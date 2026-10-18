@@ -1,13 +1,10 @@
 # Decisions
 
 Why the code is shaped the way it is, so that a question already settled does
-not get re-argued from scratch.
-
-Each entry is a decision, not a document. The design documents these came from
-were removed when this file was written -- twenty-five of them, about 90,000
-tokens, which agents were paying to grep through. **They are not lost:** every
-entry names the file it came from, and `git log --diff-filter=D -- docs/design/`
-finds the commit that removed them, with the full argument intact.
+not get re-argued from scratch. Each entry is a decision and the reason for it.
+How the code came to that shape is `git log`, not this page. Where an entry names
+a design document, `git log --diff-filter=D -- docs/design/` finds the commit that
+removed it, with the full argument intact.
 
 Read this before proposing a change to something listed here. Several of these
 were proposed, built, and then reversed -- those are marked, and the reversal is
@@ -17,8 +14,7 @@ the most useful thing on the page.
 
 Ordered outside-in: what a deployment writes, what a request may do with it, what
 a run then meets, the surfaces it is reached through, and last the shape of the
-code itself. Arrival order was what put two sections about sessions four hundred
-lines apart.
+code itself.
 
 | | |
 |---|---|
@@ -30,9 +26,7 @@ lines apart.
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
 
 *Sessions* and *Wiring a store* sit together and are not one section: the first is
-what survives a turn, the second is how a deployment names a storage port. It
-covered `FileStore` as well until that port was removed, which is why it is not
-called *Sessions and storage*.
+what survives a turn, the second is how a deployment names a storage port.
 
 ---
 
@@ -40,28 +34,18 @@ called *Sessions and storage*.
 
 **An entry is a name, or a mapping of `name` and what that field lets a name
 carry.** `source_ids` for `skills`, `source` for `tools` and `skills`, `settings` for
-`middlewares`; a `subagents:` entry is a name alone. One long form, whichever field it
-belongs to, read through one loop -- so a reader who has met one has met the other.
-`tools` and `subagents` entries took `source_ids` too until 2026-10-18 -- *Source-id
-access* has why that went.
+`middlewares`; a `subagents:` entry is a name alone. One long form, read through one
+loop, so a reader who has met one field has met them all. `tools` and `subagents`
+entries no longer take `source_ids` -- *Source-id access* has why.
 
-It replaced a field-level mapping keyed by name, and not for tidiness. **That
-shape could not see a name written twice.** YAML collapses `{a: X, a: Y}` before
-any reader runs, so a tool named twice with two audiences lost one of them
-silently, with nothing able to refuse or report it -- an access restriction that
-disappears without a word, which is the failure this format exists to prevent.
-The list form refuses a duplicate by name, and for both fields at once because
-the check is in the shared loop.
-
-The other half of the argument was already written in the code that got it
-right first: *"a format where the whole list changed shape as soon as one entry
-wanted a setting would make the common case pay for the rare one."* The mapping
-form did exactly that -- adding one audience rewrote every entry in the field.
-
-Refused rather than dropped, and the message names the entry to write.
-*(2026-09-03. The `all_of` spelling nested one level deeper under it, which was the
-one place the old form read better and was accepted knowingly.)* `all_of` is refused
-now, and a requirement is written as the set it is -- *Source-id access* has why.
+It replaced a field-level mapping keyed by name, because **that shape could not see a
+name written twice.** YAML collapses `{a: X, a: Y}` before any reader runs, so a tool
+named twice with two audiences silently lost one -- an access restriction that
+disappears without a word, the failure this format exists to prevent. The list form
+refuses a duplicate in the shared loop, for every field at once. The mapping also made
+the common case pay for the rare one: adding one audience rewrote every entry in the
+field. The old form is refused, naming the entry to write; so is `all_of`, since a
+requirement is written as the set it is. *(2026-09-03.)*
 
 ## The catalogue
 
@@ -74,22 +58,19 @@ and rejected; one level of grouping was accepted the next day, when several part
 had to ship skills into one catalogue. *(2026-08-16, `nested-discovery.md`;
 2026-08-17, `skills-from-several-parties.md`.)*
 
-**The catalogue holds paths, not content, under three named roots.** A plain
-mapping rather than an object, and library-only -- no environment variable.
-Derived roots are created; roots the caller supplied must already exist. A
-`CatalogueSource` protocol and its adapter were designed in full and cut before
-building, on the grounds that one implementation is not a seam.
+**The catalogue holds paths, not content, one root per kind.** `Definitions.from_roots`
+takes a plain mapping rather than an object, and that mapping is library-only -- the
+environment names one definitions folder. A `CatalogueSource` protocol and its adapter
+were designed in full and cut before building: one implementation is not a seam.
 *(2026-08-16, `injectable-catalogue.md`.)*
 
 **Two definitions of one name coexist, and the refusal moves to construction.**
 The catalogue keeps both, and what an agent holding two of a name gets depends on
 the kind: two subagents are refused, and two tools leave it with neither, which the
-run reports.
-Refusing at load would stop a deployment over a clash no single agent would ever
-see, unfixable by anyone who does not own both files. This was worked out three
-times over -- skills got sources, tools got references, subagents came last and
-failed hardest.
-*(2026-08-17, `skills-from-several-parties.md`, `two-tools-called-fetch.md`,
+run reports. Refusing at load would stop a deployment over a clash no single agent
+would ever see, unfixable by anyone who does not own both files. Worked out three
+times -- skills got sources, tools got references, subagents came last and failed
+hardest. *(2026-08-17, `skills-from-several-parties.md`, `two-tools-called-fetch.md`,
 `two-subagents-called-surveyor.md`.)*
 
 **A reference is a selector, and a checked label too.** `vendor_a/fetch.py::fetch`
@@ -101,131 +82,76 @@ runs without the tool. The model never sees a reference -- it is given a flat
 something to put in one. A bare name two folders offer is refused, naming both.
 *(2026-08-17, `qualified-tool-references.md`, `two-tools-called-fetch.md`.)*
 
+**One definition naming one dispatch name twice is refused, however it spells it.**
+Compared verbatim, `shared.py::shared` beside a bundled `shared` went through and the
+bundle silently won over the catalogue file the author named; `a.py::fetch` with
+`b.py::fetch`, and `fetch` with `a.py::fetch`, slipped through the same way. Measured
+on 2026-10-11, the plain pair as control. All three are refused, naming both spellings,
+since "names 'fetch' twice" sends a reader hunting a second `fetch` they did not write.
+It is refused at the reader, unlike *Two definitions of one name coexist*, because a
+definition naming both owns the problem and can edit the line. **The comparison is
+per-field**: a tool dispatches by its flat name, so `tools` compares bare names, while a
+skill's identity *is* `source::name` and two parties may both ship a `lookup`, so
+`skills` compares as written and leaves bare-against-qualified to the registry, where
+ambiguity can be seen. A mutation applying the tools rule to skills reddens a control.
+*(2026-10-11, from an architecture review.)*
 
-**One definition naming one dispatch name twice is refused, however it spells it.** The
-"names it twice" check compared written entries verbatim, so `shared.py::shared` beside
-a bundled `shared` was two strings and went through -- and the bundle silently won,
-handing the subagent its own tool where the author had named the catalogue's file. Only
-a `doctor` warning said so. Measured on 2026-10-11, with the plainly-written pair beside
-it as the control: that one is refused.
-
-Three pairs slipped through, not one. `a.py::fetch` with `b.py::fetch` is the same
-collision from the other side -- two *different* tools, one flat name -- and `fetch`
-with `a.py::fetch` is the pair the entry above calls two spellings of one tool. All
-three are refused now, and the message names both spellings, because "names 'fetch'
-twice" sends a reader looking for a second `fetch` they did not write.
-
-**Refused at the reader, which is not where the catalogue's clash goes.** *Two
-definitions of one name coexist* sends a clash between two catalogue files to
-construction, because it is "unfixable by anyone who does not own both files". A
-definition naming both owns the problem and can edit the line, so the refusal belongs
-where the line is -- and the reader already refused the plain spelling, so this widens
-an existing decision rather than taking a new one.
-
-**The comparison is per-field, and the fields genuinely differ.** A tool's reference is
-`where::what` and *the model never sees it* -- it is handed a flat `what` -- so two
-entries resolving to one `what` cannot both dispatch. A skill's identity *is*
-`source::name`: two parties who never met may both ship a `lookup`, and deduping those
-by bare name would refuse the arrangement sources exist for. So `tools` compares by bare
-name and `skills` compares as written, with the bare-against-qualified skill case left
-to the registry, where whether a bare name is ambiguous can actually be seen. A mutation
-applying the tools rule to skills reddens that control, which is what holds the
-distinction rather than the comment above it. *(2026-10-11, from an architecture
-review.)*
 **A skill's identity is `source::name`**, a folder under the skills root is a
 source, and deny rules are built from the path rather than the name.
 *(2026-08-17, `skills-from-several-parties.md`.)*
 
+**`unloadable` compares a skill by its own path, not by its name.** By name, a `lookup`
+that loaded from `research/` vouched for a broken `legal/lookup`: no `unloadable` line,
+`doctor` green, and `legal::lookup` refused with nothing saying why -- in the very case
+sources exist for. Measured on 2026-10-11, distinct names as control. The two sides are
+spelled differently on purpose, since `Listed.path` already carries a mount's label and
+prefixing both makes every mounted skill read as unloadable;
+`test_a_broken_skill_in_a_mount_is_reported_under_its_label` asserts the whole tuple
+because a membership test passed against that mistake. *(2026-10-11, from an
+architecture review.)*
 
-**`unloadable` compares a skill by its own path, and compared it by its name.** The
-came-back check read `f"/{found.name}/" in path` against every path kept under one root
--- and the sources *under* a root share that list, so a `lookup` that loaded from
-`research/` vouched for a broken `legal/lookup`. Two sources shipping one name is the
-case sources exist for, and it was the case that hid a failure completely: no
-`unloadable` line, `doctor` green, and a grant of `legal::lookup` refused with "no skill
-'lookup' in 'legal'" with nothing anywhere saying why. Measured on 2026-10-11, with the
-distinct-name layout as the control -- there the same broken skill is reported.
-
-The two sides of the comparison are spelled differently on purpose: `Listed.path`
-already carries the mount's label and `relative_to` does not, so prefixing both names a
-mounted skill twice over. That mistake makes *nothing* match what loaded, so every
-skill in the mount reads as unloadable -- and
-`test_a_broken_skill_in_a_mount_is_reported_under_its_label` passed against it, because
-it asserted `"vendor/broken" in` the tuple rather than the tuple. It asserts the whole
-tuple now, which is the same correction the bubblewrap binds took on 2026-10-05 and for
-the same reason: a membership test cannot see what else arrived.
-*(2026-10-11, from an architecture review.)*
 **The skill registry is populated by deepagents' own lister**, which is a private
 function with a test pinning it. Two readers of the catalogue used to disagree, so
 a caller could activate a skill the agent was never told about. A directory the
 agent will not load is reported, not refused.
 *(2026-08-17, `skill-registry.md`.)*
 
-**Only `core.definitions.skills.registry` calls it.** The lister and its async twin were called
-from there and from `core.agent.middlewares.narrowing`, so an upgrade
-that moved either meant the same edit in two files, and the async one was never
-pinned.
-`list_skills` and `alist_skills` are the only calls now; `test_skill_registry` pins both
-names and fails if another module names either. A listing becomes a `Listed` where
-it arrives, so `name`, `path` and `description` are read off deepagents' metadata in
-one function rather than by key wherever an entry is used. The skills index hands
-deepagents' own dictionaries back to it, because its formatting reads them.
-*(2026-09-16.)*
+**Only `core.definitions.skills.registry` calls it.** An upgrade that moves deepagents'
+private listers, sync or async, should mean one edit. The registry wraps both as
+`list_skills` and `alist_skills`, which `core.agent.middlewares.narrowing` calls;
+`test_only_the_registry_names_the_private_listers` fails if another module names
+either, and both are pinned. A listing becomes a `Listed` where it arrives, so its keys
+are read in one function; the skills index hands deepagents' own dictionaries back,
+because its formatting reads them. *(2026-09-16.)*
 
-**And the repository stopped answering `names`.** The second reader that decision
-removed from the deciding path was still there beside it, satisfying a port that
-promises "every definition held, by the name a request grants it". It listed the
-directories one level under the root, and measured on a catalogue of four it got both
-halves wrong at once: it missed both skills in a source folder and advertised one
-whose file does not parse. Nothing in production depended on the answer -- `warm`
-forced it two lines above forcing the registry, and a bundle's skills were already the
-registry's -- so three tests carried comments steering readers off it and an
-architecture rule's failure message recommended it by name.
-
-Listing more deeply was the obvious repair and is not available: it fixes the missing
-skills and can never fix the advertised one, because only deepagents' parse decides
-what loads. Any answer here is the disagreement, so there is no answer here.
-`SkillRepository` is the one repository that is not an `AssetRepository`; it keeps
-`root` and `misplaced`, which are facts about the directory rather than claims about
-what the agent will be told. `reachable` is what a caller asking "is anything here?"
-uses -- seeding's own tests do -- and the registry is what a caller asking for names
-uses. *(2026-09-21.)*
+**And the repository stopped answering `names`.** Listing directories one level down,
+it missed both skills in a source folder and advertised one whose file does not parse.
+Listing deeper fixes the first and never the second, because only deepagents' parse
+decides what loads: any answer here is the disagreement, so there is none.
+`LocalSkillRepository` keeps `root` and `misplaced`, facts about the directory;
+`reachable` answers "is anything here?", and the registry answers "which names?".
+*(2026-09-21.)*
 
 **A skills directory can be mounted beside the catalogue, as one more folder of it.**
-`KINGFISHER_SKILLS_MOUNTS` names `label=path` pairs, and each is routed at
-`/skills/<label>/` and read as a source under its label, so the index, `source::name`,
-the deny rules and narrowing learned nothing. One level of grouping had answered
-several parties shipping into one catalogue; this is for a party that cannot write
-into it, where the answer was a deploy-time copy and the copy was what went stale.
-The copy still works, and needs no code, for anyone who can make it.
+`KINGFISHER_SKILLS_MOUNTS` names `label=path` pairs, each routed at `/skills/<label>/`
+and read as a source under its label, so the index, `source::name`, the deny rules and
+narrowing learned nothing. It is for a party that cannot write into the catalogue, where
+a deploy-time copy went stale; the copy still works for anyone who can make it. A mount
+is one source, so it is flat. The label prefix on each registry path is what fails open
+if dropped: a deny rule built without it names a path that does not exist. A label
+carrying `::` or `/`, a missing mount and overlapping ones are refused before anything
+is mounted. Not taken: several peer catalogues, which doubles every question the
+registry answers. *(2026-09-25, `several-skills-roots.md`.)*
 
-A mount is one source, so it is flat: skills sit directly in it, and anything deeper
-is misplaced. The registry prefixes each of its paths with the label, and that is
-the part that fails open if dropped -- a deny rule is built from the path, and
-without the label it names `/skills/<name>/**`, which does not exist. A label that
-would hide part of the catalogue, one carrying `::` or `/`, a mount that is not
-there and one that overlaps another are refused before anything is mounted.
-
-Considered and not taken: several peer catalogues, each with its own `catalogue` and
-folders, which doubles every question the registry answers and leaves each answer a
-rule nobody has written. *(2026-09-25, `several-skills-roots.md`.)*
-
-**With a mount, the shell reads the catalogue through a view.** A skill names its
-scripts under `$KINGFISHER_SKILLS`, and the prompt teaches one rule, `/skills/X` is
-`$KINGFISHER_SKILLS/X`, which a mount has no host path to keep. So `skills_view`
-builds a directory of links in `.kingfisher/` -- each catalogue entry and each mount
-under its label -- and the variable names that. It is named for what it holds, so a
-catalogue that gained a skill gets a new view rather than a stale one, and it is
-built aside and renamed into place, so a turn never reads half of one. Views a
-changed catalogue left behind are not pruned: telling one no running turn still
-uses costs more than the links do.
-
-Considered and not taken: a variable per mount, which breaks the one rule and turns
-a label into an environment name with clashes of its own; links an operator places
-in the catalogue, which the shell is not granted the targets of; and rooting
-`/skills/` itself at the view, which would put the file tools at the mercy of how
-upstream's filesystem backend treats a link leaving its root.
-*(2026-09-25, `several-skills-roots.md`.)*
+**With a mount, the shell reads the catalogue through a view.** The prompt teaches one
+rule, `/skills/X` is `$KINGFISHER_SKILLS/X`, which a mount has no host path to keep. So
+`skills_view` builds a directory of links in `.kingfisher/`, named for what it holds so
+a changed catalogue gets a new view rather than a stale one, and renamed into place so a
+turn never reads half of one. Old views are not pruned: telling which no running turn
+uses costs more than the links. Not taken: a variable per mount, which breaks the one
+rule; links an operator places in the catalogue, whose targets the shell is not granted;
+and rooting `/skills/` at the view, which leaves the file tools to how upstream's
+backend treats a link leaving its root. *(2026-09-25, `several-skills-roots.md`.)*
 
 **Middleware is a definition kind.** `middlewares/*.py` declaring `MIDDLEWARES`,
 read like `tools/`, seeded like everything else, and named from a definition in
@@ -235,373 +161,177 @@ the agent can edit wrapped around the agent that edited it -- true while the
 shell could write into a definition root, and false the moment `protected` was
 widened to every one of them. The premise moved, so this followed.
 
-It relocates like `tools/` as well, and that arrived late enough to be worth
-recording: `definition_roots_for` took a `middlewares_root` from the day the
-kind existed, under a comment promising each root "separately relocatable by its
-own environment variable", and no caller ever passed it -- no variable read, no
-field on `WorkspacePaths` or `Config`, and neither call site forwarding. Nothing
-went red, because nothing ran from the kinds to the settings that move them.
-`KINGFISHER_MIDDLEWARES_DIR` closed it, and a rule drove all five so a sixth kind
-could not arrive the same way. Both went a fortnight later, with the settings
-themselves -- see *Definitions have a folder of their own, apart from the workspace*
-below, where every kind lives in one folder and the five per-kind variables are
-refused. What this entry is still about is the other half: a kind the settings could
-not reach was a kind nothing moved, and nothing ran from the kinds to the settings to
-say so.
-
 **The name comes from the class**, the way a tool's comes from the tool.
 `AgentMiddleware.name` is a *property* answering the class's own name, so
-`getattr(cls, "name")` is a `str` exactly when a subclass overrode it with one --
-checked rather than trusted, or the selector would stringify into `<property
-object at 0x...>`. The shipped examples now declare `name = "call-cap-strict"`
-and its two siblings, which is what keeps every existing definition valid and
-makes the wiring block's keys the strings the classes answer to.
+`getattr(cls, "name")` is a `str` exactly when a subclass overrode it -- checked rather
+than trusted, or the selector would stringify into `<property object at 0x...>`.
 
 **Classes only in a file, where a registry may also hold a zero-argument
-factory.** A file is imported once, so an object in `MIDDLEWARES` would be built
-once and shared by every graph in the process -- the state leak that makes a cap
-stop capping. A class in a file does everything a factory does and takes
-settings besides, so the second shape would be a spelling with no capability
-behind it. The registry keeps the factory because a factory can close over a
-live object, which a file cannot.
+factory.** A file is imported once, so an object in `MIDDLEWARES` would be shared by
+every graph in the process -- the state leak that makes a cap stop capping. A class does
+everything a factory does and takes settings besides. The registry keeps the factory
+because a factory can close over a live object, which a file cannot.
 
 **Both sources are merged once, and a name in both is refused.** `build_agent`
-resolves the registry before either branch reads it, so an agent and its
-subagents select from one mapping; merging twice would be a second chance to
-disagree. A clash is refused rather than resolved because both sources belong to
-the same deployment and renaming is available -- unlike a tool clash between two
+resolves the registry before either branch reads it, so an agent and its subagents
+select from one mapping. A clash is refused rather than resolved because both sources
+belong to one deployment and renaming is available -- unlike a tool clash between two
 vendors, which is why that one is qualified instead.
-
-**`middlewares` is outside `STAGED_KINDS`, like `agents`**, and it was the test of
-whether that rule held. Added to `Definitions` and left in, every supplied
-catalogue in the tree stopped loading at once -- *"catalogue is missing
-middlewares"* -- which is the breakage the `agents` exclusion was written to
-prevent, arriving on the first kind added after it. `seeding.destinations`
-now skips a kind the destination does not name, for the same reason: a
-`Destination` is satisfied by shape, so one written when there were four kinds
-hands over four roots.
 
 **A deferred `langchain` import**, because the module-level one made nine light
 exports heavy at once -- `seed`, `inventory`, `Origins` and the rest pulling the
-agent runtime for names that never reach it. The trade `models.py` already makes
-by naming its chat classes as strings.
+agent runtime for names that never reach it.
 
-**The shipped pairing had never been built, and did not work.** `researcher`
-granted `call-cap-strict` and `tool-note` while its subagent `sweeper` named
-`call-cap-generous` -- and an agent's `middlewares:` is the ceiling its subagents
-are clamped by, so the parent refused it. Invisible for as long as the example
-existed: with nothing registered anywhere it failed earlier for want of a
-registry, and every test that touched the pair either replaced the spec or
-supplied its own registry. `researcher` grants all three now, and runs under both
-caps with the stricter deciding, which the file says out loud.
+**The shipped pairing had never been built, and did not work.** The agent granted
+`call-cap-strict` and `tool-note` while its subagent `sweeper` named
+`call-cap-generous`, and an agent's `middlewares:` is the ceiling its subagents are
+clamped by. Every test touching the pair had replaced the spec or supplied a registry.
+`assistant` grants all three now and runs under both caps, the stricter deciding;
 `test_the_middleware_pairing_builds_from_the_workspace_alone` builds it with no
-registry at all. *(2026-09-07.)*
+registry. *(2026-09-07.)*
 
-**The kind is `middlewares`, in the plural its four siblings were already in.**
-`agents/`, `skills/`, `subagents/` and `tools/` are named for what they hold and
-this one was not. The folder name was never free to differ: `seeding` walks
-`DEFINITION_KINDS` on both sides, so the directory has to spell the field on
-`Definitions`, which `test_what_the_catalogue_loads_is_accounted_for` holds equal
-to the axis on `Capabilities` -- which is the line a definition writes and the
-field a request sends. One name across five surfaces, and renaming any one of
-them alone leaves a folder nothing looks in.
+**The kind is `middlewares`, in the plural its four siblings were already in.** The
+name was never free to differ: `seeding` walks `DEFINITION_KINDS`, so the folder spells
+the field on `Definitions`, which `test_what_the_catalogue_loads_is_accounted_for`
+holds equal to the axis on `Capabilities`. One name across five surfaces, so it was
+taken as the breaking change it is -- the definition field, the request field,
+`Kingfisher(middlewares=...)`, `MIDDLEWARES`, the folder. The folder is the quiet one:
+a populated `middleware/` offers nothing, and nothing refuses an older layout.
 
-So this was taken as the breaking change it is, not as tidying: `middlewares:` in
-an agent or subagent file, `middlewares` in a `CapabilitiesBody` that forbids
-unknown fields, `Kingfisher(middlewares=...)`, `MIDDLEWARES` in a workspace file,
-`middlewares/` in a workspace. The last one is the quiet one -- `middlewares/` is
-outside `LAYOUT_DIRS`, and the marker's `LAYOUT_VERSION` was a number compared rather
-than a list of directories checked, so it could not refuse an old layout here the way
-it refused one inside a session. A workspace that
-keeps a populated `middleware/` gets an empty `middlewares/` made beside it and
-offers nothing, with nothing said.
-
-*(`middlewares/` is made by the layout since 2026-09-24, and where its setting points
-since 2026-10-07; see below. `LAYOUT_VERSION` went with #756 -- the marker holds no
-number now, and nothing refuses an older workspace anywhere.)*
-
-**The layout names every kind, and makes each where its setting points.** It made
-three of the five, and resolving a catalogue makes all five, so a workspace had two
-answers to which directories it has: the layout's on a fresh start and the first
-read's thereafter. `agents` and `middlewares` were the two outside it, each because
-it arrived after that tuple did.
-
-What the gap cost was not a failure but a habit. Tests made the missing two by hand,
-and the same call spread to the three that already existed: 69 `mkdir` calls across
-28 files that do nothing, against 8 that were required. Those are left where they
-are -- idempotent, and removing them is churn across 28 files for no behaviour --
-but the rule that made them look necessary is gone.
-
-No `LAYOUT_VERSION` bump. That number refused a workspace laid out *differently*,
-and nothing here moves; an existing workspace gains two empty directories on its
-next start, which is what `mkdir(exist_ok=True)` is for. A version bump would have
-refused every workspace in existence in order to add a folder.
-
-Then it made all five in the workspace whatever `KINGFISHER_*_DIR` said, which was
-the same two answers by another road: a deployment that had moved its skills read
-them from where the setting pointed and kept an empty `skills/` beside its sessions
-as well. A folder where nothing reads misleads more than a missing one. It looks
-like the place to put a definition, and one put there is never loaded and nothing
-says so. `ensure_layout` takes the resolved `catalogue_roots` now, the way it takes
-`authored`, and makes each kind there; a caller holding only a directory still gets
-all five in it. `LAYOUT_DIRS` is what is always in the workspace -- `sessions` and
-`.kingfisher` -- and names no kind. A catalogue passed to `Kingfisher(catalogue=...)`
-gets no kind folder anywhere, which is the rule for roots a caller supplies. A
-folder an earlier start left behind is kept, empty or not: the layout runs on every
-start, and deleting an operator's directory is not its call. No version bump here
-either, for the same reason as before.
-
-Two rules held it: one drove the layout rather than reading the tuple, which no longer
-had a kind in it to check, and held `LAYOUT_DIRS` to the directories that are not
-kinds; the other moved every kind and asserted the first read made nothing the layout
-did not. Both went with the per-kind settings they moved -- *Definitions have a folder
-of their own, apart from the workspace* below -- and `LAYOUT_DIRS` naming no kind is
-the part that survived them. *(2026-09-24, from an architecture review; each kind where
-its setting points, 2026-10-07; the settings themselves removed 2026-10-13.)*
+**The layout names no kind.** `LAYOUT_DIRS` is what is always in the workspace --
+`sessions` and `.kingfisher` -- and kind folders are made where the definitions are. A
+folder where nothing reads misleads more than a missing one: it looks like the place to
+put a definition, and one put there is never loaded. A folder an earlier start left is
+kept, since deleting an operator's directory is not the layout's call. *(2026-09-24,
+from an architecture review.)*
 
 **The mass noun stays wherever it is still a mass noun.** `middlewares` names the
-kind -- a directory, a field, a key, a table row. `MiddlewareRepository`,
-`approved_middleware`, `harness/kinds/declared_middleware.py` and every sentence about
-*a middleware* keep the singular, because `ToolRepository` already sits behind a
-kind called `tools`: naming the type for one of the things is what the other four
-kinds do. *(2026-09-15.)*
+kind -- a directory, a field, a key, a table row. `LocalMiddlewareRepository`,
+`approved_middleware`, `core/agent/kinds/declared_middleware.py` and every sentence
+about *a middleware* keep the singular, as `LocalToolRepository` sits behind a kind
+called `tools`. *(2026-09-15.)*
 
-**A class may ask the harness for what only the harness knows.** `wants` is a
-third class attribute beside `defaults` and `yaml_settable`, naming kwargs filled
-in where the agent is assembled: `model`, `backend`, `definition`. It was argued
-as "no asset can depend on a deployment object", and that framing was wrong and
-worth correcting here, because the next person will know it is. A registered
-class has always been able to close over one -- `guides/middleware.md` documents
-the pattern, and a deployment can build a model in its own program and capture it.
-What could not be reached was narrower and sharper: *this build's* answer, which
-is decided per agent and per subagent and cannot be closed over at startup, and
-the model from a `middlewares/` file, which is imported once when `Kingfisher`
-reads its catalogue -- before any agent has been built, so there is no model yet to
-capture.
+**A class may ask the harness for what only the harness knows.** `wants`, beside
+`defaults` and `yaml_settable`, names kwargs filled in where the agent is assembled:
+`model`, `backend`, `definition`. Not because "no asset can depend on a deployment
+object" -- a registered class can always close over one, as `guides/middleware.md`
+documents -- but because *this build's* answer is decided per agent and per subagent,
+and a `middlewares/` file is imported before any agent exists, so there is no model yet
+to capture.
 
 **The set is open and lives at the two call sites.** No constant enumerates it.
-Each site in `build_agent` builds a mapping from what it holds, `_instantiate`
-pulls out the keys a class named, and a want nothing answers to is refused with
-the site's own listing -- which is the listing to read precisely because there is
-no table to read instead. Both sites go through one builder, so they cannot offer
-different keys by accident; `test_both_kinds_are_handed_the_same_things_to_want`
-is what catches a second mapping written inline at one of them.
+Each site in `build_agent` builds a mapping from what it holds, `_instantiate` pulls
+out the keys a class named, and a want nothing answers is refused with the site's own
+listing. Both sites go through one builder;
+`test_both_kinds_are_handed_the_same_things_to_want` catches a second mapping written
+inline.
 
-**A wanted key is a name in yaml and an object in Python.** `model` may also
-appear in `yaml_settable`, and what a definition writes there is resolved -- the
-catalogue lookup, the endpoint check, the instance -- rather than passed through.
-That keeps the vocabulary of "which model" the one every other file already uses
-and puts `refuse_ungranted_endpoint` on this path for free, in `model_named`,
-which `model_object` now calls as well: two copies of those three steps, one of
-them forgetting the middle one, is a run sent where the caller refused with
-nothing said. A want with no such resolver -- `backend`, `definition` -- has no
-name a file could carry, so a value written for one is refused rather than
-interpreted, on the class rather than on the write.
+**A wanted key is a name in yaml and an object in Python.** A `model` a definition
+writes is resolved -- catalogue lookup, endpoint check, instance -- in `model_named`,
+which `model_object` calls too: two copies of those steps, one forgetting the endpoint
+check, is a run sent where the caller refused. `backend` and `definition` have no name
+a file could carry, so a value written for one is refused, on the class.
 
-**A subagent is handed its own model, not its agent's.** The proposal said both
-call sites had the built model in scope; only one did. A subagent's is not built
-until `as_subagent`'s last line, so what is in scope where its middleware is made
-is the *agent's* -- and handing that over is wrong in the direction that costs
-money, since a subagent pinned to the cheap model would be compacted by the
-expensive one. `_with_helpers` already knew the answer and now passes it down.
-The same mistake had been made once before for a helper's inherited model.
+**A subagent is handed its own model, not its agent's.** Its model is not built until
+`as_subagent`'s last line, so the one in scope where its middleware is made is the
+agent's -- wrong in the direction that costs money, since a subagent pinned to the cheap
+model would be compacted by the expensive one. `_with_helpers` passes the right one.
 
-**The example is `compaction.py`, and it runs.** A `SummarizationMiddleware`
-subclass that wants all three: six lines of declaration, a note written to
-`/derived` on both the sync and async paths, and `researcher.yaml` names it. It is
-the motivating case rather than an illustration of one -- handed `model: "gpt-5"`
-as a string, langchain's own class passes it to `init_chat_model`, which infers a
-provider and reads credentials from the environment, around the catalogue and the
-endpoint's `base_url` entirely. Two things it teaches were measured rather than
-assumed: an unset `trigger` normalises to no clauses and never fires, and a
-backend reports a failed write by returning one rather than raising.
-*(2026-09-15. Reversed 2026-10-01, next entry.)*
+**The example is `compaction.py`, and it runs.** It is the motivating case: handed
+`model: "gpt-5"` as a string, langchain's summarizer calls `init_chat_model`, which
+infers a provider and reads credentials from the environment, around the catalogue and
+the endpoint's `base_url`. Measured: an unset `trigger` never fires, and a backend
+reports a failed write by returning one rather than raising. *(2026-09-15. Reversed
+2026-10-01, next entry.)*
 
-**Reversed: `compact` as a second summarizer.** `compaction.py` subclassed
-langchain's `SummarizationMiddleware` under its own name, so it ran beside the
-summarizer deepagents puts on every agent rather than instead of it, and the two
-keep different books. deepagents' records its cutoff as an index into
-`state["messages"]` and never rewrites them; langchain's rewrites them to a summary
-and twenty messages. After a rewrite the index pointed past the end, and on a
-scripted run the model was shown the system prompt and an old summary for twelve
-consecutive calls -- not the request, not the results it had just asked for.
-`test_a_compacted_agent_still_sees_what_it_just_read` holds it. The note had a
-fault of its own: a counter per instance, an instance per build and a build per
-turn, so each turn's first compaction wrote `<agent>-1.md` over the last, and the
-backend overwrites without an error.
-
-`Compact` is now deepagents' summarizer in that summarizer's place -- its
-thresholds from the model's profile, its `keep`, its history file, which the
-summary itself names, and its retry when a call overflows -- with one clause added
-to the trigger: sixty messages, whatever their size. The class keeps `compact` for
-definitions and the instance answers to deepagents' name, so kingfisher's
-replacement notice fires when it is built, which here is the design rather than a
-slip. `trigger` and `keep` left `defaults` and `model` left `yaml_settable`,
-because the summarizer every other agent runs has no such settings and this one
-matches it. Weighed and not taken: dropping `compact` from the shipped agents,
-which fixes two files and leaves every workspace that names it broken. *(2026-10-01.)*
+**Reversed: `compact` as a second summarizer.** Subclassing langchain's
+`SummarizationMiddleware` ran it beside deepagents' summarizer, and the two keep
+different books: deepagents' records its cutoff as an index into `state["messages"]`;
+langchain's rewrites them to a summary and twenty messages. After a rewrite the index
+pointed past the end, and on a scripted run the model saw the system prompt and an old
+summary for twelve consecutive calls; `test_a_compacted_agent_still_sees_what_it_just_read`
+holds it. `Compact` is now deepagents' summarizer in its place, with one clause added to
+the trigger: sixty messages, whatever their size. The instance answers to deepagents'
+name, so the replacement notice fires by design, and its settings match the summarizer
+every other agent runs. Not taken: dropping `compact` from the shipped agents, which
+breaks every workspace naming it. *(2026-10-01.)*
 
 **The shipped `assistant` names its middleware, and does not write the star.**
-`middlewares: ["*"]` was argued as the one form a shipped file could carry: a name
-is refused on a deployment that registered nothing, and a star resolves to nothing
-there. *Middleware is a definition kind* is what made that false, and nobody read
-the two together -- a file in the workspace's `middlewares/` counts as registered,
-and `seed` copies the examples in. So a seeded workspace wrapped the agent a reader
-runs first in every one of them, on the agent and on its general-purpose subagent,
-with neither its file nor its prompt saying so. Measured by building it. The test
-for the star checked it against an empty registry, which is the one registry a
-seeded workspace never has.
-
-It names all four examples instead, so what it runs under is written in its file
-and its prompt can say so -- a twenty-call budget, a note on every tool result, a
-summariser past sixty messages -- and a middleware added later for another agent
-does not arrive here unasked. The price is `seed`'s rule against named middleware:
-a plain `kingfisher seed` now leaves `assistant` behind alongside `researcher`, and
-`--all` is how it arrives. Seeding `middlewares/` only under `--all`, and a star
-that skipped workspace files, were weighed and not taken: the first undoes half of
-*Middleware is a definition kind* for one line of one file, the second makes the
-two sources of one registry mean different things to one field.
-*(2026-09-16.)*
+`middlewares: ["*"]` was argued as safe because a star resolves to nothing where
+nothing is registered. *Middleware is a definition kind* made that false: `seed` copies
+the examples into `middlewares/`, so a seeded workspace wrapped the first agent a reader
+runs in all of them, unannounced -- measured by building it; the star's test used an
+empty registry, the one a seeded workspace never has. Naming all four puts what it runs
+under in its file and prompt, and a middleware added later does not arrive unasked. The
+price: a plain `kingfisher seed` leaves `assistant` behind, and `--all` brings it. Not
+taken: seeding `middlewares/` only under `--all`, which undoes half of *Middleware is a
+definition kind* for one line, and a star skipping workspace files, which makes one
+registry's two sources mean different things. *(2026-09-16.)*
 
 **The definition repositories are internal, and each declares what is read from
-it.** `ports.md` listed four of them as ports to replace when a catalogue is not a
-directory, and nothing outside this repository could: neither `Definitions` nor the
-interfaces are exported. The repositories with no directory were test fakes, a
-subagent's carried tools, and the empty middleware default. So the interfaces declared the basics, the local repositories carried the
-rest, and thirteen reads went through `getattr` with a default -- one of them under
-a comment saying a repository that is not the local one answers nothing rather than
-raising. Two of those answers were behaviour, and running an in-memory repository
-through them showed it: without `documents` a session was never pinned to its agent,
-so a later turn asking the same session for another agent was served instead of
-refused; without `bundles` a subagent's carried tools were dropped.
+it.** `ports.md` listed four as ports to replace, though neither `Definitions` nor the
+interfaces were exported. Reads through `getattr` with a default hid behaviour: a
+repository without `documents` never pinned a session to its agent, so a later turn
+asking for another agent was served, and one without `bundles` dropped a subagent's
+carried tools. One implementation is not a seam, so every member a consumer reads is
+declared on the reader, and `test_nothing_reads_a_repository_member_with_a_default`
+holds it. *(2026-09-16.)*
 
-Settled the way `CatalogueSource` was, above: one implementation is not a seam. The
-rows left `ports.md`, every member a consumer reads is on its interface -- `root`
-too, as `Path | None`, which `CarriedTools`, `NoMiddleware` and the fakes answer --
-and `test_nothing_reads_a_repository_member_with_a_default` holds it. It exempts one
-read by name, because it is not of a repository: a `SessionStore`'s `root`, which is
-a port a deployment does implement.
+**Removed with it: skills mounted from a store.** An in-memory store filled from a
+repository's `files` let a skill catalogue not be a directory. Once the repositories
+were internal, the only ones with no directory were test fakes, so the store and the
+no-directory branches went; the shell is always told `$KINGFISHER_SKILLS`.
+*(2026-09-17.)*
 
-Left as it was, and taken out the next day: skills could still be mounted from a
-repository with no directory, through `files`, and nothing in production did that
-any more. *(2026-09-16.)*
+**One envelope for what a Python module declares.** `TOOLS`, `SUBAGENTS` and
+`MIDDLEWARES` were each loaded with the same `getattr` and two refusals, and the copies
+had drifted: middleware told an author the type it got and stopped, where the others
+said what to write instead. No duplication rule finds that, because the three say it
+about different nouns. `core.definitions.importing.Export` carries what differs, and
+`exported_from` is the envelope. `test_refusals.py` counts refusals against the parsed
+source, so it records that each lives in one place. *(2026-09-18.)*
 
-**Removed with it: skills mounted from a store.** `core.definitions.skills` could fill an
-in-memory store from any repository's `files` and mount it read-only, so a skill
-catalogue need not be a directory. Once the repositories were internal, the only
-repositories with no directory were two test fakes. So the store module, `files` on
-the port and the local repository, and the branches for a catalogue with no
-directory are gone, and `SkillRepository` declares `root` as a `Path`. The shell is
-always told `$KINGFISHER_SKILLS`, since there is always a directory to name.
-`kinds/skills` imports `deepagents` alone now, deferred in the registry, and no kind
-module loads a provider SDK at import. *(2026-09-17.)*
+**One walk for both definition roots.** The two walks differed by the error class and
+one `continue`, around a byte-identical `.yml` refusal -- a copy that has not drifted
+yet. `documents_in` takes the error class and a `skipping` set, and that set is the
+asymmetry: `tools/` and `skills/` under `subagents/` hold a bundle's assets, while under
+`agents/` they are ordinary folders. Passed at both sites, an agent under `agents/tools/`
+is lost with nothing red; `test_a_folder_called_tools_is_organisation_here_too` holds
+that side. *(2026-09-18.)*
 
-**One envelope for what a Python module declares.** Three kinds read modules out
-of the workspace -- `TOOLS`, `SUBAGENTS`, `MIDDLEWARES` -- and each catalogue wrote
-out the same load, the same `getattr`, and the same two refusals. The copies had
-drifted where a copy drifts first: middleware told an author the type it got and
-stopped, where tools and subagents also said what to write instead. Nothing was
-red, and no duplication rule finds it, because the three say it about different
-nouns.
+**And the union it answers is discriminated once.** Both readers wrote the same five
+lines around `decode`, and `fields_of` is those five. Dropping the file name from the
+refusal left the suite green, because the table in `test_subagent.py` matched on the
+reason only; it is driven for both kinds now. *(2026-09-24.)*
 
-`kinds/importing.Export` carries the four things that differ -- the name, the
-kind's own error, what the list holds, and one entry spelled as an author would
-write it -- and `exported_from` is the envelope. A catalogue declares its
-`DECLARES` once beside its error class, and the loop body is one line.
-
-`test_refusals.py` is where this showed up as more than tidying. Its table names
-every refusal in the catalogue-reading code, keyed by function and counted against
-the parsed source, so moving two refusals out of three functions made five tests go
-red at once and the table now says the refusal lives in one place. The counter
-itself needed widening: it already followed an error class *handed in* as a
-parameter, and an envelope hands one in as a field of a parameter, which it read as
-no refusal at all. *(2026-09-18.)*
-
-**One walk for both definition roots.** `NEAR_MISS` and `SUFFIX` moved to
-`documents` so the agent catalogue would stop importing the subagent one for them;
-the walk that used them stayed behind, written out twice. The two copies differed
-by the error class and by one `continue`, and the `.yml` refusal in the middle of
-each was byte-identical -- which is a copy that has not drifted yet rather than one
-that cannot.
-
-`documents_in` takes the error class, the way `require_literal_prompt` beside it
-already did, and a `skipping` set of folder names. That set is the asymmetry and
-the reason this is not simply a shared function: `tools/` and `skills/` under
-`subagents/` hold a bundle's own assets and are kept out of the scan, and under
-`agents/` they are ordinary folder names. Only the subagent caller passes them.
-Handing the walk that list by default, or passing it at both call sites, loses an
-agent filed under `agents/tools/` with nothing red, so
-`test_a_folder_called_tools_is_organisation_here_too` is what holds the other side
-of it.
-
-`documents` now reads `core.definitions.importing.skipped`, so the Layering entry saying four
-kind catalogues are that module's only readers names one reader short.
-*(2026-09-18.)*
-
-**And the union it answers is discriminated once.** `decode` says *fields, or a line
-saying why not*, which only means anything together with the sentence that reports
-it -- so both readers wrote the same five lines: the call, the `isinstance`, the
-message naming the file, the raise, and the prompt-style check on the line after.
-Five of each reader's six. `fields_of` is those five, and each `read` is now one
-line: its own format parsing what this module handed back.
-
-The message was the part worth a rule. *"YAML says why; we say which file"* is a
-comment in `test_subagent.py` beside a table that matches on the reason and never on
-the file name -- so dropping `{source.name}` from the refusal left the suite green,
-and the one thing both copies agreed on word for word was held by neither. It is
-driven for both kinds now, because there is one function to drive. *(2026-09-24.)*
-
-**Both readers take a `DefinitionText`, the text and the file it came from.** The
-subagent reader took a path, since its text parameter only ever served tests; the
-agent reader kept `(text, source)`, because its catalogue pins the exact document it
-parsed into a session. A path alone cannot serve that catalogue: it would open the
-file again for the pin, and an edit landing between the two reads runs a session's
-first turn on one agent and every later turn on another. One value carrying both is
-read once, keeps what was parsed, and is what a test hands `read` too, so neither
-reader bends to the other. *(2026-09-24.)*
+**Both readers take a `DefinitionText`, the text and the file it came from.** A path
+alone cannot serve the agent catalogue, which pins the exact document it parsed into a
+session: opening the file again for the pin lets an edit between the reads run a
+session's first turn on one agent and later turns on another. *(2026-09-24.)*
 
 **A subagent lists what it takes from its own folder, and only that arrives.** Each
-`tools:` and `skills:` entry may say `source: shared` (the catalogue, which is what a
-plain name means) or `source: bundled` (the subagent's own folder). The folder used
-to grant by itself: every file in `subagents/<name>/tools/` reached the subagent
-with no line naming it, and an optional `bundle:` key could describe the folder and
-be checked against it while granting nothing.
+`tools:` and `skills:` entry may say `source: shared` (the catalogue, what a plain name
+means) or `source: bundled` (the subagent's own folder). When the folder granted by
+itself, a file dropped in was granted with no line changing, a rename took everything
+away with only a warning, and a descriptive `bundle:` key sat among fields that grant
+and granted nothing. Listing as the grant removes all three.
 
-That had two silent failures and one misleading key. A file dropped into the folder
-was granted with nothing in the definition changing; renaming the folder or the
-`name:` took everything away, reported only as a warning; and `bundle:` sat among
-fields that grant, granted nothing, and needed a paragraph in the guide explaining
-why it was nested. Listing as the grant removes all three: the list is the claim, so
-there is nothing separate to keep in step.
+**`bundled` names where the file is, not who may use it.** A label on a file in the
+shared `tools/` would make privacy something any definition can put on or take off,
+and two subagents claiming one tool would need a rule of their own.
 
-**`bundled` names where the file is, not who may use it.** The alternative was a
-label on a file in the shared `tools/`. That makes privacy something any
-definition can put on or take off, and two subagents claiming one tool would need a
-rule of their own. With the location reading, a tool is private because of where
-its file sits.
-
-**An unlisted file in a subagent's folder is refused, not ignored.** Every
-deployment upgrading has exactly these files, granted by being there, and ignoring
-them would lose each one silently -- the failure the change exists to remove. It is
-the old `bundle:` check, now always on: `rules.miscounted` compares the list and the
-folder in both directions, `warm` refuses, and `doctor` fails on `bundled entries`.
-The build filters to the list as well, so a caller that skipped `warm` is still
-handed only what is listed. A compiled subagent cannot list skills, so a `skills/`
-folder beside one is refused by the same rule rather than warned about.
+**An unlisted file in a subagent's folder is refused, not ignored.** Every upgrading
+deployment has such files, and ignoring them would lose each silently.
+`core.definitions.subagents.rules.miscounted` compares list and folder both ways, `warm`
+refuses, `doctor` fails on `bundled entries`, and the build filters to the list too.
+A `skills/` folder beside a compiled subagent, which cannot list skills, is refused by
+the same rule.
 
 **Subagents only.** `source: bundled` in an agent file is refused: an agent has no
-folder, and the folder exists so a subagent can hold something its caller cannot.
-A bundled entry also takes no `source_ids` -- it reaches whoever reaches the
-subagent -- and no `file::name` path, since the folder is where it is.
-
-**What was kept.** The shadowing rule stays: a subagent inheriting the catalogue
-with `"*"` and listing its own `fetch` gets its own, and `list` still marks it,
-because the catalogue's `fetch` is still dropped for that subagent. A folder named
-after no definition stays a warning; the renamed definition that left it is refused
-from its own side when it listed anything. A portable `SUBAGENTS` entry carries
-objects instead, in its plain `tools` and `skills`, since it has no folder for
-`bundled` to name.
-*(2026-09-23.)*
+folder. A bundled entry takes no `source_ids` -- it reaches whoever reaches the
+subagent -- and no `file::name` path. A subagent inheriting the catalogue with `"*"`
+and listing its own `fetch` gets its own, and `list` marks the shadowing; a folder named
+after no definition stays a warning. *(2026-09-23.)*
 
 ## Agents and delegation
 
@@ -611,454 +341,260 @@ only ever narrows it; the prompt is appended to the harness prompt, never
 replaces it; naming an agent is required; the agent is fixed when the session
 starts and snapshotted into it. *(2026-08-18, `agents-as-definitions.md`.)*
 
-**Omission means different things on different axes, deliberately.** The tool
-fields inherit everything available; `skills`, `subagents` and `middlewares` omit
-to none. Tools are what an agent needs to *act*; the others are what it needs to
-know and to ask. *(2026-08-18, `agents-as-definitions.md`. Reversed 2026-10-18,
-next entry.)*
+**Reversed: omission means different things on different axes.** Leaving out `tools:`
+or `builtin_tools:` granted everything available -- the shell, and every tool file
+added later -- while `skills`, `subagents` and `middlewares` left out granted none, on
+the argument that tools are what an agent needs to act. Every grant field now reads
+alike, in every format: unset is none, `["*"]` is all, `[]` an explicit none. **A
+forgotten line fails closed**, where it used to grant everything silently; **it fits
+source-id locks**, which a default handing every new tool to every agent works against;
+and **one rule** leaves no asymmetry to explain. The `Capabilities` a caller passes still
+read unset as no narrowing. Every shipped definition that left a line out gained
+`["*"]`. A package typed to deepagents' `SubAgent` now holds no built-in until the
+deployment names some, and a subagent's `tools` is always set, to `[]` when nothing is
+granted: deepagents reads a missing key as the parent's tools, so a subagent granted
+none was built holding the agent's, with only its allowlist filtering them -- driven,
+the parent's tool seen arriving. `general-purpose` still gets the parent's.
+*(2026-08-18, `agents-as-definitions.md`. Reversed 2026-10-18.)*
 
-**Reversed: omission means different things on different axes.** Leaving out
-`tools:` or `builtin_tools:` granted everything available -- the shell among it, and
-every tool file added to the workspace afterwards -- while `skills`, `subagents` and
-`middlewares` left out granted none. Every grant field reads the same now: unset is
-none, `["*"]` is all, and `[]` stays an explicit none. That holds in every format: an
-agent file, a subagent file, a portable `SUBAGENTS` entry, whose missing
-`builtin_tools` granted every built-in, and one with `build`, whose missing `tools`
-granted every workspace tool. `builtin_tools` stays refused beside `build`.
-
-Three reasons. **A forgotten line fails closed:** under the old rule it silently
-granted everything, where an agent that cannot act shows it on its first turn. **It
-fits source-id locks:** tools carry locks for source ids, and a default handing every
-new tool to every agent works against them. **One rule:** `tools`, `builtin_tools`,
-`skills`, `subagents` and `middlewares` read alike, so there is no asymmetry for a
-reader to be told about.
-
-What did not change: the `Capabilities` a caller passes still read unset as no
-narrowing -- only what a definition file means moved. Every shipped definition that
-left a line out gained `["*"]`, so none behaves differently on the day; narrowing any
-of them is a decision of its own. `versions` is typed to deepagents' `SubAgent`, which
-has no word for built-ins, so its module adds the key the way a deployment's file
-would -- `{**versions_subagent, "builtin_tools": ["*"]}` -- and a package written to
-that type now arrives holding no built-in until the deployment names some.
-
-Two things moved with it. A definition naming subagents with `builtin_tools` left out
-holds no `task`, so the load-time refusal covers it, saying the line was left out
-rather than that a list leaves `task` out. And a subagent's `tools` is always set, to
-an empty list when nothing is granted: deepagents reads a missing key as the parent's
-tools, so a subagent granted none was built holding the agent's tool objects, and
-"none" held only because its allowlist filtered them -- driven, with the parent's tool
-seen arriving before the filter. `general-purpose` is still handed the parent's, which
-is what it is for. *(2026-10-18.)*
-
-**A subagent names its skills; `["*"]` is refused there and taken on an agent.**
-The star resolves to whatever the request granted, and a subagent is handed a
-skills index only where its skills are *named* -- so under the ordinary request,
-which grants every skill, `skills: ["*"]` read as all of them and arrived as
-none. It worked only when the caller happened to narrow skills, which is a
-meaning no author of the file can see and the opposite of the one they wrote.
-Refused at the read, beside the `subagents` star and for the same reason: the
-habit comes from a request, where the star is the ordinary way to say
-everything. The two tool axes still take it, where it means what it says.
+**A subagent names its skills; `["*"]` is refused there and taken on an agent.** A
+subagent is handed a skills index only where its skills are *named*, so under the
+ordinary request, which grants every skill, `skills: ["*"]` read as all of them and
+arrived as none. Refused at the read, beside the `subagents` star: the habit comes from
+a request, where the star is the ordinary way to say everything. The two tool axes still
+take it.
 
 **An agent grants the helpers its subagents consult, and the docs said otherwise
-for months.** *Helpers arrive with the subagent that wants them* promised that an
-agent naming `reviewer` got whatever `reviewer` named; `kingfisher list` printed
-that chain, computed by `inventory.reached`. The build never did it:
-`AgentSpec.declares` returns the agent's own `subagents:`, and `subagent_helpers`
-narrows a subagent's helpers by it, so an agent naming only the parent built a
-subagent with no `task` tool at all. Measured both ways before changing anything --
-naming both works, naming one drops the helper silently.
-
-The code kept its rule and the prose moved to it, because the alternative widens
-one axis alone: `middlewares:` already makes an agent's line the ceiling its
-subagents are clamped by -- *the shipped pairing had never been built* is the entry
-where that cost `researcher` a name it does not use itself -- and a `subagents:`
-that granted what it did not name would be the only field where naming one thing
-grants another. It would also compile a graph per turn for a helper nobody asked
-for.
-
-So the listing prints what an agent *activates*, `reached` is `activated` and no
-longer walks the chain, and the guide says a subagent's helper needs naming on the
-agent too. What did not change: a *request* naming `reviewer` alone still gets a
-reviewer without its helper, dropped rather than refused, which is the half the
-guide always had right. *(2026-09-17.)*
+for months.** They promised an agent naming `reviewer` got whatever `reviewer` named,
+and `kingfisher list` printed that chain, while the build narrowed a subagent's helpers
+by the agent's own `subagents:` -- so naming only the parent built a subagent with no
+`task`. Measured both ways. The prose moved to the code: `middlewares:` already makes an
+agent's line its subagents' ceiling, and a `subagents:` granting what it did not name
+would be the only field where naming one thing grants another, compiling a graph per
+turn for a helper nobody asked for. The listing prints what an agent activates
+(`core.access.reach.activated`). A *request* naming `reviewer` alone still gets it
+without its helper, dropped rather than refused. *(2026-09-17.)*
 
 **Delegation is unbounded in depth and is a DAG, not a tree.** A definition may
 appear in several places, each is compiled once and its runnable shared, and a
 cycle anywhere in the catalogue is refused, whether or not the agent being built
 reaches it. Compiling per *path* is exponential -- 15 definitions naming three each
-is 6,872 compilations and seven seconds. *(2026-08-18, `subagents-all-the-way-down.md`.)*
+is 6,872 compilations and seven seconds. At startup `kingfisher list` reports a cycle,
+and the first build of an agent with subagents refuses it. *(2026-08-18,
+`subagents-all-the-way-down.md`.)*
 
-"At load" meant when a build read the catalogue, which was the only time it was
-read. The catalogue has been read at startup since, and a cycle is still not
-refused there: `kingfisher list` reports one, and the first build of an agent with
-subagents refuses it. *(2026-09-17.)*
+A name the walk cannot place -- a helper nobody defines, a bare name two files share --
+is no edge. Resolving the shared one to every file it could mean was not taken: it
+refuses the whole catalogue over a loop that exists only if the choice goes one way, and
+the build refuses the same name before following it. *(2026-10-12.)*
 
-A name the walk cannot place is no edge: a helper nobody defines, or a bare name
-two files share with nothing saying which. Resolving the shared one to every file
-it could mean was considered and not taken -- it refuses the whole catalogue over
-a loop that exists only if the choice goes one way. What makes skipping it safe is
-that the build refuses the same name against the same keys before following it.
-*(2026-10-12.)*
-
-**A subagent name nothing answers to is reported, not refused at load.** An agent
-or subagent naming one -- unknown, or the bare name two files share -- loads, and
-the run reaching it refuses it. `kingfisher list` names who wrote it and exits 1;
-it used to exit 0, and an agent's own subagent line dropped the name without a
-word. Refusing at load, as a helper listed without `task` is, was considered and
-not taken: that shape cannot work in any catalogue, while this one is one file at
-odds with the rest, and refusing it at load would stop every request over a
-definition none of them may use. *(2026-10-12.)*
+**A subagent name nothing answers to is reported, not refused at load.** It loads, the
+run reaching it refuses it, and `kingfisher list` names who wrote it and exits 1.
+Refusing at load, as a helper listed without `task` is, was not taken: that shape cannot
+work in any catalogue, while this one is one file at odds with the rest, and refusing it
+would stop every request over a definition none of them may use. *(2026-10-12.)*
 
 **A subagent may be a compiled graph rather than a spec**, told apart by
 extension. `SUBAGENTS` is declared and never inferred; name and description are
 static text and only the graph comes from a function; the function receives the
-model and tools rather than choosing them. A `.yml` file there is refused as the
-`.yaml` it was meant to be; anything else is left alone. *(2026-08-18,
-`compiled-subagents.md`.)*
+model and tools rather than choosing them. A `.yml` file, in any case, is refused as the
+`.yaml` it was meant to be; anything else is left alone, since a package there may hold
+a fixture or a prompt. Refusing every unfamiliar suffix was reversed the day it was
+written. *(2026-08-18, `compiled-subagents.md`.)*
 
-That read "an unrecognised extension in `subagents/` is an error" until now, though
-it was reversed the day it was written: a folder there may be a Python package, and
-a package may hold a fixture or a prompt beside its `__init__.py`, so the one real
-confusion is named rather than every unfamiliar suffix refused. *(2026-09-17.)*
-`.YML` and `.YAML` are the same confusion and were skipped without a word, so the
-suffix is compared in lower case. *(2026-10-12.)*
+**One stack for every graph that holds the workspace tools.** The agent, a subagent and
+deepagents' `general-purpose` each composed their own middleware, and the last got none:
+deepagents fills a spec naming no tools from the parent, so `general-purpose` held the
+agent's tool objects with no host-path guard, no error guard and no path translation.
+`standing_middleware` builds all three, so a fourth cannot be written half-right.
 
-**One stack for every graph that holds the workspace tools.** Three graphs hold
-them -- the agent, a subagent, and the `general-purpose` subagent deepagents supplies
--- and each composed its own middleware where it was built. The one built last got
-none of it: deepagents fills a subagent spec that names no tools from the parent, so
-`general-purpose` held the agent's own tool objects with no host-path guard, no error
-guard and no path translation. A tool call through it reached the tool with the paths
-the model wrote, which is exactly the leak translation exists to close, and a failing
-tool raised instead of answering. `standing_middleware` builds the three now and all
-three sites call it, so a fourth cannot be written half-right.
-
-**A compiled subagent's tools are wrapped, because it is the fourth graph.**
-`standing_middleware` reaches a graph through its middleware, and a compiled subagent
-has none -- deepagents runs it as given. The shipped `scribe` is what showed it: three
-path-taking tools handed to `show-your-work`, and the first call died on
-`log_levels('/data/api.log')` with `FileNotFoundError`, the run over. `GuardedTool`
-carries the translation and the error conversion on the tool objects, which is the one
-thing kingfisher still owns for a graph it did not build.
-
-This reverses, for that path only, the reasoning `WorkspaceToolPathsMiddleware` records --
-rewrite the call rather than wrap each tool, because the tools are not alike. They
-still are not, so the wrapper normalises: a plain function becomes the tool
-`create_agent` would have made of it anyway, refusing a missing docstring exactly
-where that already failed, and a `BaseTool` keeps its own `args_schema`, since a
-wrapper advertising `**kwargs` tells the model the wrong arguments and nothing
-raises. A refusal is returned rather than raised, because inside a graph kingfisher
-did not build nothing catches one -- measured for `ToolException`, `ValueError` and
-`FileNotFoundError` alike, each ending the run -- so `handle_tool_error` converts it
-before it leaves the tool. That also keeps `ToolMessage.status` true, which
-`show_your_work` reads to report a call as failed. *(2026-09-18.)*
+**A compiled subagent's tools are wrapped, because it is the fourth graph.** It has no
+middleware -- deepagents runs it as given -- and the shipped `show-your-work`'s first
+path-taking call died with `FileNotFoundError`, ending the run. `GuardedTool` carries
+the translation and error conversion on the tool objects, reversing for that path only
+the reasoning `WorkspaceToolPathsMiddleware` records, that the call is rewritten because
+the tools are not alike. So the wrapper normalises: a plain function becomes the tool
+`create_agent` would make, and a `BaseTool` keeps its `args_schema`, since a wrapper
+advertising `**kwargs` tells the model the wrong arguments. A refusal is returned, not
+raised, because nothing in a graph kingfisher did not build catches one -- measured for
+`ToolException`, `ValueError` and `FileNotFoundError` -- which also keeps
+`ToolMessage.status` true. *(2026-09-18.)*
 
 **Middleware is standing, switched on by a setting, or offered, and what decides is
-whether kingfisher promises it.** Standing middleware is what kingfisher guarantees
-every caller on every graph it builds -- the guards, the allowlists, the recorder,
-result clearing, the PDF guard -- and `standing_middleware(kind)` builds all of it for
-the agent, a declared subagent and `general-purpose`, so what a graph is guaranteed is
-read in one place. Memory and the interpreter are neither: a deployment switches them by
-a setting, not a definition. Everything else is offered, and a definition names it. The
-order is one rule on every graph -- standing, then switched, then a subagent's helpers,
-then offered -- so whatever a deployment chose sees a call only after kingfisher has
-judged it and rewritten its paths. Memory and the interpreter used to sit between the
-guards and the allowlists; moved after every standing one, the full suite stayed green
-at 3,319, so that position was holding nothing. *(2026-10-17.)*
+whether kingfisher promises it.** Standing is what every caller is guaranteed on every
+graph -- the guards, the allowlists, the recorder, result clearing, the PDF guard --
+built by `standing_middleware` for the agent, a declared subagent and `general-purpose`.
+Memory and the interpreter are switched by a setting; everything else is offered, and a
+definition names it. The order is standing, switched, a subagent's helpers, offered, so
+whatever a deployment chose sees a call only after kingfisher has judged it and
+rewritten its paths. Moving memory and the interpreter after every standing one left
+all 3,319 tests green, so their old place held nothing. *(2026-10-17.)*
 
-**A compiled subagent is outside the promise, and that is said rather than closed.**
-deepagents runs it as given, so a guarantee reaches it only on its tools --
-`GuardedTool`'s paths and errors -- and at the `task` boundary, where only a declared
-subagent is reached and its answer is recorded. Closing it would mean wrapping a graph
+**A compiled subagent is outside the promise, and that is said rather than closed.** A
+guarantee reaches it only on its tools, through `GuardedTool`, and at the `task`
+boundary, where its answer is recorded. Closing it would mean wrapping a graph
 kingfisher did not build. *(2026-10-17.)*
 
-**`TodoListMiddleware` stays standing, for now.** Offered was the obvious place for a
-checklist no caller is promised, but `write_todos` is a built-in tool a request grants
-by name, and `build_agent` reads which tools are built in off the middleware its probe
-holds. Offered, the checklist would leave the probe, and `builtin_tools: [write_todos]`
-would name a tool that is not there. Moving it waits on the built-ins being read some
-other way. *(2026-10-17.)*
+**`TodoListMiddleware` stays standing, for now.** `build_agent` reads which tools are
+built in off the middleware its probe holds, so an offered checklist would leave the
+probe and `builtin_tools: [write_todos]` would name a tool that is not there. Moving it
+waits on the built-ins being read some other way. *(2026-10-17.)*
 
-**Two pairs of standing middleware are one each now.** `HostPathGuard` and
-`WorkspaceToolErrors` each turned an exception into a failed result, three places apart;
-`ToolFailureMiddleware` does both, a workspace tool's exception first so it keeps its
-type, from the outer one's place, so a `grep` that `BuiltinToolsMiddleware` runs as
-several searches fails once. `ToolAllowlist` and `DeclaredSubagentsOnly` each refused
-what a request was not granted; `GrantedOnlyMiddleware` is on every graph and grants
-everything where nothing was narrowed, as the declared-subagent check already was on the
-agent. Five more took the suffix -- `RecorderMiddleware`, `ResultClearingMiddleware`,
-`LargePdfMiddleware`, `WorkspaceToolPathsMiddleware`, `NarrowedSkillsMiddleware` -- so a
-class in the package says what it is. `results.failed` builds every failed result
-kingfisher's own hand back. The offered ones keep their own: `kingfisher` and
-`kingfisher.plugins` are the addresses a file in `assets/` may import, and everything
-else may move. A helper to append a line to a result was proposed beside it and not
-built, because only `BuiltinToolsMiddleware` appends. *(2026-10-17.)*
-
-**And two more pairs.** `CutReplies` and `ModelUnavailableGuard` each stood in front of
-the model call, one for a reply cut at the output cap and one for a call the provider
-refused; `ModelReplyMiddleware` does both, and reads a refusal on every call it makes,
-the asking again after a cut answer included. `ShellPaths` and `FileTools` each changed
-deepagents' built-in tools from outside, `execute` and then `read_file` and `grep`, and
-neither touched the other's; `BuiltinToolsMiddleware` does both. *(2026-10-17.)*
+**Two pairs of standing middleware are one each now.** `ToolFailureMiddleware` turns
+both kinds of exception into a failed result, a workspace tool's first so it keeps its
+type, from the outer place, so a `grep` that `BuiltinToolsMiddleware` runs as several
+searches fails once. `GrantedOnlyMiddleware` refuses both what a request was not granted
+and an undeclared subagent, granting everything where nothing was narrowed.
+`core.agent.middlewares.results.failed` builds every failed result kingfisher's own
+hand back. Offered ones keep their names, because `kingfisher` and `kingfisher.plugins`
+are the addresses a file in `assets/` may import. A helper to append a line to a result
+was not built: only `BuiltinToolsMiddleware` appends. **And two more pairs.**
+`ModelReplyMiddleware` handles a reply cut at the output cap and a call the provider
+refused, reading a refusal on the retry too; `BuiltinToolsMiddleware` makes both changes
+to deepagents' built-in tools. *(2026-10-17.)*
 
 **A call from `eval` is a fifth way to dispatch, and it met none of the guards.** With
-the sandbox wired, a narrowed request's `eval` holds `tools.<name>()` for each tool it
-was granted, and `task()` wherever it may delegate. Both go through langchain-quickjs's
-own bridge rather than `ToolNode`, so no `wrap_tool_call` on any graph sees them, and no
-approval gate does either: a gate reads the model's message, and a call from code is
-never on it. Measured against the same call made directly, which refused or paused each
-time: a tool reading its own argument returned another session's `inputs/` file and the
-host's `/etc/hosts`; `/inputs/x` reached a tool untranslated; the shipped `csv_profile`
-on a missing file ended a `Kingfisher.run` turn with `FileNotFoundError`;
-`tools.writeFile` under `interrupt_on: [write_file]` wrote with no pause; and `task()`
-under `interrupt_on: [task]` ran the subagent with no pause. What held was the built-in
-file tools refusing a host path, which the backend does whoever calls, and the request's
-allowlist, since what the sandbox is handed is built from it.
-
-Three changes, each where its gap was:
-
-- **The granted workspace tools go in as `GuardedTool`s, built-ins as names.** This is
-  the compiled-subagent exception above taken a second time, for its reason -- a call
-  that never reaches `ToolNode` has no middleware to meet -- and not a reversal of
-  rewriting the call: every graph `standing_middleware` reaches still rewrites. A
-  built-in needs no wrapper, because its refusal is the backend's. What a wrapped tool
-  refuses or raises comes back to the program as the tool's error text, and the turn
-  goes on.
-- **A gated tool is left out of `tools.*`, and a gate on `task` turns `task()` off.**
-  Gating `eval` instead would put a person in front of arithmetic, and the gated tool is
-  still callable directly, behind its gate. The sandbox was re-wired only for a narrowed
-  request, so an unrestricted one with a gate kept the probe's `task()`; it is re-wired
-  whenever there is a gate now.
-- **A nested helper is handed no `eval`.** A helper is given the probe graph's tool
-  objects, and the probe's sandbox is wired before the grant is known and never narrowed.
-  A helper whose own allowlist refused `task` reached a subagent through `task()`, and
-  `release_interpreter` walks only the agent's graph, so a `quickjs-worker` thread
-  outlived every turn that used one. A top-level subagent never had `eval` -- deepagents
-  hands a subagent none of its parent's middleware -- and a helper now matches it.
-
-A subagent that lists `eval` in `builtin_tools` gets nothing for it, at either level and
-without a word, where on a deployment with the sandbox off the same file is refused as
-naming an unknown tool. Refusing it everywhere would be a rule for the definition format,
-and was left for a change of its own.
-
-The comment at the wiring called `None` the library's "no allowlist", and a test's
-docstring agreed. `None` turns `tools.*` off: an unrestricted request has never reached
-a tool from code, and the code did what it should while its text said the opposite.
-Giving an unrestricted request `tools.*` would now mean the same guarded list, and is
-not done here. *(2026-10-11.)*
+the sandbox wired, `eval` holds `tools.<name>()` for each granted tool and `task()`
+wherever it may delegate, through langchain-quickjs's bridge rather than `ToolNode`, so
+no `wrap_tool_call` and no approval gate sees them. Measured against the same calls made
+directly: a tool returned another session's `inputs/` file and the host's `/etc/hosts`;
+`/inputs/x` reached a tool untranslated; the shipped `csv_profile` on a missing file
+ended a `Kingfisher.run` turn; and gated `write_file` and `task` ran with no pause. Only
+the backend's host-path refusal and the allowlist the sandbox is built from held. So
+**the granted workspace tools go in as `GuardedTool`s, built-ins as names** -- the
+compiled-subagent exception again, for the same reason, and errors come back to the
+program as text; **a gated tool is left out of `tools.*`, and a gate on `task` turns
+`task()` off**, since gating `eval` itself would put a person in front of arithmetic;
+and **a nested helper is handed no `eval`**, since the probe's sandbox is wired before
+the grant is known and a helper whose allowlist refused `task` reached a subagent
+through it, leaving a sandbox thread `release_interpreter` never reached. A top-level
+subagent never had `eval`. `None` turns `tools.*` off: an unrestricted request has never
+reached a tool from code. *(2026-10-11.)*
 
 **A definition naming subagents has to hold the tool that calls them.** The shipped
-`reviewer` named `profiler` and left `task` off its `builtin_tools`, so its own
-allowlist refused every consultation at the call -- where the model reads the error and
-answers without the helper -- and nothing said so at load. The same shape on an agent
-was measured before refusing it there: the shipped `researcher` and `analyst` each list
-their built-ins without `task`, and driving either one to its subagent came back `task
-is not available for this request`. Neither had ever reached `sweeper` or `auditor`.
+`reviewer` named `profiler` without `task` in its `builtin_tools`, so its own allowlist
+refused every consultation at the call, where the model answers without the helper, and
+nothing said so at load. Measured on agents too: two shipped agents had never reached
+their subagents. Both formats refuse at load, from one function, `subagents:` naming
+anything while `builtin_tools` is a list without `task` or is left out. A *request*
+narrowing `task` away is still narrowed at the call, because there the caller chose it.
+*(2026-10-12.)*
 
-Both formats refuse it at load now, in the same words, from one function: `subagents:`
-naming anything while `builtin_tools` is a list without `task`. An omitted list and
-`["*"]` hold it. A *request* narrowing `task` away is left alone and still narrowed at
-the call, because there the caller chose it and the file is not wrong. Both shipped
-agents hold `task`. *(2026-10-12.)*
-
-An omitted list holds it no longer: since a tool field left out grants none, it holds
-no `task` and is refused too, in words of its own -- *Reversed: omission means different
-things on different axes* has the rest. *(2026-10-18.)*
-
-**A subagent may not list `eval`.** The entry on calls from `eval` left this open: with
-the sandbox wired, a subagent listing it loaded and was built without it, and without
-the sandbox the same file was refused at build as naming an unknown tool. Read against
-the code first, no subagent holds the sandbox in any configuration -- deepagents builds a
-subagent's stack from its own spec and none of the parent's middleware, the
-`general-purpose` one kingfisher supplies carries the guards, the allowlist and the
-agent's registered middleware, a nested helper's tool objects leave `eval` out, and a
-compiled subagent may not list built-ins at all. So it is refused at load whether or not
-the sandbox is wired, in a document and a portable declaration alike, and the agent
-format still takes it.
-
-A subagent could hold a tool *called* `eval` only through middleware a deployment
-registers itself, which an agent has to list for a subagent to choose it, and an agent
-runs everything it lists -- beside the sandbox, under the same name, or with the sandbox
-off as a name the build's probe never saw. Neither is a configuration to keep open.
-
-The name moved from `infrastructure/harness/interpreter.py` to `kinds/subagents` beside
-`TASK_TOOL`, for that constant's reason and because a kind may not name a layer: the
-helper filter and the refusal key on one spelling. *(2026-10-12.)*
+**A subagent may not list `eval`.** No subagent holds the sandbox in any configuration:
+deepagents builds a subagent's stack from its own spec, `general-purpose` carries the
+guards, the allowlist and registered middleware, a nested helper's tools leave `eval`
+out, and a compiled subagent lists no built-ins. Listing it granted nothing with the
+sandbox wired and was an unknown tool without, so it is refused at load either way, in
+both subagent formats; the agent format takes it. A tool *called* `eval` could reach a
+subagent only through middleware a deployment registers -- not a configuration to keep
+open. The name lives in `core.definitions.subagents` beside `TASK_TOOL`, so the helper
+filter and the refusal key on one spelling. *(2026-10-12.)*
 
 **The skills switch is the deployment's, for subagents too.** `cfg.skills_enabled`
-says what is wired and a request says what it wants of that. The subagent branch asked
-only the request, so a workspace with skills switched off still handed a subagent an
-index of the catalogue while the agent got none and `doctor` reported that none would
-be offered. Read once now, beside the request's own ceiling. A subagent's *own* bundle
-stays outside the switch: it is the subagent's folder rather than the catalogue the
-switch is about, and the backend mounts its route either way, so withholding the index
-would leave those files reachable and unnamed. *(2026-09-18, from an architecture
-review; both were found by reading the three stacks side by side.)*
+says what is wired and a request says what it wants of that. Asking only the request,
+a subagent was handed the catalogue's index with skills off, while the agent got none
+and `doctor` said none would be offered. A subagent's *own* bundle stays outside the
+switch: the backend mounts its route either way, so withholding the index would leave
+its files reachable and unnamed. *(2026-09-18, from an architecture review.)*
 
+**A third reader was still asking only the request: the withheld run report.** With
+skills off it still said `1 skill(s) not granted: beta`, implying another was granted,
+while `doctor` said none would be offered -- measured on 2026-10-11 through a whole
+turn. Where nothing is wired the offered set is `()`, so nothing was withheld. **The
+rule that should have caught it asserted the defect**:
+`test_every_kind_a_request_can_narrow_is_reported` ran on the `cfg` fixture, where
+`Config.skills_enabled` is *off*, and so required the answer the switch suppresses. It
+switches skills on now. *(2026-10-11, from an architecture review.)*
 
-**A third reader was still asking only the request: the withheld run report.** With the
-switch off the agent is told about no skills at all, and the report still said `1
-skill(s) not granted: beta` -- which says `alpha` *was* granted. Measured on 2026-10-11
-through a whole turn: the same line with the switch on and off alike, while `doctor` on
-that config says `KINGFISHER_SKILLS_ENABLED is off so none will be offered`. Two
-surfaces contradicting each other about one deployment. The offered set is `()` where
-nothing is wired, so there is nothing to have been withheld.
-
-**The rule that should have caught it asserted the defect.**
-`test_every_kind_a_request_can_narrow_is_reported` drives all four axes and asserts the
-skills row reports -- on the `cfg` fixture, where `Config.skills_enabled` defaults to
-*off*. So it required the answer the switch exists to suppress. It switches skills on
-now, which is what a rule about the skills axis needs, and the new rule takes the other
-half. That makes five rules this review has found whose fixture put their own subject
-out of reach, and the first that was asserting the wrong answer rather than merely
-missing the right one. *(2026-10-11, from an architecture review.)*
 **A definition names at most one model**, and a subagent naming none runs its
 caller's. A list there is refused rather than read. `indistinct` reports a
 subagent that named a model and did not end up anywhere different.
 *(2026-08-18, `compiled-subagents.md`, `agents-as-definitions.md`.)*
 
-**What a subagent inherits is now held rather than commented.** Two lines beside
-`_with_helpers` explain that a subagent naming no model gets no `model` on its spec
--- deepagents hands it the caller's -- and that its middleware must therefore be
-told the model it will actually run. Both carried the reasoning for a bug measured
-once: a helper under a subagent pinned to the cheap model quietly ran the expensive
-one. Only the helper half was held. Dropping the other, so a middleware on an
-inheriting subagent is handed `None`, left all 2,084 tests green.
+**What a subagent inherits is now held rather than commented.** A subagent naming no
+model gets none on its spec -- deepagents hands it the caller's -- so its middleware
+must be told the model it will run; a helper under a cheap-pinned subagent once ran the
+expensive one. Only the helper half had been held: handing an inheriting subagent's
+middleware `None` left all 2,084 tests green.
 
 **The duplication that occasioned this was left alone, and that is the decision.** A
-subagent's model is resolved twice per build -- once for what its middleware is
-told, once for its spec -- and the two are equal answers in separate objects. The
-review card called for collapsing them. Measured first: a model costs **0.010ms** to
-build, against an admit at 15-46ms, so there is no saving to claim; the two sites
-always resolve from the same inputs, so they cannot disagree; and the case the card
-named -- a top-level call carrying an inherited model -- cannot arise, because
-`default_model` is `None` there by construction.
-
-Worth recording for whoever reads that construction next: `default_model=inherited
-if nested else None` is the same expression as `default_model=inherited` given the
-one caller, since a top-level call passes no `inherited` at all. It guards a caller
-that does not exist, which is why no test can hold it and why removing it changes
-nothing. *(2026-09-23, from an architecture review.)*
+subagent's model is resolved twice per build. Measured: **0.010ms** to build against an
+admit at 15-46ms, so no saving; both sites resolve from the same inputs, so they cannot
+disagree; and the review's case, a top-level call carrying an inherited model, cannot
+arise. `default_model=inherited if nested else None` equals `default_model=inherited`
+for the one caller there is: it guards a caller that does not exist, which is why no
+test can hold it. *(2026-09-23, from an architecture review.)*
 
 **Reversed on 2026-08-19: a list of models, and `distinct: true`.** `model` took a
 list tried in order, and `alias` was the only thing that could use one, so the two
 went together. `distinct: true` turned `indistinct`'s report into a refusal, and
 `second-opinion` was its only user in the shipped catalogue, so both went; the field
-can come back if that subagent does. This entry kept describing both until
-2026-09-17.
+can come back if that subagent does.
 
-**A turn resolves its agent once.** Admission asked `_agent_for` twice, and down
-different branches of the same function: the first resolved from the catalogue and
-wrote the session's pin, the second read that pin back and parsed it. Counted rather
-than reasoned about, because both answers agreed and nothing was ever wrong --
-measured at two calls, two snapshot reads and two parses per turn under a policy,
-one of each without.
-
-`_claimed` resolves it and hands it to both readers, so `_graph_for` takes the spec
-rather than deriving it, along with the source ids it was also resolving a second
-time. Both are required keywords: this method has one caller in `src/`, and a
-default meaning "work it out yourself" would have been a branch alive only in tests.
-
-**It is resolved only where something will read it**, and that guard is behaviour
-rather than economy. A deployment that supplied its own graph and declares no policy
-has no reader for the spec: the build never asks, and the withheld report only
-filters by an agent's audience where a vocabulary is in force. Resolving anyway
-would make such a session start refusing a request that names a different agent
-mid-conversation, which today it does not. Both halves of that condition are driven
--- a supplied graph with no policy reads the snapshot never, and one under a policy
-reads it once, because the report still wants what the agent declares.
-*(2026-09-23, from an architecture review, whose count of three reads was two.)*
+**A turn resolves its agent once.** Admission resolved it twice down two branches --
+from the catalogue, writing the pin, then reading the pin back -- counted at two calls,
+two snapshot reads and two parses per turn under a policy. `_claimed` resolves it and
+`_graph_for` takes the spec and source ids as required keywords: one caller, and a
+default meaning "work it out yourself" would be a branch alive only in tests. **It is
+resolved only where something will read it**, and that is behaviour: a deployment with
+its own graph and no policy has no reader for the spec, and resolving anyway would make
+it refuse a request naming a different agent mid-conversation. Both halves are driven.
+*(2026-09-23, from an architecture review.)*
 
 ## Packaging: where the definitions live
 
 This reversed twice. The current answer is the third one.
 
 **Definitions live outside the wheel, and where a deployment gets them is a
-setting.** `KINGFISHER_ASSETS` names one path, read in `application/config.py`;
-`seed(into, source)` takes it as a required argument with no `None` branch. This
-repository's own are in `assets/`, outside the wheel, committed and held to
-working by the suite. Definitions from another project belong outside the
-checkout, and are seeded with a second `--from`.
+setting.** `KINGFISHER_ASSETS` names one path; `seed(into, source)` takes it as a
+required argument with no `None` branch. This repository's own are in `assets/`,
+outside the wheel, committed and held to working by the suite. Definitions from
+another project belong outside the checkout, and are seeded with a second `--from`.
 *(2026-08-19, `examples-are-ours-assets-are-yours.md`. Its second directory
 reversed 2026-10-16, below.)*
 
 **A subagent can travel, and kingfisher discovers nothing.** A `SUBAGENTS` entry
-with no `build` is a declaration kingfisher assembles, restricted to what a
-definition can answer without seeing the deployment it lands in: `name`,
-`description`, `system_prompt`, `builtin_tools`, `tools`, `skills`, `metadata`.
-`tools` holds the tool objects and `skills` an absolute directory, never names. The
-three it may not write -- `subagents`, `middlewares`, `model` -- each name something
-only one deployment knows, and each is refused with that reason rather than as an
-unknown key. `source_ids` was the fourth; see the reversal below.
+with no `build` is a declaration kingfisher assembles, restricted to what a definition
+can answer without seeing the deployment it lands in: `name`, `description`,
+`system_prompt`, `builtin_tools`, `tools`, `skills`, `metadata` and `source_ids`.
+`tools` holds the tool objects and `skills` absolute directories, never names. The
+three it may not write -- `subagents`, `middlewares`, `model` -- each name something only
+one deployment knows, and are refused with that reason rather than as unknown keys.
 
-**What it carries goes in the plain fields, not under `bundle`.** It was written
-`bundle: {tools: [...], skills: ...}`, the same key a document used to describe its
-folder, so one word meant a claim in one format and the goods in the other. The
-nesting only said *these are not names*, which the objects already say. A string or a `{name: ...}` entry in
-a portable `tools` is refused as a name, and `bundle` is refused with the two plain
-fields in the message. *(2026-09-23.)*
+**What it carries goes in the plain fields, not under `bundle`.** `bundle` was the key a
+document used to describe its folder, so one word meant a claim in one format and the
+goods in the other; the objects already say *these are not names*. A string or a
+`{name: ...}` in a portable `tools` is refused as a name, and `bundle` is refused naming
+the plain fields. *(2026-09-23.)*
 
-**This is not the entry above, and the difference is who does the finding.** That
-reversal was about *discovery*: assets leaving the repository and being found
-through entry points kingfisher named none of. Here kingfisher finds nothing.
-A deployment writes `subagents/acme.py` holding `from acme_agents import
-SUBAGENTS`, and that file is the whole of the opt-in -- in the workspace, beside
-every other definition, where `Origins` and `doctor` already report from. The
-mechanism needed no new code: the catalogue has always imported `subagents/*.py`
-and read `SUBAGENTS`, and the only thing stopping a package import was `declared`
-demanding a `build`.
+**This is not the entry above, and the difference is who does the finding.** The
+packaging reversal was about *discovery* through entry points. Here a deployment writes
+`subagents/acme.py` holding `from acme_agents import SUBAGENTS`, and that file is the
+whole opt-in, in the workspace where `Origins` and `doctor` already report from.
 
-**The rules hang on the shape, not on the origin.** A re-export hands over
-mappings indistinguishable from ones typed into the same file, so nothing can ask
-whether an entry was imported. `build` present means the compiled rules, absent
-means the portable ones. The alternative was a second export name or a
-self-declared marker, and both would have been a rule about where an entry came
-from that any local file could claim.
+**The rules hang on the shape, not on the origin.** A re-export is indistinguishable
+from an entry typed into the file, so `build` present means the compiled rules and
+absent the portable ones. A second export name or a self-declared marker would be a rule
+about origin that any local file could claim.
 
-**Both Python declarations check a required field the same way, in one body.** They
-did not. The compiled branch checked that `name` and `description` were *present*; the
-portable branch beside it checked presence and emptiness, and so did both document
-readers. So `{"name": "", "description": "", "build": f}` was accepted by the one
-reader of four that had half the check. Measured: the subagent reached deepagents --
-which dispatches on the name and hands the description to the parent model to choose on
--- and `kingfisher list` exited **zero** over a line reading `(surveyor.py)  [compiled]
-— `, against this record's own rule that a listing exiting zero means nothing in the
-catalogue will break.
-
-Absent and blank stay different messages, for the reason both document readers already
-gave: "missing" sends somebody looking for a line they can see they wrote, which is the
-wrong hunt. What is shared is the body, not the wording -- the documents say `missing
-required field 'name'` and the Python declarations say `SUBAGENTS entry is missing
-'name'`, which is the format naming its own export, and `EXPORT` is beside the format
-for that reason.
-
-The rule is driven over **all four readers** rather than over the one that was wrong: a
-required field present but blank is refused, and the same fields never written are
-refused as missing, with a control that each reader still accepts a definition with
-nothing wrong. `models.yaml` was measured too and already refuses every blank required
-key, so the class stops at the definition formats.
-
-Folding the two moved a refusal, and `test_refusals.py` said so -- `_portable` from four
-to two, `declared` from five to four, and a new entry for the shared body, filed on the
-blank name rather than the missing one because that is the refusal the fold added and
-what the table is for is proving `doctor` reports it. The defect that entry needed was
-already written and filed nowhere: `a_portable_subagent_naming_a_model` had been sitting
-unreferenced since it was added. *(2026-09-27, from an architecture review.)*
+**Both Python declarations check a required field the same way, in one body.** The
+compiled branch checked only presence, so `{"name": "", "description": "", "build": f}`
+reached deepagents, which dispatches on the name and shows the description to the parent
+model, and `kingfisher list` exited **zero** over it -- against the rule that a zero exit
+means nothing in the catalogue will break. Absent and blank stay different messages, as
+"missing" sends somebody hunting a line they can see they wrote. Driven over **all four
+readers**, with a control; `models.yaml` already refused every blank required key.
+*(2026-09-27, from an architecture review.)*
 
 **Reversed: a declaration without `build` may not say who reaches it.** Refused on
-the reason the other three are, that it names ids from one deployment's vocabulary,
-with the agent granting the subagent left to carry the audience. That made a
-deployment writing its subagents as dicts -- translated from its own records, which
-already say who may use each one -- write the audience again on every agent naming
-the subagent, which is the line one of them forgets. The reason was also weaker for
-this key than for the others: a name the vocabulary lacks stops the deployment at
-startup, naming it, and with no vocabulary the line does nothing, so a subagent
-shipped from elsewhere fails loudly or not at all. The other three have no such
-check to fall back on. Taken now, read as a document's `source_ids:` is, and never
-handed to deepagents -- the spec deepagents receives is built from kingfisher's
-record, not passed through. Tools a declaration carries may say who they admit as
-well, through a `ToolSpec`. *(2026-09-23. Reversed 2026-10-16.)*
+the reason the other three are, leaving the granting agent to carry the audience. That
+made a deployment translating subagents from records that already say who may use each
+write the audience again on every agent naming one -- the line one of them forgets. The
+reason was weaker here, too: a name the vocabulary lacks stops startup, and with no
+vocabulary the line does nothing, so it fails loudly or not at all; the other three have
+no such check. Taken, read as a document's `source_ids:` is, and never handed to
+deepagents. Carried tools may say who they admit through a `ToolSpec`. *(2026-09-23.
+Reversed 2026-10-16.)*
 
 **What it carries is its own, and `builtin_tools` is the exception.** Carried
 tools reach that subagent and nothing else -- they enter no catalogue, so nothing
@@ -1067,98 +603,56 @@ rather than the definition's, so they stay narrowed by the request: otherwise
 `pip install` would be a way to put back a shell a deployment had turned off.
 
 **`Holdings` gained a second backing rather than the spec gaining contents.**
-`SubagentSpec.bundled` holds names -- what a definition lists from its folder,
-checked against it -- and `carried` beside it holds what a definition brought
-instead, refused together by `__post_init__` since a subagent owns one or the
-other. Putting imported tool
-objects on the spec for folder bundles too would have made *parsing* a definition
-import its bundle's Python, where now the import happens when a bundle's tools are
-asked for. `kingfisher list` asks, to report them, and so does `warm`.
-*(2026-09-16.)*
+`SubagentSpec.bundled` holds names a definition lists from its folder, and `carried`
+holds what it brought; a spec has one or the other. Tool objects on the spec for folder
+bundles too would make *parsing* a definition import its bundle's Python, where now the
+import waits until a bundle's tools are asked for. *(2026-09-16.)*
 
-**A portable definition's `skills` are directories on the host, a list allowed.** The
-list is deepagents' own `SubAgent["skills"]`, so a spec typed to it is imported as
-written -- but there each entry is a path inside the backend, and a package cannot
-know a deployment's routes, so here each is a directory that must exist on this
-host, and `/skills/...` is refused naming the likely mistake. One directory keeps the
-bundle's route; several are numbered beneath it in the order listed, all under the
-bundle's one label, so a skill's identity does not depend on which directory holds
-it. Two holding one name are refused rather than merged, since the subagent could
-hold only one of them. *(2026-09-25.)*
+**A portable definition's `skills` are directories on the host, a list allowed.** In
+deepagents' `SubAgent["skills"]` each entry is a path in the backend, which a package
+cannot know, so here each is a directory that must exist on this host, and `/skills/...`
+is refused naming the likely mistake. Several sit numbered under the bundle's one label,
+so identity does not depend on the directory; two holding one name are refused, since
+the subagent could hold only one. *(2026-09-25.)*
 
-**A subagent's own skills folder is read flat, as a mount is.** Its skills index is
-given the folder as one source, which deepagents lists one level down, while the
-startup reading treated it as the catalogue -- a root whose folders are sources too.
-So a skill in a subfolder was granted to a carried subagent and never on its menu,
-and nothing said so. Both readers now ask the repository whether it is `flat`, so
-they find the same skills. A skill too deep to load is reported, as the catalogue's
-are, by `kingfisher list` under its subagent and by a `doctor` warning, numbered by
-folder when a subagent carries several; a definition listing one is refused, as a
-caller naming a skill the agent will not load is, with a message saying it is in a
-subfolder rather than that the folder lacks it. Allowing one level of grouping was
-the alternative: it meant giving the index a source per subfolder, and a rule for two
-subfolders holding one name, for subagents that hold a handful of skills.
-*(2026-10-11.)*
+**A subagent's own skills folder is read flat, as a mount is.** The index listed it one
+level down while startup read it as a catalogue of sources, so a skill in a subfolder was
+granted and never on the menu. Both readers ask the repository whether it is `flat`; a
+skill too deep is reported by `kingfisher list` and `doctor`, and a definition listing
+one is refused. Not taken: one level of grouping, which needs a source per subfolder and
+a clash rule, for subagents holding a handful of skills. *(2026-10-11.)*
 
 **deepagents' other `SubAgent` keys are refused with a reason, not as unknown.** A
-spec typed to that TypedDict is the likeliest thing to write `permissions`,
-`interrupt_on`, `response_format` or `middleware`, and "this format does not define
-it" reads as *not yet* rather than *no*. The first three take a document's reasons.
-`middleware` is refused rather than carried the way tools are: deepagents merges it
-by name, so the `FilesystemMiddleware` its own docs suggest would replace the one
-holding the deployment's backend and permission rules, and middleware otherwise
-reaches a subagent only by the deployment registering it. The drift test reads the
-keys off the TypedDict, so one a deepagents upgrade adds has to be decided here.
-*(2026-09-25.)* `CompiledSubAgent`'s `runnable` joined them: a graph built before
-the deployment saw it has its tools fixed, and the generic refusal listed every key
-but `build`, the one that does what its author meant. *(2026-10-12.)*
+spec typed to that TypedDict is the likeliest to write `permissions`, `interrupt_on`,
+`response_format` or `middleware`, and "not defined" reads as *not yet*. `middleware` is
+not carried as tools are: deepagents merges it by name, so the `FilesystemMiddleware`
+its docs suggest would replace the one holding the deployment's backend and rules.
+`CompiledSubAgent`'s `runnable` joined them on 2026-10-12: a graph built before the
+deployment saw it has its tools fixed, and `build` is what its author meant. The drift
+test reads the keys off the TypedDict, so a new one has to be decided here.
+*(2026-09-25.)*
 
-**Considered and not taken: `own_subagents`, private nested helpers.** The key was
-reserved when `subagents:` was refused, so that a portable definition wanting a
-helper could get one later without any file changing meaning. Costed on 2026-09-17
-and not built.
-
-The case for it is one thing, because the other two reasons to delegate are already
-unavailable to a portable definition: it cannot give a helper a different tool
-surface, since its carried bundle is one set with nothing to split it between, and
-it cannot give one a different model, since `model` is refused as unportable. What
-is left is context isolation -- a subagent burning its own context and handing back
-an answer -- and `build` already answers that. A compiled entry composes whatever
-graph it likes and closes over its own tools.
-
-The cost was not small either. Nested specs inside specs means recursion in the
-reader; a cycle check over a shape where `entry["own_subagents"] = [entry]` is
-constructible in Python; a compilation memo keyed on `(name, nested, id(inherited))`
-that two packages each shipping a private `checker` would collide in; and decisions
-about whether a request may narrow a private helper away, and how `list` shows one.
-
-So the refusal stays and the key stays reserved, and what changed instead was the
-advice. It used to say *fold the step into this one's prompt*, which is wrong in the
-one case somebody would be reading it: a prompt cannot buy a fresh context, which is
-the whole reason to want a helper. It now names the two real answers -- ship the
-helper as a subagent of its own, or write `build` -- and `formats.md` says what each
-costs. `test_the_helper_refusal_points_at_a_key_that_exists` holds the advice to the
-format, so a renamed `build` cannot leave it pointing at nothing.
-
-Not measured, and said so plainly: nobody has hit the refusal yet. Build it when
-somebody does, and their case will say which of the decisions above to take.
+**Considered and not taken: `own_subagents`, private nested helpers.** A portable
+definition cannot give a helper another tool surface (its bundle is one set) or model
+(`model` is unportable), leaving only context isolation -- which `build` answers. The
+cost: recursion in the reader, a cycle check over a constructible
+`entry["own_subagents"] = [entry]`, a compilation memo two packages' private `checker`s
+would collide in, and rules for narrowing and listing a private helper. So `subagents`
+stays refused, and its advice names the two real answers -- ship the helper as a subagent
+of its own, or write `build` -- rather than folding the step into the prompt, which
+cannot buy a fresh context. `test_the_helper_refusal_points_at_a_key_that_exists`
+holds the advice to the format. Nobody has hit the refusal; build it when somebody does.
 *(2026-09-17.)*
 
 **Reversed: a second directory, ignored, for definitions somebody else wrote.**
-`assets/` was committed holding only a `README.md` with everything else ignored,
-so a skill fetched with its own `LICENSE.txt` could not reach an MIT repository
-through `git add -A`. This repository's set sat beside it as `assets_examples/`,
-a name chosen only so the two would sort together. Nothing ever went into the
-ignored one, and the one in use carried the awkward name, so the set took
-`assets/`.
-
-The licence argument stands and moved rather than went: such definitions live
-outside the checkout. An ignored subdirectory was the alternative, and is wrong
-for a reason the old arrangement never met -- the suite walks every file under
-`assets/` as one of ours, so a fetched skill there would be held to our tests and
-could fail a change that never touched it. What the move costs: an ignore rule
-stopped a careless `git add -A`, and a sentence in `assets/README.md` does not.
-*(2026-08-19. Reversed 2026-10-16.)*
+`assets/` held only a `README.md` with everything else ignored, so a fetched skill with
+its own `LICENSE.txt` could not reach an MIT repository through `git add -A`, while this
+repository's set sat beside it under another name. Nothing went into the ignored one, so
+the set took `assets/`, and such definitions live outside the checkout. An ignored
+subdirectory is wrong because the suite walks every file under `assets/` as ours, so a
+fetched skill could fail a change that never touched it. The cost: a sentence in
+`assets/README.md` does not stop a careless `git add -A`. *(2026-08-19. Reversed
+2026-10-16.)*
 
 **Reversed: definitions as separate pip packages.** Assets were to leave the
 repository entirely, become distributions of their own, and be found through
@@ -1172,236 +666,153 @@ and an empty workspace gets `SEED_HINT` instead.
 
 **Reversed: definitions shipped inside the wheel.** The reversal of the above went
 one step too far -- `src/kingfisher/assets/`, shipped to everyone, excluded from
-every architecture rule. Its D1 was itself reversed the next day by the entry at
-the top of this section. Its D5 held: the tree went back to `src/`, `tests/` and
-`service/` at the root.
+every architecture rule. Its D1 was reversed the next day by the entry at the top of
+this section; its D5, the tree back at the root, held.
 *(2026-08-18, `the-definitions-ship-with-the-library.md`. D1 reversed 2026-08-19.)*
 
 **Reversed: one `packages/` folder for three distributions.** Tidiness only, no
 caller saw it, and it went with the packaging reversal above.
 *(2026-08-17, `one-folder-for-the-packages.md`. Reversed 2026-08-18.)*
 
-**Seeding lays the workspace out itself, and its parameter says what it is.**
-`seed(into: Destination, source: Path) -> Seeded`. `into` rather than `cfg`,
-because `Destination` is a Protocol precisely so seeding can run before a
-`Config` exists -- the model catalogue is a file inside the workspace, so
-reading one raises before the directory does -- and naming the parameter after
-the type it deliberately does not take undid that where a reader most needed it.
-`Seeded` rather than `Seeding`, because it is a record of something finished.
-
-And it calls `ensure_layout` first. Seeding into a workspace that was never laid
-out used to succeed, report every definition written, and leave no
-`models.yaml.example` -- the dead end that write was moved into `ensure_layout`
-to avoid. The CLI had the ordering and a docstring explaining it; a library
-caller reading the signature had neither. Not a new responsibility so much as
-the rest of one seeding already had: it was already creating the four catalogue
-directories and omitting only the file that makes the result usable.
+**Seeding lays the definitions folder out itself, and its parameter says what it is.**
+`seed(into: Destination, source: Path)` returns a `Seeded`. `into` rather than `cfg`,
+because `Destination` is a Protocol so seeding can run before a `Config` exists -- the
+model catalogue is a file among the definitions, so reading one raises before the folder
+does. `Seeded`, because it records something finished. It calls `ensure_definitions`
+first: seeding a folder never laid out reported success and left no
+`models.yaml.example`, a dead end a library caller could not see from the signature.
 *(2026-09-01.)*
 
 **`config_from_env`, not `from_env`.** It returns a `Config` and the bare name
 said none of that -- imported at package level, which is how most calls read, it
 could have returned anything, and it sat beside a qualified `paths_from_env`.
-Inside `application/config.py` the old name read well because the module
-qualified it, and that one call site now stutters; fifty-two others got clearer.
 *(2026-09-01.)*
 
 **"Catalogue" means a definition catalogue, and the two functions that meant
-something else are renamed.** The word carries two senses here -- `models.yaml` is
-the model catalogue, and a definition directory is a catalogue too -- and four
-functions were called `_catalogue` across the command, the listing, `origins` and a
-test. Two of them were neither sense: one printed the skills and subagents sections,
-one wrote a skill into a workspace.
-
-The sharp one was inside `doctor`: `_catalogue` checked `models.yaml` and
-`_catalogues`, two hundred lines below, checked the definition directories. One
-letter between two names about different subjects, in one file. `_models` and
-`_catalogues` now, so the plural is the plural of the singular above it.
-
-**No rule against a singular beside its plural**, which is what a check for this
-would have to forbid. There is no other such pair in the tree, and the hazard was
-never the spelling: `_agent` beside `_agents` rendering one and many is exactly what
-a reader expects. What made this one a trap is that the two names had different
-subjects, and no rule keyed on the letters can tell that apart. *(2026-09-24, from
+something else are renamed.** `models.yaml` is the model catalogue and a definition
+directory is one too, and four functions were called `_catalogue`, two in neither sense.
+In `doctor`, `_catalogue` checked `models.yaml` and `_catalogues` the definitions, one
+letter apart; they are `_models` and `_catalogues`. **No rule against a singular beside
+its plural**: `_agent` beside `_agents` is what a reader expects, and the trap was two
+names with different subjects, which no rule on the letters can see. *(2026-09-24, from
 an architecture review.)*
 
-**`subagent` is the noun, and `delegate` is only ever the verb.** Kingfisher's formal
-names already followed deepagents -- the `subagents/` folder, the `subagents:` key,
-`SUBAGENTS`, `SubagentSpec` -- while its prose, its messages and many of its helpers
-used `delegate` for the same thing, about as often. Readers met two words for one
-thing and asked whether they differed, and the noun reads as the verb at a glance: one
-comment had to say "what lets this subagent delegate" to be read at all. So the noun is
-`subagent` everywhere, and `delegate` stays only as the verb ("an agent delegates the
-reading") or the act (`test_delegation_ceiling`). `test_subagent_vocabulary` refuses
-the noun in a name, a file name or prose. `spikes/` is left as the record it is.
-
-**The public spellings changed with it, with no alias kept.** The `delegate_only`
-warning is `subagent_only`, `kingfisher list --json` says `agent_subagents`, the
-`doctor` rows are `subagent tools` and `subagent bundles`, and the listing prints
-`subagents:`. Keeping the old spellings beside the new would have kept the second word
-in exactly the places a script reads; the upgrading notes list all four.
-*(2026-10-11.)*
+**`subagent` is the noun, and `delegate` is only ever the verb.** The formal names
+followed deepagents -- `subagents/`, `subagents:`, `SUBAGENTS`, `SubagentSpec` -- while
+prose and helpers used `delegate` as often, so readers asked whether the two differed.
+`delegate` stays as the verb or the act (`test_delegation_ceiling.py`), and
+`test_subagent_vocabulary.py` refuses the noun; `spikes/` is left as the record it is.
+**The public spellings changed with it, with no alias kept** -- `subagent_only`,
+`agent_subagents` in `kingfisher list --json`, the `doctor` rows `subagent tools` and
+`subagent bundles`, the listing's `subagents:` -- because an alias keeps the second word
+where a script reads; the upgrading notes list all four. *(2026-10-11.)*
 
 **Seeding keeps its own tolerant reader, and the spellings it covers are held.**
-`source_ids_named` and `middleware_named` read one field out of a document that may
-not parse, because seeding runs before there is a catalogue and cannot refuse
-anything: a file it will not copy has to be one it decided about, not one it choked
-on. The review called that a second reader to be replaced by the format's own.
-
-**Measured, and the replacement is what would cause the bug.** A definition naming
-source ids *and* carrying an unrelated fault -- no `description` -- is refused by the
-format and read fine by this one, so today it is correctly left behind. Asked of the
-format, it would read as a document that cannot be read, and be copied into a
-workspace where its names are not declared. That is precisely the failure the
-proposal names.
-
-What the two readers do agree on was measured rather than assumed: every definition
-in `assets/`, and every legal spelling of an audience -- a bare name, a
-list, a requirement set, an entry's own `source_ids:`. On all of them the tolerant
-reader finds what the format finds.
-
-**Two of those four spellings were held by nothing.** Stop reading a requirement set,
-or a source id written as a bare string, and the whole suite stayed green while a
-definition naming somebody read as naming nobody. `test_every_way_of_naming_a_source_id_is_left_behind`
-drives each through `seed` itself, since what goes wrong is the copying rather than
-the reading. *(2026-09-24, from an architecture review.)*
+`source_ids_named` and `middleware_named` read one field from a document that may not
+parse, because seeding runs before there is a catalogue and must decide about every
+file rather than choke on it. **Measured, and the replacement is what would cause the
+bug**: a definition naming source ids and missing a `description` is left behind today,
+but asked of the format it would read as unreadable and be copied into a workspace where
+its names are not declared. On every definition in `assets/` and every spelling of an
+audience the two readers agree. **Two of those four spellings were held by nothing**: a
+requirement set and a bare-string source id could stop being read with the suite green;
+`test_every_way_of_naming_a_source_id_is_left_behind` drives each through `seed`.
+*(2026-09-24, from an architecture review.)*
 
 **Definitions have a folder of their own, apart from the workspace.**
 `KINGFISHER_DEFINITIONS_DIR` is required and holds every kind, with `models.yaml` and
 `source_ids.yaml` beside them, under fixed names. `KINGFISHER_WORKSPACE` holds what
-sessions make -- `sessions/` and `.kingfisher/` -- and nothing a person writes. The two
-were one folder, with seven settings to pull the authored half out an item at a time,
-and a deployment that set none of them kept its reviewed definitions beside its
-sessions, in the one folder the macOS fence lets every session's shell read.
+sessions make -- `sessions/` and `.kingfisher/` -- and nothing a person writes. As one
+folder, a deployment that set none of the seven per-item settings kept its reviewed
+definitions in the one folder the macOS fence lets every session's shell read.
 
 *One folder, not a setting per kind.* `KINGFISHER_AGENTS_DIR`, its four siblings,
-`KINGFISHER_MODELS_FILE` and `KINGFISHER_SOURCE_IDS_FILE` are removed and refused if
-still set: ignored, each would serve the definitions folder's copy where a deployment
-had chosen another. What they bought was moving part of a catalogue, and the case
-that wants it -- skills somebody else maintains -- is what `KINGFISHER_SKILLS_MOUNTS`
-is for, and that stays. `Kingfisher(catalogue=...)` takes one folder for the same
-reason, or a `Definitions` for a caller that stages its kinds apart.
+`KINGFISHER_MODELS_FILE` and `KINGFISHER_SOURCE_IDS_FILE` are refused if still set:
+ignored, each would serve the definitions folder's copy where a deployment had chosen
+another. Skills somebody else maintains are what `KINGFISHER_SKILLS_MOUNTS` is for.
 
 *Required, with no default inside the workspace*, because a default would rebuild the
-mix by omission. Seeding writes into this folder and nowhere else, so it needs
-nothing else: `WorkspacePaths.workspace` is optional, and `config_from_env` is what
-asks for the workspace.
+mix by omission. Seeding writes only here, so `WorkspacePaths.workspace` is optional.
 
-*A start reads the folder and writes nothing there.* It may be shared, or mounted
-read-only, so a start that made kind folders or placed `models.yaml.example` in it
-would be one deployment changing everyone's, and one that made a missing folder would
-hide a failed mount behind an empty catalogue. A folder that is not there is refused;
-a kind folder missing inside it means none of that kind. So `backend_at` no longer
-makes `skills/`, and `skill_registry.sources` offers no source for a root that is not
-there: deepagents logs "Cannot load skills" about a source it cannot list, on every
-turn. `ensure_layout` lays out the workspace alone, and `ensure_definitions` -- which
-seeding calls, and which replaces it on the package root -- makes the kind folders and
-places both examples beside `models.yaml`. That settles *"Beside it" means beside the
-file* by leaving one place to be beside.
+*A start reads the folder and writes nothing there.* It may be shared or mounted
+read-only, so a start making kind folders or examples would change everyone's, and one
+making a missing folder would hide a failed mount behind an empty catalogue. A missing
+folder is refused; a missing kind folder means none of that kind. So `backend_at` does
+not make `skills/`, and `core.definitions.skills.registry.sources` offers no source for
+a missing root, which deepagents would log about every turn. `ensure_layout` lays out
+the workspace alone, and `ensure_definitions`, which seeding calls, makes the kind
+folders and places both examples.
 
 *Neither folder may be inside the other*, refused by `Config` and `WorkspacePaths`
-alike so that one built in code meets it too. Sessions inside the definitions put
-runtime state in the folder people review; definitions inside the workspace are back
-where every session's shell can read them.
+alike: sessions inside the definitions put runtime state in the folder people review,
+and definitions inside the workspace are back where every shell can read them.
 
 *What the shell reaches*, measured on macOS through `backend_at`: a definitions folder
-outside the home folder is readable and never writable, and under the home folder it
-is hidden but for `skills/`, which the fence gives back because skill scripts run
-there. The profile still denies the definition roots and the two files by path. They
-lie outside every writable root now, so those rules cover nothing today; they are what
-holds if a definitions folder is ever let back inside the workspace.
+outside the home folder is readable and never writable, and under it hidden but for
+`skills/`, which skill scripts run in. The profile still denies the definition roots and
+the two files by path, which covers nothing today and holds if a definitions folder is
+ever let back inside the workspace.
 
-*Nothing checks for definitions left in a workspace.* They are read by nothing, and
-moving them is a one-time job for whoever upgrades. A check on what sits at the
-workspace's top would also be one a session's shell can set off, since on macOS it may
-make a folder there. `doctor`'s warning for a relocated catalogue holding nothing went
-with relocation: it existed because a mistyped `*_DIR` was created rather than
-refused, and a definitions folder that is not there is refused now. `Origins` carries
-`definitions` beside `workspace`, and spells a path inside it `definitions/<name>` as
-it spells one in the workspace `./<name>`. *(2026-10-13.)*
+*Nothing checks for definitions left in a workspace.* They are read by nothing, moving
+them is a one-time upgrade job, and a check on the workspace's top is one a session's
+shell could set off. `Origins` carries `definitions` beside `workspace`, spelling a path
+inside it `definitions/<name>`. *(2026-10-13.)*
 
 ## Capabilities
 
 **One refusal, with the caller naming itself.** Tool-name rules live in a value
-object, `Offering`, beside `FoundTool` -- not a `Tool` entity. Both were in the domain
-when this was written and are in `core.definitions.tools.spec` now, with the tools format. Offered
-names and sources are stored; grants are derived. There is a test that fails when
-a function has no caller outside tests.
+object, `Offering`, beside `FoundTool` in `core.definitions.tools.spec` -- not a
+`Tool` entity. Offered names and sources are stored; grants are derived. There is a
+test that fails when a function has no caller outside tests.
 *(2026-08-17, `tool-rules-in-the-domain.md`.)*
 
 **Capabilities narrow and never widen.** There was one exception: an upload could
 widen skills and subagents, because those were the caller's own text, and a
 middleware name got no such exemption because it selects code the deployment wrote.
-*(2026-08-18, `agents-as-definitions.md`, and the middleware work of 2026-08-31.)*
 Uploads were removed on 2026-09-16, and nothing widens now.
+*(2026-08-18, `agents-as-definitions.md`, and the middleware work of 2026-08-31.)*
 
-**And a turn is built inside the ceiling, which nothing checked.** `_claimed`
-narrows the deployment's grants by what the request asked for and hands the result
-to the build. Handing the request's own capabilities instead -- one line -- let a
-caller reach a workspace tool the deployment never granted, and the whole suite
-stayed green: 2,083 tests, because every fixture but two leaves the deployment
-unrestricted, and there the two are equal.
+**And a turn is built inside the ceiling, which nothing checked.** `_claimed` narrows
+the deployment's grants by the request and hands the result to the build. Handing the
+request's own capabilities instead -- one line -- let a caller reach a tool the
+deployment never granted, with all 2,083 tests green, since every fixture but two
+leaves the deployment unrestricted. `_graph_for`'s `capabilities` defaulted to
+`request.capabilities`, that escalation written into a signature, and is required now.
+`test_a_turn_is_built_inside_the_deployments_ceiling` reads what the build was handed at
+the seam rather than computing the intersection: a test that works out the answer the
+way the code does agrees with itself and checks nothing. *(2026-09-23, from an
+architecture review.)*
 
-`_graph_for` took `capabilities` as an optional keyword defaulting to
-`request.capabilities`, which is that escalation written into a signature. It is
-required now, so there is no way to build a turn's graph without saying what it may
-use, and `test_a_turn_is_built_inside_the_deployments_ceiling` drives a real turn on
-a deployment that grants one tool against a request asking for two. It reads what
-the build was handed at the seam rather than computing the intersection and
-comparing -- a test that works out the expected answer the same way the code does
-agrees with itself and checks nothing, which is how this stayed uncovered.
-*(2026-09-23, from an architecture review, whose own card was about something
-else.)*
-
-**The axes are read off the dataclass.** They were written three times -- as fields,
-again in `__post_init__` to be normalised, again in `intersect` to be narrowed --
-with nothing holding the three lists together. Measured, by adding a ninth axis and
-changing nothing else: it kept whatever list it arrived as, breaking the contract
-that a `Selection` is `ALL` or a tuple, and `intersect` answered `'*'` for it, so a
-grant of one name narrowed by a request asking two returned everything. A narrowing
-that widens is the one thing this object promises not to do, and the whole suite,
-ruff and ty stayed green.
-
-Both loops now read `SELECTIONS`, which is `fields(Capabilities)` minus the one field
-marked `SWITCH`. A field says which of the two it is in its own declaration and
-nowhere else. The marker is on the exception rather than on the axes, so the
-defaulting fails closed: a field that is neither a `Selection` nor marked reaches
-`_normalise`, which refuses a value that is not a selection at the first
-construction, rather than being quietly left out of the narrowing.
-
-`intersect` builds its answer with `replace` rather than a fresh `Capabilities`, and
-that is worth stating because it changes what a mistake looks like: a dropped axis
-keeps the grant whole instead of resetting to the class default. Safer, and the
-reason the obvious test did not bite -- a grant of one name against a request asking
-two answers the grant either way. The rule drives each axis with two sets that
-overlap without either containing the other. *(2026-09-18.)*
+**The axes are read off the dataclass.** Written three times -- as fields, in
+`__post_init__`, in `intersect` -- nothing held the lists together. Measured by adding a
+ninth axis: it kept whatever list it arrived as, and `intersect` answered `'*'` for it,
+so a narrowing widened with the suite, ruff and ty green. Both loops read `SELECTIONS`,
+`fields(Capabilities)` minus the fields marked `SWITCH`. The marker is on the exception,
+so the default fails closed: an unmarked non-selection is refused by `_normalise` at the
+first construction rather than left out of the narrowing. `intersect` uses `replace`,
+so a dropped axis keeps the grant whole rather than resetting to the default -- safer,
+and why the obvious test did not bite; the rule drives each axis with two overlapping
+sets, neither containing the other. *(2026-09-18.)*
 
 **None of kingfisher's own middleware is offered to a definition, and that was the
-alternative considered.** They ship with the package the way `prompts/` does, which invites
-listing them beside a deployment's own so a definition could name one. A name a
-definition can write is a name it can leave out, and `GrantedOnlyMiddleware` is what holds
-a request to the tools it was granted -- omitting it would be a way to widen, which
-*Capabilities narrow and never widen* does not allow an exception for. They do not
-fit the registry mechanically either: an entry there is built from defaults a
-deployment stored, and these are built per request from the names that request
-resolved and the backend it runs on.
+alternative considered.** A name a definition can write is a name it can leave out, and
+`GrantedOnlyMiddleware` is what holds a request to its grant -- omitting it would widen,
+which *Capabilities narrow and never widen* allows no exception for. Nor do they fit the
+registry: its entries are built from stored defaults, and these per request from the
+names it resolved and its backend.
 
-**An agent is told only of the built-in tools it was granted.** Its system message was
-the same whatever it held: one granted `builtin_tools: []` still read kingfisher's
-sections on the file tools and the shell, deepagents' host paths and langchain's
-`write_todos` prose, because `GrantedOnlyMiddleware` takes a tool out of the request and
-none of what describes it. A model told of a tool it does not hold calls it, and each
-call is spent on a refusal. So the file tools' section appears where one is held and
-names only those, and the shell's two, with deepagents' host paths, where `execute` is.
-The grant read is the allowlist `GrantedOnlyMiddleware` filters by -- the agent's and
-`general-purpose`'s `permitted`, a subagent's ceiling -- not the tools in the request:
-deepagents and langchain add their prose ahead of that filter, while every tool is still
-offered, and kingfisher's own is written when the graph is built. `BuiltinToolsMiddleware`
-takes theirs out by block, as it already took the host paths from a shell elsewhere.
-`TodoListMiddleware` stays on the stack, for the reason its entry gives, and only its
+**An agent is told only of the built-in tools it was granted.** One granted
+`builtin_tools: []` still read the sections on the file tools and the shell,
+deepagents' host paths and langchain's `write_todos` prose, because
+`GrantedOnlyMiddleware` takes a tool out of the request and none of what describes it --
+and a model told of a tool calls it, spending each call on a refusal. The file tools'
+section now names only those held, and the shell's, with the host paths, appears where
+`execute` is. The grant read is the allowlist `GrantedOnlyMiddleware` filters by, not
+the request's tools, since deepagents and langchain write their prose before that
+filter; `BuiltinToolsMiddleware` takes theirs out by block, and only `TodoListMiddleware`'s
 prose goes. A grant that changes the prompt changes the tool list too, which Anthropic
-caches ahead of the system prompt, so following it loses no cache that was not already
-lost. Where to write, and that workspace tools take the same paths, moved from the file
-tools' section to the session's: they hold for an agent with only the shell.
+caches ahead of the system prompt, so no cache is lost that was not already. Where to
+write moved to the session's section, since it holds for an agent with only the shell.
 *(2026-10-18.)*
 
 ## Source-id access
@@ -1410,185 +821,132 @@ tools' section to the session's: they hold for an agent with only the shell.
 `source_ids:` for who may reach it, a tool writes its lock in its own file, and an
 entry of `skills:` may be written long -- `{name: X, source_ids: [...]}` -- for who
 is told about that one, since a skill has no file of its own to say it in. One central
-file, `source_ids.yaml`, holds the vocabulary -- names only, no policy. It held
-`contains` as well, which is a retired spelling now and refused.
-An audience resolves into an ordinary `Capabilities`, so nothing downstream
-changed: an ungranted tool is never attached to the graph and an ungranted
-subagent is never compiled. *(2026-08-31. Entries of `tools:` and `subagents:` took an
-audience too until 2026-10-18 -- see *Reversed: a `tools:` or `subagents:` entry says
-who reaches that one*, below.)*
+file, `source_ids.yaml`, holds the vocabulary -- names only, no policy; `contains` is a
+retired spelling there and refused. An audience resolves into an ordinary
+`Capabilities`, so nothing downstream changed: an ungranted tool is never attached to
+the graph and an ungranted subagent is never compiled. *(2026-08-31.)*
 
 The rule that makes it safe to add to an existing definition: **`source_ids:` is the
 default audience for everything the definition holds, and the ceiling on what a
 `skills:` entry may say.** So an omitted or plain-list `tools:` keeps its exact meaning,
 and a skills entry is always an *and* with the definition's own line -- the only way to
-reach an entry is through the definition holding it, so naming a source id from
-outside that line adds a second requirement rather than replacing the first. A definition with no `source_ids:` line is reachable by everyone, and the report of
-every such definition is built at startup -- default-open must not also be silent.
-It is `kingfisher list` that prints it; a plain start says nothing.
+reach an entry is through the definition holding it, so naming a source id from outside
+that line adds a second requirement rather than replacing the first. A definition with
+no `source_ids:` line is reachable by everyone, and the report of every such definition
+is built at startup -- default-open must not also be silent. `kingfisher list` prints
+it; a plain start says nothing.
 
-**A tool may say who may use it, in its own file.** A tool its file writes as
-`ToolSpec(tool, source_ids=[...])` carries an audience of its own, and it is an
-**and** on every grant of that tool: nothing an agent writes can widen it, and since
-2026-10-18 nothing an agent writes can narrow it either -- it is the tool's only lock.
-It is the rule a definition's entries already follow -- the only way to reach an entry
-is through the definition holding it -- carried one level further down, to the thing
-the audience is actually about. A deployment whose
-tools are written in Python had nowhere else to put it: the translation from its own
-tool record to a LangChain tool dropped the field, and writing it on every agent that
-grants the tool is the line one of them forgets.
+**A tool may say who may use it, in its own file.** `ToolSpec(tool, source_ids=[...])`
+is an **and** on every grant of that tool, and the tool's only lock: nothing an agent
+writes can widen or narrow it. A deployment whose tools are written in Python had
+nowhere else to put it -- its translation to a LangChain tool dropped the field -- and
+writing it on every agent that grants the tool is the line one of them forgets.
 
-It is applied where the grant is resolved rather than where the catalogue is read.
-Taking the tool out of the catalogue for a caller would have a definition that names
-it refused by `refuse_unknown` for that caller alone -- the failure that reversed the
-central `access.yaml` below. So the build takes it out of the grant, `kingfisher list`
-and the run report take it out of what they say is offered, and the ledger stamps a
-result no wider than its tool, each through `core.definitions.tools.spec.out_of_reach`.
-A subagent's own tool is held back the same way, and a caller's listing printed one
-under its subagent regardless until 2026-10-17: the build's filter was written for
-bundles, and the listing's kept bundles to the subagents the caller reaches and
-nothing finer.
-
-It was written through `kingfisher.tool`, which took only a plain function, until
-2026-10-18; *Taken: a `ToolSpec` a tool is declared as* says why that gave way.
+It is applied where the grant is resolved, not where the catalogue is read: taking the
+tool out of the catalogue for a caller would have a definition naming it refused by
+`refuse_unknown` for that caller alone -- the failure that reversed the central
+`access.yaml` below. So the build takes it out of the grant, `kingfisher list` and the
+run report out of what they say is offered, and the ledger stamps a result no wider than
+its tool, each through `core.definitions.tools.spec.out_of_reach`. A subagent's own tool
+is held back the same way.
 
 **The audience is kingfisher's record, not the tool's `metadata`.** `BaseTool.metadata`
 was the obvious home and is wrong: LangChain passes it to every callback, so an audience
-kept there is in the trace of every call. It lives on the `FoundTool` the loader makes
-and never on the LangChain object, so no callback can see it. *(2026-10-16. Until
-2026-10-18 it was a private attribute of a `StructuredTool` subclass -- measured to reach
-neither `model_dump` nor a callback -- which the loaders read back by attribute name
-because the tools kind could not import langchain.)*
+kept there is in the trace of every call. It lives on the `FoundTool` the loader makes,
+never on the LangChain object. *(2026-10-16.)*
 
 **A datazone is a second field, held as one more name.** A caller is in at most one
 datazone, and a subagent or tool may require one; an agent may not, because it runs in
-whichever datazone its caller names. Written as a prefixed source id -- `datazone:finance`
-in `source_ids:` -- it would have needed no new field at all, and was turned down for
-that reason: the deployment that asked models the two as separate fields, a caller has
-exactly one datazone and any number of source ids, and folding the first into the second
-would leave "exactly one" to whoever builds the caller's list.
+whichever datazone its caller names. A prefixed source id -- `datazone:finance` in
+`source_ids:` -- would have needed no new field, and was turned down for that reason: a
+caller has exactly one datazone and any number of source ids, and folding one into the
+other would leave "exactly one" to whoever builds the caller's list.
 
-Inside, it is one more name after all, and that is deliberate. A caller's datazone joins
-their expanded source ids as `datazone=finance` in `held_by`, and a definition's becomes
-one more name its audience requires -- so every check that already asks whether a caller
-reaches something asks this too, and the ledger stamps a zoned result with no new column.
-The prefix is refused as a source id, so no vocabulary declares one and no caller presents
-one. On its way in it rides among the caller's source ids as a `Datazone`, a `str`: the
-dozen doors between the public method and `held_by` pass it on unread, where a second
-parameter would have been one more each of them had to remember.
-
-A caller in no datazone reaches only what names none -- the closed answer, for the reason a
-call naming no caller is refused. No startup refusal for an agent naming a tool from
-another datazone: the tool is left out of that caller's build, and for a caller in the
-tool's own datazone the same agent works. *(2026-10-16.)*
+Inside, it is one more name, deliberately. A caller's datazone joins their expanded
+source ids as `datazone=finance` in `held_by`, and a definition's becomes one more name
+its audience requires -- so every reach check asks it too, and the ledger stamps a zoned
+result with no new column. The prefix is refused as a source id. On its way in it rides
+among the caller's source ids as a `Datazone`, a `str`: the dozen doors before `held_by`
+pass it on unread, where a second parameter would be one more each had to remember. A
+caller in no datazone reaches only what names none -- the closed answer, as for a call
+naming no caller. An agent naming a tool from another datazone is not refused at
+startup: the tool is left out of that caller's build, and works for a caller in its
+zone. *(2026-10-16.)*
 
 **The operator's listing prints both.** A tool's own audience is a line of its own,
-`tool sql_query  [sales_db]`. A subagent's own tool is named `counter::count`: the
-file `audienced_tools` keys it by sits inside a folder the key does not name, which
-sends a reader to look for it in `tools/`. A datazone is printed beside the source ids,
-not folded into them, because a subagent writing only `datazone: finance` was listed as
-`[*]` -- everyone. *(2026-10-17.)*
-
-The tool's line was also the first under that tool in a roll-up by tool, beside every
-agent entry narrowing it, until 2026-10-18. With no entry able to lock a tool or a
-subagent, those two roll-ups would print each lock a second time beside nothing that
-could differ from it, so they went. Skills keep theirs: a skills entry is still a lock
-per use, and a use quietly wider than its neighbours is still what a roll-up shows.
+`tool sql_query  [sales_db]`; a subagent's own tool is named `counter::count`, because
+the file `audienced_tools` keys it by sits in a folder the key does not name. A datazone
+is printed beside the source ids, not folded in, because a subagent writing only
+`datazone: finance` was listed as `[*]` -- everyone. Only skills get a roll-up: a tool's
+or subagent's lock is one line in its own file with nothing that could differ from it,
+while a skills entry is a lock per use, and a use wider than its neighbours is what a
+roll-up shows. *(2026-10-17.)*
 
 **Reversed: a `tools:` or `subagents:` entry says who reaches that one.** Written long,
 `{name: X, source_ids: [...]}`, an entry was a lock per agent: an *and* with the
-definition's own line and with the thing's own lock -- a tool's `ToolSpec`, a
-subagent's own `source_ids:`. A compiled subagent wrote the same thing in Python, as a
+definition's own line and with the thing's own lock; a compiled subagent wrote it as a
 `tools` mapping of name to audience. Each thing has one lock now, in its own file, and
-an entry is its name.
+an entry is its name. **One place to read**: who can use `http_fetch` is answered by its
+tool file, not every agent that lists it, and a lock on each agent's entry is the line
+one of them forgets. Who may use a tool in an agent is three checks, each in one obvious
+place: the caller can open the agent, the agent lists the tool, the caller passes the
+tool's lock. **Per-agent control is by listing.** The one case lost is the same tool
+locked differently in two agents, which the deployment this was decided for does not
+need.
 
-**One place to read.** To answer "who can use `http_fetch`?" one reads its tool file,
-not every agent that lists it -- and a lock written on each agent's entry is the line
-one of them forgets, the argument that moved the tool's own lock into its file on
-2026-10-16. Who may use a tool in an agent is three checks, each in one obvious place:
-whether the caller can open the agent, whether the agent lists the tool, and whether
-the caller passes the tool's lock. **Per-agent control is by listing.** An agent can
-always leave a tool or a subagent off its list; the one case lost is the same tool
-locked differently by source id in two agents, which the deployment this was decided
-for does not need, and which listing covers when one does.
+`skills:` keeps the long form, having no file to lock in. A long `tools:` or
+`subagents:` entry writing `source_ids` is refused at load, saying where the lock goes,
+as is a compiled subagent's `tools` mapping and a long `subagents:` entry with nothing
+beside its name. A ledger stamp is the definition's own audience joined with the tool's
+lock. The shipped `analyst` grants `auditor` bare, so an `audit_log` caller of `analyst`
+reaches it, which `auditor`'s own line already admits. *(2026-08-31. Reversed
+2026-10-18.)*
 
-`skills:` keeps the long form, because a skill has no file of its own to lock it in --
-its entry is the only place one can be written, and the definition's own line stays
-the default and the ceiling for it. A long `tools:` or `subagents:` entry writing
-`source_ids` is refused at load, saying where the lock goes, and so is a compiled
-subagent's `tools` mapping; a long `subagents:` entry with nothing beside its name is
-refused with them, having nothing left to carry. A result's ledger stamp became the
-definition's own audience joined with the tool's lock, where an entry's audience had
-stood in for the definition's. The shipped `analyst` grants `auditor` bare, so an
-`audit_log` caller of `analyst` reaches it, which `auditor`'s own line already admits.
-*(2026-08-31. Reversed 2026-10-18.)*
+**Reversed: a central `access.yaml` listing every asset by name.** Built in full --
+vocabulary, per-asset audiences, reconciliation against the catalogue, two load reports
+-- then replaced within the same branch. What killed it was not taste. A central table
+can name an asset the workspace no longer offers, and that stale entry had to be
+*dropped* rather than reported, because the grant it produced reached
+`Offering.refuse_unknown` and turned every turn into a refusal. A definition *is* the
+asset it is about, so that failure has no shape now, and the reconciliation and its
+reports went with it. What survived: `UNSCOPED`, the refusal of a call that names no
+caller, the per-turn re-check of a session's pinned agent, and the closed vocabulary.
+*(2026-08-31, reversed the same day.)*
 
-**Reversed: a central `access.yaml` listing every asset by name.** Built in full
--- vocabulary, per-asset audiences, reconciliation against the catalogue, two
-load reports -- then replaced within the same branch. What killed it was not
-taste. A central table can name an asset the workspace no longer offers, and that
-stale entry had to be *dropped* rather than merely reported, because the grant it
-produced reached `Offering.refuse_unknown` and turned every turn into a refusal.
-A definition *is* the asset it is about, so that failure has no shape in the
-current design: the reconciliation, both its reports and the whole class of bug
-went with it. What survived unchanged: `UNSCOPED`, the refusal of a call that
-names no caller, the per-turn re-check of a session's pinned agent, and the
-closed vocabulary. `for_groups` survived that reversal too and did not survive
-the next one -- see below. *(2026-08-31, reversed the same day.)*
+**Reversed: `for_groups` and the `Caller` handle.** A caller said who they were once and
+reused the handle; now every call takes `source_ids=`. Counted before removing: zero
+production callers, and the one consumer serving several callers passed `source_ids=` at
+all seven call sites. The stated benefits did not survive checking: the grant it
+resolved once measures **0.81 microseconds**, because the transitive closure is computed
+when `source_ids.yaml` loads, and refusing an unknown source id "at the boundary" gains
+one call, since `expand` refuses before any agent is built. What was real was script
+ergonomics, and one accident: the reader of `source_ids` took anything but a tuple as
+*no opinion*, so the handle's coercion was the only reason `["A"]` narrowed. Any sequence
+now means what it looks like, and a bare string is refused. *(2026-09-03.)*
 
-**Reversed: `for_groups` and the `Caller` handle.** A caller said who they were
-once and reused the handle; now every call takes `source_ids=`. Counted before
-removing: zero production callers. The service -- then the only consumer that served
-several callers, which is the case the handle was built for -- resolved source ids
-per request from a header and passed `source_ids=` at all seven of its call sites.
-Two of the handle's three stated benefits did not survive checking either: the
-grant it resolved once measures **0.81 microseconds**, because the transitive
-closure is computed when `source_ids.yaml` loads; and refusing an unknown source id "at
-the boundary rather than at the first turn" is a gap of one call, since `expand`
-still refuses before any agent is built. What was real was the script
-ergonomics, and one thing that was not a benefit at all: `held_for` tested
-`isinstance(source_ids, tuple)` and read anything else as *no opinion*, so the
-coercion inside `for_groups` was the only reason `["A"]` ever narrowed. That
-moved into `held_for`, which now takes any sequence and refuses a bare string.
-*(2026-09-03.)*
+**An audience list is an `or`, and an entry of it may be an `and`.** A requirement --
+several source ids held at once -- is written two ways deliberately: named in
+`source_ids.yaml` for anything reused, inline as one entry of a list for a one-off. The
+same shape both places, so the named form is literally a *name for* the inline one: the
+argument against two spellings was drift, and one form with one evaluation answers it.
+The result is or-of-ands, the shape access rules take, out of one field. `expand` does
+the work -- covering closes first, then a compound joins the held set once its parts are
+held -- so two consequences follow rather than being chosen. **Covering satisfies a
+requirement**; the alternative is an `admin` who covers both parts yet is weaker than
+the sum of what they reach. And **nesting works for free**. *(2026-09-01.)*
 
-**An audience list is an `or`, and an entry of it may be an `and`.** A
-requirement is satisfied only by holding several source ids at once, and is
-written two ways deliberately: named in `source_ids.yaml` for anything reused,
-inline as one entry of a list for a one-off. The same shape both places, so the
-named form is literally a *name for* the inline one rather than a second
-mechanism -- the argument against two spellings was drift, and using one form
-with one evaluation is what answers it. The result is or-of-ands, which is the
-shape access rules take, out of one field with no rule about how two fields
-combine. *(2026-09-01.)*
-
-`expand` does the work, which is what kept `reaches` nearly unchanged: covering
-closes first, then a compound joins the held set once its parts are held, so a
-named compound is an ordinary held name by the time any audience is asked. Two
-consequences follow rather than being chosen. **Covering satisfies a
-requirement**, because expansion runs first -- the alternative is an `admin` who
-covers both parts yet is weaker than the sum of what they reach. And **nesting
-works for free**, since a compound whose parts are held is held.
-
-**A compound is derived, and nothing may hand it over directly.** A caller may
-not present one: it is what holding the parts adds up to, not something to
-claim, and accepting it would let one assertion stand in for the two that the
-requirement exists to demand. The refusal names the parts. Over HTTP this
-surfaced as the `misconfigured` 500 a drifted vocabulary already got, which is
-exactly what a gateway emitting a derived name was.
-
-A covers list may not hand one over either, and that is the same rule rather
-than a second one. `admin: [finance-senior]` was legal for one commit and gave
-an admin the compound while they held neither part -- the requirement defeated
-by the file declaring it, which is the caller's move made one level up. Refusing
-it in only one of the two places was the inconsistency. Naming the parts reaches
-the same people and is visible, since the listing prints what a compound
-requires and never prints a covers list.
+**A compound is derived, and nothing may hand it over directly.** A caller may not
+present one: accepting it would let one assertion stand in for the two the requirement
+exists to demand, and the refusal names the parts. A covers list may not either, by the
+same rule: `admin: [finance-senior]` gave an admin the compound while they held neither
+part -- the requirement defeated by the file declaring it. Naming the parts reaches the
+same people and is visible, since the listing prints what a compound requires and never
+a covers list.
 
 **The two operations are told apart by shape, not by a keyword.** `contains` and
-`all_of` were the spelling until the format was asked why a YAML file needed
-English words for two things YAML already has brackets for. A list body is what
-a name covers and a set body is what it requires:
+`all_of` were the spelling until the format was asked why YAML needed English words for
+two things it has brackets for. A list body is what a name covers, a set body what it
+requires:
 
 ```yaml
 source_ids:
@@ -1597,695 +955,332 @@ source_ids:
   sales_db_pii: {sales_db, pii}         # requires
 ```
 
-`{a, b}` is a mapping of null values, which is what makes it available as a set
-at all. Four things fell out, and only the first was the goal:
+A name writing both operations stopped being expressible, so no refusal for it is
+maintained. The listing stopped inventing `finance_db+pii`, which no file could write
+and `+` made ambiguous; it prints `{finance_db, pii}`, and `--json` nests, since a script
+should not parse a set out of a string. The cost was one new refusal: a set inside a
+covers list -- `warehouse: [{sales_db, pii}, audit_log]` -- is the covers-list bypass with
+no name to look up, so it is refused where it is written. Both retired words are refused
+rather than ignored, or an upgrading deployment's policy would be read and dropped in
+silence; `A: {}` is refused with them, since an empty set admits everyone.
 
-  - The rule that a name may not write both operations stopped needing to exist.
-    A body is a list or it is a mapping, so a name that grants and costs at once
-    is not a thing the format can express and not a refusal anybody maintains.
-  - The listing stopped inventing a third spelling. It printed `finance_db+pii`
-    for something no file could write that way, and `+` is legal inside a source
-    id, so the display was ambiguous as well as unique to itself. It prints
-    `{finance_db, pii}` now, and `--json` still nests -- a script should not have
-    to parse a set out of a string.
-  - The inline and named forms became the same characters rather than the same
-    word, which is a stronger version of what the 2026-09-01 entry above wanted.
-  - One new refusal was needed, and it is the cost of the change rather than a
-    bonus. A set inside a covers list -- `warehouse: [{sales_db, pii}, audit_log]`
-    -- reads as perfectly legal and is the bypass above with no name to look up,
-    so it is refused structurally where it is written. The named half was a
-    lookup; this half cannot be.
-
-Both retired words are refused rather than ignored, on the same reasoning the
-retired sections get: a deployment upgrading has a file full of policy that would
-otherwise be read and dropped in silence. `A: {}` is refused with them, since an
-empty set requires nothing and admits everyone -- it means the plain name it used
-to spell, and `A:` is how that is written now.
-
-**The refusal is for the file, not the name**, and the difference is what makes
-it a migration rather than a wall. It began as one message per source id, which
-is how every other refusal in this format works and is wrong here: a realistic
-old vocabulary earns its first refusal on a `{}` line, says nothing about the
-`contains` further down, and costs a restart per line. The scan runs over the
-whole document before any name is read and prints each line beside the line that
-replaces it, built from what the file actually says -- so the remedy is the
-message rather than something to work out from it. Same argument as the seeding
-message under *Reversed: `groups.yaml.example`* below, reached the same way: by
-reading what an upgrade actually looks like instead of what one refusal does.
-
-A set whose names happen to be `contains` and `all_of` is legal and stays legal.
-The value is what marks a keyword, which is the same test the parser uses one
-line down. *(2026-09-15.)*
-
-**In Python, a requirement is a set, and a list inside an audience is refused.** An
-audience written in Python had one spelling for *all of*, `{"a": None, "b": None}` --
-the dict YAML's `{a, b}` parses to, which nobody types. A Python set fell through to
-the name branch and became one source id spelled `"{'a', 'b'}"`, and a tuple did the
-same; with a vocabulary that is a confusing refusal at startup, and without one it is
-nothing at all. A set now reads as the requirement it looks like.
-
-A list or tuple inside the audience is refused rather than read as *all of*, though
-that is how a caller's own format may nest it. A bracket whose meaning depends on its
-depth is misread in the direction that widens: `(a, b)` at the top is *a or b*, a field
-named `required_sources` invites reading it as both, and only the second level would
-mean that. Keeping one bracket per operation makes the misreading impossible at any
-depth, and the conversion is a line in the caller's own translation. The `--json`
-listing still nests a requirement as an inner list, because JSON has no set; that is
-output, and handing it back in is refused rather than misread. *(2026-10-16.)*
-
-**Reversed: `refuse_dead`, the rule that an entry audience must overlap its
-definition's.** It moved off `parse` onto `SourceIds` first, which was a real fix
--- a definition `[reviewers]` with an entry `[analysts]` is alive when
-`reviewers` contains `analysts`, and comparing raw names at parse called it
-dead. Then measuring it settled the larger question: it had no true positives
-left, and one class of false ones. *(2026-09-01, both the same day.)*
-
-An entry audience is already an **and** with the definition's, because the only
-way to reach an entry is through the definition holding it -- `agent_named`
-refuses a caller who cannot open the agent, and nothing else hands out a spec.
-So `[senior]` under `[analysts, auditors]` has always evaluated as "opens this
-agent, and is senior", which is a perfectly good second requirement. The refusal
-blocked writing it, and the fault it meant to catch -- `[auditors]` written
-under `[analysts]` by somebody trying to widen -- is the same shape, so no rule
-can separate them.
-
-What survived is the looking. It is `SourceIds.narrowing_in` now, and feeds
-`AccessReport.narrowed`, on the same reasoning as the `unrestricted` line beside
-it: a thing worth noticing, said once, where an operator sees it. The typos it
-was really catching are `refuse_undeclared`'s, which refuses them by name.
-
-One consequence worth keeping: **the ordering question went with it.** A
-misspelling used to trip both checks, and `never reaches anyone` explained it as
-a reachability problem without mentioning the spelling. There is now one refusal
-on that path.
-
-**`source_ids.yaml` now holds vocabulary with a rule in it**, and the file's pitch
-was "a dictionary, not a policy". A compound sits on that line: it still answers
-"what does this name mean", but answers it with a condition. Judged to stay on
-the right side -- what it cannot do is say who reaches what, which is the
-property that made the central design fail. Recorded because it is cheap to
-disagree with now and expensive later.
-
-The `--json` listing's `access` key grew from a name-to-closure mapping into
-`{names, requires}`. A shape change for scripts, taken because a compound has no
-honest place in the old shape and the alternative was dropping the second fact.
-Source-id access was two days old at the time.
-
-**`builtin_tools` takes no audience, and that is not an omission.** deepagents
-registers its own tools, so kingfisher can filter them but never leave them out
-of a graph -- a live run was measured where a model called `execute` from memory. Gating them here would promise a boundary it cannot keep.
-What gates them is which *agents* a source id may open, since an agent declaring a
-read-only builtin set cannot yield the shell to anyone.
-
-**Out of reach reads as not offered.** An asset a caller's source ids do not reach is
-absent from listings, from the "this workspace offers ..." in a refusal, and from
-the report of what a run withheld -- so nothing lets a caller enumerate the
-catalogue by guessing. A scoped view of it hides both what source-id
-narrowing removed and what no definition in reach offers at all: a tool and a skill
-have nowhere to write an audience of their own, so what can be asked of one is whether
-a definition this caller reaches offers it to them.
-
-**That exception was reversed on 2026-10-13.** It said the report hid only what source-
-id narrowing removed and never what the agent simply never declared, the second being a
-fact about the agent. It had been written when out of reach meant narrowing alone, and
-the 2026-09-27 entry widened the term for listings without widening it here -- so the
-two disagreed on one workspace. Measured: `list --as B` showed `tools: ['line_count']`
-while a run as `B` was told `1 tool(s) not granted: secret_export`, a tool no definition
-`B` reaches offers. The caller supplies `capabilities` themselves, so narrowing their
-own grant was the whole of what it took to be handed the catalogue.
-
-The report asks what the listing asks now, through the same function: `offers` moved
-into `domain/access.py` because two readers with their own answers to what a caller
-reaches is exactly how these came apart, and this makes one. What a *run* reaches is the
-agent it opened plus the subagents that agent can hand work to and this caller can open
--- a caller who reaches a subagent reaches what it holds, through `task` -- and
-`subagents` in that function was the precedent, written for the same reason: `denied`
-sees the agent's own line and nothing else.
-
-A run with no vocabulary, and one under `UNSCOPED`, reach everything, so `held` is
-`None`, `offers` admits every name and the report says exactly what it always said. The
-reversal is for a caller holding a source id, which is who the sentence above is about.
-*(2026-10-13, from an architecture review.)*
-
-It did not hold for skills until 2026-09-17. The report's skills row was written when
-a skill took no audience and was left unfiltered when it gained one, so a caller was
-told a run had withheld the very skill their source ids hide. Skills are filtered now,
-and compared by the one skill each spelling means, because an audience written
-`catalogue::audit` has to hide `audit` too.
-
-**It did not hold for `--json` until 2026-09-26**, and the shape is the same one
-again: a rule implemented at a renderer rather than in the record, then implemented at
-one renderer. `Inventory` filtered `agents` and `subagents` by what the caller reaches
-and carried the rest whole, and the text form covered for it by skipping the access
-sections for a scoped view. `as_json` had no such clause. Measured through the real
-command, a caller holding one source id was handed, for every definition out of their
-reach: its name, the file it came from, and its subagent chain -- plus the vocabulary,
-every definition's audience, and the report of what restricts nobody.
-
-The record's own field said otherwise -- *"the names above have already been filtered
-to what this caller reaches, so the printer never filters and the two views cannot
-come apart"*. Both halves were false: only two fields were filtered, and the printer
-was the only thing filtering the rest.
-
-The filtering is in `inventory` now, so a scoped view is a truthful record and every
-renderer is handed the same one. What a caller reaches is computed once and the
-companion maps are filtered against it, rather than each asking again -- two answers to
-that question is how these came apart. The vocabulary, the audiences and the access
-report are the *policy*, and a caller reading their own view is not the operator
-checking it, so a scoped view carries none of the three. `_access`'s second clause is
-gone with them.
-
-**The rules search the whole rendered output for a name that should not be there**,
-in both forms, rather than naming the fields that leaked. The four that did were not a
-closed set, and a field added later would leak the same way past a field-by-field
-assertion. *(2026-09-26, from an architecture review.)*
-
-**Nor for the fields naming a subagent, until 2026-10-12.** The filter covered
-`agents` and `subagents` and carried every field keyed by a subagent whole: the tools
-and skills in its own folder, the compiled ones, the ones shadowing the catalogue, and
-the faults a listing reports. The rule above searched the right way and could not see
-it, because its fixture held no `subagents/` and every such field was empty where it
-was asserted. Measured through the real command, a caller holding `B` was shown, for
-subagents only `A` reaches, seven fields of names in `--json`, and a moved-tool line
-and an orphaned folder in the text form.
-
-They are kept to the same `for_caller_subagents` answer now, and `moved_tools` to both
-answers, through the one function that words its keys. Orphaned folders are left out
-of a scoped view: they belong to no definition to filter by, and they are the
-operator's diagnostic. A scoped listing's exit status follows the view, so a fault in a
-subagent the caller cannot open does not fail it. The rule's fixture holds subagents
-out of reach, valid and faulty. *(2026-10-12, from an architecture review.)*
-
-**It did not hold for the tool and skill catalogues at all**, and the reason is worth
-reading: those two have nowhere to *write* an audience. A tool module and a skill's own
-file carry no `source_ids:` line -- an audience for one exists only as an entry inside
-the definition that offers it -- so the filter in the listing asked a question with no
-answer. `reaching("tools", ...)` looked up audiences under a `tools` key that walk never
-builds, matched every tool at `"*"`, and filtered nothing; replacing the whole call with
-the unfiltered tuple left all 2,167 tests passing. The skills catalogue had no filter to
-be a no-op. Measured through the real command, a caller holding one source id was shown
-the tool the one agent they reach narrows away from them, the tool and the skill only an
-agent they cannot open offers, and the file each tool lives in.
-
-What a listing can ask is whether **any agent this caller reaches offers it to them**,
-which is what `offers` does. It walked the reachable subagents as well, on the argument
-that a caller who reaches a subagent reaches what it holds -- false, and corrected on
-2026-10-14 in the entry below: a subagent can only narrow what reached it. Three things
-about that walk are load-bearing and each was a silent mutation until a rule was written
-for it:
-
-  - **Reachable definitions, not all of them.** An entry may be written `["*"]`, which
-    means anyone who reaches *that definition*; at run time the `and` with the
-    definition's own line is held by the caller never opening it, and a listing has no
-    such gate. Reading every definition's entries hands back a tool from an agent the
-    caller cannot open, and nothing else in the suite notices -- every other audience
-    names source ids, so the definition's own line narrows the entry away a second time
-    and covers for the missing filter.
-  - **An unset field ends the walk.** `tools:` unset offers the whole catalogue, which
-    is what most definitions look like, so a filter reading it as "nothing" empties the
-    commonest deployment's listing. `ALL` is the string `"*"`, so a union that read its
-    entries would collect the character.
-  - **Skills are compared by identity, not spelling.** A grant may write `audit` or
-    `catalogue::audit` where the listing says `audit`. This is the second reader of
-    those grants to need it; the withheld report already carries the note above.
-
-`skills:` unset means *none* while `tools:` unset means *all*, and the filter needs to
-know nothing about that difference: it reads what the definition resolved to for this
-caller. *(2026-09-27, from an architecture review.)*
-
-Both mean none now, so it is `["*"]` that ends the walk and an unset `tools:` offers
-nothing; the filter still reads what the definition resolved to, and needed no change.
-*(2026-10-18.)*
-
-**Nor for the faults, until 2026-10-13.** Three rounds had settled what a scoped view
-carries and the faults were in none of them. `broken` -- the complaint `undeclared_in`
-makes about a definition naming a source id the vocabulary does not declare -- went into
-`agents_error` and `subagents_error` whole. Measured through the real command: a caller
-holding `B` was handed the name of a subagent out of their reach, the source id that
-subagent wrote, and every source id the deployment declares, printed beside the `access:
-null` that exists to withhold exactly that, and their listing exited 1 over a file they
-cannot open. Only `list --as` and `inventory(source_ids=...)` reach that state, since a
-deployment in it is refused at construction. The three skills fault fields went in whole
-too, with `skills` beside them correctly empty.
-
-**The faults are not all filtered the same way, and the differences are the whole of
-it.** A misfiled skill is loaded and offered, so it is kept to what the definitions this
-caller reaches offer, exactly as `skills` is -- emptying it instead would take away the
-one skill fault a caller can act on, and a rule holds that half so the three cannot be
-collapsed into one `if scoped`. A skill that would not load, and one nested past the
-level skills are read at, never got a name for any definition to offer: there is nothing
-to filter them against, and they are the operator's diagnostic like an orphaned folder.
-`broken` is the policy reached by another route, so it goes with the rest of the policy.
-`Inventory.held`'s own comment claimed the names above it had already been filtered --
-the claim this record logged as false in September, false again for these four fields --
-and it now says what each kind of filtering actually is.
-
-Both complaints are built per kind and carried in a field per kind, and the per-
-definition fault maps key agents as well as subagents -- so a fixture holding subagents
-alone leaves the agents' half of each one unheld. Pointing the agent half of the fault
-filter at every agent was the only survivor of that review's twenty-one mutations, and
-the first version of the rule written here for `broken` had the very same gap, found by
-mutating it. Each fixture holds one of both kinds now. *(2026-10-13, from an
-architecture review.)*
-
-**The HTTP surface asks who is calling; it still authenticates nobody.**
-`create_app(source_ids_from=...)` takes a callable given the request and returning
-source ids, and `from_header` is shipped but never defaulted -- the header is an
-argument so that trusting one is a line somebody wrote rather than what happens
-when nobody decides. A deployment whose policy and identity disagree refuses at
-startup, in both directions: a vocabulary with no source cannot serve a single
-request, and a source with no vocabulary is a server somebody believes is locked
-down and is not. *(2026-09-01.)*
-
-A source may return source ids and nothing else. **`UNSCOPED` is unreachable
-over HTTP**, because it exists to be a value a person types at a call site they
-can see -- reachable from a request it is a value a *bug* can produce, and one
-returned on a parse failure hands every caller everything at once. "Reaches
-everything" is already a source id that contains the others, which is declared and
-visible in the listing where an unscoped run would never appear.
-
-**The caller gets a code, the log gets the reason**, and it is one rule at every
-refusal. A session whose pinned agent a caller cannot reach answers 404
-`unknown_session` -- the same code a wrong id gets, so holding a real one teaches
-nothing. A source id the vocabulary does not declare answers 500 `misconfigured`
-with a body naming no source id, while the message that lists them all goes to the
-service logger. Reading and deleting a session are checked like running one: a
-session you cannot run is one you cannot touch.
-
-*The four entries above were the HTTP surface's, removed with it on 2026-09-15, and
-stay as the record.* What they decided that the library still does: every call
-names its caller with `source_ids=`; a caller presenting a compound is refused with
-an `AccessError` naming the parts; `UNSCOPED` is a value a caller passes on purpose,
-which `kingfisher run --as UNSCOPED` accepts; and a session whose agent a caller
-cannot reach raises the same `UnknownSessionError` a wrong id does. Reading a
-session asks who is calling. Deleting one does not -- `delete_session` is the
-operator's, and the checks it made over HTTP went with the surface.
-
-**A turn checks who is calling before it touches the session.** The entry
-reversing `access.yaml` lists "the per-turn re-check of a session's pinned agent"
-among what survived, and nothing performed it. A session's first turn asked
-whether the caller could open the agent it named; every later turn returned the
-pinned agent without asking, so a caller holding another's session id ran in it
-with everything that agent grants, while reading the same session answered that
-it did not exist. The test named for the case never pinned an agent, and passed on
-the first-turn check.
-
-It is the first thing a turn does, before the session is marked used, claimed or
-written to. Refused at the agent -- the obvious place, and one line -- the
-caller's files were already in the session's `/data` and the session marked as
-used, which was measured rather than reasoned about; the refusal of a call that
-names nobody sat equally late and moved up with it. The rule is the one reading
-a session already used, now written once for both, and the refusal is word for
-word the one an id nobody issued gets, so holding a real id teaches nothing: not
-whose the session is, not which agent it runs, not whether a turn is running in
-it. *(2026-09-15.)*
-
-**Who may continue a session is the caller's to decide.** A caller holding another's
-session id, and reaching its agent, continues that conversation and is shown all of it.
-Measured on 2026-10-17: a caller holding `B` was shown a result from a tool only `A`
-may use, which `A` had run earlier in the same session. Three fixes were weighed and
-turned down. Gating a session on the stamps its results carry leaves out what carries
-no stamp, the caller's own uploads and the conversation itself. Pinning a session to
-whoever started it decides who owns a conversation, which kingfisher cannot know.
-Hiding the results alone cannot hold, because the model's own replies repeat them.
-Kingfisher has no users, only the source ids a call names, and it trusts those as
-given; which person owns which conversation is the deployment's knowledge, beside
-which source ids that person holds. So source ids decide what a turn may use -- its
-agent, tools and subagents -- and never what the conversation already holds. The check
-above stays, because it is about what the turn runs, and so do the stamps, as the
-record a caller reads off `RunResult.ledger`. *(2026-10-17.)*
-
-**One reader of what a caller says.** `held_for` was where a list stopped being
-read as nobody in particular, and two readers never asked it: naming an agent and
-reading a session each tested for a tuple, so `["B"]` opened an agent restricted
-to `A` and was shown a session pinned to it, and `"B"` got through both.
-**One walk of the definitions, for three questions.** `audit` reports what a
-policy leaves open, `undeclared_in` returns the first definition naming a source
-id nobody declared, and a listing prints what each one says. All three began by
-asking `stated` for the same spec, so the specs -- a directory read -- were walked
-three times per listing and twice at every startup, where the comment beside it
-already claimed one walk. `checks.walked` yields `(kind, name, said)` and the
-three questions consume it.
-
-Shared and not merged, which is the whole of the care here: a report that stopped
-at the first fault would be a refusal, and a refusal that carried on would be a
-report. `Kingfisher.__init__` still calls them in order -- refusals first, because
-a typo makes a line both undeclared and narrowing and reporting it as a narrowing
-explains the wrong fault. *(2026-09-16.)*
-
-`held_by` in `application/access.py` is now the only place the shape of
-`source_ids` is read -- `held_for`, the turn, naming an agent, reading a session
-and the listing all ask it -- and a rule holds `application/` to that, because a
-second reader is how this happened. *(2026-09-15.)*
-
-**One reader of what a definition says, and one narrowing of it.** The sibling of
-the entry above, found the same way: `Stated` was built from a spec in two places
-with the same pair of `getattr` calls, and the rule that narrows a definition's
-audienced fields to one caller was written out six times -- three fields, in each
-of the two `declares` bodies, with the subagent listing its own fields a second
-time for the no-caller case. `AUDIENCED` already named those three fields and
-already drove five other loops, so the enumeration was the duplicated part rather
-than the rule. `core.access.reach.stated` and `narrowed_for` are the one of each now,
-and they live beside `reaching` because a kind may not hold a helper the kinds
-share.
-
-`narrowed_for` returns the three selections and never a `Capabilities`, which is
-the part worth keeping deliberate: an agent widens `models` to everything where a
-subagent leaves it unset, and `memory` is an agent's to state. Those axes carry no
-audience, so they stay with the definition that has an opinion about them -- a
-shared body returning the whole record would have flattened a difference no test
-was watching. One is now. *(2026-09-16.)*
-
-**`errors.STATUS` stayed exactly the caller-facing set.** A deployment error that
-still deserved a name went in `DEPLOYMENT_STATUS` beside it, disjoint and tested
-as such -- the first table's value was that it was checkable in both directions,
-and an entry a caller cannot cause would be a status nobody decided on. Both tables
-were the HTTP service's, and went with it.
-
-**Reversed: `groups.yaml.example`, shipped in the package and placed by
-`ensure_layout`.** The reasoning was that `seed` names `source_ids.yaml` in a skip
-message, and that message named a file no example of existed anywhere an
-installed deployment could reach. True, and the example still did not help --
-which only became visible by running it. An example ships *one* vocabulary and a
-workspace needs whichever names its own definitions ask for, so seeding this
-repository's set said `declare analysts, auditors, senior-analysts` and put a
-file beside it declaring `readers, writers, staff, senior, senior-writers`. Five
-names, none of them the three. Following the pointer led away from the answer.
-
-So the remedy travels in the message instead, where it can be built from the
-names actually missing -- one line, after the list, holding the union across
-every skipped definition, because a copy per definition prints overlapping
-partial lists and whoever pastes the first is skipped again on the second. The
-flat form only: what a name covers and what it requires are a deployment's
-choices about its own organisation, and nothing can infer which a name wants.
-
-`assets/source_ids.yaml` is now the only source ids example, and it is named
-the thing the message points at rather than a `.example` beside it.
-
-**`models.yaml.example` stays, and the asymmetry is the point.** The two were
-never alike: `models.yaml` is required with no fallback, its example is a
-hundred lines of annotation about endpoints and keys, and nothing else anywhere
-carries that -- where deleting the source ids example leaves
-`assets/source_ids.yaml` standing. Its error message already prints a
-minimal working catalogue inline, so the getting-started path exists and the
-file is the reference beside it.
-
-Still not seeded, which is unchanged. `source_ids` is not a definition kind, and
-copying a policy would make adopting access control something a deployment
-inherits rather than does. *(2026-09-02, reversed 2026-09-04.)*
-
-**"Beside it" means beside the file, not inside the workspace.** Both files
-relocate -- `KINGFISHER_MODELS_FILE` points a fleet at one reviewed catalogue,
-which is what `compose.yaml` ships -- and the layout wrote each example into the
-workspace regardless. So the deployment most likely to need the annotated
-catalogue was the one guaranteed not to get it: `kingfisher seed` wrote it into
-the workspace, the container read `/config/models.yaml`, and the error for the
-missing file said seed would write the example next to it. It had, next to the
-other one, and nothing anywhere said so.
-
-`WorkspacePaths` carries the two overrides now and `authored_files_for` resolves
-them, which is `definition_roots_for` again and for the same reason: seeding
-answers "where does this go?" before a catalogue can be read, and a second copy
-of `models_file or workspace / "models.yaml"` is how the two records drift.
-`ensure_layout` takes the resolved mapping, so a caller holding only a directory
-still gets the old behaviour -- that caller is saying the files are read from the
-workspace, which for nearly every deployment is true.
-
-Best-effort, and that is a deliberate second choice. A shared catalogue is often
-mounted read-only, and a layout that raised there would take `kingfisher seed`
-down for exactly the deployment this fixes; the example falls back to the
-workspace, which is where it went before it could follow the file at all.
-*(2026-09-03.)*
-
-**`groups` is `source_ids`.** The concept did not move: an audience, resolved by
-`reaches` against a closed vocabulary, with `contains`, `all_of`, the ceiling
-rule and default-open all untouched. What changed is the word, and it changed
-everywhere it appeared -- the definitions' key, `source_ids.yaml` and the section
-inside it, `KINGFISHER_SOURCE_IDS_FILE`, `run(source_ids=)`, `SourceIds`,
-`Stated.source_ids`, the `--as` metavar, both `list --json` keys,
-`create_app(source_ids_from=)`, and the header this service's own examples spell
-`X-Kf-Source-Ids`. Renaming the definitions' key alone was the first shape of it
-and the wrong one: it leaves a reader two words for one thing and an Access
-chapter obliged to teach both.
-
-**The prose noun is "source id", never bare "source".** That word is taken here
--- `definitions_source`, `access_source`, `skill_sources`, `models.source`, and
-197 bare uses -- and it means *where a definition was read from*. A message
-reading `source_ids.yaml: source 'sales_db' contains ...` would put both meanings
-in one sentence with a file path as the prefix. `formats.md` says the same thing
-once, positively, in the Access chapter: a source id is a name in the vocabulary
-and nothing else, not a path a definition came from and not a data file a run is
-handed.
-
-**The shipped example's vocabulary moved with the key.** `analysts`, `auditors`,
-`reviewers`, `senior` and `senior-analysts` are now `sales_db`, `audit_log`,
-`warehouse`, `pii` and `sales_db_pii`. A key called `source_ids` whose worked
-example lists job titles teaches the wrong reading of the line it is there to
-explain, and `assets/` is built and run by the suite rather than
-eyeballed, so the sentences around those names had to move too.
-
-No compatibility window, on the precedent the export table set at 0.1.0. Most of
-the old spelling fails loudly -- `run(groups=)` is a `TypeError`, a definition
-still writing `groups:` is refused as an unknown field. One does not, and it is
-worth stating rather than discovering: a workspace whose vocabulary file is still
-named `groups.yaml` finds no file, and no file has always meant *no policy*, so
-it comes up reachable by everyone with nothing red. That is the documented
-meaning of an absent vocabulary, and it was accepted here rather than guarded.
-
-Entries above still say `for_groups` and `groups.yaml.example`. Those name things
-that were deleted, and `for_source_ids` describes a function that never existed.
+**The refusal is for the file, not the name**, which makes it a migration rather than a
+wall. One message per source id costs a restart per line and says nothing of the
+`contains` further down; the scan reads the whole document first and prints each line
+beside the line that replaces it, built from what the file says -- the argument of the
+seeding message under *Reversed: `groups.yaml.example`* below. A set whose names happen
+to be `contains` and `all_of` stays legal: the value is what marks a keyword.
 *(2026-09-15.)*
 
-**One place asks who is calling.** A call that named nobody where a policy is in
-force was refused at two of the three doors that take `source_ids=`. Reading one
-session took the argument, ignored its absence and answered -- because `held_by`
-returns `None` for three different things -- no vocabulary, nobody named,
-`UNSCOPED` -- and every reach check reads `None` as reaching everything. Right for
-the first and the third, wrong for the second: a deployment with a policy was
-asked something on a caller's behalf and nobody said whose behalf, and the answer
-named the agent someone else's session is pinned to.
+**In Python, a requirement is a set, and a list inside an audience is refused.** The
+only Python spelling of *all of* was `{"a": None, "b": None}`, which nobody types; a set
+became one source id spelled `"{'a', 'b'}"`. A set now reads as the requirement it looks
+like. A list or tuple inside the audience is refused rather than read as *all of*,
+though a caller's own format may nest it that way: a bracket whose meaning depends on
+its depth is misread in the direction that widens -- `(a, b)` at the top is *a or b* --
+and one bracket per operation makes that impossible at any depth. The `--json` listing
+still nests a requirement as an inner list, because JSON has no set; handing that back
+in is refused rather than misread. *(2026-10-16.)*
 
-`caller_holds` is the refusal and the lookup together, and the three doors --
-`_effective_grants`, `agent_named` and `Sessions.session` -- go through it. The
-refusal was written out at two of them and forgotten at the third, which is what
-one function removes rather than a third copy of the sentence.
+**Reversed: `refuse_dead`, the rule that an entry audience must overlap its
+definition's.** Measured, it had no true positives left and one class of false ones. An
+entry audience is already an **and** with the definition's, so `[senior]` under
+`[analysts, auditors]` is a good second requirement, and the fault it meant to catch --
+`[auditors]` under `[analysts]` by someone trying to widen -- is the same shape, so no
+rule can separate them. What survived is the looking: `SourceIds.narrowing_in` feeds
+`AccessReport.narrowed`, said once beside `unrestricted`. The typos it really caught are
+`refuse_undeclared`'s, refused by name, and a misspelling is no longer explained as a
+reachability problem. *(2026-09-01, both the same day.)*
 
-The two housekeeping calls take no caller and stay that way: `sessions()` lists
-the workspace and `delete_session` removes one, both the operator's, so there is
-nothing to forget. `kingfisher reap` passes `source_ids=UNSCOPED` where it reads a
-session, which is what a caller who means no caller writes. `kingfisher list`
-stays exempt for the reason recorded beside it -- read-only, run by whoever has
-the policy file in front of them. *(2026-09-18.)*
+**`source_ids.yaml` now holds vocabulary with a rule in it**, against its pitch of "a
+dictionary, not a policy". A compound still answers "what does this name mean", with a
+condition; judged to stay on the right side, because what it cannot do is say who
+reaches what, the property that sank the central design. Recorded because it is cheap
+to disagree with now and expensive later. The `--json` `access` key became
+`{names, requires}`, since a compound has no honest place in a name-to-closure mapping.
 
-**A subagent's own line is a ceiling at build, where it had been one only on
-paper.** `formats.md` has said since audiences moved into the definitions that a
-subagent's `source_ids:` is its intrinsic ceiling -- who reaches it wherever it is
-used, and the default audience for its `tools`, `skills` and `subagents` entries --
-intersected with the parent's entry, and the field's first comment said it held even
-for a compiled subagent. The listing read it that way. The build never asked:
-`SubagentSpec.declares` had no caller, `as_subagent`, `compiled`, `subagent_skills`
-and `subagent_helpers` read the raw selections, and nothing turned a subagent away
-for its own line, so the agent's `declares` was the only place a caller's source ids
-narrowed a build. Never built rather than lost -- the commit that wrote the promise
-wrote `declares` beside it and no call to it.
+**`builtin_tools` takes no audience, and that is not an omission.** deepagents registers
+its own tools, so kingfisher can filter them but never leave them out of a graph -- a
+live run was measured where a model called `execute` from memory. Gating them here would
+promise a boundary it cannot keep. What gates them is which *agents* a source id may
+open, since an agent declaring a read-only builtin set cannot yield the shell to anyone.
 
-Measured through `build_agent` with the guide's own `reviewer` and a caller in `C`:
-a `reviewer` holding `sql_query`, told about a skill its entry keeps from `C`,
-consulting a helper the same way; a subagent written `source_ids: [A]` built because
-the agent named it; and a compiled declaration's `build` handed the tool its per-tool
-audience withholds. A caller in `A` got the identical build. The shipped `auditor`
-never showed it, because `analyst` narrows the same tools the same way and the
-agent's grant is the subagent's ceiling.
+**Out of reach reads as not offered.** An asset a caller's source ids do not reach is
+absent from listings, from the "this workspace offers ..." in a refusal, and from the
+report of what a run withheld -- so nothing lets a caller enumerate the catalogue by
+guessing. What can be asked of a tool or a skill is whether an agent this caller reaches
+offers it to them, and of a tool whether they pass its own lock.
 
-The build follows the guide now. A subagent its own line does not reach is left out of
-what an agent's list activates, as an entry the agent narrowed away is, and a request
-naming one is refused as a typo is -- see *A name a request writes reads the same
-whether nothing defines it or it is out of reach*, below, which reversed the rule this
-entry first recorded. What a built one holds goes through its `declares(held)` before
-the request's grant -- tools on both paths, skills, helpers -- while what is refused
-stays the file's own names, so a typo is refused whoever is calling. Helpers are narrowed by the activated set rather
-than by the grant, which may be `"*"` and says nothing about reach. `build_agent` had
-also rebound `held` to the walked tool names a dozen lines after reading it as the
-caller's, so that local is `guarded` now.
+**Reversed: the withheld report hides only what source-id narrowing removed.** The
+exception held that what an agent never declared is a fact about the agent. Measured:
+`list --as B` showed `tools: ['line_count']` while a run as `B` was told
+`1 tool(s) not granted: secret_export`, a tool no definition `B` reaches offers; the
+caller supplies `capabilities`, so narrowing their own grant handed them the catalogue.
+The report now asks the listing's question through the same `offers` in
+`core.access.reach`, since two readers answering what a caller reaches is how these came
+apart. With no vocabulary, or under `UNSCOPED`, `offers` admits every name. Skills are
+compared by the skill each spelling means, so an audience on `catalogue::audit` hides
+`audit` too. *(2026-10-13, from an architecture review.)*
 
-The guide's sentence that such a subagent "reports what was withheld" was wrong in the
-other direction and is gone, with the same claim in `auditor.yaml`: out of reach reads
-as not offered, and the report names nothing source-id narrowing removed. The tests
+**A scoped view is filtered in the record, not at a renderer.** Measured through the
+real command, `--json` handed a caller holding one source id the name, file and subagent
+chain of every definition out of reach, plus the vocabulary, every audience and the
+access report: `Inventory` filtered two fields, the text form covered for the rest, and
+its own comment claimed the names were already filtered. `inventory` filters now, so
+every renderer is handed the same truthful record, and what a caller reaches is computed
+once for every field. The vocabulary, the audiences and the access report are the
+*policy*, and a caller reading their own view is not the operator checking it, so a
+scoped view carries none of them. **The rules search the whole rendered output for a
+name that should not be there**, in both forms, rather than naming the fields that
+leaked: a field added later would leak past a field-by-field assertion. *(2026-09-26,
+from an architecture review.)*
+
+**Nor for the fields naming a subagent, until 2026-10-12.** A subagent's own tools and
+skills, the compiled and shadowing ones and their faults were carried whole, invisible
+to the rule above because its fixture held no `subagents/`; a caller holding `B` was
+shown seven fields of names for subagents only `A` reaches. They are kept to the same
+`for_caller_subagents` answer now. Orphaned folders belong to no definition to filter
+by and are the operator's diagnostic, so a scoped view leaves them out. A scoped
+listing's exit status follows the view. The rule's fixture holds subagents out of reach,
+valid and faulty. *(2026-10-12, from an architecture review.)*
+
+**It did not hold for the tool and skill catalogues at all.** `reaching("tools", ...)`
+looked up audiences under a key the walk never built, matched everything at `"*"`, and
+filtered nothing -- replacing the call with the unfiltered tuple left all 2,167 tests
+passing -- so a caller was shown tools and skills only agents they cannot open offer, and
+each tool's file. A listing asks whether **any agent this caller reaches offers it to
+them**, which is `offers`, with a tool's own lock applied beside it. Three things about
+that walk were each a silent mutation until a rule held it. **Reachable definitions, not
+all of them**: `["*"]` means anyone who reaches *that definition*, which a run gates by
+the caller opening it and a listing must gate itself. **`["*"]` ends the walk**: `ALL`
+is the string `"*"`, so a union would collect the character; an unset `tools:` or
+`skills:` offers nothing, and the filter reads what the definition resolved to for this
+caller. **Skills are compared by identity, not spelling**: `audit` or
+`catalogue::audit`. *(2026-09-27, from an architecture review.)*
+
+**Nor for the faults, until 2026-10-13.** `broken` -- `undeclared_in`'s complaint about an
+undeclared source id -- went into `agents_error` and `subagents_error` whole: a caller
+holding `B` was handed a subagent out of reach, its source id and every declared one,
+beside the `access: null` that exists to withhold them, and exited 1. Only `list --as`
+and `inventory(source_ids=...)` reach that state; a deployment in it is refused at
+construction. **The faults are not all filtered the same way, and the differences are
+the whole of it.** A misfiled skill is loaded and offered, so it is kept to what reached
+definitions offer, as `skills` is -- emptying it would take away the one skill fault a
+caller can act on, and a rule holds that so the three cannot collapse into one
+`if scoped`. A skill that would not load, or nested too deep, has no name to filter by
+and is the operator's diagnostic. `broken` is policy, so it goes with the policy. The
+fault maps key agents as well as subagents, and a subagents-only fixture left the agent
+half unheld -- the only survivor of that review's twenty-one mutations -- so each fixture
+holds both kinds. *(2026-10-13, from an architecture review.)*
+
+**The HTTP surface asked who was calling and authenticated nobody.** It went on
+2026-09-15; its decisions stay as the record. Reading source ids off a header was
+shipped but never defaulted, so trusting one was a line somebody wrote. A policy with
+no identity source, or a source with no policy, refused at startup -- the second is a
+server somebody believes is locked down and is not. `UNSCOPED` was unreachable over
+HTTP: it is a value a person types at a call site they can see, and from a request it is
+one a bug can produce. **The caller gets a code, the log gets the reason**: a session out
+of reach answered as a wrong id does, and an undeclared source id got a body naming no
+source id while the logger got the list. What the
+library still does: every call names its caller with `source_ids=`; a presented
+compound is refused with an `AccessError` naming the parts; `kingfisher run --as
+UNSCOPED` passes `UNSCOPED` on purpose; a turn in a session whose agent the caller
+cannot reach raises the `UnknownSessionError` a wrong id does, and `session` answers
+`None` for it. *(2026-09-01.)*
+
+**A turn checks who is calling before it touches the session.** The per-turn re-check
+the `access.yaml` reversal lists among its survivors was performed by nothing: every
+turn after the first returned the pinned agent unasked, so a caller holding another's
+session id ran in it with everything that agent grants. The test named for the case
+never pinned an agent. The check is the first thing a turn does, before the session is
+marked used, claimed or written to -- refused at the agent, the caller's files were
+already in the session's inputs, which was measured. The refusal is word for word an
+unissued id's, so holding a real id teaches nothing. *(2026-09-15.)*
+
+**Who may continue a session is the caller's to decide.** A caller holding another's
+session id, and reaching its agent, continues that conversation and sees all of it.
+Measured on 2026-10-17: a caller holding `B` was shown a result from a tool only `A` may
+use, run earlier in the session. Three fixes were turned down. Gating on the results'
+stamps leaves out what carries none, the uploads and the conversation itself. Pinning a
+session to whoever started it decides who owns a conversation, which kingfisher cannot
+know. Hiding the results cannot hold, because the model's replies repeat them.
+Kingfisher has no users, only the source ids a call names, trusted as given; who owns a
+conversation is the deployment's knowledge. So source ids decide what a turn may use --
+its agent, tools and subagents -- never what the conversation already holds. The stamps
+stay, as the record a caller reads off `RunResult.ledger`. *(2026-10-17.)*
+
+**One reader of what a caller says.** Naming an agent and reading a session each tested
+for a tuple, so `["B"]` opened an agent restricted to `A`, and `"B"` got through both.
+`core.access.checks.held_by` is the only place the shape of `source_ids` is read, and
+`test_one_function_reads_what_shape_a_caller_s_source_ids_are_in` holds that.
+*(2026-09-15.)*
+
+**One walk of the definitions, for three questions.** `audit` reports what a policy
+leaves open, `undeclared_in` the first definition naming an undeclared source id, and a
+listing what each says; `core.access.checks.walked` yields `(kind, name, said)` once for
+all three. Shared and not merged: a report that stopped at the first fault would be a
+refusal, and a refusal that carried on would be a report. `Kingfisher.__init__` refuses
+first, because a typo makes a line both undeclared and narrowing, and as a narrowing it
+explains the wrong fault. *(2026-09-16.)*
+
+**One reader of what a definition says, and one narrowing of it.** The narrowing of a
+definition's audienced fields was written out six times while `AUDIENCED` already named
+the three fields. `core.access.reach.stated` and `narrowed_for` are the one of each,
+beside `reaching`, because a kind may not hold a helper the kinds share. `narrowed_for`
+returns the three selections and never a `Capabilities`, deliberately: an agent widens
+`models` where a subagent leaves it unset, and `memory` is an agent's to state, so the
+axes no audience touches stay with the definition. *(2026-09-16.)*
+
+**Reversed: `groups.yaml.example`, shipped in the package and placed by
+`ensure_layout`.** `seed` names `source_ids.yaml` in a skip message, and no example of it
+could be reached from an installed deployment. True, and the example still did not help,
+visible only by running it: it ships *one* vocabulary, so seeding this repository's set
+said `declare analysts, auditors, senior-analysts` beside a file declaring
+`readers, writers, staff, senior, senior-writers`. So the remedy travels in the message,
+built from the names actually missing -- one line, the union across every skipped
+definition, because per-definition copies are overlapping partial lists. The flat form
+only: whether a name covers or requires is the deployment's choice, and nothing can infer
+it. `assets/source_ids.yaml` is the only source ids example.
+
+**`models.yaml.example` stays, and the asymmetry is the point.** `models.yaml` is
+required with no fallback, and its example is a hundred lines of annotation nothing else
+carries; its missing-file error already prints a minimal catalogue inline. `source_ids`
+is still not seeded: it is not a definition kind, and copying a policy would make access
+control something a deployment inherits rather than adopts. *(2026-09-02, reversed
+2026-09-04.)*
+
+**`groups` is `source_ids`.** The concept did not move; the word changed everywhere it
+appeared. Renaming the definitions' key alone was the first shape and the wrong one: it
+leaves a reader two words for one thing. **The prose noun is "source id", never bare
+"source"**: that word means *where a definition was read from* here --
+`definitions_source`, `access_source`, `skill_sources`, `models.source`, and 197 bare
+uses. **The shipped example's vocabulary moved with the key**, from job titles to
+`sales_db`, `audit_log`, `warehouse`, `pii` and `sales_db_pii`, because job titles teach
+the wrong reading of the key. No compatibility window, on the precedent the export table
+set at 0.1.0: `run(groups=)` is a `TypeError` and `groups:` an unknown field. One
+spelling fails silently, stated rather than discovered: a file still named `groups.yaml`
+is no file, which means *no policy*, so the workspace is reachable by everyone with
+nothing red -- accepted as the documented meaning of an absent vocabulary.
+*(2026-09-15.)*
+
+**One place asks who is calling.** A call naming nobody under a policy was refused at two
+of three doors; reading a session answered, because `held_by` returns `None` for no
+vocabulary, nobody named and `UNSCOPED`, and every reach check reads `None` as everything
+-- wrong for the second, and the answer named the agent someone else's session is pinned
+to. `caller_holds` is the refusal and the lookup together, and `_effective_grants`,
+`_agent_named` and `Kingfisher.session` go through it. Housekeeping takes no caller:
+`sessions()` naming nobody is the operator's view of every session, and deleting acts on
+a `Session` handle already handed out. `kingfisher reap` passes `source_ids=UNSCOPED`
+where it reads a session, which is what a caller who means no caller writes, and
+`kingfisher list` stays exempt -- read-only, run by whoever has the policy in front of
+them. *(2026-09-18.)*
+
+**A subagent's own line is a ceiling at build, where it had been one only on paper.**
+`formats.md` makes a subagent's `source_ids:` its intrinsic ceiling and the default
+audience for its entries, and the listing read it so, but the build never asked.
+Measured through `build_agent` with the guide's `reviewer` and a caller in `C`: a
+subagent written `source_ids: [A]` built because the agent named it, with tools, skills
+and helpers its entries keep from `C` -- the build a caller in `A` got. The shipped
+`auditor` never showed it, because `analyst` narrows the same tools the same way. A
+subagent its own line does not reach is now left out of what an agent activates, and
+what a built one holds goes through its `declares(held)` before the request's grant,
+while what is refused stays the file's own names, so a typo is refused whoever calls.
+Helpers are narrowed by the activated set, not the grant, which may be `"*"`. The tests
 build the guide's example for `C` and the control for `A`. *(2026-10-12.)*
 
-**What a caller is told about subagents follows the same reach as the build.** Once
-the build dropped a subagent for its own line, three outputs still named it. Measured
-with a real turn and the real command, a caller in `C` and subagents written
-`source_ids: [A]`: a request narrowing `subagents:` was told `insider` and `ledger` were
-not granted, because the withheld report filtered what the agent's audiences removed
-and nothing a subagent's own line did; `kingfisher list --as C` left both out of its
-subagents and printed them on `boss`'s chain, which read the agent's raw `subagents:`;
-and the report of a subagent running on the main agent's host was asked with the
-request's grant, `"*"`, so it named `insider`'s model. That report also named, for any
-caller, subagents an agent never names, and the chain named an entry the agent's own
-audience keeps from the caller.
+**What a caller is told about subagents follows the same reach as the build.** Measured,
+a caller in `C` with subagents written `source_ids: [A]` was told `insider` was not
+granted, saw it on a listed chain, and was shown its model in the report of subagents
+running on the host. The build and both run reports drop a subagent through
+`within_reach`, the host report reads the build's roster via `for_the_caller`, and a
+listing's chain is kept to `for_caller_subagents`. *(2026-10-12.)*
 
-The build and both run reports now drop a subagent through `within_reach`, and the
-host report reads the build's roster: the agent's declaration for this caller, through
-the `for_the_caller` the build clamps with, then `within_reach`. A listing's chain is
-what the agent declares for this caller, kept to `for_caller_subagents` as every other
-field naming a subagent is. The listing does not call `within_reach`: `activation`
-imports deepagents, and two answers to one question inside one listing is how its
-fields came apart before. The tests drive each output for `C` and the control for `A`.
+**A refusal of a subagent nothing defines offers only the ones the caller reaches.** It
+listed every definition after `offered:`; both refusals list through `offered_to` now.
+Whether one is raised is unchanged: a typo in a file is refused whoever is calling.
 *(2026-10-12.)*
-
-**A refusal of a subagent nothing defines offers only the ones the caller reaches.**
-The entry above left one output naming the rest. Measured with a real turn, a caller in
-`C` whose agent's file, request or subagent's file named a subagent nothing defines was
-refused with every definition listed after `offered:`, `insider` and `ledger` among
-them. Both refusals list through `offered_to` now, which is `within_reach` over every
-definition. Whether one is raised is unchanged: what is unknown is still asked of every
-definition, so a typo in a file is refused whoever is calling, and a caller in `A` or a
-run with no `source_ids.yaml` reads the list it read before. *(2026-10-12.)*
 
 **A name a request writes reads the same whether nothing defines it or it is out of
-reach.** The entries above held that whether a refusal is raised is about what the
-request named and must not depend on who sent it, and that left the guide's promise
-open. Measured with a real turn, a caller in `C` under an agent writing
-`subagents: ["*"]`: naming `ghost` was refused, and naming `insider` -- defined, and kept
-from `C` by its own line -- ran without it and said nothing. So `C` could tell a real
-name from a typo by guessing, which is the one thing *out of reach reads as not
-offered* exists to stop. Closing the gap was chosen over rewording the guide to admit
-it, and for a request the old rule is reversed: whether a name is refused, and what the
-refusal says, now depend on who sent it, because that is the only way they can stop
-depending on what exists.
+reach.** Measured with a real turn, a caller in `C` under an agent writing
+`subagents: ["*"]`: naming `ghost` was refused, naming `insider` -- defined, kept from
+`C` by its own line -- ran without it and said nothing. So `C` could tell a real name
+from a typo by guessing, which *out of reach reads as not offered* exists to stop.
+Closing the gap was chosen over rewording the guide, and for a request the rule that a
+refusal must not depend on who sent it is reversed: it now depends on who sent it,
+because that is the only way it can stop depending on what exists.
 
-A request's own names are settled in the service, by `settled_request`, where they are
-still apart from the deployment's grant and from the agent that clamp them. Where both
-offer every subagent the names reach the build as written, so each is checked against
-what the caller reaches: one out of reach is refused in a typo's words, with the same
-`offered:` list, and a request naming both kinds lists both. Where either is a list it
-narrows the request silently, a typo and a name out of reach alike, as it did. The same
-reading settles two definitions of one name when the caller reaches one: a bare `x`
-means that one rather than being refused as offered by two sources, and `"*"` expands
-to what the caller reaches, so neither refusal of two of a name fires for them or names
-the other. Settled there rather than in the build, because the build is handed the
-grant and the request already combined, and a grant listing a subagent out of `C`'s
-reach would otherwise have `C` refused for a name `C` never wrote.
+A request's own names are settled by `settled_request` in the service, while still apart
+from the grant and the agent: the build is handed the two combined, and a grant listing
+a subagent out of `C`'s reach would have `C` refused for a name `C` never wrote. Where
+both offer every subagent, a name out of reach is refused in a typo's words; where either
+is a list, it narrows the request silently, typo and out-of-reach alike. A bare `x` with
+two definitions means the one the caller reaches, and `"*"` expands to what they reach.
+A file's mistakes stay caller-independent -- a subagent nothing defines, two of a name or
+a loop is the file's fault and no caller can fix it -- and an agent's names are checked
+as its file wrote them, by `refuse_misnamed_by`, so a typo behind an entry audience is
+refused for a caller it excludes too. Three refusals still name a definition out of
+reach, because no true wording hides that it exists: a file naming a bare name two
+definitions share, an agent's file naming both, and a loop through definitions the
+caller cannot reach. *(2026-10-12.)*
 
-A file's mistakes stay caller-independent: a subagent nothing defines, two of a name or
-a loop, written in an agent's or a subagent's file, is refused whoever is calling,
-because it is the file's fault and no caller can fix it. An agent's names are checked
-as its file wrote them now, by `refuse_misnamed_by` before the agent and the request
-are combined, so a typo behind an entry audience is refused for a caller the entry
-excludes too, and the refusal names the agent instead of "this request". What one lists
-follows the caller through `offered_to`. Three still name a definition out of the
-caller's reach, because no true wording of them hides that it exists: a file naming a
-bare name two definitions share, an agent's file naming both, and a loop through
-definitions the caller cannot reach. They are left as they were for the owner to word.
-*(2026-10-12.)*
+**Naming a caller where nothing narrows is refused, at one door.** With no
+`source_ids.yaml` any name expands to nobody and the answer is unrestricted. A turn was
+refused for it and a listing was not, so `kingfisher list --as marketing` printed the
+whole catalogue and exited zero -- read as what marketing reaches, not as a workspace
+with no policy. It is the state the HTTP surface refused as "a server somebody believes
+is locked down and is not". The refusal is in `held_by`, so every door shares it; the
+turn's own copy had also refused `UNSCOPED`, the one value meaning *no caller*.
+`UNSCOPED` and an empty sequence pass; a name does not. *(2026-10-14, from an
+architecture review.)*
 
-**Naming a caller where nothing narrows is refused, at one door.** A workspace with no
-`source_ids.yaml` declares no vocabulary, so any name expands to nobody and the answer
-is the unrestricted one. A turn was refused for it; a listing was not, so `kingfisher
-list --as marketing` printed the whole catalogue and exited zero on the deployment a
-turn could not run against -- which reads as what marketing reaches rather than as a
-workspace with no policy. It is the state the HTTP surface already refuses at startup,
-recorded there as "a server somebody believes is locked down and is not".
-
-The refusal is in `held_by` now, which is already the only place the shape of a
-caller's source ids is read, so every door shares it: the listing, a turn, the library
-and the service. `_effective_grants` had its own, and dropping it fixed a second thing
--- it refused on `source_ids is not None`, and `UNSCOPED` is not `None`, so the one
-value that exists to mean *no caller* was refused by exactly the deployments that need
-it and `run --as UNSCOPED` could not run a workspace with no policy. `UNSCOPED` and an
-empty sequence pass; a name does not. *(2026-10-14, from an architecture review.)*
-
-**A bundle that will not import is told to every caller, and that is not a leak.** Ten
-definition-scoped faults are filtered to what a caller reaches, and `bundles_error` is
-not. A review read the asymmetry as the one that was missed. It is the other way round:
+**A bundle that will not import is told to every caller, and that is not a leak.**
+Definition-scoped faults are filtered to a caller's reach, and `bundles_error` is not.
 `warm` reads every bundle and the service constructor calls it, so a bundle that will
-not import stops the deployment before any request has named a caller -- measured --
-and withholding it from a scoped view would hide the reason that caller's own run
-refuses to start. It is the shape of `subagents_error`, which is kept for the same
-reason and says so.
-
-What was actually wrong was the message and the comment above it. `doctor` gave "a
-reader has to be told which subagent to go and open" as the reason this fault has a row
-of its own, and the row said `probe.py: ModuleNotFoundError ...` -- a basename, in a
-folder it never named, and a workspace may hold one of those under every subagent. Each
-bundle is read on its own now, so the failure arrives named by whose folder it was in,
-every broken one is reported rather than the first, and the subagents that are fine
-still list what they hold. The traceback is carried over the re-raise on purpose:
-`test_a_defect_reaches_the_refusal_it_is_filed_under` keys a refusal by the deepest
-frame inside the package, and a plain re-raise filed two refusals in
-`kinds/tools/catalogue.py` under the wrapper. *(2026-10-14, from an architecture
+not import stops the deployment before any request names a caller -- measured -- and
+withholding it would hide why that caller's own run refuses to start; `subagents_error`
+is kept for the same reason. Each bundle is read on its own, so a failure is named by
+whose folder it was in and every broken one is reported. The traceback is carried over
+the re-raise on purpose: `test_a_defect_reaches_the_refusal_it_is_filed_under` keys a
+refusal by the deepest frame inside the package. *(2026-10-14, from an architecture
 review.)*
 
-**A caller is told only what some path reaches, and a declaration is not a path.** The
-rule implemented in 2026-10-13 was "no definition they reach declares it"; the promise
-in `formats.md` is "an asset a caller's source ids do not reach". Three things sat in
-the gap between those sentences, each measured through the real command against the real
-build:
+**A caller is told only what some path reaches, and a declaration is not a path.**
+`formats.md` promises to hide "an asset a caller's source ids do not reach", and "no
+definition they reach declares it" left three gaps, each measured against the real
+build. A tool or skill a reached subagent declares and no reached agent grants: `ceiling`
+and `subagent_skills` gave the subagent nothing while the listing offered the name, so
+`offers` is asked of reached *agents* -- a subagent is never a widener. And a subagent
+its own line admits but no reached agent names: a request naming it wired nothing,
+because `Capabilities.subagents` may only narrow what an agent declares; both
+conditions are asked together in `handed_work_by`, shared by the listing and the report.
+`handed_work_by`, `within_reach` and `activated` sit in `core.access.reach` rather than
+in `activation.py`, which imports deepagents and would cost `kingfisher list` a provider
+SDK.
 
-  - **A tool a reached subagent declares, and no reached agent grants.** `ceiling`
-    narrows a subagent's tools by what the agent holds, so the subagent got nothing --
-    while the listing and the withheld report both handed the name over. `offers` is
-    asked of the reached *agents* now. A subagent is never a widener; its own
-    declaration can only subtract.
-  - **The same for skills**, where `subagent_skills` narrows by what the run activated.
-    The subagent was handed `skills: None` and the name was offered anyway.
-  - **A subagent whose own line admits the caller and which no reached agent names.**
-    Filtered by that line alone it was listed; a request naming it wired nothing,
-    because `Capabilities.subagents` may only narrow what an agent declares. Both
-    conditions are asked together now, in `handed_work_by`, which the listing and the
-    report share -- a listing and a report asking this separately is how they came
-    apart before.
-
-`handed_work_by`, `within_reach` and `activated` sit in `domain/access.py` rather than
-beside the build. The first home was `activation.py`, and it cost `kingfisher list` a
-provider SDK: `test_a_light_export_stays_light` is what said so, immediately.
-
-The refusals are listings too. A definition's typo listed every workspace tool and its
-file to a scoped caller -- three names and three paths where the agent they reach grants
-one -- while the subagent refusals beside it were already filtered. What a refusal
-*judges* is deliberately not narrowed: a file naming a tool nothing offers is the file's
-fault whoever is asking, and a definition naming a real tool out of one caller's reach
-is not an error at all, which is the case
-`test_a_definition_naming_a_real_tool_out_of_reach_is_not_refused` holds. Narrowing the
-judgement would refuse one file for some callers and not others, which is what
-`refuse_misnamed_by` exists to prevent.
-
-Unscoped, every one of these answers exactly what it answered before: an operator's view
-is everything, including the subagent nobody activates, which is the thing they are
-reading a listing to find. *(2026-10-14, from an architecture review.)*
+The refusals are listings too, and were narrowed. What a refusal *judges* is not: a file
+naming a tool nothing offers is its fault whoever asks, and a definition naming a real
+tool out of one caller's reach is no error at all, which
+`test_a_definition_naming_a_real_tool_out_of_reach_is_not_refused` holds -- narrowing
+the judgement would refuse one file for some callers and not others. Unscoped, an
+operator sees everything, including the subagent nobody activates, which is what they
+read a listing to find. *(2026-10-14, from an architecture review.)*
 
 **What a caller reaches is read from the catalogue's own spelling, and asked of every
-agent they can open.** The three rules of 2026-10-14 left four gaps, each found by
-mutating the thing a rule guards rather than by reading:
+agent they can open.** Four gaps, each found by mutating the guarded thing rather than
+by reading. `offers` compared `csv_profile::csv_profile`, the documented long form,
+against the catalogue unspelt, so a scoped caller was told they reached no tools while
+the build handed them one; `placed` is passed as `same=` now. Two readers asked a spec
+raw and leaked a moved tool's path and a subagent out of reach; both read
+`declares(held)`. A refusal about a file listed only what the agent being built names,
+but a *file* is fixed by editing it and may name anything the caller reaches through any
+agent they can open, while a *request* is bound by the agent it opened; `offered_to`
+takes `by=` for the difference.
 
-  - **A grant written the long way reached nobody.** `offers` compared a written entry
-    against the catalogue unspelt, so `csv_profile::csv_profile` -- the form
-    `formats.md` documents, and the form the shipped `surveyor` is written with --
-    matched nothing, and a scoped caller was told they reached no tools at all while
-    the build handed them one. `placed` was private to the selection reader; it is
-    public now and both readers pass it as `same=`.
-  - **Two readers asked a spec raw.** `moved_tools` read `tool_sources` and the
-    unresolved-subagent row read `spec.subagents`, both unnarrowed, so a scoped caller
-    was handed a moved tool's path and a name out of their reach. Both read
-    `declares(held)` now. `tool_sources` is keyed by the bare name while a selection
-    holds the reference as written, so the comparison is on the bare name --
-    comparing them as written emptied the field for every caller, scoped or not.
-  - **A refusal about a file listed only what the agent being built names.** Which
-    agents may be asked depends on what the refusal is about, and the two are not the
-    same question: a *file* naming a subagent wrong is fixed by editing that file, so
-    what it could name instead is everything this caller reaches through any agent
-    they can open; a *request* naming one is bound by the agent it opened, because
-    `Capabilities.subagents` may only narrow what that agent declares. `offered_to`
-    takes `by=` for the first and the one agent for the second.
-
-The fourth was a guard over nothing, twice. `agents_to_ask` first filtered its agents
-by the caller's reach, and first short-circuited an unscoped caller to `()`; mutating
-either away left the suite green, because `narrowed_for` reads a definition's own
-`source_ids:` as the default audience for its entries -- so an agent the caller cannot
-open narrows every subagent it names away -- and `handed_work_by` answers an unscoped
-caller itself. A condition restated one level up from the place that holds it is the
-same defect as a rule that cannot fail: nothing can tell whether it is right. Both are
+The fourth was a guard over nothing, twice. `agents_to_ask` filtered by the caller's
+reach and short-circuited an unscoped caller, and mutating either away left the suite
+green: `narrowed_for` already narrows every subagent an unopenable agent names away, and
+`handed_work_by` answers an unscoped caller itself. A condition restated one level up
+from the place that holds it is the same defect as a rule that cannot fail. Both are
 gone, and the ten mutations of this slice all bite. *(2026-10-15, from an architecture
 review.)*
 
@@ -2297,1750 +1292,1008 @@ names a model and nothing more. An endpoint whose `key_env` is unset is dropped 
 the catalogue loads, with a warning; `Models` keeps the models that named it, and
 `doctor` warns about those rather than staying silent -- silence made a typo in
 `key_env` look identical to a shared catalogue naming an endpoint this machine
-cannot reach. An endpoint no model names is dropped with the loader's warning alone.
-*(2026-08-16, `model-catalogue.md`; 2026-08-18, `what-the-catalogue-dropped.md`.)*
+cannot reach. *(2026-08-16, `model-catalogue.md`; `what-the-catalogue-dropped.md`.)*
 
-**`max_retries` is the SDK's, set per model.** How patient a deployment is with a
-provider that refuses or cannot answer differs by provider and plan, so a model row
-says it, and it is handed to the SDK, which backs off and reads the provider's
-retry-after. Unset is the SDK's own. A `Landing` may leave the site out for a class with
-nowhere to keep it, and a model setting it on that format is refused before it is built,
-since a keyword a class does not know is moved into the request body. Kingfisher adds no
-retry layer of its own: one would multiply with the SDK's. *(2026-10-17.)*
+**`max_retries` is the SDK's, set per model.** How patient to be with a provider that
+refuses or cannot answer differs by provider and plan, so a model row says it, and the
+SDK backs off and reads the provider's retry-after. Unset is the SDK's own. A `Landing`
+with nowhere to keep it refuses a model that sets it, since a keyword a class does not
+know is moved into the request body. Kingfisher adds no retry layer: one would multiply
+with the SDK's. *(2026-10-17.)*
 
 **The shipped definitions name no models.** A vendor's model id is portable
 nowhere, and a file shipped inside a wheel cannot name one.
 *(2026-08-16, `model-catalogue.md`.)*
 
 **A wire format is named after what it speaks, and an unbuildable one is
-refused as the file loads.** The Responses-API row was called `openai`, which
-promised the thing every gateway speaks and delivered the one almost none of
-them do -- `/v1/responses`. Written the obvious way for a gateway, `api: openai`
-loaded, built, and failed inside the first turn with an error from somebody
-else's server. It is `openai_responses` now, and `model_catalogue.load` refuses
-an `api` that names no adapter, quoting what was written and listing what can be
-built.
+refused as the file loads.** The Responses-API row was called `openai`, promising
+what every gateway speaks and delivering `/v1/responses`, which almost none do:
+`api: openai` for a gateway loaded, built, and failed inside the first turn. It is
+`openai_responses`, and `model_catalogue.load` refuses an `api` naming no format,
+listing what can be built. Neither half works alone: the check alone catches only typos,
+the rename alone is a breaking change nothing enforces. Refused rather than dropped, and
+checked *before* the missing-key drop: a missing key is a fact about one machine, an
+unbuildable `api` a fact about the file, and checking it second would make one catalogue
+load here and fail on the machine that holds the key.
 
-The two halves only work together: the check alone catches typos, which were
-already cheap to find, and the rename alone is a breaking change with nothing
-enforcing it. Together they turn the one dangerous line in this file into a
-refusal at startup that names its own fix.
-
-Refused rather than dropped, unlike an endpoint whose `key_env` is unset, and
-checked *before* that drop. A missing key is a fact about one machine, which is
-why a shared catalogue survives it; an unbuildable `api` is a fact about the
-file, and checking it second would make the same catalogue load here and fail on
-the machine that holds the key.
-
-**No Chat-Completions row was added**, though it is the wire format those
-gateways actually speak. Nothing needs one: MiniMax and every gateway worth
-pointing at publish an Anthropic-compatible endpoint, which is the recommended
-path and where the example sends them. A deployment that does need one adds it
-itself; see below. *(2026-09-04.)*
+**No Chat-Completions row was added**, though it is what those gateways speak. MiniMax
+and every gateway worth pointing at publish an Anthropic-compatible endpoint, the
+recommended path; a deployment that needs one adds it itself. *(2026-09-04.)*
 
 **A row says where its class keeps each value, and a model that did not keep one
-is refused as it is built.** A chat class handed a keyword it does not know moves
-it into `model_kwargs` with a warning and builds anyway. For `base_url` that
-leaves the URL unset, and the request goes to the vendor's default host carrying
-the gateway's key -- measured on `ChatOpenAI`, not supposed. What stood between
-a row and that was a table in `test_models.py`, which covered only the rows
-kingfisher ships. `Adapter.lands` puts the same knowledge on the row, and
-`build_model` reads every value back through it, so the check holds for a row
-from anywhere, which is what let the table be opened.
-
-`temperature` and `top_p` are not read back: `ChatOpenAI` drops `temperature` for
-`gpt-5`, which rejects it, and checking it would refuse a model the vendor's own
-client builds correctly. A refusal names the value and never quotes a key -- a
-class that loses the endpoint's key falls back to one from the environment, and
-the message goes to a log. *(2026-09-24.)*
+is refused as it is built.** A chat class handed a keyword it does not know moves it
+into `model_kwargs` with a warning and builds anyway; for `base_url` the request then
+goes to the vendor's default host carrying the gateway's key -- measured on
+`ChatOpenAI`. `WireFormat.lands` records where each value lands, and `build_model` reads
+every value back through it, so the check holds for a row from anywhere. `temperature`
+and `top_p` are not read back: `ChatOpenAI` drops `temperature` for `gpt-5`, which
+rejects it. A refusal never quotes a key -- a class that loses the endpoint's key falls
+back to one from the environment, and the message goes to a log. *(2026-09-24.)*
 
 **A deployment adds a wire format through a setting, in Python.**
-`KINGFISHER_ADAPTERS_FACTORY` names a zero-argument factory returning `Adapter`
-rows, the convention `KINGFISHER_SESSION_STORE_FACTORY` already set. The rows are
-merged over the two kingfisher ships as the catalogue loads, and each endpoint
-carries the row its `api` resolved to, so building a model never looks a name up
-again in a table that might not hold it.
+`KINGFISHER_WIRE_FORMATS` names a zero-argument callable returning `WireFormat`s by
+name, the convention `KINGFISHER_SESSIONS` follows, merged over kingfisher's two as the
+catalogue loads. Each endpoint carries the format its `api` resolved to, so building a
+model never looks a name up again in a table that might not hold it.
 
-**Considered and rejected: a `Kingfisher(adapters=...)` argument**, which was the
-first design. `api` is checked as `models.yaml` loads, and that happens in
-`config_from_env`, before the constructor has seen an argument -- so the check
-would have had to move later, keeping the `api` of every endpoint dropped for want
-of a key so the file still failed on every machine. And `kingfisher doctor` and
-`run` build their own instance with nowhere to pass one: a catalogue naming a
-deployment's wire format would load in its own program and be refused by the
-commands meant to diagnose it.
+**Considered and rejected: a `Kingfisher(adapters=...)` argument.** `api` is checked in
+`config_from_env`, before the constructor sees an argument, so the check would have had
+to move later. And `kingfisher doctor` and `run` build their own instance with nowhere to
+pass one: a catalogue naming a deployment's format would load in its own program and be
+refused by the commands meant to diagnose it.
 
-**Considered and rejected: rows in `models.yaml`.** A row names a class to import,
-and that file is meant to be shared across a fleet and reviewed as data -- "it says
-where your prompts go". A setting keeps the code in the deployment's own package
-and the catalogue free of it.
+**Considered and rejected: rows in `models.yaml`.** A row names a class to import, and
+that file is shared across a fleet and reviewed as data -- "it says where your prompts
+go".
 
-**A shipped name is refused, not replaced.** Letting a deployment's `anthropic`
-win would move every endpoint already written `api: anthropic` to a class its
-author never chose, with nothing in `models.yaml` to show it. *(2026-09-24.)*
+**A shipped name is refused, not replaced.** Letting a deployment's `anthropic` win
+would move every `api: anthropic` endpoint to a class its author never chose, with
+nothing in `models.yaml` to show it. *(2026-09-24.)*
 
-**`doctor` answers "why will this not start?" and nothing else.** It never makes a
-model call: no probe, and it points at the caller's own task as the end-to-end
-test. *(2026-08-18, `what-the-catalogue-dropped.md`; 2026-08-17,
-`a-command-worth-shipping.md`.)*
+**`doctor` answers "why will this not start?" and nothing else.** It makes no probe
+call, and points at the caller's own task as the end-to-end test.
+*(2026-08-17, `a-command-worth-shipping.md`; `what-the-catalogue-dropped.md`.)*
 
 **The command line's model keys may sit in a keys file it is told about.** An endpoint
-in `models.yaml` says `key: <entry>` instead of `key_env: <VAR>`, naming an entry in
-the file `KINGFISHER_MODEL_KEYS_FILE` names, so the key is in neither the shared
-catalogue nor the environment. The obvious way to move keys into YAML -- `api_key:`
-inline in `models.yaml` -- would have put them in the workspace, which the macOS fence
-lets the agent's shell read, more exposed than a `.env` under the home folder; so the
-keys have a file of their own and `models.yaml` stays the half that is shared. `key_env`
-stays beside it for a runtime that hands secrets over as variables, and an endpoint
-names exactly one. `key_file:` per endpoint, the shape Docker and Kubernetes hand
-secrets in, was left as a later addition rather than the answer.
+says `key: <entry>` instead of `key_env: <VAR>`, naming an entry in the file
+`KINGFISHER_MODEL_KEYS_FILE` names. `api_key:` inline in `models.yaml`, the obvious way,
+puts keys in the workspace, which the macOS fence lets the agent's shell read -- more
+exposed than a `.env` under the home folder. `key_env` stays for a runtime that hands
+secrets over as variables; an endpoint names exactly one. `key_file:` per endpoint, the
+Docker/Kubernetes shape, was left as a later addition.
 
-**No default, only the setting names the file, and only the keys move.** Everything
-but the workspace defaults inside it or is off: a home-folder default would have been
-the first place kingfisher picked outside the workspace by itself, and a workspace
-default puts keys where the shell reads them. `models.yaml` never names the file,
-because a path there is one machine's path in the file machines share. The setting
-resolves as the other path settings do. No setting, or no such entry, drops the
-endpoint as a missing variable does; a named file that is missing, unreadable, not a
-mapping, or holding a key YAML reads as a number refuses to start, as the models file
-does. Moving every other `KINGFISHER_*` setting into YAML is a separate argument, not
-made here.
+**No default, only the setting names the file, and only the keys move.** A home-folder
+default would be the first place kingfisher picked outside the workspace by itself; a
+workspace default puts keys where the shell reads them; a path in `models.yaml` is one
+machine's path in a shared file. No setting, or no such entry, drops the endpoint as a
+missing variable does; a named file that is missing, unreadable, not a mapping, or holding
+a key YAML reads as a number refuses to start. Moving every other `KINGFISHER_*` setting
+into YAML is a separate argument, not made here.
 
 **`doctor` says where each key came from and who else can read it, and refuses
 nothing.** `credentials` names each endpoint's source. `keys file` says whether the
 running fence lets the shell read the file, by each fence's shape: on macOS anything
-outside the home folder is readable, so a check about the workspace alone would have
-called `/tmp` safe. `keys file mode` names a file other users can read.
-`starting environment` names a key that was in the environment before kingfisher
-started, on macOS or with no fence, where the shell reads a process's starting
-environment -- which the command line can tell only because it records the names
-`.env` added. That exposure was first put in the guide rather than in code; a report
-is not a guard, and it is the one a deployer cannot otherwise see. Session backends
-`doctor` cannot see into get the answer `session files` gives them.
+outside the home folder is readable, so a workspace-only check would call `/tmp` safe.
+`keys file mode` names a file other users can read. `starting environment` names a key
+present before kingfisher started, on macOS or with no fence, where the shell reads a
+process's starting environment -- knowable because the command line records the names
+`.env` added. A line in the guide is not a guard, and this exposure is one a deployer
+cannot otherwise see.
 
-**Reversed: no keys example.** None was settled at first, because renaming one in place
-puts real keys in the workspace. With `keys file` reporting exactly that, the mistake
-is said rather than silent, so `seed` places `keys.yaml.example` beside
-`models.yaml.example`, holding no live entry and opening with the instruction to copy
-it out. What every rule here leans on is measured in `guides/configuration.md`, under
-*What each fence hides*. *(2026-10-11, `where-the-command-line-keeps-its-keys.md`.)*
+**Reversed: no keys example.** Renaming one in place puts real keys in the workspace;
+with `keys file` reporting exactly that, `seed` places `keys.yaml.example` beside
+`models.yaml.example`, with no live entry and the instruction to copy it out. The fences
+these rules lean on are measured in `guides/configuration.md`, under *What each fence
+hides*. *(2026-10-11, `where-the-command-line-keeps-its-keys.md`.)*
 
 **A refusal about a credentials file says where it failed, not what was there.** PyYAML
-reproduces the source line it stopped on, caret and all, so `not valid YAML: <error>`
-printed the key sitting on that line -- and the command prints the refusal. Measured on
-three shapes a person types. The parser's complaint and a line and column are kept,
-which is what somebody needs in order to go and look; the content is not. `models.yaml`
-is read by the same two lines and took the same change: it refuses an `api_key:` field,
-but only once the file parses, and malformed it quoted whatever line it stopped on
-exactly as the keys file did. The test that should have caught this used a body whose
-value was harmless, so it passed with the leak in place.
+reproduces the line it stopped on, so `not valid YAML: <error>` printed the key on it --
+measured on three shapes a person types. The complaint and a line and column are kept,
+the content is not; `models.yaml`, read the same way, took the same change. The test that
+should have caught it used a harmless value.
 
-**The keys file is protected from the shell where `models.yaml` already was.** The
-argument is the one `profile` makes for an authored file: a shell able to edit it picks
-the key the next start sends, and one able to make it unparseable refuses that start
-outright -- which is the strongest case for the rule rather than an exception to it.
-Named in `shell_confinement` and not in `authored_files_for`, because that mapping also
-decides what `ensure_layout` scaffolds and a keys file must never be written for a
-deployment that did not ask for one. Linux is owed nothing: there the writable set is
-the session's own directories and nothing above them, so the workspace and everything a
-deployment authored in it are already out of the shell's reach. `protected_files` exists
-only in the macOS profile because only there is the whole workspace writable and this
-list what carves the exceptions out of it. *(2026-10-13, from an architecture review.)*
+**The keys file is protected from the shell where `models.yaml` already was.** A shell
+able to edit it picks the key the next start sends, and one able to make it unparseable
+refuses that start. Named in `shell_confinement`, not `authored_files_for`, because that
+mapping also decides what `ensure_layout` scaffolds and a keys file must never be written
+for a deployment that did not ask. Linux needs nothing: its writable set is the session's
+own directories. `protected_files` exists only in the macOS profile, where the whole
+workspace is writable. *(2026-10-13, from an architecture review.)*
 
 **A model's window is declared under `extra: profile:`, not as a key of its own.**
-`profile` is a constructor argument of every langchain chat model, and `extra` is
-where a row hands its class what this format does not define, so it reached the
-model before anything here changed; a `max_input_tokens:` beside `max_tokens` would
-be a second spelling of one argument. The shipped template sets it on `MiniMax-M3`,
-which langchain has no profile for, and where deepagents' summarizer otherwise
-falls back to 170,000 tokens and six messages on a 1M window.
-
-A profile given there replaces the one langchain has for a model rather than adding
-to it, and the template says so where it explains `profile:`. Merging was the
-alternative: taking `profile` out of `extra` and setting it once the class has
-filled in its own -- a special case in `build_model` for a model no shipped row
-declares a profile on. *(2026-10-13.)*
+`profile` is a constructor argument of every langchain chat model and `extra` already
+hands a class what this format does not define; `max_input_tokens:` would be a second
+spelling of one argument. The template sets it on `MiniMax-M3`, which langchain has no
+profile for, and where deepagents' summarizer otherwise falls back to 170,000 tokens and
+six messages on a 1M window. It replaces langchain's profile rather than merging, which
+would be a special case in `build_model` for a model no shipped row declares one on.
+*(2026-10-13.)*
 
 **A row that reserves the whole window for output is refused when the model is built.**
-`max_tokens` is the output ceiling and reads like the model's own limit, which is the
-mistake: deepagents takes it off the advertised input window before sizing a request, so
-`max_tokens: 190001` against a 200,000-token window leaves a budget of zero and every
-turn is refused before it is sent. Measured through `kingfisher run`: a
-`ContextOverflowError` whose message names no model, no row and no number, reaching the
-terminal as a traceback. It is a `ConfigError` from `build_model` now, beside the
-refusal for a value the chat class did not keep, and the command prints it as one line.
-
-Refused rather than warned, because no request of any size can be sent -- so it cannot
-be a decision anybody meant. The window comes from the provider package's profile for
-that model name, which moves: it moved from 1,000,000 to 200,000 under this project
-once. A row that started yesterday failing to start today is the right outcome when the
-alternative is every turn dying.
-
-**The shipped MiniMax rows reserve 32,768 and 16,384 output tokens, not 4,096 and
-2,048.** Measured across sixteen real MiniMax-M3 turns: 21 model calls stopped at exactly
-4,096 output tokens and none went past it. All 19 of those that called a tool reached it
-without the argument still being written -- `write_file` with no `content`, `execute`
-with no `command` -- and came back `Field required`; one session retried the same
-whole-file write a dozen times before writing in pieces. The other two were final
-answers cut off mid-sentence and reported as complete. MiniMax caps M3's output at
-524,288 and suggests 131,072. The template stays well under both because deepagents
-summarizes once the conversation passes 95% of the window less `max_tokens`, as well as
-at 85% of the window, so anything above a tenth of the window summarizes sooner than the
-window says -- a test holds the shipped row to that.
-
-The code's own default stays 4,096. It applies to a row on any vendor, including a small
-local endpoint that would refuse a large reservation, and the template is where a
-deployment reads what to write. A deployment seeded before this keeps its own row and
-has to raise it itself. Noticing a call that stopped at the cap is the next entry.
-*(2026-10-16, from the transcript-clearing trials.)*
-
-**A reply cut off at the output cap has its cut call refused or its answer asked for
-again, and three cut replies in a row stop the agent.** The entry above said only a
-provider streaming arguments as raw text would save a shortened file. MiniMax-M3 does it itself: in live calls at caps of
-60 and 1,500 tokens it sent a cut call's arguments as one delta with the JSON already
-closed, and `write_file` arrived valid with its `content` stopping mid-word.
-langchain's streaming repair closes a cut call the same way for any provider, so nothing
-in the arguments shows the cut. The trials' `Field required` was the other case, a cap
-reached before the argument began. The only sign is the stop reason: `stop_reason:
-max_tokens` in the Anthropic format, and an incomplete status for `max_output_tokens` in
-the Responses API.
-
-`ModelReplyMiddleware` reads it. Only a reply's last call can be cut, so the calls
-before it run, and the last one is answered "Not run" with the limit it reached and a
-way round it: writing in parts. The content's last block is what was cut: text there
-means every call is whole, and a call too broken to parse there cuts none of the calls
-that run. Where a provider puts no calls in the content, the last call is refused,
-because refusing a whole call costs a retry and running a cut one saves a shortened
-file. The refused call keeps its short arguments, such as the path, and each one over
-500 characters becomes a note of its length: clearing never shortens a call that failed,
-and the agent writes the text again in parts anyway, so the cut text was sent on every
-later call for nothing. Three cut replies in a row stop the agent on its text, with none
-of that reply's calls run: each cut reply spends the whole reservation, and one trial
-session retried a whole-file write a dozen times. In a row rather than per turn, so an
-agent writing a long report in parts may hit the cap now and then. The main agent's turn
-then ends with `max_tokens`. A subagent's answer goes back headed by a line saying it is
-cut off, and the turn goes on: the caller can work round a subagent's trouble, and
-ending the turn would throw away the rest of it. A turn that ends on a cut reply reports
-`max_tokens` whatever led there, since its answer is cut off either way. Each cut is
-marked on the `model_call` run event and on the stream's `model_call` event, which is
-the only trace of a cut the agent got past.
-
-Retrying quietly with a higher cap was turned down: it overrides `models.yaml`, spends
-without asking, and fails once the model's own maximum is reached. Nothing in `system.md`
-warns in advance, since the refusal arrives exactly when a cut happens and standing text
-is paid for on every call. It lives inside the model call and the tool call, because a
-hook beside them is a graph step and the recursion limit counts those. A subagent the
-workspace compiled itself gets none of it, as it gets none of `standing_middleware`. A
-cut call behind an approval gate is still put to the reviewer, since the gate reads
-every call and the refusal comes when the call would run; approving it runs nothing, and
-the two rarely meet, so the gate is left as it is.
-
-A cut final answer is asked for again, shorter, with anything long written to a file under
-the deployment's outputs folder first and the answer naming it after, and a file is named
-only once it is written. Measured on live turns at a 2,000-token cap: told to "put
-anything long in a file and say where it is", the agent named a file it never wrote; told
-to write it first, it still named one when the question had said to write no file. With
-the last sentence, two such turns wrote the file before naming it -- against the
-question's wish, which is the lesser fault, since the content is somewhere a caller can
-find. Shorter rather than continued: stitching two replies into one answer is new logic,
-a model asked to continue tends to repeat itself at the seam, and at 32,768 tokens a cut
-answer is some 25,000 words, which belongs in a file anyway.
-Neither the cut answer nor the request reaches the conversation, because clearing never
-touches the agent's own text and the transcript would send it again on every later call;
-each request shows the model its latest attempt only. A cut call too broken to parse is
-asked again the same way, sent back as text, since a call with no result beside it is
-refused by the provider. These hidden attempts still count toward three, carried on the
-next reply the conversation keeps, or an agent alternating cut answers and cut writes
-would go well past three. Their text has already streamed to whoever is watching, so the
-middleware writes a `model_call` event to langgraph's `custom` stream at the cut, which
-kingfisher now asks for, and the shorter answer does not run straight on from the cut one
-with nothing between them. *(2026-10-17, from a design session and live calls.)*
-
-**`doctor` does check it, and the reason I said it could not was measured wrongly.**
-The paragraph here said the pair is only knowable from a built model, that building one
-imports a provider package at ~700ms against 17ms for kingfisher itself, and that
-`test_nothing_here_calls_a_model` -- "the line that keeps this cheap enough to run before
-every deployment" -- was right. The import figure is real and irrelevant: `deepagents`
-imports `langchain_anthropic` and `langchain_openai` itself, so by the time `health`
-reaches `unrunnable_agents` both are in `sys.modules` and the marginal cost of building a
-model is nil. And `doctor` *already built the default model*, every time, through
-`inventory` -> `_builtin_tools` -> `build_agent`. The rule that said otherwise patched
-`models.build_model` while `agent.py` holds a direct `from ... import build_model`, so it
-never bit; it is deleted rather than repaired, because what it forbade is what `doctor`
-needs to do to answer this. The construction itself is 0.03-0.18ms.
-
-So the pair is reported by `doctor`, on a row of its own, and `inventory` carries it as
-`build_error` rather than letting it escape -- which is the other half of this
-correction. One bad row used to exit 2 with no output from `doctor`, `list`, `sessions`
-and `reap` at once, so the deployment's own diagnostics were the first thing it broke.
-`sessions` and `reap` need no model and no graph, and the startup probe is what dragged
-them in: it asks whether a workspace tool wears a built-in's name, answers with
-`CapabilityError`, and a `ConfigError` is not its answer -- so only that type is
-suppressed there, and the turn that needs a model still refuses, naming the row.
-*(2026-10-15, from an architecture review.)*
-
-A `ContextOverflowError` from an input that genuinely does not fit still reaches the
-terminal as a traceback. Catching it in the command would mean granting
-`presentation/cli` a langchain dependency, which `THIRD_PARTY` exists to make somebody
-argue for; translating provider failures at the harness boundary is the same change as
-the connection error that reaches the terminal the same way, and belongs with it.
+deepagents takes `max_tokens` off the advertised input window, so `max_tokens: 190001`
+against 200,000 leaves a budget of zero and every turn is refused unsent -- measured as a
+`ContextOverflowError` naming no model, row or number, reaching the terminal as a
+traceback. It is a `ConfigError` from `build_model`, printed as one line. Refused rather
+than warned, because no request of any size can be sent. The window comes from the
+provider package's profile, which moves (once from 1,000,000 to 200,000 under this
+project); a row failing to start today beats every turn dying. A `ContextOverflowError`
+from input that genuinely does not fit is still a traceback: catching it in the command
+would grant `cli` a langchain dependency, which `THIRD_PARTY` makes somebody argue for.
 *(2026-10-14, from an architecture review.)*
 
+**The shipped MiniMax rows reserve 32,768 and 16,384 output tokens, not 4,096 and
+2,048.** Across sixteen real MiniMax-M3 turns, 21 model calls stopped at exactly 4,096.
+All 19 that called a tool hit it before the argument was written and came back `Field
+required` (one session retried a whole-file write a dozen times); the other two were
+answers cut mid-sentence and reported complete. MiniMax caps M3 at 524,288 and suggests
+131,072; the template stays well under because deepagents summarizes at 95% of the window
+less `max_tokens` as well as at 85% of the window, so above a tenth of the window it
+summarizes sooner than the window says -- a test holds the row to that. The code's
+default stays 4,096, since it applies on any vendor, including a small local endpoint
+that would refuse a large reservation. *(2026-10-16, from the transcript-clearing trials.)*
+
+**A reply cut off at the output cap has its cut call refused or its answer asked for
+again, and three cut replies in a row stop the agent.** Nothing in the arguments shows a
+cut: MiniMax-M3, live at caps of 60 and 1,500, sent a cut call with its JSON closed and
+`write_file`'s `content` stopping mid-word, and langchain's streaming repair does the same
+for any provider. Only the stop reason shows it, and `ModelReplyMiddleware` reads it.
+Only the last call can be cut, so the others run and it is answered "Not run" with a way
+round, writing in parts; where a provider puts no calls in the content, the last is
+refused anyway, since a refused call costs a retry and a cut one saves a shortened file.
+Its arguments over 500 characters become notes of their length, or the cut text is resent
+on every later call. Three in a row stop the agent, each having spent the whole
+reservation -- in a row, not per turn, so writing in parts may hit the cap now and then.
+The main agent's turn ends `max_tokens`; a subagent's answer goes back headed as cut off
+and the turn goes on, because the caller can work round it. Each cut is marked on the
+`model_call` events, the only trace of a cut the agent got past.
+
+**Not taken: retrying quietly with a higher cap** -- it overrides `models.yaml`, spends
+without asking, and fails at the model's own maximum. Nor standing text in `system.md`,
+paid on every call. It sits inside the model and tool calls because a hook beside them is
+a graph step, which the recursion limit counts. A subagent the workspace compiled itself
+gets none of it. A cut call behind an approval gate still goes to the reviewer; approving
+it runs nothing, and the two rarely meet.
+
+A cut final answer is asked for again, shorter, anything long written under the outputs
+folder first and named only once written -- measured at a 2,000-token cap, looser wording
+had the agent name files it never wrote. Shorter rather than continued: stitching is new
+logic, a continuing model repeats itself at the seam, and a cut 32,768-token answer
+belongs in a file anyway. Neither the cut answer nor the request enters the conversation,
+which would resend them; a cut call too broken to parse is asked again the same way, as a
+call with no result beside it is refused by the provider. These hidden attempts still
+count toward three, and since their text has already streamed, a `model_call` event goes
+to langgraph's `custom` stream at the cut. *(2026-10-17, from a design session and live
+calls.)*
+
+**`doctor` reports a row that cannot start a turn, by building the model.** Reversed: it
+was held that building costs ~700ms of provider import against 17ms for kingfisher, and
+`test_nothing_here_calls_a_model` forbade it. Measured wrongly: `deepagents` imports both
+provider packages itself, so the marginal cost is nil and construction 0.03-0.18ms;
+`doctor` already built the default model through `inventory`; and the rule patched
+`models.build_model` while the caller imported it directly, so it never bit. Deleted
+rather than repaired. `inventory` carries the failure as `build_error` rather than letting
+it escape, because one bad row had made `doctor`, `list`, `sessions` and `reap` all exit 2
+with no output. The startup probe that dragged in `sessions` and `reap` answers with
+`CapabilityError`, so only that is suppressed there; a turn that needs the model still
+refuses, naming the row. *(2026-10-15, from an architecture review.)*
+
 **A provider that cannot answer now stops the turn, and a subagent's tells its parent.**
-A 429, a 5xx -- Anthropic's 529 "overloaded" among them -- a timeout or a dropped
-connection escaped `run` as the SDK's own exception, and the command printed two
-tracebacks and exited 1, the code it keeps for a turn stopped at a bound. Measured on
-2026-10-17: a plan's rate limit took 16 of 21 parallel turns down that way. These are
-failures that may pass, so a turn now ends on one as a stop, `model_unavailable`, with
-the provider's words on its `cut_short` event and what it wrote kept, and running again
-on the session carries on. A 401 stays a configuration error, and any other 4xx and
-every bug keep their traceback. Recognised on the model call, by the status code and the
-error's type names through its causes: no SDK is imported, and a tool timing out on a
-request of its own is not taken for a model that cannot answer. A subagent's refused
-call comes back to its parent as a failed `task` result, a compiled subagent's raw error
-included, because the parent may go on without that part and stopping the turn threw
-the rest away. **Not taken: retrying in kingfisher.** The SDKs already retry twice with
-backoff and read the provider's retry-after; a second layer multiplies with theirs, up
-to nine requests for one call against a quota, and no measured failure has yet outlasted
-their window.
+A 429, a 5xx (Anthropic's 529 among them), a timeout or a dropped connection escaped `run`
+as two tracebacks and exit 1 -- on 2026-10-17 a plan's rate limit took 16 of 21 parallel
+turns down that way. These may pass, so the turn stops as `model_unavailable`, the
+provider's words on its `cut_short` event and its output kept; running again carries on.
+A 401 stays a configuration error; other 4xx and bugs keep their traceback. Recognised on
+the model call by status code and type names through the causes, so no SDK is imported
+and a tool's own timeout is not taken for the model. A subagent's comes back as a failed
+`task` result, because the parent may go on without that part. **Not taken: retrying in
+kingfisher.** The SDKs retry twice with backoff already; a second layer multiplies, up to
+nine requests for one call against a quota, and no measured failure has outlasted their
+window.
 
 ## What a tool returns
 
 **A workspace tool's return type is langchain's rule, and kingfisher adds none.**
-The loader checks that `TOOLS` holds tools and stops; nothing reads a return
-annotation, and `ToolFailureMiddleware` passes the value through untouched because
-it catches exceptions and nothing else. A dict therefore reaches the model as
-`json.dumps`, and a `ToolMessage` or a langgraph `Command` is not wrapped at all
--- the graph applies it.
+Nothing reads a return annotation, and `ToolFailureMiddleware` catches exceptions and
+passes values through: a dict reaches the model as `json.dumps`, and a `Command` is
+applied by the graph, not wrapped.
 
-**Refusing the `Command` was considered and rejected**, which is the half worth
-recording, because it will be proposed again. The wrapper that would do it
-already exists and the check is five lines. What stops it is what the loader's
-other refusals have in common: each catches a *near miss* that produces a
-successful wrong answer -- `TOOLS = [Shout]` for `[Shout()]` is one character,
-loads, and answers with the repr of a new instance. Returning a `Command` takes
-an import of `langgraph.types` and means it. A rule there would make kingfisher a
-second name for someone else's contract, which is the thing `guides/tools.md`
-refuses to be in its opening lines.
-
-Documented instead, with the cost stated where an author reads it: a `Command`
-that writes its own message leaves its streamed `tool_result` event naming no tool,
-and a `files`
-update reaches nothing, because this harness puts the file tools on a real
-filesystem rather than in graph state. `findings.md` has the measurement and
-`tests/unit/test_tool_returns.py` pins the behaviour, so a langchain change lands
-there rather than at a deployment's first tool call. *(2026-09-04.)*
+**Refusing the `Command` was considered and rejected**, and will be proposed again. The
+check is five lines. The loader's refusals each catch a *near miss* that yields a
+successful wrong answer -- `TOOLS = [Shout]` for `[Shout()]` loads and answers with a
+repr. Returning a `Command` takes an import of `langgraph.types` and means it; a rule
+would make kingfisher a second name for someone else's contract, which `guides/tools.md`
+refuses to be. Documented instead: a `Command` writing its own message leaves its
+`tool_result` event naming no tool, and a `files` update reaches nothing, as the file
+tools are on a real filesystem. `findings.md` has the measurement and
+`tests/unit/test_tool_returns.py` pins it, so a langchain change lands there.
+*(2026-09-04.)*
 
 **A tool that creates a file saves it and returns where it went, never its contents.**
-A file is the purpose of an image generator, a chart, an export. Returned, it is its
-whole body in the model's context and nothing the caller can open; saved, it is one
-line. Output that is only a side effect of a tool's work -- a result that runs long --
-is middleware's: deepagents' eviction to `/scratchpad/large_tool_results/` handles it
-now, and a ledger may later. `guides/tools.md` gives the recipe under *A tool that
-creates a file*, and `bar_chart` and `csv_filter` ship following it.
+Returned, a chart or export is its whole body in the model's context and nothing the
+caller can open; saved, it is one line. Output that only runs long is middleware's, which
+deepagents evicts to `/scratchpad/large_tool_results/`. `guides/tools.md` has the recipe,
+and `bar_chart` and `csv_filter` follow it.
 
-**There is no kingfisher helper.** A save helper was the alternative, and a tool calling
-`runtime.context.backend.upload_files` itself was preferred: the call is deepagents'
-and already documented, and the whole save is about ten lines. What a helper would have
-guarded is the one mistake that fails in silence -- `upload_files` hands a refused path
-back on the response's `error` rather than raising it, so a tool that does not look
-answers "Saved" for a file that is not there. That is held instead by the recipe
-carrying the check in its example code rather than in a warning after it, and by the
-shipped tools that write, whose tests point each at `/inputs/` and expect a failure with
-nothing written; a test runs the guide's example the same way.
+**There is no kingfisher helper.** A tool calls `runtime.context.backend.upload_files`
+itself, deepagents' documented call, in about ten lines. A helper would have guarded the
+one silent mistake: a refused path comes back on the response's `error`, not raised, so a
+tool that does not look answers "Saved" for no file. That is held instead by the recipe
+carrying the check in its code, and by tests pointing each shipped writer, and the guide's
+example, at `/inputs/` and expecting a failure.
 
-**`save_as`, never `path`.** Optional: left out, the file goes to `/outputs/` under a
-name the tool picks, which is what the caller is handed back; given, it is a full
-virtual path and may name anywhere the turn may write, the session's rules refusing the
-rest. `path` was the obvious name and is taken -- kingfisher rewrites an argument called
-`path` to the host file a tool *reads*, and the backend refuses that as a host path.
+**`save_as`, never `path`.** Optional: left out, the file goes to `/outputs/`; given, it
+is a full virtual path the session's rules may refuse. `path` is taken -- kingfisher
+rewrites an argument called `path` to the host file a tool *reads*.
 
-**An existing file is overwritten without a word.** Saying "replaced" was the
-alternative, and it costs every such tool a lookup before each save to find out. The
-agent chose the path, the default included, and can `ls` first when it cares.
+**An existing file is overwritten without a word.** Saying "replaced" costs a lookup
+before every save; the agent chose the path and can `ls` first.
 
-**An image is returned as a path, never as image blocks.** A block stays in the
-conversation and is sent again with every model call after it; `read_file` hands the
-image to the model when it wants to look.
+**An image is returned as a path, never as image blocks.** A block is resent with every
+later model call; `read_file` hands the image over when the model wants to look.
 
-**No machine-readable copy of these facts.** The result line is for the model. The
-structured record is the ledger's, one shape for every tool rather than a convention
-each tool keeps: the result line is kept as a row of what the turn's tools returned,
-under *What a turn's tools returned*. Nor does `system.md` gain a line: each tool's
-docstring says what its `save_as` does.
+**No machine-readable copy of these facts.** The structured record is the ledger's, one
+shape for every tool, under *What a turn's tools returned*; each docstring says what its
+`save_as` does. These first shipped writers take no `path` and write through
+`ToolContext` under the turn's rules, so *A tool's path is the backend's path* is
+untouched. *(2026-10-12.)*
 
-These are the first shipped tools that write, which *A tool's path is the backend's
-path* gave as a reason a `path` under a write-denied scope is safe to hand over.
-Neither takes `path`; both write through `ToolContext` under the turn's rules, so that
-decision is untouched. *(2026-10-12.)*
+**A PDF is read as text a tool saves, not whole through `read_file`.** `read_file` hands
+a PDF over as one block whatever `offset` and `limit` say, and a large one trips the
+summarizer (`findings.md` has how). `pdf_text` saves the text under a `--- page N ---`
+line per page, for the agent to read in ranges and `grep`.
 
-**A PDF is read as text a tool saves, not whole through `read_file`.** `read_file`
-hands a PDF over as one block whatever `offset` and `limit` say, and a large one trips
-the summarizer, which has no good way out with it -- `findings.md` has how it counts
-one and what its overflow handling does to a PDF. `pdf_text` saves the text under a `--- page N ---` line per page, and the
-agent reads that a range of lines at a time and searches it with `grep`.
-
-**A tool, because a shell is not always there to run the library.** pdfplumber is in
-the agent's interpreter for the shell's sake, but a request has a shell only where
-the backend executes and the request was granted one, and a remote sandbox has
-whatever its own image installed. A workspace tool runs in kingfisher's process,
-which has the library wherever the `agent` group is installed, and reads through
-`download_files`, which every backend answers. Where the group is not installed the
-tool fails when called and every other tool still loads: it imports pdfplumber in
-its body, because one tool file that fails to import refuses the whole folder.
+**A tool, because a shell is not always there.** A request has a shell only where the
+backend executes and it was granted one, and a remote sandbox has whatever its image
+holds; a workspace tool runs in kingfisher's process and reads through `download_files`,
+which every backend answers. It imports pdfplumber in its body, so without the `agent`
+group only this tool fails -- a tool file that fails to import refuses the whole folder.
 
 **`/scratchpad/` when not told, not `/outputs/`.** The text is the agent's working
-material rather than something the caller asked for, and `/outputs/` is what the
-caller is handed back. The pages are in the default name, so a second range does
-not replace the first.
+material, not what the caller asked for. The pages are in the default name, so a second
+range does not replace the first.
 
-**Text only, five hundred pages a call.** The parse runs in kingfisher's own process,
-outside every sandbox and beside every other turn. pdfminer is Python; pdfplumber's
-`repair=` would run Ghostscript and `.to_image()` native PDFium, so neither is used.
-The cap keeps one call bounded however long the report, and the answer names the
-pages it left out.
+**Text only, five hundred pages a call.** The parse runs in kingfisher's process, outside
+every sandbox: pdfminer is Python, while pdfplumber's `repair=` would run Ghostscript and
+`.to_image()` native PDFium, so neither is used. The cap was fifty: asked for a figure on
+page 120 of a 300-page report, MiniMax-M3 read 1-50, sampled 51-60 and 280-300, and said
+there was no such figure. The text goes to a file, so the cap bounds only the parse: the
+Federal Reserve's 222-page 2023 annual report took pdfplumber 11.1 seconds, 314 ms a page
+at worst; pypdf took 3.6 seconds and got a little less text. *(2026-10-13.)*
 
-It was fifty, and a real turn showed what that costs. Asked for a figure on page 120
-of a 300-page report, MiniMax-M3 took pages 1-50, then sampled 51-60 and 280-300,
-and answered that the report held no such figure. The text goes to a file the agent
-searches rather than into its context, so the cap bounds only the parse: on the
-Federal Reserve's 222-page 2023 annual report, dense with tables, pdfplumber took
-11.1 seconds, 50 ms a page on average and 314 ms at worst, so five hundred pages is
-under half a minute. pypdf extracted the same report in 3.6 seconds, and a little
-less of its text. *(2026-10-13.)*
-
-**`pdf_text`'s `pages` defaults to the word `all`, not to the span `1-500`.** The cap
-written into the default read as the more informative thing to show a model, and it
-made the cap unreportable: a span is clipped to the document before the cap applies, so
-on a 503-page report the default extracted 1-500 and said `pages 1-500 of 503` with
-nothing left out, while the same call naming `1-503` named the three pages it dropped.
-The docstring recommends leaving `pages` out, so the recipe it recommends was the one
-that reported least -- measured both ways. `all` means every page there is, which is
-what a caller leaving it out asked for, and the cap then has something to name. An
-explicit span is still parsed before the file is fetched, so an unreadable `pages`
-costs nothing to find out about. *(2026-10-14, from an architecture review.)*
-
-**And the pages the document does not have are named too, which the clip was
-swallowing.** The same clip, in the other direction. `_present` narrows a span to the
-document before expanding it -- which is what keeps `1-99999999` from being a hundred
-million page numbers -- and said nothing about what it narrowed away: measured,
-`pages="3-5,9"` on a three-page report answered `pages 3 of 3`, and `2-9` answered
-`pages 2-3 of 3`. A model that asked for nine pages and got one was told nothing had
-been left out, against a docstring promising the answer names which asked-for pages
-were. The cap's note covered only the pages past five hundred, so the half of that
-promise a caller is most likely to need was the half nothing kept.
-
-Named as spans rather than page numbers, for the reason the clip exists in the first
-place: a typo's worth of pages is a number, not a list. Nothing is said about the low
-end, where there is nothing to name -- no document has a page 0, and a span naming only
-pages below one is already refused for naming no page of the document. The call site
-has one condition and not two: a caller who named no spans asked for every page there
-is, which cannot name a page there is not, and `_beyond` answers that itself rather
-than being guarded against it.
-
-*The word `all` was held by nothing, either.* Changing `EVERYTHING` to `"whole"` left
-the suite green, after which every call the docstring recommends failed -- nothing
-passed anything but a span, so neither the word, nor the case-folding, nor the strip
-around it was reached. The rule reads the word off the constant and sends it four ways
-a model might write it. *(2026-10-15, from an architecture review.)*
-
-**A shipped tool that promises CSV is written by `csv`.** `sql_query` built its answer
-with `",".join(...)`, and its docstring said CSV: a value holding a comma, a quote or a
-newline came back as different data with nothing to say so -- measured, three rows
-arrived as four lines, a two-column header got a three-field row, and a newline inside
-a value ended the record there. It writes through `csv.writer` now, as `csv_filter`
-beside it already did, and the row cap is said in a trailing `--` line that the
-docstring names so a reader parsing the rows knows where they stop.
-
-Nothing had ever called that file. Six of the shipped tools were covered by "does it
-import" and "is the name in the set", which is the coverage that let this ship; the
-three that open a database are driven now, in
-`tests/unit/test_tools_that_read_a_database.py`. The same tests hold the connections
-closed: `with sqlite3.connect(...)` commits and does *not* close, so every call leaked
-one, in both modules. `closing` is what a read wants, and it is spelled the same way in
-both -- their shared connection rule is the stated reason they are written as they are.
+**`pdf_text`'s `pages` defaults to the word `all`, not to the span `1-500`.** A span is
+clipped to the document before the cap applies, so on a 503-page report the default
+`1-500` reported nothing left out while `1-503` named the three dropped -- and leaving
+`pages` out is what the docstring recommends. `all` gives the cap something to name.
 *(2026-10-14, from an architecture review.)*
 
-**A PDF over 256 KB in a tool's result reaches the model as advice instead.**
-`LargePdfMiddleware`, in `standing_middleware` on every graph kingfisher builds, swaps the
-block for a line saying how large the PDF is and why it was not handed over, and marks
-the call an error when nothing else came back. 256 KB because one PDF of about 500 KB
-springs the summarizer's trap on a model with no profile, and half leaves room for the
-conversation around it. Bytes rather than pages: they are what the summarizer counts,
-and pages would mean parsing every PDF a tool returns, in kingfisher's process, to
-decide whether to pass it on.
+**And the pages the document does not have are named too, which the clip was
+swallowing.** `_present` narrows a span to the document, which keeps `1-99999999` from
+being a hundred million page numbers, and said nothing of what it cut: `pages="3-5,9"` on
+a three-page report answered `pages 3 of 3`. Named as spans, for the reason the clip
+exists; nothing is said below page one, which no document has. *The word `all` was held
+by nothing either*: changing `EVERYTHING` to `"whole"` left the suite green while every
+recommended call failed, so the rule reads the constant and sends it four ways a model
+might write it. *(2026-10-15, from an architecture review.)*
 
-**Every tool's result, not `read_file`'s.** A workspace tool returning a PDF block
-would step around a guard on one tool's name, and the check is a size on a block,
-the same whoever returned it.
+**A shipped tool that promises CSV is written by `csv`.** `sql_query` joined values with
+`","` under a docstring saying CSV, so a comma, quote or newline in a value returned
+different data -- measured, three rows as four lines. It uses `csv.writer`, as
+`csv_filter` does, and says its row cap in a trailing `--` line the docstring names.
+`tests/unit/test_tools_that_read_a_database.py` drives the three tools that open a
+database, which "does it import" had covered, and holds connections closed:
+`with sqlite3.connect(...)` commits and does *not* close, so every call leaked one;
+`closing` is what a read wants. *(2026-10-14, from an architecture review.)*
+
+**A PDF over 256 KB in a tool's result reaches the model as advice instead.**
+`LargePdfMiddleware`, in `standing_middleware`, swaps the block for a line saying how
+large the PDF is and why, an error when nothing else came back. 256 KB because one PDF of
+about 500 KB springs the summarizer's trap on a model with no profile, and half leaves
+room for the conversation. Bytes, because the summarizer counts them and pages would mean
+parsing every PDF a tool returns.
+
+**Every tool's result, not `read_file`'s.** A guard on one tool's name is stepped around
+by a workspace tool returning a PDF block.
 
 **It names `pdf_text` only where the model is offered it.** `standing_middleware` is
-handed every tool the workspace defines, granted or not, so advice read off those names
-told an agent granted none of them to call one it does not hold. The guard reads the
-tools off the model's own request instead, which is exact because a graph is built from
-its granted tools only. A call replayed on a resume follows no model call, and gets the
-advice with no tool named.
+handed every tool the workspace defines, granted or not, so the guard reads the tools off
+the model's own request instead. A call replayed on a resume follows no model call and
+gets the advice with no tool named.
 
-**What it leaves.** A PDF small in bytes and long in pages still goes whole, and the
-provider counts it by the page. A subagent the workspace compiled itself is run as
-given, with no middleware of kingfisher's, so its own `read_file` is unguarded. A
-`Command` passes untouched; `read_file` returns one only for a video. And other
-blocks the summarizer counts by their base64 -- a `.pptx` `file` block, audio -- are
-left as they come, for whoever first meets a large one. *(2026-10-13.)*
+**What it leaves.** A PDF small in bytes and long in pages still goes whole. A subagent
+the workspace compiled itself has no kingfisher middleware, so its `read_file` is
+unguarded. A `Command` passes untouched. Other blocks counted by their base64 -- a
+`.pptx` `file` block, audio -- are left for whoever first meets a large one.
+*(2026-10-13.)*
 
 **`pdf_pages` saves a page range as a smaller PDF, for a model that reads PDFs.**
-`pdf_text` gives every model the words, and leaves out a chart, a table's layout and
-a scanned page. A slice of the pages worth looking at is a PDF `read_file` hands over
-whole, where the document it came from was too large to be. MiniMax-M3, the default,
-sees one drawn: handed a page holding nothing but a filled red rectangle, through
-`build_model` and a `read_file` result as a turn sends it, it described the rectangle,
-its colour and where it sat. MiniMax-M2.5 reads a PDF's text -- both named the word
-on page 2 of three -- and found that page blank. MiniMax's API reference lists no
-document block for either, and this entry said from it alone that MiniMax read no
-PDF, until the same day's call said otherwise.
+`pdf_text` leaves out a chart, a table's layout and a scanned page; a slice small enough
+is a PDF `read_file` hands over whole. MiniMax-M3 sees one drawn: handed a page holding
+only a red rectangle, as a turn sends it, it described the rectangle, its colour and
+place. MiniMax-M2.5 read the text and found that page blank. MiniMax's API reference
+lists no document block for either; the live call settled it.
 
 **A slice past 256 KB is refused, not saved.** `LargePdfMiddleware` would replace it with
-advice, so a saved one is a file the model is told to open and never sees. The tool
-keeps its own copy of the limit, because a shipped tool is written against the
-public API and the guard's module is not part of it; a test holds the copy to the
-guard's.
+advice, a file the model is told to open and never sees. The tool keeps its own copy of
+the limit, since a shipped tool is written against the public API; a test holds the copy
+to the guard's.
 
-**Copied, not drawn.** A model that reads PDFs draws the page itself, so the slice
-needs nothing drawn here -- and drawing a page is PDFium, native code in kingfisher's
-process outside every sandbox, which is what `pdf_text` was built to avoid. pypdf
-copies pages and is Python. *(2026-10-13.)*
+**Copied, not drawn.** Drawing is PDFium, native code in kingfisher's process outside
+every sandbox, and a model that reads PDFs draws the page itself. pypdf copies pages and
+is Python. *(2026-10-13.)*
 
 **A tool that reads a file caps what it reads, and `pdf_text` releases each page as it
-goes.** Three facts meet in a file-reading tool and none is visible from inside one: a
-backend hands a file back whole, so the bytes are in this process before the tool sees
-them; the parse runs on the turn's thread, in the kingfisher process, outside every
-fence; and `KINGFISHER_TURN_TIMEOUT_S` is read *between* stream chunks, so a tool
-spending ten minutes inside one call spends them. There is no timeout to reach for -- a
-thread cannot be interrupted mid-parse -- so the bound has to be set before the work
-starts.
-
-The cap is 32 MB, one number in every shipped file that reads a file, named in the
-message a model gets back with the size it asked for. It is a per-module constant rather
-than a shared import because these are examples copied one file at a time, which is
-exactly why `test_a_tool_reads_a_file_one_way` compares the copies.
-
-**That rule walked the tool catalogue, and one of these files is not in it.** It said
-"eight tools" here and "seven copies" in its own docstring, against a tree that holds
-nine files -- and the ninth, `subagents/redactor/tools/mask_secrets.py`, is a subagent's
-own tool two directories further down, which shipped reading a file with no cap at all
-while all six rules passed. Three counts, no two alike, in the paragraph that exists to
-keep a copy from being missed. The walk reads every `.py` under the assets now, the set
-is pinned by path in `FETCHES_A_FILE` rather than counted, and the threshold that stood
-beside it -- `assert len(...) >= 2` against nine -- is gone: that is the shape the commit
-before had deleted from `test_shipped_assets.py` with the reason written out.
+goes.** A backend hands a file back whole, the parse runs on the turn's thread outside
+every fence, and `KINGFISHER_TURN_TIMEOUT_S` is read *between* stream chunks; a thread
+cannot be interrupted mid-parse, so the bound is set before the work starts. The cap is
+32 MB, a per-module constant because these are examples copied one file at a time, which
+is why `test_a_tool_reads_a_file_one_way` compares the copies. A bound, not a prediction:
+a CSV costs by the *cells* sampled, not the bytes -- 32 MB of two-column rows peaked at
+358 MB, the same 32 MB over 4,000 columns at **998 MB**, 16.8 million strings at about 50
+bytes each. A gigabyte is survivable where unbounded is not.
 *(2026-10-15, from an architecture review.)*
 
-**And the CSV ratio was true of one row shape, said as though it held generally.**
-"About nine times the file" is what 32 MB of two-column rows cost. The ratio is to the
-*cells* the sample gathers, not to the bytes: the same 32 MB over 4,000 columns peaks at
-**998 MB**, thirty times the file -- 16.8 million Python strings at about 50 bytes of
-object before the first character, so a one-character cell costs fifty times its own
-size. A cap in bytes is still worth having, a gigabyte being survivable where unbounded
-is not; it is not a prediction. *(2026-10-15, from an architecture review.)*
+**The rule reads every file under the assets, pinned by path rather than counted.** A
+walk of the tool catalogue missed `subagents/redactor/tools/mask_secrets.py`, a
+subagent's own tool, which shipped reading a file uncapped with every rule green. The set
+is pinned in `FETCHES_A_FILE`, with no `len(...) >= 2` threshold beside it.
+*(2026-10-15, from an architecture review.)*
 
-**Bytes were the wrong bound for the PDF, and measuring showed it.** For a CSV they
-track the cost -- 32 MB of rows peaked at 358 MB of RSS, 188 MB at 1.8 GB, about nine
-times the file. For a PDF they do not: 1.6 MB of dense pages peaked at **1,655 MB**,
-about a thousand times the file, because pdfplumber keeps each page's objects and its
-text map until the document closes and `pdf_text` reads up to five hundred pages. The
-review asked for a byte cap and a timeout; a byte cap would have left that untouched.
-
-What fixed it was releasing each page once its text was out: `flush_cache()` and
-`get_textmap.cache_clear()`, both, which took the same work from 1,655 MB to **93 MB**
-and about a quarter faster. Either alone leaves most of it -- 1,020 MB and 1,626 MB
-measured -- which is why the rule asserts both. Driven end to end afterwards, the tool
-grew the process by 12 MB on 500 dense pages. So `MAX_PAGES` did not have to move: the
-entry above justified 500 on time, said nothing about memory, and memory was the larger
-cost. pypdf, which `pdf_pages` uses, needed nothing: 2,000 pages copied in 0.16s and 109
-MB, measured before changing anything. *(2026-10-14, from an architecture review.)*
+**Bytes were the wrong bound for the PDF, and measuring showed it.** 1.6 MB of dense
+pages peaked at **1,655 MB**, because pdfplumber keeps each page's objects and text map
+until the document closes; the byte cap and timeout a review asked for would not have
+touched that. Releasing each page -- `flush_cache()` and `get_textmap.cache_clear()`,
+both, since either alone left 1,020 MB or 1,626 MB -- took it to **93 MB** and a quarter
+faster, and end to end the tool grew the process 12 MB on 500 dense pages, so
+`MAX_PAGES` stayed. pypdf needed nothing: 2,000 pages copied in 0.16s and 109 MB.
+*(2026-10-14, from an architecture review.)*
 
 **`mask_secrets` could be made to spend days on one line, and answered for a fifth of
-a file as though it were the file.** The bundled tool, and the one shipped tool written
-for content nobody trusts -- which makes its input the attacker's, not the
-deployment's.
-
-Its address pattern was `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`. The `.`,
-`-`, `+` and `%` are in that class and are word characters to nobody, so each one
-starts a fresh `\b` the class can still consume through: on a run with no `@` every
-start position consumed to the end of the run and backtracked the whole way. Measured
-through the real tool -- 128 KB of `1.` took 7.25 seconds, 1 MB took 472, clean n², so
-about five and a half days at the 32 MB the tool admits, on the turn's thread where
-nothing can stop it. Non-contrived shapes reach it: a European-formatted number run,
-224 KB in 13.5s; an SNMP OID run, 336 KB in 42.5s. `max_lines` did not help, a single
-huge line being line 1.
-
-Every repetition is bounded now, and the bounds are the standard's rather than picked:
-RFC 5321 gives 64 octets for a local part and 255 for a domain. Measured linear after
-it -- 440 times faster at 64 KB, with the same addresses matched and none invented.
-Possessive quantifiers are the other obvious answer and are wrong twice over, which is
-worth recording because it is the fix a reader will reach for: `[A-Za-z0-9.-]++\.`
-cannot give back the dot the pattern then needs, so it matches no address at all, and
-the cost stays n² regardless, because what repeats is the number of positions a match
-is attempted from. Both were measured.
+a file as though it were the file.** It is the shipped tool written for content nobody
+trusts, so its input is the attacker's. Its address pattern
+`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}` holds `.`, `-`, `+` and `%`, each
+starting a fresh `\b` the class consumes through, so a run with no `@` backtracked from
+every position: 128 KB of `1.` took 7.25 seconds and 1 MB 472, clean n², about five and a
+half days at the tool's 32 MB, on the turn's thread. European-formatted numbers and SNMP
+OIDs reach it. Every repetition is bounded now by RFC 5321's 64 octets for a local part
+and 255 for a domain: linear, 440 times faster at 64 KB, the same addresses matched.
+**Rejected: possessive quantifiers**, the fix a reader reaches for, measured wrong twice:
+`[A-Za-z0-9.-]++\.` cannot give back the dot, so it matches nothing, and the cost stays
+n², since what repeats is the start positions.
 
 **And the line cut was silent, in the tool whose whole purpose is not being silent.**
-`[:max_lines]` was applied before anything was counted, so a thousand-line file whose
-only credential sat on the last line answered `200 line(s), 0 masked` -- which
-`skills/redaction/` tells the subagent to read as "this file held nothing sensitive",
-and `redactor.yaml`'s own prompt warns that a caller who cannot tell that from "I
-removed the sensitive parts" will eventually treat the second as the first. The header
-says `200 of 1001` now and names what it did not read. `max_lines` is in the docstring,
-which it never was, so the model can see the knob at all.
-
-Raising it is the only remedy this subagent has -- it holds no `read_file`,
-deliberately -- so the number has a ceiling and the answer has a bound in characters,
-for the reason `sql_query` has one: lines are not characters, and two thousand lines of
-a minified payload is not two thousand lines of a log. A non-positive `max_lines` is
-refused rather than answering `0 line(s)`, which reads as an empty file, or `[:-1]`,
-which dropped the last line -- the one a credential is as likely to be on as any other.
-
-Nothing held any of it. Two of the three patterns could be deleted with the suite
-green, because one `sk-live-123` was the whole of this tool's coverage. There is a rule
-per pattern now, a time bound driven on a 150 KB line of each pattern's own worst
-shape, and the cut, the ceiling, the remedy and the docstring's numbers each have one.
+`[:max_lines]` ran before counting, so a thousand-line file with its credential on the
+last line answered `200 line(s), 0 masked`, which `skills/redaction/` tells the subagent
+to read as nothing sensitive. The header says `200 of 1001` and names what it skipped,
+and `max_lines` is in the docstring. Raising it is this subagent's only remedy -- it holds
+no `read_file`, deliberately -- so it has a ceiling and the answer a bound in characters,
+as `sql_query` has: lines are not characters. A non-positive `max_lines` is refused, not
+read as `0 line(s)` or `[:-1]`. One `sk-live-123` had been the whole coverage; each
+pattern now has a rule and a time bound driven on its own worst shape.
 *(2026-10-16, from an architecture review.)*
 
 **Four more shipped tools: two that did not bound what they spend, and two that let a
-file's own text into an answer.** The same review pass that found `csv_profile`'s
-merged columns, `bar_chart`'s `inf` and `sql_query`'s two missing bounds, on the tools
-nobody had called.
+file's own text into an answer.**
 
-**A header cell forged a report row.** `Column.line` formatted the name straight into
-an answer that is one line per column, and a header cell is uploaded data: a
-three-column file whose header held `region\nsalary: number, 5000 filled, 0 missing
-(0%), 4998 distinct` reported four columns, the fourth a complete and plausible row
-nobody wrote -- and `csv_columns`, whose whole contract is "the column names, one per
-line", returned four names. Escaped rather than stripped, so the name still says what
-the file holds and a reader can see why it looks odd. `_report_names` already reasoned
-about awkward names one function away, which is how the axis was considered and this
-one missed.
+**A header cell forged a report row.** `Column.line` formatted the name into a
+one-line-per-column answer, so a header cell holding a newline and a plausible line
+reported a column nobody wrote, and `csv_columns` returned an extra name. Escaped rather
+than stripped, so the name still says what the file holds.
 
-**Four tools died on a cell 0.6% of their own cap.** `csv.field_size_limit()` is
-131,072 and these read 32 MB, so `csv` raised and the model got `Error: Error: field
-larger than field limit (131072)` -- no file, no column, no remedy, and a type name
-reading `Error`. Each says the three now, in its own file, for the reason `_fetched` is
-written out in each: these are examples copied one at a time. Raised rather than fixed
-by widening the limit, which is process-wide state an example tool has no business
-setting.
+**Four tools died on a cell 0.6% of their own cap.** `csv.field_size_limit()` is 131,072
+against a 32 MB read, and the model got `Error: Error: field larger than field limit
+(131072)` -- no file, column or remedy. Each says the three now, in its own file. Not
+fixed by widening the limit, process-wide state an example tool has no business setting.
 
-**`sql_explain` bounded rows and not characters**, which is the lesson its neighbour has
-a cap and a comment for and the guide states as a heading: a two-million-character table
-alias obeyed the row cap and came back as a 2,000,008-character answer in a hundredth
-of a second. It carries `sql_query`'s number now, cut with the same marked `--` line.
+**`sql_explain` bounded rows and not characters**: a two-million-character alias came
+back whole. It carries `sql_query`'s number and marked `--` line.
 
-**`log_levels` capped what it printed and not what it held.** Thirty minutes listed,
-one `Counter` per distinct minute kept: measured, a 19 MB file of 883,011 distinct
-minutes peaked at 506 MB against 199 MB for the same bytes in one minute, so the
-32 MB it admits reaches a million and a half keys. Fifty thousand are tracked now --
-thirty-five days of every-minute trouble, about 18 MB -- and the answer says how many
-lines fell outside, worded as a doubt about the list rather than a count on its own,
-because the minutes kept are the first the walk met and not the loudest in the file.
-`status_codes` beside it needed nothing: it keys on a three-digit status, so its
-accumulator cannot exceed a thousand entries, and a rule now says so by measurement
-rather than by assertion.
+**`log_levels` capped what it printed and not what it held.** One `Counter` per distinct
+minute: 883,011 minutes in 19 MB peaked at 506 MB against 199 MB in one minute. Fifty
+thousand are tracked, about 18 MB, and the answer says how many lines fell outside, as a
+doubt about the list, because the minutes kept are the first met, not the loudest.
+`status_codes` keys on a three-digit status and cannot pass a thousand; a rule measures
+it.
 
-*What the guards taught.* Of the fifteen mutations this slice applied, two of my own
-rules were wrong before they were right. One sized its fixture from the constant it was
-testing, so mutating the cap to a billion made the *test* build a billion lines and the
-run never finished -- a rule whose fixture is sized by its own subject cannot survive
-that subject being broken. The other patches its cap down to keep the fixture small,
-which leaves the shipped number held by nothing; both tools now carry a separate rule
-putting a floor under the claim their comments make, that these are guards and not
-budgets worth tuning. *(2026-10-16, from an architecture review.)*
+*What the guards taught.* A rule whose fixture is sized from the constant it tests cannot
+survive that constant being broken -- a billion-line cap built a billion-line fixture --
+and one that patches its cap down leaves the shipped number held by nothing, so both
+tools carry a separate floor. *(2026-10-16, from an architecture review.)*
 
 **`http_fetch` bounded nothing, guarded the wrong URL, and read every page as UTF-8.**
-The last of the shipped tools nothing had ever called. Three faults, each driven against
-a server written for the purpose on the loopback:
+Each driven against a loopback server written for the purpose:
 
-  - **`timeout=` is a socket timeout.** It bounds one operation, not the call, and a
-    server sending one byte every two seconds was still being read after ninety --
-    every byte reset the clock. A tool runs on the turn's thread, where
-    `KINGFISHER_TURN_TIMEOUT_S` is read between stream chunks, so nothing outside the
-    call was going to end it; and unlike `sql_query`'s join, the party deciding how
-    long this takes is whoever the URL points at. There is a deadline over the whole
-    call now, and the socket timeout stays beside it, because a connection that answers
-    *nothing* is the socket's to end and the deadline is only checked between reads.
-    The first fix was wrong and measured so: reading in pieces with `read` left it
-    unbounded, because `read` blocks until it has every byte asked for, so the check
-    between pieces never ran. `read1` returns what has arrived.
+  - **`timeout=` is a socket timeout**, per operation: a server sending a byte every two
+    seconds was still being read after ninety, and whoever the URL names decides how long
+    that is. A deadline covers the whole call; the socket timeout stays for a connection
+    that sends *nothing*. `read` blocks until it has every byte asked for, so the deadline
+    is checked between `read1` calls, which return what has arrived.
   - **The scheme check guarded the URL the model wrote.** urllib's redirect handler
-    permits `ftp:` beside http and https, so a 302 took the fetch out of the scheme the
-    tool promises: measured against the real internet, `ftp://ftp.gnu.org/welcome.msg`
-    came back as that file's contents. An opener with a redirect handler of its own
-    refuses it now. `file:` was already refused upstream, and so is a redirect loop.
-  - **The body was decoded as UTF-8 whatever the server said.** A page declaring
-    `ISO-8859-15` came back as `caf? costs 5??` and one declaring `utf-16` as its bytes
-    with a NUL between every character. The declared charset is read now, and a charset
-    this machine does not have falls back rather than raising `LookupError` -- which
-    would leave the server deciding whether the tool fails.
+    permits `ftp:`, and a 302 fetched `ftp://ftp.gnu.org/welcome.msg`. A redirect handler
+    of its own refuses it.
+  - **The body was decoded as UTF-8 whatever the server said.** The declared charset is
+    read, and one this machine lacks falls back rather than raising `LookupError`, which
+    would let the server decide whether the tool fails.
 
-*A rule about a bound cannot be written to assert the elapsed time afterwards.* A call
-with no bound does not return, so such a rule hangs rather than fails, and a hang tells
-a reader of CI less than one red line. Both time rules drive the fetch on a thread and
-fail if it has not answered, which also has to tell a *raise* from a hang: reporting one
-as the other sent me to the bound when the answer was in the traceback.
-
-*What this leaves.* The tool will still fetch `http://169.254.169.254/` or anything else
-inside the network it runs in, which no scheme check addresses and which a deployment
-exposing this tool has to decide for itself. Its docstring says a public web page; it is
-an example of a narrow grant, not of a safe one. *(2026-10-15, from an architecture
-review.)*
+*A rule about a bound cannot assert the elapsed time afterwards*: unbounded, the call
+never returns and the rule hangs. Both time rules run the fetch on a thread and fail if
+it has not answered, telling a raise from a hang. *What this leaves*: the tool will still
+fetch `http://169.254.169.254/` or anything in its network, which a deployment exposing
+it must decide; it is an example of a narrow grant, not of a safe one.
+*(2026-10-15, from an architecture review.)*
 
 **Three shipped tools answered wrongly about a file a real deployment holds, and the
-bound was never the one the row count suggested.** Each was found by handing the tool
-the input, not by reading it.
+bound was never the one the row count suggested.** Each found by handing the tool the
+input.
 
-**`csv_profile` merged two columns that share a name.** Its cells were gathered into a
-dict keyed by the header's names, so `region,sales,region` appended both columns into
-one list: two rows reported four filled cells and four distinct values, a column half
-empty reported a quarter missing, and the line was printed once per spelling with
-nothing to tell the two apart -- while `csv_columns`, reading the same header, listed
-all three. Gathered by position now, and a repeated name carries the column number the
-file gave it, because the file is the only place that distinction lives. The same loop
-counts the rows that are not the header's width: a row with a cell past it lost that
-cell in silence, under an answer saying the file was rectangular.
+**`csv_profile` merged two columns that share a name.** Keyed by header name,
+`region,sales,region` pooled both columns while `csv_columns` listed three. Gathered by
+position, a repeated name carrying its column number, the only place the distinction
+lives; a row wider than the header is counted, not silently cut.
 
-**`bar_chart` wrote files no viewer can open, and said it had saved a chart.** Two
-ways. `inf` passed the negative check, so it became the longest bar and every other
-bar's length was `n/inf` -- `width="nan"` for itself and `0.0` for all the rest, over
-an answer reporting two bars drawn. `nan` and `1e400` arrive the same way, which is why
-the guard reads the number rather than its spelling, and refuses it exactly as a
-negative one is refused: a bar is a share of the longest, and neither has a length. The
-other way was `escape`, which handles markup and nothing else: a NUL or a vertical tab
-in a cell went into the SVG untouched, and XML 1.0 admits only tab, newline and
-carriage return below a space -- so the saved file was not well-formed and the answer
-said `Saved chart.svg (SVG image, 335 B)`. Those characters are dropped before anything
-is written, and the answer counts the cells that lost one.
+**`bar_chart` wrote files no viewer can open, and said it had saved a chart.** `inf`
+passed the negative check and made every bar `n/inf` (`nan` for itself); `nan` and
+`1e400` arrive the same way, so the guard reads the number and refuses it as a negative is
+refused -- neither has a length. `escape` handles markup only, so a NUL went into an SVG
+XML 1.0 forbids it in; such characters are dropped and counted.
 
-**`sql_query` bounded rows and nothing else.** `MAX_ROWS` is 200, and that is a bound
-on rows: `SELECT b.a FROM big b, t LIMIT 200` against a 20 MB database obeyed it and
-returned a 4,000,000,200-character answer -- 30 seconds and 3.3 GB of resident memory.
-It also had no bound at all on time, and a tool runs on the turn's thread: a three-way
-join over a 1,000-row table takes 49 seconds, and a fourth table about 14 hours that
-nothing can interrupt. Both are held now, and `docs/guides/tools.md` has the reasoning
-under *A tool that runs a query*. The time bound is SQLite's progress handler, which is
-the one thing here that can stop work already under way -- free, measured, and reported
-in words naming the bound, because `OperationalError: interrupted` names neither it nor
-the fix. The width bound is one number used twice: rows stop when the answer reaches it
-and say so in a marked `--` line, and a single value past it is refused by column name
-with `substr` suggested, since the model can ask for that column narrower. Read per
-value before the conversion, and a row at a time rather than `fetchmany`, because that
-is where the memory went.
+**`sql_query` bounded rows and nothing else.** `SELECT b.a FROM big b, t LIMIT 200` on a
+20 MB database returned four billion characters, 3.3 GB resident; a four-table join on
+1,000 rows takes about 14 hours that nothing could interrupt. `docs/guides/tools.md` has
+the reasoning under *A tool that runs a query*. Time is SQLite's progress handler, the
+one thing that stops work under way, reported naming the bound, which `OperationalError:
+interrupted` does not. Width is one number used twice: rows stop at it with a marked `--`
+line, and a single value past it is refused by column with `substr` suggested -- read per
+value before conversion, a row at a time, because that is where the memory went.
 
-**Not changed: `WITH` is still refused.** The guard admits a statement starting
-`select`, so a common table expression -- read-only, and a SELECT in every practical
-sense -- comes back as "only SELECT statements are permitted". That is why the
-unbounded-time case above had to be a plain join; a recursive CTE never reached the
-database. The time bound would make admitting `WITH` safe, but it widens what the tool
-grants and that is its own decision, not a thing to ride along with a fix.
-*(2026-10-15, from an architecture review.)*
+**Not changed: `WITH` is still refused.** The guard admits a statement starting `select`,
+so a read-only common table expression is refused. The time bound would make admitting it
+safe, but widening what the tool grants is its own decision, not one to ride along with a
+fix. *(2026-10-15, from an architecture review.)*
 
 ## What a turn's tools returned
 
 **Every tool result the model is handed is recorded, kept as a file and given an id,
 and kingfisher writes the record, never the model.** One ledger, two readers: the model
-reads a rendering of it in the user message, and the caller reads the turn's rows on
+reads a rendering of it in the user message, the caller reads the turn's rows on
 `RunResult.ledger`. It exists for what goes wrong once deepagents summarises a long
 conversation: an earlier result is somewhere in one history file with nothing saying
-where it starts, and the summary's list of what was produced is the summarising
-model's memory of it. Settled with the owner question by question and built in three
-slices; the owner's plan, *Artifact provenance for conversational agents*, is kept
-outside the repository and this is its first stage. *(2026-10-12.)*
+where it starts, and the summary's list of what was produced is the summarising model's
+memory of it. Settled with the owner question by question; this is the first stage of
+the owner's plan, *Artifact provenance for conversational agents*, kept outside the
+repository. *(2026-10-12.)*
 
 **What is recorded: every successful result but the file tools' and `write_todos`.**
 `ls`, `glob`, `grep`, `read_file`, `write_file`, `edit_file` and `delete` touch what is
 a file already, and a row each would bury the rest. `write_todos` rewrites one list the
-conversation already carries, and sat in neither half of this sentence while being
-recorded: measured, three updates beside one real search made three of the four
-`<ledger_delta>` lines a todo list, each repeating the list in `args` as well.
-`execute`, `task`, workspace and MCP tools are recorded. A failed call has nothing worth
-finding again and the conversation shows it. A subagent's results are *working* entries
-under the parent's `task` call, nested helpers included, and its answer is a *main* one.
+conversation already carries: measured, three updates beside one real search made three
+of the four `<ledger_delta>` lines a todo list. `execute`, `task`, workspace and MCP
+tools are recorded. A failed call has nothing worth finding again, and the conversation
+shows it. A subagent's results are *working* entries under the parent's `task` call,
+nested helpers included; its answer is a *main* one.
 
-**Middleware, not the stream.** The stream reaches further, to a compiled subagent's
-own calls, and needs no lock, but it can only watch, and the ledger changes the result:
-the id stamped on it now, perhaps a handle later, which would need middleware anyway
-and two collectors kept in step. The stream also replays results after a superseded
-pause and carries results the approval step made up, each needing a filter that rests
-on how langgraph shapes its chunks. Middleware sees only real calls.
+**Middleware, not the stream.** The stream reaches further, to a compiled subagent's own
+calls, and needs no lock, but it can only watch, and the ledger changes the result: the
+id stamped on it, perhaps a handle later. The stream also replays results after a
+superseded pause and carries results the approval step made up, each needing a filter on
+how langgraph shapes its chunks. Middleware sees only real calls.
 
-**The recorder is ahead of the guards in `standing_middleware`, and each thing that
-position gives is needed.** Inside deepagents' eviction, so it sees a long result whole
-and the id survives in the stub's tail. Ahead of `WorkspaceToolPathsMiddleware`, so it records
-the arguments the model wrote rather than the host paths they become. Ahead of a
-deployment's middleware, which `build_agent` appends after `standing_middleware`, so it
-records what the model was shown, a `ToolNote` reminder included. Moved, nothing fails a
-call; a test for each of the three is what goes red. The turn hands one collector to
-every graph it builds, with a lock because calls made together run on threads, and a
-context variable names the `task` call a subagent runs inside; `findings.md` has it
-reaching both loops.
+**The recorder is ahead of the guards in `standing_middleware`, so it records the
+arguments the model wrote**, not the host paths `WorkspaceToolPathsMiddleware` makes of
+them; moved last, `test_the_arguments_recorded_are_the_ones_the_model_wrote` goes red.
+Its other two properties are not that position's: it sees a long result whole, inside
+deepagents' eviction, because deepagents lands every custom middleware after its own;
+and it records what the model was shown, a `ToolNote` included, because `build_agent`
+appends a deployment's middleware after everything else. One collector serves every
+graph a turn builds, locked because calls made together run on threads, and a context
+variable names the `task` call a subagent runs inside; `findings.md` has it reaching
+both loops.
 
-**Ids run for the session, `A-` and at least four digits.** Not per turn, as the
-owner's plan had them: regeneration would reuse turn numbers, and a running number never
-repeats. The next is the last in the ledger plus one. The id is the result's last line,
-or a text block holding `\n[A-0042]` after a block list, which the transcript joins
-with nothing between; eviction's stub keeps the head and tail, so it shows there.
+**Ids run for the session, `A-` and at least four digits.** Not per turn, as the plan
+had them: regeneration would reuse turn numbers, and a running number never repeats.
+The id is the result's last line, or a text block holding `\n[A-0042]` after a block
+list, which the transcript joins with nothing between; eviction's stub keeps the head and
+tail, so it shows there.
 
 **Each result is a file in `/scratchpad/tool_results/`, `A-0042-<tool>.txt` or `.json`,**
-written as it arrives through the turn's backend under the turn's rules, without the
-id. The scratchpad, because the agent reads a range of one back with `read_file` and
-searches with `grep`, which needs no new tool, and because it is working material swept
-with the session. Named `tool_results/`, not `results/` as it first was: that is the
-name anyone gives a folder of their own work, and the agent and its tools write in the
-scratchpad too. Beside deepagents' `large_tool_results/` the two read as one pair, each
-result in one or the other. A file the backend refuses leaves the row's `path` null
-and the call succeeds: failed, the model may make the call again and run the tool twice.
+written as it arrives through the turn's backend. The scratchpad, because the agent reads
+one back with `read_file` and searches with `grep`, no new tool, and it is swept with the
+session. Not `results/`, which is the name anyone gives a folder of their own work; beside
+deepagents' `large_tool_results/` the two read as a pair. A file the backend refuses
+leaves the row's `path` null and the call succeeds: failed, the model may call again and
+run the tool twice.
 
 **An offloaded result is pointed at deepagents' copy, not kept twice.** Eviction runs
 outside the recorder, so at the end of the turn one `ls` of `large_tool_results/`
-repoints each entry whose call id is there, and kingfisher's copy goes in the sweep.
-deepagents' copy ends in the id. A nested helper has no eviction and keeps its own.
+repoints each entry whose call id is there, and kingfisher's copy goes in the sweep. A
+nested helper has no eviction and keeps its own.
 
-**Never onto a path a row already names, though, and never twice in one turn.**
-deepagents names an eviction after the call id alone, with no turn in the name, and
-that folder outlasts the turn -- so an id a provider used twice pointed the second row
-at the first result's file, and the sweep then removed the copy that was right.
-Measured across two turns on one session: the row read `A-0002 web_search -> 32 B
-/scratchpad/large_tool_results/c1`, and reading it returned the previous turn's 101 KB.
-Every other call id here need only be unique within its turn -- a `PendingDecision` is
-answered by a `Resume` into the same paused turn -- and nothing asks a provider for
-more than that, so this is kingfisher's to detect rather than to require. A collision
-keeps our own copy, which is this call's whole result.
-*(2026-10-13, from an architecture review.)*
+**A name is not an identity, and the size is what settles it.** deepagents names an
+eviction after the call id alone, in a folder that outlasts the turn. Measured across two
+turns, a reused id pointed the second row at the first result's file -- the row read
+`A-0002 web_search -> 32 B`, the file held the previous turn's 101 KB -- and the sweep
+removed the copy that was right. A crash cutting a row, one id twice in a turn, and an
+agent and its subagent (two conversations in one turn, each with a `c1`) all reach it,
+and nothing asks a provider for more uniqueness, so this is kingfisher's to detect. The
+file deepagents keeps ends in the recorder's id line, so its length is known exactly: a
+row is repointed only onto a file of that length, and a backend reporting no size is no
+match, which keeps our copy, this call's whole result. A check against paths *earlier*
+rows named was the first fix and went, being a guard no mutation could fail: two rows of
+different turns match one file's length only if they are the same length, and then
+deepagents has overwritten it and this turn's row is right.
 
-**A name is not an identity, and the size is what settles it.** The paragraph above
-checked that no two rows claimed one path, which was not the same as checking that the
-path held *this* result. Three shapes went through it: a crash, which takes
-`earlier.paths` with the row it cut while the eviction file outlives the turn; one id
-twice in a turn with both results evicted; and -- needing no provider misbehaving at
-all -- an agent and a subagent, which are two conversations in one turn, where a
-provider numbering calls per response gives each a `c1`. That last one is also why the
-sentence above about an id being unique within its turn was too comfortable: a turn is
-not one conversation. deepagents keeps the result with the id line this recorder put on
-the end, so the file is exactly that long and the `ls` already carries the number; a
-row is repointed only onto a file of that length, and a backend reporting no size reads
-as no match, which keeps our own copy. The no-two-rows check stays, because two results
-of one length under one id -- the same tool twice -- would each match the size. The
-check on paths *earlier* rows named went with the change: a row from a previous turn
-and one from this turn cannot both be the length of a single file unless they are the
-same length, and then deepagents has overwritten it, so this turn's row is the one
-that is right. Keeping it left a guard no mutation could fail -- the shape three
-reviews have been about -- and left the rule for the cross-turn case passing by a
-disjunction no test could tell apart. Two guards now, each red under its own
-mutation.
-
-**On a tie, neither row takes it.** "No two rows claim one path" stopped the second row
-from claiming it and said nothing about whether the first row should have. Measured:
-two calls of one id in a turn, results of equal length and different content, left the
-row recording `subject='one'` pointed at the bytes of `subject='two'` -- and the `one`
-result swept out of the session altogether, under a row still carrying its own size and
-its own summary. Nothing in the session held it. `system.md` tells the model to read
-that file back rather than call the tool again, so what it reads is another call's
-answer with nothing to say so, which is the lie that rule set out to prevent, told by
-the row that passed the check instead of the row that failed it.
-
-Nothing can tell those two apart: the `ls` carries a name and a length, and both rows
-have both. What is true today is that deepagents overwrites `large_tool_results/<id>`
-per eviction, so the *last* of the tied calls is the one in the file -- measured -- and
-pointing the last row at it would be right for the wrong reason: a write order neither
-the listing nor deepagents' documentation promises, holding a claim about which
-caller's result a file is. So neither row takes it, which is the direction the no-size
-case beside it already takes and for the same reason: our own copy is this call's whole
-result either way. The cost is one extra copy of a long result, in the turn where a
-provider reused an id, where there were two copies before and one of them was wrong.
-
-The rule that should have caught this was written with two `loud` calls, whose results
-are identical -- so the assertion that each row's file was "its own result" could not
-fail, whichever row held which. It is driven with results that differ in content and
-not in length now, and a second rule keeps the bound: a tie is a tie in *length*, not
-in id, and where the lengths differ the matching row still takes deepagents' copy.
+**On a tie, neither row takes it.** Measured: two calls of one id, results of equal length
+and different content, left the row for `subject='one'` pointed at the bytes of
+`subject='two'` and the `one` result swept away, under a row still carrying its own size
+and summary -- which `system.md` tells the model to read back rather than call again.
+deepagents writes the *last* tied call into the file, measured, but that is a write order
+nothing promises, so neither row takes it, as with no size; the cost is one extra copy in
+a turn where a provider reused an id. The rule that should have caught it used two
+identical `loud` results, so it could not fail; it is driven with results that differ in
+content and not length now, beside a rule that a differing length still repoints.
 *(2026-10-15, from an architecture review.)*
 
-**Result files, then the ledger, then the transcript, then a sweep.** In that order a
-row never names a missing file and a result the conversation shows always has a row;
-the other way round, a crash leaves the next turn reading an id the ledger never gave
-out, and giving it again. A paused turn writes its rows before its state, since its
-results are as real as a finished turn's. The sweep then removes any result file *a
-recorder wrote* that no row names, recognised by the id its name begins with. Only a
-turn that died before its rows leaves one, and one turn runs per session at a time, so
-there is no grace period. The ledger is `.harness/ledger.jsonl`, read when the turn
-starts and rewritten whole when it ends. SQLite, as the plan had it, is for
-writers that interleave, and here there is one, writing wherever the session's backend
-keeps it. A line a crash cut short is dropped rather than refused, because refused it
-would refuse every turn after. This said the sweep removed any file no row named, and
-that a dead turn was the only thing that could leave one: the agent is a writer here
-too -- the results sit inside the scratchpad precisely so it can read and grep them,
-`system.md` sends it there, and nothing refuses it the folder -- so the sweep deleted
-the agent's own file in the turn that wrote it, after the tool had reported the write
-as succeeding. Narrowing the sweep rather than refusing the write, because a draft
-under `/scratchpad` is something the tools guide offers a tool author in as many words.
-*(2026-10-13, from an architecture review.)*
+**Result files, then the ledger, then the transcript, then a sweep.** So a row never
+names a missing file and a result the conversation shows always has a row; the other way
+round, a crash leaves the next turn reading an id the ledger never gave out, and giving
+it again. A paused turn writes its rows before its state. The ledger is
+`.harness/ledger.jsonl`, rewritten whole at the end of the turn; not SQLite, as the plan
+had it, which is for writers that interleave, and here there is one. A line a crash cut
+short is dropped rather than refused, or it would refuse every turn after. The sweep
+removes only a file whose name begins with a result id and that no row names: the agent
+writes in the scratchpad too, and a sweep of every unnamed file deleted the agent's own
+file in the turn that wrote it. Narrowed rather than refusing the write, because a draft
+under `/scratchpad` is what the tools guide offers a tool author. One turn runs per
+session, so there is no grace period. *(2026-10-13, from an architecture review.)*
 
-**The recorder's own folder is refused, and that is not the same decision.** The
-sentence above is about a draft under `/scratchpad`, which is still offered: the folder
-refused is the one #726 moved the recorder's files into, and nothing else under the
-scratchpad is touched. What forced it is the claim this record already makes about the
-ledger -- that it sits under `.harness` because a row names its file and the agent must
-not be able to rewrite what a later turn reads back as true. The file was in the
-scratchpad. Measured: the row stayed at `size: 32` with its original summary while the
-file held `forged`, and `system.md` is what tells the model to read that file back
-instead of calling the tool again, so a later turn read the forgery as true. `delete`
-goes with it -- a row naming a file that is gone is the same lie the other way round.
+**The recorder's own folder is refused, and that is not the same decision.** Only
+`tool_results/` is write-denied to the file tools, `delete` included. A row names its file
+and the agent must not rewrite what a later turn reads back as true: measured, the row
+stayed at `size: 32` while the file held `forged`. Mounted only so the rule is
+expressible, as `.harness` is, since deepagents builds no graph with a deny outside a
+route on an executing backend; readable, since reading back is the point. **Reversed: the
+tools' rules covering the recorder**, on the reasoning that a result file should be held
+to what a tool's save is -- under that reading the folder could not be denied at all. It
+writes through the turn's backend, so a deployment's own refusals still apply, and
+`_unkept` reports one. *(2026-10-13, from an architecture review.)*
 
-Mounted only so the rule is expressible, which is why `.harness` is mounted too:
-deepagents refuses permissions on an executing backend unless every rule sits under a
-route, so an unrouted deny builds no graph at all. Readable, unlike `.harness`, since
-reading a result back is the point of keeping it.
+**The deny covers both folders a row can name, and the shell's half is the fences'.**
+`large_tool_results/` was unrouted, so a plain `write_file` forged an evicted row's file;
+it is routed and write-denied too, and deepagents' own eviction is not subject to the
+rule. `execute` bypasses all of it -- measured, the file tool was refused and the shell
+got in -- and the sweep cannot see an overwrite, since it skips every path a row names.
+**Left as it is:** rows from before the move name `results/`, and nothing denies that; a
+third permanent route to protect rows a version without this property wrote is not worth
+it, with no layout version to move, so they age out with their sessions. *(2026-10-14,
+from an architecture review.)*
 
-The recorder writes through the turn's backend rather than through the tools' rules, and
-that is a reversal: those rules used to cover it, on the reasoning that a result file
-should be held to what a tool's own save is held to. Under that reading this folder
-could not be denied at all -- the deny reached the recorder first. A deployment's own
-refusals still apply, since they live in the backend underneath rather than in these
-rules, and `_unkept` is what reports one.
+**Two fences of three now refuse the shell both folders a row can name.** Once older
+results are cleared to handles, the saved file is the only copy, so an overwrite is the
+record rather than a forgery. `sandbox-exec` refuses both with the regex it writes for
+`.harness`, and bubblewrap binds them read-only after the session. macOS needed one rule
+more: renaming the scratchpad away, writing through the new name and renaming it back
+beat a rule that finds the folders by position -- measured, `FORGED` and exit 0 -- so the
+scratchpad's own node is refused writes, as `sessions/<id>` is for `.harness`. bubblewrap
+binds only what exists, so `ensure_session_layout` makes both folders and `backend_at`
+refuses a session without them. Landlock cannot while it grants the scratchpad whole, a
+read-only grant under a writable parent being stepped over (`_session_writable`), which
+is also why `shell_denied` does not ask a deployment's backend for it. Two of three is not
+a boundary, so nothing claims one. *(2026-10-16, before clearing results to handles.)*
 
-One half is not closed by this rule. Filesystem permissions are deepagents' and
-`execute` bypasses them, so the shell still writes in that folder -- measured, the file
-tool refused and the shell got in. *(2026-10-13, from an architecture review.)*
+**The caller's inputs are refused the shell by each fence, not by their mode bits.** The
+shell runs as the uid that owns them: measured through `execute`, a plain write is
+refused, but `chmod u+w` and the same write replaces the caller's file, and `rm -rf
+inputs` takes the folder, the only copy and versioned by nothing. So each fence refuses
+it as it refuses `.harness`: a regex on macOS, a read-only bind in bubblewrap, and on
+Landlock by leaving `inputs` out of the grant. Reads stay, and the rule asserts the rest
+of the session stays writable, so a fence refusing everything fails it. **The contract
+kit said this held when it did not**: `shell_denied` never lifted the bits, and its
+control asserted `/inputs` absent from an unfenced shell's failure -- the belief stated as
+a test. It lifts them first now, the `chmod` allowed to fail, names both folders, and
+has a case where the fence holds so a kit raising for everything fails too.
+*(2026-10-14, from an architecture review.)*
 
-**Two sentences above were wrong, and the folder next door was missed.** The first said
-the narrowed sweep covered the shell's half: it does not and cannot, since the sweep
-skips every path a row names and so cannot see an overwrite at all. What the narrowing
-earns is that a draft a shell left in the folder is not deleted in the turn that wrote
-it -- a different property, told as if it were this one. Measured: the shell overwrote a
-row's file, a later turn's sweep ran, and the file still held `forged`. The second said
-the half could not be closed from here. `sandbox-exec` and bubblewrap can each refuse
-this folder the way they already refuse `.harness`, measured on the first; Landlock
-cannot while the folder sits inside a scratchpad it grants whole, because a read-only
-grant under a writable parent is stepped over, which `_session_writable` has recorded
-since it was written. Two fences of three is not a boundary, so nothing claims one --
-but "cannot" was the wrong word and the fences are where that half belongs.
-
-**And the deny reached one of the two folders a row can name.** `_repointed` moves an
-evicted row's path to deepagents' `large_tool_results/`, which was unrouted -- so no
-rule was expressible against it, and a plain `write_file` forged exactly what the rule
-above exists to prevent, with the row still naming the original size. It is routed and
-write-denied now, mounted for the reason `.harness` is. Eviction still writes there,
-which was the thing to check: deepagents' own write is not subject to these rules.
-
-One folder a row can name is still unprotected, and left so deliberately: a session
-opened before the results moved to `tool_results/` has rows naming `results/`, and
-nothing denies that. A deny there would protect only rows written by a version that did
-not have this property at all, at the cost of a third permanent route and a fifth entry
-in the four places this deny set is pinned. What would have closed it properly is
-`LAYOUT_VERSION`, and that is gone (#756): there is no number to move and nothing
-refuses a workspace holding older sessions, so a row naming `results/` is left to age
-out with the session that wrote it. *(2026-10-14, from an architecture review; the
-deferral closed on 2026-10-16, together with the constant it deferred to.)*
-
-**Two fences of three now refuse the shell both folders a row can name.** Clearing older
-results to handles in the replayed conversation leaves the saved file as the only copy of
-what a tool returned, so the half above stops being a forgery a turn might trip over and
-becomes the record itself. `sandbox-exec` refuses `tool_results/` and
-`large_tool_results/` with the regex it writes for `.harness`, and bubblewrap binds them
-read-only after the session, as it binds `inputs`. The macOS half took one rule more than
-`.harness` does: these folders sit under the scratchpad, which the shell may write, and a
-rule that finds them by position was beaten by renaming the scratchpad away, writing
-through the new name and renaming it back -- measured, the row's file held `FORGED` and
-every command exited 0. The scratchpad's own entry is refused writes now, the node and not
-what it holds, as `sessions/<id>` is for `.harness`; a hard link was tried as well and the
-profile already refused it. bubblewrap binds only what exists, so `ensure_session_layout`
-makes both folders before the first result and `backend_at` refuses a session without
-them. Landlock still cannot, for the reason above, which is also why `shell_denied` does
-not ask a deployment's backend for what kingfisher's own Linux fence cannot give.
-*(2026-10-16, before clearing results to handles.)*
-
-**The caller's inputs are refused the shell by each fence, not by their mode bits.**
-`/inputs` is read-only to the file tools by a deny rule and was read-only to the shell
-by nothing but dropped write bits -- and the shell runs as the uid that owns those
-files. Measured through a real `execute`: a plain write is refused by the kernel, `chmod
-u+w` and the same write replaces the caller's file, and `rm -rf inputs` takes the
-folder. What that folder holds is what `layout.py` calls never re-derivable from the
-workspace, versioned by nothing.
-
-So each fence refuses it the way it already refuses `.harness`: one regex in the macOS
-profile, written once now and called for both folders; a read-only bind in bubblewrap,
-after the session's own and for the reason that order exists; and, on Landlock, by
-leaving `inputs` out of what the session grants, because a read-only grant under a
-writable parent is stepped over there. Reads are kept in all three -- the agent is given
-the caller's files to read -- and the rest of the session stays writable, which the rule
-asserts beside the refusal so that a fence refusing everything would not pass it.
-
-**And the shipped contract kit said this held when it did not.** `shell_denied` wrote
-directly and never lifted the bits, so it passed against a folder two commands take, and
-a deployment author running the kit was told the shell was refused it. It lifts them
-first now, and the `chmod` is allowed to fail: on a backend without one, the write is
-still what is asserted. The kit's own control asserted `/inputs` was *absent* from the
-failure it raises on an unfenced shell -- that assertion was the belief, stated as a
-test -- and it names both folders now, with a case beside it where the fence holds them
-so that a kit raising for everything would not pass either. The docstring on
-`read_only_permissions` named the bits as the other half of its rule; they are a layer
-below both halves, and it says so. *(2026-10-14, from an architecture review.)*
-
-**Access is recorded and not acted on, because the session is the boundary.** A row
-holds the audience its tool was granted under, and a `task` answer holds its run's
-audiences together, since an answer can repeat anything the run read. Nothing filters
-on it. A session belongs to one caller, and where a caller's entitlements change between
-turns every turn replays the transcript, which carries the content already, so filtering
-the ledger alone would be no boundary. Callers who must not see each other's data use
-separate sessions. Results served only through access-checked tools were declined on
-the same ground, with one more: the shell reads the whole session whatever the file
-tools are told. It is kept so that a later design can act on it without old rows
+**Access is recorded and not acted on, because the session is the boundary.** A row holds
+the audience its tool was granted under, and a `task` answer its run's audiences
+together. Nothing filters on it: a session belongs to one caller, and every turn replays
+a transcript that already carries the content, so filtering the ledger alone would be no
+boundary. Callers who must not see each other's data use separate sessions. Serving
+results only through access-checked tools was declined on the same ground, and because
+the shell reads the whole session. It is kept so a later design need not find old rows
 lacking it.
 
-**No model-written summaries.** A row's `summary` is the tool, its short arguments and
-the first line of the result. A model-written one costs a call per result, and is the
+**No model-written summaries.** A row's `summary` is the tool, its short arguments and the
+first line of the result. A model-written one costs a call per result and is the
 summary-from-memory the ledger exists to replace.
 
 **What the model sees goes in the user message, never the system prompt.** The system
 prompt is the cached prefix, and anything there that moves with the ledger misses the
-cache on every call. `system.md` has fixed text, *What your tools returned*, explaining
-the id, both blocks and where the files are, and that text reaches the agent's prompt
-alone. A new message carries `<ledger_delta>`, the rows since the previous user message,
-a subagent's indented under its answer so the parent sees where they are and never what
-they hold. A resume adds no message, so *since* reaches back to the last turn that was
-not one, and a run whose `task` never answered has its rows after the rest with a note.
-There is no block when nothing was recorded, on a resume, or for a graph the deployment
-supplied.
+cache on every call. `system.md` carries fixed text, *What your tools returned*, to the
+agent alone. A new message carries `<ledger_delta>`, the rows since the previous user
+message, a subagent's indented under its answer so the parent sees where they are and
+never what they hold. A resume adds no message, so *since* reaches back past it. No block
+when nothing was recorded, on a resume, or for a graph the deployment supplied.
 
 **A subagent reads the id on its results and is told nothing about it, and that is left
-as it is.** Measured: the agent's prompt is 9,543 characters and explains the id; a
-subagent's is 1,902 and does not, being its own `system_prompt:` and the workspace's
-`PROMPT.md`. This is not an oversight but two decisions meeting, each deliberate and
-each held by a rule -- the recorder stamps every graph the build makes, and a subagent
-is given its own text and nothing of the harness's, asserted byte for byte and again by
-length.
-
-The stamp is addressed to the agent rather than to the subagent that passes it. The
-fixed text above tells the agent that a subagent's own results are indented under its
-answer, so the ids are the agent's handle on delegated work; a subagent seeing the
-trailing line in passing is incidental to that.
-
-Both ways of closing it cost more than it does. Explaining the id to a subagent means
-harness prose in every subagent's prompt, which is the thing those two rules refuse --
-and the section entire cannot be the text sent, since two of its four paragraphs
-describe the `<ledger_delta>` and `<ledger_index>` blocks, which arrive in a message to
-the agent and never to a subagent, so a subagent would be handed two claims that are
-false for it. Not stamping inside a subagent costs the other direction: deepagents keeps
-an evicted result with the id on the end, and *grep for the `[A-0042]` line* is how the
-prompt says to find one too long to show whole, so an unstamped subagent result would be
-the one nothing could find. *(2026-10-13, from an architecture review; the alternatives
-were built far enough to price them.)*
+as it is.** Measured, the agent's prompt is 9,543 characters and explains the id; a
+subagent's is 1,902 and does not. Two deliberate rules meet: every graph is stamped, and a
+subagent gets its own text and nothing of the harness's, asserted byte for byte. The
+stamp is the agent's handle on delegated work. Explaining it to a subagent puts harness
+prose in every subagent's prompt, half of it about blocks a subagent never receives; not
+stamping leaves an evicted subagent result nothing can find, since grepping for the
+`[A-0042]` line is how one too long to show is found. *(2026-10-13, from an architecture
+review; the alternatives were built far enough to price them.)*
 
 **After a summary, the index replaces the delta, and nothing estimates size.** The delta
 lists only what is new, and the messages that listed the rest are what the summary
 replaced. So when any turn since the previous user message ended on a summarised
-conversation, the message carries `<ledger_index>`: the last five exchanges that
-recorded anything listed as the delta lists them, and each older one as a line of its
-id range and a count by tool, main and working entries alike, most first; an exchange
-that recorded nothing has no line. An exchange is a turn that carried a message and the
-resumes after it, so a paused `task` and its answer are never split. It is shown on the
-summariser's own mark rather than an estimate of the conversation's size, which would be
-a copy of its threshold to drift when the model or its settings change. Every turn
-summarises again once the replayed transcript is past the trigger, so in practice the
-index arrives every turn from then on.
+conversation, the message carries `<ledger_index>`: the last five exchanges that recorded
+anything in full, each older one as its id range and a count by tool. An exchange is a
+turn that carried a message and the resumes after it, so a paused `task` and its answer
+are never split. Shown on the summariser's own mark, not an estimate of size, which would
+copy its threshold and drift when the model or settings change.
 
 **A turn's closing line carries two marks, each written only when true.** Every turn
-writes `{"turn": ...}`, one that recorded nothing included, because turn ids are not a
-sequence and the file's order is the turns' order. `resumed` marks a resume, which is
-how the delta and the index find the last user message. `summarised` marks a turn whose
-final state holds deepagents' `_summarization_event`, read where `_settled` reads the
-pause because the event is private state that `invoke` leaves out. It means the turn
-*ended on* a summarised conversation: a resume restores the paused turn's checkpoint,
-event and all, and that counts too, so nothing tries to tell the two apart.
+writes `{"turn": ...}`, even one that recorded nothing, because turn ids are not a
+sequence. `resumed` is how the delta and index find the last user message. `summarised`
+marks a turn whose final state holds deepagents' `_summarization_event`, read where
+`_settled` reads the pause because `invoke` leaves private state out; a resume restores
+the event with the checkpoint, and counts too.
 
-**`ledger_*`, not `artifact_*`.** The owner's notes named the blocks `<artifact_index>`
-and `<artifact_delta>`. In kingfisher an artifact is a file under `/outputs` or
-`/memory`, as `RunResult.artifacts` lists, and the word would come to mean two things.
+**`ledger_*`, not `artifact_*`.** The owner's notes said `<artifact_index>`; in kingfisher
+an artifact is a file under `/outputs` or `/memory`, as `RunResult.artifacts` lists, and
+the word would mean two things.
 
 **Older results and file text are cleared to handles once the agent's conversation is
 large.** Before each model call on the main agent, once the conversation reaches a high
-mark and a quarter of that could be freed, the oldest results with a saved copy, file
-tools' results and the text inside `write_file` and `edit_file` calls are replaced by
-handles until it is under half the mark. A recorded result keeps its summary, its size and
-its id, and names its file; a file tool's names the call that gets it back; a write or an
-edit keeps its id and `file_path` and says the file holds the current text. The latest
-batch of calls and the three most recent clearable results besides stay whole. Settled
-with the owner question by question, after four real sessions were measured.
-*(2026-10-16.)*
+mark and a quarter of it could be freed, the oldest saved results, file tools' results
+and the text inside `write_file` and `edit_file` calls become handles until it is under
+half the mark. A recorded result keeps its summary, size and id and names its file; a
+file tool's names the call that gets it back; a write or edit says the file holds the
+current text. The latest batch and the three most recent clearable results stay whole.
+Settled with the owner after four real sessions were measured. *(2026-10-16.)*
 
-It is not the handle for every result declined below: that replaced each result as it
-arrived, when most are needed at once. This touches only older ones, and only once the
-conversation is large.
-
-**The scope is what was resent, not what was saved.** Results with a ledger copy were
-14.7% of what four four-turn MiniMax sessions resent on each call; file reads were
-36.5%, and write and edit text 30.7%. Those have no copy, but they have the file, so
-their handle points at it and says it may have changed rather than at a snapshot, which
-would be a second store to write and sweep. Inline `execute` scripts, what the user and
-the agent said, `task` answers and failed results stay whole: the first three exist
-nowhere else, and a failure is what stops the same call being made again. The
-transcript keeps no status, so a replayed failure is known by its wording -- deepagents'
-`Error:`, its patched call that never finished, a non-zero exit.
+**The scope is what was resent, not what was saved.** Of what four four-turn MiniMax
+sessions resent per call, ledger results were 14.7%, file reads 36.5%, write and edit
+text 30.7%. Those last have the file, so their handle points at it and says it may have
+changed; a snapshot would be a second store to write and sweep. Inline `execute` scripts,
+what the user and agent said, and `task` answers exist nowhere else, and a failure is
+what stops the same call being made again, so they stay whole. The transcript keeps no
+status, so a replayed failure is known by its wording.
 
 **Inside the model call, replacing in place, writing nothing.** A pass clears the request
-the call sends, and returns the handles as a state update, so every later call and the
-transcript are built from the cleared conversation. It was a `before_model` hook first,
-so that the summariser would count the cleared conversation on the very call a pass ran.
-That hook is a graph step, and the acceptance run measured what it cost: the recursion
-limit's 150 steps bought 37 model calls instead of 50, and a writing turn stopped there.
-Inside the call it costs no step; the summariser, outside it, counts the uncleared
-conversation on the one call a pass starts on, which with the default mark at most half
-its trigger only a batch adding more than that half reaches. Topping the limit up to
-cover the hook's step, and wrapping deepagents' summariser to clear before it counts,
-were the other two; the owner chose this one. *(2026-10-16, after the acceptance run.)*
-Each message keeps its id and position, because the summariser's cut is an index into
-that list. It writes no file, so reading a handle back
-cannot start another pass, and a handle is never cleared again: read as if it were what
-it replaced, an offloaded result's was pointed at the copy the turn's sweep removes.
+and returns the handles as a state update, so every later call and the transcript are
+built from the cleared conversation. **Reversed: a `before_model` hook.** It is a graph
+step, and the acceptance run measured it: the recursion limit's 150 steps bought 37 model
+calls instead of 50, and a writing turn stopped there. Inside the call the summariser
+counts the uncleared conversation on the one call a pass starts on, which with the
+default mark at most half its trigger only a very large batch reaches. Topping up the
+limit, and wrapping the summariser, were the other options; the owner chose this. Each
+message keeps its id and position, since the summariser's cut is an index. No file is
+written, so reading a handle cannot start another pass, and a handle is never cleared
+again: read as what it replaced, an offloaded result's was pointed at a swept copy.
+*(2026-10-16, after the acceptance run.)*
 
-**An offloaded result is named by a search for its id, not by a path.** deepagents names
-its copy after the call id, with no turn in the name, and a later call with the same id
-overwrites it, so a path would name another call's result where a search finds nothing.
-Telling one apart needs no listing: a row the ledger already pointed there, or this
-turn's result whose stub is shorter than what the recorder kept. A tool that offloads its
-own output hands the recorder the stub, and is named by our copy, which holds it.
+**An offloaded result is named by a search for its id, not by a path.** deepagents' copy
+is named by call id, and a later call with the same id overwrites it, so a path would
+name another call's result where a search finds nothing. A tool that offloads its own
+output hands the recorder the stub, and is named by our copy.
 
-**The marks.** The high mark is the model entry's `clear_results_at` as written, or else
-the smaller of 64,000 tokens and half the summariser's trigger -- read from
-`compute_summarization_defaults` and the input budget, never copied, so a small window
-still clears first. The low mark is half the high; a pass needs a quarter of it
-clearable, with nothing kept between calls. A simulation replaying the 372 model calls of
-those sessions chose them: at 64k, four passes, input tokens 72% and transcripts 60% of a
-run without clearing, and 82% of the cost at Anthropic's cache prices, since each pass
-costs a re-cache of everything after the earliest message it touched. 48k fired seven
-times, once on a session's last call, which then cost 116%. Keeping two, three or five
-recent results made no difference there. The guard changed nothing from 32k up, and is
-what stops a pass on every call once what can never be cleared nears the low mark: at a
-20k mark one session fired 40 times without it and 12 with it. The count is the request
-the call sends, system prompt and tools with it, as the summariser counts it.
+**The marks.** The high mark is the model entry's `clear_results_at`, or else the smaller
+of 64,000 tokens and half the summariser's trigger, read from
+`compute_summarization_defaults` and never copied, so a small window still clears first.
+The low mark is half the high. Replaying the 372 model calls of those sessions chose
+them: at 64k, four passes, input tokens 72% and transcripts 60% of a run without
+clearing, 82% of the cost at Anthropic's cache prices, each pass re-caching everything
+after the earliest message it touched; 48k fired seven times, once on a session's last
+call, which then cost 116%. Keeping two, three or five recent results made no
+difference. The quarter guard stops a pass on every call once what cannot be cleared
+nears the low mark: at a 20k mark one session fired 40 times without it and 12 with it.
 
 **One setting, and no flag and no off switch.** The trigger moves with the model's
-window, so a mark beside the model is where a deployment would want to say it, and a
-flag would be a second place to look. A mark at or past the summariser's trigger is
-refused when the model is built, since clearing would never come first; the highest
-allowed almost never clears, which is the nearest thing to off -- only a call landing
-between it and the trigger starts a pass. The summariser also fires on the last reply's reported usage, which this does not read, so
-a mark right under the trigger can still lose to that. A model the deployment passes in
-has no entry and takes the default. The ledger is unchanged: it records what the tools
-returned, and what was cleared is in the transcript.
+window, so the mark sits beside the model, and a flag would be a second place to look. A
+mark at or past the summariser's trigger is refused when the model is built; the highest
+allowed almost never clears, the nearest thing to off. The summariser also fires on the
+last reply's reported usage, which this does not read. A model the deployment passes in
+takes the default. The ledger is unchanged by clearing.
 
 **Still open: the summariser re-runs every turn once past its trigger.** Its event is in
-state the next turn's graph is not given, and the transcript is the whole conversation,
-so each turn summarises again and appends the same history to its file once more. The
-fix designed writes the summary and the messages after its cut as the transcript.
-Clearing makes the trigger rare on a large window; on a small one it is the next thing to
-fix.
+state the next turn's graph is not given, so each turn summarises again and appends the
+same history once more. The fix designed writes the summary and the messages after its
+cut as the transcript. Clearing makes the trigger rare on a large window; on a small one
+it is the next thing to fix.
 
 **Not built, and still open.**
 
 - **A handle in place of a large result's stub.** A handle in place of *every* result,
   as the plan has it, was declined: most results are needed at once, and reading each
-  back would double the round trips of every search. Older ones are cleared once the
-  conversation is large, above.
+  back would double the round trips of every search.
 - **Reusing a result for an identical call within a freshness window, declared
   supersession, and "derived from" links.** Each needs information nothing supplies.
 - **Regeneration, which gets a design of its own:** rewinding or forking, what becomes
   of files already in `/outputs`, how a client names a turn. Every row records its turn
-  so that it can filter by one when it lands.
-- **Calls inside `eval` and inside a compiled subagent,** which no hook sees. A compiled
-  subagent's answer is still recorded, through `task`. Nor is what the shell writes;
+  so it can filter by one.
+- **Calls inside `eval` and inside a compiled subagent,** which no hook sees; the
+  compiled subagent's answer is recorded through `task`. Nor what the shell writes;
   `RunResult.artifacts` is the sound view of files.
-- **Finding an old entry by anything but its id.** Settled for now as finding its file:
-  `glob` for `A-0042-*` under `/scratchpad/tool_results/`, or `grep` for its `[A-0042]`
-  line under `/scratchpad/large_tool_results/` where deepagents offloaded it, as `system.md`
-  says and `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says` drives. A
-  rolled-up line keeps only ids and counts, and the ledger is under `.harness`, which the
-  file tools refuse, so a rolled-up entry's arguments and summary are out of reach. If
-  that proves too little, the index could also be written as a readable file there.
+- **Finding an old entry by anything but its id.** Its file is found by `glob` for
+  `A-0042-*` under `/scratchpad/tool_results/` or `grep` for `[A-0042]` under
+  `/scratchpad/large_tool_results/`, as `system.md` says and
+  `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says` drives. A rolled-up
+  entry's arguments and summary are in the ledger, under `.harness`, out of reach; if
+  that proves too little, the index could be written as a readable file.
 
 ## Tool failure
 
 **A workspace tool's exception is a failed tool result, not a dead run.**
-`ToolFailureMiddleware` converts it to a `ToolMessage` with `status="error"` and
-the text carried whole, so the model sees a failure rather than a value. Built-in
-tools are untouched but for a refused host path, the one thing they do not report
-themselves -- they already report the rest, so widening this to them would put a second
-opinion between deepagents and its own error handling. `BaseException` is deliberately
-not caught: an interrupt is not a tool telling the model something.
-
-Measured before it was built, on one deployment: the same wrong path cost nothing
-through `read_file` and killed a sixteen-call run through `csv_profile`. Which of
-the two happened depended on the tool the model reached for, which a deployment
-cannot predict.
-
-Built beyond what the design asked for. It specified the agent; subagents and
-helpers below them get the guard too, because an agent declares its own roster
-and `subagents` defaults to everything in it, so the common case became several
-subagents holding the workspace's tools with the guard only on the parent.
-*(2026-08-18 as `a-tool-failure-is-not-a-crash.md`; shipped, and the file removed
-2026-08-31.)*
+`ToolFailureMiddleware` converts it to a `ToolMessage` with `status="error"`, text whole.
+Built-in tools are untouched but for a refused host path, the one failure they do not
+report themselves; converting the rest would put a second opinion between deepagents and
+its own error handling. `BaseException` is not caught: an interrupt is not a tool telling
+the model something. Measured first: the same wrong path cost nothing through
+`read_file` and killed a sixteen-call run through `csv_profile`, depending on which tool
+the model reached for. Subagents and their helpers get the guard too, since they can hold
+the workspace's tools. `on_tool_error` still writes a `tool_error` event for a converted
+exception, which is asserted. *(2026-08-18, `a-tool-failure-is-not-a-crash.md`.)*
 
 **What a deployment's own middleware raises is not this guard's to convert, and it
-cannot tell.** `ToolFailureMiddleware` catches whatever `handler(request)` raises, and a
-deployment's middleware is below it -- appended last, so it sees the narrowing
-kingfisher applied. So the asymmetry above is reinstated for a deployment hook that
-falls over, pointing the other way: driven with a registered middleware whose
-`wrap_tool_call` raises, the call to a workspace tool came back as `status="error"` and
-the run finished, while the same middleware on `read_file` ended the turn with the raw
-`RuntimeError`. The surviving half carries the tool's name, so the deployment's fault
-reads as the tool's.
-
-Left as it is, and written down instead. Telling the two apart needs a marker across
-the boundary -- something below the deployment block to tag the tool's own exceptions,
-and this guard converting only what is tagged -- which means interleaving
-`standing_middleware` with the deployment middleware in each of the three graphs whose
-stacks are pinned to its order. That carries a decision rather than a correction:
-whether a hook that falls over should end every turn or none of them. The middleware
-guide says what happens today.
-
-**The same placement hands a hook host paths.** Nearest the tool is below
-`WorkspaceToolPathsMiddleware`, so a deployment's `wrap_tool_call` is handed the rewritten
-argument: driven, the model wrote `line_count(path="/inputs/n.txt")` and the middleware
-saw the absolute session path. The recorder states this question for itself and answers
-it by position; for a deployment hook the answer is the opposite one, and it was written
-nowhere. *(2026-10-16, from an architecture review.)*
+cannot tell.** That middleware is appended last, below the guard: driven with one whose
+`wrap_tool_call` raises, a workspace tool's call came back `status="error"` under the
+tool's name, while on `read_file` the turn ended with the raw `RuntimeError`. **Left as
+it is.** Telling them apart needs a tag below the deployment block, which means
+interleaving `standing_middleware` with the deployment's in each of the three graphs
+pinned to its order, and carries a decision rather than a fix: whether a hook that falls
+over should end every turn or none. The middleware guide says what happens today. The
+same placement hands a hook host paths: the model wrote
+`line_count(path="/inputs/n.txt")` and the middleware saw the session's absolute path --
+the opposite of what the recorder sees by its position. *(2026-10-16, from an
+architecture review.)*
 
 **A workspace tool is handed real paths, resolved against its own session.**
 `WorkspaceToolPathsMiddleware` rewrites a `path` argument before the tool sees it, so
-`/data/config.ini` means the same thing to a workspace tool as it does to
-`read_file`. A workspace tool is an ordinary function that opens files with the
-operating system; the built-in file tools do not have the problem because they
-close over the backend that roots them at a session, and nothing hands that
-backend to a tool the caller supplied.
+`/inputs/config.ini` means to a workspace tool what it means to `read_file`; how is under
+*A tool's path is the backend's path*. A workspace tool opens files with the operating
+system, and nothing gives it the backend the file tools close over. It closed a leak too:
+without it the model learned the host layout from the shell, and from there
+`line_count('/workspace/sessions/<other>/secret.txt')` answered. Now that argument
+resolves under *this* session and finds nothing. Links are resolved on both sides, since
+a link the shell made to another session was measured returning `TENANT-A-PRIVATE`
+through a tool while `read_file` refused it. The call is rewritten rather than each tool
+wrapped, because `@tool` objects and plain functions share only the call.
+`PATH_ARGUMENTS` is `{"path"}`, the convention shipped tools follow.
 
-It closed a leak as well as a usability bug, and the second is how the first was
-found. Before it, the only way for the model to make a workspace tool work was to
-learn the host layout from the shell -- and from there it could name any session:
-`line_count('/workspace/sessions/<other>/secret.txt')` returned an answer. Now
-that argument resolves under *this* session and finds nothing, not by being
-refused but by there being no way to say it. Symlinks are resolved on both sides,
-because `execute` is rooted in a directory the agent can write to and a link at
-`/derived/link.txt` pointing at another session was measured returning
-`TENANT-A-PRIVATE` through a tool while `read_file` refused the same path.
+**Corrected: an argument with another name could reach outside the session.** A tool
+taking `input_file`, handed another session's real path, returned `TENANT-A-PRIVATE`.
+Every other string argument of a workspace tool call is refused when it names a host
+path -- the file tools' refused roots, `/root/`, `/proc/`, `/sys/`, `/dev/`, or the
+sessions directory, which catches `/workspace/sessions/...` in a container. Defence, not
+a boundary: a relative path, or text a tool turns into a path, still reaches it.
+`tools.md` says only `path` is translated. *(2026-09-17.)*
 
-Rewriting the call rather than wrapping each tool, because tools are not alike --
-some are `BaseTool`s from `@tool`, some plain functions -- and the call is the one
-shape they share. `PATH_ARGUMENTS` is `{"path"}`, the convention this repository
-already enforces on shipped tools; a tool calling it `input_file` is missed, and the
-virtual path the model writes fails visibly on the first call.
+**Still open from it.** Whether a tool failing repeatedly with the same argument should
+be taken away rather than left to the recursion limit. Nothing needs it yet, and a rule
+that removes a capability mid-run deserves its own argument.
 
-**Corrected: an argument with another name could reach outside the session.** This
-entry said it could not, and a host path showed otherwise: a workspace tool taking
-`input_file`, handed the real path of another session's file, returned
-`TENANT-A-PRIVATE`. Nothing translates such an argument, so it reached the tool as
-written, and a tool is Python in kingfisher's own process with nothing fencing it.
-Every other string argument of a workspace tool call is now refused when it names a
-host path -- the roots the file tools refuse, `/root/`, `/proc/`, `/sys/` and `/dev/`,
-or the directory this session's neighbours are in, which is what catches
-`/workspace/sessions/...` in a container where no host root would. Defence rather
-than a boundary: a relative path, or text a tool turns into a path, still reaches
-it. `tools.md` now says that only `path` is translated, which it had never told
-anyone writing a tool. *(2026-09-17.)*
-
-**Still open from it.** Whether a repeatedly failing tool should be taken away
-from the model rather than left to the recursion limit. Three failures of the
-same tool with the same argument is a loop, and a middleware could say so;
-nothing needs it yet, and a rule that removes a capability mid-run deserves its
-own argument.
-
-*Two other things this document listed as open were answered before it was
-written, and were copied here on 2026-08-31 without being checked. The
-routed/host mismatch is the entry above. A tool's exception does reach the run
-report: `on_tool_error` writes a `tool_error` event even when the middleware has
-already converted the exception into a tool result, which is now asserted rather
-than assumed.*
-
-**A caller's tool can be handed the turn's backend, under the turn's permissions.**
-The entry on real paths says nothing hands the backend to a tool the caller
-supplied, and since this one something does. The graph is built with
-`context_schema=ToolContext`, every turn is driven with a `ToolContext` holding the
-backend, and a tool declaring `runtime: ToolRuntime[ToolContext]` reads
-`runtime.context.backend`. It works in the virtual paths the model writes, with no
-host path anywhere in it. The `path` translation stays, for the tool that wants one
-real file to open; this is for the one that wants to list, search or write.
-
-The run context rather than a closure, because of when each thing exists. A tool is
-imported once, when the catalogue is read; a backend is rooted at one session and
-built per turn. langgraph's context is the one value that is per run, reaches every
-tool, and is never shown to the model.
+**A caller's tool can be handed the turn's backend, under the turn's permissions.** The
+graph is built with `context_schema=ToolContext`, every turn is driven with one, and a
+tool declaring `runtime: ToolRuntime[ToolContext]` reads `runtime.context.backend` in the
+virtual paths the model writes -- for the tool that lists, searches or writes, where the
+`path` translation serves one that opens a file. The run context rather than a closure,
+because a tool is imported once and a backend is built per turn; it is the one value
+that is per run, reaches every tool, and is never shown to the model.
 
 **Wrapped, because the backend keeps none of the rules.** deepagents applies
-`permissions=` in the bodies of its file tools and nowhere else. Measured on the
-default backend, in a session hardened the way a turn hardens one: a write to
-`/skills/x/SKILL.md` landed in the catalogue every session shares, and
-`/.harness/run.jsonl` was read back whole. `/data` held, but only because
-`protect_data` had dropped its write bits -- and the refusal named the host path.
-`PermittedBackend` puts the turn's rules in front of the backend with deepagents'
-own helpers. They are private and called deliberately, for the reason the skills
-lister is: a second matcher is the copy that drifts, and here the drift is a path
-one side refuses and the other reads. It answers the way the file tools do and no
-more strictly -- a listing is filtered, a delete is checked against the whole
-subtree, a batch marks the paths it refused and sends the rest.
+`permissions=` inside its file tools and nowhere else: measured on the default backend, a
+write to `/skills/x/SKILL.md` landed in the shared catalogue and `/.harness/run.jsonl` was
+read back whole. `PermittedBackend` puts the turn's rules in front with deepagents' own
+private helpers, since a second matcher is the copy that drifts. It answers as the file
+tools do and no more strictly. It differs in three ways, each because a call inside a
+tool is not a file tool call:
 
-Three things differ from the file tools, each because a call made inside a tool is
-not a file tool call:
-
-- **`interrupt` is a refusal.** The rule means stop and ask a person, and the asking
-  is the graph pausing before a file tool runs; nothing pauses for a call made in a
-  tool's body. deepagents' result filters pass `interrupt` entries through -- for
-  them the person has answered -- so the rules are rewritten to `deny` once rather
-  than compared at each check. No rule kingfisher writes today is an `interrupt`,
-  and this is so that the first one is not a hole.
-- **There is no `execute`.** No permission rule reaches the shell, so a tool holding
-  it has a way round all of them, and runs commands for a request that was refused
-  the `execute` tool.
-- **A refused path is an `error` on the result**, where a file tool returns a failed
-  message: a backend's callers read results, and that is the convention every other
-  failure of these methods already follows.
+- **`interrupt` is a refusal**, since nothing pauses for a call in a tool's body and
+  deepagents' filters pass `interrupt` entries through. None is written today; this is so
+  the first is not a hole.
+- **There is no `execute`**, which no rule reaches.
+- **A refused path is an `error` on the result**, the convention every other failure of
+  these methods follows.
 
 **Every turn, and a resume is a turn.** langgraph keeps the context out of the
-checkpoint: a graph paused at a gate and resumed without one ran the approved call
-with `runtime.context` as `None`. So it travels with the keywords both loops are
-driven with and not with the payload, which is the part a resume replaces.
+checkpoint: resumed without it, a paused graph ran the approved call with
+`runtime.context` as `None`. So it travels with the keywords both loops are driven with.
+**A graph the caller built is driven with none**, the keyword left off rather than
+`None`, since its context is its builder's.
 
-**A graph the caller built is driven with none.** Its context is whatever its
-builder decided. The keyword is left off rather than passed as `None`, because all
-that is known of such a graph is the three keywords it has always been driven with.
-A tool written this way needs a graph kingfisher assembled.
-
-**It costs an author two rules, documented rather than guarded.** The argument must
-not be called `path`: that name is rewritten to a host path before the tool runs,
-the backend takes virtual ones, and the default backend refuses the rewritten one.
-And the tool is a function: a `BaseTool` subclass declaring its own `args_schema` is
-called without `runtime`. Each fails on the first call with a message naming what
-went wrong, and a test pins each so the guide hears when upstream moves.
-
-`ToolContext` is on the front door and apart from the wrapper it carries, so a tool
-file naming it for an annotation does not load deepagents. **Not a sandbox for the
-tool:** what the wrapper bounds is where the model can point one, and a tool's own
-`open()` meets nothing, as before. *(2026-09-30.)*
+**It costs an author two rules, documented rather than guarded.** The argument must not
+be called `path`, which is rewritten to a host path the backend does not take; and the
+tool is a function, since a `BaseTool` subclass with its own `args_schema` is called
+without `runtime`. Each fails on the first call naming what went wrong, and a test pins
+each. `ToolContext` is on the front door apart from the wrapper, so naming it does not
+load deepagents. **Not a sandbox for the tool:** a tool's own `open()` meets nothing.
+*(2026-09-30.)*
 
 ## Confining the shell
 
-**The two fences share a toolchain and not a workspace**, and the asymmetry is
-the design rather than an oversight. `sandbox-exec` is `(allow default)` with
-denies: it takes away the operator's home and hands back what has to stay
-reachable inside it, so `readable_roots` names the workspace. Landlock and
-bubblewrap are allow-lists: they take away everything and hand back one session,
-so naming the workspace there would return every *other* tenant's session, which
-is the exact read the fence was built after -- measured before it existed, tenant
-B ran `cat ../<A>/derived/secret.txt` and got `TENANT-A-PRIVATE` with exit 0.
+**The two fences share a toolchain and not a workspace**, and the asymmetry is the
+design. `sandbox-exec` is `(allow default)` with denies: it takes away the home and hands
+back what must stay reachable, so `readable_roots` names the workspace. Landlock and
+bubblewrap are allow-lists handing back one session, so naming the workspace there would
+return every other tenant's -- measured before the fence existed, tenant B's
+`cat ../<A>/derived/secret.txt` got `TENANT-A-PRIVATE`. So `toolchain_roots` is the shared
+half, and having `fence_for` call `readable_roots` -- tidier, three lines shorter -- would
+reopen that hole. Without it the Linux side granted nothing for the venv `shell_env` puts
+first on `PATH`, and an allow-list skips an ungranted entry rather than refusing it: the
+shell ran `/usr/local/bin/python3`, without the agent's libraries.
+`test_every_directory_on_the_agent_s_path_is_reachable` states the property, so a path
+added later by another route is caught. *(2026-09-04.)*
 
-So `toolchain_roots` is the shared half and the workspace is not. It is worth
-recording because the tidy-looking move is to have `_fence_for` call
-`readable_roots` -- one function, both platforms, three lines shorter -- and that
-change would close a bug and silently reopen a hole, which is the shape of thing
-this file exists to stop.
+**A definition is not the agent's to edit.** Every directory in `catalogue_roots` is
+denied to the confined shell, not only `skills/`. `tools/` sat in the writable workspace,
+and `LocalToolRepository` *executes* its modules each time a `Kingfisher` is constructed:
+measured under the profile a deployment builds, a write to `skills/` was denied, one to
+`tools/` succeeded, and a fresh repository ran the module-level code of the file. The
+other kinds are denied one step along: an agent editing its `agents/*.yaml` strikes out
+the `source_ids:` line saying who may reach it, and `subagents/` and `middlewares/` hold
+Python too. *Wiring a store* rests on the same premise, *"a file the agent could edit is
+not a boundary"*. Nothing relied on the hole, checked four ways: no caller could add
+tools, the file tools' catalogue routes are read-only, the prompt never mentions
+`tools/`, and `guides/tools.md` addresses a person authoring before a run. **Writes, not
+reads**, since reading a skill and running its scripts is ordinary; the read control is
+parametrised beside the write test so denying the directory outright fails it. **An
+absent root is still named**, since `kingfisher seed` can run between two backend builds.
+`test_every_definition_root_is_protected` walks `catalogue_roots`, so a new kind is
+covered the day it exists, which is what made *Middleware is a definition kind*
+buildable. *(2026-09-07.)*
 
-**What went wrong without it:** the Linux side named only the catalogue, so the
-venv `shell_env` puts first on the agent's `PATH` was granted by nothing. An
-allow-list does not refuse an ungranted `PATH` entry, it skips it -- the shell
-walked on to `/usr/local/bin/python3` and ran a different interpreter, without
-the libraries this project installs for the agent and unable to read the venv's
-`site-packages` besides. Invisible on macOS, where the profile is default-allow
-and `readable_roots` had granted the same roots since denying the home broke
-Python there.
+**Reversed: `models.yaml` and `source_ids.yaml` are protected too.** They were left out
+as read only at construction, but so are the definitions; and `source_ids.yaml` is who may
+reach what, so a shell editing it could grant itself anything from the next start. The
+files a deployment writes, the keys file with them, are denied by exact `path`, being
+beside folders that stay writable, at the place the configuration reads them from, so a
+relocated file is covered and a missing one cannot be created. macOS only: the Linux
+fences grant nothing outside the session. *(2026-09-17.)*
 
-The guard is stated as the property rather than as the fix:
-`test_every_directory_on_the_agent_s_path_is_reachable` asserts every existing
-entry of `shell_env`'s `PATH` falls inside something the fence grants, so a path
-added later by another route is caught by having been added. *(2026-09-04.)*
+**The profile was not the agent's to edit either, and was.** It sat in `.kingfisher`
+inside the writable workspace, and `sandbox-exec -f` re-reads it for every command, so
+two commands sufficed: write `(allow default)` over it, run under it. Measured: the
+second read the home and created `skills/PWNED.md`. `profile` now requires the path it is
+written to and denies writes to it by `path` -- required, because a caller who forgets it
+gets no boundary -- which covers overwrite, append, unlink and rename-over. It is replaced
+rather than truncated, so no turn binds to half a profile, and `.kingfisher` is protected
+whole.
 
-**A definition is not the agent's to edit.** Every directory in
-`catalogue_roots` is denied to the confined shell, not only `skills/`. It used to
-be only `skills/` -- one call site, one value -- on the reasoning that a skill is
-prompt text the agent follows. The premise was always broader than the rule.
+**A session's `.harness` is denied to the shell too, by a pattern** --
+`(deny file-write* (regex #"^…/sessions/[^/]+/\.harness…"))` -- because a profile naming
+the sessions that existed when written would be rewritten as sessions arrive, and
+concurrent turns would race on the file each is bound by. bubblewrap binds it read-only
+over the session it mounted. *(2026-09-08.)*
 
-`writable_roots` returns the whole workspace, so `tools/` was writable by the
-shell, and `LocalToolRepository` *executes* its modules to read them. The catalogue
-is read each time a `Kingfisher` is constructed -- once per process, and once per
-`kingfisher run` -- so a `.py` file the shell wrote was imported and run, in this
-process and outside this profile, the next time one was. Measured rather than reasoned
-about: a write to `skills/` was denied and a write to `tools/` succeeded under the
-profile a deployment actually builds, and a fresh repository ran the module-level
-code of a file that had not been there.
-
-The other three roots decided rather than executed when this was written, and are
-denied for the same reason one step along. An agent that edits its own
-`agents/*.yaml` strikes out the `source_ids:` line saying who may reach it, and that
-line is read when the catalogue loads -- the same next construction. `subagents/`
-and `middlewares/` have since come to hold Python too, which is one more reason
-rather than a different one.
-
-Half of this was already recorded under *Wiring a store*, which quotes the same
-`writable_roots` sentence to argue that a store must be named by an environment
-variable because *"a file the agent could edit is not a boundary"*. That entry
-reasoned about integrity; the same premise carries execution, and it even named
-the neighbour -- *"it is the middleware decision again, one object further in."*
-
-**Nothing relied on the hole**, checked four ways before closing it, because a
-capability somebody uses is a different argument from a side effect nobody asked
-for. A caller could not add tools: uploads layered skills and subagents and there
-was no `LayeredTools`. The agent's file tools cannot write to a catalogue root --
-the backend is rooted at the session, and the routes that do address one, the
-skills catalogue and each bundle's skills, are read-only -- so the shell was the only
-path. The prompt never mentions `tools/`. And `guides/tools.md` is written
-throughout to a person authoring before a run.
-
-**Writes, not reads**, which is what `skills/` already did: an agent reading the
-skill it was told to follow is ordinary, and `execute` runs scripts the catalogue
-ships. The cheap way to pass the write test is to deny the directory outright, so
-the read control is parametrised beside it.
-
-**An absent root is still named.** The profile is written when the confinement
-resolves, which is each time a backend is built, and `kingfisher seed` can run
-between one build and the next, so filtering directories that do not exist would
-leave a workspace seeded in between with a protection nobody removed and nothing
-applied.
-
-**Stated as the property, not the four names.**
-`test_every_definition_root_is_protected` walks `catalogue_roots` rather than a
-list, so a fifth kind is covered the day it exists rather than the day somebody
-remembers. That test is what makes *Middleware as a definition kind* buildable at
-all.
-
-**`models.yaml` and `source_ids.yaml` are deliberately not included.** Both are
-workspace files and both are writable, but `config_from_env` runs once when
-`Kingfisher` is constructed, so an edit lands at the next restart rather than the
-next request. A different shape, and its own argument about who writes
-`source_ids.yaml` and when. *(2026-09-07.)*
-
-**Reversed: they are protected too.** The shape was not different -- the definitions
-are read at construction as well, so an edit to any of them lands at the same next
-start -- and the argument about who writes `source_ids.yaml` comes out one way: not
-the agent, since it is who may reach what, and a shell that could edit it could grant
-itself anything from the next start on. They are denied by exact `path` rather than
-`subpath`, because they sit in a workspace that has to stay writable, and by where the
-configuration reads them from, so a relocated file is covered and one that does not
-exist yet cannot be created. Only the macOS profile needed it: Landlock and bubblewrap
-grant writes inside the session and nowhere else, and `off` and `external` apply
-nothing, as before. *(2026-09-17.)*
-
-**The profile was not the agent's to edit either, and was.** The rule above
-applied one object further in than anybody had looked: `shell.sb` sat inside the
-region its own rules declared writable. `state_dir` defaulted to
-`<workspace>/.kingfisher`, `writable_roots` returned the whole workspace, and
-`protected_roots` named only the definition roots -- so two commands in one turn
-were enough. Write `(allow default)` over the profile; run under it.
-`sandbox-exec -f` re-reads the file for every command while `resolve` rewrites it
-only per backend build.
-
-Measured through `confinement.profile` at the path `resolve` writes: the second
-command read the operator's home and created `skills/PWNED.md`, both refused by
-the profile a moment earlier. macOS `auto` only -- bwrap reads no profile, and
-`external` and `off` have nothing to defeat.
-
-The entry under *Wiring a store* had already stated the rule and attributed it to
-`confinement.resolve` -- *"host-side configuration, and a file the agent could
-edit is not a boundary"*. **That attribution was stale**: `f99d2ce` trimmed the
-sentence out of the docstring, so this page cited a docstring that no longer said
-it, about a state directory that *was* the workspace by default. The rule
-survived in prose and had never been true in the code.
-
-`profile` now takes the path it will be written to and denies writes to it, by
-`path` rather than `subpath`, after every other rule but the one refusing each
-session's `.harness`. Required rather than defaulted: a caller who
-forgets it gets no boundary, which is the failure being fixed. Four ways are
-covered rather than the obvious one -- overwrite, append, unlink and rename-over
-are all `file-write*` against that name. The profile is also replaced rather than
-truncated in place, so a turn cannot bind itself to half a profile while another
-rewrites it; the content cannot differ between turns, every input coming from one
-`Config`, so that is a torn read rather than a disagreement.
-
-`.kingfisher` is protected as a directory as well, which is what the single-path
-rule became once `TMPDIR` moved out of it. It could not have been a `subpath`
-deny before: the denies are written after the allows and would have covered the
-one directory in there the shell had to be able to write.
-
-**A session's `.harness` is denied to the shell too, by a pattern.** One static
-profile covers every session -- `(deny file-write* (regex #"^…/sessions/[^/]+/\.harness…"))`
--- because `shell.sb` has one fixed path, so a profile naming the sessions that
-existed when it was written would have to be rewritten as sessions arrive, and
-two concurrent turns would then race to write different bytes to the file each is
-bound by. On Linux, bubblewrap binds the directory read-only over the session it
-has already mounted. *(2026-09-08.)*
-
-**The profile is named for its rules, not fixed at `shell.sb`.** It is
-`.kingfisher/shell.<digest>.sb`, the digest taken over every rule but the one naming the
-file itself, which cannot be known before the name is. One fixed name was one file per
-workspace, which was right while every input to it came from one `Config`. Once
-processes each serving one session may share a workspace, two configured differently
--- another keys file, other mounts -- would each rewrite it with their own rules, and
-every turn would be bound by whichever wrote last, with nothing to say so. The same
-rules are still one file, so the torn-read argument above holds per name.
-`Confinement.profile` carries the path, since nothing else can spell it. A profile left
-by a configuration no process holds any more is a few hundred bytes the harness's
-folder keeps. *(2026-10-13.)*
+**The profile is named for its rules, not fixed at `shell.sb`:** `.kingfisher/shell.<digest>.sb`,
+the digest over every rule but the one naming the file. Processes serving one session
+each may share a workspace, and two configured differently would rewrite one fixed file,
+every turn bound by whichever wrote last. `Confinement.profile` carries the path, since
+nothing else can spell it. A stale profile is a few hundred bytes left. *(2026-10-13.)*
 
 **Measured and closed: a pattern held `.harness` by where it sat, and the path could
-move.** The macOS denial matches `.harness` by position under `sessions/`. The rest of
-the workspace is writable, and nothing denied the directories *above* a `.harness`, so
-a shell could carry one out from under the pattern. Measured on 2026-10-12 with a real
-`sandbox-exec`, through the backend the agent runs under, two moves rewrote a pinned
-agent and put it back: renaming `sessions/` aside, and -- in a shared workspace --
-carrying a single session's folder out of `sessions/`. Both in the single-session
-layout and the shared one.
-
-`_sessions_denial` closes them, by denying writes to the nodes those moves rename:
-`sessions/` always, and each `sessions/<id>/` where there are many. Rename and unlink
-are a `file-write*` against the name, the same reading the profile's own rule rests on,
-and `$` ends the pattern at the node so the session's own folders stay writable --
-measured, the session still makes, renames and removes its own directories, and a new
-session is the harness's to lay down, unconfined, not the shell's. The depth differs by
-layout as `_session_folder_denial`'s does: with one session the session is `sessions/` and its
-work sits at `sessions/<dir>`, so only `sessions` is named; with many, a session is
-`sessions/<id>` and its work a level deeper, so both are.
-
-The link vector the first write of this entry suspected -- a hard or soft link made in a
-writable folder, which `file-write*` might not see -- was measured closed on the same
-day and pinned by `test_a_link_from_a_writable_folder_does_not_reach_the_harness`, so no
-rule names `file-link`: the measurement did not justify one. `doctor` stays `ok` on
-macOS, now for a gap that is shut rather than one unnoticed; a location-based deny is
-only ever as good as the paths it enumerates, and that caveat lives here rather than in
-a check that would cry wolf on every run. The Linux fences never shared this, measured
-elsewhere and reasoned here: bubblewrap mounts `.harness` read-only, which cannot be
-renamed out from under its path, and Landlock never grants `sessions/` or the workspace,
-so the shell cannot rename either. *(2026-10-12.)*
+move.** Measured with a real `sandbox-exec` through the agent's backend, renaming
+`sessions/` aside, or carrying one session's folder out of it, rewrote a pinned agent and
+put it back. `_sessions_denial` denies writes to the nodes `sessions/` and each
+`sessions/<id>`, `$` ending the pattern so a session's own folders stay writable --
+measured, it still makes, renames and removes them. A hard or soft link from a writable
+folder was measured closed the same day, pinned by
+`test_a_link_from_a_writable_folder_does_not_reach_the_harness`, so no rule names
+`file-link`. `doctor` stays `ok`; that a location-based deny is only as good as the paths
+it enumerates lives here, not in a check crying wolf every run. bubblewrap's read-only
+mount cannot be renamed away, and Landlock never grants `sessions/`. *(2026-10-12.)*
 
 **Landlock cannot take back what it has granted, and the Linux job is what
-established that.** The first version of this granted the session writable and
-`<session>/.harness` readable, on the reading that the kernel resolves a path by
-its most nested matching rule. It does not. A Landlock rule only ever grants, and
-a write walks up from the file until one of them answers -- so the read-only rule
-was stepped over and the session's writable rule answered in its place. On the
-first run of `tests/linux/test_fence_escapes.py` the fenced shell overwrote the
-agent definition its own session was pinned to.
-
-`policy_for` grants a session's directories one at a time instead, and never the
-session, which leaves that walk nothing to find. The price is that the shell
-cannot write into the directory it starts in on a Landlock host, where it can
-under bubblewrap and on macOS -- both of which can express a carve-out and both of
-which still do. `data`, `derived`, `memory`, `runs`, `.home` and `.tmp` stay
-writable -- and `skills/uploaded` did, until uploads went -- so what stops working is
-scratch dropped straight
-into the session; the alternative was leaving the pinned agent, the conversation,
-the turn lock and the run log writable by the shell they belong to. *(2026-09-08.)*
+established that.** The first policy granted the session writable and its `.harness`
+readable, reading the kernel as taking the most nested rule. A Landlock rule only grants,
+and a write walks up until one answers, so on the first run of
+`tests/linux/test_fence_escapes.py` the shell overwrote the agent its session was pinned
+to. `policy_for` grants the session's folders one at a time, never the session; `inputs`
+is left out. The price is that the shell cannot write into the directory it starts in,
+where bubblewrap and macOS can carve one out; the alternative left the pinned agent, the
+conversation, the turn lock and the run log writable by the shell. *(2026-09-08.)*
 
 **The two Linux fences share one front door.** They differ in the middle -- Landlock
-confines between `fork` and `exec`, bubblewrap prepends a sandbox to the argv -- and
-were identical on both sides of it. `sandbox/linux.py` holds what is neither
-mechanism's: `present`, which drops a path the host does not have, and `outcome`,
-which is the three ways a fenced command comes back. The launch stays in each runner,
-as a callable, because that is the only half worth writing twice.
+confines between `fork` and `exec`, bubblewrap prepends to the argv -- and `sandbox/linux.py`
+holds the rest: `present`, `outcome` and `MAX_OUTPUT_BYTES`. Each keeps its own path list,
+since bubblewrap binds no `/proc` and builds its own `/dev`, and one shared list is how a
+mechanism gains a path the other meant to deny. The duplication hid that `test_fence.py`
+exercised the Landlock runner on any host while `test_bubblewrap.py` barely touched its
+runner.
 
-`MAX_OUTPUT_BYTES` moved with them. It had lived in `fence.py` with `bubblewrap.py`
-importing it from there, which reads as bubblewrap depending on Landlock for a number
-that is really `LocalShellBackend`'s. Each fence keeps its own path list: bubblewrap
-binds no `/proc` and builds a fresh `/dev`, and one list serving both is how a
-mechanism gains a path the other meant to deny.
+**The fence's own claims were the part untested.** Mutating what `argv_for` builds, on
+2026-10-01: binding the whole host **writable** left all 2,293 tests green, as did
+deleting the `.harness` bind or moving it above the session's. The rules listed what must
+*not* be bound, where the claim is what may be, and the fixture made no `.harness`, so
+`present` dropped that bind from every assertion. They check the whole set now, as
+`test_the_shell_may_write_exactly_these_places_in_a_session` does for Landlock, on a
+fixture from `ensure_session_layout`. It mattered: `FENCES_HARNESS` is what `doctor`'s
+`session files` check reads to call bubblewrap `ok`, and bubblewrap's escape tests run on
+no CI job, the Linux image refusing the user namespace, so
+`tests/linux/test_a_fence_was_exercised.py` vouches for *a* fence and not this one. Six
+mutations fail a named test now, one being the runner inheriting `os.environ`, whose first
+rule passed an explicit `env` and so could never reach the fallback. *(2026-10-05, from an
+architecture review.)*
 
-The duplication was hiding a gap rather than only costing lines. `test_fence.py`
-stubs `sandlock` so the Landlock runner's shaping, timeout and failure paths run on
-any host; `test_bubblewrap.py` drove `argv_for` and one thing about the runner. So
-the copy nobody tested was the one on the kernels Landlock cannot reach. Four
-mutations that used to fail one test each now fail two.
+**A mechanism is named, not spelled out.** `LANDLOCK`, `BUBBLEWRAP` and `SANDBOX_EXEC` are
+one vocabulary and `MODES` another, overlapping on one word: a mode is what a deployment
+asks for, a mechanism what ended up confining, and `auto` is never one. A spelling
+compared in several places reads a renamed mechanism as *not a fence* -- an unfenced
+shell beside a `Confinement` reporting one. `LINUX_FENCES` is the pair `fence_for` builds
+a runner for. *(2026-09-20.)*
 
-**The gap was wider than that, and the fence's own claims were the part untested.**
-Found on 2026-10-01 by mutating what `argv_for` builds rather than reading it. Binding
-the whole host **writable** inside the sandbox left all 2,293 tests green. So did
-deleting the read-only bind of `.harness`, and so did moving it *above* the session's
-bind -- which the comment beside it says "would cover this again". Of the four, the only
-mutation anything noticed was binding the sibling session by name, because that is the
-one path the assertion happened to list.
+**A runner that says nothing keeps the fence, and one function decides it.** `local`
+defaults to `True`, the safe direction, and was read twice: whether to wrap, and what the
+`Confinement` claims. Flipping the second left all 2,109 tests passing, and with it a
+local runner declaring nothing ran unsandboxed under
+`Confinement(wrap=_unwrapped, elsewhere=True)`, reported as somebody else's boundary. The
+test named for it replaced the confinement after building it;
+`test_a_runner_that_says_nothing_is_confined_here` asserts on `elsewhere`, since
+Landlock's wrap is the identity by design. `runs_locally` is the one reading. **The
+contract kit keeps its own on purpose:** importing the module holding `runs_locally`
+would take `tests/checks/runner.py`, which a deployment copies, from 70 loaded modules to
+3,104, measured on 2026-10-16, to share one `getattr`. *(2026-09-25, from an architecture
+review.)*
 
-That is the shape: the rule enumerated what must *not* be bound -- `tmp_path`, the
-sessions root -- where the claim is about what may be. `--bind / /` is neither of those
-two paths, and the sibling rule reads `not any(sibling in word for word in argv)`, which
-a bind naming no session satisfies. Both go through the whole set now, the way
-`test_the_shell_may_write_exactly_these_places_in_a_session` has always held Landlock's.
-
-**The `.harness` bind's line had never executed.** `argv_for` passes every bind through
-`present`, which drops a source that is not there, and the fixture was
-`directory.mkdir(parents=True)` -- no `.harness`, so the bind was filtered out of every
-assertion in the file, and `test_bubblewrap.py` contained no occurrence of the word. The
-fixture uses `ensure_session_layout` now. `tests/linux/test_fence_escapes.py` had been
-built that way from the start and says why in its docstring: the lesson was written down
-for one fence and not applied to the other.
-
-**Why this mattered more than a thin test file.** `FENCES_HARNESS` -- named by no test
--- is what `harness_unfenced` reads, which is what lets `doctor`'s `session files` check
-say a bubblewrap deployment keeps the shell out of `.harness`. Nothing signs what is kept
-there, so the binds nothing checked were all that `ok` stood on. Of the three
-mechanisms in that constant, sandbox-exec had four to five
-tests biting per mutation and Landlock had both a policy rule and a CI escape test;
-bubblewrap had the flag words. Its five escape tests run on no job -- no `bwrap` on the
-macOS runner, and the Linux image refuses the unprivileged user namespace the probe
-needs -- so `test_a_fence_was_exercised` is honest about *a* fence and silent about this
-one.
-
-Six mutations fail a named test now: the host bound writable, the sibling bound
-writable, the `.harness` bind deleted, the same bind moved above the session's, `/`
-added to `SYSTEM_PATHS`, and the runner inheriting `os.environ`. The last deserves its
-own line, because the first version of that rule did not catch it: it passed an explicit
-`env`, and `dict(env or ...)` returns whatever it is given whenever that is truthy, so
-only a runner built with *no* `env` can reach the fallback. The rule drives both calls.
-Writing a rule whose subject its own fixture could not reach, inside the slice fixing
-exactly that, is the clearest argument there is for mutating every new guard.
-*(2026-10-05, from an architecture review.)*
-
-**A mechanism is named, not spelled out.** `LANDLOCK`, `BUBBLEWRAP` and
-`SANDBOX_EXEC` are a vocabulary of their own, and `MODES` is a different one that
-overlaps it on a single word: a mode is what a deployment asks for, a mechanism is
-what ended up confining the command, and `auto` is never a mechanism. Three files
-outside `confinement` branched on the spellings -- `_fence_for` twice, `doctor` once
--- so a mechanism renamed in one place would have gone on reading as *not a fence* at
-each of them, which is a shell running unfenced beside a `Confinement` reporting one.
-`LINUX_FENCES` is the pair `_fence_for` builds a runner for, and a fourth mechanism
-has to say which half it is in. *(2026-09-20.)*
-
-**A runner that says nothing keeps the fence, and one line decides it.** `local`
-defaults to `True` so a duck-typed runner is treated as local, which is the safe
-direction -- and that default was written four times: the port's property, the two
-readers in `backend.py`, and the contract kit's validator. The two in `backend.py` ask
-the same question a hundred lines apart: whether to wrap the command, and what the
-`Confinement` beside it claims.
-
-**Only the first was held.** Flipping the second left all 2,109 tests passing. With it
-wrong, a supplied local runner that declares nothing is handed
-`Confinement(wrap=_unwrapped, elsewhere=True)` -- so `execute` still takes the wrap
-branch and wraps with the identity, the shell runs with no sandbox, and the record
-beside it reports the boundary as somebody else's while warning about nothing.
-
-The test named for the rule could not see it: it builds the backend and then
-*replaces* `backend.default.confinement` two lines later, so it pins the wrap branch
-and discards the decision. That test keeps its job, says so, and
-`test_a_runner_that_says_nothing_is_confined_here` holds the other half -- asserting on
-`elsewhere` rather than on the wrapped text, because Landlock's wrap is the identity by
-design and an unchanged command is correct on Linux and a failure on macOS.
-
-`runs_locally` is the one reading now. **The contract kit keeps its own on purpose**:
-`testing.a_runner_says_where_it_runs` validates a deployment's adapter, and importing
-`core.agent.backend` there would take the kit from 70 loaded modules to
-3,104 -- measured -- to share one `getattr`, against the decision that it stays light
-enough to run in somebody else's CI. *(2026-09-25, from an architecture review. The
-second number was written as 103 and remeasured on 2026-10-16: that module reaches
-deepagents, and deepagents reaches the provider SDKs.)*
-
-**Sessions reaching each other is reported, not refused.** On macOS the sandbox denies
-the operator's home and gives the whole workspace back, for writes as well as reads, so
-one session's shell can read and change every other session's files: measured on
-2026-10-11, a second session's shell read the first's `outputs/` and wrote a file into
-it, with the workspace inside the home folder and outside it. Nothing needed the whole
-workspace; it follows from the profile's shape, and narrowing it means a profile per
-session, which the one text per workspace was built to avoid -- two turns racing to
-write one file, and a truncated profile failing open. Where no fence starts, which is
-most servers on a kernel before 6.12 without a working bubblewrap, and Docker
-Desktop's, and under `external`, nothing keeps sessions apart either.
-
-Refusing a turn there was weighed and not taken. Kingfisher is mostly run as a
-package, and a stop most ordinary servers would hit is friction for nearly every
-deployment, to protect the one case -- several people sharing a workspace -- that a
-warning can name. So `doctor`'s `sessions apart` says it in those words. It is quiet
-with one session per workspace (`KINGFISHER_SESSION_ID`), under a Linux fence, and for
-session backends `doctor` cannot see into, whose contract asks it of them. The warning
-a program sees when nothing confines the shell says it too, where the workspace holds
-many sessions. The macOS profile is left as it is; separating people on one Mac is a
-workspace each. The shipped `compose.yaml` stays `external`, for development testing
-and one person per container, and its comment says so. The system prompt no longer
-tells the agent another session's files are unreachable. *(2026-10-11.)*
-
-*No longer quiet for `KINGFISHER_SESSION_ID`*, and the unconfined warning no longer
-leaves it out: the setting pins a process to one session, not a workspace, and other
-processes may keep theirs beside it. *(2026-10-13.)*
+**Sessions reaching each other is reported, not refused.** The macOS profile gives the
+whole workspace back, so one session's shell can read and change every other's files:
+measured on 2026-10-11, a second session's shell read the first's `outputs/` and wrote
+into it. Narrowing it means a profile per session, which one text per workspace was built
+to avoid. Where no fence starts -- most servers on a kernel before 6.12 without a working
+bubblewrap, Docker Desktop, `external` -- nothing keeps sessions apart either. **Refusing
+a turn there was weighed and not taken:** kingfisher is mostly run as a package, and a
+stop most ordinary servers would hit is friction for nearly every deployment to protect
+one case, several people in a workspace, that a warning can name. So `doctor`'s
+`sessions apart` names it, quiet under a Linux fence and for backends it cannot see
+into, and so does the warning about an unconfined shell. People sharing a Mac get a
+workspace each; `compose.yaml` stays `external`, one person per container. The prompt
+does not tell the agent other sessions are unreachable. *(2026-10-11.)*
 
 **The profile's rules follow one link on `sessions`, and the two halves of that move
-together.** Every session rule in the macOS profile was built from
-`f"{Path(workspace).resolve()}/sessions"`: the workspace resolved, and the `sessions`
-component under it not. The profile matches real paths, so an operator who moves
-sessions onto another volume with one symlink -- which `ports.md` recommends as a mount
-at that same path -- put every session outside every rule. Measured with the workspace
-under the home folder, which is both where one lives and the only thing this profile
-denies wholesale: every command in the session failed at `cd`, `shell-init: error
-retrieving current directory`. Not a write refused -- the agent could not reach its own
-files at all, and the message names no fence. A symlinked *workspace* works, and is the
-control: resolution already happens at that level and stopped there.
-
-Four rules name that root, two allowing and two denying, and they now ask one function
-for it. The reason it is one function rather than four spellings is that the obvious
-half-fix is worse than the fault: with the allows resolved and the deny patterns left on
-the written path, `inputs` was writable, `rm -rf inputs` took the caller's folder, and
-`.harness` -- the pinned agent, the conversation, a paused turn -- was writable too, all
-exit 0. A break became the complete loss of the fence. The driven rule asserts both
-directions at once so neither half can be resolved alone.
-
-**One link deep is as far as a static profile reaches, and `doctor` says so.** A single
-session that is itself a link still lands where no rule names it, and no rule can: the
-profile is one text per workspace written before any session exists, which is the design
-`_session_folder_denial` already gives the reason for. That failure is the safe
-direction -- the session is unusable, not unfenced -- but it is unusable in the same
-unexplained way, so `doctor` gained a `session paths` row naming it, warning rather than
-failing because the workspace's other sessions are untouched. Quiet where the sessions
-moved all at once, which now works; quiet under a Linux fence, where `policy_for` is
-built from the session directory itself so the link is followed when it is opened; and
-quiet for session backends it cannot see into, whose own sessions are not in that
-directory. It sees only the sessions that exist when it runs. *(2026-10-15, from an
+together.** The rules resolved the workspace and not a `sessions` symlinked under it, and
+the profile matches real paths, so moving sessions to another volume, as `ports.md`
+recommends, put every session outside every rule: measured, every command failed at
+`cd`, naming no fence. A symlinked *workspace* is the control, and worked. Every rule
+naming the root asks `fenced_sessions`, because the half-fix is worse: allows resolved and
+denies not left `inputs` and `.harness` writable, exit 0. The driven rule asserts both at
+once. **One link deep is as far as a static profile reaches**: a session that is itself a
+link is unusable, the safe direction, and `doctor`'s `session paths` row warns of it;
+quiet under a Linux fence, built from the opened session directory, and for backends it
+cannot see into. *(2026-10-15, from an
 architecture review.)*
 
 **A `"` in the workspace path cost the deployment, and what a profile's regex literal
-accepts is a small dialect.** `_sb` has always escaped a quote for the profile's string
-literals, so the `subpath` and `path` rules were right. The three `regex` rules were
-built from `re.escape` alone, which leaves a quote bare -- and a quote is legal in a
-macOS directory name. Measured, with a workspace called `my "work" stuff`: the literal
-ended early, the profile did not parse, and every command came back exit 65 saying
-`sandbox-exec: unbound variable: work"`. Not a fence that stopped holding -- reads
-failed too. The message names a fragment of the operator's own directory and nothing
-about a profile.
-
-The obvious fix is wrong, and the suite said so immediately. `#"..."` is *raw*: a
-backslash reaches the regex engine as a backslash, so `re.escape`'s output belongs in
-it untouched, and escaping it for the literal -- doubling the backslashes -- broke every
-path holding a character `re.escape` escapes, `pytest-of-...` among them. Worse, `\"`
-does not put a quote in either: measured, it ends the literal exactly as a bare one
-does.
-
-So the quote is not escaped, it is matched. What that literal's engine accepts was
-measured against sandbox-exec one spelling at a time, because none of it is documented:
-`.`, `[[:punct:]]` and `[^/]` match a quote; `\x22`, `\042`, `\u0022` and even `.{1}`
-all parse and then match nothing. It is not PCRE, and the patterns these rules already
-use -- `[^/]+`, `(/|$)` -- are about the whole of what it understands. `[^/]` is the
-stand-in, over `.`, because `.` matches a separator: for a workspace called `a"b` it
-would deny `sessions/*/inputs` under a *directory* `a` holding a directory `b`, a tree
-this profile was never asked about. What `[^/]` gives up is exactness in one character
-position, which can only ever deny more, and what it reaches is another workspace's
-`inputs` or `.harness`.
-
-Two rules, and the text one is the reason both exist. It decodes each literal the way
-sbpl does -- raw, ending at the first quote -- and matches the result against the real
-paths, so it holds on every platform and would have caught the wrong escaping on CI's
-Linux job. The driven one hands the file to sandbox-exec, because a pattern Python
-compiles is not a pattern that engine compiles, which `.{1}` is the proof of.
+accepts is a small dialect.** `_sb` escapes quotes in string literals, but the `regex`
+rules took `re.escape` alone, and a quote is legal in a macOS directory name: with a
+workspace `my "work" stuff` every command exited 65 with `sandbox-exec: unbound variable:
+work"`. **The obvious fix is wrong.** `#"..."` is raw, so doubling backslashes broke every
+path `re.escape` touches, `pytest-of-...` among them, and `\"` ends the literal like a bare
+quote. Measured spelling by spelling, since none is documented: `.`, `[[:punct:]]` and
+`[^/]` match a quote, while `\x22`, `\042`, `"` and `.{1}` parse and match nothing.
+`[^/]` stands in, not `.`, which crosses a separator; it can only deny more. A text rule
+decodes each literal as sbpl does, on every platform, and a driven one hands the file to
+sandbox-exec, because a pattern Python compiles is not one that engine compiles.
 *(2026-10-15, from an architecture review.)*
 
 **Landlock, chosen against two measured alternatives.** bubblewrap works only with
-`--security-opt seccomp=unconfined`, disabling the syscall filter to gain path isolation in a
-box shared by tenants. Per-session Unix users through `setpriv` work but deny by ownership:
-every file, forever, including the ones the agent creates. Landlock denies by default, needs
-no privileges and no relaxed seccomp, and cost 0.2ms -> 0.8ms a command under Docker's default
-profile. The policy is generated, never written by hand, because the first hand-written one
-failed open: it granted `/tmp` writable while the workspace was mounted under `/tmp`, so the
-fence covered nothing, and every read succeeded, so it looked as if it worked. `Sandbox` has
-forty fields. *(Recorded in the code until 2026-10-17.)*
+`--security-opt seccomp=unconfined`, disabling the syscall filter in a box shared by
+tenants. Per-session Unix users through `setpriv` deny by ownership: every file, forever,
+the agent's own included. Landlock denies by default, needs no privileges or relaxed
+seccomp, and cost 0.2ms -> 0.8ms a command under Docker's default profile. The policy is
+generated, because the first hand-written one failed open: it granted `/tmp` writable with
+the workspace under `/tmp`, and every read succeeded, so it looked as if it worked.
+`Sandbox` has forty fields. *(Recorded in the code until 2026-10-17.)*
 
 **The macOS profile denies writes from `/` down, and headless Chrome pays for it.**
-Unsandboxed it renders a PDF in 2.0s; under the profile it fails in 0.4s with `Failed to create
-a ProcessSingleton for your profile directory`. That rule is the whole cause: the same profile
-with writes unrestricted works, and socket permissions do not help. No flag avoids it, since
-`--user-data-dir` inside the workspace still fails -- Chrome reaches `/private/var/folders/<user>`
-regardless. Allowing writes to the parent of `tempfile.gettempdir()` was verified to make
-Chrome work while `.env`, the home and the repository stay refused. It is not allowed, because
-nothing shipped needs a browser, and the model asked to stay in the workspace wrote
-`/tmp/preview.pdf` and twice tried `pip install`. *(Recorded in the code until 2026-10-17.)*
+Under the profile Chrome fails in 0.4s with `Failed to create a ProcessSingleton for your
+profile directory`, where unsandboxed it renders a PDF in 2.0s; the write rule is the
+whole cause, and no flag avoids it, since Chrome reaches `/private/var/folders/<user>`
+whatever `--user-data-dir` says. Allowing writes to the parent of
+`tempfile.gettempdir()` was verified to fix it with `.env`, the home and the repository
+still refused. Not allowed: nothing shipped needs a browser, and the model asked to stay in
+the workspace wrote `/tmp/preview.pdf` and twice tried `pip install`. *(Recorded in the
+code until 2026-10-17.)*
 
 ## Sessions: what persists and where
 
@@ -4049,2640 +2302,1475 @@ without the rest of it, which is what that document's N2 asked for -- the parts
 that need no memory-backed filesystem, first and separately.
 
 **`/runs` and `.tmp` became one `/scratch`, and a turn stopped being a place.**
-A session held two scratch directories with one purpose. `.tmp` was the shell's
-`TMPDIR` and the agent was never told about it; `runs/<turn>` was named in every
-task message and reached by the file tools. Neither was returned to a caller, and
-only one of them was ever swept -- a turn's directory stayed for the life of the
-session, counted against its quota, holding files whose own docstring said they
-"arrive fresh each round and leave with the turn". Nothing implemented that.
+A session held two scratch directories with one purpose: `.tmp`, the shell's `TMPDIR`,
+which the agent was never told about, and `runs/<turn>`, named in every task message.
+Neither was returned to a caller, and a turn's directory was never swept, so it stayed
+for the life of the session, counted against its quota. The folders were also the turn
+counter, so a session restored on another host, where nothing restores `runs/`, began
+again at `t001`. Nobody compares two turn ids -- one reaches a printed line, the run log
+and `RunResult` -- so `allocate_turn` generates one now, and a caller's own still wins.
+It buys no de-duplication on a retry, which the id never gave.
 
-**The folders were also the turn counter**, which is the part that made this more
-than a tidy-up. `allocate_turn` listed `runs/`, took the number after the highest
-and claimed the next with `create_exclusive`. So a session restored on another host
--- where nothing restores `runs/`, because only artifacts, the transcript and the
-agent snapshot are kept -- began again at `t001`. Asked who reads the sequence, the
-answer was nobody: the id reaches a printed line, the run log and `RunResult`, and
-none of them compares two. It is generated now, a caller's own id still wins, and
-what that no longer buys is de-duplication on a retry -- which was never the id, it
-was `ensure` on the same directory.
+**A request's files go to `/inputs` with the session's.** Once a turn had nowhere of its
+own, a per-turn field and a per-session one were two fields for one operation, and they
+merged. Two turns sending one name no longer keep both: the second replaces it, visibly,
+through `place_inputs`, which re-hardens the directory and reports what it replaced --
+the cost of the merge, stated rather than discovered. The per-turn `--input` went here;
+the flag and `Request.inputs` came back with the per-session meaning (see "The names a
+caller writes follow the folder" below).
 
-**A request's files go to `/data` with the session's.** `Request.inputs` and
-`Request.data` were two fields for one operation once the turn had nowhere of its
-own; `data` survived, because it names where they land and `place_data` is the
-half that re-hardens the directory and reports what it replaced. Two turns sending
-one name no longer keep both -- the second replaces it, visibly, which is the cost
-of the merge and is stated here rather than discovered.
-
-**What a reader should expect and not find:** `RunResult.virtual_dir`, which named
-a directory that no longer exists, and `run_dir`, which is `session_dir` now
-because that is what it points at. `kingfisher run --input` went with the field.
-*(2026-10-07: `--input` is back, as the only flag for a caller's files. It is
-`--data` renamed, as `Request.inputs` is `Request.data` renamed -- not the per-turn
-field and flag that went here. See "The names a caller writes follow the folder"
-below.)*
-
-**The three lifetimes are told apart by destination now**, which is what the split
-had been doing by convention: `/data` is the caller's and read-only, `/scratch` is
-the agent's and returned to nobody, `/derived` and `/memory` are what the caller
-gets back. The dot came off `.tmp` because its only reason was that the agent never
-named it -- `SESSION_DIRS` is "the names the agent addresses", and it is one now.
-
-The measured warning about path spellings survives unchanged and is worth keeping
-in view: told only the virtual form, the agent passed it to `execute` 4 times in 10,
-each failing and costing about three times the whole task. `/scratch` and `scratch`
-correspond the way every other route does, which is why the directory was renamed
-rather than given a prettier virtual name. *(2026-09-21.)*
+**The three lifetimes are told apart by destination**: `/inputs` is the caller's and
+read-only, `/scratchpad` is the agent's and returned to nobody, `/outputs` and `/memory`
+are what the caller gets back. The dot came off `.tmp` because its only reason was that
+the agent never named it, and `SESSION_DIRS` is "the names the agent addresses". Told
+only the virtual form of a path, the agent passed it to `execute` 4 times in 10, each
+failing and costing about three times the whole task; so a folder and its route
+correspond as every route does -- drop the slash -- and folders are renamed rather than
+given prettier virtual names. *(2026-09-21.)*
 
 **`execute`'s own description states the shell's path rule, and a miss is answered
-with it.** deepagents' description of the tool says "Use absolute paths", and the
-only absolute paths a model knows are the file tools', which the shell reads from the
-host's root. `system.md` says otherwise, but a subagent is built with its own prompt
-and never sees it, and the description reaches every graph holding the shell. So
-`BuiltinToolsMiddleware`, in `standing_middleware`, replaces that line with the rule
-there -- appending it when deepagents has reworded the line, which
+with it.** deepagents' description says "Use absolute paths", and the only absolute paths
+a model knows are the file tools', which the shell reads from the host's root. `system.md`
+says otherwise, but a subagent never sees it, while the description reaches every graph
+holding the shell. So `BuiltinToolsMiddleware`, in `standing_middleware`, replaces that
+line with the rule -- appending it where deepagents has reworded the line, which
 `test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_ones` then
-fails on -- and appends a correction to an `execute` result whose error names a session
-folder spelt the file tools' way. A correction rather than a rewrite of the command,
-because the miss the agent made despite `system.md` was a path inside a script the
-command ran, which no rewrite sees. Not a copy of `system.md`'s table in every
-subagent's prompt: it would contradict the description beside it, and cost every
-subagent the tokens. deepagents' own host mappings for routed mounts are left as they
-are; both spellings reach the same files. The description also says `timeout` is in
-seconds and its longest, on every shell: the line it replaces was the one that mentioned
-the timeout, and over 71 trial turns models passed milliseconds, 5,000 to 40,000, each
-refused as past the hour deepagents allows. *(2026-10-17.)*
+fails on -- and appends a correction to an `execute` error naming a session folder spelt
+the file tools' way. A correction rather than a rewrite of the command, because the miss
+the agent made despite `system.md` was a path inside a script the command ran, which no
+rewrite sees. Not `system.md`'s table copied into every subagent's prompt: it would
+contradict the description beside it, and cost every subagent the tokens. The
+description also says `timeout` is in seconds, and its longest: over 71 trial turns
+models passed milliseconds, 5,000 to 40,000, each refused as past deepagents' hour.
+*(2026-10-17.)*
 
-Measured over ten real turns each way, five of an agent running its own script and five
-of it asking `reviewer` to work in the shell: turns with a miss did not fall, 3 before
-and 4 after, which at this size is noise. What changed is what followed one. Before,
-two of the three turns that missed missed again, three times and twice, and one went
-looking for the file with `ls`; after, each of the four was right on its next call. The
-spelling moved too, from 7 host-absolute paths and 6 relative ones in 29 shell calls to
-2 and 9 in 27. *(2026-10-13.)*
+Measured over ten real turns each way, half with the agent running its own script and
+half asking `reviewer` to work in the shell: turns with a miss did not fall (3 before, 4
+after, noise at this size), but what followed one did. Before, two of the three that
+missed missed again; after, each of the four was right on its next call. Host-absolute
+spellings went from 7 in 29 shell calls to 2 in 27. *(2026-10-13.)*
 
-**Still rare, and still not worth rewriting the command.** Measured again on 2026-10-17
-over 21 real turns of two data tasks, while counting stray saves: 8 of 109 shell
-commands named a session folder the file tools' way, in 5 of the 21 turns, and all 8
-were answered with the correction. The one turn they cost anything ran out of its
-deployment's own cap of 20 tool calls with 3 of them spent here, and the cap is what lost
-its output. So the command is still not rewritten, for the reason above -- the miss that
-matters is a path inside a script no rewrite sees -- and the folders are not given
-environment variables, which the model would still have to choose to use. Reopen it on
-turns that keep missing after the correction. *(2026-10-17.)*
+**Still rare, and still not worth rewriting the command.** Over 21 real turns of two
+data tasks, 8 of 109 shell commands named a session folder the file tools' way, all 8
+answered with the correction. The one turn they cost anything ran out of its
+deployment's cap of 20 tool calls with 3 spent here, and the cap is what lost its output.
+So the command is not rewritten, and the folders get no environment variables, which the
+model would still have to choose to use. Reopen it on turns that keep missing after the
+correction. *(2026-10-17.)*
 
 **`read_file` reads 1,000 lines unless told otherwise, and says to read a file whole.**
 deepagents defaults to 100 lines and tells the model to page "instead of reading them
-whole". Measured over 71 trial turns, `read_file` was a third of every call, and 87% of
-reads named a limit themselves, mostly 100, copying the description; the turns that ran
-out of their 50 calls spent 121 calls reading. So the description changes with the
-default, through `BuiltinToolsMiddleware`, which hands each graph's model a `read_file`
-saying 1,000 and showing it as the default, and fills in 1,000 where a call names no
-limit. A limit the model names is left alone: it is a slice the model wanted. 1,000
-lines of code of ordinary width stays under deepagents' cut of a read at 80,000
-characters. deepagents is not patched for this, here or anywhere: its tools are changed
-from outside, `execute` among them, each with a test that fails when an upgrade moves
-what it changes. *(2026-10-17, from the trial transcripts.)*
+whole". Over 71 trial turns `read_file` was a third of every call, 87% of reads named a
+limit, mostly 100, copying the description, and the turns that ran out of their 50 calls
+spent 121 calls reading. So `BuiltinToolsMiddleware` hands each graph's model a
+`read_file` saying 1,000, and fills in 1,000 where a call names no limit; a limit the
+model names is a slice it wanted. 1,000 lines of ordinary width stays under deepagents'
+cut of a read at 80,000 characters. deepagents is not patched, for this or anything: its
+tools are changed from outside, each with a test that fails when an upgrade moves what it
+changes. *(2026-10-17, from the trial transcripts.)*
 
-**`grep` searches each string of `a|b`, and says so.** deepagents' `grep` is literal and
-its description says so in capitals, with `foo|bar` as the example of what not to write.
-Over 71 trial turns, 97 searches written as regex found nothing, 63 of them alternations,
-and 85% were followed by another search. `BuiltinToolsMiddleware` runs a pattern of
-non-empty strings joined by `|` as one literal search per string and answers once, each
-string's matches under a line naming it, and tells the model that is what `|` does. A
-pattern with an empty part, such as a table cell `| a |`, is searched as written, since
-an empty string matches everything. Escapes and anchors are left alone: deepagents' note
-already points at `rg` in the shell, and unescaping them would guess at what was meant.
-*(2026-10-17, from the trial transcripts.)*
+**`grep` searches each string of `a|b`, and says so.** deepagents' `grep` is literal,
+and its description gives `foo|bar` as what not to write. Over 71 trial turns, 97
+searches written as regex found nothing, 63 of them alternations, and 85% were followed
+by another search. `BuiltinToolsMiddleware` runs non-empty strings joined by `|` as one
+literal search each, answers once with each string's matches under a line naming it, and
+tells the model that is what `|` does. A pattern with an empty part, such as a table cell
+`| a |`, is searched as written, since an empty string matches everything. Escapes and
+anchors are left alone: deepagents already points at `rg` in the shell, and unescaping
+would guess at what was meant. *(2026-10-17, from the trial transcripts.)*
 
 **An agent near the end of its budget is told how many model calls it has left, and a
 subagent is held to the same budget.** Over 71 trial turns, every turn either finished in
 38 calls or fewer or ran to the 50-call limit and stopped mid-work, never told it was
 close. `StepBudgetMiddleware` reads langgraph's own step counter and limit, so it follows
 `KINGFISHER_RECURSION_LIMIT`, and from 80% of the steps adds a note as the last thing each
-model call reads: about how many calls remain after this one, three steps a call, and on
-the last call that it is the last. The note is never stored. Kept, it would be sent
-again, stale, on every later call and turn; coming after the cached part, it leaves the
-prompt cache whole; and there is only ever one. The limit stays at 150 steps.
+model call reads: about how many calls remain, at three steps a call, and on the last that
+it is the last. The note is never stored: kept, it would be resent stale on every later
+call, and coming after the cached part it leaves the prompt cache whole. The limit stays
+at 150 steps.
 
 A subagent does not run under that limit: deepagents binds 9,999 steps to the graph it
-builds, and the turn's limit overrides that for the agent's own run and not for the
-subagents run inside it. Measured under a 30-step turn, a subagent's model calls saw a
-limit of 9,999, two steps a call, and it made 41 calls, all of them one tool call to the
-agent. So `standing_middleware` holds each subagent it builds to the agent's budget in
-model calls, counted off its own conversation rather than steps, which deepagents' config
-would decide: warned from four fifths of it like the agent, and on its last allowed call
-any calls it still asks for are dropped and its text handed back headed by a line saying
-it stopped at its limit. The turn goes on, as with a subagent that gave up on cut
-replies. Enforcing it there, rather than binding a limit onto graphs deepagents compiles,
-leaves deepagents' config alone. On neutral prompts the trial after the `read_file` and
-`grep` changes had no turn reach the warning. *(2026-10-17, from the trial transcripts
-and a scripted turn.)*
+builds, and the turn's limit does not override that. Measured under a 30-step turn, a
+subagent saw 9,999 and made 41 calls. So `standing_middleware` holds each subagent to the
+agent's budget in model calls, counted off its own conversation: warned from four fifths
+of it, and on its last allowed call any tool calls it still asks for are dropped and its
+text handed back under a line saying it stopped at its limit. The turn goes on. Enforced
+there rather than by binding a limit onto graphs deepagents compiles, which leaves
+deepagents' config alone. After the `read_file` and `grep` changes, no trial turn on a
+neutral prompt reached the warning. *(2026-10-17, from the trial transcripts and a
+scripted turn.)*
 
 **What the agent is told about the shell is said by the shell.** `system.md`,
 `capability_skills.md` and `BuiltinToolsMiddleware` told every deployment's agent four
 things true only of kingfisher's own shell: it runs on the host in the session root,
 `TMPDIR` is the scratchpad, `KINGFISHER_SKILLS` is the catalogue, and every session
-folder is in reach by dropping the slash. A deployment whose shell runs elsewhere
-reported it. The prompt was built from `Config` alone, so nothing about the backend
-could reach it.
+folder is reached by dropping the slash. A deployment whose shell runs elsewhere reported
+it; the prompt was built from `Config` alone, so nothing about the backend could reach it.
 
 `runs_locally` cannot choose the wording. Measured on 2026-10-15 with the plainest runner
-a deployment writes, driven through `DefaultBackends(runner=...)`: local or not, it
-started in the process's directory, with the system's `TMPDIR`, no `KINGFISHER_SKILLS`
-and no `inputs/` in reach, because a runner is handed the command and nothing else.
-`local` says whether the fence goes in front of the command, not what the shell sees.
-The only shell kingfisher can vouch for is the one `backend_at` builds without a runner
--- on Linux, kingfisher's own fence, which is handed the session directory and the
-environment.
+a deployment writes, through `LocalSessions(runner=...)`: local or not, it started in the
+process's directory, with the system's `TMPDIR`, no `KINGFISHER_SKILLS` and no `inputs/`,
+because a runner is handed the command and nothing else. `local` says whether the fence
+goes in front of the command, not what the shell sees. The only shell kingfisher can vouch
+for is the one `backend_at` builds without a runner.
 
-So the shell carries a `ShellPrompt`: a section for the agent's prompt, a paragraph after
-the skills section, and the line in `execute`'s description. Three parts, because three
-readers see different ones: a single string could not know whether skills are on, and
+So the shell carries a `ShellPrompt` in three parts -- a section of the agent's prompt, a
+paragraph after the skills section, and the line in `execute`'s description -- because
+three readers see different ones: one string could not know whether skills are on, and
 would never reach a subagent, which is told only the description. Kingfisher's own shell
-carries its wording, moved into `shell_here*.md` with every sentence kept bar the two about
-`TMPDIR`, which are one now; a runner's is handed in beside the runner; a deployment's
-sandbox sets the attribute. A shell saying nothing is described
+carries its wording in `shell_here.md` and its siblings; a runner's is handed in beside
+the runner; a deployment's sandbox sets the attribute. A shell saying nothing is described
 neutrally -- only what holds wherever a shell runs, and deepagents' own `execute` line --
-rather than refused: the neutral wording misleads nobody, and a refusal would stop a
+rather than refused: neutral wording misleads nobody, and a refusal would stop a
 deployment until it wrote prose. A part left `None` is neutral, and `""` says nothing.
 
 **Two sentences the base prompt stated unconditionally, and a blank nobody could
-misspell loudly enough.** Making the shell's four claims conditional left three things
-of the same kind behind, each found by driving rather than reading.
+misspell loudly enough.** Each was found by driving rather than reading.
 
-*The inputs folder is not read-only "by the filesystem itself".* `system.md` said writes
-under it are denied "at the tool level **and** by the filesystem itself". The second half
-is a fence, and `off` and `external` are supported settings: measured, with the sandbox
-off, `chmod u+w` and the same write replaced the caller's file and `rm -rf` took the
-folder, both exit 0. `harness/agent.py` records that exact measurement in the present
-tense a few lines from the code that drops the bits, so the prompt was contradicted by
-its own repository -- and this was the *fifth* sighting of that sentence: #743 corrected
-it in the permissions helper, in a test docstring and in the contract kit, and left it in
-the text the model reads every turn. The prompt claims the file-tool half now, which
-holds on every run, and a rule drives a real `write_file` under all three confinement
-settings rather than asserting the new wording alone. What the fence does is the
-operator's to know, and `doctor` is where they hear it.
+*The inputs folder is not read-only "by the filesystem itself".* That half is a fence, and
+`off` and `external` are supported settings: with the sandbox off, `chmod u+w` and a write
+replaced the caller's file and `rm -rf` took the folder, both exit 0. The prompt claims
+only the file-tool half, which holds on every run, and a rule drives a real `write_file`
+under all three confinement settings rather than asserting the wording. What the fence
+does is the operator's to know, from `doctor`.
 
-*"One of two places, and never anywhere else" is false the moment memory is on.* The
-same composed prompt then tells the agent to record things, and
-`write_file("/memory/AGENTS.md", ...)` succeeds and comes back as an artifact. The
-sentence names what is *not* the agent's to write now, rather than counting what is: a
-count is a claim an optional section can break, and the absolute form is the composition
-hazard this section already fixed once for the shell.
+*"One of two places, and never anywhere else" is false the moment memory is on*, since the
+same prompt then tells the agent to write `/memory`. The sentence names what is *not* the
+agent's to write, rather than counting what is: a count is a claim an optional section can
+break.
 
-*And a blank spelt wrong three ways was neither refused nor filled.* The scan for a
-`{{leaf}}` matched `\w+`, so it saw neither a space, a hyphen nor a dot: `{{ inputs }}`,
-`{{tool-results}}` and `{{inputs.dir}}` passed the refusal and then passed the fill,
-reaching the model as braces in wording a deployment had customised and been told
-nothing about -- while `{{inptus}}` was refused, which is what made the gate read as
-working. One pattern serves the refusal and the fill on purpose, so a blank either is
-wrong about is one the other reports; widening it to anything between doubled braces
-fixed both, and the rule drives all four misspellings across all three parts. Every
-doubled brace in the shipped prompts was checked against the leaves first: all five are
-real. *(2026-10-16, from an architecture review.)*
-
-**On the shell, not on the session backends.** The session backends are what a deployment
-subclasses, and the subclass `ports.md` shows swaps in a sandbox of its own. On the class,
-the wording would be inherited, and that sandbox's agents told it was kingfisher's. On the
-shell, a sandbox is neutral until it says something, and what it says sits beside the code
-deciding what it sees. Its blanks are filled from the layout as kingfisher's are, and one
-no layout has is refused when the `ShellPrompt` is made rather than on the first turn.
-`shell_prompt=` without a runner is refused: kingfisher's own shell describes itself, and
-`deployment_prompt` is where standing instructions go.
-
-The correction on a missed path goes only to a shell that starts in the session root,
-since it spells the path from there: one whose `ShellPrompt` says `starts_in_session`,
-which kingfisher's own does. Building this found a subagent's guards made without
-the layout, so a renamed `inputs` reached a subagent's `execute` line as `/inputs`; they
-are handed it now. deepagents' own host paths were left for a change of their own, the
-next entry. *(2026-10-15.)*
-
-**deepagents' host paths reach only a shell on this host.** deepagents appends a section
-giving each routed folder's path on this host to any shell of its local class, and
-kingfisher's shell is that class whatever runner it holds -- so an agent whose commands
-ran on another machine was told to use paths only this one has, right beside a
-`ShellPrompt` telling it to check. `BuiltinToolsMiddleware` takes the section out where
-the shell is not kingfisher's own on this host: a runner whose `local` is false, or a
-shell of a deployment's own. A local runner keeps it, since its paths are real there.
-
-Removed rather than corrected. Making a remote runner's shell a class deepagents reads
-as remote would have it say instead that those folders are out of the shell's reach,
-which is as much a guess, and would contradict a deployment whose `ShellPrompt` says its
-sandbox mirrors them -- with no way for that deployment to turn it off. Removed, the
-shell's own wording is the one thing the agent hears about it, which is the rule the
-entry above set. A deployment's own shell loses deepagents' section too, for the same
-reason: deepagents cannot know what that shell sees, and its `ShellPrompt` can.
-
-Taken out by block, matched on deepagents' heading, because the section arrives as a
-system-message block of its own; one that deepagents merged into other text would be
-left whole, and `test_deepagents_host_paths_reach_only_a_shell_on_this_host` would fail
-on it. `standing_middleware` is handed the turn's backend rather than what was read off
-it, so the `execute` line and this section are asked of the same shell. *(2026-10-15.)*
-
-**`HOME` is `scratch` too, and `.home` is gone.** The shell's `HOME` had a
-directory of its own so that whatever a tool caches under `~` would land in the
-session that caused it, be swept by `reap` and be counted by `session_bytes`.
-Asked what writes there, the answer was nothing: the harness only exports the
-path, workspace tools run in the kingfisher process and resolve `~` against the
-operator's home, and no shipped asset runs pip or anything else that caches. The
-one `.home` on disk was empty. `scratch` already has every property the job
-needs -- per session, swept, counted, writable under all three fences, and
-`TMPDIR` besides -- so `HOME` points there, and the fence grants one directory
-fewer. What a reader should not look for: `AGENT_HOME`, `agent_home()` and
-`SESSION_PLUMBING`, which held only `.harness` once `.home` left it and is spelled
-`HARNESS` where it is used. If a tool ever does cache under `~`, the agent will see
-a dot-directory in its own scratch, which is the cost this accepts. *(2026-09-24.)*
-
-**`/scratch` is `/scratchpad`.** The name the agent types, in both spellings, and
-the shell's `HOME` and `TMPDIR` with it. One constant moved; the rest was the
-prompt, which no test tied to the layout until this change added one -- the table
-in `system.md` could have kept teaching `/scratch` with everything green. A session
-made before the rename keeps its old `scratch/` beside a new empty `scratchpad/`
-until it is reaped; nothing in it was ever returned to a caller, so nothing is lost,
-and a resumed conversation that reaches for `/scratch` is refused or writes a file
-no later turn is told about. Entries above that say `scratch` meant this directory
-under its old name. *(2026-09-24.)*
-
-**A session's history is kingfisher's own records, not a framework's.**
-`domain/transcript.py` holds it, and it keeps what the agent *did* as well as
-what it said -- tool calls and results, not only human and assistant text, since
-an agent that cannot see what it already did will do it again. Portable on
-purpose: the next turn may not be run by this harness.
-
-**The checkpointer is in-memory, and the transcript is what survives.** So a
-turn's *working* state does not cross a turn boundary even though its
-conversation does -- an agent resuming a session does not find a half-finished
-`TodoListMiddleware` checklist it has no memory of writing, for a task the caller
-may have dropped. That is structural rather than enforced, so it is asserted.
-*(A deployment could once take it back by passing a persistent saver as `threads=`. That
-went on 2026-10-17; see "Dropped: a deployment's own saver" below.)*
-
-That is a change in what a checkpointer is *for* here rather than a cheaper way
-to do the same job: a checkpoint preserves resumable graph state, and kingfisher never
-resumes a graph -- no `checkpoint_id`, no `interrupt()` anywhere. What is left
-for a saver is one turn's supersteps.
-
-**Narrowed once, for approval gates.** kingfisher resumes a graph now, in exactly
-one case: a turn that stopped at an `interrupt_on` gate writes what its saver
-holds into `.harness/paused.state`, and a `Resume` reads it back and continues
-that graph. Everything above still holds for every other turn -- nothing is kept
-unless a turn stopped to ask, and it is dropped the moment one is answered or
-superseded, so an ordinary turn still starts with empty channels and no agent
-resumes into a checklist it does not remember writing.
-
-What that file is, is a consequence of where it lives. `.harness` is refused to
-the file tools, but `execute` bypasses those entirely and what refuses the shell
-is `confinement._session_folder_denial` -- a macOS profile, on one platform, that a
-deployment can switch off. So the checkpoint is msgpack through langgraph's own
-serialiser, which neither writes nor reads a pickle. That is also why it is not
-`InMemorySaver(factory=PersistentDict)`, the persistence seam langgraph ships
-for this and the obvious thing to reach for: it is unconditionally pickle, and a
-tampered pickle read back is arbitrary code at resume time where a tampered
-msgpack is only bad graph state.
-
-The pending writes go with the checkpoint, which is the half worth writing down.
-A turn can stop on one gated call while a sibling in the same superstep has
-already run; drop those writes and the sibling runs *again* on resume, which for
-an approval gate means a tool firing twice for one decision. Both paths end in
-identical state, so nothing but a side effect can tell them apart. *(2026-09-22.)*
-
-**Dropped: a deployment's own saver.** `threads=` let a deployment hand every turn a
-langgraph saver of its own, one every session shared or one made per session. Driven
-on 2026-10-17 it had four faults, and one cause -- a saver that remembers earlier turns,
-beside a transcript that is replayed into each of them:
-
-  - every follow-up turn's model saw the earlier exchanges twice, once from the saver
-    and once from the transcript;
-  - a turn that stopped at a gate crashed as it ended, on any saver but
-    `InMemorySaver`, because writing the pause reads `InMemorySaver`'s own mappings;
-  - on a shared `InMemorySaver`, the pause written into one session carried every
-    session's checkpoints;
-  - a resume ran on a copy read back from that file, so the deployment's saver never
-    saw the turn it finished.
-
-A normal turn needs a saver only for its own length: the end of the turn reads the final
-state once, which is how the transcript is written. So a deployment's saver bought
-nothing kingfisher's did not, and the pause file already keeps a paused turn inside the
-session. Removed with `checkpointer=` on `run` and `stream`, `Plugins.threads`,
-`SharedThreads`, and the sweep in `reap` for threads no session owned;
-`test_a_follow_up_turn_hands_the_model_the_earlier_exchange_once` holds the doubling.
-
-**Not taken: a thread per turn in the deployment's saver.** It fixed all four and kept
-the plugin, for a use nobody had named -- keeping each turn's step-by-step state for a
-deployment's own tools to read. *(2026-10-17.)*
-
-**A pre-built graph runs on the turn's saver too.** A graph passed as `graph=` ran on the
-saver it was compiled with, and so had both halves of the fault above, whichever it was
-compiled with: on a saver of its own, every follow-up turn's model saw the earlier
-exchanges twice; on none, the end of the turn had no state to read and wrote no
-transcript, so every turn started with no history at all. A pause kept in its own saver
-also lived only as long as the process. Each turn now runs `graph.copy` with the turn's
-saver in place of its own, which is what a definition-built agent gets.
-*(2026-10-17.)*
-
-**The mark beside it records the agent the turn ran, not the one the request named.**
-It recorded `request.agent`, and a session's agent is fixed when it opens -- so every
-turn after the first names nothing, and a pause on one of those recorded `""`.
-`_refuse_stale_pause` then compared every resume against nothing. Measured through the
-service on a session plainly running `analyst`: a resume naming `analyst` was refused
-as *"paused under agent 'none', and this resume names 'analyst'"*, and a resume naming a
-different agent was refused with the same wrong sentence. The field's own comment had
-said *"which agent this turn's graph was built from"* all along; it was filled from the
-request.
-
-The rule that was supposed to hold this passed throughout, and the reason is worth
-keeping: it ran on an injected graph under no policy, where `_claimed` resolves no
-agent at all. With nothing recorded, "a resume naming a *different* agent" was refused
-the same way every name was -- so the rule passed for the correct name too. It is driven
-on a session with a pinned agent now, and the accepting half it never had sits beside it.
-
-**Nothing recorded is not a mismatch.** A deployment that supplies its own graph and
-declares no policy never resolves an agent, and a *request* naming one there is not
-refused either -- so a resume carrying the same name meant two different things
-depending on which call it rode in on. The `agent` clause now fires only where an agent
-was actually recorded; the other direction, a resume naming an agent the session is not
-running, is also refused by the pin in `_agent_for`, but this check stays ahead of it
-because the paused state is deserialised first. *(2026-10-01, from an architecture
+*A blank spelt wrong was neither refused nor filled.* The scan for a `{{leaf}}` matched
+`\w+`, so `{{ inputs }}`, `{{tool-results}}` and `{{inputs.dir}}` passed the refusal and
+the fill and reached the model as braces, while `{{inptus}}` was refused, which made the
+gate look as if it worked. One pattern serves both on purpose, so a blank either is wrong
+about the other reports; it matches anything between doubled braces now, and the rule
+drives all four misspellings across all three parts. *(2026-10-16, from an architecture
 review.)*
 
-The three things the old per-session sqlite bought all survive by another route,
-which was measured rather than assumed. A conversation deleted with its directory
-(one workspace held 132 orphaned threads after every session had been reaped), a
-conversation the quota can see, and no cross-session contention (at 32 concurrent
-writers the slowest went from 363ms on a shared file to 80ms on its own). The
-transcript is a file in the session, so the first two hold; nothing is shared, so
-the third has nothing to contend for. What is genuinely gone is ~20KB of empty
-database per session, which was the cost rather than the benefit.
+**On the shell, not on the session backends.** The session backends are what a deployment
+subclasses, and the subclass `ports.md` shows swaps in a sandbox of its own: on the class,
+the wording would be inherited and that sandbox's agents told it was kingfisher's. On the
+shell, a sandbox is neutral until it says something, and what it says sits beside the code
+deciding what it sees. A blank no layout has is refused when the `ShellPrompt` is made,
+not on the first turn. `shell_prompt=` without a runner is refused: kingfisher's own shell
+describes itself, and instructions for every agent go in the instructions file or
+`instructions=` on `Kingfisher`. The correction on a missed path goes only to a shell whose
+`ShellPrompt` says `starts_in_session`, since it spells the path from the session root.
+*(2026-10-15.)*
+
+**deepagents' host paths reach only a shell on this host.** deepagents appends a section
+giving each routed folder's host path to any shell of its local class, which kingfisher's
+is whatever runner it holds -- so an agent whose commands ran elsewhere was told paths only
+this machine has. `BuiltinToolsMiddleware` takes the section out where the shell is not
+kingfisher's own on this host: a runner whose `local` is false, or a deployment's own
+shell. A local runner keeps it, since its paths are real there. Removed rather than
+corrected: making a remote shell a class deepagents reads as remote would have it say the
+folders are out of reach, as much a guess, contradicting a deployment whose `ShellPrompt`
+says its sandbox mirrors them, with no way to turn it off. Taken out by block, matched on
+deepagents' heading, because the section arrives as a system-message block of its own;
+merged into other text it would be left whole, and
+`test_deepagents_host_paths_reach_only_a_shell_on_this_host` would fail.
+`standing_middleware` is handed the turn's backend, so the `execute` line and this section
+are asked of the same shell. *(2026-10-15.)*
+
+**`HOME` is `scratch` too, and `.home` is gone.** `HOME` had a directory of its own so
+that whatever a tool caches under `~` would land in the session, be swept by `reap` and be
+counted by `session_bytes`. Nothing wrote there: workspace tools run in the kingfisher
+process and resolve `~` against the operator's home, no shipped asset caches, and the one
+`.home` on disk was empty. The scratchpad already has every property the job needs -- per
+session, swept, counted, writable under all three fences, and `TMPDIR` besides -- so
+`HOME` points there, and the fence grants one directory fewer. A tool that does cache
+under `~` leaves a dot-directory in the agent's scratchpad, which is the cost accepted.
+*(2026-09-24.)*
+
+**`/scratch` is `/scratchpad`.** The name the agent types, in both spellings, and the
+shell's `HOME` and `TMPDIR` with it. One constant moved; the rest was the prompt, which a
+test now ties to the layout -- without it, `system.md` could have kept teaching `/scratch`
+with everything green. *(2026-09-24.)*
+
+**A session's history is kingfisher's own records, not a framework's.**
+`core/session/transcript.py` keeps what the agent *did* as well as what it said -- tool
+calls and results, not only human and assistant text -- since an agent that cannot see
+what it already did will do it again. Portable on purpose: the next turn may not be run by
+this harness.
+
+**The checkpointer is in-memory, and the transcript is what survives.** So a turn's
+*working* state does not cross a turn boundary though its conversation does: an agent
+resuming a session does not find a half-finished `TodoListMiddleware` checklist it has no
+memory of writing, for a task the caller may have dropped. That is structural rather than
+enforced, so it is asserted. A checkpoint preserves resumable graph state, and kingfisher
+resumes a graph only in the one case below, so what is left for a saver is one turn's
+supersteps.
+
+**Narrowed once, for approval gates.** A turn stopped at an `interrupt_on` gate writes what
+its saver holds into `.harness/paused.state`, and a `Resume` reads it back and continues
+that graph. Nothing is kept unless a turn stopped to ask, and it is dropped once answered
+or superseded, so an ordinary turn still starts with empty channels. The file tools are
+refused that file, but `execute` bypasses them and what refuses the shell is a fence a
+deployment can switch off. So the checkpoint is msgpack through langgraph's serialiser,
+and not `InMemorySaver(factory=PersistentDict)`, the persistence seam langgraph ships and
+the obvious thing to reach for: it is unconditionally pickle, and a tampered pickle read
+back is arbitrary code at resume time where tampered msgpack is only bad graph state.
+
+The pending writes go with the checkpoint. A turn can stop on one gated call while a
+sibling in the same superstep has already run; drop those writes and the sibling runs
+*again* on resume -- a tool firing twice for one decision, in identical end state, so
+nothing but the side effect tells them apart. *(2026-09-22.)*
+
+**Dropped: a deployment's own saver.** `threads=` let a deployment hand every turn a
+langgraph saver of its own. Driven on 2026-10-17 it had four faults with one cause -- a
+saver remembering earlier turns, beside a transcript replayed into each: every follow-up
+turn's model saw the earlier exchanges twice; a turn stopping at a gate crashed as it
+ended on any saver but `InMemorySaver`, whose own mappings writing the pause reads; on a
+shared `InMemorySaver`, one session's pause carried every session's checkpoints; and a
+resume ran on a copy read from that file, so the deployment's saver never saw the turn it
+finished. A turn needs a saver only for its own length -- its end reads the final state
+once, to write the transcript -- so a deployment's saver bought nothing, and the pause
+file already keeps a paused turn in the session. Removed with `checkpointer=` on `run` and
+`stream`, `Plugins.threads`, `SharedThreads` and `reap`'s sweep of threads no session
+owned; `test_a_follow_up_turn_hands_the_model_the_earlier_exchange_once` holds the
+doubling.
+
+**Not taken: a thread per turn in the deployment's saver.** It fixed all four and kept the
+plugin, for a use nobody had named -- each turn's step-by-step state for a deployment's own
+tools to read. *(2026-10-17.)*
+
+**A pre-built graph runs on the turn's saver too.** A graph passed as `graph=` ran on the
+saver it was compiled with, so on a saver of its own every follow-up turn saw the earlier
+exchanges twice, and on none the turn had no final state to read and wrote no transcript.
+Each turn now runs `graph.copy` with the turn's saver, as a definition-built agent does.
+*(2026-10-17.)*
+
+**The mark beside it records the agent the turn ran, not the one the request named.** A
+session's agent is fixed when it opens, so every turn after the first names none, and a
+pause recorded from the request recorded `""`: a resume naming the session's own agent
+was refused as *"paused under agent 'none'"*, and one naming another agent with the same
+wrong sentence. The rule meant to hold this passed throughout, because it ran on an
+injected graph under no policy, where no agent resolves, so it refused every name alike,
+the right one too. It is driven on a session with a pinned agent now, beside the
+accepting half it never had.
+
+**Nothing recorded is not a mismatch.** A deployment that supplies its own graph and no
+policy never resolves an agent, and a *request* naming one is not refused there, so a
+resume must not be either. The `agent` clause fires only where an agent was recorded. A
+resume naming an agent the session is not running is also refused by the pin in
+`_agent_for`, but `_refuse_stale_pause` stays ahead of it because the paused state is
+deserialised first. *(2026-10-01, from an architecture review.)*
+
+What the old per-session sqlite bought survives by another route, measured rather than
+assumed: a conversation deleted with its session (one workspace held 132 orphaned threads
+after every session was reaped), a conversation the quota can see, and no cross-session
+contention (at 32 concurrent writers the slowest went from 363ms on a shared file to 80ms
+on its own). The transcript is a file in the session, and nothing is shared. What went is
+~20KB of empty database per session, which was the cost.
 
 **Sqlite is gone entirely, and so are the two dependencies that carried it.**
-`langgraph-checkpoint-sqlite` and `aiosqlite` were what N13 asked to drop, and
-the transcript work shipped without them because two exported builders still
-needed them: `build_checkpointer` and `async_checkpointer`, one database per
-workspace, for a deployment that wanted one shared file on purpose.
-
-The reason they were public expired. `async_checkpointer` was exported because
-`astream` refused to run without an async saver -- `SqliteSaver` raises on
-`aget_tuple` -- and the server, the first consumer outside the package, opened
-one for the life of the process. `InMemorySaver` implements both halves, so the
-server stopped opening one, and what was left was two builders whose only
-callers in this repository were their own tests, plus the shape the library had
-deliberately moved away from: one database shared by every session.
-
-Removed rather than kept for symmetry. A deployment that wants durable graph
-state passes `threads=` its own saver, which is three lines it controls against
-a hundred kingfisher carries and two dependencies every install pays for. That
-it is a breaking change to a public surface is why it is written down here, and
-`0.1.0` is when such a change costs least. *(2026-09-04. The service stopped
-opening one first, separately, so the removal landed on a tree where nothing
-used it. Reversed 2026-10-17 in the part that sent a deployment to `threads=`: there
-is none -- see "Dropped: a deployment's own saver".)*
-
-**A saver factory is handed the session's id, not its directory.** It was handed
-`<workspace>/sessions/<id>` so the per-session sqlite above could live inside the
-session it belonged to. That database is gone, and since a session became its backend
-the directory is not the session either: one its backend keeps elsewhere has none
-here, and a factory handed one would put its saver beside nothing. `SessionBackends.open`
-takes the id for the same reason. A factory that does want a file per session on this
-host builds the path from its own configuration. *(2026-10-05. Gone with `threads=`
-on 2026-10-17.)*
+`langgraph-checkpoint-sqlite` and `aiosqlite`, which N13 asked to drop, outlived the
+transcript only for `build_checkpointer` and `async_checkpointer`, exported builders of
+one database per workspace. The second existed because `astream` refused a saver without
+async methods -- `SqliteSaver` raises on `aget_tuple` -- and `InMemorySaver` implements
+both halves, which left two builders whose only callers were their own tests, in the shape
+the library had moved away from: one database shared by every session. Removed rather than
+kept for symmetry, a breaking change made at `0.1.0`, when it costs least. *(2026-09-04.
+Its pointer to `threads=` for durable graph state was reversed on 2026-10-17: see "Dropped:
+a deployment's own saver".)*
 
 **`doctor` checks whether a memory-backed workspace can be filled safely.**
-`workspace/backing.py` reads the filesystem type, its size, the cgroup limit
-and
-whether swap is permitted; `presentation/cli/health.py` reports on them. The
-danger it names is specific: a memory filesystem *larger* than the container's
-limit does not fail when it fills -- the kernel swaps its pages out, which is
-data at rest, arrived at silently, with the write succeeding and no error
-anywhere. Only a filesystem smaller than the limit gives a clean `ENOSPC`.
+`core/backing.py` reads the filesystem type, its size, the cgroup limit and whether swap
+is permitted, and `cli/health.py` reports them. A memory filesystem *larger* than the
+container's limit does not fail when it fills: the kernel swaps its pages out, which is
+data at rest, arrived at silently, with the write succeeding. Only one smaller than the
+limit gives a clean `ENOSPC`.
 
-**The run log never crosses the wire.** `run_dir` and `log_path` are typed `Path`
-in the domain so `json.dumps` raises rather than quietly stringifying them, and
-`service/payloads.py` was the one place that knew to leave them behind. A
-mirrored pydantic model would have been a second home for that rule, and the kind
-that gets it wrong helpfully -- adding a `Path` serialiser makes the error go away
-and ships exactly the leak. The service and its payloads went on 2026-09-15; the
-fields are still `Path`, so a caller serialising a result meets the same refusal.
-*(`log_path` went on 2026-09-30, with the run log leaving the session for
-`RunEvents`, and `session_dir` on 2026-10-01, when a session stopped being a folder
-on this host. Nothing in a result is a host path now, so a result serialises whole:
-`artifacts` names files relative to the session, and `Kingfisher.artifact` fetches
-them.)*
+**The run log never crosses the wire.** Nothing in a result is a host path, so a result
+serialises whole: `artifacts` names files relative to the session, and `Session.artifact`
+fetches them. While a result carried host paths they were typed `Path`, so `json.dumps`
+raised rather than stringifying them. Rejected: a mirrored pydantic model, a second home
+for that rule and the kind that gets it wrong helpfully -- a `Path` serialiser makes the
+error go away and ships exactly the leak. *(2026-09-15.)*
 
 **The session quota is checked between turns and never during one.** This reverses
-what *Nothing at rest* argued: N11 said the bound could be metered on the
-tool-call hook because kingfisher already wraps every tool call. It cannot.
-`execute` writes without any file tool seeing it, so a turn already running can
-exceed the bound and only a filesystem quota underneath could stop it. What the
-check prevents is the next turn making it worse.
-**A session's files reach a store the deployment wired, and its directory is a
-port too.** `SessionStore` -- `fetch`, `save`, `knows`, `forget` -- is the missing
-half of a symmetry this package then had: bytes arrived through a door
-(`FileStore`, `DefinitionStore`, both since removed) and left through a host path,
-which only ever worked for a caller sharing that host. `SessionRoot` is the other half, handing
-back the one directory a turn addresses everything from, as a context manager so
-that a mount is released when the turn ends however it ended. `LocalSessionRoot`
-is the default root; there is no store unless one is named, and
-`KINGFISHER_SESSION_STORE` naming a directory gets a `LocalSessionStore`. **A local
-directory is a perfectly good implementation of either** -- what the constraint forbids is kingfisher
-*assuming* a disk, not a deployment choosing one.
+*Nothing at rest*'s N11, which said the bound could be metered on the tool-call hook
+because kingfisher wraps every tool call. It cannot: `execute` writes without any file tool
+seeing it, so only a filesystem quota underneath could stop a running turn. The check
+stops the next turn making it worse.
 
-**A session owns what it costs: everything per-session lives in the session.**
-Four things did not. The agent a session opened with, its conversation, the lock
-a turn holds and its run log sat under `state_dir`, one directory per kind keyed
-by session id, and the shell's `TMPDIR` was one directory shared by the whole
-workspace. Two properties this page already states about single files -- deleted
-with the session, counted by `session_bytes` -- were true of none of them.
+**A session's files reach a store the deployment wired, and its directory is a port
+too.** `SessionStore` and `SessionRoot` were built because bytes left a session through a
+host path, which only worked for a caller on that host; both went on 2026-09-30, when the
+backend became where a session is (*A session is its backend*). What carried over: **a
+local directory is a perfectly good implementation** -- what the constraint forbids is
+kingfisher *assuming* a disk, not a deployment choosing one.
 
-Nothing swept them. `delete_session` removes the directory, the thread and the
-store's copy; `reap` sweeps expired sessions; neither ever touched
-`<state_dir>/agents/<id>.yaml` or `<state_dir>/runs/<id>.jsonl`, so a workspace
-kept one of each per session that had ever existed. The same shape as the 132
-orphaned threads above, arrived at by a different route.
+**A session owns what it costs: everything per-session lives in the session.** Four things
+did not: a session's pinned agent, its conversation, a turn's lock and its run log sat
+under `state_dir`, one directory per kind keyed by id, and the shell's `TMPDIR` was shared
+by the workspace. None was deleted with the session or counted by `session_bytes`, and
+nothing swept them -- the 132 orphaned threads again, by another route. And shared scratch
+was a channel between tenants: every fence granted it writable, so what one caller's agent
+derived, another's could read.
 
-And shared scratch was a channel between tenants: both fences granted it
-writable, so what one caller's agent derived sat where another caller's agent
-could read it. `prepare_scratch`'s `0700` check was written about other Unix
-users on the host and had nothing to say about other sessions.
+**Uniform rather than by size**, which is the decision worth recording. Moving the large
+things and leaving the small -- the pin is a kilobyte, a claim an empty directory -- buys
+the same two properties for a smaller diff, and is where the reasoning would have gone to
+hide: the pin is small, and it is also the file that decides which endpoint a session's
+prompts reach and whose credentials pay. A layout whose rule is "unless it is small"
+cannot be checked by reading it.
 
-**Uniform rather than by size**, which is the decision worth recording. Moving
-the large things and leaving the small ones -- the pin is a kilobyte, a claim is
-an empty directory -- buys the same two properties for a smaller diff, and is
-where the reasoning would have gone to hide: the pin is small, and it is also the
-file that decides which endpoint a session's prompts reach and whose credentials
-pay. A layout whose rule is "unless it is small" cannot be checked by reading it.
+**Two enforcement points, because one is bypassable.** `.harness` carries read *and* write
+denies for the file tools and a rule in the fence for the shell. The read deny makes it
+invisible rather than visibly forbidden: a deny filters entries out of `ls`, `glob` and
+`grep` instead of erroring, so the model never sees a directory it would then try to open.
 
-**Two enforcement points, because one is bypassable.** `.harness` carries read
-*and* write denies for the file tools and a rule in the sandbox for the shell.
-The read deny is what makes it invisible rather than visibly forbidden: a deny
-filters entries out of `ls`, `glob` and `grep` instead of erroring, so the model
-never sees a directory it would then try to open.
+**The pin crosses a machine now, which closed a hole rather than tidying one.** Kept
+outside what travelled with a session, it was missing on another host, so the session
+re-pinned from *that* host's catalogue and took whatever agent the request named --
+*"a session is fixed to the agent it opened with"* held on one machine and failed across
+two. It lives in the session's `.harness`, wherever the session's backend keeps it. The run
+log does not: it is diagnostics, and goes to `RunEvents`.
 
-**The pin crosses a machine now, which closed a hole rather than tidying one.**
-It lived where `SessionStore` never saw it, so a session resumed on another host
-found none, re-pinned from *that* host's catalogue, and accepted whatever agent
-the request named -- *"a session is fixed to the agent it opened with"* held on
-one machine and quietly failed across two. `keep_from` carries it beside the
-transcript. The claim and the run log stay behind: a restored claim would make
-the session look busy for `claim_stale_after` -- minutes -- and the log is
-diagnostics that would be re-uploaded whole every turn.
-
-**The claim moving in deleted `_discard_dead_claims` outright.** It existed
-because a claim could outlive the session it named; one inside that session
-cannot. `busy` is a stat per session rather than a listing of a shared directory,
-which is the cost. *(The claim has since moved onto the session's backend, as
-`SessionClaims`; see "A session is its backend".)*
-
+**The claim moving in deleted `_discard_dead_claims` outright.** It existed because a claim
+could outlive the session it named; one inside that session cannot. The cost is that
+`busy` is asked per session rather than read from one listing. The claim is on the
+session's backend now; see *A session is its backend*.
 
 **A constant's property and a constant's wiring need separate rules.**
 `claim_stale_after` is the turn deadline plus the longest model timeout, so a claim
-outlives the window a turn stops *in* -- and a rule was written for exactly that. It
-supplies the constant by hand at every call, which holds the property and says nothing
-about whether `_admit` passes it. Measured on 2026-10-11: reinstating the original bug
-at that call site -- `stale_after=cfg.turn_timeout_s` -- left all 2,546 tests green,
-while the same mutation at `Disposal` reddens
-`test_retention_and_claim_agree_on_when_a_claim_went_stale`. One of the constant's two
-readers was held and the other was not.
-
-The wiring is watched at the `claim` seam rather than raced: a turn runs, and what it
-passed is recorded. The rule also asserts that the two numbers *differ*, because they
-were the same number once and a rule comparing against either would have passed then --
-which is the shape this review kept finding, in a rule written to prevent it.
+outlives the window a turn stops *in*, and a rule held that by supplying the constant at
+every call -- which says nothing of whether a turn passes it. Measured on 2026-10-11:
+reinstating the original bug at the turn's call site, `stale_after=cfg.turn_timeout_s`,
+left all 2,546 tests green, while the same mutation at `Disposal` reddens
+`test_retention_and_claim_agree_on_when_a_claim_went_stale`. The wiring is now watched at
+the `claim` seam rather than raced, and the rule asserts the two numbers *differ*: they
+were once the same, and a rule comparing against either would have passed then.
 *(2026-10-11, from an architecture review.)*
 
-**A sweep that removes nothing says which reason spared each session.** `expired` folds
-a busy session into `kept`, and `reap` had only that count and the age -- so it blamed
-the age for a session `kingfisher sessions` prints as hours idle. Two commands
-contradicting each other on one workspace, and the advice that followed could not work:
-no age sweeps a session a turn is running in, so `--older-than sweeps on a shorter age`
-sent a reader to try something that was never going to help. `--older-than 0`, which the
-flag's own help glosses as "every session no turn is running in", read as `none ... has
-been idle longer than <1m`.
-
-`SweepPlan` and `SweepResult` carry the busy count now, which is the difference between
-the two `expired` calls `Disposal` already makes -- the first to find which sessions are
-old enough to ask the claim question of, the second to take the running ones out. Three
+**A sweep that removes nothing says which reason spared each session.** `expired` folds a
+busy session into `kept`, so `reap` blamed the age for a session `kingfisher sessions`
+printed as hours idle, and sent the reader to a shorter `--older-than`, which no age can
+help: none sweeps a session a turn is running in. `SweepPlan` and `SweepResult` carry the
+busy count, the difference between the two `expired` calls `Disposal` already makes. Three
 sentences rather than one, because three things can be true: every survivor is busy, some
-are and the rest are too young, or the age is genuinely what decided. The last is the
-control, and it is what the pre-existing rule about *which* age is named was holding.
-*(2026-10-11, from an architecture review.)*
+are and the rest too young, or the age decided -- the control, held by the existing rule
+about which age is named. *(2026-10-11, from an architecture review.)*
 
-**No migration and no fallback reader; the marker carries a layout version.**
-The failure a fallback would paper over is silence rather than breakage: a pin
-the new code cannot find means a session re-pins and may change agent
-mid-conversation, and a transcript read from the new path means the conversation
-comes back empty. A fallback also has no forcing function to be removed -- the
-day the old paths are gone, nothing says so. `.kingfisher/WORKSPACE` had always
-held one line nothing ever read, so the version cost nothing and the next layout
-change inherits the check.
+**No migration and no fallback reader.** The failure a fallback would paper over is
+silence rather than breakage: a pin the new code cannot find means a session re-pins and
+may change agent mid-conversation, and a transcript read from the new path comes back
+empty. A fallback also has no forcing function to be removed. The workspace marker was
+given a layout version to make an old workspace loud, refusing on what was left rather
+than on the number, since an operator who deleted everything listed was otherwise still
+refused, and deleting the marker made the workspace read as new. *(2026-10-06.)*
 
-*The refusal is on what is left, not on the number.* It refused on the number
-alone, so an operator who deleted everything the message listed was still
-refused, and the one way out it did not name -- deleting the marker -- makes the
-workspace read as new, which the integration driver seeds over. It refuses now
-while anything in `sessions/` or `.kingfisher/{agents,runs,claims,tmp}` remains,
-and `ensure_layout` rewrites the marker once nothing does. Still no migration:
-nothing is moved, and a workspace with old state in it is refused as before.
-*(2026-10-06.)*
-
-*Then the version went as well, and nothing refuses an older workspace now.* The number
-would have ratcheted on every change to a layout still being reshaped week to week, and
-the state it protected is disposable either way: a session holds a conversation, a pin
-and some files, none of it meant to outlive the shape it was written in. `MARKER_TEXT`
-is a bare identity line again, nothing reads it, and `ensure_layout` neither refuses an
-old workspace nor rewrites its marker. What this gives up is exactly the loudness the
-argument above was for; the replacement, once workspaces outlive config churn, is a
-fingerprint of the configurable names in the marker and a mismatch refused.
-*(2026-10-15, #756.)*
+*Reversed: the version went as well, and nothing refuses an older workspace now.* The
+number would have ratcheted on every change to a layout reshaped week to week, and the
+state it protected is disposable: a conversation, a pin and some files, none meant to
+outlive the shape it was written in. `MARKER_TEXT` is a bare identity line nothing reads,
+and `ensure_layout` neither refuses an old workspace nor rewrites its marker. What this
+gives up is that loudness; the replacement, once workspaces outlive config churn, is a
+fingerprint of the configurable names in the marker and a mismatch refused. *(2026-10-15,
+#756.)*
 
 **`KINGFISHER_STATE_DIR` and `KINGFISHER_SCRATCH_DIR` are gone.** Scratch first:
-per-session and relocatable are not both expressible, because `session_bytes`
-counts one directory and anywhere else is a cost the quota cannot see. Then
-state, which was left holding one generated file. Both were documented and
-neither was set anywhere -- `.env.example` had them commented out. *(2026-09-08,
-in four slices. `docs/design/2026-09-08-a-session-owns-what-it-costs.md` argued
-it and is removed.)*
+per-session and relocatable are not both expressible, because `session_bytes` counts one
+directory and anywhere else is a cost the quota cannot see. Then state, left holding one
+generated file. Neither was set anywhere -- `.env.example` had both commented out -- and
+`doctor` names each as retired. *(2026-09-08, `a-session-owns-what-it-costs.md`.)*
 
-*Not set anywhere, but still read in one place.* The one generated file state held
-was the smoke report the integration driver copied there, and the driver went on
-reading `cfg.state_dir` after the field was gone -- on the last lines of a smoke
-run, which only a live model call reaches, in a tree where `ty` ignores unresolved
-attributes under `tests/**`. So every smoke run finished its turn and then raised.
-The copy was dropped rather than moved: nothing read it, the run already prints
-where the report is, and the pass/fail signal was always `check_result`.
-`test_a_smoke_run_reaches_its_end` drives those lines without a model.
-*(2026-09-16.)*
+*Not set anywhere, but still read in one place.* The integration driver read
+`cfg.state_dir` on the last lines of a smoke run, which only a live model call reaches, in
+a tree where `ty` ignored unresolved attributes under `tests/**` -- so every smoke run
+finished its turn and then raised. The copy was dropped, not moved: nothing read it, and
+the pass/fail signal was always `check_result`. `test_a_smoke_run_reaches_its_end` drives
+those lines without a model. The `ty` override was narrowed to test modules, where all 55
+findings it hid were, and `evals/`, which the driver imports, was brought into both `ty`
+and CI's `ruff`; `test_ty_exempts_test_modules_and_nothing_else_under_tests` and
+`test_every_directory_holding_python_is_type_checked` keep it so. *(2026-09-16.)*
 
-The override was then narrowed to test modules. None of the 55 findings it hid
-were outside one, so the driver, `conftest.py` and the helper scripts under
-`tests/` lost nothing by being checked, and with the narrower glob `ty` reports
-this bug directly. `evals/`, which the driver imports, turned out to be outside
-both `ty` and CI's `ruff` and is in both now. Two rules keep it so:
-`test_ty_exempts_test_modules_and_nothing_else_under_tests` and
-`test_every_directory_holding_python_is_type_checked`. *(2026-09-16.)*
-
-**Containerise and use a sized tmpfs; do not adopt mirage for the filesystem.**
-That was *Nothing at rest*'s closing recommendation and it is what shipped. A
-tmpfs inside a container gives memory-backed files that are *real paths* -- any
-program opens them, any package reads them -- with a size limit the kernel
-enforces, and no library, no driver and no version risk. Mirage was measured
-rather than argued about, and `findings.md` carries what it does. What it would
-still be good for is the question that exploration opened with and set aside: S3,
-Drive and Postgres mounted as paths, which kingfisher has no story for and which
-is a far smaller change than replacing the filesystem.
-*(N11, N13 to N16, N20 and N22 built through 2026-09-01; the store and the session
-root on 2026-08-26, `A session that survives the machine it ran on`. All from
+**Containerise and use a sized tmpfs; do not adopt mirage for the filesystem.** That was
+*Nothing at rest*'s closing recommendation and what shipped. A tmpfs inside a container
+gives memory-backed files that are *real paths* -- any program opens them -- with a size
+limit the kernel enforces, and no library, driver or version risk. Mirage was measured
+rather than argued about, and `findings.md` carries what it does. What it would still be
+good for is the question that exploration set aside: S3, Drive and Postgres mounted as
+paths, which kingfisher has no story for and which is a far smaller change than replacing
+the filesystem. *(N11, N13 to N16, N20 and N22 built through 2026-09-01. All from
 `nothing-at-rest-on-this-machine.md`, removed 2026-09-04.)*
 
-**Deleting a session reaches the store whether or not this workspace holds a
-directory for it.** `delete_session` returned as soon as it found no directory
-under `<workspace>/sessions/`, which under a root of the deployment's own is every
-session -- so the store kept its copy, `knows` still answered for the id, and a
-session reported deleted could be resumed. It now forgets the store's copy either
-way, and, like `reap`, not after a directory that refused to go: that directory
-still needs the history behind it. An id that names nothing is still not an
-error, so a retried delete need not care whether the first one landed.
-*(2026-09-15.)*
+**`run(delete_session=True)` reports a deletion that failed, on the result.**
+`RunResult.deletion_failure` carries the reason: on the result rather than logged, because
+the caller asked for the deletion in the same call and looks there for how the turn went;
+and rather than raised, because the turn finished and its answer is worth keeping. A turn
+stopped at a bound keeps its session on purpose and leaves the field empty -- `stop_reason`
+says why. *(2026-09-15.)*
 
-**Eviction is deletion that keeps the store's copy, and only when asked.**
-`delete_session` and `reap` take `forget=False`, which removes a session from
-this machine and leaves it in the store, so it resumes here or on another host.
-This qualifies the entry above rather than reversing it: forgetting stays the
-default, because a caller who asked for a deletion and got a resumable session is
-the bug that entry fixed. The thread goes either way -- the next turn is rebuilt
-from the transcript, which the store carries. *(2026-09-18.)*
-
-**`run(delete_session=True)` reports a deletion that failed, on the result.** It
-called `delete_session` and threw away what came back, so a caller got the answer
-and no sign the session was still there. `RunResult.deletion_failure` carries the
-reason: on the result rather than logged, because the caller asked for the
-deletion in the same call and the result is where it already looks for how the
-turn went; and rather than raised, because the turn finished and its answer is
-worth keeping. A turn stopped at a bound keeps its session on purpose and leaves
-the field empty -- `stop_reason` says why. *(2026-09-15.)*
-
-**`/memory` lasts as long as its session, and the prompt says so.** The memory
-section told the agent to record what "would change how a future session works",
-and no future session can read it: `/memory` is routed to `memory/` inside the
-session, scaffolded when the session is laid out and deleted with it. An agent
-following the prompt wrote notes for a reader who never arrives. It now says
-*later turns of this conversation*, the lifetime `system.md` already gives
-`/derived`.
-
-Memory shared between sessions is a separate design, and it has not been made.
-`docs/design/2026-09-10-a-mount-kingfisher-can-name.md` leaves `/memory` off a
-shared mount because a per-caller route on storage every session shares "needs a
-tenancy argument that has not been made", and nothing since has made it. Until
-that design exists, "a future session" does not go back into the prompt.
-*(2026-10-07.)*
+**`/memory` lasts as long as its session, and the prompt says so.** `/memory` is deleted
+with its session, so a prompt telling the agent to record what "would change how a future
+session works" had it writing for a reader who never arrives. It says *later turns of this
+conversation*, the lifetime `/outputs` has. Memory shared between sessions is a separate
+design, not made: `docs/design/2026-09-10-a-mount-kingfisher-can-name.md` leaves `/memory`
+off a shared mount because a per-caller route on shared storage "needs a tenancy argument
+that has not been made". Until that design exists, "a future session" does not go back
+into the prompt. *(2026-10-07.)*
 
 **The guidelines deepagents appends after it say the same, because they are
-kingfisher's.** Straight after kingfisher's section, deepagents' own
-`MEMORY_SYSTEM_PROMPT` called each correction "a chance to improve permanently"
-and told the agent to skip what is "irrelevant in future conversations".
-`prompts/memory_guidelines.md` is that template with five lines changed and
-nothing else: the structure, the trust rules, what not to record and the
-examples are still the library's.
+kingfisher's.** deepagents' `MEMORY_SYSTEM_PROMPT`, straight after kingfisher's section,
+called each correction "a chance to improve permanently" and told the agent to skip what is
+"irrelevant in future conversations". `prompts/memory_guidelines.md` is that template with
+five lines changed; the rest is still the library's. `create_deep_agent` takes no argument
+for the template, but merges middleware by name, in place, so `build_agent` keeps
+`memory=` and passes a `MemoryMiddleware` of its own carrying it, which takes deepagents'
+slot. Measured by driving a real build with a recording `ChatAnthropic`, sync and async:
+the stack unchanged, `MemoryMiddleware` last after `AnthropicPromptCachingMiddleware`, and
+two cache breakpoints as before, one on the static prompt and one on the memory block.
 
-It reaches the model by replacement. `create_deep_agent` builds its
-`MemoryMiddleware` without a `system_prompt` and takes no argument to pass one,
-but it merges middleware by name, in place -- so `build_agent` keeps `memory=` and
-passes a `MemoryMiddleware` of its own, carrying the template, which takes the
-slot deepagents built its own in. Measured by driving a real build with a
-`ChatAnthropic` that records what it is sent, sync and async: the stack unchanged,
-with `MemoryMiddleware` last, after `AnthropicPromptCachingMiddleware`; the memory
-file's contents in the last system block; two cache breakpoints, one on the static
-prompt and one on the memory block, as before. A request declining memory still
-builds no memory middleware.
+Two other ways were measured and not taken. `system_prompt=None` appends nothing, so the
+memory file stops reaching the model too, and putting it back is the middleware written
+again. A `MemoryMiddleware` passed *instead of* `memory=` lands ahead of
+`AnthropicPromptCachingMiddleware` with one breakpoint where there were two, so every edit
+to the memory file costs the whole prompt its cache.
+`test_the_memory_guidelines_promise_nothing_past_the_session` reads deepagents' template
+off the library and fails if a line kingfisher's copy leaves out reaches the model; it
+cannot catch "permanently" written back into kingfisher's own copy, which a test could only
+match as a phrase. `test_the_memory_block_keeps_a_cache_breakpoint_of_its_own` holds the
+slot. *(2026-10-07.)*
 
-Two other ways were measured and not taken. `system_prompt=None` appends nothing,
-so the memory file's contents stop reaching the model along with the guidelines,
-and putting them back would be the middleware written again. A `MemoryMiddleware`
-passed *instead of* `memory=` is spliced in with kingfisher's own, ahead of
-`AnthropicPromptCachingMiddleware`, and the system message arrives with one
-breakpoint where it had two: the static prompt is cached only together with the
-memory file, so every edit to that file costs the whole prompt its cache.
+**A session id is one path segment, checked where it becomes a path.** Nothing checked it,
+and every path built from an id joined it on as given. Measured: `..` laid a session out in
+the workspace's own folder, an absolute id laid one out wherever it pointed, and deleting
+`""` removed every session and reported success. So `session_dir` refuses it rather than
+any one door: a door is one caller, and every path built from an id is built there.
 
-`test_the_memory_guidelines_promise_nothing_past_the_session` reads deepagents'
-template off the library and fails if a line kingfisher's copy leaves out reaches
-the model -- a revert to `memory=` alone, a release that stops replacing by name, a
-second memory block beside this one. It does not catch "permanently" written back
-into kingfisher's own copy: that is kingfisher's text, and a test for it could only
-match a phrase. `test_the_memory_block_keeps_a_cache_breakpoint_of_its_own` holds
-the slot. *(2026-10-07.)*
+**One segment means one visible entry in a directory**: not empty, not starting with `.`,
+and holding neither `/` nor NUL. Not hidden, because the macOS profile guards `.harness` in
+every session and a session of that name could not write its files. `\` was weighed and is
+allowed: Windows and URL parsers read it as `/`, but POSIX allows it in a folder name, and
+refused, such a session was listed and never opened, and `reap`, which opens each expired
+session to ask whether a turn holds it, raised there and swept nothing. A rule narrower
+than the filesystem's names makes sessions nothing can remove; covering Windows would take
+`:` and its reserved names too, for a host no fence of kingfisher's runs on.
 
-**A session id is one path segment, checked where it becomes a path.** Nothing
-checked it. A turn never met the gap, because it accepts only an id the backends
-already list, but `files_for`, `session_size` and `DefaultBackends`' own `mark_used`,
-`size` and `delete` joined the id onto `sessions/` as given. Measured:
-`files_for("..")` laid a session out in the workspace's own folder, an absolute id
-laid one out wherever it pointed, and `DefaultBackends.delete(cfg, "")` removed every
-session in the workspace and reported success. So `session_dir` refuses it rather
-than any one door: a door is one caller, and every path built from an id is built
-there, `open`'s and `delete`'s included.
+**The refusal is `UnknownSessionError`.** Every caller already handles it -- the command
+line reports it among its `REFUSALS`, and a deployment mapping it to a 404 needs nothing
+new -- where a `ValueError` would be a second way of saying "no such session" for each to
+learn. The rule is `names_a_session`, apart from the refusal, so the listing is held to it
+too. *(2026-10-07.)*
 
-**One segment means a POSIX file name**: not empty, not `.` or `..`, and holding
-neither `/` nor NUL. `\` was weighed and is allowed. Windows paths and URL parsers
-read it as `/`, but every folder under `sessions/` is listed as a session and POSIX
-lets a folder be named with one. Refused, such a session was listed and could never
-be opened, and `reap`, which opens each expired session to ask whether a turn holds
-it, raised there and swept nothing. A rule narrower than the filesystem's names makes
-sessions nothing can remove; covering Windows would take `:` and its reserved names
-as well, for a host none of kingfisher's fences runs on.
+**`/data` is `/inputs` and `/derived` is `/outputs`.** The agent knows a folder by little
+more than its name: "data" did not say its files were the caller's and not to be written,
+and "derived" did not say what goes there is handed back; `inputs` and `outputs` say which
+way files go. `/memory` keeps its name. The folder on disk moved with the route, because
+the agent reaches both, and a route renamed over a folder left as it was would break the
+path table's one rule, drop the slash. Artifact names follow, as paths in the session. The
+shell's guard on the inputs folder and the upload into it name one constant, and a test
+finds where an upload landed rather than naming the folder: a name spelt by hand beside the
+constant would have left a caller's inputs writable to the shell. *(2026-10-07.)*
 
-**The refusal is `UnknownSessionError`, worded as an unissued id's.** It is one: no
-session could have been given such an id. And every caller already handles that
-answer -- the command line reports it among its `REFUSALS` rather than as a
-traceback, and a deployment that maps it to a 404 needs nothing new -- where a
-`ValueError` of its own would be a second way of saying "no such session" for each
-of them to learn. The rule is `is_one_path_segment`, apart from the refusal, so that
-a setting naming a session can be held to it and refused in its own words.
+**The names a caller writes follow the folder.** `data` was kept when the two fields merged
+because it named where a caller's files land, and by that reason the folder's new name
+carries over: `kingfisher run --input`, `Request.inputs` and the `inputs_placed` event,
+with the per-session meaning `data` had, not the per-turn one from before the merge. The
+names inside follow, so the folder and what guards it are spelled one way: `place_inputs`,
+`InputsPlacement`, `InputsError`, `InputsBackend`, `protect_inputs` and `writable_inputs`.
+No alias keeps the old names: it would be two names for one thing again, which is what the
+merge removed. *(2026-10-07.)*
+
+**A workspace can hold one session.** Some services make a workspace *be* a session, and
+`KINGFISHER_SESSION_ID` said so: a request naming no id ran in it, any other id was refused
+as unissued, and it was listed before any turn, since it existed by configuration. A
+setting rather than an argument, because the default sessions object serves every
+workspace a process opens and is handed the `Config` on every call; and read in
+`_session_for`, where an id was minted, rather than asked of the backends, which would
+have been a port method every deployment's own had to grow for one field. *Not a reversal
+of "Session ids are issued, not accepted"* (2026-08-16): the deployment issued the one id.
 *(2026-10-07.)*
 
-**`/data` is `/inputs` and `/derived` is `/outputs`.** The names are for the agent,
-which knows a folder by little more than what it is called. "data" did not say the
-files in it were the caller's and not to be written, and "derived" did not say that
-what goes there is handed back; `inputs` and `outputs` say which way files go.
-`/memory` keeps its name, and the prompt's memory section says it is kept and
-returned as `/outputs` is.
-
-The folder on disk moved with the route, because the agent reaches both. `/outputs`
-is unrouted, so the file tools and the shell write one real folder, and the shell
-sees `inputs/` beside it. A route renamed over a folder left as it was would have
-broken the one rule the path table teaches -- drop the slash -- which is why
-`/scratch` was renamed the same way. Artifact names are paths inside the session,
-so they follow: `derived/report.md` is `outputs/report.md`.
-
-The layout is 3, and a workspace with sessions from an older one is refused, with
-no migration, as the layout version above was added to do. The refusal had been
-written for the move into `.harness`, and told every older workspace to delete
-layout 1's leftovers under `.kingfisher/` whether it had any or not. It now says
-which layout it found and which this is, and lists exactly what is left to delete:
-what is in `sessions/`, and each of `.kingfisher/{agents,runs,claims,tmp}` only
-where it exists. `permissions.py` spelled `"data"` by hand beside the constant
-`DataBackend` uploads under, so renaming the constant alone would have left a
-caller's inputs writable to the shell; both use the constant, and a test finds
-where an upload landed rather than naming the folder.
-
-The names a caller writes follow in a separate change: `--data`, `Request.data`,
-the `data_placed` event, and `protect_data` with its neighbours still say `data`.
-Entries in this file that say `/data` or `/derived` meant these folders under their
-old names. *(2026-10-07.)*
-
-**The names a caller writes follow the folder.** `data` was kept over `inputs` when
-the two fields merged because it named where a caller's files land, and by that
-reason the folder's new name carries over: `kingfisher run --input`,
-`Request.inputs` and the `inputs_placed` event. `Request.inputs` returns with the one
-meaning `data` had -- files kept for the life of the session, in `/inputs`, read-only
-to the agent -- and not the per-turn one it had before the merge. The names inside
-follow too, so the folder and what guards it are spelled one way: `place_inputs`,
-`InputsPlacement`, `InputsError`, `InputsBackend`, `protect_inputs` and
-`writable_inputs`. No alias keeps the old names working: it would be two names for
-one thing again, which is what the merge removed. Entries in this file that say
-`--data`, `Request.data`, `place_data` or `data_placed` meant these.
-*(2026-10-07.)*
-
-**A workspace can hold one session.** In some services a workspace *is* a session:
-the service names it, and everything under the workspace belongs to it. Setting
-`KINGFISHER_SESSION_ID` says so, and its value is that session's id. The session is
-laid out in `<workspace>/sessions` itself -- `inputs/`, `outputs/`, `memory/`,
-`scratchpad/` and `.harness/`, with no level per id -- and kingfisher's own backends
-know no other id. Unset, nothing changes.
-
-*A setting, not an argument to `DefaultBackends`.* `default_backends` is one object
-serving every workspace a process opens, and every `SessionBackends` method is already
-handed the `Config`, so `Config.session_id` reaches each call where a constructor
-argument would have fixed one answer for all of them. The id is held to
-`is_one_path_segment` and refused at startup in words naming the setting, though it is
-never joined onto a path.
-
-*`sessions/` itself, not a new `session/` folder*, so the two layouts differ by one
-level and nothing else: what a deployment mounts at `<workspace>/sessions` is still
-where sessions are, `doctor` measures the same folder, and `SessionPaths` and
-`reject_host_path` refuse the same prefix. `session_dir` makes the mapping in one place,
-given `only=` the configured id: that id is `sessions/`, and any other is refused with
-the `unknown_session` wording.
-
-*The request rules.* The listing names the configured id always -- before any turn has
-run and after a delete -- because the session exists by configuration, so a first turn
-naming it names an issued id. A request naming no id runs in it, and its `RunResult`
-says so; that includes one handed `files=`, which elsewhere is refused because it would
-mint a session and run in another's files. Any other id is refused as an id nobody
-issued. The no-id rule reads `cfg` in `_session_for`, where a uuid used to be minted,
-rather than asking the backends: minting is the application's, the setting replaces
-it, and asking the backends would be a port method every deployment's own had to grow
-for one `Config` field. `_session_for` is the step sequence both loops drive, so it
-holds on `astream` and `arun` as on `stream` and `run`.
-
-*Delete and `reap` work as for any session*, and the next turn starts a fresh
-conversation under the same id. Deleting empties `sessions/` rather than removing it:
-it is the workspace's own folder, made by its layout and the place a deployment mounts
-storage, and a mountpoint cannot be removed, so every delete would have reported a
-failure after it had worked. `mark_used` touches `sessions/`, and its mtime is the idle
-clock `reap` reads -- last turn, or when the session was last emptied, which for a
-session that exists by configuration is when it last started fresh.
-
-*The macOS profile names the session's `.harness` where it is.* The pattern was
-`sessions/[^/]+/.harness`, which does not match `sessions/.harness`, so in this layout
-the shell could have rewritten the pinned agent, the conversation and a paused turn.
-`resolve` is handed the mode by `shell_confinement`, and the profile is still one text
-per workspace because every input to it is the workspace's: `sessions/.harness` here,
-and `sessions/` followed by an optional segment and `.harness` in a workspace of many.
-That optional segment is new and has a reason of its own, below. Bubblewrap and
-Landlock needed no change: built from the session directory, the first binds
-`sessions/` writable and `sessions/.harness` read-only over it, and the second grants
-the session's folders one by one and never `sessions/`. So `FENCES_HARNESS` stays true of all
-three, and doctor's `session files` check with it.
-
-*A workspace used both ways is refused.* A workspace of many, started with the
-setting, would lay the one session out over the others, and its agent would read each
-of them at `/<id>/`; a workspace of one, started without it, would list `inputs/` and
-`memory/` as sessions, and `reap` would delete them. So `check_sessions` refuses on
-what is in the folder, as the layout check does -- *the refusal is on what is left*
-(2026-10-06) -- and says what it found and the ways out: clear `sessions/`, set or
-unset the setting, or use another workspace.
-
-The test is `.harness/`, because no agent can make or remove one where it looks, so
-nothing done from inside a session sets it off. "Anything but the session's own
-folders" would be simpler and wrong: under bubblewrap and on macOS the shell can
-`mkdir` where it starts, which here is `sessions/`, and one stray folder would lock the
-workspace. Measured before building on it, and it moved the rule once: the file tools
-write `/outputs/.harness/notes.md` and `/stray/.harness/notes.md` without complaint --
-only `/.harness/` is denied them -- so "a folder holding its own `.harness/`" could be
-set off from inside too. A workspace of one therefore refuses folders holding
-`.harness/` only while `sessions/.harness` does not exist; once it does, `sessions/` is
-the one session and its folders are that session's. A workspace of many refuses
-`sessions/.harness`, and the macOS profile denies a shell in any session the making of
-it -- so one `mkdir ../.harness` cannot stop a shared workspace starting.
-
-**That is `_sessions_denial`'s node deny, not the folder rule's optional segment.** The
-folder rule matched `sessions/<folder>` as well as `sessions/*/<folder>`, through an
-optional session segment, and the segment was redundant: creating or renaming anything
-directly under `sessions/` is a write against that node, which the neighbour refuses for
-every name at once rather than for the two the folder rules happen to guard. What it
-added was a collision. `inputs` is a legal session id -- `names_a_session` refuses only a
-dot-name, and says so because `.harness` is one of these folders -- so a session called
-`inputs` had its whole tree denied and every command in it failed with `Operation not
-permitted`, saying nothing. Measured, and the session id comes from the request. The
-segment is required now, and
-`test_the_shell_cannot_leave_a_folder_the_listing_would_read_as_a_session` drives the
-node deny over `inputs`, `.harness` and a name no rule mentions, so the half that
-remains is held by what actually holds it. *(2026-10-15, from an architecture review.)*
-
-It runs where `ensure_layout` runs for a service, and in `DefaultBackends.open` and
-`sessions` as well, because a deployment may drive those without a `Kingfisher` to have
-checked, and they are the calls that would lay one mode's session over the other's or
-list one as the other. `ensure_layout` asks it only of a caller that says which mode it
-serves: seeding serves none and reads no session setting, and asked, it would refuse a
-workspace of one for a setting it never read.
-
-*Not a reversal of "Session ids are issued, not accepted"* (2026-08-16). A caller still
-cannot choose an id: in a workspace of many, one the backends do not list is refused,
-as before. Here the deployment issues the one id by configuration, before any caller
-arrives, which is issuing. A deployment's own `SessionBackends` is told the mode
-through `cfg` as `default_backends` is, and what it does with it is its own; the
-contract kit's checks open several ids and do not hold of a workspace of one.
-*(2026-10-07.)*
-
-*A changed id is refused.* Nothing recorded which id `sessions/` was laid out for, so
-a workspace holding session `a`, started with the setting changed to `b`, mapped `b`
-onto the same folder: `b` carried on `a`'s conversation, pinned agent and memory as its
-own, and a caller still holding `a` was refused as holding an id nobody issued -- the
-quiet failure the layout version was added to make loud. The one session now records
-its id in `.harness/session-id` when `open` first lays it out, and `check_sessions`
-refuses any other id, at startup and in `open` and `sessions`, naming both ids and the
-ways out: set the setting back, clear `sessions/`, or use another workspace. A delete
-empties `sessions/` and the record with it, so the next id is accepted. A `sessions/`
-laid out before the record holds none, and is let through and given one on its next
-`open` rather than refused for lacking what it could not have had; a changed id is
-undetectable there exactly once.
-
-The record is written on disk by `DefaultBackends`, not through `HarnessFiles` with the
-pin and the transcript. *Every read and write of a session's files goes through that
-session's backend* is about kingfisher reaching a session; this is the default backends'
-own mapping of the id onto `sessions/`, and `check_sessions` reads it off that disk
-before any backend is open. Written by a turn, it would land in a deployment's own
-backends as well, where nothing reads it. Carrying the id is also why the service now
-calls `check_sessions` itself, just before `ensure_layout`, which no longer takes a
-mode: a flag could not carry it, and the id would have needed a third value for
-seeding, which asks nothing and now simply does not call it. *(2026-10-07.)*
-
-**Reversed: the one session has a folder of its own, and the setting pins a process
-rather than a workspace.** `KINGFISHER_SESSION_ID` keeps its session in
-`sessions/<id>/`, as every other session is kept, and the request rules above stand: a
-request naming no id runs in it, any other id is refused as unissued, and it is listed
-before any turn and after a delete. What went is everything the missing level cost.
-`sessions/` being the session meant a delete had to empty rather than remove, the
-macOS profile needed patterns at another depth, the id needed a record because no
-folder carried it, and a workspace used both ways had to be refused at startup -- each
-a special case of its own.
-
-With the definitions in a folder of their own, the workspace is only what sessions
-make, and a service running one process per session can point them all at one
-workspace. Each lists and reaps its own, and none refuses the others' folders: they
-are sessions, not a mistake. So `check_sessions` and the record are gone. A changed id
-starts a session beside the old one instead of carrying on its conversation, an unset
-id makes the workspace one of many, and the macOS profile has one pattern for every
-session. Nothing checks for a workspace laid out the old way: its folders are read by
-nothing, and clearing them is the upgrade. *(2026-10-13.)*
+**Reversed: the one session has a folder of its own, and the setting pins a process rather
+than a workspace.** First built, the session was `<workspace>/sessions` itself, and the
+missing level cost a special case each: a delete had to empty a mountpoint rather than
+remove it; the macOS profile's `.harness` pattern missed `sessions/.harness`, leaving the
+pin, the conversation and a paused turn writable to the shell; a restart with the id
+changed carried the new id on the old session's conversation, so the id needed a record;
+and a workspace used both ways had to be refused at startup. With the definitions in a
+folder of their own, the workspace is only what sessions make, and one process per session
+can share it, each listing and reaping its own. So the session is in `sessions/<id>/` like
+any other, and the startup check and the record went. *(2026-10-13.)*
 
 **Removed: the setting.** Once a request names its session and one naming none runs in
-`default`, `KINGFISHER_SESSION_ID` had nothing left to do. It is refused at startup if
-still set, as an entry in the table that already refused the store settings rather than
-a check of its own: ignored, a deployment's no-id requests would land in `default`
-instead of the session it chose. *(2026-10-14.)*
+`default`, `KINGFISHER_SESSION_ID` had nothing left to do. It is refused at startup if still
+set, in the table that refuses the store settings: ignored, a deployment's no-id requests
+would land in `default` instead of the session it chose. *(2026-10-14.)*
 
-**deepagents' own files are kept in the scratchpad.** deepagents writes two kinds of
-file without being asked. A tool result over about 80,000 characters is saved to
-`large_tool_results/<call id>` and the model is handed a stub naming the path; the
-summarizer's fallback when a call overflows the context writes there too. The
-summarizer keeps what it replaced in `conversation_history/session_<id>.md`, with its
-images under `media/`, and a user message too long to send goes to
-`conversation_history/<uuid>.md`. Both folders hang off `CompositeBackend.artifacts_root`,
-which defaults to `/` and which kingfisher never set. So they sat at the session root
-beside `inputs/`, `outputs/`, `memory/`, `scratchpad/` and `.harness/`: in no folder
-the layout names, never returned to a caller, and not in a prompt that tells the agent
-it writes only to `/outputs` and `/scratchpad`.
+**What keeps the shell from making a folder the listing would read as a session is
+`_sessions_denial`'s node deny, not the folder rule's optional segment.** The folder rule
+matched `sessions/<folder>` as well as `sessions/*/<folder>`, through an optional session
+segment, which was redundant -- creating or renaming anything directly under `sessions/` is
+a write against that node, which `_sessions_denial` refuses for every name at once -- and
+collided: `inputs` is a legal session id, so a session called `inputs` had its whole tree
+denied and every command in it failed with `Operation not permitted`, saying nothing, and
+the id comes from the request. The segment is required now, and
+`test_the_shell_cannot_leave_a_folder_the_listing_would_read_as_a_session` drives the node
+deny over `inputs`, `.harness` and a name no rule mentions, so the half that remains is held
+by what actually holds it. *(2026-10-15, from an architecture review.)*
 
-`WorkspaceScopedBackend` passes `artifacts_root=SCRATCH_ROUTE`, so they are
-`/scratchpad/large_tool_results/` and `/scratchpad/conversation_history/`. That is what
-they are: the agent's working material, returned to nobody and swept with the session.
-`/outputs` was the other folder with a name, and would have handed every evicted result
-to the caller as an artifact. `system.md` names both in its scratchpad line. A stub
-names its own path, so the line matters when the agent searches rather than follows one
--- and deepagents' own `grep` description says offloaded results are under
+**deepagents' own files are kept in the scratchpad.** deepagents writes two kinds of file
+unasked: a tool result over about 80,000 characters goes to `large_tool_results/` with a
+stub naming the path handed to the model, and the summarizer keeps what it replaced, and a
+user message too long to send, under `conversation_history/`. Both hang off
+`CompositeBackend.artifacts_root`, which defaults to `/`, so they sat at the session root,
+in no folder the layout names and never returned. `WorkspaceScopedBackend` passes the
+layout's scratchpad route as `artifacts_root`: they are the agent's working material,
+returned to nobody, where `/outputs` would have handed every evicted result to the caller. `system.md` names both folders, because the agent sometimes searches
+rather than follows a stub, and deepagents' `grep` description puts offloads under
 `/large_tool_results/` "by default", which is no longer where they are.
 `test_the_prompt_names_the_folders_deepagents_writes_on_its_own` reads the root off the
 backend, so a rename cannot leave the line behind.
 
 *One setting, and one condition on it.* deepagents reads `artifacts_root` only off a
-`CompositeBackend`: `FilesystemMiddleware` and `SummarizationMiddleware` both ask
-`isinstance` and fall back to `/`. `WorkspaceScopedBackend` is one, and it is what
-`create_deep_agent` is handed, so every middleware built from it reads the setting -- the
-agent's, each declared subagent's, `general-purpose`'s and the `compact` example's. A
-deployment's own backend has it by subclassing that class or returning what `backend_at`
-built; a `CompositeBackend` assembled from nothing is back at `/`. `BACKEND_CONTRACT`
-gained `offloads_in_the_scratchpad`, which reads the root the way deepagents does. It is
-not one of the two run on every build: it finds a folder in the wrong place, whose stub
-still names the right path, and refusing a working deployment over that costs more
-than the folder.
-
-*The shell can now write them.* The Landlock fence grants a session's folders one at a
-time and never the session itself, so the shell could not write the old root-level
-folders and can write these. The agent may edit or delete an evicted result or the
-summary history with its own shell. They are its working material and nothing kingfisher
-reads back trusts them, so that is accepted rather than fenced.
-
-*No migration.* A session made before this keeps any root-level `large_tool_results/`
-and `conversation_history/` until it is reaped. A stub from before names the old path,
-and the file is still there to read. *(2026-10-11.)*
+`CompositeBackend` -- `FilesystemMiddleware` and `SummarizationMiddleware` ask `isinstance`
+and fall back to `/` -- so a deployment's own backend has it by subclassing
+`WorkspaceScopedBackend` or returning what `backend_at` built, and a `CompositeBackend`
+assembled from nothing is back at `/`. The contract kit's `offloads_in_the_scratchpad`
+checks it the way deepagents reads it, and is not refused at startup: it finds a folder in
+the wrong place whose stub still names the right path, and refusing a working deployment
+over that costs more than the folder. The Landlock fence grants a session's folders and
+never the session itself, so the shell can write these where it could not write the
+root-level ones; they are working material nothing kingfisher reads back trusts, so that is
+accepted rather than fenced. *No migration*: an older session keeps its root-level folders
+until it is reaped. *(2026-10-11.)*
 
 **Not built: refusing a save outside the session's folders.** A file tool handed a bare
-`result.json` saves it at the top of the session, where nothing is returned, and the
-turn reports success. A guard refusing such a save, and naming `/outputs` instead, was
-built once beside a layout change that was closed unmerged, and was to be rebuilt. It
-was measured first, on 2026-10-17: two tasks that never said where to save, 21 turns on
-the default model, 68 file-tool saves -- 16 in `/outputs`, 51 in `/scratchpad`, one host
-path refused and corrected, none anywhere else -- and nothing at the top of any session
-from the shell either. The one turn that delivered nothing ran out of tool calls with
-its result still in `/scratchpad`, which no guard on saves would have changed. The
-occurrence that prompted the guard predated `system.md` saying nothing else in the
-session is the agent's to write. And the reason it had been a middleware rather than a
-refusal in the backend is gone: deepagents' own files are in the scratchpad now, so
-nothing kingfisher runs writes the session's top. Reopen it on a turn that strays, not
-on the argument.
+`result.json` saves it at the top of the session, where nothing is returned, and the turn
+reports success. A guard refusing such a save was built once, beside a layout change closed
+unmerged, and measured before being rebuilt: two tasks that never said where to save, 21
+turns, 68 file-tool saves -- 16 in `/outputs`, 51 in `/scratchpad`, one host path refused
+and corrected, none anywhere else -- and nothing at the top of any session from the shell.
+The one turn that delivered nothing ran out of tool calls with its result in `/scratchpad`,
+which no guard would have changed. The occurrence that prompted it predated `system.md`
+saying nothing else in the session is the agent's to write, and the reason it was a
+middleware rather than a backend refusal is gone: deepagents' own files are in the
+scratchpad, so nothing kingfisher runs writes the session's top. Reopen it on a turn that
+strays, not on the argument. *(2026-10-17.)*
 
 ## Wiring a store
 
-*Much of this was reversed on 2026-09-30: `SessionStore` and `SessionRoot` are gone,
-and the backend is where a session is. See *A session is its backend*, below. What
-is here stays as the record of why they were built.*
+`SessionStore` and `SessionRoot` were reversed on 2026-09-30 -- the backend is where a
+session is, under *A session is its backend*. What stays here is why they were built,
+and what outlived them.
 
-**The session directory is the backend root**, `/data` is materialised once at
-session creation, writes come back as a manifest, and processes are stateless
-while the service is stateful. `sweep()` came off the request path.
-*(2026-08-16, `session-scoped-api.md`, `durable-session-data.md`.)* Two of those
-have since changed: `/data` is placed on every turn that brings files, replacing any
-of the same name, and the service is gone.
+**The session directory is the backend root**, and housekeeping is off the request path.
+A caller's files are placed in `/inputs` on every turn that brings them, replacing any of
+the same name, and what a turn wrote comes back as a list of names.
+*(2026-08-16, `session-scoped-api.md`, `durable-session-data.md`.)*
 
-**A deployment names its store in a setting; it does not pass an object.**
-`Config.session_store` could only be a directory and its comment said why -- *"a
-deployment reaching for that passes an object rather than a path"* -- and both
-halves were wrong. An environment variable can name a factory, which is how
-`models.yaml` has always reached a chat class; and passing an object only reaches
-the one construction site a deployment controls, which is none of the ones
-kingfisher ships. `presentation/cli/__main__.py` builds its own `Kingfisher` and
-there is nowhere to point it. A setting resolved inside `Kingfisher.__init__` is
-inherited by every entry point at once.
+**A deployment names its store in a setting; it does not pass an object.** Passing an
+object reaches only a construction site the deployment controls, and the command builds
+its own `Kingfisher` with nowhere to point it. The library half went on 2026-09-30 --
+`Kingfisher` takes its sessions as an argument -- and the setting stayed for the command,
+which alone reads `KINGFISHER_SESSIONS` (*Sessions are always named*).
 
-**A zero-argument factory, not a class and not an instance.** `module:name`, the
-same string `Adapter.chat_class` uses. Kingfisher does not know whether a store
-wants a bucket, a DSN or a pool, so it asks for none of them and the factory
-reads its own configuration; inventing a URL grammar for stores it knows nothing
-about is the version that ages worst, and a ready-made instance moves
-construction to import time, where "cannot reach the bucket" arrives as an
-`ImportError` from a module nobody was reading.
+**A zero-argument factory, not a class and not an instance.** `module:name`, the string
+`WireFormat.chat_class` uses. Kingfisher does not know whether a store wants a bucket, a
+DSN or a pool, so the factory reads its own configuration; a URL grammar for stores
+kingfisher knows nothing about ages worst, and a ready-made instance moves construction
+to import time, where "cannot reach the bucket" arrives as an `ImportError` from a module
+nobody was reading.
 
-**What is checked is the name, not the building.** A spec that will not parse, a
-module that will not import, an attribute that is not there, a result of the
-wrong shape: `ConfigError`, naming the setting. A factory raising its *own*
-exception passes through untouched -- that is the deployment's code failing at
-the deployment's job, its type may be one their handling knows, and `store_named`
-is already on the traceback saying which setting reached it.
+**What is checked is the name, not the building.** A spec that will not parse, a module
+that will not import, a missing attribute, a result of the wrong shape: `ConfigError`,
+naming the setting. A factory raising its *own* exception passes through untouched -- that
+is the deployment's code failing at its own job, in a type their handling may know, and
+`store_named` is on the traceback saying which setting reached it.
 
-**Naming a store twice is refused at startup, not resolved by precedence**, and
-on the record rather than in the reader, so a config assembled in Python obeys
-the same rule. Preferring one silently leaves a deployment's sessions in the
-directory it stopped meaning to use, and nothing says so until somebody goes
-looking.
+**Two settings naming one thing are refused at startup, not resolved by precedence**, on
+the record so a config assembled in Python obeys it too. Preferring one silently leaves
+sessions where the deployment stopped meaning to keep them. Written for the two store
+settings, both since removed.
 
-**Environment variables, never a workspace file.** Measured rather than assumed:
-`confinement.writable_roots` returned the whole workspace plus scratch, carving
-out only `skills/`, so `models.yaml`, `agents/`, `subagents/` and `tools/` were
-writable by the agent's shell. The rule was quoted from `confinement.resolve` --
-*"host-side configuration, and a file the agent could edit is not a boundary"* --
-though *Confining the shell* found that sentence already gone. The definition
-roots have been protected since 2026-09-07 and `models.yaml` since 2026-09-17, but
-only under the fences kingfisher applies -- under `off` or `external` a workspace file
-is whatever the deployment makes it -- so the rule still holds. This is why a store as a workspace *asset* is closed
-rather than deferred: it is the middleware decision again, one object further in.
-The agent cannot reach environment variables at all -- its shell gets an
-allowlist of five plus the skills directory.
+**Environment variables, never a workspace file.** Measured: `writable_roots` returned the
+whole workspace, carving out only `skills/`, so `models.yaml` and every definition folder
+were writable by the agent's shell -- and a file the agent could edit is not a boundary.
+Definitions are fenced now, but only under the fences kingfisher applies; under `off` or
+`external` a file is whatever the deployment makes it. The agent cannot reach environment
+variables at all: its shell gets an allowlist of five plus `KINGFISHER_SKILLS`. This is
+why a store as a workspace *asset* is closed rather than deferred -- the middleware
+decision again, one object further in.
 
-**A port a deployment can name gets a runnable contract.** `SESSION_STORE_CONTRACT`
-in `kingfisher.testing` -- and `FILE_STORE_CONTRACT` beside it until that port went
--- are the checks
-`tests/unit/` runs, exported so a deployment runs them against its own adapter. A
-setting inviting somebody to write an implementation without a way to check it is
-worse than no setting, and the parts easiest to get wrong are the ones that
-matter: extracting the session kit found `knows()` -- the method the port calls a
-security question -- with no test anywhere, and a store answering `True` for
-every id passes 2,255 other tests while letting a caller resume a session they
-invented.
+**A port a deployment can name gets a runnable contract.** A setting inviting an
+implementation with no way to check it is worse than no setting, and the parts easiest to
+get wrong matter most: the first kit found the port's security question -- whether a
+session id is known -- with no test anywhere, and a store answering `True` for every id
+passed 2,255 other tests while letting a caller resume a session they invented. Each check
+raises `AssertionError` with the whole story, never a bare `assert`, which `python -O`
+strips. They are `tests/checks/runner.py`, `backend.py` and `sessions.py`: kingfisher holds
+its own implementations to them, and a deployment writing its own copies them.
 
-**The kit imports no test framework**, which is what lets it live in the library
-rather than a second wheel: `pip install kingfisher` gains a module and no test
-dependency. Each check raises `AssertionError` with the whole story, because
-pytest's assertion rewriting does not reach an imported library and `python -O`
-strips a bare `assert` -- a conformance kit passing while checking nothing is
-worse than no kit.
+**Reversed 2026-10-16: the kit shipped in the library**, as `kingfisher.testing`, importing
+no test framework so `pip install kingfisher` gained no test dependency. It left because
+the runtime package carried test code and the public API named tuples of functions. What
+each check holds is written on the interface it is about, and the two that only look
+stayed in the core as `refuse_unusable_backend`. *(`core-and-plugins.md`.)*
 
-**The two kits took different arguments, because the ports differed.**
-`SessionStore` writes, so its checks are handed a factory and fill their own.
-`FileStore` was one method and that method read: kingfisher never wrote to a
-file store, so a check could not plant the file it then fetched, and the deployment
-handed over a `Planted` describing what it planted. Both went with `FileStore`; the
-kits left, for the session store, the session root and the command runner, all take
-a factory.
+**The backend stays kingfisher's, and a store as a workspace asset is refused.** *(The
+first half was reversed on 2026-09-15, below; the refusal stands.)* The backend is not
+"where files live": it fences every shell command, refuses host paths, and its route table
+is what makes `read_only_permissions` legal -- deepagents refuses `permissions=` on a
+backend that executes unless every rule is route-scoped. Routing inputs to a store would
+break what `plugins/sessions/prompts/shell_here.md` tells the model, *"nothing in the
+workspace is out of the shell's reach"*, leaving the agent able to read its inputs and
+unable to run anything over them. Object storage reaches a session as a mount at
+`<workspace>/sessions`, or through a deployment's own `Sessions`.
 
-**`FileStore`'s setting was the service's, `SessionStore`'s is the library's.** Both
-the port and its setting are gone (*The HTTP service*); the asymmetry was kept
-deliberately while they existed: a `FileStore` resolves *refs*, the vocabulary of a
-caller with no host paths, and `kingfisher run` takes `--input` as a path on this
-machine and neither builds one nor could use one. The setting belongs where the
-port is used. Flagged while proposed as the decision most likely to be wrong, and
-it survived being built.
+**What the agent addresses is a table in `kingfisher.core.layout`.** One entry per path:
+whether the composite mounts it, which scope denies writes under it, whether its members
+are generated per catalogue. `plugins.sessions.backend` turns the entries into mounts and
+`core.agent.assembly` the scopes into deny rules. It exists because one route was three
+facts in two modules -- a path constant, a mount in a dict literal, and a
+`FilesystemPermission` typing the path again -- which must agree, since
+`FilesystemMiddleware` refuses `permissions=` unless every rule is scoped to a route, and
+nothing made them agree but care, with the failure arriving at a turn. The leaves are
+named once and everything is composed from them: a second spelling is how two halves of a
+layout drift apart. *(2026-09-07.)*
 
-**The backend stays kingfisher's, and a store as a workspace asset is refused.**
-*(The first half was reversed on 2026-09-15 -- a deployment names the filesystem its
-agents run on, below. The refusal of a store as a workspace asset stands.)*
-The backend is not "where files live": it wraps every shell command in
-`sandbox-exec`, bubblewrap or Landlock, it is what refuses a host path, and its route
-table is what makes `read_only_permissions` legal at all -- deepagents refuses
-`permissions=` outright on a backend that executes unless every rule is
-route-scoped. Routing `/data` to a store would also break the promise
-`prompts/system.md` makes the model in a table -- *"nothing in the workspace is
-out of the shell's reach"* -- leaving the agent able to read its inputs and unable
-to run anything over them. Object storage reaches a session as a mount
-(`SessionRoot`) or by being copied in and out, and both work today.
+**Writability hangs on a scope, not on a route.** `/skills/**` is one rule covering the
+catalogue and every bundle's mount; a rule per route would grow a deployment's permission
+list with its bundles, protecting nothing more.
 
-**What the agent addresses is a table in `kingfisher.core.layout`.** One entry per path,
-saying whether the composite mounts it, which scope denies writes under it, and
-whether its members are generated per catalogue. `core.agent.backend`
-turns the entries into mounts and `core.agent.assembly` turns the scopes
-into deny rules. Policy here, the runtime's objects there -- the division this
-module's first line already describes. *(2026-09-07.)*
+**Agreed as "a test ties them" and built one step stronger, because a rule refused the
+agreed form.** `routed_paths` read only by a test is what
+`test_nothing_is_defined_for_tests_alone` catches, and would have left `routed=False` as
+documentation. So `backend_at` keys its mounts off the table, and a route declared with
+nothing to back it raises at build. **Unrouted paths are in the table** too -- `/outputs`
+and `/scratchpad` reach the shell's backend -- because an absence from a dict literal is
+not a record.
 
-**The rename reached everything the agent addresses and neither edge the caller
-does.** `Layout` threaded the configurable leaves through the routes, both fences, the
-prompt, the ledger, the sweep and `doctor` -- and `session_files`, which is where a
-caller's files go in and a turn's results come out, read the module constants instead.
-Measured through one real turn under a renamed layout: `artifacts` came back `()` with
-the turn's own report sitting in the session, `read_artifact` refused the configured
-names outright so `kingfisher get` could fetch nothing, and the caller's supplied file
-landed at `/inputs/` -- a route that layout does not mount, so the write fell through
-to the session root and made a sixth folder nothing had routed, hardened or fenced.
-The agent's file tools saw an empty inputs folder, and its shell rewrote the caller's
-file with exit 0. `place_inputs` also read `replaced` off a listing of the wrong
-folder, so a resupply reported as a first supply.
+**The rename reached everything the agent addresses and neither edge the caller does.**
+`Layout` threaded the leaves through the routes, fences, prompt, ledger, sweep and
+`doctor`, while the module where a caller's files go in and results come out read the
+module constants. Measured through one real turn under a renamed layout: `artifacts` came
+back `()` with the report sitting in the session, `read_artifact` refused the configured
+names, and the caller's file landed at an inputs route that layout does not mount -- so it
+fell through to the session root, a folder nothing routed, hardened or fenced, and the
+shell rewrote it with exit 0. `core/session/files.py` takes the layout as an argument and
+imports no route constant, so the names are not there to be spelt again. The same pass
+found a renamed scratchpad laid out `0o755` instead of `0o700`, the scaffolding having been
+handed one leaf; `ensure_session_layout` takes the whole `Layout`.
 
-The module no longer imports `ARTIFACT_DIRS` or `INPUTS_ROUTE` at all, which is the
-part worth keeping: both edges here are a caller's, the layout arrives as an argument,
-and the names are not reachable from that file to be spelt again. `ARTIFACT_DIRS` is
-gone from `layout.py` with it -- it had no other reader, and the entry above about the
-route constants already called it "a third spelling" of two leaves this module owns.
-`Layout.artifact_dirs` was built by the same commit and wired to nothing, which is why
-a reader checking whether artifacts had been threaded found a property and stopped.
+**None of it was visible, and the fixture is why.** Mutating the constants reddened
+nineteen tests, all on the default layout. The one renamed-layout rule pre-created its
+session *passing the argument production omits*, and `tests/conftest.py`'s `start` laid
+out the default folders whatever the configuration said, so a measurement of production
+was a measurement of the helper. It takes the layout now, and each renamed case is paired
+with the default, because the default working is exactly what hid this.
+*(2026-10-15, from an architecture review.)*
 
-**`TMPDIR` was the one leaf `backend_at` did not pass on.** `ensure_session_layout`
-takes `memory` and `scratchpad` separately as well as in the tuple, because the two
-steps that scaffold and harden one directory each cannot pick it out -- and the call
-passed `memory` only. Measured: a renamed scratchpad laid out `0o755` where the default
-gives `0o700`, with `TMPDIR` pointing at it.
+**Rejected:** kingfisher shipping an S3 store behind a closed table like the shipped wire
+formats, which would make this package the owner of every backing store anyone asks for.
+A backend factory on `Kingfisher` was deferred at the same time, and opened on
+2026-09-14, below. *(2026-09-04, `a-store-a-deployment-can-name.md`.)*
 
-**None of it was visible, and the fixture is why.** Every rule covering those paths ran
-the default layout, so the subject was covered and the rename was not: mutating the
-constants in that module reddens nineteen tests, all of them default. The one
-renamed-layout rule that existed pre-created its session *passing the argument
-production omits*, so the call under test was never reached. `tests/conftest.py`'s
-`start` was the same shape one level down -- it laid out the default folders whatever
-the configuration said, so a renamed-layout test ran against a session holding both
-spellings, and a measurement of which folder production had made was really a
-measurement of the helper. It takes the layout now. The new rules pair each renamed
-case with the default rather than driving the rename alone, because the default
-working is exactly what hid this. *(2026-10-15, from an architecture review.)*
+**The seam is open, and the reason is tenancy rather than capability.** A remote runtime
+was already served by a runner and a mount; neither survives a deployment that forbids
+one caller's session reaching another's. A mount is established once, outside the
+process, before any session exists, and giving a runtime-created session its own needs
+privileges: a container holding `CAP_SYS_ADMIN` is one command from the agent's shell
+remounting its workspace executable. So every session sat on one mount, separated by a
+path prefix -- the shared storage a per-caller route was declined on for want of a tenancy
+argument. A deployment that forbids the sharing *is* that argument. The backend is opened
+per turn for its session, so each caller can have its own filesystem, separated in the
+wiring rather than by naming convention. The deferral's condition, "routes only, never the
+default slot", was what was wrong with it: the default slot is the shell and every
+unrouted path, so reserving it ruled out the one deployment that needed the seam.
 
-**It exists because one route was three facts in two modules.** The path was a
-constant in `harness/backend.py`, the mount was a dict literal inside
-`default_backend`, and whether it was writable was a `FilesystemPermission` in
-`harness/agent.py` whose `paths=["/data/**"]` was a string typed a second time
-with nothing tying it to `DATA_ROUTE = "/data/"`. They have to agree --
-`FilesystemMiddleware` refuses `permissions=` outright unless every rule is
-scoped to a route -- and nothing made them agree except care, with the failure
-arriving at a turn rather than at the definition.
+**Per turn, never one instance.** A backend is rooted at a session, so one instance handed
+in at construction is one filesystem for every caller -- the leak a deployment replaces the
+backend to avoid, written where nothing looks wrong. What is handed in opens a backend per
+turn, and `LocalSessions` refuses a runner that is not a callable with a `TypeError`. A
+setting waited until something wanted one; the command did. *(2026-09-14.)*
 
-**The route constants were a second spelling of names this file already owned.**
-`SESSION_DIRS` held `"data"` and `"memory"`; `backend.py` held `"/data/"` and
-`"/memory/"`; `ARTIFACT_DIRS` spelled two of them a third time. The leaves are
-named once now and everything is composed from them, which is what this module
-already recorded doing for `UPLOADED_SKILLS`: *"a second spelling is how the two
-halves of this layout drifted apart in the first place."* That constant went with
-uploads, and the quotation with it.
+**A deployment names the filesystem its agents run on, and kingfisher no longer picks
+one.** The reason is that the backend is the security boundary, and the honest version is
+narrow. The default was never lax -- a fence around every command, host-path refusal, the
+route table a read-only rule needs -- so requiring the parameter makes no deployment safer
+by itself. What it buys is that nobody wires the service without learning the boundary is
+there; the cost, named, is that a parameter you must type is one you notice you can
+change. Written down because the argument is tempting to overstate. **What replaces the
+old shape's protection** -- being handed the default kept the route table and confinement
+by doing least -- is `refuse_unusable_backend`, asking `why_no_shell` and
+`unrouted_denials` of every backend opened. Both only look, costing a turn nothing; the
+kit's checks that write files and run commands stay a deployment's to run.
 
-**Writability hangs on a scope, not on a route.** `/skills/**` is one rule
-covering the catalogue and every bundle's mount, and covered a session's uploads
-too while they existed. A rule per
-route would make a deployment's permission list grow with the number of bundles
-its catalogue ships, protecting nothing more, and it would have stopped this
-being a refactor that changes nothing observable -- which is the property that
-made it safe to land.
+**Considered and rejected:** requiring the old optional adjuster unchanged, ceremony with
+the default still built inside; a narrower `(session_dir) -> backend` factory, making the
+deployment build the closure and drop whatever else the default was handed; and both a
+required factory and the optional adjuster, two parameters for one question.
+*(2026-09-15, in three slices.)*
 
-**Agreed as "a test ties them" and built one step stronger, because a rule
-refused the agreed form.** `routed_paths` would have been read by nothing but a
-test, which `test_nothing_is_defined_for_tests_alone` catches -- and that would
-have left `routed=False` on `/derived` as pure documentation. So `default_backend`
-keys its dict off the table: a route declared with nothing to back it now raises
-where it is declared. The harness still decides *what* backs each path; only the
-keys moved.
-
-**Unrouted paths are in the table.** `/derived` and `/runs` reach the default
-backend, which is the shell's, and before this a reader learned that by not
-finding them in a dict literal. An absence is not a record.
-
-**Still not opened: the seam.** The entry below defers a backend factory on
-`Kingfisher` and that stands -- execution is swapped through `CommandRunner` and
-storage through `SessionRoot`, both of which exist and neither of which this
-touches. What changed is that "routes only, never the default slot" is now a
-thing someone could implement without first untangling three files.
-*(Opened on 2026-09-14; see below.)*
-
-**Considered and rejected with it:** a backend factory on `Kingfisher` -- deferred
-then, opened on 2026-09-14 for a reason this had not considered, and not on the
-terms reserved here; kingfisher shipping
-an S3 store behind a closed table like `ADAPTERS`, which would put this package in
-the business of owning every backing store anyone asks for; and a builder
-parameter on `create_app`, designed and dropped once the resolution point moved
-inside `Kingfisher.__init__` and left it nothing to do.
-*(2026-09-04 to 2026-09-05, `a-store-a-deployment-can-name.md`, built in four
-slices. Its one correction is worth keeping: an argument about `create_app`
-needing a checkpointer held open for the process was true when written and false
-a day later, `48cd457` having made the default `InMemorySaver`. The conclusion
-did not rest on it.)*
-
-**The seam is open, and the reason is tenancy rather than capability.** What kept
-it shut was that a remote runtime is already served by two ports: `CommandRunner`
-ships the command elsewhere, `SessionRoot` says where the session's files are.
-Both hold. What neither survives is a deployment that forbids one caller's session
-from reaching another's. `SessionRoot` yields a *path*, so a remote filesystem
-reaches it as a mount -- and a mount is established once, outside the process,
-before any session exists. A session created at runtime cannot be given one of its
-own: making mounts needs privileges, and granting them was measured to cost more
-than it buys, since a container holding `CAP_SYS_ADMIN` is one command from the
-agent's own shell remounting its workspace executable and nothing in the process
-can take that back. So every session sits on one mount, separated by a path prefix
-and nothing else. That is exactly the shared storage a per-caller route was
-already declined on, for want of a tenancy argument. A deployment that forbids the
-sharing *is* the argument, and it comes out the other way: `backend_from` is
-called per turn with the session it is for, so each caller can be handed its own
-filesystem, and the separation is in the wiring rather than in a naming
-convention.
-
-**Past "routes only, never the default slot", and that condition was the thing
-wrong with the deferral.** The default slot is the shell and the filesystem for
-every unrouted path, so reserving it ruled out the only deployment that needed the
-seam at all. What stands in its place is the shape rather than a boundary:
-`backend_from` is handed the backend kingfisher built, so a deployment wanting one
-thing different returns what it was given with one thing different, and keeps
-refusing host paths, keeps the route table that makes a read-only rule legal, and
-keeps the confinement, by doing the least work available. Losing any of them takes
-a deliberate return of something else.
-*(This paragraph alone is superseded on 2026-09-15; see below. The rest of this
-entry stands -- the tenancy argument, the callable, the graph refusal and the
-setting left unopened are all unchanged by it.)*
-
-**A callable, and the reason is sharper here than for a runner.** A backend is
-rooted at a session directory, so one instance handed in at construction is one
-filesystem for every caller -- which is the leak a deployment replacing the
-backend is usually replacing it to avoid, written at a call site where nothing
-looks wrong. The parameter is named for where a backend comes from rather than for
-the backend so that passing an instance is not the obvious thing to try, and
-refused with a type error when it is tried anyway.
-
-**Both a pre-built graph and a function is refused at construction.** They are two
-answers to what filesystem a turn runs against, and a pre-built graph already
-carries one, so either would be silently discarded. Refused where the wiring is
-written, which is the last moment it is cheap to say so.
-*(Reversed 2026-10-05: a graph now needs session backends beside it. See "A
-pre-built graph names its session backends" under "A session is its backend".)*
-
-*(The parameter was renamed `backend` on 2026-09-15, below, so its name no longer
-does the work the paragraph before last describes; the type error for an instance
-does.)*
-
-**Not opened with it: a setting.** A deployment needing this builds `Kingfisher`
-itself, and `create_app` took one ready-made, so the service reached the seam
-without a name to resolve. The command line does not, and would need one --
-left until something wants it, because a setting is permanent and nothing has
-asked yet.
-*(2026-09-14.)*
-
-**A deployment names the filesystem its agents run on, and kingfisher no longer
-picks one.** `backend_from` was optional and was handed the backend kingfisher had
-already built. It is now `backend`, required, and handed the ingredients instead: a
-`BackendFactory` called per turn with the config, the session, the catalogue and the
-runner, which is exactly what `default_backend` takes. A deployment keeping what it
-always had writes `Kingfisher(cfg, backend=default_backend)`.
-
-**The reason is that the backend is the security boundary, and the honest version of
-that is narrower than it sounds.** The default was never the lax option -- it is
-`sandbox-exec` or Landlock around every command, host-path refusal, and the route
-table a read-only rule is only legal against -- so requiring the parameter makes no
-deployment safer by itself, and there was no way to weaken it by accident. What it
-buys is that nobody can wire the whole service without learning the boundary is
-there. The cost is named rather than glossed: a parameter you must type is a
-parameter you notice you can change, which cuts the other way, and that was judged
-worth it. Written down because the argument is tempting to overstate and a later
-reader checking it against the code would find the default strict and wonder what
-this entry meant.
-
-**What the old shape was protecting, and what replaces it.** Being handed the
-default meant a deployment kept the route table and the confinement by doing the
-least work available. A factory starts from nothing, so the cheap path stops being
-the safe one -- and the answer is not prose but `refuse_unusable_backend`, which
-runs `execution_support` and `route_coverage` on every backend the harness resolves.
-Both only look, so they cost a turn nothing; the other two write files and run
-commands and stay a deployment's to call. *(Landed a day earlier, on its own merits:
-it improves the old seam too.)* The typed `BackendFactory` covers the one failure a
-runtime check cannot see -- a factory written without `runner` drops the
-`CommandRunner` the deployment wired, and the backend that comes back is well-formed
-and merely runs its commands in the wrong place. *(That failure is gone since
-2026-10-05, when `open` stopped taking a runner. See "The runner belongs to the
-session backends" under "A session is its backend".)*
-
-**Required, except that a pre-built graph is an answer too.** `graph=` carries its
-own backend and `_graph_for` returns it before the factory is reached, so demanding
-one beside it would force 72 call sites to name something provably discarded --
-making the mistake the old `graph=`/`backend_from=` refusal existed to catch into the
-mandatory spelling. So the rule is exactly one of the two, both refusals at
-construction. That is why `backend` keeps a `None` default in the signature: the
-requirement is a pairing, not a parameter.
-*(Reversed 2026-10-05, along with the paragraph below. See "A pre-built graph names
-its session backends" under "A session is its backend".)*
-
-**`run` and `stream` keep a default, and `Kingfisher` does not.** They are
-documented as conveniences over a *default* `Kingfisher`, and `formats.md` teaches
-`run(Request(...))` as the first thing a reader writes. The default is in their
-signature rather than their body so it can be seen and replaced without dropping to
-the constructor. *(Reversed 2026-10-16: they take `sessions` with no default, as
-`Kingfisher` does. See "Sessions are always named" under *The core and its plugins*.)*
-
-**`default_backend` is one of the eleven names, back through the front door.** The
-rule they left under -- a caller means a caller outside this wheel -- is unchanged;
-what changed is that every such caller now has to name this one. Its witness was
-`service` rather than `document`, because the service imported it and that half of
-the table was read off the real imports and could not rot. It is `document` now,
-since the service is gone and the guides write it out. *(Both gone since:
-`default_backend` is `LocalSessions` on `kingfisher.plugins`, and the witness table went
-with *The core and its plugins*.)*
-
-**Considered and rejected:** requiring `backend_from` unchanged, which would have
-been ceremony with the default still built inside; a narrower `(session_dir) ->
-backend` factory, which makes the deployment build the closure and worsens the
-dropped-runner problem; keeping both a required base factory and the optional
-adjuster, two parameters answering one question; and a service setting naming a
-factory, which stayed unopened for the reason the entry above gives -- the service
-reached the seam without a name to resolve, and the parameter becoming required is
-not the same as something asking for one.
-*(2026-09-15, in three slices: the rename, the check, then the parameter.)*
+**Not kept: a default for `run` and `stream`.** As conveniences over a default
+`Kingfisher`, with `formats.md` teaching `run(Request(...))` first, they carried one -- in
+the signature, then in the body so a graph caller was not handed one it never named.
+*Reversed 2026-10-16:* they take `sessions` with no default, as `Kingfisher` does; a
+default there was the core picking what a deployment's agents run on.
 
 ## A session is its backend
 
 **Every read and write of a session's files goes through that session's backend,
-kingfisher's own included.** The agent always reached a session through the backend
-a factory returned; kingfisher reached the same session through a `Path` and assumed
-they were one directory. With the default they were. With a backend that runs
-elsewhere they were two places: a request's data went where the agent could not
-read it, the report it wrote came back as nothing, and the turn said it had worked.
-Proposed on 2026-09-30 and built the same day in four slices, the last two together
-because the lock and the housekeeping could not move to the backend while
-`SessionRoot` still decided where a session was.
+kingfisher's own included.** The agent reached a session through the backend a factory
+returned; kingfisher reached it through a `Path` and assumed they were one directory.
+With a backend that runs elsewhere they were two places: a request's files went where the
+agent could not read them, the report it wrote came back as nothing, and the turn said it
+had worked. That covers a request's inputs (`upload_files`), what a turn left (`glob`, and
+`download_files` for `Session.artifact`), the pinned agent, the conversation and a paused
+turn (`HarnessFiles`), and the turn lock. *(2026-09-30, built in four slices.)*
 
-**What goes through it.** A request's `data` (`upload_files`), what a turn left
-(`glob`, and `download_files` for `Kingfisher.artifact`, which replaced opening
-`RunResult.artifacts` on this disk), the pinned agent, the conversation and a paused
-turn (`HarnessFiles`), and the turn lock. Nothing is read from a directory on this
-host any more, and a backend that keeps its sessions elsewhere keeps all of them
-there.
+**The backend is opened by a `Sessions`**, per turn with a session *id*, because a backend
+that runs elsewhere has no directory here; and asked what only something seeing every
+session can answer -- `sessions`, `mark_used`, `size`, `delete`. Each takes the `Config`,
+because the default is one object serving every workspace. A deployment building on
+`LocalSessions` subclasses it, and a plain function is refused: it can build a backend and
+cannot say which sessions there are. `backend_at` is public because building on the
+default needs it.
 
-**The backend is a `SessionBackends`.** Called per turn with a session *id*, not a
-directory, because a backend that runs elsewhere has no directory here to be handed;
-and asked what only something that sees every session can answer -- `sessions`,
-`mark_used`, `size`, `delete` -- which is what `SessionDirs` answered, keyed by id.
-Each takes the `Config`, because the default is one object serving every workspace.
-`default_backend` is that object, and a deployment building on it subclasses
-`DefaultBackend`; a plain function is refused, because it can build a backend and
-cannot say which sessions there are. `backend_at(cfg, directory)` is the old
-per-directory builder, public because building on the default needs it.
+**The lock is on the sessions**: `claim`, `release`, `held` -- a create that fails while
+another claim is live, which `write` cannot be. Not chosen: a lock beside the backend,
+which asks less of an adapter and gives a session two things to wire to one place.
 
-**The lock is on the backend.** `claim`, `release` and `held` -- a create that fails
-while another claim is live, which `write` cannot be. Considered and not chosen: a
-lock beside the backend, which asks less of an adapter and gives a session two
-things that must be wired to the same place, the split this closed.
+**`SessionRoot` and `SessionStore` are gone**, and `KINGFISHER_SESSION_STORE` and
+`KINGFISHER_SESSION_STORE_FACTORY` are refused rather than ignored: ignored, a deployment
+relying on one for durable sessions would lose them on upgrade with nothing said. Keeping
+a session when the machine may not is a durable backend's job, or storage mounted at
+`<workspace>/sessions`. A `synced(backend, store)` wrapper lost, as a second answer to one
+question. The old root's one check that mattered -- two sessions are two places -- is
+`two_sessions_are_kept_apart`.
 
-**`SessionRoot` and `SessionStore` are gone**, with `KINGFISHER_SESSION_STORE` and
-`KINGFISHER_SESSION_STORE_FACTORY`, which are refused rather than ignored: ignored,
-a deployment that relied on one for durable sessions would lose them on upgrade with
-nothing said. Keeping a session when the machine may not is what a durable backend
-does, or storage mounted at `<workspace>/sessions`. A `synced(backend, store)`
-wrapper was the alternative that lost, as a second way to answer one question.
-`KINGFISHER_BACKEND_FACTORY` replaces them, and only the command line reads it:
-`Kingfisher` takes its backend as an argument, and the setting is how `sessions`,
-`reap` and `artifact` see sessions a backend keeps elsewhere. `SESSION_ROOT_CONTRACT`
-went with its port; the one check in it that mattered -- two sessions are two
-places -- is `two_sessions_are_kept_apart` in `SESSION_BACKENDS_CONTRACT`.
+**`/.harness` is in the shell's reach on a remote backend, so it was defended twice**:
+`shell_denied` drives `execute` at `/.harness` and `/inputs`, and kingfisher signed the
+pin, the conversation and a paused turn with `KINGFISHER_SESSION_KEY`, an HMAC bound to
+the session and file name, refusing anything unsigned.
 
-**`/.harness` is in the shell's reach on a remote backend, so it is defended twice.**
-`shell_denied` in the kit drives `execute` at `/.harness` and `/data`; and
-kingfisher signs the pin, the conversation and a paused turn with
-`KINGFISHER_SESSION_KEY`, an HMAC bound to the session and the file name as well as
-the bytes, verified on every read. Unsigned is refused, because it cannot be told
-from a signature deleted. The key is required unless the factory *is*
-`default_backend` under a sandbox kingfisher applies itself -- identity, because a
-wrapper can return the default's backend with anything changed -- and it has no
-default and must never get one: generated and saved in the workspace, it is readable
-by the macOS sandbox's shell. Two things were decided building it: any supplied
-runner needs a key, because whether it is local cannot be known at startup; and a
-paused checkpoint is written in place, a backend having no rename, so half of one
-fails its signature rather than loading. *Reversed 2026-10-01, next entry.*
+**Reversed: the session key.** Nothing signs what a session keeps; the shell's fence is
+the one defence, and `doctor` says where it cannot see one. The key was configuration for a
+threat only the deployment's runtime can shape -- which backend, where its shell runs, what
+it can read. Where kingfisher fences the shell no key was needed, and where it does not the
+key was only as safe as where it was kept: with the sandbox off, the shell read it out of
+a `.env` on the first try, and sandbox-off was a case the key was required for. Protection
+a backend needs belongs to the runtime that brings it. `doctor`'s `session files` check
+warns for the sandbox off or external and for sessions of a deployment's own, pointing at
+`shell_denied`; a key still set is reported as retired. A paused turn needs no signature:
+no prefix of a paused state deserialises, measured at every length and held by
+`test_no_part_of_a_checkpoint_resumes`. Not taken: an optional key on the backend, keeping
+signing code for a protection nothing requires; and session state out of the shell's
+reach, splitting a session back into two places. *(2026-10-01.)*
 
-**Reversed: the session key.** Nothing signs what a session keeps; the shell's fence
-is the one defence, and `doctor` says where it cannot see one. The key was
-configuration every deployment's environment carried, for a threat whose shape only
-the deployment's runtime knows -- which backend, where its shell runs, what that
-shell can read. Where kingfisher fences the shell no key was ever needed, and where
-it does not, the key was only as safe as the place it was kept: with the sandbox off,
-the shell read it out of a `.env` on the first try, and the sandbox being off was one
-of the cases the key was required for. Protection a backend needs belongs to the
-runtime that brings the backend, not to the package.
+**The run log is `RunEvents`, not session state.** It was the one file appended to while
+a turn ran, which a backend cannot do, and most wanted for the turn that crashed. Events go
+to the `kingfisher.run` logger or a sink the deployment passes, carrying `session_id` and
+`turn_id`.
 
-So `KINGFISHER_SESSION_KEY`, `kingfisher key`, `SessionTamperedError` and the refusal
-to start went. A deployment kingfisher cannot see into starts, and `doctor`'s
-`session files` check warns -- for the sandbox off or external, and for a backend
-`KINGFISHER_BACKEND_FACTORY` names -- pointing at `shell_denied`. A key still set is
-reported as retired rather than refused, because the deployment runs either way.
-What the signature also did for a paused turn the format does by itself: no prefix
-of a paused state deserialises, measured at every length and held by
-`test_no_part_of_a_checkpoint_resumes`, and a resume of one now says which session
-rather than leaving msgpack to. Weighed and not taken: a backend carrying an
-optional key kingfisher would use, which keeps the signing code for a protection
-nothing requires; and keeping session state where the shell cannot reach it, which
-splits a session back into the two places it was just made one. *(2026-10-01.)*
+**Still local, on purpose**: `LocalSessions`' confinement, because confining a shell means
+something only on the host that runs it; and a supplied runner, built from
+`<workspace>/sessions/<id>`, because a runner is about where commands run on this host.
 
-**The run log is `RunEvents`, not session state.** It was the one file appended to
-while a turn ran, which a backend cannot do, and most wanted for the turn that
-crashed. Events go to the `kingfisher.run` logger or a sink the deployment passes,
-and carry `session_id` and `turn_id`. The proposal said nothing read the log; the
-live driver did, for its usage line, and now keeps a sink of its own.
+**Named for what they are: a backend is one session's, and a `Sessions` opens them.** A
+`backend=` that refuses a backend reads as a bug. A session is opened by a named `open`
+rather than `__call__`, which collapses the constructor's two checks into one and gives an
+async twin a name to follow. "Factory" means only what a setting names, a function of no
+arguments, as `KINGFISHER_WIRE_FORMATS` names one. *(2026-10-02; the present names are
+from *The core and its plugins*.)*
 
-**Still local, on purpose.** `default_backend`'s confinement, because confining a
-shell only means something on the host that runs it; and a supplied runner is still
-built from `<workspace>/sessions/<id>`, because a runner is about where commands run
-on this host. *(By `DefaultBackends` since 2026-10-05, not by `Kingfisher`.)*
+**The old setting name is refused, which the policy on renamed settings does not do.**
+*The deprecation is over* has a stale name reported, because its default may be what was
+wanted. Here it cannot be: a deployment that named its own sessions did not want the
+command's, and its agent's shell, on this host. So the earlier names are in
+`RENAMED_SETTINGS`, refused where the environment is read, stopping a library deployment
+too. Not the shim that went, which read the old name in place of the new.
 
-**Named for what they are: `backends=`, `open`, `KINGFISHER_SESSION_BACKENDS_FACTORY`.**
-The entries above call the object a backend and its setting a backend factory, and
-the code said the same -- `backend=`, `default_backend`, `DefaultBackend`,
-`KINGFISHER_BACKEND_FACTORY` -- while the type was `SessionBackends` and a backend
-was what it returned. A `backend=` that refuses a backend reads as a bug. Now a
-**backend** is one session's filesystem and shell, and the **session backends** open
-them: `Kingfisher(backends=...)`, `default_backends`, `DefaultBackends`,
-`Config.session_backends_factory`, `configured_backends`. A session is opened by a
-named `open` rather than the object's `__call__`, which collapses the constructor's
-two checks into one -- callability was the first, and its advice was refused by the
-second -- and gives the method a name an async twin can follow. "Factory" means only
-what the setting names: a function of no arguments returning the session backends,
-as `KINGFISHER_ADAPTERS_FACTORY` names one returning adapters.
-
-**The old setting name is refused, which the policy on renamed settings does not
-do.** *The deprecation is over* settled that a stale name is reported by `doctor`
-rather than refused, because the default it falls back to may be what was wanted.
-Here it cannot be: a deployment that named session backends did not want the command
-line's sessions, and its agent's shell, on this host instead. So
-`KINGFISHER_BACKEND_FACTORY` is in `RENAMED_SETTINGS` and refused where the
-environment is read, as the removed store settings are -- which stops a library
-deployment still carrying it too, at the cost of a rename for a variable only the
-command line ever read. It is not the `RENAMED` shim that went: that read the old
-name in place of the new, and this reads it only to refuse it. *(2026-10-02.)*
-
-**A pre-built graph names its session backends, `default_backends` included.**
-`graph=` was accepted in place of `backends=` because the backend it would have
-named was provably discarded: `_graph_for` returned the graph before any session's
-backend was opened. That stopped being true here. kingfisher places a request's data,
-collects what a turn left and takes the turn lock through a backend on every turn,
-and beside a graph it was told of none, so it built `LocalFiles` over
-`<workspace>/sessions/<id>`. That was the guess this section exists to stop making,
-still made for the one deployment kingfisher could not check. A graph compiled on a
-backend that keeps its sessions elsewhere had its data placed where its agent never
-looked. So `Kingfisher` refuses a graph without `backends=`, `LocalFiles` is gone,
-and a graph built on kingfisher's own writes `backends=default_backends`. The
-spelling the old entry declined to make mandatory, at 72 call sites, is 127 now, and
-true. Nothing checks that the graph's backend and the session backends reach the same
+**A pre-built graph does not stand in for sessions.** `graph=` was first refused beside a
+backend, then accepted instead of one rather than force 72 call sites to name something
+provably discarded. That stopped being true: kingfisher places inputs, collects what a
+turn left and takes the lock through a backend every turn, and beside a graph it guessed a
+folder under `<workspace>/sessions/<id>` -- so a graph compiled on a backend keeping
+sessions elsewhere had its inputs placed where its agent never looked. A graph needs
+sessions beside it now, at 127 call sites. Nothing checks that the two reach the same
 place, because a compiled graph does not say what it was compiled on.
+*(Reversed 2026-10-05.)*
 
-`run` and `stream` still fill in `default_backends` for a caller with no graph, and
-refuse one with a graph the way the constructor does. So their default moved from
-the signature into the body: in the signature it would have been handed to a graph
-caller who never named it. *(2026-10-05. Reversed 2026-10-16: they require
-`backends=` as the constructor does, graph or not. A default there was the core
-picking what a deployment's agents run on, and the core now names no sessions
-implementation at all.)*
+**`sessions` has no default.** A missing argument is reported by the type checker where
+the call is written, earlier than any message at construction, and Python refuses it at
+runtime for a caller nobody type-checks. *(2026-10-05.)*
 
-**`backends` has no default.** It kept `None` only so that leaving it out reached a
-message naming `default_backends`. A missing argument is reported by the type checker
-where the call is written, which is earlier than any message at construction, and
-Python still refuses it at runtime for a caller nobody type-checks. The part of the
-message that was not obvious -- a graph needs them too -- is said by `run` and
-`stream`, the only callers that leave `backends` out on purpose. *(2026-10-05.)*
+**What a session opens is checked where it is opened.** Run only where an agent was built,
+which beside a graph is never, the check let a backend with no shell reach kingfisher's own
+calls and fail at `claim` with an `AttributeError`. It runs in `_files_for` on every
+session opened, for an `isinstance` and a scan of the routes. *(2026-10-05.)*
 
-**What a session opens is checked where it is opened.** `refuse_unusable_backend` ran
-only where an agent was built on a backend, which beside a pre-built graph is never,
-so a backend deepagents gives no shell went on to kingfisher's own calls and failed at
-the first of them, `claim`, with an `AttributeError`. It runs in `_files_for` now, on
-every session opened -- a turn, a lookup, a sweep -- for an `isinstance` and a scan of
-the routes. That asks the same of session backends beside a graph as beside none:
-what `open` returns is what a session runs on, and kingfisher cannot see whether a
-graph's own backend is a different one. *(2026-10-05.)*
+**The runner belongs to the sessions, not to `Kingfisher`.** `Kingfisher(runner=)` worked
+out a host path for every session whatever its sessions were, and an `open` that dropped
+the runner got a well-formed backend running commands under the wrong fence, invisible at
+runtime. `LocalSessions(runner=...)` builds it in `open` from the directory it lays out;
+sessions of a deployment's own decide how their commands run. Kingfisher's own are told
+apart by exact type, not identity, since a subclass can return its backend with anything
+changed. *(2026-10-05.)*
 
-**The runner belongs to the session backends, not to `Kingfisher`.**
-`Kingfisher(runner=)` built a runner per turn from `<workspace>/sessions/<id>` and
-handed it to `open`. So the service worked out a host path for every session whatever
-its backends were, and every `open` had to take the runner and pass it on. An `open`
-that dropped it got a well-formed backend running its commands under the wrong fence,
-which nothing at runtime could see -- the failure `SessionBackends` was typed to
-catch. Now that session backends are always named, the runner goes on the ones that
-know a session's directory. `DefaultBackends(runner=...)` builds it in `open` from the
-directory it lays out, and `open` takes no runner. Session backends of a deployment's
-own decide how their commands run, as their backend always did. It is still a
-callable given the directory, for the reasons above.
-
-A `DefaultBackends` carrying a runner still keeps kingfisher's sessions. So
-`Kingfisher.origins` tells kingfisher's own from a deployment's by exact type rather
-than by identity with `default_backends`. A subclass still counts as the deployment's,
-because it can return its backend with anything changed. *(2026-10-05.)*
-
-**A session's files are one module, outside the harness.** `session_files` sat in
-`infrastructure/harness/` for `LocalFiles`, which subclassed deepagents'
-`CompositeBackend`. With that gone it calls methods on a backend it is handed and
-imports no framework, and a file that imports no framework does not belong in the
-package defined by importing one. So it is `infrastructure/session_files.py`, beside
-`session_store`, and `service` has one edge fewer into the harness.
-
-`workspace/placement` came with it. `session_files` was its only reader, and
-`DataPlacement` described *what `place_data` did*, a function that had been in the
-other file since data went through the backend. What reaches `/data` through a backend
-is not about the directory a deployment runs out of, which is `workspace/`'s subject.
-The mode rule loses nothing by it: `placement` held the checks and the report, and
-the copy into `/data` is the backend's own, inside `writable_data`.
-*(2026-10-05.)*
-
-**What a session serves under `/skills/` is checked against what kingfisher read.**
-Kingfisher reads the skills catalogue itself, at startup, and builds grants and the
-read-deny rules from that reading; the agent reads skills through its session's
-backend. Session backends of a deployment's own may serve `/skills/` from anywhere,
-and nothing compared the two: a granted skill could be missing from the agent's
-index, and one kingfisher never read had no deny rule, so it stayed readable whatever
-a request narrowed. `a_session_serves_the_skills_kingfisher_read` in
-`SESSION_BACKENDS_CONTRACT` lists the catalogue, each mount and each bundle through
-one opened session, with the lister deepagents loads skills with, and compares names
-and paths with the same folders read directly.
-
-**By what is served, not by what backs a route.** Inspecting the routes would refuse
-a backend serving the same folders another way, and pass one routing `/skills/` to
-the right kind of backend over the wrong folder. **In the kit rather than on every
-open**, where the two automatic checks run: those cost an `isinstance` and a scan,
-and this lists every source, for a wiring mistake that does not change between
-turns. It needs no async twin, because `aopen_reaches_the_session_open_does` already
-holds `aopen` to the session `open` reaches. **Bundles and mounts come from one list,
-`skill_mounts`**, which `backend_at` mounts and the check reads: a skills directory
-mounted anywhere else would be served and never checked. *(2026-10-11.)*
+**What a session serves under `/skills/` is checked against what kingfisher read.** Grants
+and read-deny rules come from kingfisher's own reading; the agent reads through its
+backend, which a deployment's own may serve from anywhere. Uncompared, a granted skill
+could be missing from the agent's index, and one kingfisher never read had no deny rule and
+stayed readable whatever a request narrowed. `a_session_serves_the_skills_kingfisher_read`
+lists every source through one opened session with deepagents' own lister and compares
+names and paths with the folders read directly -- **by what is served, not what backs a
+route**, which would refuse a backend serving the same folders another way and pass the
+right kind over the wrong folder. **In the kit rather than on every open**: it lists every
+source, for a wiring mistake that does not change between turns. **Bundles and mounts come
+from one list, `skill_mounts`**, which `backend_at` mounts and the check reads.
+*(2026-10-11.)*
 
 ## A tool's path is the backend's path
 
-**A workspace tool's `path` is resolved by the session's backend, under the turn's
-rules, one path at a time.** It was resolved by joining the virtual path onto the
-session directory: a second copy of the backend's own path mapping, which had drifted
-three ways, each measured on 2026-09-30. On the default backend it handed a tool
-`<session>/skills/...`, which does not exist, while `read_file` read the same path from
-the catalogue. It handed a tool the real `/.harness` pin and conversation, which the
-file tools are refused and the shell is fenced from -- and a tool runs in this process,
-outside every fence, so one writing to its `path` could rewrite the agent a session is
-pinned to. And on a backend keeping sessions elsewhere it handed a tool a local path to
-nothing. Proposed on 2026-09-30 after an audit of what still assumed a session is a
-folder here, settled on 2026-10-01, and built in four slices.
+**A workspace tool's `path` is resolved by the session's backend, under the turn's rules,
+one path at a time.** Joining the virtual path onto the session directory was a second copy
+of the backend's mapping, drifted three ways, each measured on 2026-09-30: it handed a tool
+`<session>/skills/...`, which does not exist; the real `/.harness` pin and conversation,
+which the file tools are refused and the shell fenced from, though a tool runs in this
+process outside every fence; and, on a backend keeping sessions elsewhere, a local path to
+nothing.
 
-**In order, per path:** the turn's rules as `read_file` applies them; then where the
-backend keeps the path on this host -- a composite's routes, a `FilesystemBackend`'s
-root, or the backend's own `host_path(virtual)`; then containment against the root
-that answered, links resolved. A path not kept here is refused with a message naming
-`ToolContext`. `SessionPaths` holds the turn's `PermittedBackend`, the same object a
-tool gets as `runtime.context.backend`, and that reads its rules when it checks:
-`build_agent` builds the guards before it has finished adding rules, and a copy taken
-then would miss memory declined and skills narrowed.
+**In order, per path:** the turn's rules as `read_file` applies them; where the backend
+keeps the path on this host -- a composite's routes, a `FilesystemBackend`'s root, or the
+backend's own `host_path`; then containment against the root that answered, links
+resolved. A path not kept here is refused naming `ToolContext`. `SessionPaths` holds the
+turn's `PermittedBackend`, which reads its rules when it checks, because `build_agent`
+builds the guards before it finishes adding rules.
 
-**Per path, not per backend.** The first finding read like "refuse path tools on a
-remote backend", and that was the wrong rule: a backend that is not kingfisher's may
-keep all, some or none of its files on this host -- a directory of its own, a network
-mount, or `/data` here and the shell elsewhere. Which backend it is says nothing about
-one path, so the question is asked of the path, at the call. A startup rule was the
-alternative, and it would have refused a deployment over a tool it never calls.
+**Per path, not per backend.** "Refuse path tools on a remote backend" was the wrong rule:
+a backend may keep all, some or none of its files here, so the question is asked of the
+path at the call. A startup rule would refuse a deployment over a tool it never calls.
+**A subagent is handed the parent's paths**, rather than guessing its session from
+`backend.workspace`, which a deployment's backend need not have.
 
-**A subagent is handed the parent's paths.** It guessed its session from
-`backend.workspace`, which a deployment's backend need not have, and without it a
-subagent's tools lost translation and the host-path refusal silently.
+**A path under a write-denied scope is handed over.** Under `/inputs` that is safe on the
+default backend, the directory read-only on disk; under `/skills` it is not, the catalogue
+being writable and shared. Decided for a `fill_template(path="/skills/report/template.md")`
+that reads, against a `tidy_whitespace(path=...)` that would rewrite for every session:
+workspace tools are the operator's reviewed code, every shipped one only reads, and
+refusing would leave a path tool unable to read a skill's file.
 
-**A path under a write-denied scope is handed over.** Under `/data` that is safe on the
-default backend, the directory being read-only on disk. Under `/skills` it is not: the
-catalogue is writable and shared, and a tool runs outside the shell's fence. Decided
-for a `fill_template(path="/skills/report/template.md")` that reads a template, against
-a `tidy_whitespace(path=...)` that would rewrite it for every session: workspace tools
-are the operator's reviewed code, every shipped one only reads, and the protection
-rests on the operator not writing that tool. Refusing write-denied scopes was the
-alternative, and would have left a path tool unable to read a skill's file at all.
-
-**`host_path` is part of the documented backend contract**, optional, and checked:
-`a_host_path_stays_in_its_session` in `SESSION_BACKENDS_CONTRACT` reads back what a
-backend's answer names and refuses one that is another session's file. Decided for a
-deployment keeping sessions on a network mount, whose existing path tools keep working
-with it. Keeping it internal was the alternative, and that deployment would have
-rewritten every path tool against `ToolContext` for files already here. A backend's own
-answer is taken at its word -- there is no root to hold it to -- which is what the
-check is for.
-
-**The shipped path tools read through `ToolContext`.** They take `file_path` and a
-runtime and fetch with `download_files`, so the examples work on any backend and teach
-the route that does. `line_count` streamed so as never to hold a large file; a backend
-hands a file back whole, so it holds it once now, and still keeps it out of the
-model's context, which is its job.
-
-**Two leftovers of *A session is its backend* went with it.** `kingfisher decide`
-asks the backends whether a session exists rather than looking for a folder, and
-`RunResult.session_dir` is gone, so nothing in a result is a host path and a result
-serialises whole.
+**`host_path` is part of the documented backend contract**, optional, and checked by
+`a_host_path_stays_in_its_session`, which refuses an answer naming another session's file.
+Decided for a deployment keeping sessions on a network mount, whose path tools keep
+working; a backend's answer is taken at its word, there being no root to hold it to, which
+is what the check is for. **The shipped path tools read through `ToolContext`** and
+`download_files`, so the examples work on any backend and teach the route that does.
+`kingfisher decide` asks the sessions whether a session exists rather than looking for a
+folder, and nothing in a result is a host path, so a result serialises whole.
+*(2026-10-01, built in four slices.)*
 
 **`reject_host_path` is scoped to the workspace, and was scoped to one session.**
-`WorkspaceScopedBackend` took a parameter called `workspace`, stored it as
-`self.workspace`, and was handed `session_dir`. The field had exactly one reader -- the
-guard -- so the whole of what "workspace" meant there was the wrong value.
-
-How it got that way is the useful part, because the wiring was not careless. The first
-clause turns the prefix into the virtual path the caller meant --
-`/{key[len(prefix):]}` -- and that only works if the prefix *is* this session:
-`<workspace>/sessions/s/scratchpad/report.md` minus the workspace is
-`/sessions/s/scratchpad/report.md`, which resolves somewhere else again. Somebody wired
-the one value that made the message right, and the scope came with it.
-
-So the clause covering "a host path inside the workspace" covered one session, and
-every other directory fell through to `HOST_ROOTS`, which names no workspace. Measured
-on 2026-10-01 at the two shapes: on a developer machine all four probes are refused, and
-the reason is that a pytest `tmp_path` sits under `/private/` -- the host-root clause,
-not the workspace one. At `/workspace`, which `Dockerfile` sets, a sibling session's
-file, a skill, `models.yaml` and an agent definition were all **accepted**, and a write
-to one was mirrored inside the session -- which is what `system.md` promises the model is
-refused.
-
-The guard takes both now: the session for the suggestion, the workspace for the scope.
-The two refusals differ deliberately -- a path in this session is offered its virtual
-spelling, and anything else under the workspace is not, because there is none to offer
-and inventing one would send the model somewhere else a third time.
-
-**The rule that named this case could not reach it.**
-`test_a_host_path_to_a_file_tool_is_refused_not_mirrored` was written for exactly this,
-using `f"{cfg.workspace}/sessions/s1/..."` -- a *sibling* of the fixture's
-`sessions/test-session`. It passed throughout, on the host-root clause. Every workspace
-in the suite is a `tmp_path`, so the workspace clause had no case anywhere, and
-`reject_host_path` is now driven directly against a `/workspace`-shaped one: a backend
-needs its directories to exist, and that is a path a test may not make. The wiring has a
-rule of its own as well, because the behaviour alone did not say which of the two values
-was wrong. *(2026-10-06, from an architecture review.)*
+`WorkspaceScopedBackend` stored a `workspace` and was handed the session directory --
+the one value that made the suggested virtual path right, so the scope came with it.
+Everything else fell through to `HOST_ROOTS`, which names no workspace. Measured on
+2026-10-01: on a developer machine every probe was refused, only because `tmp_path` sits
+under `/private/`; at `/workspace`, which `Dockerfile` sets, a sibling session's file, a
+skill, `models.yaml` and an agent definition were **accepted**, and a write to one was
+mirrored inside the session -- what `core/agent/prompts/file_tools.md` tells the model is
+refused. The guard takes both: the session for the suggestion, the workspace for the
+scope; anything else under the workspace gets no virtual spelling, since inventing one
+would send the model somewhere else again. **The rule that named this case could not reach
+it**: `test_a_host_path_to_a_file_tool_is_refused_not_mirrored` passed on the host-root
+clause, every suite workspace being a `tmp_path`, so `reject_host_path` is driven directly
+against a `/workspace`-shaped one. *(2026-10-06, from an architecture review.)*
 
 ## The command line
 
-**The command is a consumer of the library, not an insider.** Seeding and the
-inventory became public API to make that true. The library answers "what does
-this workspace offer" with a record rather than a list of names. Bare
-`kingfisher` prints help. Publishing was deferred, deliberately, and asked
-twice. *(2026-08-17, `a-command-worth-shipping.md`.)*
+**The command is a consumer of the library, not an insider.** Seeding and the inventory
+became public API to make that true, and the library answers "what does this workspace
+offer" with a record. Bare `kingfisher` prints help. Publishing was deferred, deliberately,
+and asked twice. *(2026-08-17, `a-command-worth-shipping.md`.)*
 
-**Reversed: the command is for what the library cannot do for itself.** That
-rule was written above the console script and kept the surface at `seed` and
-`list`; running a task was `kingfisher.run` and therefore not the command's job.
-It measures the library's completeness rather than the user's -- "the library
-can already do it, in Python" is true of every command-line tool ever written,
-and here it meant an editor, four lines, and knowing a bare task string is
-refused because a request must name an agent. Replaced by *what does a person at
-a terminal need to do*, under which `run` is the first verb and the others exist
-to get somebody to it.
+**Reversed: the command is for what the library cannot do for itself.** It kept the
+surface at `seed` and `list`, and measured the library's completeness rather than the
+user's -- "the library can already do it, in Python" is true of every command-line tool,
+and here meant an editor, four lines, and knowing a bare task string is refused. Replaced
+by *what does a person at a terminal need to do*: `run` is the first verb. What survives:
+a bare driver invocation spends real money on the smoke, wrong for a stranger's first
+command, and a verb with a required task cannot be reached by accident.
+*(2026-09-04, `the-verb-that-runs-a-task.md`.)*
 
-**Housekeeping is a verb, and it goes in through the front of the library.**
-`kingfisher sessions` lists what a workspace holds -- id, how long idle, what it
-costs -- and `kingfisher reap` deletes what it is finished with: the TTL by
-default, `--older-than` for one run, `--session` for one by name whatever its
-age. Both build a whole `Kingfisher`, at 1.3s and a refusal on a workspace with
-no `models.yaml`. A lighter path needing only the directory was the obvious
-alternative and is the wrong one: a session is four things in four places, one
-of them whichever `SessionStore` a setting names, and a second reader of those
-settings buys a fast cleanup that silently leaves the store's copy behind --
-the shape of the 132 orphaned threads *Sessions* already records.
+**Housekeeping is a verb, and it goes in through the front of the library.** `kingfisher
+sessions` lists id, idle time and cost; `kingfisher reap` deletes at the TTL, at
+`--older-than`, or one `--session` whatever its age. Both build a whole `Kingfisher`, at
+1.3s and a refusal without `models.yaml`. A lighter path needing only the directory buys a
+fast cleanup that silently leaves behind whatever the configured sessions keep elsewhere.
 
-**Both defaults are about which mistake is cheap.** `--older-than` refuses a
-bare number and takes `30m`, `12h`, `7d` -- or `0`, the one age that means the
-same in every unit. Seconds would have matched the setting beside it and would
-have made `--older-than 7`, from somebody who meant a week, sweep every session
-no turn is running in. And bare `reap` sweeps at the TTL rather than sweeping
-everything, so the least-typed invocation is not the most destructive one; when
-it removes nothing it names what decided, because a sweep that deletes nothing
-and prints nothing is one whose next user deletes the directory by hand --
-leaving the conversation, the claim and the store's copy exactly where they
-were. *(2026-09-14.)*
+**Both defaults are about which mistake is cheap.** `--older-than` refuses a bare number
+and takes `30m`, `12h`, `7d`, or `0`: seconds would make `--older-than 7`, from somebody
+meaning a week, sweep every idle session. Bare `reap` sweeps at the TTL, so the least-typed
+invocation is not the most destructive, and when it removes nothing it names what decided,
+because a silent sweep's next user deletes the directory by hand. *(2026-09-14.)*
 
 **A run can be told to take its session with it, and only a finished turn is.**
-`kingfisher run --delete-session` and `Kingfisher.run(delete_session=True)`
-dispose of the session once the turn ends. A turn stopped at a bound keeps all
-of it and says how to pick it up or remove it: that ending is the one whose
-leftovers are worth something -- the partial work is real, the conversation is
-what a retry on the same session is rebuilt from, and the line printed beside it
-already promises both. The files a deletion takes are named on the way out,
-which is the only place this command prints `artifacts` at all, and a deletion
-that fails does not change the exit code -- those three say how the *turn*
-ended, and `1` already means the answer above was cut short.
+`--delete-session` and `run(delete_session=True)` dispose of the session once the turn
+ends. A turn stopped at a bound keeps it and says so: those leftovers are worth something,
+and the conversation is what a retry is rebuilt from. A failed deletion does not change the
+exit code, which says how the *turn* ended. **Offered on `run` and not on `stream`**: a
+generator has no *after the turn* this library controls, and a `finally` fires on
+`GeneratorExit` too, so a session would go because somebody closed a loop early. The rule
+both need lives in `RunResult.completed`, and
+`test_no_surface_decides_for_itself_what_a_finished_turn_is` stops a second copy.
+*(2026-09-14.)*
 
-**Offered on `run` and not on `stream`,** which is not the asymmetry it looks
-like: a generator has no *after the turn* that this library controls. Past the
-final yield never runs for a caller who stops reading at the answer, and a
-`finally` fires on `GeneratorExit` too -- so a session would go because somebody
-closed a loop early, which is the shape `_stream_turn` already carries a comment
-about. The command drains `stream` itself and so disposes after `show` returns,
-which leaves the two surfaces sharing no code path: the rule they both need
-lives in `RunResult.completed`, and
-`test_no_surface_decides_for_itself_what_a_finished_turn_is` is what keeps a
-second copy of it from being written. *(2026-09-14.)*
+**Rejected: sweeping at the start of a run.** Not on cost, measured first and nothing: a
+sweep finding nothing is 1.65ms at fifty sessions and 33ms at a thousand, against a turn of
+1.5-1.9s. On shape: a command that deletes as a side effect of being asked something else
+has a blast radius nobody reads in `kingfisher run --help`. `reap` is the janitor's door,
+and a schedule has cron and `reap()`. Nothing enforces the TTL, and `configuration.md` says
+so. The measurement was never the objection. *(2026-09-15.)*
 
-**Rejected: sweeping at the start of a run.** With `reap` a verb and
-`--delete-session` a flag, the obvious third move is for `kingfisher run` to
-sweep whatever the TTL calls expired before it does anything else -- so that
-`KINGFISHER_SESSION_TTL_S` finally decides something without anybody typing a
-command.
+**`run` takes no flag that narrows capabilities.** Its flags say what runs, where, on what
+and for whom, and what happens around it. Narrowing is a deployment's concern with better
+homes -- `Config(grants=...)` clamps, an agent file declares what it holds -- and
+`--without-*` freezes what the workspace offers *now*. The cost: no "without the shell"
+from the command line; write an agent that declares it. `--input` was never a candidate for
+cutting, `/inputs` being read-only to the agent and so the only way to hand it a file (see
+"The names a caller writes follow the folder" under "Sessions: what persists and where").
+Nor was `--as`, measured: on a workspace declaring source ids a run naming nobody is
+refused, so `run` without it would break exactly the deployments that took access control
+seriously. Unlike `list --as`, absent is not the operator's view: a listing reads, a turn
+acts. *(2026-09-04.)*
 
-Not rejected on cost, which was measured first and is nothing: a sweep finding
-nothing expired is 1.65ms at fifty sessions, 6.3ms at two hundred and 33ms at a
-thousand, against a turn of 1.5-1.9s. It is rejected on shape. A command that
-deletes as a side effect of being asked to do something else has a blast radius
-nobody reads, because the person reading `kingfisher run --help` is asking how
-to run a task. The janitor already has a door -- `reap` is it -- and a
-deployment wanting this on a schedule has cron and a `reap()` to call from it.
+**The answer goes to stdout and everything watched goes to stderr**, so `> answer.md`
+keeps the answer and `2>/dev/null` the quiet. A `--quiet` flag was rejected: it asks the
+caller for correct behaviour and does nothing for whoever forgets it. **A subagent's prose
+is progress, not answer**: the streams keep the voices apart, and an extractor's notes are
+not what anybody redirected stdout for. `Progress` moved out of the driver rather than
+being copied, since two renderers would disagree about the next event kind. *(2026-09-04.)*
 
-What that leaves standing is that nothing enforces the TTL, which is why the
-row in `configuration.md` says so rather than letting the setting read as
-automatic. Anyone re-proposing this should know the measurement was never the
-objection. *(2026-09-15.)*
+**The exit code carries `stop_reason`, because prose on stdout leaves nowhere else to put
+it.** `0` finished, `1` stopped at a bound, `2` never ran -- so `kingfisher run ... >
+report.md && publish report.md` does not publish half a report. A code per reason was
+rejected: it repeats a stderr line in a vocabulary that grows with `STOP_REASONS`. Errors
+that would reach a stranger as a traceback are reported as `2`; `SessionBusyError` keeps
+its own branch, because "wait" is different advice from "fix something". *(2026-09-04.)*
 
-The half that survives: a bare invocation of the driver spends real money on the
-smoke, which is a fine default for a driver and a wrong one for a stranger's
-first command. A verb with a required task argument cannot be reached by
-accident. *(2026-09-04, `the-verb-that-runs-a-task.md`.)*
-
-**`run` takes six flags, and the eight that narrow capabilities are not among
-them.** `task`, `--agent`, `--session`, `--input`, `--data`, `--as` -- and
-`--delete-session` since 2026-09-14, which says what happens to the session
-afterwards rather than what the run may do. Narrowing what a request may activate
-is a deployment's concern with two better homes -- `Kingfisher(grants=...)`
-clamps, an agent file declares what it holds -- and
-`--without-*` freezes what the workspace offers *now*, which is a subtlety for
-somebody wiring a service rather than running a first task. The cost is that you
-cannot say "without the shell" from the command line; write an agent that
-declares it.
-
-`--data` was never a candidate for cutting: `/data` is read-only to the agent,
-so it is the only supported way to hand one a file at all. Nor was `--as`,
-measured rather than assumed -- on a workspace declaring source ids, a run that
-names nobody is refused by the library, so a `run` without it would be broken on
-exactly the deployments that took access control seriously. Unlike `list --as`,
-an absent one is not the operator's view: a listing is read-only, and a turn
-acts. *(2026-09-04, same document.)*
-
-*(2026-10-07: one flag hands the agent a file now, and it is `--input`. The
-per-turn `--input` named above went when a turn stopped having a directory, and
-`--data` was renamed `--input` once its folder was `/inputs`; the paragraph above
-is about that flag. See "The names a caller writes follow the folder" under
-"Sessions: what persists and where".)*
-
-**The answer goes to stdout and everything watched goes to stderr**, so
-`kingfisher run ... > answer.md` keeps the answer alone and `2>/dev/null` keeps
-the quiet. A `--quiet` flag was rejected: it asks the caller for correct
-behaviour and does nothing for whoever forgets it.
-
-That split settled something the design had not reached. **A subagent's prose is
-progress, not answer.** On one stream the speaker tag is what keeps two voices
-apart; on two, the streams do it better, and an extractor's working notes are
-not what anybody redirected stdout for. `Progress` moved out of the unshipped
-driver rather than being copied -- two renderers would have disagreed about a
-new event kind the first time one was added. *(2026-09-04, same document.)*
-
-**The exit code carries `stop_reason`, because prose on stdout leaves nowhere
-else to put it.** `0` finished, `1` ran and stopped at a bound, `2` never ran.
-The case `1` exists for is `kingfisher run ... > report.md && publish
-report.md`, which must not publish a report that stopped halfway. A code per
-reason was rejected: it encodes in the exit status what one stderr line already
-says, in a vocabulary that grows every time `STOP_REASONS` does.
-
-The errors that could only ever have reached a stranger as a traceback are
-reported instead, all as `2`. `SessionBusyError` keeps its own branch: it is the
-one that is not the caller's mistake, and "wait" is different advice from "fix
-something". *(2026-09-04, same document.)*
-
-**Two of those errors were missing, and `decide` is where it showed.** `DecisionError`
-and `AgentError` were in neither `REFUSALS` nor any sibling `except`. Measured: the same
-sentence about a session that is not waiting arrived as a clean exit `2` from `decide
---session X` and as a traceback with exit `1` from `decide --session X --approve abc` --
-the code this entry assigns to a turn that ran and stopped at a bound, read by whatever
-script is watching. `AgentError` did the same on `run`, for an `interrupt_on:` naming a
-tool that is not there. It is taken at the module defining it rather than added to the
-front door, since no caller outside the wheel has asked for it; `SubagentError` beside
-it in that tuple is public because one did. The count that used to open the sentence
-above is gone with this: it was nine, then eleven, and nobody re-counted.
+**Two of those errors were missing, and `decide` is where it showed.** `DecisionError` and
+`AgentError` were in neither `REFUSALS` nor any `except`: one sentence arrived as a clean
+`2` from `decide --session X` and as a traceback with exit `1` from `decide --session X
+--approve abc` -- the code a script reads as a turn stopped at a bound. `AgentError` is
+taken from its own module rather than the front door, since no outside caller has asked;
+`SubagentError` is public because one did.
 
 **`doctor` asked whether every *subagent* resolves to a model and said "every
-definition".** `unrunnable_subagents` was the only half written, so the row read `ok
-definitions run -- every definition resolves to a model` and the command exited `0`
-while `run --agent` refused with exactly the configuration error the row had promised
-was absent. Both kinds are asked now, over one shared body rather than two, because two
-places deciding whether a definition can run is how the second half came to be missing
-in the first place. The guard above it widened with them: it skipped the check when the
-*subagent* catalogue had not loaded, and an unreadable agent file then raised out of
-`doctor` itself.
+definition".** It exited `0` while `run --agent` refused with the error the row promised
+absent. Both kinds are asked over one shared body, because two places deciding whether a
+definition can run is how the second half went missing.
 
 **An unreadable built-in set is said to be unknown, not counted as zero.** A middleware
-that will not import takes down the probe the built-in set is read off. `tools_error` is
-deliberately not set there -- the tool catalogue walked fine, and `middlewares_error`
-already carries that fault with the file to open -- so nothing said the count was
-unavailable, and the row printed `0 built in` with an `ok` beside it over a deployment
-holding ten. `builtin_tools_checked` says so instead, beside `shadowed_checked` and
-`moved_tools_checked`, which draw the same distinction for their own fields. The comment
-on `builtin_tools` claimed `tools_error` covered this case; it did not, and a consumer
-reading `()` with no error as "none here" was reading the gap.
+that will not import takes down the probe the built-in set is read off, and `tools_error`
+is rightly not set -- the catalogue walked, `middlewares_error` carries the fault -- so the
+row printed `0 built in` with an `ok` over ten. `builtin_tools_checked` says so, beside
+`shadowed_checked` and `moved_tools_checked`.
 
-**A `source_ids:` line is inert with no vocabulary, and `--json` now agrees.** The human
-form prints no access section at all where there is no `source_ids.yaml`, which is what
-the guide and the shipped example both describe; `as_json` published every definition's
-lines regardless, so the form a script reads reported a policy that is not in force.
-Answered in `inventory` rather than in the renderer, for the reason the 2026-09-26 entry
-gives: the record is what both forms are handed. The agreement rule that should have
-caught it compared only subagent and skill names, and its own workspace writes no
-`source_ids:` anywhere -- it compares the access fields now, in both directions, so
-neither form falling silent passes it.
+**A `source_ids:` line is inert with no vocabulary, and `--json` now agrees.** `as_json`
+published every definition's lines with no `source_ids.yaml`, reporting a policy not in
+force. Answered in `inventory`, because the record is what both forms are handed, and the
+agreement rule compares access fields both ways.
 
-**A refusal offers only the source ids a caller may present.** `expand`'s "this
-deployment defines ..." listed every declared name, compounds included -- and the clause
-immediately above it refuses a compound as something a caller cannot hold, so whoever
-mistyped a name was sent straight into a second refusal. `refuse_undeclared` still lists
-them, and should: there a *definition* is asking, and a definition may name one. The
-idle column `sessions` prints is floored rather than rounded for the same kind of
-reason: it is read straight into `reap --older-than`, and rounded, one printed figure
-covered sessions a sweep would take and sessions it would not. *(2026-10-13, from an
-architecture review.)*
+**A refusal offers only the source ids a caller may present.** `expand` listed compounds
+too, beside a clause refusing a compound, sending whoever mistyped a name into a second
+refusal; `refuse_undeclared` still lists them, since a definition may name one. The idle
+column `sessions` prints is floored, since it is read into `reap --older-than`.
+*(2026-10-13, from an architecture review.)*
 
-**`help` went, and `--seed`, `--from` and `--all` went off the driver.**
-`kingfisher help seed` was byte-for-byte `kingfisher seed --help`; its only
-unique contribution was naming the valid words for a mistyped verb, which
-argparse already does. The driver's seeding flags duplicated `kingfisher seed`
-and were kept on the argument that it is "the driver you already have open" --
-true while nothing else could run a task.
+**`help` went, and `--seed`, `--from` and `--all` went off the driver.** `kingfisher help
+seed` was `kingfisher seed --help` byte for byte; the driver's seeding flags duplicated
+`kingfisher seed`, kept as "the driver you already have open" while nothing else could run
+a task. **`--list` stayed, and not as a listing**: it is the only way to reach the driver's
+`main` without calling a model, which six tests are built on -- written into the flag,
+because it looks as removable as the ones that went. *(2026-09-04.)*
 
-**`--list` stayed on the driver, and not as a listing.** The plan said all four
-go; building it found the fourth does a second job nothing else there does -- it
-is the only way to reach the driver's `main` and have it return without calling
-a model, which six tests covering workspace creation and first-run seeding are
-built on. Written into the flag, because from outside it looks exactly as
-removable as the three that went. *(2026-09-04, same document.)*
-
-**`Seeded` says what it left behind, because three callers said it and two were
-wrong.** `seed` leaves a definition alone for one of two reasons, and the remedies
-are opposite: middleware is registered in code, a source id is declared in a file.
-That is why the command keeps `UNCONSULTED` and `REMEDY` and a rule holding them
-total against the kinds seeding can report. The integration driver and
-`seed_example.py` each wrote their own line instead, and both told a reader to
-*register* a source id -- the one mistake the two tables exist to prevent. Neither
-offered the `source_ids.yaml` that would unblock the run, and the example script is
-the one people copy.
-
-The lines are on the record now. `Seeded.report()` is every line a person is owed
-about a seeding, in order, and all three callers print it. On the record rather than
-in the command because the command was never the only caller; the tables moved with
-it, so what a skip means and what to do about it are in the module that decided to
-skip. `test_only_the_record_says_what_a_skipped_definition_needs` is what stops a
-fourth copy: nothing outside `seeding.py` composes a `skipped …` line, and the
-driver, the example and `evals/` are searched along with the package. *(2026-09-23.)*
+**`Seeded` says what it left behind, because three callers said it and two were wrong.**
+`seed` leaves a definition alone for one of two reasons with opposite remedies -- middleware
+is registered in code, a source id declared in a file -- hence `UNCONSULTED` and `REMEDY`,
+held total. The integration driver and `seed_example.py`, the script people copy, each told
+a reader to *register* a source id. `Seeded.report()` is every line a person is owed, and
+every caller prints it; `test_only_the_record_says_what_a_skipped_definition_needs` finds
+any `skipped …` line composed outside `seeding.py`, searching the driver, the example and
+`evals/` too. *(2026-09-23.)*
 
 ## What doctor promises
 
-**`kingfisher doctor` exiting zero means nothing in the catalogue will break** --
-at startup or on some later request, whether or not anybody ran it. It did not
-mean that, and the gap was not one thing: five refusals escaped it at once, each
-differently. An agent file it never looked at. A middleware directory nothing
-read at all. A workspace tool wearing a built-in's name, which made the command
-itself exit with a traceback over a deployment that starts perfectly well. And
-two definitions naming a tool by a path it had moved from, of which the agent
-half was refused *nowhere* -- it started, ran, and quietly did not have the tool
-its author granted. *(2026-09-14.)*
+**`kingfisher doctor` exiting zero means nothing in the catalogue will break** -- at startup
+or on a later request. Five refusals escaped it at once: an agent file it never read; a
+middleware directory nothing read; a workspace tool wearing a built-in's name, which made
+`doctor` itself crash over a deployment that starts fine; and two definitions naming a moved
+tool, the agent half refused *nowhere* -- it ran without the tool its author granted.
+*(2026-09-14.)*
 
-**Checking was already separate; it was the separation that leaked.** The first
-proposal was to split validation out of the runtime and lazy-load at `run`.
-Measured, that premise did not hold twice over. `warm()` is not doing validation
-and running -- every `_ = ...` in it forces a read a run needs anyway, and a
-broken file happens to raise while being read, so there is nothing to split.
-And the reading costs 17.5ms for a real workspace's seven tools once deepagents
-is loaded, against ~1,000ms for the runtime itself. The checking step already
-existed and already ran without starting a deployment: it was `doctor`, and what
-it lacked was coverage, not a home.
+**Checking was already separate; it was the separation that leaked.** The proposal to split
+validation out and lazy-load at `run` failed measurement twice: `warm()` reads only what a
+run needs anyway, a broken file raising while read, so there is nothing to split; and
+reading costs 17.5ms for seven tools against ~1,000ms for the runtime. The checking step
+was `doctor`, and it lacked coverage, not a home.
 
-**Lazy tool loading was rejected on a structural blocker, not the cost.** A
-tool's name lives inside the module, so which file defines `sql_tables` is
-unknowable without importing it -- three of eight shipped names are not derivable
-from their filename. "Import only what is granted" needs a name-to-module map
-that can only be built by importing everything. A tool whose work needs a heavy
-library should import it inside the function, which gets 98% of the saving with
-no manifest to go stale: 89 modules and 65ms become 1 and 1ms.
+**Lazy tool loading was rejected on a structural blocker, not the cost.** A tool's name
+lives inside its module -- three of eight shipped names were not derivable from the
+filename -- so "import only what is granted" needs a map built by importing everything. A
+tool needing a heavy library imports it inside the function: 98% of the saving, 89 modules
+and 65ms becoming 1 and 1ms.
 
-**Startup got stricter where the failure had nowhere else to surface.** A broken
-middleware module and a shadowed built-in now stop `Kingfisher(...)`, because
-otherwise they waited for a request. Together that is about 11ms once -- and the
-shadow probe only runs when the workspace defines tools, since nothing else can
-shadow one, which is what keeps it off the 179 tests that build a service with an
-empty catalogue.
+**Startup got stricter where the failure had nowhere else to surface.** A broken middleware
+module and a shadowed built-in stop `Kingfisher(...)`, about 11ms once; the shadow probe
+runs only when the workspace defines tools, keeping it off the 179 tests with an empty
+catalogue. **An agent naming a moved tool fails `doctor` and does not stop startup**,
+unlike the subagent case: it would stop a deployment that runs today over a file nobody
+touched, and the promise is that `doctor` tells you.
+`test_doctor_sees_an_agents_moved_tool_that_nothing_else_would` asserts both halves.
 
-**An agent naming a moved tool fails `doctor` and does not stop startup.**
-Deliberately asymmetric with the subagent case, which does stop it. Refusing the
-agent at startup would stop a deployment that runs today over a file nobody has
-touched, and the promise being made here is that `doctor` tells you -- not that
-every mistake becomes fatal. `test_doctor_sees_an_agents_moved_tool_that_nothing_else_would`
-asserts both halves so neither can drift.
+**`REFUSALS` is what stops the next one.** The table in `tests/unit/test_refusals.py` has an
+entry per catalogue-reading function that can refuse a definition, naming a broken
+catalogue that reaches it or why none can, deny by default both ways, with the raise count
+checked so a new refusal cannot inherit an entry about another. It counts a raise of a
+class the function was *handed*, which `importing.load` and
+`documents.require_literal_prompt` do; driving it found a sixth escape, a bundle folder
+holding two definitions; and each defect is run and the frame that raised compared with its
+key.
 
-**`REFUSALS` is what stops the next one.** One entry per function in the
-catalogue-reading code that can refuse a definition, each naming a broken
-catalogue that reaches it or saying why no file on disk can. It was 43 refusals in
-21 functions when this was written, and the count is the table's to keep rather
-than this page's. Deny by default in both directions, with the raise count
-checked so a refusal added to a function already listed cannot inherit an entry
-written about a different one.
+**`doctor` asks the fence the questions a run asks.** It kept its own copy of the required
+ABI and its own kernel reading, and told a kernel that could be fenced to wait "until that
+is wired" beside the fence's own warning naming the missing package. It reads
+`landlock_abi`, `landlock_ready` and `REQUIRED_LANDLOCK_ABI` through the confinement module,
+so the two cannot disagree. *(2026-09-15.)*
 
-Two things it found that reading would not have. The first version scanned for
-`raise <Kind>Error` and missed `importing.load` and `documents.require_literal_prompt`,
-which raise the error class they were *handed* -- so the rule counts a raise of a
-name the function was given as well as one it names. The second: driving the
-table turned up a sixth escape nobody had looked for, a bundle folder holding two
-definitions, which took `doctor` down the same way the shadowed built-in had. The
-filing is checked rather than trusted -- each defect is run and the frame that
-actually raised is compared against the key it is filed under.
-
-**`doctor` asks the fence the questions a run asks.** Its advice for an unconfined
-shell kept its own copy of the ABI a full ruleset needs and its own reading of the
-kernel, and told a kernel that could already be fenced to wait "until that is
-wired" -- beside a warning, from the fence, naming the one package that was
-missing. The advice now reads `landlock_abi`, `landlock_ready` and
-`REQUIRED_LANDLOCK_ABI` through the confinement module, the way the fence does, so
-the two cannot disagree and a test fakes the kernel once for both.
-*(2026-09-15.)*
-
-**The inventory answers by kind, so a consumer walks rather than lists.** Every
-reader of it spelled the kinds out: four near-identical blocks in `doctor`, the
-errors again in the listing's `failed`, and the two remaining reads by
-`getattr(found, kind)` and `getattr(found.origins, kind)`, where a checker cannot
-follow them. That is a hand-written list of a set that keeps growing, and this file
-already recorded it going wrong twice -- `doctor` read three of the five kinds, then
-four, and `middlewares_error` was computed on every walk and read by nothing for a
-release.
-
-`Inventory.by_kind()` answers a `Catalogued` per kind: its name, its error, how many
-it holds, where it was read from, and whether one of them is a file or a module --
-which is the whole of what those consumers were spelling out, including the noun in
-"fix or remove the *module* it names". The list is written out rather than derived,
-so the attributes stay ones a checker follows, and
+**The inventory answers by kind, so a consumer walks rather than lists.** Every reader
+spelled the kinds out, a hand-written list of a growing set that went wrong twice: `doctor`
+read three of five kinds, then four, and `middlewares_error` was computed and read by
+nothing for a release. `Inventory.by_kind()` answers a `Catalogued` per kind, written out
+so a checker follows the attributes, and
 `test_the_per_kind_view_covers_every_kind_there_is` holds it total against
-`DEFINITION_KINDS` -- the half a reader cannot check.
+`DEFINITION_KINDS`. `skills` has no single error, a skill failing one at a time, and
+`bundles_error` is no kind, a bundle being one subagent's folder. Each `*_error` is driven
+through `failed` one at a time, since that is how one goes missing. Not named `Kind`: the
+origins record has one, meaning what sort of *place*. *(2026-09-23.)*
 
-Two things stay outside it and say so. `skills` has no single error, because a skill
-fails one at a time and `doctor` gives them a check of their own; `bundles_error` is
-not a kind at all, a bundle being one subagent's folder rather than a catalogue.
-Each `*_error` the record carries is now driven one at a time through `failed`,
-which is how one goes missing: a kind gains an error, every other check keeps
-passing, and the deployment that breaks on it is the one nobody told.
+**A non-zero listing says why, to the person and not only to a script.** `middlewares_error`,
+`bundles_error` and `moved_tools` each made `kingfisher list` exit 1 with nothing in the
+text saying so, because the exit code and the renderer were two hand-written lists, and
+every rule asserted on `--json` -- passing while the person looking at a broken workspace
+was told nothing. Each `*_error` must now make the listing non-zero **and** be said in the
+text; troubles that are not a kind's error are held by a table pinned to `failed`'s source.
+**`render` has no branch now**: an early return when `tools/` would not walk dropped every
+section not remembered on that path, `_access` among them, so one unparseable `.py` hid the
+access report. **The middlewares section prints the name and not the module**, since a
+`middlewares/*.py` class's `__module__` is a made-up unique name; an imported class is
+printed `(from ...)`, as the subagents section marks `carried`, and `Inventory.middlewares`
+carries the distinction so `--json` is honest too. *(2026-09-27, from an architecture
+review.)*
 
-Named `Catalogued` rather than `Kind` because `origins.Kind` is already a word in
-this layer and means what sort of *place* something was read from. *(2026-09-23.)*
-
-**A non-zero listing says why, to the person and not only to a script.** The exit
-code and the printed text were two hand-written lists of one set, and they had drifted
-by three entries. `middlewares_error`, `bundles_error` and `moved_tools` each made
-`kingfisher list` exit 1 with nothing in the human output saying so: the text renderer
-had no middlewares section at all, and the only hint was `(could not introspect)` under
-the *builtin tools* heading, which sends a reader to the wrong directory -- what a
-broken `middlewares/*.py` costs is the graph the built-in set is read off. `--json`
-carried the file and the `SyntaxError` all along.
-
-Every rule that proved those errors were carried asserted on `--json`. That is how
-three of them passed while the person most likely to be running the command -- somebody
-looking at a broken workspace -- was told nothing. The rule now has two halves driven
-over the same total set: each `*_error` makes the listing non-zero, **and** each one is
-said in the rendered text. The troubles that are not a kind's error -- `moved_tools`
-and `miscounted_bundles` then -- are held by a table pinned against `failed`'s own
-source, so another cannot be added to the exit code and forgotten by the renderer.
-
-`moved_tools` was the worst of the three to be silent about, and this file already said
-why: an agent naming a tool by a path it has moved from loads, runs, and quietly does
-not have the tool its author granted.
-
-**`render` has no branch now**, which is the other half of the same bug. It used to
-return early when `tools/` would not walk, so every section written afterwards had to
-be remembered on that path too. Skills and subagents were remembered when that was
-fixed; `_access` was not -- so an operator auditing a policy on a workspace with one
-unparseable `.py` in `tools/` got no access report and no sign there was one to get.
-The tools half moved into a section of its own, which is what let the early return go,
-and `_skills_and_subagents` went with it: that helper existed only to be called from
-both paths. The nine tests that reached for it now go through `render`, which is the
-output a person actually reads -- the same lesson as the `--json` rules above.
-
-**The middlewares section prints the name and not the module.** For a class written in
-`middlewares/*.py` the `__module__` is a dynamic name made unique and nothing more, and
-a listing printing `cap_3107351676692534586` would look like it was saying where the
-code is. A class *imported* into a workspace file keeps its own package, and that one
-is printed as `(from ...)` -- the same fact the subagents section marks with `carried`,
-for the same reason: code an operator cannot open in this workspace should not print
-like code they can. `Inventory.middlewares` carries that distinction rather than the
-raw `__module__`, so `--json` gets the honest answer too. *(2026-09-27, from an
+**The inventory's `try` blocks each keep their own catch-set**: exactly the kinds the block
+reads, each extra type carrying its incident -- `CapabilityError` in `_tools`, because the
+tool probe refuses a workspace tool shadowing a built-in; `SubagentError` in the agents
+walk, because resolving delegation reads the subagent catalogue. One catch-set would say
+each block might fail any way. The agents walk could be narrowed to `AgentError` with all
+2,104 tests green, turning a broken subagent into a traceback over fine agents;
+`test_a_broken_subagent_does_not_take_the_agents_half_down` holds it. The workspace tool
+catalogue's read has its own block, since inside the one feeding `bundles_error` a broken
+`tools/` module showed as both `FAIL tools` and `FAIL subagent tools` with no subagents.
+`shadowed` answers `None` where that read failed, and `shadowed_checked` says so: an empty
+mapping cannot tell "nothing shadows" from "not compared". *(2026-10-11, from an
 architecture review.)*
 
-**The inventory's `try` blocks each keep their own catch-set.** The review read
-them as one rule written several ways. They are not: each set is exactly the kinds its
-block reads, and every type beyond the obvious one carries the incident that put it
-there -- `CapabilityError` in `_tools` because assembling the tool probe refuses a
-workspace tool shadowing a built-in, `SubagentError` in the agents walk because
-resolving what each agent delegates to reads the subagent catalogue. One catch-set
-would say that each block might fail in any way, which is the thing they were
-narrowed to stop saying.
-
-Five of the six were held. **The sixth was not**: the agents walk could be narrowed
-to `AgentError` alone with all 2,104 tests green, and a broken subagent would then
-reach `doctor` and `list` as a traceback over a workspace whose agents are fine --
-which is the incident three of the comments in that file record.
-`test_a_broken_subagent_does_not_take_the_agents_half_down` holds it now.
-
-
-**It gained one on 2026-10-11, and the count in this heading went with it.** The block
-that reads the *workspace* tool catalogue is its own now. It had sat inside the one whose
-exception becomes `bundles_error`, because `shadowed` compares a bundle's tool names
-against the catalogue's -- so one unparseable module in `tools/` was reported twice,
-`FAIL tools` and `FAIL subagent tools`, on a workspace with no subagents at all. The
-second row sends a reader to the wrong directory, which is the fault `doctor` exists to
-avoid. `bundles_error` is for a subagent's own folder, and the record already said so:
-*"a bundle is one subagent's folder rather than a catalogue."*
-
-`shadowed` answers `None` where that read failed, and `Inventory` carries
-`shadowed_checked` beside it -- the third field to need that after `moved_tools` and
-`miscounted_bundles`, for the same reason each gives: an empty mapping cannot tell
-"nothing shadows" from "the catalogue it would be compared against did not load", and
-`doctor` must not report the second as the first. It says `shadowing not checked` now and
-points at the row that does say why.
-
-The heading above used to count the blocks. It is one more than it said as of this
-change, and the claim never needed the number -- which is the lesson `CLAUDE.md` already
-records about a measured count in prose nobody re-measures. The property is that each
-block's catch-set is exactly the kinds it reads, and that is checkable by reading one
-block. *(2026-10-11, from an architecture review.)*
-**Removed on the way: `SkillError`.** Defined, exported as one of "the errors a
-caller must tell apart", listed among the command's refusals -- and raised nowhere
-since #483 took `kinds/skills/reading.py::name_from` out with the upload path on
-2026-09-16. A skill's failures are carried, not raised: `unloadable`, `misplaced`,
-`misfiled`. The class said otherwise for eight days.
-
-Gone with no compatibility window, on the precedent the export table set at 0.1.0 --
-a caller writing `except SkillError` gets an `ImportError` rather than a handler
-that silently never fires. **What let it survive is worth more than the removal**:
-the export rules hold `__all__` against the lazy table and the table against the
-modules, and *neither asks whether a published error can occur*, so a name
-consistently exported everywhere passes them all.
-`test_every_error_this_table_names_can_actually_happen` asks that -- counting a
-`raise` and a class handed to somebody who raises what they are given, since four
-kinds refuse only that second way. *(2026-09-24, from an architecture review.)*
+**Removed: `SkillError`.** Exported as an error a caller must tell apart, and raised
+nowhere once uploads went: a skill's failures are carried -- `skills_unloadable`,
+`skills_misplaced`, `skills_misfiled`. No compatibility window, on the 0.1.0 precedent:
+`except SkillError` becomes an `ImportError` rather than a handler that never fires. **What
+let it survive is worth more than the removal**: the export rules check names against
+tables and *never ask whether a published error can occur*, which
+`test_every_error_this_table_names_can_actually_happen` does, counting a class handed to
+somebody who raises it. *(2026-09-24, from an architecture review.)*
 
 ## Where a deployment reads from
 
-**The capability flags are `KINGFISHER_*_ENABLED`, and the old names are read
-by nothing.** `KINGFISHER_SKILLS` answered two questions at once: whether
-a deployment wired skills, and -- exported into the agent's shell by `shell_env`
--- *where* the catalogue is, which is how a skill's own scripts reach their
-neighbours. A deployment writing the path, which is what the name means
-everywhere the agent can see it, set a flag to a value no parser recognises. The
-flag reads `1`, `true`, `yes`, `on` and treats everything else as false, so
-skills went off with no error and nothing logged. Measured rather than reasoned
-about: `'/workspace/skills' -> skills enabled: False`.
+**The capability flags are `KINGFISHER_*_ENABLED`, and the old names are read by
+nothing.** `KINGFISHER_SKILLS` answered both whether skills are wired and -- exported to
+the shell -- *where* the catalogue is. A deployment writing the path set a flag to a value
+the parser (`1`, `true`, `yes`, `on`) reads as false, and skills went off silently:
+`'/workspace/skills' -> skills enabled: False`. All four were renamed, so no reader must
+remember which carries a suffix, and `_ENABLED` says "whether" is not "where".
 
-All four were renamed, not only the one that collided. Four flags that read
-identically should not need a reader to remember which one carries a suffix, and
-`_ENABLED` beside `KINGFISHER_SKILLS_DIR` says plainly that "whether" and
-"where" are different questions.
+**Not solved by inferring the flag from the catalogue**, worse four ways: the skills
+section is in the cached system prompt, which would change when a file appears; several
+deployments may share one reviewed definitions folder, and inference opts them all in;
+"I set it and it is off" becomes "I set nothing and it turned on", leaving nothing to grep;
+and a capability would come from data rather than configuration. *(2026-09-05.)*
 
-Both names were read for a deprecation, the new one winning and the old one
-warning once -- the arrangement `kingfisher_service` had already made when its
-prefix changed. `.env.example` lists them under an arrow rather than as
-assignments, so the file does not re-advertise the spelling being replaced.
+**The deprecation is over, and what replaced it is `doctor` rather than a refusal.** The
+shims reading both names are gone. Renaming an environment variable is the one rename that
+fails in silence, but refusing to start was not taken: a stale line is untidy rather than
+broken, and stopping over it makes an upgrade look like a failure. `health.RETIRED` and
+`RETIRED_PREFIXES` carry the dead names and `doctor` warns about any set -- a place to find
+out rather than a thing that happens to you. A list of names nothing reads is what nothing
+else can check, so `test_no_message_names_a_variable_nothing_reads` holds a name retired or
+read, never both, and `test_every_retired_name_is_one_the_file_lists` holds it against
+`.env.example`, where a typo would warn about a variable nobody has. Prefixes are matched
+rather than enumerated, or the copy misses the next setting; `KINGFISHER_SERVICE_*` joined
+`KINGFISHER_SERVER_*` when the service went. *(2026-09-10.)*
 
-**The deprecation is over, and what replaced it is `doctor` rather than a
-refusal.** Both shims are gone: `RENAMED` here and `KINGFISHER_SERVER_*` in the
-service, along with the two readers that weighed one name against another. A
-reader now looks up the name it wants and stops.
-
-That leaves the failure the shims existed to prevent, and it is real: renaming an
-environment variable is the one rename that fails in silence, where a moved
-import stops the program and says which. A deployment upgrading with
-`KINGFISHER_SERVER_PORT` still set got port 8000 and no explanation, while there
-was a server to get it. Refusing to
-start was the other candidate and was not taken -- a stale line somebody forgot
-to delete is untidy rather than broken, and stopping a deployment over it makes
-an upgrade look like a failure. `health.RETIRED` and `RETIRED_PREFIXES` carry the
-dead names and `doctor` warns about any that are set, which is a place to find
-out rather than a thing that happens to you.
-
-Two rules keep that list honest, because a list of names nothing reads is exactly
-what nothing else can check: `test_no_message_names_a_variable_nothing_reads`
-allows a retired name in a message and then asserts the complement -- a name is
-retired or it is read, never both -- and `test_every_retired_name_is_one_the_file_lists`
-holds it against `.env.example`, which is the case a typo falls into. A misspelled
-key warns about a variable nobody has and stays quiet about the one they do, and
-nothing else in the tree would notice.
-
-The prefix is matched rather than enumerated. Listing the service's seven
-suffixes in the base package would be its table written down twice, and the copy
-would stop covering whichever setting the service gains next.
-*(2026-09-10.)*
-
-**The service's own prefix joined the one it replaced.** With the service gone,
-`KINGFISHER_SERVICE_*` is read by nothing either, so `doctor` reports both
-prefixes and names nothing to use instead. A deployment still carrying
-`KINGFISHER_SERVICE_PORT` gets no server and no error -- the silent kind of rename
-this section is about -- and `doctor` is the one place that can say so.
-*(2026-09-15.)*
-
-**Not solved by inferring the flag from the catalogue**, which was the obvious
-alternative and is worse in four ways: the skills section lives in the system
-prompt, which is the cached prefix, so a prompt derived from directory contents
-changes when a file appears; `KINGFISHER_SKILLS_DIR` exists so several
-deployments can share one reviewed catalogue, and inference would opt every one
-of them in; the failure mode inverts from "I set it and it is off" to "I set
-nothing and it turned on", which leaves nothing to grep; and a capability would
-be derived from data rather than from configuration. *(2026-09-05.)*
-
-**One record, `Origins`, and every surface prints it.** Kingfisher reads from
-eleven places and nothing could say what they were: `kingfisher list` named four,
-`doctor` named one, and the library named none. `tools` was in no answer at all,
-because the listing header was three hand-written lines and `Inventory` carried
-three loose strings -- a fourth of each is a thing somebody has to remember, and
-nobody did. `Inventory` carries one of these now and both commands print it, so a
-place added to the record appears in both without either being touched.
+**One record, `Origins`, and every surface prints it.** Kingfisher read from eleven places
+and nothing said which: `kingfisher list` named four, `doctor` one, the library none, and
+`tools` none at all, the headers being hand-written lines. `Inventory` carries the record
+and both commands print it, so a new place appears in both untouched.
 *(2026-09-02, `where-this-deployment-reads-from.md`.)*
 
-**It reports what was loaded, not what was configured.**
-`Config.catalogue_roots` is the fallback, not the answer -- a `Kingfisher` may be
-handed a mapping or a `Definitions` of its own -- so a report derived from
-configuration alone is right for the simple deployment and quietly wrong for the
-one that moved something. `Origins.of` does not call `resolve_definitions`, which
-creates derived roots: a report must not bring into being what it reports on.
+**It reports what was loaded, not what was configured.** `Config.catalogue_roots` is the
+fallback -- a `Kingfisher` may be handed its own `Definitions` -- so a report from
+configuration alone is wrong for the deployment that moved something. `Origins.of` does not
+call `resolve_definitions`, which creates derived roots: a report must not bring into being
+what it reports on.
 
+**`sessions` is asked of the sessions in use, never of the setting that built them.**
+`inventory` held only a `Config`, so every surface printed `<workspace>/sessions` whatever
+was configured: measured on 2026-10-11, `doctor` and `kingfisher list` printed
+`./sessions` where the library said `<supplied>`, three rows above a `doctor` check that
+knew better. The `sessions` command printed a path beside a correct listing, sending the
+one deployment the setting is for to a directory its sessions never touch; it prints a path
+only where kingfisher knows it, a sentence otherwise, and `"root"` `null` in JSON. The
+surfaces are driven together, since a rule reading one would have passed, with
+`test_both_forms_of_the_listing_name_where_they_read` as the control on kingfisher's own
+sessions, where the bug was invisible. *(2026-10-11, from an architecture review.)*
 
-**`sessions` was the one entry a surface could not answer, and answered wrongly.**
-`Origins` is asked for where sessions are by handing over the backends a `Kingfisher`
-was built with, tested by identity against `DefaultBackends` -- a subclass may return
-its backend with anything changed. `inventory` has no such object: it holds a `Config`.
-It passed nothing, which `_sessions` read as "the default backend", so every surface
-printing the origins block reported the derived `<workspace>/sessions` whatever a
-deployment had configured.
+**Each entry carries a kind, not a formatted string.** `default` is decided by comparing
+against the derived location, so naming the default path explicitly is `default`;
+`relocated` is any other configured path, `overridden` means the configuration is not what
+is read, `supplied` is a repository with no directory, `unset` carries where it looked.
+`--json` and the line `Kingfisher` logs at construction read it, so "nothing configured"
+and "you handed me one" never arrive as spellings to match on.
 
-Measured on 2026-10-11 against a deployment naming its own backends: `kingfisher doctor`
-and `kingfisher list` both printed `sessions : ./sessions` while the library answered
-`<supplied>` for the same deployment -- and `doctor` printed it three rows above its own
-`sessions survive` check, which reads the setting and knew better. `inventory` is
-handed the sessions the command runs on now, and `Origins` asks them, so the two ways
-of asking agree.
+**`Config` remembers where it looked for `source_ids.yaml`**, as `access_source`, because
+with no file there is no record to hang a path on, and "not set, and here is where I
+looked" is the one line that makes a policy written one directory off visible -- otherwise
+the deployment comes up reachable by everyone and says nothing.
 
-**The `sessions` command had the same split, with the listing right and the line beside
-it wrong.** `kf.sessions()` asks the backends; the path printed next to it was
-`sessions_root(kf.workspace)`. So the one deployment the setting exists for was told to
-look in a directory its backends never touch, and the empty case said "no sessions in"
-that directory. The absolute path is kept where kingfisher knows it -- somebody reads
-that line in order to go there -- and a sentence naming the backends stands where it
-does not, rather than a path that would be a guess. `"root"` is `null` in the JSON form
-for the same reason.
+**The library's first logger is `kingfisher.origins`, and not `kingfisher`.** One INFO
+record per construction. `print` would make the library unusable by a server, and
+`warnings.warn` means "probably not what you meant". The name was load-bearing: `kingfisher`
+is every other logger's parent, so raising it to INFO for this would have turned on the
+audit trail a deployment had left off, while there was one.
 
-Three surfaces are driven together in one rule, because the listing was already correct
-and only its neighbour was wrong: a rule reading one of them would have passed. The
-control is `test_both_forms_of_the_listing_name_where_they_read`, which runs on the
-default backend -- where the derived path *is* the right answer, and where this bug was
-invisible. *(2026-10-11, from an architecture review.)*
-**Each entry carries a kind, not a formatted string.** `default` is the derived
-location, decided by comparing against it rather than by asking whether an
-override was set -- so a deployment naming the default path explicitly is
-`default`, which is what it is. `relocated` is any other configured path,
-`overridden` means the configuration is not what is being read, `supplied` is a
-repository with no directory, and `unset` carries where it looked. `--json` and
-the line `Kingfisher` logs at construction read this -- and the service did -- so
-"nothing is configured" and "you handed me a store"
-must not arrive as two spellings a consumer has to match on.
+**`doctor` gained two checks a path alone could not express.** Resolving a catalogue
+*creates* its directory, so a mistyped root yields a real empty one, which says `0 defined`
+as a fresh workspace does. And a configuration being ignored is said out loud, which needed
+`examine` to take the inventory rather than build one agreeing with `cfg` by construction.
 
-**`Config` remembers where it looked for `source_ids.yaml`.** The path was read,
-used for error-message prefixes and discarded. It sits on `Config` rather than on
-`SourceIds` because of the absent case: with no file there is no record to hang a
-path on, and "not set, and here is where I looked" is the one line that makes a
-policy written one directory off visible at all -- otherwise the deployment comes
-up reachable by everyone and says nothing.
-
-**The library's first logger is `kingfisher.origins`, and not `kingfisher`.**
-One INFO record per construction, and that is the whole budget. `print` is not an
-option -- a library that writes to stdout cannot be used by a server -- and
-`warnings.warn` means "this is probably not what you meant", which a summary is
-not. The name was the load-bearing part: `kingfisher.audit` was left unconfigured
-so that writing session ids stayed a deployment's decision, a logger named
-`kingfisher` is its *parent*, and the server raised this one to INFO -- so asking
-where the definitions live would have turned the audit trail on. A test in the
-service held the two apart. The audit logger and the server went with the service,
-and nothing in the library writes to `kingfisher.audit` now.
-
-**`doctor` gained two checks a path alone could not express.** An empty
-catalogue at a path somebody typed is not an empty workspace: resolving one
-*creates* the directory it was pointed at rather than refusing an absent one, so
-a mistyped root yields a real empty one and `ok  subagents  0 defined` is what a
-correct fresh workspace says too. And a configuration that is being ignored is
-said out loud, or somebody edits the setting and watches nothing change. The
-second needed `examine` to take the inventory rather than build one -- a
-catalogue it resolves from `cfg` agrees with `cfg` by construction, so nothing it
-examined could ever be overriding it.
-
-**Rejected along the way, and each for its own reason.** Opening in-code
-configuration as a first-class path -- `Models`, `Endpoint` and `ModelProfile`
-are constructible and the test suite wires a `Config` that way, but setup stays
-YAML and directories and this was about making that legible, not replacing it.
-Merging `WorkspacePaths` into `Config` -- `Config` requires a `Models` and
-`models.yaml` lives inside the workspace, so merging means making it optional and
-taking `Models.resolve()` from total to partial. Nesting one inside the other to
-end the six duplicated fields -- measured at 7 constructions and 38 reads, both
-cheap, against 17 `replace(cfg, ...)` calls that would become nested. Serving the
-record over the HTTP surface, which authenticates nobody. And a `Config.paths`
-property, which nothing would have read.
+**Rejected along the way, each for its own reason.** In-code configuration as a first-class
+path -- `Models`, `Endpoint` and `ModelProfile` are constructible, but this was about making
+YAML and directories legible, not replacing them. Merging `WorkspacePaths` into `Config`,
+which requires a `Models` found through `WorkspacePaths`, so it would make `Models.resolve()`
+partial. Nesting one in the other -- 7 constructions and 38 reads, against 17
+`replace(cfg, ...)` calls that would become nested. Serving the record over HTTP, which
+authenticated nobody. And a `Config.paths` property nothing would read.
 
 ## The HTTP service
 
 **Reversed: an HTTP service in this repository.** `kingfisher-service` was removed
-because nobody ran it. It was already its own distribution, imported nothing past
-the front door, and no container or compose file started it, so it came out as a
-deletion rather than a migration. The entries below are what it decided while it
-existed and stay as the record; the code is in the commit that removed `service/`.
-
-What it leaves is named rather than swept into the same change. Several library
-features had it as their only reader here -- opening a session without a turn,
-fixing its agent before one, files passed by id through `FileStore`, the async
-turn path -- and each is a decision about callers this repository cannot see, to
-be taken one at a time after counting what still uses it. `file_store_named`
-could not wait: it turned the service's own setting into a store, and with the
-setting gone it had no caller and no honest witness. *(2026-09-15.)*
+because nobody ran it. It was already its own distribution, imported nothing past the
+front door, and no container or compose file started it, so it came out as a deletion
+rather than a migration; the code is in the commit that removed service/. The entries
+below are what it decided while it existed. Library features it alone used were each decided
+separately, after counting what still used them; `file_store_named`, which turned its
+setting into a store, went with it. *(2026-09-15.)*
 
 **Taken: the async turn path goes.** `astream` and `arun` existed so turns could
-overlap on one event loop, which a server needs and nothing left here is; with the
-service gone their only callers were their own tests and one spike. They were also
-the second copy of the turn -- `_astream_turn` repeated `_stream_turn` down to its
-cleanup, and mutation testing had already found a flag the copy set by hand. A
-caller wanting turns to overlap runs `run` on threads. *(2026-09-15. **Half of
-this was reversed** -- see *Reversed in half* below, which is where a caller
-should start: `astream` is back, and turns overlap on one loop without the
-threads. What stayed removed is the second copy of the turn.)*
+overlap on one event loop, which a server needs and nothing left here is; their only
+callers were their own tests and one spike. They were also the second copy of the turn
+-- `_astream_turn` repeated `_stream_turn` down to its cleanup, and mutation testing
+had found a flag the copy set by hand. A caller wanting turns to overlap runs `run` on
+threads. *(2026-09-15. **Half of this was reversed** -- see *Reversed in half* below,
+which is where a caller should start: `astream` is back and turns overlap on one loop.
+What stayed removed is the second copy of the turn.)*
 
-**They do overlap, and it took two checks to say so.** The sentence above ended
-"which should overlap as well since a turn is almost all waiting on the model --
-reasoned, not measured", and an entry that names a measurable claim and declines
-to measure it reads as an open question. Eight turns in eight sessions: **26.14s
-one after another, 5.27s together, 4.96x** on the live gateway
-(`spikes/concurrent_turns.py`, 2026-09-18). Not 8x, and the shortfall is the part
-of a turn that is not waiting -- `service.py` records construction as CPU-bound
-and unhelped by threads.
+**They do overlap, and it took two checks to say so.** Eight turns in eight sessions:
+**26.14s one after another, 5.27s together, 4.96x** on the live gateway
+(`spikes/concurrent_turns.py`). Not 8x: construction is CPU-bound and unhelped by
+threads. `test_turns_in_separate_sessions_are_in_flight_at_once` is the half a gateway
+cannot answer -- a barrier where the model call goes, driven rather than timed, with a
+control so it cannot pass against a barrier one turn fills. The spike is the half a
+fake model cannot answer: an endpoint serving one request at a time would make the
+threads pointless however good the library is. The measurement also found a bug:
+eight concurrent turns crashed on macOS because the sandbox profile's scratch file was
+named after the process, and threads share a pid, so the advice above had been
+unrunnable on the platform it is developed on. Fixed in `write_atomically`, whose
+scratch is named per thread too. *(2026-09-18.)*
 
-`test_turns_in_separate_sessions_are_in_flight_at_once` is the half a gateway
-cannot answer: a barrier where the model call goes, so the check is driven rather
-than timed and goes red if anything later serialises a turn. Its control is the
-half worth insisting on -- without it the check passes against a barrier one turn
-fills. The spike is the half a fake model cannot answer, since an endpoint free to
-serve one request at a time would make the threads pointless however good the
-library is.
-
-**The measurement found a bug rather than confirming a number.** Eight concurrent
-turns crashed four times over on macOS: the sandbox profile's scratch file was
-named after the process, and every thread of a process shares a pid. The advice in
-this entry was unrunnable on the platform it is developed on for as long as it has
-stood. Fixed where the mistake was, in `_write_atomically`. *(2026-09-18.)*
-
-
-**What `_write_atomically` prevents was itself unheld, and the window is fail-open.**
-Two rules are named for it -- one that no temporary profile is left beside the real one,
-one that eight concurrent writers all succeed -- and a plain truncating `write_text`
-satisfies both: it leaves no scratch file and raises nothing. Measured on 2026-10-06 by
-replacing the body with one, which left all 2,390 tests green.
-
-The cost of that gap is not a torn file that fails closed. The profile is `(version 1)`,
-then `(allow default)`, then the denies, so a prefix of it is a *valid* profile that
-permits everything -- and `sandbox-exec -f` re-reads the file at the start of every
-command while `resolve` rewrites it per backend build. Driven through a real 22-line
-profile and `confined.wrap`: `cat` of a file under the operator's home is refused with
-"Operation not permitted" at full length and **prints the file** at two lines.
-
-So the rule watches the rename rather than the file. What sits at the profile's path the
-instant before the replace is what any concurrent reader could have seen, and it has to
-be the whole of the last profile rather than a prefix of the next -- which also kills a
-scratch written and then *copied* over the profile, the plausible wrong fix. The race
-itself is not provoked: a test that tried would be timing-dependent, and the property
-does not need it.
+**What `write_atomically` prevents was itself unheld, and the window is fail-open.**
+Its two rules -- no scratch left beside the profile, eight concurrent writers all
+succeed -- are both met by a plain truncating `write_text`: replacing the body with one
+left all 2,390 tests green. A torn profile does not fail closed. It is `(version 1)`,
+then `(allow default)`, then the denies, so a prefix is a *valid* profile permitting
+everything, and `sandbox-exec -f` re-reads the file at every command while `resolve`
+rewrites it per build. Driven through a real 22-line profile, `cat` of a file under the
+operator's home is refused at full length and **prints the file** at two lines. So the
+rule watches the rename: what sits at the profile's path the instant before the replace
+must be the whole of the last profile, which also kills a scratch *copied* over the
+profile, the plausible wrong fix. The race itself is not provoked, which would be
+timing-dependent. The scratch sits beside the profile because `os.replace` is atomic
+only within one filesystem.
 
 **A rule was written and withdrawn here.** It asserted that a prefix of the profile
-denies nothing -- true, and the premise the rule above rests on. But it would have gone
-red the day somebody made the profile deny-by-default, which is an improvement, so it
-was a rule against a better version of the code. The premise is prose in the surviving
-rule's docstring instead, where changing the profile's shape sends a reader to the
-sentence that stops mattering.
+denies nothing -- true, and the premise above -- but it would go red the day the
+profile became deny-by-default, an improvement, so it was a rule against a better
+version of the code. The premise is prose in the surviving rule's docstring instead.
 
-`_write_atomically`'s own docstring justified writing beside the profile by
-`KINGFISHER_STATE_DIR` being relocatable, a setting `profile_path` records six lines
-below as gone. The argument survives the setting -- `os.replace` is atomic only within a
-filesystem, and a workspace may be on any of them -- so the reason is restated rather
-than the code changed.
-
-**The new rule shipped without `@macos` and CI's Linux job is what found it.** `resolve`
-returns whichever mechanism the host has, so on Linux it writes no profile at all and an
-assertion about `shell.sb` is a `FileNotFoundError` rather than a skip. Every other job
-here is macOS, where the mistake cannot show; it was missed by reading the file from the
-`def` line down, with the neighbour's decorator one line above the window.
-
-So the marker has a rule of its own now, and the predicate took two attempts. "Calls
-`resolve`" named eight rules that drive it for the mechanism it picks and are
-platform-independent -- and named itself, because `"resolve("` appears as a literal in
-its own body. It matches the syntax tree instead: a rule that *both* drives `resolve`
-and calls `profile_path` is the one that needs the marker, and the two that only build
-the profile text stay correctly unmarked.
+**The new rule shipped without `@macos` and CI's Linux job is what found it.** On Linux
+`resolve` writes no profile, so the assertion was a `FileNotFoundError` rather than a
+skip, and every other job is macOS. It was missed by reading from the `def` line down,
+with the neighbour's decorator one line above. The marker now has a rule,
+`test_every_rule_reading_the_written_profile_is_marked_for_macos`, and its predicate
+took two attempts: "calls `resolve`" named eight platform-independent rules, and
+itself, because `"resolve("` is a literal in its body. It matches the syntax tree
+instead -- a rule that both drives `resolve` and reads the profile it wrote.
 *(2026-10-06, from an architecture review.)*
+
 **Reversed in half: `astream` and `arun` are back, the second copy of the turn is
-not.** What the removal missed is an asymmetry it never mentioned. A caller on an
-event loop who wants an *answer* writes `asyncio.to_thread(kf.run, ...)` and is
-done; a caller who wants the events as they arrive has to run the turn on a
-thread and hand each event across through a queue, which is twenty lines, easy to
-get subtly wrong, and described on no page here. Streaming is what an async
-caller wants -- a bot showing tokens, a route streaming a response -- so the
-workaround was fiddliest exactly where it was needed most.
+not.** The removal missed an asymmetry. A caller on an event loop who wants an *answer*
+writes `asyncio.to_thread(kf.run, ...)`; one who wants events as they arrive has to run
+the turn on a thread and hand each event across a queue -- twenty lines, easy to get
+subtly wrong, and described nowhere. Streaming is what an async caller wants, so the
+workaround was fiddliest where it was needed most.
 
-**What is not back is the second copy of the turn.** `stream` drives
-`graph.stream` and `astream` drives `graph.astream`, and those eight lines are
-the whole of the difference: every bound and translation is in `_turn_outcome`
-and every release in `_end_turn`, which both share, and the state they write is one
-`_Turn` record. That is what the 2026-09-15 removal was actually about -- `_astream_turn`
-repeated `_stream_turn` down to its cleanup and set a flag by hand -- so the
-lifecycle came out first and the loops are only loops.
+**What is not back is the second copy of the turn.** `stream` drives `graph.stream`
+and `astream` drives `graph.astream`, and that is the whole difference: every bound and
+translation is in `_turn_outcome`, every release in the shared ending, and the state is
+one `_Turn` record.
 
-**Driving the graph for real is what makes cancelling immediate.** Measured on a
-ten-second model call: **0.00s** against **9.71s**. A cancelled `await` abandons
-the request; a thread has to be waited out, which is what the first version of
-this did, and the turn's cleanup still runs inside that instant so the session is
-free before the caller continues. The 120-second worst case this entry used to
-document was a property of that shape rather than of the problem.
+**Driving the graph for real is what makes cancelling immediate**: **0.00s** against
+**9.71s** for a thread-backed turn, measured on a ten-second model call. A cancelled
+`await` abandons the request; a thread has to be waited out.
 
 **What the async path asks of a deployment, and the sync path does not.** The
-`a`-prefixed middleware hook is the one that runs there, so a middleware written
-only as `wrap_model_call` raises the first time an `astream` turn reaches it --
-loudly, measured against langchain's own machinery, rather than being skipped.
-A saver passed as `threads=` needs `aget_tuple` and `aput`, which langgraph
-calls; `InMemorySaver` has both and `SqliteSaver` does not. Neither refusal can
-reach a caller of `stream`, whose behaviour is unchanged, and the async pair had
-no callers at all when this landed -- so this is a requirement of a new API
-rather than a break in an old one. `guides/middleware.md` says it where a
-deployment reads it. *(The saver half went with `threads=` on 2026-10-17.)*
+`a`-prefixed middleware hook is the one that runs there, so a middleware written only
+as `wrap_model_call` raises the first time an `astream` turn reaches it -- loudly,
+measured against langchain's own machinery. It cannot reach a caller of `stream`, and
+the async pair had no callers when it landed, so it is a requirement of a new API
+rather than a break. `guides/middleware.md` says it where a deployment reads it.
 
-**Two things that had to be closed by hand.** Building the turn goes through a
-thread -- all of setup through `asyncio.to_thread` then, only `_built_turn` on
-kingfisher's own pool since -- because it is CPU-bound construction, and on the loop
-it would be 15-46ms every other turn waits through. And `astream` closes
-`_astream_turn` itself, because an async generator dropped by another one is
-finalised by the event loop's `shutdown_asyncgens` rather than when it goes out of
-scope -- `yield from` closes a nested *sync* generator for free and there is no
-async spelling of that. Without it a caller who stopped reading left the turn's
-`finally` unrun and its session claimed until the loop ended;
+**Two things that had to be closed by hand.** `_built_turn` runs on kingfisher's pool,
+because it is CPU-bound and on the loop would cost every other turn 15-46ms. And
+`astream` closes `_astream_turn` itself: an async generator dropped by another is
+finalised by the loop's `shutdown_asyncgens`, not when it goes out of scope, and there
+is no async spelling of `yield from`'s close. Without it a caller who stopped reading
+left the session claimed until the loop ended;
 `test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
 `SessionBusyError` when it is removed.
 
-**The first version of this was thread-backed, and the record of why is worth
-keeping.** It stepped the sync turn through `asyncio.to_thread` -- the
-`BaseLoader.alazy_load` shape -- because a middleware with only sync hooks raises
-under a native async graph, and that looked like a reason to avoid the native
-path rather than a requirement to document. It also hand-rolled a thread and a
-queue first, which passed every behaviour test while silently dropping the
-caller's context, since a bare `threading.Thread` starts with an empty one.
-`findings.md` keeps what was measured about both.
+**Not taken: a thread-backed `astream`.** The first version stepped the sync turn
+through `asyncio.to_thread`, the `BaseLoader.alazy_load` shape, because sync-only
+middleware raises under a native async graph -- which looked like a reason to avoid the
+native path rather than a requirement to document. Its cancel had to wait out the
+thread, up to 120 seconds. A hand-rolled thread and queue before it passed every
+behaviour test while dropping the caller's context, since a bare `threading.Thread`
+starts with an empty one. `findings.md` keeps the measurements. One cost is not free on
+either path: a turn that calls `eval` holds its own QuickJS runtime.
 
-**A thread per turn in flight, not many turns on one loop.** That is the honest
-limit, and it is affordable for the reason the entry above now records with a
-number: turns overlap, 4.96x across eight, because a turn is almost all waiting.
-The one resource that does not come free is the sandbox -- a turn that calls
-`eval` holds its own QuickJS runtime, so eight concurrent such turns hold eight.
-
-**Cancelling waits.** A thread cannot be interrupted, so a cancelled `astream`
-asks the turn to stop at its next event and returns once it has -- at worst one
-model call or one shell command. Returning sooner would leave a window in which
-the session answers `SessionBusyError` to a retry for reasons the caller cannot
-see, which is a worse thing to be handed than a slow cancel.
-`test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
-exactly that error when the wait is removed.
+**Cancelling waits.** A cancelled `astream` returns once the turn has ended and its
+session is free. Returning sooner would leave a window in which a retry gets
+`SessionBusyError` for reasons the caller cannot see, which is worse than a slow
+cancel. `test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
+that error when the wait is removed.
 
 **Methods on `Kingfisher`, and no module-level pair.** `run` and `stream` have
-one-line conveniences over a default service; these do not, because a new name in
-`__all__` needs a witness and the honest witness today is that no caller outside
-this wheel has asked. The day one does, the convenience is four lines -- which is
-how `default_backend` came back. *(2026-09-18.)*
+module-level conveniences; the async twins do not, because a new name in `__all__`
+needs a witness and no caller outside this wheel has asked. The day one does, it is
+four lines. *(2026-09-18.)*
 
-**A cancel during setup left the session claimed.** Setup ran through
-`asyncio.to_thread`, and a cancelled `await` there returns at once while the thread
-goes on: it claimed the session, built the turn, and handed it to a future nobody
-read. Measured with setup held for 0.3s and cancelled 0.1s in, the claim was on disk
-when the cancel returned and still there once the thread had finished, so the
-session answered `SessionBusyError` until the claim went stale. Every cancellation
-test had cancelled during the model call, by which time the lifecycle holds the
-turn. Now the cancel waits for setup, ends the turn through `_end_turn` -- the
-lifecycle's own ending, not a release written beside it -- and goes on: *Cancelling
-waits* again, at the cost of one setup. `arun`'s disposal is waited out the same
-way. `test_cancelling_during_setup_leaves_the_session_free` lets setup go only
-after the cancel has landed, so it cannot pass by setup finishing first.
-*(2026-10-02.)*
+**A cancel during setup left the session claimed.** A cancelled `await` on
+`asyncio.to_thread` returns at once while the thread goes on, so setup claimed the
+session and handed the turn to a future nobody read: with setup held 0.3s and cancelled
+0.1s in, the claim stayed on disk until it went stale. Every cancellation test had
+cancelled during the model call. Now the cancel waits for setup and ends the turn
+through the lifecycle's own ending -- *Cancelling waits* again.
+`test_cancelling_during_setup_leaves_the_session_free` lets setup go only after the
+cancel has landed, so it cannot pass by setup finishing first. *(2026-10-02.)*
 
 **Kingfisher's own thread pool, one per process.** `asyncio.to_thread` borrows the
-loop's default executor, `min(32, cpu+4)` workers -- 12 on the 8-CPU host this was
-measured on -- and a call that blocks for a round trip holds its worker for all of
-it. At a simulated 50ms round trip, 200 concurrent calls took 917ms on that pool,
-73ms on one of 256 threads and 56ms awaited natively. Setup and `arun`'s disposal
-go through `core.session.threads` now, which copies the caller's context as
-`to_thread` does. One pool rather than one per `Kingfisher` because threads are the
-process's to spend; `KINGFISHER_THREAD_POOL_SIZE` is asked for when a service is
-built, so a second size is refused there, naming both, rather than queueing behind
-whichever service came first. 64 by default then, 16 since: a pool starts its threads
-only as work arrives, so a generous ceiling costs nothing idle. *(2026-10-02.)*
+loop's default executor, `min(32, cpu+4)` workers, and a call blocking on a round trip
+holds its worker throughout: at 50ms, 200 concurrent calls took 917ms there, 73ms on
+256 threads and 56ms awaited natively. Host work goes through `core.session.threads`,
+which copies the caller's context as `to_thread` does. One pool, because threads are
+the process's to spend; `KINGFISHER_THREAD_POOL_SIZE` is read when a service is built,
+and a second size is refused there, naming both, rather than queueing behind whichever
+service came first. *(2026-10-02.)*
 
-**The session reads have async twins, and each read is written once.**
-`asession`, `apending` and `aartifact`, asked for by a deployment whose own code runs
-on an event loop -- the witness *Methods on `Kingfisher`* was waiting for, and still
-methods rather than module-level names. They go through the ports' own async methods
-rather than a thread each: a call that blocks for a round trip holds a worker for all
-of it, and at a thousand concurrent 50ms calls the default executor took 4491ms, a
-256-thread pool 257ms and awaiting natively 62ms.
+**The session reads have async twins, and each read is written once.** `asession`,
+and `apending` and `aartifact` on the `Session` it returns, asked for by a deployment
+on an event loop -- the witness *Methods on `Kingfisher`* was waiting for. They await
+the ports' own async methods rather than taking a thread each: at a thousand
+concurrent 50ms calls, 4491ms on the default executor, 257ms on 256 threads, 62ms
+awaited.
 
 **Written once, as the port calls a read makes.** A sequence is a generator that
 yields each call and is sent the answer; `drive` makes the sync call and `adrive`
-awaits its `a`-prefixed twin, so every check and refusal between the calls, and their
-order, exists once. Two hand-written copies of each read was the alternative, and two
-copies of one thing is what the second copy of the turn was. Every session I/O helper
-is one -- `HarnessFiles`, the transcript and pause formats, the pin, placing data,
-listing and fetching what a turn left -- and sync code that is not one, the turn's
-ending and `reap`, drives them. `HarnessFiles` moved beside the formats in
-`session_store`, because `sessions` needs it and it needs nothing from the harness.
-The pinned agent followed on 2026-10-05, for the same reason: `remember_agent` and
-`agent_started_with` are sequences over the same `/.harness` files, read by the same
-two modules, and `workspace/` is the directory, which the pin has not lived in since
-a session became its backend.
+awaits its `a` twin, so every check between the calls, and their order, exists once.
+Two hand-written copies of each read was the alternative, which is what the second copy
+of the turn was. Every session I/O helper is one -- `HarnessFiles`, the transcript and
+pause formats, the pinned agent, placing data, what a turn left -- kept together in
+`core.session.store`. *(2026-10-02.)*
 
 **A sequence called without a driver does nothing, which is how this shape fails
-quietly.** `test_every_sequence_is_driven_or_delegated_to` finds each call by name and
-requires `yield from`, `drive` or `adrive` around it. It found the test helper `pin`
-writing no pin, and every turn that relied on one told it named no agent. Finding calls
-by name needs names nothing else uses, which is why `HarnessFiles` says `fetch`,
-`store` and `drop` and not `read`, `write` and `delete`, the backend's own --
+quietly.** `test_every_sequence_is_driven_or_delegated_to` requires `yield from`,
+`drive` or `adrive` around each call; it found the test helper `pin` writing no pin.
+Finding calls by name needs names nothing else uses, so `HarnessFiles` says `fetch`,
+`store` and `drop`, not the backend's `read`, `write` and `delete`;
 `test_a_sequence_s_name_is_not_also_a_plain_function_s` keeps it so.
 
-**A cancel waits for a call that changes something, and abandons a read.** *Cancelling
-waits*, one level down: a claim taken or a sandbox opened while the caller was being
-cancelled would otherwise reach nobody, and the sequence that must give it back is
-handed the answer before it is handed the cancel. Disk and CPU work on this host goes
-to kingfisher's pool, and is always waited for, because a thread runs to the end
-whether anyone waits or not.
+**A cancel waits for a call that changes something, and abandons a read.**
+*Cancelling waits*, one level down: a claim taken or a sandbox opened during the
+cancel would otherwise reach nobody, so the sequence is handed the answer before the
+cancel. Work on this host goes to the pool and is always waited for, because a thread
+runs to the end regardless.
 
-**`aopen` and `asessions` are defaults on the protocol**, running `open` and
-`sessions` on kingfisher's pool -- deepagents' own `BackendProtocol` gives its async
-methods the same shape. A class that subclasses `SessionBackends` has them; one that
-does not must write them, because `isinstance` asks for every member, and that is the
-breaking half of this. The session's *backend* is read through deepagents' async
-methods, which for its filesystem backends run on the loop's default executor: that is
-deepagents' choice and a local read. A backend whose files are a round trip away
-overrides them.
+**`aopen` and `asessions` are defaults on the protocol**, as is every async twin
+`Sessions` declares, each running its sync method on kingfisher's pool -- the shape
+deepagents' `BackendProtocol` gives its own. A subclass of `Sessions` inherits them;
+a class that only matches it must write them, since `isinstance` asks for every member,
+which is the breaking half. The session's *backend* is read through deepagents' async
+methods, which for its filesystem backends use the default executor -- a local read; a
+backend a round trip away overrides them.
 
 **`session()` opens a backend only when something reads it.** With nothing to narrow
 the caller, the pin decides nothing, and opening a remote backend to say a session
 exists was a sandbox for nothing. *(2026-10-02.)*
 
-**Deleting a session has an async twin, and the shared checkpointer is wrapped
-rather than typed.** `adelete_session`, and `arun(delete_session=True)` with it: both
-drains end in one sequence, so the disposal tail `arun` used to push onto a thread
-whole is written once and awaited. `adelete` joins `open` and `sessions` as a default
-on the protocol, and the kit checks it.
+**Deleting a session has an async twin.** `Session.adelete` and
+`arun(delete_session=True)` end in one sequence, written once and awaited. `adelete`
+is a default on the protocol, and the kit checks it. *(2026-10-05.)*
 
-`ThreadStore` is gone. It typed `threads=` as something with `delete_thread`, because
-the application layer may not name langgraph's saver -- but that under-described a
-shared saver, which langgraph reads and writes every turn and `reap` asks to `list`,
-and nothing checked it. `SharedThreads` in `checkpointing` wraps whatever was passed
-and holds what kingfisher asks of a saver in one place: `forget`, `aforget` and `ids`.
-`aforget` awaits the saver's own `adelete_thread`, and falls back to kingfisher's pool
-where it has none or raises `NotImplementedError`, as langgraph's base class does --
-refused instead, a sync-only saver would make deleting a session fail on the async
-path alone, which is the rule `SessionBackends`' defaults already follow. `_exists`
-and `_known` were two listings asking one question; `_known_steps` is the one.
-*(2026-10-05. `SharedThreads` went with `threads=` on 2026-10-17.)*
-
-**Setup is one sequence for both loops, and the turn's ending is off the loop.**
-`stream` and `astream` set a turn up by driving one `_prepare_steps` -- the session
-lookup, the open, the pin, `mark_used`, the claim, the quota, the data, the pause, the
-agent, the transcript -- and only `_built_turn`, the saver and the graph and the turn
-record, is work on this host: inline for `stream`, on kingfisher's pool for
-`astream`. `_admit` and `_open_turn`, with `Admitted` between them, were split so that
-a refused request left no turn directory behind; `allocate_turn` makes nothing any
-more, so the order inside one sequence keeps that promise, and
-`test_a_refused_request_starts_no_turn_and_keeps_no_claim` says so where a signature
-check used to. `_held_session` went with them, having held nothing.
+**Setup is one sequence for both loops.** `_prepare_steps` is the lookup, the open,
+the pin, `mark_used`, the claim, the quota, the data, the pause, the agent and the
+transcript; only `_built_turn` is host work -- inline for `stream`, on the pool for
+`astream`. A refused request leaves no turn behind because `allocate_turn` makes
+nothing and the sequence's order keeps that promise;
+`test_a_refused_request_starts_no_turn_and_keeps_no_claim` says so.
 
 **A cancel can land at any of setup's steps now, and each is tried.** The claim goes
-back synchronously from the sequence's own `except`. A cancel during the last step,
-the build, has no later step to go in at, so `adrive_finished` hands the built turn
-back with the cancel and `astream` ends it the way any turn ends.
-`test_cancelling_at_any_step_of_setup_leaves_the_session_free` counts setup's steps
-on a warm turn and cancels at each in turn, so a step added later is tried too.
+back from the sequence's own `except`. A cancel during the build has no later step to
+go in at, so `adrive_finished` hands the built turn back with the cancel and `astream`
+ends it like any turn. `test_cancelling_at_any_step_of_setup_leaves_the_session_free`
+counts setup's steps on a warm turn and cancels at each, so a step added later is tried
+too.
 
-**The turn's ending runs on the pool for `astream`, and is still uninterruptible.**
-`_end_turn` is a plain function, for the reason `findings.md` measured, and what moved
-is only where it runs: on the loop it held every other turn up through the pause, the
-transcript, the artifact listing and the claim, each a round trip on a remote
-backend. `astream` waits for it however many times it is cancelled, so the session is
-free before the cancel returns -- and `release` keeps no async twin, for the same
-reason.
+**Read once, and closed on failure.** The pin is read once and handed down rather than
+once per question. `_built_turn` closes a saver it opened for a build that then raised,
+since no turn exists for an ending to close it. *(2026-10-05.)*
 
-**Read once, and closed on failure.** The pin decides whether the caller reaches the
-session and which agent runs, and was read once for each; it is read once and handed
-down. A saver opened for a build that then raised was left open, since no turn
-existed for an ending to close it; `_built_turn` closes what it opened when it does
-not hand it over. *(2026-10-05.)*
-
-**A pause is cleared only where there is one, and the pool defaults to 16.** Measured
-end to end against session backends whose every call takes 50ms
-(`spikes/async_scaling.py`, numbers in `findings.md`): reads scale flat once awaited,
-and what grew with concurrent turns was the ending, which runs on kingfisher's pool
-so that nothing can interrupt it. Three of its seven round trips were `clear_pause`,
-dropping the pause files at the end of every turn whether or not there had been a
-pause. Setup reads the mark for every turn and drops it for one that supersedes it,
-so only a resume has a pause left to clear by its end; every other turn now skips
-the three, on both paths.
-
-The default went from 64 to 16. A smaller pool was asked for, and 4 was measured:
-since each turn holds a thread through its ending, ten concurrent remote turns took
-1.8x as long as one, and two hundred took longer than handing each turn to a thread.
-16 keeps ten concurrent turns at the cost of one and holds fewer threads under a
-burst than 64; at fifty, 64 still does twice as well, which is why
-`configuration.md` tells a deployment with many turns at once on a remote backend
-to raise it. Making the ending awaited rather than threaded would remove the pool
-from it altogether, and is the change that would reopen *Cancelling waits*.
+**A pause is cleared only where there is one, and the pool defaults to 16.** Against
+session backends whose every call takes 50ms (`spikes/async_scaling.py`, numbers in
+`findings.md`), reads scaled flat once awaited and the ending grew with concurrent
+turns. Three of its seven round trips were `clear_pause`, run whether or not there had
+been a pause; setup now drops a superseded mark, so only a resume clears one. The
+default went from 64 to 16. 4 was asked for and measured: each turn then held a thread
+through its ending, ten concurrent remote turns took 1.8x as long as one, and two
+hundred took longer than a thread per turn. 16 keeps ten at the cost of one; at fifty,
+64 does twice as well, which is why `configuration.md` tells a deployment with many
+remote turns at once to raise it.
 
 **The size is per process, not per `Kingfisher`, and nothing is spent until it is
-used.** A deployment building an instance per session shares the one pool across all
-of them -- two instances hold the same pool, and a second size is refused -- so the
-number bounds the process, and measured with an instance per session the turns above
-came out the same. Nor does the ceiling start threads: a pool makes one only when
-work arrives with none idle, and after five turns in a row it held one. A process
-serving a single session therefore uses one or two whatever the number says.
+used.** Instances share the one pool, so the number bounds the process -- measured with
+an instance per session, the turns came out the same -- and a pool starts a thread only
+when work arrives with none idle: after five turns in a row it held one.
 *(2026-10-05.)*
 
-**A turn's ending is awaited too, run as a task no cancel reaches.** Measured after
-the pool went to 16, what still queued with concurrent turns was the ending: four
-round trips each, on kingfisher's pool so that nothing could interrupt them, and two
-hundred turns took 3173ms against one turn's 522ms. The ending is now a sequence like
-setup -- the pause, the transcript, the artifacts and the claim awaited, the run log,
-the state read and the closing of the saver and the interpreter on the pool as host
-work -- which `stream` drives with no await in it and `astream` runs through
-`finished`, as a task of its own that the caller's cancel never reaches, waited for
-however many times that cancel comes. Two hundred turns now take 646ms at the pool of
-16, and 638ms at a pool of 4: the size no longer decides it.
+**A turn's ending is awaited too, run as a task no cancel reaches.** It had been a
+plain function on the pool for `astream`, because on the loop its round trips -- the
+pause, the transcript, the artifacts, the claim -- held up every other turn. Still, at
+a pool of 16, two hundred turns took 3173ms against one turn's 522ms. The ending is now
+a sequence like setup, its host work on the pool, which `stream` drives with no await
+and `astream` runs through `finished`, as a task the caller's cancel never reaches,
+waited for however often the cancel comes. Two hundred turns take 646ms at 16 and 638ms
+at 4: the size no longer decides it.
 
-**That replaces a guarantee rather than keeping it**, and the difference is said here
-rather than discovered. A thread nothing could interrupt also outlived its event
-loop; a task does not. `astream` is waiting on the ending whenever it runs, so the
-loop does not end first unless something stops it outright, and that is the case
-this gives up. `test_the_turns_ending_runs_to_the_end_however_often_it_is_cancelled`
-cancels at every step of the ending three times over and requires every step to
-have run, which is what the structural check on `_end_turn` stood for. `release` has
-an async twin after all, `arelease`, since the protected task is what keeps it from
-being stopped halfway -- and setup gives a refused turn's claim back with it too,
-which was the last sync call to the backend left on the async path.
+**That replaces a guarantee rather than keeping it.** A thread nothing could interrupt
+also outlived its event loop; a task does not, and a loop stopped outright is the case
+given up. `test_the_turns_ending_runs_to_the_end_however_often_it_is_cancelled` cancels
+at every step three times over and requires every step to have run. `release` gained
+`arelease`, since the protected task is what keeps it from stopping halfway. The pool
+stays 16 because session backends whose async methods are the protocol's defaults still
+run every call there. *(2026-10-05.)*
 
-The pool's default stays 16, for a reason other than the one given for it above: a
-turn hands the pool no round trip now, but session backends whose async methods are
-the protocol's defaults still run every sync call there. *(2026-10-05.)*
+**Asked and declined: making a turn a langchain `Runnable`.** It would bring `batch`,
+`astream_events` and LCEL with an interface that ecosystem knows, and it removes none
+of the work: `Runnable.astream`'s default yields one chunk from `ainvoke` rather than
+iterating `stream`, so the bridge above would still be written underneath. It adds a
+second vocabulary for what a request may do: `RunnableConfig` answers "how should this
+run", `Capabilities` answers "what may this request reach" and only narrows, and there
+is nowhere in the first for the second. What was worth having -- a caller's context and
+its tracing reaching the turn -- arrived with the bridge. A `Runnable` adapter needs a
+witness first. *(2026-09-18.)*
 
-**Asked and declined: making a turn a langchain `Runnable`.** The question is
-reasonable -- `Runnable` is the interface that ecosystem's callers already know,
-and it would bring `batch`, `astream_events` and LCEL composition with it. Three
-reasons not to, and the first is the one that surprised us:
+**Taken: files passed by id go.** `Request.input_refs` and `data_refs` named files
+for a `FileStore` to resolve, the service's vocabulary; with it gone every use was in
+the feature's own tests. The port went, with `LocalFileStore`, its kit, `Planted` and
+the `contents=` placement path. A caller whose files are elsewhere copies them here and
+passes paths, as `kingfisher run --input` does. *(2026-09-16.)*
 
-It removes none of the work. `Runnable.astream`'s default does not iterate the
-sync `stream` -- it yields one chunk from `ainvoke` -- so the bridge above would
-still have to be written, and the interface would sit on top of it rather than
-instead of it.
+**Taken: opening a session without a turn goes.** `start_session`,
+`Kingfisher.remember_agent` and `open_session_for` minted a session and fixed its agent
+before any turn, which only a server does, and the only callers left were tests. The
+route had cost a data-loss bug twice -- a stub session laid out under the workspace
+whatever `session_root` answered and swept by `reap` out of its own store, and a pin
+written where a custom root's turn would not look. *(2026-09-16.)* *Making a session
+before its first turn returned on 2026-10-14, as `kf.session(id, create=True)` for
+placing inputs, under "Reversed: a session is named by the request" below.*
 
-It cannot live where the turn lives. `THIRD_PARTY` grants `application` nothing,
-and that is not an oversight to edit around: the runtime's types belong behind
-`infrastructure/harness`, which is where `subagents.py` and `tools.py` went for
-this same reason. A `Runnable` adapter there is a perfectly good idea the day
-somebody wants one, and it needs a witness first.
+**Reversed: `files_for` opened only a session a turn issued.** It opened through the
+session backends' `open`, which makes what it is asked for, so a made-up id became a
+session a turn would accept -- the route above, back by another door. It was made to
+refuse an id the listing lacked, at the public doors and not in `_files_for`, where it
+would refuse every turn that starts a session. *(2026-10-07.)* Undone 2026-10-14 by the
+reversal below: an unused id starts a session by design. What the check reached for is
+held by the id itself -- `names_a_session` admits one visible path segment, so a made-up
+id names only a folder directly under `sessions/`.
 
-It adds a second vocabulary for what a request may do. `RunnableConfig` is
-langchain's answer to "how should this run"; `Capabilities` is kingfisher's answer
-to "what may this request reach", and it narrows and never widens. There is
-nowhere in the first for the second to live, so the two would sit side by side
-meaning different things, permanently.
+**Taken: definitions passed by id go.** `Request.skill_refs` and `subagent_refs` sent
+catalogue ids fetched through a `DefinitionStore` -- a route for a caller with no
+filesystem here, which only the service was. The port went, with uploads.py,
+`UploadError` and `Kingfisher(definitions=)`, and so did `Capabilities.including`, the
+single exception to *Capabilities narrow and never widen*. Nothing widens now, so the
+exception is gone rather than merely unused. *(2026-09-16.)*
 
-What was actually worth having out of that ecosystem -- a caller's context, and
-the tracing hanging off it, reaching the turn -- arrived with the bridge above
-and needed no interface at all. *(2026-09-18.)*
+**Taken: a session contributes no definitions.** The half that read them went too: the
+per-turn overlay in layered.py, `read_uploaded` and its registry merge, the
+/skills/uploaded route, and the `SESSION_PLUMBING` entry that made the directory and
+granted the shell write access to it -- so the fence under *Landlock cannot take back
+what it has granted* grants one place fewer. What a request may activate is what the
+catalogue holds. *(2026-09-16.)*
 
-**Taken: files passed by id go.** `Request.input_refs` and `data_refs` let a
-caller with no host paths name files for a `FileStore` the deployment wired to
-resolve -- the service's vocabulary, which is why that store's setting was the
-service's. With the service gone nothing built a request carrying one; every use
-was in the feature's own tests. The port goes with them, as do `LocalFileStore`,
-its contract kit and `Planted`, and the `contents=` path the placement writers
-kept for fetched bytes. A caller whose files are elsewhere copies them to this
-host and passes paths, which is what `kingfisher run --input` and `--data`
-already do. *(2026-09-16.)*
-
-**Taken: opening a session without a turn goes.** `start_session`, the
-`Kingfisher.remember_agent` method and `open_session_for` minted a session, fixed its agent and
-handed back an id before any turn ran -- what a server does between the request
-that opens a session and the first one to use it. Nothing here does that: the
-command continues a session it was given and mints one by running a turn, and the
-only callers left were tests. A session now begins with its first turn, so an id
-is only ever issued, and `_admit` is handed the session its caller is already
-holding rather than opening one itself. The pre-turn route had cost a data-loss
-bug twice over -- a stub session laid out under the workspace whatever
-`session_root` answered, swept by `reap` out of its own store, and a pin written
-where a custom root's turn would not look -- and what is left cannot produce
-either. *(2026-09-16.)* *Reopened by `files_for` 2026-10-05 and closed again
-2026-10-07, next entry.*
-
-**`files_for` opens only a session a turn issued.** It was added so a caller could
-open a session's backend once and hand it to the turn, and it opened through the
-session backends' `open`, which makes a session it is asked for. So an id the
-caller made up became a session the listing held, and a turn naming it was
-accepted: the route the entry above closed, back by another door. `files_for` and
-`afiles_for` now ask the listing a turn asks and refuse an id it lacks with the same
-`UnknownSessionError`, before anything is opened, so a refusal leaves nothing for a
-later turn to accept. The check is at those two doors and not in `_files_for`,
-where it would refuse every turn that starts a session -- that turn opens the id it
-has just minted -- and repeat a question `reap` and the session reads have just
-asked. *(2026-10-07.)* *Undone 2026-10-14 under "Reversed: a session is named by the
-request" below: an id nobody has used starts that session by design, so there is no
-listing for a made-up id to fail, and `files_for` makes the one it is asked for again.
-What the check was reaching for is held by the id itself -- `names_a_session` refuses
-anything but one visible path segment, so a made-up id can name only a folder directly
-under `sessions/`.*
-
-**Taken: definitions passed by id go.** `Request.skill_refs` and
-`subagent_refs` let a caller send catalogue ids for skills and subagents of its
-own, which `provision` fetched through a `DefinitionStore` and unpacked into the
-session. That is a route for a caller with no filesystem here, which is what the
-service was; with it gone nothing built such a request, and every use was in the
-feature's own tests. The port goes, with `uploads.py`, `UploadError` and
-`Kingfisher(definitions=)` -- and so does `Capabilities.including`, which existed
-for the single exception to *Capabilities narrow and never widen* above: an
-upload widening skills and subagents. Nothing widens now, so the exception is
-gone rather than merely unused. What fed on it -- `/skills/uploaded`, the overlay
-in `layered.py`, and the write the shell was granted there -- reads empty
-directories until the change after this one removes it. *(2026-09-16.)*
-
-**Taken: a session contributes no definitions.** With nothing able to put one
-there, the half that read them goes: the overlay `layered.py` built per turn,
-`read_uploaded` and the registry merge behind it, the `/skills/uploaded` route
-and its mount, and the entry in `SESSION_PLUMBING` that made the directory in
-every session. That entry is also what granted the shell write access to it, so
-the fence now grants `data`, `derived`, `memory`, `runs`, `.home` and `.tmp` and
-nothing more -- the list under *Landlock cannot take back what it has granted*,
-above, names one place fewer. The `session_dir` that threaded through
-`available_skills`, `defined_subagents`, `indistinct_subagents` and
-`withheld_by_kind` went with it: what a request may activate is what the
-catalogue holds, and a turn reads no definitions of its own. *(2026-09-16.)*
-
-**Transport only -- the server never interprets identity**, and lives in its own
-wheel, installed by `kingfisher[service]`. `pip install kingfisher` does not put a
-web service on disk. One request per turn, streamed, with no result persistence;
-files arrive as ids resolved through a `FileStore` port; the turn stops on
-disconnect and there is no cancel endpoint. An explicit error-to-status map, with
-a test that it is total. *(2026-08-16, `http-surface.md`; 2026-08-17,
+**Transport only -- the server never interprets identity**, in its own wheel, installed
+by `kingfisher[service]`, so `pip install kingfisher` put no web service on disk. One
+request per turn, streamed, no result persistence; files as ids through a `FileStore`;
+the turn stopped on disconnect, with no cancel endpoint; an error-to-status map with a
+test that it was total. *(2026-08-16, `http-surface.md`; 2026-08-17,
 `the-service-as-its-own-package.md`.)*
 
-**Session ids are issued, not accepted**, and the tenancy boundary is outside
-kingfisher with one guard inside. *(2026-08-16, `session-scoped-api.md`.)*
-
 **Reversed: a session is named by the request.** Any id names a session, the first
-turn naming one starts it, and a request naming none runs in `default`. The guard --
-a supplied id may resume a session but never create one, and minted ids are 128 bits
--- protected one deployment: a service forwarding a user's input as a session id.
-Every other caller paid for it. One with ids of its own, a chat thread or a ticket,
-kept a table from its ids to kingfisher's, and the only way to choose an id at all was
-`KINGFISHER_SESSION_ID`, one process per session. So the boundary is outside kingfisher
-with no guard inside: a service derives the ids it sends and never forwards a user's,
-and the guides say so where `files_for` and the session backends are described.
+turn naming one starts it, and a request naming none runs in `default`. The rule it
+replaced -- ids are issued, not accepted: a supplied id may resume but never create, and
+minted ids are 128 bits *(2026-08-16, `session-scoped-api.md`)* -- protected one
+deployment, a service forwarding a user's input as an id. Every other caller paid: one
+with ids of its own kept a table from them to kingfisher's, and choosing an id at all
+meant `KINGFISHER_SESSION_ID`, a process per session. So the tenancy boundary is
+outside kingfisher with no guard inside: a service derives the ids it sends and never
+forwards a user's, as `ports.md` says.
 
 What still holds: the access policy refuses a caller at a session whose pinned agent it
-does not reach, in the words reading an absent session gets. Reading or deleting a
-session nobody has made answers "no session" and makes nothing, since a read that made
-one would be a write nobody asked for, and a resume has to find the session it answers.
-`files_for` does make one, because placing inputs before the first turn is what it is
-for. An id may not start with `.`: `.harness` is the name the macOS rule guards in every
-session, so a session called that could not write its own files, and the listing skips
-what no request could name. `default` is an ordinary id, listed and reaped like any
-other, so one continuing conversation needs no setting. *(2026-10-14.)*
+does not reach, in the words an absent session gets. Reading or deleting a session
+nobody made answers "no session" and makes nothing -- a read that made one would be a
+write nobody asked for. `kf.session(id, create=True)` makes one, since placing inputs
+before the first turn is its purpose. An id may not start with `.`: `.harness` is
+guarded by the macOS rule in every session, and the listing skips what no request could
+name. `default` is an ordinary id, listed and reaped like any other. *(2026-10-14.)*
 
-**A skill's `allowed-tools` is prompt text, not enforcement.** Worth knowing
-before trusting it for anything. *(2026-08-16, `session-scoped-api.md`.)*
+**A skill's `allowed-tools` is prompt text, not enforcement.** Worth knowing before
+trusting it for anything. *(2026-08-16, `session-scoped-api.md`.)*
 
 ## The core and its plugins
 
@@ -6704,1272 +3792,833 @@ kingfisher/
   cli/            the command
 ```
 
-**The layers had stopped being the dependencies.** Counted at the review that proposed
-this: `domain/` imported the kinds, `application/` imported `infrastructure/harness/` at
-module scope in more than a dozen places, and more than a dozen other imports of the
-harness were deferred into functions to get past the rule rather than because the
-dependency was wrong. The deepagents 0.7.22 upgrade changed three source files, two
-outside the harness, so the folder no longer drew an upgrade's list; startup cost was
-real, and a check that imports in a fresh interpreter holds it without a folder.
+**The layers had stopped being the dependencies.** domain/ imported the kinds,
+application/ imported the harness at module scope in more than a dozen places, and a
+dozen more imports were deferred into functions to get past the rule rather than
+because the dependency was wrong. The deepagents 0.7.22 upgrade changed three files,
+two outside the harness, so the folder no longer drew an upgrade's list; startup cost
+is held by a fresh-interpreter check instead.
 
-**Words.** A *plugin* is a part a deployment may replace with its own, and kingfisher
-ships one of each; its *interface* is what the core needs of it, stated once, in
-`core/interfaces.py`. "Port", "adapter" and "extension" name none of these, and
-`Adapter` became `WireFormat` because it was a model wire format. Middleware is
-upstream's type used as it is, so it has no interface here, and the conversation is not
-a plugin at all: "Dropped: a deployment's own saver" under *Sessions: what persists and
-where* says why.
+**Words.** A *plugin* is a part a deployment may replace, and kingfisher ships one of
+each; its *interface* is what the core needs of it, stated once in
+`core/interfaces.py`. "Port", "adapter" and "extension" name none of these; `Adapter`
+became `WireFormat`, being a model wire format. Middleware is upstream's type used as
+is, so it has no interface here, and the conversation is not a plugin: "Dropped: a
+deployment's own saver" under *Sessions: what persists and where* says why.
 
-**The core imports no plugin.** A default the core falls back to lives in the core
-beside its interface: the logger sink `LoggedRunEvents`, `InstructionsFile` and the
-shipped wire formats. `plugins/` holds what the core never names --
-`LocalSessions` with its folders, backend, shell and sandbox, and `JsonlRunEvents`. What
-the core needs beyond an interface it reads as extras an implementation may declare --
-`host_path`, `shell_prompt`, `unprotected`, `runs_here`, `where` -- never by identity: five
-places asked `LocalSessions` directly and were cut before anything moved, since one
-`isinstance` would make kingfisher's own sessions impossible to ship apart.
+**The core imports no plugin.** A default the core falls back to lives beside its
+interface: `LoggedRunEvents`, `InstructionsFile`, the shipped wire formats. `plugins/`
+holds what the core never names -- `LocalSessions` and `JsonlRunEvents`. What the core
+needs beyond an interface it reads as extras an implementation may declare --
+`host_path`, `shell_prompt`, `unprotected`, `runs_here`, `where` -- never by identity:
+one `isinstance` would make kingfisher's own sessions impossible to ship apart.
 `test_the_core_imports_nothing_from_plugins` holds it; only `cli/` is excused.
 
-**A plugin imports the core and never another plugin**, and `kingfisher.plugins` counts
-as another: it names every plugin, so it would be the back door.
+**A plugin imports the core and never another plugin**, and `kingfisher.plugins`
+counts as another, since it names every plugin and would be the back door.
 `test_no_plugin_imports_another`.
 
 **A plugin of kingfisher's own takes only what an outsider could.** `LocalSessions`
-reached twenty-five names no public address carried -- the folder names every
-deployment's sessions must honour among them -- and the kit in `tests/checks/`, which a
-plugin's author is told to copy, fifteen of its own. Whatever a default needs and an
-outsider cannot import is a gap in the plugin interface, so the gaps were closed rather
-than the default excused: the layout through `cfg.layout`, with `Layout` public;
-`Config.sessions_root` and `Config.kingfisher_dir`; `Definitions` public, saying where
-its skills are served; the checks kingfisher makes of a backend, and how it lists a
-skills source, public for a plugin's own suite; a `ShellPrompt` that says it starts in the session, where the core had asked
-whether it was kingfisher's own by identity; and what only `LocalSessions` used, moved
-into it. `test_a_plugin_has_of_kingfisher_only_what_an_outsider_has` holds both. A
-plugin takes a name a door carries from the module that door takes it from, since it
-may not import its own door; the kit takes it through the door, since it leaves as
-written. **Not taken: shipping `LocalSessions` as a package of its own.** It needs
-nothing the core does not, `sandlock` is already an extra, and a second release would
-buy an install nobody has asked to skip.
+reached twenty-five names no public address carried, and the kit in `tests/checks/`,
+which plugin authors are told to copy, fifteen. Whatever a default needs and an
+outsider cannot import is a gap in the interface, so the gaps were closed rather than
+the default excused: `cfg.layout` with `Layout` public, `Config.sessions_root` and
+`Config.kingfisher_dir`, `Definitions`, the backend checks and the skills lister, and a
+`ShellPrompt` where the core had asked by identity.
+`test_a_plugin_has_of_kingfisher_only_what_an_outsider_has` holds both. A plugin takes
+a door's name from the module the door takes it from, since it may not import its own
+door; the kit takes it through the door. **Not taken: shipping `LocalSessions` as a
+package of its own.** It needs nothing the core does not, `sandlock` is already an
+extra, and a second release buys an install nobody asked to skip.
 
 **Inside `LocalSessions`, a function that needs the layout takes the `Layout`.** The
-folders, the backend and the three fences took the folder names one at a time, each
-defaulting to the name kingfisher ships. Every caller passed `cfg.layout`'s, so nothing
-was wrong, but nothing stopped a new caller forgetting one and laying out or fencing a
-renamed deployment's session under the shipped name, silently. One required `Layout` is
-all of them at once. `Layout.made_dirs` and `Layout.shell_read_only` name the two sets
-of folders each spelled out in two places: what a session is made with, and what every
-fence keeps the shell from writing. The checks kingfisher makes of a backend are named
-for what they answer, `why_no_shell` and `unrouted_denials`, and `Definitions` lists
-its skills as named tuples, since a plugin's author reads them cold. The same held for
-the public `unrouted_denials`, which checked the shipped layout's paths when given none,
-and for the backend kit, whose checks were handed a backend alone: the check takes the
-`Layout`, and each kit check's `make` returns `(Config, backend)` as the sessions kit's
-does. Kingfisher's own backend serves any path in a session, so a kit spelling a shipped
-name passes against it either way; each kit is also driven against a backend serving
-only the layout's folders, which is where that shows. *(2026-10-17, from a review of
-the plugin work.)*
+folders, backend and three fences took folder names one at a time, each defaulting to
+the shipped name, so a new caller could forget one and lay out or fence a renamed
+deployment's session under the shipped name, silently. One required `Layout` is all of
+them; `Layout.made_dirs` and `Layout.shell_read_only` name the two sets spelled out
+twice each. The same went for `unrouted_denials` and the backend kit, whose `make` now
+returns `(Config, backend)`. Kingfisher's own backend serves any path, so a kit
+spelling a shipped name passes against it either way; each kit is also driven against
+a backend serving only the layout's folders, which is where that shows. *(2026-10-17,
+from a review of the plugin work.)*
 
-**Sessions are always named.** `Kingfisher`, `run()` and `stream()` refuse to run without
-them. The sessions plugin is the sandbox and decides where each caller's files are, so it
-has no default: a guess there is the leak a deployment replaced it to avoid. The command,
-kingfisher's own deployment, names `LocalSessions` in `cli/configured.py` unless
-`KINGFISHER_SESSIONS` names others. `graph=` is kept and never stands in for sessions -- a
-turn's inputs, leavings and lock go through them whatever runs the agent -- and whether to
-drop it is a later decision.
+**Sessions are always named.** `Kingfisher`, `run()` and `stream()` refuse to run
+without them. The sessions plugin is the sandbox and decides where each caller's files
+are, so a default would be a guess, and a guess there is the leak a deployment replaced
+it to avoid. The command names `LocalSessions` in `cli/configured.py` unless
+`KINGFISHER_SESSIONS` names others. `graph=` is kept and never stands in for sessions,
+since a turn's inputs, leavings and lock go through them whatever runs the agent.
 
 **`Plugins` is a record for `KINGFISHER_PLUGINS` alone.** The command builds its own
-`Kingfisher` with no call a caller could hand keywords to, so the setting names a callable
-returning one. In the library the same plugins stay `Kingfisher`'s keywords. **Not taken:
-one `Plugins` object as the argument.** It would have changed more than a hundred places to
-say the same thing one level down, and wire formats do not fit it: they are applied as the
-configuration loads, where `doctor` checks every endpoint's `api:`.
+`Kingfisher`, so the setting names a callable returning one; in the library the plugins
+stay keywords. **Not taken: one `Plugins` object as the argument.** It would change more
+than a hundred places to say the same thing one level down, and wire formats do not fit:
+they apply as the configuration loads, where `doctor` checks every endpoint's `api:`.
 
-**`Config` holds what the core reads.** The shell's fence and what it adds to `PATH` are
-`LocalSessions`' settings, as `ShellSettings`, and the factories `KINGFISHER_SESSIONS` and
-`KINGFISHER_PLUGINS` name are the command's: nothing in the core read any of the four.
-`LocalSessions()` reads `KINGFISHER_SHELL_SANDBOX` and `KINGFISHER_SHELL_PATH_EXTRA` as it is
-built, so one `.env` still fences the command and a library deployment alike, and `shell=`
-decides in code instead. `doctor` and `kingfisher list` ask the sessions the command runs on
-whose they are and how their shell is fenced, as `Kingfisher.origins` does -- a report read
-from a setting printed a sessions path three rows above a check that knew better. **Not
-taken: a `Config.shell` record.** It keeps one plugin's settings on the core's record under
-another name, and a deployment on sessions of its own would still carry a fence nothing
-applies. **Not taken: leaving them flat.** `Config` was the record every surface could
-reach, so a setting landed there whoever read it, which is how the core's record came to
-configure a plugin and the command.
+**`Config` holds what the core reads.** The shell's fence and `PATH` additions are
+`LocalSessions`' settings, as `ShellSettings`, and `KINGFISHER_SESSIONS` and
+`KINGFISHER_PLUGINS` are the command's: nothing in the core read any of the four.
+`LocalSessions()` reads `KINGFISHER_SHELL_SANDBOX` and `KINGFISHER_SHELL_PATH_EXTRA`, so
+one `.env` fences the command and a library deployment alike, and `shell=` decides in
+code. `doctor` and `kingfisher list` ask the sessions how they are fenced, as
+`Kingfisher.origins` does, rather than read a setting that may not be the one applied. **Not taken: a `Config.shell` record**, which keeps one
+plugin's settings on the core's record under another name. **Not taken: leaving them
+flat** -- that is how the core's record came to configure a plugin and the command.
 
-**Two public addresses.** `kingfisher`, the front door, is for embedding and for tool
-files: `Config`, `Request`, the result types, `Session`, `Capabilities`, the errors,
-`run` and `stream`, seeding and `inventory`, `ToolContext` and `tool`. `kingfisher.plugins` is for
-writing a plugin: `Sessions`, `RunEvents`, `Instructions` and `CommandRunner`, the records
-they speak in -- `CommandResult`, `WireFormat`, `Plugins`, `ShellPrompt`, `HostPathError`
--- and what kingfisher ships to fill them: `LocalSessions`, `backend_at`, `JsonlRunEvents`,
-`InstructionsFile` and `WIRE_FORMATS`. Everything else is private and may move, with no
-deprecation window: at 0.1.0 a caller on an old spelling changes one import line. Both
-are lazy tables: `import kingfisher` is 5.0ms, 4.8 of it `typing` and `importlib`, and
-`kingfisher.plugins` 5.1ms, against 909ms and 3,143 modules for `Kingfisher`. *(Measured
-2026-10-17, Python 3.12.7, best of seven fresh interpreters.)*
+**Two public addresses.** `kingfisher` is for embedding and tool files: `Config`,
+`Request`, the results, `Session`, `Capabilities`, the errors, `run` and `stream`,
+seeding and `inventory`, `ToolContext` and `ToolSpec`. `kingfisher.plugins` is for
+writing a plugin: the interfaces, the records they speak in, and kingfisher's own
+implementations. Everything else is private and may move with no deprecation window: at
+0.1.0 a caller on an old spelling changes one import. Both are lazy tables: `import
+kingfisher` is 5.0ms and `kingfisher.plugins` 5.1ms, against 909ms and 3,143 modules for
+`Kingfisher`. *(Measured 2026-10-17, Python 3.12.7, best of seven fresh interpreters.)*
 
 **One session, one handle, checked once.** `Kingfisher` keeps what is asked of the
-service as a whole -- `run`, `stream` and their async twins, `session`, `sessions`, `reap`
-and `origins` -- and what is asked of one session is asked of the `Session` that
-`session` hands out: `pending`, `artifact`, `files`, `size` and `delete`, each with an `a`
-twin. It replaced `SessionInfo` and five pairs of methods taking a session id, and the
-point was the caller check: `pending` and `artifact` took `source_ids`, while
-`delete_session`, `session_size` and `files_for` took none, so whether a caller could act
-on a session depended on which method was asked. `session` checks once, when it hands a
-session out. A session's agent is fixed when it opens and the caller's source ids are
-fixed then, so no method could ask again and be answered differently; a session deleted
-since answers `UnknownSessionError`, except to `delete`, which finds nothing to do.
-`None` answers both a session that is not there and one this caller cannot reach, so a
-leaked id is worth nothing, and `create=True`, which makes a session as `files_for` did,
-still answers `None` for one that exists out of reach. The handle keeps the backend it
-opened, so a narrowed read is one opening rather than two sandboxes. `held_for` and
-`agent_named` became private first: nothing outside the service called them.
+service -- `run`, `stream` and their twins, `session`, `sessions`, `reap`, `origins` --
+and one session is asked through the `Session` that `session` hands out: `pending`,
+`artifact`, `files`, `size`, `delete`, each with an `a` twin. It replaced `SessionInfo`
+and five pairs of id-taking methods, some of which checked `source_ids` and some not,
+so whether a caller could act on a session depended on which method was asked.
+`session` checks once; a session's agent and the caller's ids are fixed when it opens,
+so no later answer could differ. `None` answers both an absent session and one out of
+reach, so a leaked id is worth nothing, and `create=True` still answers `None` for one
+that exists out of reach. The handle keeps its backend, so a narrowed read opens one
+sandbox, not two.
 
-**Not taken: `s.run(...)` on the handle.** Beside `kf.run(Request(...))` it would be two
-ways to start a turn, and a first turn makes its session, which no handle exists for
-yet. *(2026-10-17.)*
+**Not taken: `s.run(...)` on the handle.** It would be a second way to start a turn,
+and a first turn makes its session, which no handle exists for yet. *(2026-10-17.)*
 
-**Not on it: `LoggedRunEvents`.** It is what a `Kingfisher` handed no run events uses, so
-naming it gives a deployment nothing, and it loads langgraph: 279ms and 834 modules, where
-the four interfaces together are 39ms and load none of the runtime.
+**Not on it: `LoggedRunEvents`.** It is the default, so naming it gives a deployment
+nothing, and it loads langgraph: 279ms and 834 modules, against 39ms for the interfaces.
 
-**A caller means a caller outside this wheel.** The command ships in the wheel and may
-import anything, but a name on either address comes through that address:
+**A caller means a caller outside this wheel.** The command may import anything, but a
+name on either address comes through that address:
 `test_a_consumer_uses_the_library_only_through_its_public_api`, by name rather than by
-file. So `cli/health.py` and `cli/listing.py` take from `kingfisher` the answers the
-library gives anybody -- `Config`, `Inventory`, `inventory`, `kinds_at`, `Origins` -- and
-every probe and renderer's word where it is defined, at addresses that may move under a
-deployment that copies them. `kinds_at` is on the door because
-`test_the_whole_job_is_reachable_through_the_front_door` names it as the job.
+file. `kinds_at` is on the door because
+`test_the_whole_job_is_reachable_through_the_front_door` names it as the job. **Not
+taken: freeing whole command files from the door.** They use public names too and would
+drift to deep imports with nothing red; held by name, putting a name on an address turns
+every deep import of it red.
 
-**Not taken: freeing whole command files from the door.** The free files use real public
-names too and would drift to deep imports of them with nothing red; held by name, putting
-a name back on an address turns every deep import of it red, with no file to move.
-
-**Which address a name is on says who it is for.** It replaced a table naming the guide
-or embedder that asked for each public name, deny by default. The cost: nothing now
-refuses a name added without a reason. What it costs to import is held below; whether it
-belongs is review's.
+**Which address a name is on says who it is for, and `WITNESSES` says who asked.** One
+table per address, keyed by `LAZY_TABLES` so a third door cannot open without one:
+`document`, `embedder`, or `interface`, which a second rule holds to a class in
+`core/interfaces.py` so the word is a claim about the tree. It was swept out with the
+layer rules it was filed beside, and for a week the record asked for a witness and
+nothing checked; nothing slipped through -- the root door shrank by the seven names that
+moved to `kingfisher.plugins` -- so what was lost was the next name. Restored
+2026-10-17. *(2026-10-17, from an architecture review.)*
 
 **Three listings per address, held to each other.** `__all__`, `_EXPORTS` and the
-`if TYPE_CHECKING:` stubs agree on each name and its module, and a stub is written
-`X as X`, which under PEP 484 is what makes it a re-export. `__getattr__` returns `Any`,
-so a name with no stub imports, passes every test and is untyped -- `reveal_type` showed
-it on a name a consumer imported. `LAZY_TABLES` names both addresses.
+`if TYPE_CHECKING:` stubs agree, and a stub is written `X as X`, which under PEP 484
+makes it a re-export. `__getattr__` returns `Any`, so a name without a stub imports,
+passes every test and is untyped.
 
-**A package's `__init__` imports nothing, or does it lazily.** It runs before any of its
-submodules, so one eager re-export reaching the runtime puts most of a second in front of
+**A package's `__init__` imports nothing, or does it lazily.** It runs before every
+submodule, so one eager re-export reaching the runtime puts most of a second in front of
 every import beneath it. `core/`, `core/definitions/` and `core/agent/kinds/` import
-nothing: each kind is 5.2ms and 71 modules and `core.environment` 34ms, where
-`import deepagents` alone is 845ms. *(Same measurement.)*
+nothing: each kind is 5.2ms, where `import deepagents` alone is 845ms. *(Same
+measurement.)*
 
 **The rules**, all in `tests/unit/test_architecture.py`:
 
-  - **`THIRD_PARTY`**, a per-folder library allowlist, deny by default, kept because an
-    upgrade is then a list of files rather than a search. deepagents is part of the core,
-    and the table grants it to `core/agent`, `core/session`, `plugins` and two kinds,
-    `core/definitions/skills` and `core/definitions/middlewares`.
-  - **The startup check**, imported for real in a fresh interpreter, which replaced
-    hand-kept tables of light and heavy names that needed a rule of their own to stay
-    total. `test_importing_kingfisher_loads_nothing_installed`;
-    `test_the_command_starts_without_the_agent_runtime`, which allows `dotenv` and `yaml`;
-    `test_a_public_name_that_runs_no_agent_loads_no_runtime`, for every name but the five
-    in `RUNS_AN_AGENT`. `langchain_core` counts as the runtime there: it was left out
-    while `kingfisher.tool` subclassed its `StructuredTool`, and `ToolSpec` names no
+  - **`THIRD_PARTY`**, a per-folder library allowlist, deny by default, so an upgrade
+    is a list of files rather than a search. The runtime goes to `core/agent`,
+    `core/session`, `plugins`, and the three kinds that must name its types:
+    `core/definitions/skills`, `core/definitions/tools`, `core/definitions/middlewares`.
+  - **The startup check**, imported for real in a fresh interpreter, replacing hand-kept
+    tables of light and heavy names: `test_importing_kingfisher_loads_nothing_installed`,
+    `test_the_command_starts_without_the_agent_runtime`, and
+    `test_a_public_name_that_runs_no_agent_loads_no_runtime` for every name outside
+    `RUNS_AN_AGENT`. `langchain_core` counts as the runtime, since `ToolSpec` names no
     langchain type.
-  - **`RECORDS` touch nothing outside the process**: the request, the result, the
-    interfaces, the access vocabulary and the field reader. A record that reads a file
-    cannot be built without a workspace behind it, in a test or in a deployment's code.
-  - **The flat core writes nothing to disk** except `core/workspace.py`, which lays out a
-    new one and is asserted to write, so a move fails rather than excusing nothing.
-  - **`test_only_one_module_changes_a_mode`**, walked over the whole package: scoped to a
+  - **`RECORDS` touch nothing outside the process**, so a record can be built without
+    a workspace behind it.
+  - **The flat core writes nothing to disk** except `core/workspace.py`, asserted to
+    write, so a move fails rather than excusing nothing.
+  - **`test_only_one_module_changes_a_mode`**, over the whole package: scoped to a
     folder, it went on passing over one that no longer held the owner.
-  - The two plugin rules above.
+  - The two plugin rules above, and `WITNESSES`.
 
-  Gone with what they described: the layer rules, `HARNESS_EDGES`, and the domain rule,
-  whose guarantee that the records touch nothing outside the process is `RECORDS` now.
+  Gone with what they described: the layer rules, `HARNESS_EDGES`, and the domain
+  rule, whose guarantee is `RECORDS` now.
 
-  *`WITNESSES` went with them and should not have.* It was filed beside the layer rules
-  and had nothing to do with them: it keyed on bare public names -- `Kingfisher`,
-  `Request` -- with a reason each, held `_EXPORTS` against that table in both
-  directions, and would have survived this move untouched. Two entries here go on
-  stating the policy, that a new name in `__all__` needs a witness and that a `Runnable`
-  adapter needs one first, so for a week the record asked for a witness and nothing
-  checked. Nothing had slipped through -- measured, the root door *shrank* by the seven
-  names that moved to `kingfisher.plugins`, and nothing was added -- so what was lost was
-  the next name rather than any name. Restored on 2026-10-17, keyed by `LAZY_TABLES` so
-  that a third door cannot open without a table of its own, and with a third witness
-  beside `document` and `embedder`: `interface`, for the five a plugin implements, which
-  a second rule holds to `core/interfaces.py` so the word is a claim about the tree and
-  not a label. *(2026-10-17, from an architecture review.)*
+**Not a portability claim.** Kingfisher is an adapter over deepagents, and another
+framework is out of scope rather than scheduled. Nothing declares what a runtime is --
+`core.session.runtime` is a module -- so a second would begin by discovering that
+interface, which is the right order: one derived from one implementation is shaped like
+it.
 
-**Not a portability claim.** Kingfisher is an adapter over deepagents, and supporting
-another framework is out of scope rather than scheduled. Nothing declares what a runtime
-is -- `core.session.runtime` is a module -- so a second one would begin by discovering that
-interface, which is the right order: one derived from one implementation is shaped like it.
+**Where the kinds sit.** Each of the five is a directory under `core/definitions/`: a
+file somebody authors, its reader, and a registry of what was found. `DEFINITION_KINDS`
+names them, `test_kinds_holds_exactly_the_kinds` holds the folder to it both ways, and
+`KINDS_HELPERS` names the loose modules. Where a kind meets deepagents is
+`core.agent.kinds`, a module per kind -- except skills, which deepagents reads itself
+and `core.definitions.skills.registry` asks, and agents, which are the graph
+`core.agent.assembly` builds. `declared_middleware` keeps its prefix so it does not read
+as a second `middlewares`. No rule names that direction: `core/definitions/` and
+`core/access/` import nothing from `core.agent`, `core.session` or `core.service`
+today, and the startup check would refuse a module-scope import of the runtime there
+but pass a deferred one. *(Measured 2026-10-17.)*
 
-**Where the kinds sit.** Each of the five is a directory under `core/definitions/` holding
-what earns a kind a package: a file somebody authors, a reader for it, and a registry
-built from what was found. `DEFINITION_KINDS` names them,
-`test_kinds_holds_exactly_the_kinds` holds the folder to it in both directions, and
-`KINDS_HELPERS` names the loose modules. A kind owns its format and its walk over the
-disk; where it meets deepagents is `core.agent.kinds`, a module per kind. Skills are not
-there, because deepagents reads a `SKILL.md` itself and `core.definitions.skills.registry`
-asks it; nor is an agent, which is the graph `core.agent.assembly` builds. `activation`
-sits beside `assembly.py` because it decides across kinds what one request turns on, and
-`declared_middleware` keeps its prefix so it does not read as a second `middlewares` beside
-`core/agent/middlewares/`. No rule names that direction: `core/definitions/` and
-`core/access/` import nothing from `core.agent`, `core.session` or `core.service` today,
-and every catalogue loads under the public names that run no agent, so the startup check
-refuses a module-scope import of the runtime there and would pass a deferred one.
-*(Measured 2026-10-17.)*
+**The kinds do not share an implementation.** Each resolves `source::name` its own way
+-- `split_reference`, `split_qualified` -- so a change for one is not argued past the
+others; the shared part is the grant vocabulary in `core.access.capabilities`. The
+exception is `core.definitions.documents`, since agent and subagent formats reflow a
+prompt identically; `SHARE_A_DOCUMENT_READER` holds it.
 
-**The kinds do not share an implementation.** Each resolves a `source::name` its own way --
-`split_reference`, `split_qualified` -- so a change for one is not argued past the others;
-the shared part is the grant vocabulary in `core.access.capabilities`. The exception is
-`core.definitions.documents`: a scalar's style is a fact about a document, and the agent
-and subagent formats reflow a prompt identically. `SHARE_A_DOCUMENT_READER` holds it.
+**Not taken: a package per concept.** Drawn in full on 2026-09-04 -- fourteen modules,
+each kind's format beside its runtime half -- and measured: a concept's files changed
+together in 13-29% of their commits, the tightest co-change pair ran across the boundary
+it would draw, and eight of the fourteen would have imported deepagents. The new shape
+gives the same answer.
 
-**Not taken: a package per concept.** Drawn in full on 2026-09-04 -- fourteen modules, each
-kind's format beside its runtime half -- and measured: a concept's files changed together in
-13-29% of the commits touching them, the tightest co-change pair in the repository ran
-across the boundary such a slice would draw, and eight of the fourteen would have imported
-deepagents. The new shape gives the same answer.
+**A group shares a subject, not a layer.** `plugins/sessions/sandbox/` is one policy
+and the kernels that carry it, where being wrong is a security failure. Before moving
+any of it: `tool.ty.overrides` names the two files importing `sandlock` by path, and a
+file it no longer matches loses its exemption in silence.
 
-**A group shares a subject, not a layer.** `plugins/sessions/sandbox/` is one policy and
-the kernels that carry it, where being wrong is a security failure rather than a bug.
-Before moving any of it: `tool.ty.overrides` names the two files importing `sandlock` by
-path, and a file it no longer matches loses its exemption in silence.
+**An import cycle is removed, not reordered.** One resolved by luck of import order
+until a cold import failed; `test_no_module_in_the_package_can_reach_itself` refuses
+the shape.
 
-**An import cycle is removed, not reordered.** One resolved by luck of import order until a
-cold import failed, and moving the generic modules up a directory removed the edge;
-`test_no_module_in_the_package_can_reach_itself` refuses the shape.
+**A file is split where its history already splits it.** Two definitions belong
+together when a commit touched both. Git's default hunk header names any line in column
+one, which inside a long class reports every method as the class, so `.gitattributes`
+sets `*.py diff=python`. Co-change cannot tell a cohesive file from a tangled one; the
+width of one commit can. By this test workspace/fs.py became six modules, and the
+backend was refused, then split when commits edited only its guards.
 
-**A file is split where its history already splits it.** Two definitions belong together
-when a commit touched both, and whatever stays apart is a seam already being kept. Git's
-default hunk header names any line in column one, which inside a long class reports every
-method as the class; `.gitattributes` sets `*.py diff=python` so the count sees methods.
-Co-change cannot tell a cohesive file from a tangled one, both being everything joined to
-everything; the width of one commit can. By this test `workspace/fs.py` became six
-modules, and `backend.py` was refused, then split when commits edited only its guards.
-
-**This round's splits were the maintainer's call, and each cut was counted before it was made.**
-The proposal listed every file over about 600 lines for a split by subject, against the
-two earlier refusals of this test. Each cut was then measured as how many commits touching
-one half also touched the other, renames and moves left out. Taken:
+**This round's splits were the maintainer's call, and each cut was counted before it
+was made**, as how many commits touching one half touched the other, moves left out.
+Taken:
 
   - `plugins/sessions/backend.py`, its shell to `shell.py`: 6 of 32 crossed.
-  - `cli/health.py`, to `health_definitions.py` (0 of 20), `health_isolation.py` (4 of 17)
-    and the shared `check.py`.
-  - `sandbox/confinement.py`, the macOS profile to `sandbox_exec.py`: 10 of 20, half of it
-    parameter plumbing.
+  - `cli/health.py`, to `health_definitions.py` (0 of 20), `health_isolation.py` (4 of
+    17) and the shared `check.py`.
+  - `sandbox/confinement.py`, the macOS profile to `sandbox_exec.py`: 10 of 20, half of
+    it parameter plumbing.
   - `core/access/source_ids.py`, who reaches what to `reach.py`: 3 of 8, thin evidence.
 
-Left whole after measuring:
+Left whole:
 
-  - `cli/__main__.py`: a command's parser, `main` and body change together; run and decide
-    crossed in 14 of 22.
-  - `core/inventory.py`, a hub: 25 of the 36 commits touching its helpers touched it too.
+  - `cli/__main__.py`: parser, `main` and body change together; 14 of 22 crossed.
+  - `core/inventory.py`, a hub: 25 of 36 commits on its helpers touched it too.
   - `core/agent/assembly.py`: `build_agent` alone is 473 lines in one cluster.
-  - `core/definitions/subagents/spec.py`: a new field lands in three of its lists in one
-    commit, and an earlier change kept them together on purpose.
+  - `core/definitions/subagents/spec.py`: a new field lands in three of its lists at
+    once, kept together on purpose.
 
-**`core/service.py` is three files, on the maintainer's call.** `Kingfisher` keeps setting
-up and building the agent. `Preparation`, in `core/session/preparation.py`, is everything a
-turn does before its agent runs; `Running`, in `core/session/running.py`, is `run`, `stream`
-and their async twins, and the settling after. History did not ask for it: of the last 69
-commits on `service.py`, moves left out, 28 stayed inside one of its parts, and 19 of the 27
-touching the opening half touched another part too -- about where `cli/__main__.py` and
-`core/inventory.py` were left whole. What decided it is parallel work. Of 11 pairs of pull
-requests open at once on `service.py`, 6 edited places apart in the one file; cut this way,
-9 would have edited separate files. The cost is that most changes to a turn open two files,
-and that each mixin declares what it borrows from `Kingfisher`, which `ty` holds. A move and
-not an edit: each of the 43 definitions has the tree it had in `service.py`. *(2026-10-17.)*
+**`core/service.py` is three files, on the maintainer's call.** `Kingfisher` sets up
+and builds the agent; `Preparation` in `core/session/preparation.py` is a turn before
+its agent runs; `Running` in `core/session/running.py` is `run`, `stream`, their twins
+and the settling after. History did not ask for it: 19 of the 27 commits touching the
+opening half touched another part, about where `cli/__main__.py` was left whole. Parallel
+work decided it: of 11 pairs of pull requests open at once on `service.py`, 6 edited
+places apart in one file, and cut this way 9 would have edited separate files. The cost
+is that most turn changes open two files, and each mixin declares what it borrows from
+`Kingfisher`, which `ty` holds. *(2026-10-17.)*
 
-**Grouped by what a class is, for whoever is looking.** "What does kingfisher wrap an agent
-in" is one package, `core/agent/middlewares/`, held through bases by
+**Grouped by what a class is, for whoever is looking.** "What does kingfisher wrap an
+agent in" is one package, `core/agent/middlewares/`, held through bases by
 `test_kingfisher_keeps_its_own_middleware_in_one_package`. It took `HostPathError` from
-250ms to 16ms once `host_paths` named no runtime class: 14ms and 96 modules today.
+250ms to 16ms once `host_paths` named no runtime class.
 
-**Not taken: splitting `config.py` by its parts.** It reads as three -- the model records,
-the workspace paths, the deployment record -- and the hunk headers said no: of 36 commits on
-2026-09-04, 20 landed only in `Config`, five only in the model records, and five reached
-two or three regions. The churn is a record gaining settings, which land on `Config`.
+**Not taken: splitting `config.py` by its parts.** It reads as three -- model records,
+workspace paths, the deployment record -- but of 36 commits on 2026-09-04, 20 landed
+only in `Config`, five only in the model records, and five reached two or three. The
+churn is a record gaining settings.
 
 ## The architecture rules
 
-
-**Architecture rules are mutation-tested, not trusted.** All 44 were audited;
-43 held and one had lost its subject. Three of them exist *because* a rule had
-stopped working silently. *(2026-08-18, `mutating-the-architecture-rules.md`.)*
-
+**Architecture rules are mutation-tested, not trusted.** All 44 were audited; 43 held
+and one had lost its subject. Three of them exist *because* a rule had stopped working
+silently. *(2026-08-18, `mutating-the-architecture-rules.md`.)*
 
 **Six guards that could not fail, and one that cannot be made to.** A review mutated
-every branch the last ten slices added -- 104 of them, 97 biting -- and the survivors
-were all in rules written days earlier, which is where they always are. Each is fixed
-by reaching the subject, not by changing behaviour: every one of these six was correct
-and held by nothing.
+every branch the last ten slices added -- 104, 97 biting -- and the survivors were all
+in rules written days earlier, which is where they always are. Each was correct and held
+by nothing, and was fixed by reaching its subject:
 
-  - **`bar_chart` scrubs three cells and the rule reached one.** The fixture put the
-    forbidden character in the *label* on every case, so dropping the scrub from the
-    *title* -- the header row, which is the half a caller does not choose row by row --
-    left 137 tests green while the title came out `n by na\x00me` and the SVG stopped
-    parsing. Parametrized over both places now.
-  - **Two of the three characters XML admits were reached by nothing**, in the rule
-    whose own docstring says it exists for "the reason the three are named rather than
-    the range": it drove the tab alone, so narrowing the set to `(0x09,)` was green.
-    All three, and asserted on the file's bytes, because XML normalises a carriage
-    return to a newline on the way *in* -- the parser handing back `al\npha` for it is
-    the standard working rather than the tool having changed anything.
-  - **`doctor` has to answer on a workspace nothing has laid out**, which is the state
-    you run it in. Its session scan guards that and nothing reached the guard: removing
-    it left the whole suite green while `examine` raised `FileNotFoundError`, and
-    `examine` catches `ConfigError` only. That is the shape of the entry this check was
-    added beside, one slice later.
-  - **And the scan's `is_dir` filter was indistinguishable from `True`**, because no
-    fixture put a non-directory in `sessions/`. A link to a file would have been
-    reported as a strayed session.
-  - **The traversal refusal was driven on one half.** `test_a_path_that_climbs_out_is_
-    an_error_on_the_result` was the one rule in its file taking `backend` without
-    `way`, so making `adelete` hand a malformed path to the backend instead of
-    refusing it left the suite green. Its neighbour covers the async halves with
-    well-formed paths only, which is how the deny rule was driven on both and the
-    traversal branch on one.
+  - **`bar_chart` scrubs three cells and the rule reached one.** The fixture always put
+    the bad character in the *label*, so dropping the *title*'s scrub left 137 tests
+    green while the SVG stopped parsing.
+  - **Two of the three characters XML admits were reached by nothing**: the rule drove
+    the tab alone. All three now, asserted on the file's bytes, because XML normalises
+    a carriage return on the way *in*.
+  - **`doctor` has to answer on a workspace nothing has laid out.** Removing its
+    session scan's guard left the suite green while `examine` raised
+    `FileNotFoundError`, which it does not catch.
+  - **And the scan's `is_dir` filter was indistinguishable from `True`**, since no
+    fixture put a non-directory in `sessions/`.
+  - **The traversal refusal was driven on one half.**
+    `test_a_path_that_climbs_out_is_an_error_on_the_result` lacked `way`, so `adelete`
+    could pass a malformed path through with the suite green.
 
 **The sixth cannot be given a rule, and that is the finding.** `_activated_subagents`
-lists what the agent the build *opened* hands work to, rather than what every agent the
-caller can open does, because `Capabilities.subagents` may only narrow what that agent
-declares. Collapsing it into the broader answer left 243 tests green, and measuring says
-why: a refusal there needs the request's name to survive the agent's ceiling, and of the
-three things an agent can say about its subagents -- nothing, a list, `"*"` -- only
-`"*"` lets a name through. `"*"` is every subagent in reach, a superset of what any
-other agent activates, so the union equals it. The other branch, for a build that
-resolved no agent, is unreachable: a workspace offering no agent refuses the turn
-earlier.
-
-So the narrower answer is kept, because it is right by the rule the whole of #751
-argues rather than by coincidence, and what is pinned is the premise instead:
+lists what the agent the build *opened* delegates to, rather than what every reachable
+agent does, because `Capabilities.subagents` may only narrow that agent's declaration.
+Collapsing it to the broader answer left 243 tests green, because only `"*"` lets a
+request's name survive an agent's ceiling, and `"*"` is every subagent in reach, so the
+union equals it; the branch for no agent is unreachable. The narrower answer is kept,
+right by the rule rather than by coincidence, and the premise is pinned instead:
 `test_a_request_is_refused_a_name_only_by_an_agent_that_offers_every_subagent` drives
-all three shapes. Widen the refusal and that rule reddens, which is the moment the
-narrower listing becomes something a rule can see. A guard that cannot be distinguished
-is usually one to delete -- three were deleted in the last month for exactly that -- and
-this is the case where recording why beats both deleting it and pretending a rule exists.
-*(2026-10-16, from an architecture review.)*
+all three shapes, and widening the refusal reddens it. A guard that cannot be
+distinguished is usually deleted; here recording why beats both deleting it and
+pretending a rule exists. *(2026-10-16, from an architecture review.)*
 
 **A rule matching one spelling of a reach matches one spelling.**
 `test_only_the_confinement_module_calls_resolve_directly` required an `ast.Name` reading
-exactly `confinement`, so it saw two of the six ways a file can reach that `resolve`:
-every aliased import walked past it, so did the full dotted chain, and so did
-`getattr`. Measured on 2026-10-12 by running the old matcher over all six, and then by
-writing each one into a real production file and asking whether the rule failed -- which
-is the only form of that question worth asking, since a matcher can be right about a
-string and wrong about the repository.
+exactly `confinement`, so it saw two of the six ways to reach that `resolve`: an
+aliased import, the dotted chain and `getattr` walked past it. Measured by writing each
+into a real production file and asking whether the rule failed -- a matcher can be
+right about a string and wrong about the repository. The rule now resolves the module
+-- bound names, flattened attribute chains, the direct import, `getattr` with a constant
+-- and two parametrized rules beside it pin the six spellings it must see and five near
+misses it must not, because the matcher is what is asserted.
+`test_an_aliased_import_reads_the_name_it_renames` had taught this already and was not
+carried to the neighbour. *(2026-10-12, from an architecture review.)*
 
-The rule resolves the module now: which local names are bound to it, attribute chains
-flattened to dotted strings, the direct import of the function, and `getattr` with a
-constant name. Two parametrized rules sit beside it -- the six spellings it must see and
-five near misses it must not -- because the matcher is the thing being asserted and the
-narrower one passed the rule itself. That is how it came to see two of six.
-
-The repository had the lesson twice already, in a harness-edge rule since deleted with
-its table, and in `test_an_aliased_import_reads_the_name_it_renames`. Neither was applied here, which is
-the same shape as the bubblewrap fixture on 2026-10-05: a lesson written down for one
-rule and not carried to its neighbour. *(2026-10-12, from an architecture review.)*
-**Rejected: a rule against prose naming a module that is not there.** Four stale
-claims were found in one session -- the CLI's charter, a refusal naming
-`access.yaml`, `pyproject.toml` citing a rule it had reversed, and
-`catalogue/`'s docstring describing three modules that had left it. Three were
-caught by a test and the fourth by reading, so a rule for the fourth looked
-worth having. Measured before building, and it is not.
-
+**Rejected: a rule against prose naming a module that is not there.** Four stale claims
+were found in one session -- among them a refusal naming access.yaml and the
+catalogue's docstring describing three modules that had left it -- and three were caught
+by a test, so a rule for the fourth looked worth having. Measured, it is not. Of
+sixty-one module paths in `src/` prose, twelve do not resolve: **seven illustrative**
+(vendor_a/fetch.py is a *workspace's* layout), **three deliberate history**, **two
+rot** -- ten false positives to two, separated by tense and intent, which no pattern
+sees. And it would not have caught its motivating case: the docstring said "`agents`,
+`skills`, `subagents` and `tools` are one module each", bare words that a rule loose
+enough to catch would fire on everywhere. `test_no_code_cites_a_document_that_is_not_there`
+works because `docs/` holds few paths and none illustrate. Whoever measures again: a
+first pass resolved three names out of `.venv`, where deepagents' own skills module
+made a skills.py look real. *(2026-09-06.)*
 
 **The prose was swept on 2026-10-12, and what it got wrong is the record of why.**
-Fourteen claims, each measured before being changed. The citations are the ones worth
-keeping here, because the rejected rule above is exactly what would have caught them and
-the reasoning for rejecting it still stands -- so the discipline is the only guard.
-
-`CLAUDE.md`'s own paragraph about the sentences worth keeping cited
-`test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry`, which has never
-existed; it offered that rule as its example of what the prose pass got wrong. Two more
-named rules that had been renamed out from under them, and one named a test module
-retired with the port it covered. Four of six candidates turned out to be real: two were
-*fragments of a wrapped name* that a line-by-line search reads as whole, and two in
-`guides/ports.md` are code a deployment writes rather than citations. A search for this
-has to join wrapped lines before concluding anything, which is the same trap that makes
-`grep` read a hit as an absence.
-
-Two claims were dead rather than stale. `withheld_by_kind`'s default-axis guard said
-`subagents` defaults to none, which the dataclass contradicts -- and the guard cannot
-change a report, since every axis defaults to `ALL` and `withheld(ALL, ...)` is empty.
-It stays, because what it skips is `names_of()` and that reads the catalogue; the comment
-now says so. The `'none'` fallback inside the pause refusal became unreachable when that
-refusal was guarded on 2026-10-01 and is gone.
-
-Two were behaviour. A private tool that shadows the catalogue's printed twice, under two
-annotations, because `shadowed` is a subset of `bundled_tools` and both loops printed it;
-the shadowing row says everything the plain one does, so it is the one kept. And
-`name_of`'s string guard -- the one stopping a middleware's name rendering as
-`<property object at 0x...>` -- had no case: every middleware in the suite spelt its own
-name, so the one class that inherits `AgentMiddleware.name` was rendered and never
-asserted on. *(2026-10-12, from an architecture review.)*
+Fourteen claims, each measured before being changed, with the rejected rule's reasoning
+still standing, so the discipline is the only guard. `CLAUDE.md`'s own paragraph on the
+sentences worth keeping cited, as its example, a rule that has never existed; two more
+named renamed rules and one a retired test module. Of six candidates, two were
+*fragments of a wrapped name* that a line-by-line search reads as whole -- a search for
+this has to join wrapped lines first. Two claims were dead: `withheld_by_kind`'s
+default-axis guard misstated the default and cannot change a report, and stays because
+it skips `names_of()`, which reads the catalogue; an unreachable `'none'` fallback went.
+Two were behaviour: a shadowing private tool printed twice, and `name_of`'s string guard,
+which stops a middleware's name rendering as `<property object at 0x...>`, had no case.
+*(2026-10-12, from an architecture review.)*
 
 *Swept again on 2026-10-16, and `LAYOUT_VERSION` is why the discipline alone is thin.*
-#756 dropped that constant from the code and touched no document, which left three
-descriptions in `docs/upgrading.md` promising a refusal that is gone -- a layout number,
-a startup refusal listing what to delete, and a troubleshooting row for its message --
-and two sentences here in the present tense about a number that no longer exists. The
-deferral from 2026-10-14 is the worst of them: it declined to route one of the folders a
-recorded result can name on the grounds that `LAYOUT_VERSION` would close it properly,
-and the constant was removed the next day, so the entry deferred to nothing. Measured,
-`ensure_layout` on an old workspace neither refuses it nor rewrites its marker, so the
-honest replacement is worse news for an operator than the promise it replaces. Four more
-claims had nothing to do with the layout: `files_for` was documented as refusing an id
-no turn issued and has made the session instead since #739, with no marker where its
-siblings in that document carry one; `kingfisher seed` was said to need only
-`KINGFISHER_DEFINITIONS_DIR`, and refuses without `KINGFISHER_ASSETS` or `--from`;
-`prompting` called `system_prompt` a public export, which raises `ImportError`; and the
-contract kit's import cost was written as 103 modules against 3,104 measured,
-understating it thirtyfold. A measurement in prose rots one way -- the number that made
-the argument is the number nobody re-runs. *(2026-10-16, from an architecture review.)*
+A change dropped that constant and touched no document, leaving `docs/upgrading.md`
+promising a refusal that was gone and an entry here deferring a fix to it -- an entry
+deferring to nothing. Measured, `ensure_layout` on an old workspace neither refuses nor
+rewrites its marker, worse news than the promise. Four more: `files_for` documented as
+refusing an id it now created; `kingfisher seed` said to need only
+`KINGFISHER_DEFINITIONS_DIR`, when it refuses without `KINGFISHER_ASSETS` or `--from`;
+`system_prompt` called a public export; the contract kit's import cost written as 103
+modules against 3,104. A measurement in prose rots one way -- the number that made the
+argument is the one nobody re-runs. *(2026-10-16, from an architecture review.)*
 
-*Two stated reasons corrected the same week, both found by mutation rather than by
-reading.* The recorder's docstring called its position first in `tool_guards` the source
-of three properties that position needed to give. Moved last, exactly one test notices:
-`test_the_arguments_recorded_are_the_ones_the_model_wrote`. Being inside deepagents'
-eviction comes from being custom middleware at all, since deepagents lands every custom
-entry after the last of its own core ones and the eviction is `FilesystemMiddleware`'s;
-recording what a deployment's middleware left comes from that middleware being appended
-after everything else, held by `test_what_a_deployments_middleware_left_is_recorded` --
-move the deployment block to the front and that test fails along with the one naming the
-narrowing, and nothing else does. Then `_unmapped` in `shell_paths` said that removing
-deepagents' host paths by block rather than by cutting text makes
-`test_deepagents_host_paths_reach_only_a_shell_on_this_host` fail on a section merged
-into other prose. Matched by substring instead, that test passes and so does every other
-one in its file: it asserts the section is absent, which holds whichever way the section
-is removed. The premise is sound -- the parts cannot merge while deepagents appends this
-one and builds `FilesystemMiddleware` with no prompt of its own -- so that reason got the
-rule it was missing rather than a correction alone, and the rule bites on all three ways
-of half-cutting. *(2026-10-16, from an architecture review.)*
-Sixty-one module paths appear in `src/` prose. Resolved the way a reader does --
-sibling first, then the package root, then the tree -- twelve do not exist:
-**seven are illustrative** (`vendor_a/fetch.py` is a *workspace's* layout, not
-kingfisher's), **three are deliberate history** ("it *was* `subagent_middleware`
-in `delegation.py`"), and **two are rot**. Ten false positives to two true ones,
-separated by tense and intent, which no pattern sees. `test_no_code_cites_a_document_that_is_not_there`
-works because `docs/` holds few paths and none of them illustrate anything.
+*Two stated reasons corrected the same week, both found by mutation.* The recorder's
+docstring credited its position first in `tool_guards` with three properties; moved
+last, only `test_the_arguments_recorded_are_the_ones_the_model_wrote` notices. Being
+inside deepagents' eviction comes from being custom middleware at all, which deepagents
+lands after its own, and seeing what a deployment's middleware left comes from that
+being appended last, held by `test_what_a_deployments_middleware_left_is_recorded`.
+And `_without` in `core.agent.middlewares.builtin_tools` claimed that removing
+deepagents' host paths by block made
+`test_deepagents_host_paths_reach_only_a_shell_on_this_host` fail on a merged section;
+matched by substring instead, it still passes, since absence holds however the section
+goes. The premise is sound, so it got the rule it was missing, which bites on all three
+half-cuts. *(2026-10-16, from an architecture review.)*
 
-What settles it: the rule would not have caught the case that motivated it.
-`catalogue/`'s docstring said "`agents`, `skills`, `subagents` and `tools` are
-one module each" -- backticked bare words, no `.py`, invisible to anything
-matching a path. Loose enough to catch those, it would fire on every ordinary
-use of the words this codebase is *about*.
-
-A caution for whoever measures this again: a first pass counted 40 of 45
-unresolved, and three of the resolutions it did find came out of `.venv` --
-`deepagents/middleware/skills.py` made `skills.py` look real. *(2026-09-06.)*
-
-**Two prose rules that do hold, and why they are not that one.** Cutting the
-repository's prose introduced four defects and every check stayed green: three
-docstrings left promising a list the cut had dropped -- *"the last of three parts
---"*, naming none -- and one comment citing `formats.md` by line number, which
-went stale the first time that page was edited and was found four merges later by
-accident.
-
-Both shapes are now guarded, and the numbers are the whole argument for why the
-rejection above does not extend to them. That rule ran 10 false positives to 2
-true ones, because "does this module exist" needs tense and intent -- illustrative
-paths, deliberate history. **"Does this sentence end" is syntax.** Measured
-against the tree before the cutting: 2,705 docstrings, *zero* false positives,
-and it catches all three. `at line N` matched twice in the entire repository, both
-stale. A rule is fragile when it has to read intent, not because it reads prose.
-
+**Two prose rules that do hold, and why they are not that one.** Cutting the prose left
+three docstrings promising a list the cut dropped -- *"the last of three parts --"* --
+and a comment citing `formats.md` by line number, with every check green. That rejected
+rule ran 10 false positives to 2, because "does this module exist" needs tense and
+intent. **"Does this sentence end" is syntax**: 2,705 docstrings, *zero* false
+positives, all three caught; a line-number citation matched twice in the repository,
+both stale. A rule is fragile when it has to read intent, not because it reads prose.
 *(2026-09-07.)*
 
 **A prose root is any package, not only a top-level one.** `_prose_roots` read one
 directory deep, so a package that moved down a level took its references out of the
-pattern instead of into the failure list. Once `tools/` is not a top-level directory,
-a comment saying *tools.spec* stops looking like a module path at all: the rule goes
-quiet rather than red, which is the one failure it cannot report about itself -- and it
-is the failure a move causes, which is when the rule is worth most.
+pattern rather than into the failures: the rule goes quiet rather than red, the one
+failure it cannot report about itself, and the one a move causes.
 
-Written the day before `kinds/` arrived, this paragraph used that example in backticks,
-where it resolved. The move falsified it and the widened rule caught it on the first run
-after -- the entry demonstrating itself, which is the only reason it is worth noting.
+**The cost is that shorthand is refused.** Eight of the ten references this found were
+layer shorthand like *harness.agent*, which resolves for a reader who knows the layer.
+Refused deliberately: a name that resolves only by knowing its layer goes quiet when the
+layer changes, so spelling it from the package root is what makes it checkable.
+*(2026-09-10.)*
 
-**The cost is that shorthand is refused**, and the entry above is what to read it
-against. Eight of the ten references this turned up are not rot: written *harness.agent*
-they resolve for any reader who knows which layer that is, and by that entry's
-accounting they are false positives rather than finds. The trade is taken deliberately.
-A name that resolves only by knowing which layer it sits in is the same name that goes
-quiet when the layer changes, so spelling it from the package root is what makes it
-checkable at all. Of the other two, one was genuine history -- *harness.skill_registry*,
-named in a `HARNESS_EDGES` note saying which edge a move closed, and excused in
-`PROSE_GONE` beside the deliberate mentions already there -- and one named an attribute
-path rather than a module, which no rooting could resolve. *(2026-09-10. Both lists have
-emptied since: `HARNESS_EDGES` went with the layers it watched, and `PROSE_GONE` holds
-nothing.)*
-
-**A third rule for the same blind spot: what a class body declares.** Two rules ask
-whether anything reads a definition -- one over a module's functions and classes, one
-over its constants, the second written because the first collected neither. Neither
-can see a bare annotation in a class body, and three lived there: `Disposal`
-declaring a `session_root` it never reads, `Sessions` declaring `_shared` the same
-way, and `Sessions` declaring `_claims: Path` where **nothing anywhere sets
-`_claims`**. That last one is why this is more than tidying -- written out, the call
-it invites type-checks and does not run:
+**A third rule for the same blind spot: what a class body declares.** The two rules
+asking whether anything reads a definition cannot see a bare annotation in a class body,
+and three lived there -- among them `Sessions` declaring `_claims: Path` where **nothing
+set `_claims`**, so the call it invites type-checks and does not run:
 
     ty:     All checks passed!
     pytest: 28 failed -- AttributeError: 'Kingfisher' object has no attribute '_claims'
 
-A mixin's declarations are its statement of what it needs from the instance it is
-mixed into, so one it does not read is either a requirement that moved or one that
-was never there. `test_no_mixin_declares_what_it_does_not_read` asks that of every
-class whose annotations are a requirement rather than a shape -- a dataclass's are
-its constructor and a Protocol's are its contract, so both are out.
+A mixin's declarations state what it needs of its host, so one it does not read is a
+requirement that moved or never was. `test_no_mixin_declares_what_it_does_not_read`
+asks it of every class whose annotations are a requirement -- not a dataclass's, which
+are its constructor, nor a Protocol's, which are its contract.
 
-**What that rule still does not see is a property**, which is a function in a class
-body and invisible to all three. `Surface.ambiguous` was one: no caller anywhere,
-while the run report asked `Offering.ambiguous` directly. It is deleted rather than
-guarded, because the rule that would catch the next one has to decide about a
-property read only by tests -- and that question was answered the other way for
-`GrantedOnlyMiddleware._allowed` on 2026-09-24, where a public accessor with no production
-caller was refused.
+**What that rule still does not see is a property.** `Surface.ambiguous` had no caller
+while the run report asked `Offering.ambiguous` directly; it was deleted rather than
+guarded, because a rule would have to decide about properties read only by tests, which
+was answered the other way for `GrantedOnlyMiddleware._allowed` on 2026-09-24. The
+claim that the backend's guards had never been edited was re-measured and reversed on
+2026-09-23. *(2026-09-24, from an architecture review.)*
 
-Two more the same review named were measured and left alone: the macOS deny rule for
-a session's harness directory already builds from `HARNESS` rather than a literal,
-and the claim, made when `workspace/fs.py` was split, that the backend's guards had never
-been edited was re-measured and reversed on 2026-09-23. *(2026-09-24, from an architecture review.)*
-
-**And one resolver where there were two.** `model_for(spec, override=...)` read
-`spec.wanted` and handed it to `resolved_model`, whose only caller it was; both
-docstrings described the same answer. The adapter is gone and its four callers pass
-`spec.wanted`, which says which field the answer comes from. The rule itself stays in
-`core.definitions.subagents.rules`, where what a definition means belongs.
-*(2026-09-24, same review.)*
+**And one resolver where there were two.** `model_for(spec, override=...)` only handed
+`spec.wanted` to `resolved_model`; the adapter is gone and callers pass `spec.wanted`,
+which says where the answer comes from. The rule stays in
+`core.definitions.subagents.rules`. *(2026-09-24, same review.)*
 
 **Four guards from the last two weeks could not fail, and each failed the same way: the
-fixture could not tell the fix from the bug.** Found by mutating them, and worth
-recording as a set because the shape is now this repo's most frequent defect.
+fixture could not tell the fix from the bug.**
 
-  - **The skills half of the audience fix.** The fixture had the subagent declare the
-    skill its own agent already granted, so "a skill only a subagent declares" did not
-    exist in it: unioning the subagents back in added a name the test asserts is
-    *present*, and reverting the fix left the suite green on the listing *and* the
-    withheld report. One word in the fixture -- `spare` for `routine` -- is the whole
-    repair, and the report half needed a rule of its own, which it never had.
-  - **`ls` listing a route's own stand-in row.** The control drove `/outputs`, and
-    `/outputs` is not a route, so no stand-in row is ever added for it and the branch
-    the rule is about never ran. Driven on `/inputs` it bites.
+  - **The skills half of the audience fix.** The subagent declared a skill its agent
+    already granted, so "a skill only a subagent declares" did not exist in the fixture;
+    one word, `spare` for `routine`, repaired it.
+  - **`ls` listing a route's own stand-in row.** The control drove `/outputs`, which is
+    not a route; driven on `/inputs` it bites.
   - **A threshold where a pinned set belongs.** `assert len(_readers(shipped)) >= 2`
-    against nine, one commit after the same shape was deleted elsewhere with the reason
-    written out.
+    against nine, a commit after the same shape was deleted elsewhere.
   - **Four refusal branches on the async path.** `ToolFailureMiddleware`,
-    `WorkspaceToolPathsMiddleware`, `GuardedTool._arun`'s artifact branch and
-    `PermittedBackend.aread` each had their behaviour held on the sync half alone --
-    each could be broken with the suite green, while the same break on the sync half
-    reddened between one and seventeen tests. The `way` fixture existed for exactly
-    this and was not reaching them; it does now, and `write`, `edit` and `delete` are
-    covered on both halves for the first time.
+    `WorkspaceToolPathsMiddleware`, `GuardedTool._arun` and `PermittedBackend.aread`
+    were held on the sync half alone; the `way` fixture now reaches them.
 
-The common tell is cheap to look for: **mutate the thing the guard guards, and if the
-suite stays green the fixture is the suspect, not the rule.** Every one of these four
-had a sibling that bit, which is what made them look covered. *(2026-10-15, from an
-architecture review.)*
+**Mutate the thing the guard guards, and if the suite stays green the fixture is the
+suspect, not the rule.** Every one of these had a sibling that bit, which is what made
+them look covered. *(2026-10-15, from an architecture review.)*
 
 ## How much a comment says
 
 **Reversed: "match the surrounding density".** The convention asked every comment
-to explain why, and asked a new one to match the length of the ones around it.
-The second half compounded the first. A file whose comments were long stayed
-long, because writing a short one there read as an oversight, and nothing in the
-rule ever pointed the other way. Measured before changing it: 53.6% of every
-non-blank line in the repository was comment or docstring -- 27,889 lines of
-prose against 24,124 of code, and `domain/ports.py` at 351 prose lines out of 359.
+to explain why, and a new one to match the length of those around it. The second
+half compounded the first: a file of long comments stayed long, because a short one
+there read as an oversight, and nothing in the rule pointed the other way. Measured
+before changing it: 53.6% of every non-blank line in the repository was comment or
+docstring -- 27,889 lines of prose against 24,124 of code, and the ports module at
+351 prose lines out of 359.
 
 **The rule is a test now, not a quantity.** A comment earns its place only if
-removing it would let a competent editor make a change that is wrong. That kept
-the paragraph in `wiring.py` explaining why a factory's own exception is
-deliberately not wrapped -- delete it and someone helpfully wraps it -- and dropped
-the paragraph after it that says the same thing again at greater length. *(The
-pass removed both in the end; the reason lives in `guides/ports.md` now, and
-`test_named_backend.py` holds the behaviour -- it was `test_named_store.py` while
-that port existed.)*
+removing it would let a competent editor make a change that is wrong. That keeps the
+reason a named factory's own exception is deliberately not wrapped -- delete it and
+someone helpfully wraps it -- and drops a paragraph restating it at greater length.
+That reason lives in `guides/ports.md` now, and `test_named_backend.py` holds the
+behaviour.
 
-**Four kinds were named as always-cut**, because a test alone drifts: repo
-history, a paragraph restating the one above it, framing that announces an
-argument instead of making it, and a contract the signature already states. The
-history ban is the one that matters, and it is the one this file already implied
--- reversals are recorded *here* so the argument is not re-run, which makes the
-copy in a docstring the redundant half.
+**Four kinds were named as always-cut**, because a test alone drifts: repo history, a
+paragraph restating the one above it, framing that announces an argument instead of
+making it, and a contract the signature already states. The history ban is the one
+that matters: reversals are recorded *here* so the argument is not re-run, which makes
+the copy in a docstring the redundant half.
 
 **What it did not rest on: deduplication.** The first pass assumed source prose
-was largely restating `docs/`, on the strength of `wiring.py`, whose docstring
-shared near-verbatim paragraphs with *Wiring a store* above -- it is one line now. Shingled against the
-whole of `docs/`, that is 1.4% of source prose -- 288 lines of 21,051.
-`wiring.py` is the outlier, not the pattern, and the cut had to be justified as
-losing information rather than moving it. *(2026-09-07.)*
+largely restated `docs/`, on the strength of `wiring.py`, whose docstring then shared
+near-verbatim paragraphs with *Wiring a store*. Shingled against the whole of `docs/`,
+that is 1.4% of source prose -- 288 lines of 21,051. `wiring.py` was the outlier, so
+the cut had to be justified as losing information rather than moving it.
+*(2026-09-07.)*
 
-**No test guards this, deliberately**, which is the same finding as *Rejected: a
-rule against prose naming a module that is not there* one section up. CI cannot
-see this change at all: deleting every line of prose in the repository passes
-`ruff`, `ty` and `pytest`. The floor is the keep-test applied while editing, not
-a check afterwards.
+**No test guards this, deliberately**, which is the same finding as *Rejected: a rule
+against prose naming a module that is not there*. CI cannot see this change at all:
+deleting every line of prose in the repository passes `ruff`, `ty` and `pytest`. The
+floor is the keep-test applied while editing, not a check afterwards.
 
-**Sixteen citations repaired on 2026-10-15, and the rule for them declined a second
-time.** What the sweep three days earlier left: `_harness_denial` was named from five
-comments and two entries after the function became `_session_folder_denial` -- four of
-those five comments are in the module that renamed it, which is the worst version of
-this, a reader sent nowhere by the file they are reading. `_bare` outlived its rename to
-`bare_name`; `_admitted` outlived its split into `_claimed` and `_built_turn` in four
-places; `_drained` outlived its rename to `_drained_steps`; and three layout rules were
-still cited as holding something, having gone with the per-kind settings they moved --
-those entries now point at *Definitions have a folder of their own* and say what
-survived them. `test_tools_that_read_a_file.py` said "the seven" in one docstring and
-"Nine copies" in another, against nine; the count is gone rather than corrected, which
-is what `FETCHES_A_FILE` beside it is for.
+**A rule against citing a `_private` or `test_*` name that is gone was declined a second
+time**, after sixteen such citations were repaired by hand on 2026-10-15 -- among them
+a function renamed in the very module whose comments still named it. This time it
+was measured against definition names rather than module paths. 307 citations, 211
+distinct: 275 resolve here, 16 resolve upstream in the two places whose subject is
+upstream -- `findings.md` and `src/` comments, which name `_tool_error` and
+`_compile_spec` because deepagents' shape is why this code has the shape it has -- and
+16 are the record deliberately naming something gone, since an entry about a deletion
+has to say what was deleted. Sixteen true against sixteen pinned by hand, where the
+module-path rule measured two against ten. Against it: the pinned set grows every time
+an entry records a removal, so the rule taxes the writing it protects; and resolving
+the names costs a walk of `site-packages`, which took one test file from 0.8s to 6.3s.
+A rule whose whole yield is a list of things already fixed is not worth that. The
+discipline stays the guard.
 
-A rule was built for this and dropped, which is the second time the argument has been
-measured and the first time against *definition* names rather than module paths. The
-numbers are better and still not better enough. 307 citations of a `test_*` or a
-`_private` name, 211 distinct: 275 resolve here, 16 resolve upstream in the two places
-whose subject is upstream -- `findings.md` and `src/` comments, which name
-`_tool_error` and `_compile_spec` because deepagents' shape is why this code has the
-shape it has -- and 16 are the record deliberately naming something gone, since an
-entry about a deletion has to say what was deleted. Sixteen true against sixteen that
-need pinning by hand, where the module-path rule measured two against ten. Against it:
-the pinned set grows every time an entry records a removal, so the rule taxes the
-writing it is meant to protect; and resolving the names costs a walk of
-`site-packages`, which took one test file from 0.8s to 6.3s. What settles it is the
-same thing that settled the first attempt -- these sixteen are now correct, and a rule
-whose whole yield is a list of things already fixed is a rule bought at the price of
-every future entry about a deletion. The discipline stays the guard.
-
-**Trimmed to the rule, 2026-10-17.** The test above held and the code had not followed it:
-`src/` carried 8,447 lines of comment and docstring against 13,237 of code. A pass over every
-file kept each reason that stops a wrong change, cut to its shortest -- usually one line --
-and took out the history, the restatements and the cross-references, leaving 4,734. It was
-checked by machine rather than by reading: every file's syntax tree, docstrings removed,
-equals the one before, so the pass changed no code. What only a comment recorded -- a
-measurement, or the evidence behind a decision -- moved to `findings.md` or beside its
-decision here. CLAUDE.md now says that most comments are one line and that a reason needing
-more than about three goes here.
-
-The pass also found comments the code had outgrown. One said a claim vanishing between two
-looks counts as held; there is one look now, and a missing claim is not held. Two said a
-subagent's model is compared with whoever summoned it, which went with `distinct: true`.
-Both went rather than being kept.
+**Trimmed to the rule, 2026-10-17.** The test above held and the code had not followed
+it: `src/` carried 8,447 lines of comment and docstring against 13,237 of code. A pass
+over every file kept each reason that stops a wrong change, cut to its shortest --
+usually one line -- and took out the history, restatements and cross-references,
+leaving 4,734. It was checked by machine rather than by reading: every file's syntax
+tree, docstrings removed, equals the one before, so the pass changed no code. What only
+a comment recorded -- a measurement, or the evidence behind a decision -- moved to
+`findings.md` or beside its decision here, and CLAUDE.md says that a reason needing
+more than about three lines goes here.
 
 **What only a comment recorded, kept here.**
 
-- `core/interfaces.py`: by its folder's own clock, a session read 10,000s idle immediately
+- `core/interfaces.py`: by its folder's own clock, a session read 10,000s idle right
   after a turn finished in it, which is why `mark_used` is part of the interface.
-- `core/config.py`: in the window `claim_stale_after` closes, a second caller took a session
-  while the first turn was still running, and the first turn then finished.
-- `core/session/model.py`: before the turn lock, a turn simply vanished -- both callers got an
-  answer and a run directory, and the conversation kept no record of one of them.
+- `core/config.py`: in the window `claim_stale_after` closes, a second caller took a
+  session while the first turn was still running, and the first turn then finished.
+- `core/session/model.py`: before the turn lock, a turn simply vanished -- both callers
+  got an answer and a run directory, and the conversation kept no record of one.
 - `core/session/methods.py`: listing sessions takes one call, measured at 0.22ms for fifty.
-- `core/workspace.py`: no `.gitignore` is written, because a shipped one listed two of the five
-  things a workspace holds; `Library/` fell outside it, and `git add -A` in a real workspace
-  offered to commit a 21MB pip cache.
-- `core/origins.py`: spelled out in full the origins line is about 450 characters; relative, it
-  is about 240, and the relocated entries are the only absolute paths left in it.
+- `core/workspace.py`: no `.gitignore` is written, because a shipped one listed two of the
+  five things a workspace holds; `Library/` fell outside it, and `git add -A` in a real
+  workspace offered to commit a 21MB pip cache.
+- `core/origins.py`: spelled out in full the origins line is about 450 characters;
+  relative, about 240, and the relocated entries are the only absolute paths left in it.
 - `core/layout.py`: denying the offloads folder and not its pair refused the file tools a
   32-byte result and handed them a 101KB one.
-- `plugins/sessions/backend.py`: one file supplied with `--input` came back from a search as
-  two matches with one path between them, on every pattern.
-- `plugins/sessions/shell.py`: before `shell_env`, the shell read `~/.aws` and `~/.config/gh`
-  straight through the fence; a runner of kingfisher's own would be 110 lines of upstream's
-  truncation, timeout and exit-code shaping, copied and kept in step.
-- `plugins/sessions/sandbox/confinement.py`: before `with_supplied_runner`, a runner declaring
-  `local = False` ran its command with no wrap, while `Confinement` still reported
-  `mechanism='sandbox-exec'` and `confined=True`.
+- `plugins/sessions/backend.py`: one file supplied with `--input` came back from a search
+  as two matches with one path between them, on every pattern.
+- `plugins/sessions/shell.py`: before `shell_env`, the shell read `~/.aws` and
+  `~/.config/gh` straight through the fence; a runner of kingfisher's own would be 110
+  lines of upstream's truncation, timeout and exit-code shaping, copied and kept in step.
+- `plugins/sessions/sandbox/confinement.py`: before `with_supplied_runner`, a runner
+  declaring `local = False` ran its command with no wrap, while `Confinement` still
+  reported `mechanism='sandbox-exec'` and `confined=True`.
 
 ## The size of the test suite
 
 **Rejected: cutting the suite substantially. There is nothing redundant in it to
-cut.** Every count below is of the tree on the date at the end, which held 2,431
-tests against 89 modules -- and 32,724 lines of test against 15,331 of source,
-which looks like padding twice over. Six ways of looking for the padding found
-none.
+cut.** Counted on the tree of the date below: 2,431 tests against 89 modules, and
+32,724 lines of test against 15,331 of source, which looks like padding twice over.
+Six ways of looking for the padding found none. *Structural duplication*, pointing
+`audit_duplication.py` at the tests: 13 findings, each a two-statement fixture helper.
+*Vacuous tests*: of 282 with no `assert`, 252 are `pytest.raises`, 23 are
+call-it-and-do-not-raise, four are genuinely loose. *Mechanical merges*: of 721
+single-assert tests only 108, in 32 groups, share a byte-identical arrange.
 
-*Structural duplication*, by pointing `audit_duplication.py` at the test tree
-instead of `src/`: 13 findings, every one a two-statement fixture helper.
-*Vacuous tests*: of the 282 with no `assert`, 252 are `pytest.raises`, 23 are
-call-it-and-do-not-raise, four are genuinely loose. *Mechanical merges*, where
-the 721 single-assert tests are the prize: only 108 of them, in 32 groups, share
-a byte-identical arrange. The rest is hand work with judgement in it.
+**Neither coverage nor kill-set can authorise a cut.** 96% line coverage is reproduced
+exactly by 353 of the 1,852 tests that execute library code -- a criterion that
+green-lights deleting four fifths of the suite is a rubber stamp, and it has no opinion
+on the 587 tests that read the tree instead. Mutation kill-set is weaker: across 300
+mutants, **89 tests preserve the entire kill-set**. Any invariant used to choose
+deletions has to be held out from the choosing, or it is fitted to the answer it was
+meant to check.
 
-**Neither coverage nor kill-set can authorise a cut.** 96% line coverage is
-reproduced exactly by 353 of the 1,852 tests that execute library code -- a
-criterion that green-lights deleting four fifths of the suite is a rubber stamp,
-and it has no opinion at all on the 587 tests that execute no library code
-because they read the tree instead. Mutation kill-set is weaker: across a corpus
-of 300 mutants, **89 tests preserve the entire kill-set**. Any invariant used to
-choose deletions has to be held out from the choosing, or it is fitted to the
-answer it was meant to check.
+**What the kill-vector matrix said.** Grouping tests by which of the 300 mutants kill
+them gives a surplus of 751 indistinguishable tests -- which looks like redundancy and
+is not. 632 of it sits in groups separated by fewer than ten mutants, thin evidence
+rather than sameness; the rest were read, and the five in `test_skills_read_only.py`
+drive four tools at four targets through one enforcement path -- they die together
+because the path is shared, not the assertions. A finer corpus can only split groups,
+so 751 is a ceiling that falls as the measurement improves.
 
-**What the kill-vector matrix said.** 300 mutants over covered lines, six
-worktrees, 246 killed and 54 survived. Grouping tests by which mutants kill them,
-with parametrize variants collapsed to the function they came from, gives 209
-groups of mutually indistinguishable tests and a surplus of 751 -- the number
-that looks like redundancy and is not. 632 of that surplus sits in groups
-separated by fewer than ten mutants, which is thin evidence rather than sameness.
-The 119 resting on wider vectors were read rather than counted: the five in
-`test_skills_read_only.py` drive four different tools at four different targets
-through one enforcement path. They die together because the path is shared, not
-because the assertions are.
+**Amplification is dependency-shaped, and is a reporting problem.** The median caught
+break turns 9 tests red. One wrong `and` in `layout.py` fails 385, of which 345 are one
+exception from one line of the workspace backend, raised on each test's way to an
+assertion it never reached. `--tb=line` took that output from 35,495 lines to 1,415
+without deleting anything.
 
-**And the evidence only gets weaker.** A finer corpus -- constants, off-by-one,
-message text -- splits those groups apart; it cannot merge them. 751 is a ceiling
-that falls as the measurement improves.
+**What was done instead** is two splits along seams each file already declared in its
+docstring: `kingfisher list` out of the file that also tested `seed`, and what a turn
+may destroy out of what a caller can reach. No test was deleted. The gate for a move is
+`pytest --collect-only`, not a green suite -- a rule that loses its parametrize data
+collects nothing and still prints dots.
 
-**Amplification is dependency-shaped, and is a reporting problem.** The median
-caught break turns 9 tests red. The wide ones come from a few foundation lines:
-one wrong `and` in `layout.py` fails 385 tests, of which 345 are a single
-exception from a single line of the workspace backend, raised on each test's way
-to an assertion it never reached. A second mutant turned 265 tests red carrying
-four distinct signals. That is what `--tb=line` is for, and it took 35,495 lines
-of output down to 1,415 without deleting anything.
+**The survivors, separated -- and the measurement was wrong three times in ways that
+read as findings about the tests.** It edited the word `and` inside error messages,
+which nothing asserts (19 survivors). It read a timeout as "no test failed": breaking
+`create_exclusive` so it never reports success spins the turn-id loop forever, and the
+most lethal mutant in the corpus was filed as a gap. Corrected: **279 mutants, 260
+killed, 19 survivors** -- 6.8% rather than 18%. Then rerunning found it editing prose
+again: the skip named `STRING` and `COMMENT`, and since Python 3.12 an f-string is
+neither, which is how nearly every message here is written. That third fault has a test
+of its own.
 
-**What was done instead** is two splits, along the seam each file already
-declared in its own docstring: `kingfisher list` out of the file that also tested
-`seed`, and what a turn may destroy out of what a caller can reach. No test was
-deleted. The gate for a move is `pytest --collect-only`, not a green suite -- a
-rule that loses its parametrize data collects nothing and still prints dots.
+**Eleven of the 19 were real gaps** -- among them the run log's `ok` on the
+`max_steps` path, `top_p` never reaching the model params, and a tool's own JSON on the
+seeding path, where JSON being valid YAML leaves the extension check as the only
+separator -- and were closed in twelve tests, each mutation-tested, none changing
+`src/`. **Six are not gaps**, `held_for` among them: written down as one, and
+reclassified by writing the test and watching it fail against unmutated code, since
+every combination that can arrive is refused before that line. **Two need Linux**, and
+CI's fence job settles them. One `src/` defect came out anyway: the source-id reader
+took a mapping as a requirement and kept only its keys, because a mapping is truthy and
+iterates; it is refused now.
 
-**The survivors, separated.** Most of those survivors were the measurement's own
-fault, and finding that out took two corrections to it. It had been editing the
-word `and` inside error messages, which nothing asserts and which accounted for
-19 of them. And it read a timeout as "no test failed", which is backwards:
-breaking `create_exclusive` so it never reports success spins the turn-id loop
-forever, and the most lethal mutant in the corpus was filed as a gap in the
-suite. Corrected and re-run: **279 mutants, 260 killed, 19 survivors** -- 6.8%
-rather than 18%.
+**The rate above is of covered lines, and `mutation_report.py` walks more than those.**
+It mutates every mutable line, uncovered ones included, which always survive -- so its
+rate is higher and the two do not compare; reached this way, "is it asserted" and "does
+it run" are one question. It found what the covered corpus could not: 23 of 61
+survivors were `frozen=True` off a dataclass. All 58 records in the package were frozen,
+one had a test, and its docstring's "frozen, like everything else a caller is handed
+here" was held up by nothing. `test_every_record_this_package_hands_out_is_frozen` is
+the rule now.
 
-**Eleven of the 19 are real gaps.** The run log's `ok` on the `max_steps` path,
-whose staying true is explained in a comment and checked by nothing. `top_p`
-never reaching the model params, with `temperature` beside it in the same shape
-and a test written for one of them. The *everything or only what was named*
-branch, twice. A stray entry in a session's `runs`. A tool's own JSON on the
-seeding path, which matters because JSON is valid YAML and the extension check
-is what separates them. `all_of` given a mapping. The nothing-here line for
-agents, whose siblings for skills and subagents were both covered.
-`ensure_ascii`. The `*`-loop clause that its own comment says the message has to
-carry. And `subgraphs`, on both loops.
-
-**Six are not gaps**: one is `# pragma: no cover`, one is refused by a
-`ConfigError` above it, one is a branch its comment says no definition can
-reach, and two are defensive keywords that show only on a second call. The sixth
-is `held_for`, which was written down as a gap and is not: a caller naming source ids
-without a vocabulary, and a caller naming none with one, are both refused before
-that line is reached, so no combination that can arrive behaves differently. It
-was reclassified by writing the test and watching it fail against unmutated
-code, which is the only way that answer comes out. **Two need Linux**, where the
-fence is reachable at all, and CI's fence job is where they get settled.
-
-The eleven are closed, in twelve tests -- two pairs share a shape, and one more
-came out of the reading: the `max_steps` flag is set twice, and the async copy
-sits three lines from the sampled one and was written by hand. Each was
-mutation-tested rather than assumed. None of them changed `src/`: every one was
-a test that was missing, not a behaviour that was wrong.
-
-One `src/` change came out of it anyway, from pointing a test at the wrong
-parser: `source_ids.yaml` read `all_of: {finance: senior}` as the single name
-`finance` and discarded the rest, because a mapping is truthy and iterates. That
-one is a defect, and it is fixed.
-
-**The rate above is of covered lines, and the report walks more than those.**
-The corpus behind these numbers drew only from lines the tests execute, so a
-survivor meant a change nothing asserted. `mutation_report.py` walks every
-mutable line in the package instead, uncovered ones included, and those always
-survive -- so its rate is higher and the two do not compare. Reached this way it
-is one question rather than two: whether a line is asserted, and whether it runs
-at all.
-
-**Rerunning it found the report editing prose again.** The skip named `STRING`
-and `COMMENT`, and since 3.12 an f-string is neither -- it is a start, its
-literal pieces, and an end -- so the fix that removed 19 survivors covered plain
-strings and let every f-string through, which is how nearly every message here is
-written. Third time this measurement has been wrong in a way that read as a
-finding about the tests, and the first with a test of its own to stop the fourth.
-
-**And it found something the covered-lines corpus could not.** 23 of 61
-survivors were one edit: `frozen=True` off a dataclass. All 58 records in the
-package are frozen, one had a test, and its docstring said "frozen, like
-everything else a caller is handed here" -- true, and held up by nothing.
-`test_every_record_this_package_hands_out_is_frozen` is the rule now; the
-behavioural test stays as the half that watches a real refusal. *(2026-09-08.)*
-
-If deletions are ever proposed, the gate is a mutation corpus generated *after*
-the deletion list is frozen, for the reason those 89 preserved tests give. *(Measured
+If deletions are ever proposed, the gate is a mutation corpus generated *after* the
+deletion list is frozen, for the reason those 89 preserved tests give. *(Measured
 2026-09-08.)*
 
-**Asked again from the other end: the suite is not over-coupled either.** The
-second complaint was not the count but the blast radius -- folding `/runs` and
-`.tmp` into one `/scratch` changed twelve files under `src/` and fifteen under
-`tests/`, which reads as tests that know too much. Its ninety hunks say otherwise:
-19 are the claim itself changing and 12 are deletions, while 44 spell a literal and
-15 a renamed name. Ten of the fifteen files moved for spelling alone.
+**Asked again from the other end: the suite is not over-coupled either.** Folding
+`/runs` and `.tmp` into one `/scratch` changed twelve files under `src/` and fifteen
+under `tests/`, which reads as tests that know too much. Its ninety hunks say
+otherwise: 19 are the claim itself changing, 12 are deletions, 44 spell a literal and
+15 a renamed name.
 
-**The cure that suggests itself prevents nothing, and the number is zero.**
-`layout.py` already exported `RUNS`, `AGENT_TMP`, `RUNS_ROUTE` and `SESSION_DIRS`
-while about sixty test files spelled those strings by hand, so the obvious move is
-to make the tests import them. It would have saved *none* of the 44 hunks: that
-commit renamed the constant along with the thing it named, `RUNS` to `SCRATCH`, so
-`workspace / RUNS` needed the same edit as `workspace / "runs"`. What constants buy
-here is a one-token rename instead of a literal hunt -- cheapness, not absence.
+**The cure that suggests itself prevents nothing.** Making tests import the folder
+constants from `layout.py` would have saved *none* of the 44 hunks: the commit renamed
+the constant with the thing it named, `RUNS` to `SCRATCH`, so `workspace / RUNS` needed
+the same edit as `workspace / "runs"`. Constants buy a one-token rename instead of a
+literal hunt -- cheapness, not absence. And the shape barely occurs: of the last sixty
+commits, the twelve touching the most test files are ten semantic or additive changes
+and one module move. The tests moved because the world moved. One collapse came of it
+on its own merits: the parity documents compare in one rule rather than fourteen.
+*(Measured 2026-09-21.)*
 
-**And the shape barely occurs.** Of the last sixty commits, the twelve touching the
-most test files are ten semantic or additive changes -- a capability removed, an
-execution path deleted, a lifecycle contract altered -- and one module move. The
-tests moved because the world moved. The move is the only cosmetic one, and 13 of
-its 23 hunks are `import` lines that no constant reaches; the remaining 8 are module
-paths written as strings, the one place here a constant could exist and does not.
+**Asked a third time, at the words.** Of 2,002 items, 1,249 drive library code; the
+rest is refusal text (308), architecture (139), config and CLI (133), shipped assets
+(97), prose and docs (60), and the suite's checks on itself (16). Deleting every one of
+those categories lands at 1,249, so a target below that is a statement about the
+product, not the tests.
 
-So a change costing fifteen test files is the suite reporting a blast radius, not a
-suite built wrong, and the entry above is why cutting it is not the answer either.
-What came of the pass is one collapse worth taking on its own merits: the parity
-documents compare in one rule now rather than fourteen. *(Measured 2026-09-21.)*
+**The wording bill is real, and it is only error messages.** Scrambling every word of
+every error message in `src` -- placeholders and punctuation kept -- turns 218 items
+red. Scrambling every docstring, or every comment, turns none. The prose rules bite on
+*shape* -- an unfinished sentence, a cited line number, a module named that is not
+there -- and the shipped-asset tests are immune at 1 of 97.
 
-**Asked a third time, at the words.** With the count still reading as too high and
-the blast radius healthy, the question became which of the suite's categories earn
-their place. Of 2,002 items, 1,249 drive library code; the rest is refusal text
-(308), architecture (139), config and CLI (133), shipped assets (97), prose and
-docs (60), and the suite's checks on itself (16). Deleting every one of those
-categories lands at 1,249, so a target below that is a statement about the product
-rather than about the tests.
+**Rejected: deleting the tests that only assert wording.** 176 candidates, cut to 51
+by coverage arcs and by the message each `raises` block saw, and to roughly nothing by
+reading the docstrings. A list where a tuple was expected once opened an agent
+restricted to somebody else, and the test holding that is indistinguishable by arc from
+the one beside it, because a list and a tuple take the same branches; only the
+docstring separates them. That is *Neither coverage nor kill-set can authorise a cut*
+from the other side. Three candidates had no docstring; those need one, not deleting.
 
-**The wording bill is real, and it is only error messages.** Scrambling every word
-of every error message in `src` -- placeholders and punctuation kept, so behaviour
-is unchanged -- turns 218 items red. Scrambling every docstring turns none.
-Scrambling every comment turns none. The prose rules bite on *shape* -- an
-unfinished sentence, a cited line number, a module named that is not there -- not on
-wording, and the shipped-asset tests are immune at 1 of 97.
+**And the matches cannot be narrowed.** Of 215 prose `match=` patterns, 51 already pin
+a quoted name or syntax fragment and survive a reword, five could drop the match, and
+159 cannot: `CapabilityError` is raised from 30 places, `ConfigError` from 34,
+`SubagentError` from 27, so the sentence is the only thing saying which refusal fired.
+The suite matches on prose because prose is the error code. What would free the
+wording is a discriminator in `src` that is not a sentence -- narrower classes, or a
+code on the error -- across thirty-odd raise sites, not costed here.
 
-**Rejected: deleting the tests that only assert wording.** 176 candidates, cut to
-51 by coverage arcs and by the concrete message each `raises` block saw, and to
-roughly nothing by reading the docstrings. A list where a tuple was expected once
-opened an agent restricted to somebody else, and the test holding that is
-indistinguishable by arc from the one beside it, because a list and a tuple take
-the same branches. The docstring is the only thing that separates them. The rule
-that a test's docstring names the failure it catches is what makes an automated
-deletion criterion unusable here, which is the same finding as *Neither coverage
-nor kill-set can authorise a cut* above, arrived at from the other side. Three
-candidates carried no docstring; those need one written, not deleting.
+**The carve-out, for whoever needs it.** Six message spans reach a model's context, all
+from `core/agent/`: `HostPathError` and `UnsafeReferenceError`, plus literals written
+inline in `narrowing.py`. Both classes subclass `ValueError` and their tests catch the
+base, so a rule keyed on the exception name exempts nothing. Wording is behaviour
+there, twice measured: told only the virtual spelling, an agent passed it to `execute`
+4 times in 10, and a model that read "None is not a subagent this request may use"
+reported the tool as broken and answered around it. *(Measured 2026-09-21.)*
 
-**And the matches cannot be narrowed, for a reason worth keeping.** Of 215 prose
-`match=` patterns, 51 already pin a quoted name or a syntax fragment and survive a
-reword; five belong to a class raised in one place and could drop the match. The
-other 159 cannot. `CapabilityError` is raised from 30 places, `ConfigError` from
-34, `SubagentError` from 27 -- so the sentence is the only thing saying which
-refusal fired. The suite matches on prose because prose is the error code.
-
-**What would actually free the wording** is a discriminator in `src` that is not a
-sentence: narrower classes, or a code carried on the error, after which a test pins
-the code and the message is free to improve. That is a change across thirty-odd
-raise sites and it is not costed here.
-
-**The carve-out, for whoever needs it.** Six message spans reach a model's context,
-all through `infrastructure/harness/`: `HostPathError` and `UnsafeReferenceError`,
-plus three literals written inline in `narrowing.py`. Both classes subclass
-`ValueError` and the tests guarding them catch the base, so a rule keyed on the
-exception name exempts nothing. Wording is behaviour there, twice measured: told
-only the virtual spelling, an agent passed it to `execute` 4 times in 10, and a
-model that read "None is not a subagent this request may use" reported the tool as
-broken and answered around it. *(Measured 2026-09-21.)*
-
-**One fixture for pointing a command at a workspace.** The command reads the
-environment and nothing else, so a test that drives it has to wire it, and three
-lines -- the workspace, the models file, the key -- were written out eighteen times.
-Each called a `_catalogue` helper that `test_list` and `test_doctor` held
-byte-identical copies of. `at_the_command_line` is those three lines, and the two
-copies are gone.
-
-**The duplication was hiding a disagreement**, which is why this is more than
-tidying. That helper wrote a catalogue naming one endpoint and one model, where the
-`FAKE_CATALOGUE` record the `cfg` fixture holds names two and three -- so a test
-that ran the command saw a different deployment from one that called the library,
-and a model added to the fixture reached only half the suite. The file is derived
-from the record now, and `test_the_two_forms_of_the_test_catalogue_agree` loads it
-back and compares: everything but the key itself, which differs by construction
-because a file names the variable to read and a record holds what was read from it.
-
-Making them agree cost nothing -- measured before building anything, by writing the
-full catalogue into the old helper and running both files green. What it would have
-cost later is the question: dropping the second endpoint again now fails 33 tests.
-
-The fixture covers that arrangement and no other. A test pointing the command at
-some *other* workspace -- a fresh one, a relocated catalogue -- still says so
-itself, because that is a different arrangement rather than this one written out.
+**One fixture for pointing a command at a workspace.** The command reads only the
+environment, so a test driving it has to wire it, and those three lines -- workspace,
+models file, key -- were written out eighteen times over a `_catalogue` helper that
+`test_list` and `test_doctor` held byte-identical copies of. `at_the_command_line` is
+those three lines. **The duplication was hiding a disagreement**: that helper's
+catalogue named one endpoint and one model where the `FAKE_CATALOGUE` record the `cfg`
+fixture holds names two and three, so a test running the command saw a different
+deployment from one calling the library. The file is derived from the record now, and
+`test_the_two_forms_of_the_test_catalogue_agree` loads it back and compares everything
+but the key, which differs by construction. Making them agree cost nothing, measured
+first; dropping the second endpoint now fails 33 tests. A test pointing the command at
+some *other* workspace still says so itself, because that is a different arrangement.
 *(2026-09-23, from an architecture review.)*
 
 **One way to reach a subagent a build made.** "The subagent called X, and its
-middleware" was written six times: twice byte-identical down to the docstring, once
-as its first half under another name and imported across files, three times inline
--- the sixth found only because a rebase put it in front of somebody, since it went
-through `declared_subagents` rather than the field and no search for the field
-reached it. `subagent_of` and `middleware_of` are in `conftest` beside `declared_subagents`
-now, which was already the same read one step back.
+middleware" was written six times, so `subagent_of` and `middleware_of` are in
+`conftest` beside `declared_subagents`.
 
-**The middleware itself was left unanswerable, which is the other half of the
-review's suggestion and the half to decline.** Tests read `GrantedOnlyMiddleware._allowed`
-at eighteen sites; making it public would be production API that nothing in
-production reads, which is the shape `test_nothing_is_defined_for_tests_alone`
-exists to refuse -- and it would slip past that rule, since the walk collects a
-module's own definitions and not a class's. Reading the private name is also honest:
-`_filter` narrows on it, so a test asserting on it asserts on what is enforced
-rather than on a copy of it.
-
-Nothing was added to stop a sixth copy. Tests read `.subagents` 113 times and most
-ask a different question -- the names only, a mapping by name, a filter -- so a rule
-against reading it directly would be noise around one real duplication.
+**The middleware itself was left unanswerable -- the half of the review's suggestion
+to decline.** Tests read `GrantedOnlyMiddleware._allowed` at eighteen sites; making it
+public would be production API nothing in production reads, the shape
+`test_nothing_is_defined_for_tests_alone` refuses -- and would slip past it, since that
+walk collects a module's definitions and not a class's. Reading the private name is
+also honest: `_filter` narrows on it, so the test asserts on what is enforced. Nothing
+stops a seventh copy: tests read `.subagents` 113 times, mostly asking something
+different, so a rule against it would be noise around one real duplication.
 *(2026-09-24, from an architecture review.)*
 
 ## Proposals, and what became of them
 
-What is still being argued is in `docs/design/`, and `docs/README.md` lists it.
-Everything else that argued here was built and its decisions moved up.
+What is still being argued is in `docs/design/`, and `docs/README.md` lists it,
+held to the folder by `test_the_index_lists_every_document`. Everything that was
+argued here and built has its decisions under its own section. Of
+`nothing-at-rest-on-this-machine`, the one thing left unbuilt on purpose is admission
+control.
 
-That sentence used to say how many were open and whether the folder was empty,
-and it is written this way now because both were wrong for four commits -- see
-below.
+**Not taken: splitting the build plan.** An architecture review named `build_agent`
+as assembling in one pass with thin seams, and the reading went the other way. It was
+657 lines doing four jobs; `prompting` and `core.agent.kinds.subagents` left with a
+rule that neither calls back, and what remains is wiring where every statement attaches
+one thing to the graph. Four decisions constrain the shape further -- the middleware
+registry merged once before either branch reads it, both `wants` sites through one
+builder, `test_both_kinds_are_handed_the_same_things_to_want` guarding a second inline
+mapping, and one compiled agent per definition because per path is exponential. The
+piece that could come out did: `_resolve_tools`, whose probe is 7.7ms and is skipped
+when nothing needs it -- no definition names a tool, the workspace defines none, and
+the request asks for every tool.
 
-The heading said *Still proposed, not built* while listing only things that
-were, which is the drift this page exists to catch, on the page itself.
+The thin seams the review saw were one seam: 21 test files monkeypatched
+`create_deep_agent` by string path and read its kwargs. A build returning a record of
+what it attached, as `_ToolSurface` already does inside it, was declined here for no
+behaviour change at the cost of every one of those files and the return type's
+callers. *(2026-09-16.)* That half was taken later -- see *Taken after all: a build
+says what it attached* below.
 
-*And it caught it again on this very section, twice over. The front-door
-proposal was added to `docs/design/` on 2026-09-06 while these lines went on
-saying the folder was empty, and the schema proposal arrived four commits later
-and made it wronger. Nothing checks a claim like that against the directory, and
-the rule that would -- grepping prose for the word "empty" -- is more fragile
-than the thing it guards. So the claim went instead. The paragraph above points
-at the folder and at the index, and the index is held to the folder by
-`test_the_index_lists_every_document`: a sentence that cannot go stale beats a
-sentence that needs a test.*
+**Not taken: one reader for the agent and subagent formats.** The same review found the
+two formats reading the same fields through copies kept by hand, and 14 of 23 commits to
+the agent spec touching the subagent reader too. Most of what it named was already
+shared: who reaches what and the narrowing in `declares` through `narrowed_for`, unknown
+keys through `fields.unrecognised`, every per-field rule through `fields.Reader` and
+`wanted_model`; seven of the 14 commits were renames, moves or the prose pass. What
+stays copied is each format's list of calls -- which rule reads which field, and what
+leaving it out means. Merging it would take about fifty lines from each format and add
+a shared function of the same size with the list behind a layer of options, and the
+list is where the deliberate differences live: the star on `skills` and `subagents`,
+`memory`, `bundle`, `build`.
 
-*A second one was there until 2026-08-31. `a-tool-failure-is-not-a-crash` had
-shipped -- `ToolFailureMiddleware` and `tests/unit/test_workspace_tool_errors.py` --
-and its status line had never been changed to say so. Its decisions are under
-*Tool failure* above.*
+The risk the history does show is a fix reaching one reader: refusing a list where one
+model goes reached the subagent format and left the agent's turning it into a string.
+`tests/unit/test_format_parity.py` holds the readers to each other instead: it reads the
+same documents through both and compares every shared field or the refusal, requires
+`["*"]` to part the formats on exactly `skills` and `subagents`, and checks each
+format's keys against its spec. A field both formats take goes into both readers and
+into a document there, and the test is red until it does. *(2026-09-16.)*
 
-*`a-tool-path-is-the-backend-s-path` was written on 2026-09-30, settled on
-2026-10-01 and built in four slices; its decisions are under *A tool's path is the
-backend's path* above. Digging into its first finding is what turned it from a rule
-about remote backends into one about each path.*
+**Left for now: one spec for agents and subagents.** Not one reader but one record. The
+two share 14 fields, and the differences are guarantees the types enforce: a subagent
+has a prompt or a `build`, exactly one; `memory` is an agent's, and `bundle`, `carried`
+and `build` a subagent's; `declares` parts where no audience reaches, which
+`test_the_two_kinds_declare_the_unaudienced_axes_differently` exists to catch, since one
+shared body would erase it with nothing red. One class would turn each into a check on
+a kind field, and an agent with a `build` would become something code can construct.
+Nothing downstream asked for it either: `build_agent` reads two things off an
+`AgentSpec`, the model functions in `core/agent/kinds/subagents.py` already take either,
+and access reads both by attribute name on purpose. What would change the answer is a
+product change: one definition file usable both as an agent and as a subagent.
+*(2026-09-17.)*
 
-*`a-session-is-its-backend` was written on 2026-09-30 and built the same day in
-four slices; its decisions are under *A session is its backend* above. Its own
-order was wrong: slice 4 moved the lock and the housekeeping onto a backend keyed by
-session id, which a `SessionRoot` still deciding where a session was would have
-broken, so slices 4 and 5 landed together.*
+*Measured the next day: all 14 shared fields declare the same type, 13 the same
+default, and 12 are read by byte-identical calls -- the other two are `skills` and
+`subagents`, where a subagent passes `refuse_all`. Only 4 of the 14 comments could move
+to a base unchanged; the other 10 explain the same field for its own kind.
+(2026-09-18.)*
 
-*A fourth, `the-verb-that-runs-a-task`, was written on 2026-09-04 and removed the
-same day, having been built in three slices. Its decisions are under *The command
-line* above. One of them did not survive contact: it said the driver's `--list`
-would go with the other three, and building it found that flag is the only way to
-reach the driver's `main` without calling a model.*
+**Taken, in the middle form: `SpecBase`, a base holding what both kinds declare
+identically.** Two things neither entry above had came out of building it. **`kw_only=True`
+is the whole of the mechanism**: a base holding defaulted fields looks as if it forbids
+a required `system_prompt` in a subclass (*non-default argument follows default
+argument*), and with it the subclass keeps the field required; nothing builds either
+spec positionally. **And a shared comment
+turned out to be the point rather than the cost**: where the kinds part, the one comment
+now says which is which -- an agent may write `["*"]` for `subagents` and a subagent may
+not, because for a subagent that set includes itself and always loops. Two comments each
+knowing half is how the agent's `wanted` sat stale for months, describing a list form
+`wanted_model` had stopped taking; one comment cannot disagree with itself.
 
-*A third, `where-this-deployment-reads-from`, was written on 2026-09-02 and
-removed the day after, having been built in four slices. Its decisions are under
-*Where a deployment reads from* above. It corrected itself once while being
-built, and that half is worth keeping in git rather than here: two of its
-decisions were wrong in ways that would have shipped a fault, and the commit that
-fixed them says how each was caught.*
-
-**Not taken: splitting the build plan.** An architecture review named
-`build_agent` as assembling in one pass with thin seams, and the reading went the
-other way. The pass is deliberate and already recorded at the function: it was 657
-lines doing four jobs, `prompting` and `core.agent.kinds.subagents` left with
-a rule that neither calls back, and what remains is wiring where every statement
-attaches one thing to the graph. Four decisions above constrain the shape further --
-the middleware registry merged once before either branch reads it, both `wants`
-sites through one builder, `test_both_kinds_are_handed_the_same_things_to_want`
-guarding a second inline mapping, and one compiled agent per definition because per
-path is exponential. The piece that could come out already did: `_resolve_tools`,
-whose probe is 7.7ms and is skipped when nothing needs it -- no definition names a
-tool, the workspace defines none, and the request asks for every tool. A workspace
-with tools of its own runs it on every build.
-
-What the review saw as thin seams is real and is one seam: 21 test files reach what
-a build produced by monkeypatching `create_deep_agent` by string path and reading
-its kwargs -- 16 assertions on `middleware`, 9 on `subagents`, 5 on `permissions`.
-The improvement would be for the build to return a record of what it attached, the
-way `_ToolSurface` already does for the tool picture inside it. Not taken because
-the cost is every one of those files plus a return type 29 call sites consume, for
-no behaviour change -- and because `_ToolSurface` is precedent in code with no entry
-here, so this would be a new decision rather than an extension of one. Recorded so
-the next review reads this instead of re-raising it. *(2026-09-16.)*
-
-**Not taken: one reader for the agent and subagent formats.** The same review found
-the two formats reading the same fields through copies kept by hand, and 14 of the 23
-commits to `kinds/agents/spec.py` touching `kinds/subagents/reading.py` too. By the
-time anybody read the code, most of what it named was already shared: who reaches
-what and the narrowing in `declares` through `narrowed_for`, unknown keys through
-`fields.unrecognised`, and every per-field rule through `fields.Reader` and
-`wanted_model`. Seven of the 14 commits were renames, moves or the prose pass rather
-than one change made twice.
-
-What stays copied is each format's list of calls -- which rule reads which field,
-and what leaving it out means -- with the required-field check and the fields both
-specs declare. Merging that would take roughly fifty lines out of each format and
-add a shared function of about the same size, with the list behind a layer of
-options -- and the list is where the deliberate differences live: the star on
-`skills` and `subagents`, `memory`, `bundle`, `build`.
-
-The risk the history does show is a fix reaching one reader: refusing a list where
-one model goes reached the subagent format and left the agent's turning the list into
-a string. `tests/unit/test_format_parity.py` holds the readers to each other instead.
-It reads the same documents through both and compares every shared field or the
-refusal, tries `["*"]` on every shared key and requires the two to part on those two
-fields and no others, and checks each format's keys against its spec. The agent's had
-never been checked, which is why `AgentSpec` now marks its derived fields. So a field
-both formats take goes into both readers and into a document there, and the test is
-red until it does. *(2026-09-16.)*
-
-**Left for now: one spec for agents and subagents.** Asked straight after the entry
-above, and a different question: not one reader but one record. The two share 14
-fields, and the differences are guarantees the types enforce rather than
-declarations kept twice. An agent's `system_prompt` is required with no default, so no
-code builds an agent without one; a subagent has a prompt or a `build`, exactly one.
-`memory` is an agent's, and `bundle`, `carried` and `build` a subagent's. `declares`
-parts where no audience reaches: an agent opens `models` and `endpoints` and carries
-`memory`, a subagent leaves all three unset, and
-`test_the_two_kinds_declare_the_unaudienced_axes_differently` exists because one
-shared body would erase that with nothing going red. One class would turn each of
-those into a check on a kind field, and an agent with a `build` would become
-something code can construct.
-
-Nothing downstream was asking for it either. `build_agent` reads two things off an
-`AgentSpec`, the model functions in `harness/kinds/subagents.py` already take either in four
-signatures, and access reads both by attribute name on purpose. The middle option --
-a base class in `domain/` for the shared fields -- would write the declarations once
-and put one name in place of the union. It was judged a wash: reading `AgentSpec`
-would mean two files, comments that give a subagent's reasons would go neutral, and
-it catches no drift `test_format_parity.py` does not already catch.
-
-What would change the answer is a product change rather than tidying: one definition
-file usable both as an agent and as a subagent. *(2026-09-17.)*
-
-*Asked again the next day and measured rather than argued, because the entry above
-asserts what the two share without counting it. Of the 14 shared fields: **all 14
-declare the same type**, 13 of 14 the same default -- `system_prompt` is the one, and
-it is the guarantee the entry names -- and **12 of 14 are read by byte-identical
-calls**. The two that are not are `skills` and `subagents`, where a subagent passes
-`refuse_all` and an agent does not, which is the star the one-reader entry above
-already named as where the formats part.*
-
-*So the mechanics do not decline it, and one of them looks like it does. A shared base
-holding the defaulted fields appears to force `AgentSpec` to default `system_prompt`
-too -- `non-default argument follows default argument` -- and `kw_only=True` removes
-that entirely: the base compiles, the agent keeps `system_prompt` required, and
-construction still fails without one. Nothing in `src/` or `tests/` builds either spec
-positionally, so nothing would break. Written down because the next person to ask this
-will find `kw_only` and think they have found the unlock.*
-
-*What declines it is the prose, and that is measurable too: only 4 of the 14 comments
-could move to a base unchanged -- `name`, `description` and `tools` are bare in both
-and `audiences` is identical. The other 10 are the same field explained for its own
-kind. `source_ids` is "who may open a session on this agent" against "who may reach
-this subagent, wherever it is used"; `wanted` is the deployment's default against
-whatever summoned it. A base would put 12 declarations in one file and 10 of their
-reasons in another, which is the fault* Write the reason where the mistake is *names.
-The measurement also found one of those comments stale -- the agent's `wanted` still
-described the list form, which `wanted_model` stopped taking -- and a shared field
-whose two comments disagree is the case for keeping both, not for merging them.
-*(2026-09-18.)*
-
-**Taken, in the middle form: `Definition`, a base holding what both kinds declare
-identically.** The entry above judged that option a wash and the measurement after it
-did not overturn that. What changed is two things neither had, and both came out of
-building it rather than arguing about it.
-
-**`kw_only=True` is the whole of the mechanism.** A base holding defaulted fields makes
-a required one in a subclass illegal -- *non-default argument follows default argument*
--- which reads like the structural objection to all of this and is not one. With it,
-`AgentSpec` keeps `system_prompt` required and constructing one without a prompt still
-fails. Nothing builds either spec positionally, so nothing had to change to allow it.
-
-**And a shared comment turned out to be the point rather than the cost.** The objection
-was that ten of the fourteen comments are kind-specific and would go neutral. They do
-not: where the kinds part, the one comment now says which is which -- an agent may write
-`["*"]` for `subagents` and a subagent may not, because for a subagent that set includes
-itself and is always a loop. A reader meets that difference in one place for the first
-time. Two comments each knowing half is how the agent's `wanted` sat stale for months
-with nothing red, and a merged comment cannot drift because there is one of it.
-
-**One spec is still refused, and the reason for it changed in this same work.** Two of
-the three hold: `_subject` tells the kinds apart by `isinstance` to name the file a
-refusal is about, and each kind has an invariant the other must not run. The third is
-void -- `system_prompt` is required on both now, so merging no longer makes a promptless
-agent constructible, and anyone re-asking this should know that argument has been spent.
-
-What replaced it is stronger and is a test rather than a judgement.
+**One spec is still refused, on a changed footing.** `_subject` tells the kinds apart by
+`isinstance` to name the file a refusal is about, and each kind has an invariant the
+other must not run. The argument that merging makes a promptless agent constructible is
+spent: `system_prompt` is required on both now. What replaced it is a test:
 `test_the_known_set_matches_the_spec_it_builds` asserts *equality* between a format's
-`KNOWN` and the non-derived fields of the spec it builds, in both directions, and its
-docstring says what that catches: a key accepted and never read. One class makes the
-spec's fields the union of both kinds', so the equality fails for each and the check can
-only weaken to a subset -- which stops catching the thing it exists for. The argument
-about a spec built in code saying what no file may say does not go away with
-`system_prompt` either; it moves to `memory`, `build`, `bundle` and `carried`, where a
-subagent could carry a `memory` nothing reads.
+`KNOWN` and the non-derived fields of its spec, both ways, which catches a key accepted
+and never read. One class makes a spec's fields the union of both kinds', so that check
+could only weaken to a subset. A spec built in code saying what no file may say moves to
+`memory`, `build`, `bundle` and `carried`, where a subagent could carry a `memory`
+nothing reads. The readers are untouched -- *Not taken: one reader* stands. The cost,
+accepted: reading a spec is two files, and ten comments true of one kind now have to be
+true of both. *(2026-09-18.)*
 
-A base keeps all of that; one class turns each into a check on a kind field. The readers
-are untouched -- that is *Not taken: one reader* above, and nothing here reopens it.
+*`system_prompt` was unified by losing its default rather than sharing one. An agent has
+no second shape, so a default would be a second way past the `parse` refusal; a compiled
+subagent carries its instruction inside the graph, so its one caller writes
+`system_prompt=""`, saying* this one has no prompt*, and `__post_init__` can still tell
+"brought a graph" from "said nothing". Putting the default back made a promptless agent
+constructible with all 1,959 tests passing -- nothing watched that door, and
+`test_neither_kind_can_be_built_without_saying_what_it_instructs_with` is it now. Named
+`SpecBase` rather than `Definition`, because a tool, a skill and a middleware are
+definitions too, and rather than `AgentDefinition`, which would make a subagent a kind of
+agent beside the `AgentSpec` that already names one. (2026-10-17.)*
 
-**What it costs, accepted rather than argued away**: reading a spec is two files, and
-ten comments that were true of one kind now have to be true of both. `system_prompt` is
-declared in both subclasses at first, and joined them once the question "why do the
-defaults differ?" was asked rather than worked around. *(2026-09-18.)*
+**Taken: a `ToolSpec` a tool is declared as.** Left for now on 2026-09-18 with its
+trigger named: the first field kingfisher wants to read off a tool. That fired when a
+tool could say who may use it -- `source_ids` and `datazone` are read off a tool and by
+nothing else. Their first form took only a plain function: a `@tool` object, a
+`BaseTool` instance or a third-party LangChain tool raised `AttributeError` on
+`__name__`, so most tools could carry no lock; and the lock sat on a private attribute
+of a `StructuredTool` subclass, read back by name, because the tools kind could not ask
+langchain what it held.
 
-*Fourteen, not thirteen: `system_prompt` unified by losing its default rather than by
-sharing one. The two arrived at their defaults from opposite directions -- an agent has
-no second shape, so `parse` refuses a definition without a prompt and a default would
-be the second way in that field exists to refuse; a subagent does, because a compiled
-one carries its instruction inside the graph. Required on both is the stricter reading
-of each: the one caller that builds a compiled subagent now writes `system_prompt=""`,
-which says* this one has no prompt *instead of leaving it to a default nobody reads, and
-`__post_init__` can still tell "brought a graph" from "said nothing". What counts as
-acceptable stays per kind.*
+`ToolSpec` is a plain frozen record -- the tool, then keyword-only `name`, `description`,
+`source_ids` and `datazone` -- and `TOOLS` holds it or a bare tool, which is
+`ToolSpec(tool)`. It wraps any form, so the lock holds on every one, and it is read
+where the tool is loaded: the loader knows the file to name in a refusal, reads
+`source_ids` with the reader a definition's own line goes through, and puts the lock on
+the `FoundTool` it makes, never on the tool. `FoundTool` pairs with it: the spec is what
+the author wrote, a `FoundTool` what the loader made of it.
 
-*Doing it found the guarantee untested. Putting the default back on the base makes a
-promptless agent constructible and all 1,959 tests pass -- `parse` refuses a document
-that omits it and always did, and nothing was watching the other door.
-`test_neither_kind_can_be_built_without_saying_what_it_instructs_with` is that door,
-and it is the one part of this work that would have been worth doing on its own.*
+`name` and `description` are applied at load, so a bad one is refused at startup.
+Measured with a real `create_agent` run: a `BaseTool` copied with `model_copy` and a
+plain function made into a `StructuredTool` leave the author's object unchanged, show
+the new values in the schema, keep an injected `ToolRuntime` hidden, and dispatch. A
+class computing either field -- a property inherited ahead of `BaseTool` -- answers with
+its own whatever a copy holds, so the loader checks the copy and refuses one that did
+not take. That is why the tools kind imports `langchain_core`, inside the one function
+that renames, so the command does not load it before it knows its verb. It carries no
+`metadata` or `extras`: the trap the deferral named -- `@tool` refusing `metadata=`, and
+`extras=` landing where a reader of `metadata` never looks -- stays shut, because nothing
+kingfisher reads is on the tool. *(2026-10-18.)*
 
-*Renamed `SpecBase` from `Definition`. In this codebase a tool, a skill and a middleware
-are definitions too, so the bare name read as the base of every kind when it is the base
-of two; and `AgentDefinition`, the first name proposed, would have made a subagent a kind
-of agent beside an `AgentSpec` that already names one. `SpecBase` sits next to the two
-`*Spec` classes it is the parent of and claims nothing more. (2026-10-17.)*
+**Taken: a `TypedDict` for a package writing `SUBAGENTS`.** A portable definition is a
+plain mapping on purpose -- it pins no kingfisher version -- and the want is type
+checking, not a different runtime shape. `PortableSubagent` and `CompiledSubagent` are
+exported from `kingfisher` and imported under `TYPE_CHECKING`, so a checker refuses a
+misspelled or refused key before a run does, and at runtime the entry is the same dict
+with nothing of kingfisher's imported. It was deferred until the first package that is
+not ours, and taken before that on request: `quarters.py` could not be annotated at all,
+because deepagents' `SubAgent` has no `source_ids` or `datazone`.
 
-**Taken: a `ToolSpec` a tool is declared as.** Left for now on 2026-09-18, with its
-trigger named: the first field kingfisher wants to read off a tool. That fired on
-2026-10-16, when a tool could say who may use it -- `source_ids` and `datazone` are
-fields kingfisher reads off a tool, and nothing else does. They were built as
-`kingfisher.tool(fn, source_ids=...)`, which took only a plain function: a `@tool`
-object, an instantiated `BaseTool` subclass or a third-party LangChain tool raised
-`AttributeError` on `__name__`, so most tools had no way to carry a lock at all. And
-the lock was a workaround in its own right, kept as a private attribute of a
-`StructuredTool` subclass and read back by attribute name, because the tools kind could
-not import langchain to ask what it was looking at.
+The types are a fourth statement of a vocabulary `KNOWN`, `PORTABLE` and `NOT_PORTABLE`
+already state, so they sit beside those tables in `subagents/spec.py`, and
+`test_subagent_typeddicts` holds each type's keys equal to its table and its required
+keys to the ones `declared` refuses an entry without. It reads `Required[...]` through
+`get_type_hints`, not `__required_keys__`: the module postpones annotations, so the class
+is made with the marker still a string and lists every key as optional.
+*(2026-09-18; taken 2026-10-18.)*
 
-`ToolSpec(tool, *, name=None, description=None, source_ids=["*"], datazone=None)` is a
-plain frozen record, and `TOOLS` -- a module's, or a Python subagent's carried tools --
-holds it or a bare tool, which is `ToolSpec(tool)`. It wraps any form, so the lock
-holds on every one, and it is read where the tool is loaded: the loader knows the file
-to name in a refusal, reads `source_ids` with the reader a definition's own line goes
-through, and puts the lock on the `FoundTool` it makes, never on the tool.
-
-`name` and `description` are applied at load, not at the first turn, so a bad one is
-refused at startup. Measured feasible with a real `create_agent` run: a `BaseTool` is
-copied with `model_copy` and a plain function made into a `StructuredTool`, the author's
-object is unchanged, the schema shows the new values, an injected `ToolRuntime` stays
-hidden, and calls dispatch. A class computing either field -- a property inherited ahead
-of `BaseTool` -- answers with its own whatever a copy holds, so the loader checks the
-copy and refuses one that did not take. Naming `BaseTool` and building a
-`StructuredTool` is why the tools kind imports `langchain_core` now, inside the one
-function that renames, so the command does not load it before it knows its verb.
-
-It carries no `metadata` or `extras`. The trap the deferral named -- `@tool` refusing
-`metadata=`, and `extras=` landing on an attribute a reader of `metadata` never looks
-at -- stays shut: nothing kingfisher reads is on the tool, so there is no attribute for
-a workspace to spell wrong. *(2026-10-18.)*
-
-*Renamed `FoundTool` from `Found`, which said nothing about what was found. It pairs
-with `ToolSpec`, the record a tool file writes: the spec is what the author wrote, and a
-`FoundTool` is what the loader made of it. (2026-10-18.)*
-
-**Taken: a `TypedDict` for a package writing `SUBAGENTS`.** A portable definition is
-a plain mapping on purpose -- it pins no kingfisher version -- and the want behind this
-is type checking, not a different runtime shape. `PortableSubagent` and
-`CompiledSubagent` are exported from `kingfisher` and imported under `TYPE_CHECKING`,
-so a checker refuses a misspelled or refused key before a run does, and the entry is
-the same dict at runtime with nothing of kingfisher's imported.
-
-Left for now on 2026-09-18, with the trigger *the first package that is not ours*.
-Taken on 2026-10-18 before that fired, on request. What it bought in this
-repository: `quarters.py` could not be annotated at all, because deepagents' `SubAgent`
-has no `source_ids` or `datazone`, and the three shipped Python subagents are now each
-checked by `ty` against the keys its reader takes.
-
-The cost named then is paid as named: the types are a fourth statement of a vocabulary
-`KNOWN`, `PORTABLE` and `NOT_PORTABLE` already state. They sit beside those tables in
-`subagents/spec.py`, and `test_subagent_typeddicts` holds each type's keys equal to its
-table and its required keys to the ones `declared` refuses an entry without. It reads
-`Required[...]` through `get_type_hints`, not `__required_keys__`: the module postpones
-annotations, so the class is made with the marker still a string and lists every key
-as optional. *(2026-10-18.)*
-
-**Accepting `SubagentSpec` instances is refused rather than deferred**, which is the
-difference between this entry and the `ToolSpec` one above it, deferred when this was
-written and taken since. Six of its fields are `derived`
-and the reader fills them: a hand-built spec writing `tools=("csv_profile::profile",)`
-gets an empty `tool_sources`, so `Offering.refuse_moved` checks nothing and a stale
-path claim that a mapping would have caught passes in silence. Publishing the type
-would also put a name through the front door under a rule that has removed eleven.
-*(2026-09-18.)*
+**Accepting `SubagentSpec` instances is refused rather than deferred.** Six of its
+fields are `derived` and the reader fills them: a hand-built spec writing
+`tools=("csv_profile::profile",)` gets an empty `tool_sources`, so
+`Offering.refuse_moved` checks nothing and a stale path claim a mapping would have
+caught passes in silence. Publishing the type would also put a name through the front
+door under a rule that has removed eleven. *(2026-09-18.)*
 
 **Taken after all: a build says what it attached.** *Not taken: splitting the build
-plan* above declined this, and the decline was right on the evidence it had. What it
-lacked was a benefit: it weighed the cost against "no behaviour change", and a
-rearrangement that changes no behaviour is not worth 21 files. The benefit arrived
-from the other direction. Six functions were defined inside `build_agent` and no test
-could call any of them, while `declared_middleware` -- which left this file under the
-same criterion -- is called directly by twenty-six. Three of the six came out first;
-this is the other half, and `build_agent` returns `Assembled` rather than a graph.
+plan* weighed the cost against "no behaviour change", and was right on that evidence.
+The benefit came from elsewhere: six functions defined inside `build_agent` could not
+be called by any test, while `declared_middleware`, which left the file under the same
+criterion, is called directly by twenty-six. `build_agent` returns `Assembled` now
+rather than a graph.
 
-**The cost that entry quoted was an undercount, and the corrected figure is the
-useful part of this one.** It said 21 test files and a return type 29 call sites
-consume. Measured before starting: 22 files reach the spy, 34 files call
-`build_agent` at all, and 58 of 148 call sites consume the return -- of which two are
-in `src/`. The rest is tests, which is the shape that made it affordable: the tests
-were being edited anyway, because deleting the spy is the point.
+**The cost that entry quoted was an undercount.** Measured before starting: 22 files
+reached the spy, 34 call `build_agent`, and 58 of 148 call sites consume the return,
+two of them in `src/`. The rest are tests, which made it affordable: they were being
+edited anyway, because deleting the spy was the point. That spy patched
+`create_deep_agent` by string path and read the kwargs back, making its argument list a
+contract nothing declared and that helpers restated by hand. `Assembled` holds every
+keyword, not only those a test reads: `checkpointer` is asserted on by nothing, and
+`interrupt_on` was asserted on by nothing until the commit that added it -- the case a
+record of only-what-is-interesting fails the next time.
 
-**What `capture_build` was is why it had to go.** It monkeypatched
-`create_deep_agent` by string path and read the kwargs back, which made
-`create_deep_agent`'s argument list a contract that nothing declared and that three
-separate helpers restated by hand -- `_shipped_provisions`, and the hand-built
-mappings in `test_middleware_settings`. `Assembled` holds every keyword, not the ten
-a test happens to read: `checkpointer` is asserted on by nothing, and `interrupt_on`
-was asserted on by nothing until the commit that added it, which is exactly the case
-a record of only-what-is-interesting fails on the next time.
+**`_graph_for` returns two shapes, by design.** It was settled the other way first --
+the service would unwrap, and `Assembled` stay inside the agent build -- and reopened
+when three tests proved unwritable under it: one asserts the backend the factory
+returned is the one the agent was built on, because *a service that computed the
+backend and then dropped it would satisfy every other test in this file*, and two need
+the middleware list. All three are about the service's wiring, so a direct `build_agent`
+call would delete them rather than weaken them. So a build kingfisher made comes back
+as `Assembled` and a graph the deployment supplied comes back as itself; an `Assembled`
+for that would assert a build that never ran. `_built_turn` unwraps with `isinstance`,
+not `getattr(x, "graph", x)`: a duck test would accept anything with a `graph`
+attribute, which is how the backend seam once lost its shell.
 
-**`_graph_for` returns two shapes, and that is the design rather than an oversight.**
-This was settled the other way first -- the service would unwrap and `Assembled` would
-stay inside the harness -- and it was reopened during the work, when three tests
-turned out to be unwritable under it. One asserts that what the backend factory
-returned is what the agent was built on, and says in its own docstring that it reads
-the arguments because *a service that computed the backend and then dropped it would
-satisfy every other test in this file*; the other two need the middleware list. All
-three are about the service's wiring, so reproducing a direct `build_agent` call in
-them would not weaken the tests, it would delete them. So a build kingfisher made
-comes back as `Assembled` and a graph the deployment supplied comes back as itself.
-Returning the record for both would mean inventing one with every field empty -- a
-record asserting a build that never ran, and one that would then be asserted on.
-`_built_turn` is the only caller in `src/` and unwraps with `isinstance`, not
-`getattr(x, "graph", x)`: a duck test there would accept anything carrying a `graph`
-attribute, which is how the backend seam lost its shell once already.
-
-*Mutation-tested, and one of the two mutations is weaker than it looks. Making the
-record report a backend the graph never got reddens exactly one test -- the factory
-one above -- which is the drift guard working: `assemble` builds one mapping and
-spends it twice, on the call and on the record, so the two cannot disagree. Dropping
-`interrupt_on` from the record reddens all six gate tests rather than the two that
-assert on it, because the field's absence breaks construction for any build that
-gates. That proves the field is load-bearing and proves nothing about the individual
-assertions, which is worth saying rather than counting it as specificity it does not
-have. (2026-09-22.)*
-
-*`nothing-at-rest-on-this-machine` went on 2026-09-04 -- several more have gone
-since, and `docs/README.md` names them -- and its removal is the sharpest example
-this file has of why a status line is not evidence. It was audited decision by decision on 2026-09-01 and still reported
-"no store port in `domain/ports.py`" -- six days after `SessionStore` and
-`SessionRoot` shipped in #254. It was describing a codebase that had moved
-underneath it. Its decisions are under *Sessions: what persists and where* above
-and its measurements in `findings.md`; what stayed unbuilt is what it deferred on
-purpose -- admission control, the run log ceasing to be a file -- plus mirage,
-which it recommended against.*
+*Mutation-tested, and one mutation is weaker than it looks. A record reporting a
+backend the graph never got reddens exactly the factory test -- the drift guard
+working, since `assemble` builds one mapping and spends it on both the call and the
+record. Dropping `interrupt_on` from the record reddens all six gate tests, because its
+absence breaks construction for any build that gates: that proves the field is
+load-bearing and nothing about the individual assertions. (2026-09-22.)*
 
