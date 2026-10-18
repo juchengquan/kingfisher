@@ -1,6 +1,6 @@
 # Writing a workspace tool
 
-A `.py` file in `$KINGFISHER_WORKSPACE/tools/` defining `TOOLS` — the list of
+A `.py` file in `$KINGFISHER_DEFINITIONS_DIR/tools/` defining `TOOLS` — the list of
 tools it contributes. Nothing is inferred: a helper in the same file stays a
 helper.
 

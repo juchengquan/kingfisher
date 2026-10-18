@@ -449,7 +449,9 @@ and an undeclared subagent, granting everything where nothing was narrowed.
 `core.agent.middlewares.results.failed` builds every failed result kingfisher's own
 hand back. Offered ones keep their names, because `kingfisher` and `kingfisher.plugins`
 are the addresses a file in `assets/` may import. A helper to append a line to a result
-was not built: only `BuiltinToolsMiddleware` appends. **And two more pairs.**
+was not built: `BuiltinToolsMiddleware` and `RecorderMiddleware` both append, but a
+correction for the model and an id for a later search are written for different readers.
+**And two more pairs.**
 `ModelReplyMiddleware` handles a reply cut at the output cap and a call the provider
 refused, reading a refusal on the retry too; `BuiltinToolsMiddleware` makes both changes
 to deepagents' built-in tools. *(2026-10-17.)*
