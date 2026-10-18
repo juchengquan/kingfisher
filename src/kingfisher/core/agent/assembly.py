@@ -442,10 +442,14 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         switched.append(_interpreter(cfg, None))
 
     def agents_standing(
-        *, tools: tuple[str, ...] | None = None, reachable: tuple[str, ...] | None = None
+        *,
+        tools: tuple[str, ...] | None = None,
+        reachable: tuple[str, ...] | None = None,
+        inner: Sequence[Any] = (),
     ) -> list[Any]:
         return standing_middleware(
             "agent",
+            inner=inner,
             names=guarded,
             paths=paths,
             layout=cfg.layout,
@@ -460,7 +464,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         )
 
     # What the probe below builds with: nothing narrowed yet, and no subagents to name.
-    middleware[:] = [*agents_standing(), *switched]
+    middleware[:] = agents_standing(inner=switched)
 
     gated = _gates_for(agent, checkpointer)
     if gated:
@@ -703,6 +707,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 # The agent's recorder: these are the agent's tools, under its audiences.
                 standing_middleware(
                     "general-purpose",
+                    inner=_deployment_middleware(
+                        agent, registry, capabilities.middlewares, provisions=agent_provisions
+                    ),
                     names=guarded,
                     paths=paths,
                     layout=cfg.layout,
@@ -711,9 +718,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     recorder=recording(agent),
                     tools=permitted,
                 )
-                + _deployment_middleware(
-                    agent, registry, capabilities.middlewares, provisions=agent_provisions
-                )
             ),
         }
     )
@@ -721,14 +725,15 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     # Kingfisher's order: what it guarantees, then what the deployment's settings switch
     # on, then what its definitions name -- last, as `as_subagent` places a subagent's, so
     # a deployment's middleware sees kingfisher's tool and skill narrowing.
-    middleware[:] = [
-        *agents_standing(
-            tools=permitted, reachable=tuple(spec["name"] for spec in supplied)
-        ),
-        *switched,
-        *_deployment_middleware(
-            agent, registry, capabilities.middlewares, provisions=agent_provisions
-        ),
-    ]
+    middleware[:] = agents_standing(
+        tools=permitted,
+        reachable=tuple(spec["name"] for spec in supplied),
+        inner=[
+            *switched,
+            *_deployment_middleware(
+                agent, registry, capabilities.middlewares, provisions=agent_provisions
+            ),
+        ],
+    )
 
     return assemble(surface.carried, permitted)

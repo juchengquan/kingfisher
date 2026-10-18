@@ -10,11 +10,15 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import ToolException
 
 from kingfisher.core.agent.host_paths import HostPathError
-from kingfisher.core.agent.middlewares.guarded_calls import GuardedCallsMiddleware
+from kingfisher.core.agent.middlewares.guarded_calls import (
+    GuardedCallsMiddleware,
+    WorkspaceToolFailureMiddleware,
+)
 from kingfisher.plugins import backend_at
 
 
@@ -34,7 +38,7 @@ def _raises(exc: BaseException):
 
 def test_a_workspace_tools_exception_becomes_a_failed_tool_result():
     """The failure this was written for."""
-    guard = GuardedCallsMiddleware(frozenset({"csv_profile"}))
+    guard = WorkspaceToolFailureMiddleware(frozenset({"csv_profile"}))
 
     answer = guard.wrap_tool_call(
         _Request("csv_profile"), _raises(FileNotFoundError("/inputs/orders.csv"))
@@ -50,7 +54,7 @@ def test_the_message_names_the_exception_type():
     """A workspace tool is somebody else's code and its exceptions were not written to
     be read by a model.
     """
-    guard = GuardedCallsMiddleware(frozenset({"probe"}))
+    guard = WorkspaceToolFailureMiddleware(frozenset({"probe"}))
 
     answer = guard.wrap_tool_call(_Request("probe"), _raises(FileNotFoundError("/inputs/x")))
 
@@ -62,7 +66,7 @@ def test_a_workspace_tool_refusing_a_host_path_still_names_the_type():
     that says it was the tool's own."""
     from kingfisher.core.agent.host_paths import HostPathError
 
-    guard = GuardedCallsMiddleware(frozenset({"probe"}))
+    guard = WorkspaceToolFailureMiddleware(frozenset({"probe"}))
 
     answer = guard.wrap_tool_call(_Request("probe"), _raises(HostPathError("/etc/hosts")))
 
@@ -84,7 +88,7 @@ def test_a_built_in_refusing_a_host_path_is_handed_back_as_said():
 
 def test_a_built_in_tool_is_left_exactly_as_it_was():
     """The half that keeps this narrow."""
-    guard = GuardedCallsMiddleware(frozenset({"csv_profile"}))
+    guard = WorkspaceToolFailureMiddleware(frozenset({"csv_profile"}))
 
     with pytest.raises(FileNotFoundError):
         guard.wrap_tool_call(_Request("read_file"), _raises(FileNotFoundError("/inputs/x")))
@@ -92,14 +96,14 @@ def test_a_built_in_tool_is_left_exactly_as_it_was():
 
 def test_a_tool_that_works_is_untouched():
     """The negative control."""
-    guard = GuardedCallsMiddleware(frozenset({"probe"}))
+    guard = WorkspaceToolFailureMiddleware(frozenset({"probe"}))
 
     assert guard.wrap_tool_call(_Request("probe"), lambda _r: "the answer") == "the answer"
 
 
 def test_an_interrupt_is_not_a_tool_telling_the_model_something():
     """`BaseException` is deliberately outside the catch."""
-    guard = GuardedCallsMiddleware(frozenset({"probe"}))
+    guard = WorkspaceToolFailureMiddleware(frozenset({"probe"}))
 
     with pytest.raises(KeyboardInterrupt):
         guard.wrap_tool_call(_Request("probe"), _raises(KeyboardInterrupt()))
@@ -117,7 +121,7 @@ def test_the_async_path_behaves_the_same():
     """Both halves exist because the harness uses both, and a guard that held on one
     would be absent exactly when a service is serving.
     """
-    guard = GuardedCallsMiddleware(frozenset({"csv_profile"}))
+    guard = WorkspaceToolFailureMiddleware(frozenset({"csv_profile"}))
 
     answer = asyncio.run(guard.awrap_tool_call(_Request("csv_profile"), _araises))
 
@@ -126,7 +130,7 @@ def test_the_async_path_behaves_the_same():
 
 
 def test_the_async_path_leaves_a_built_in_alone_too():
-    guard = GuardedCallsMiddleware(frozenset({"csv_profile"}))
+    guard = WorkspaceToolFailureMiddleware(frozenset({"csv_profile"}))
 
     with pytest.raises(FileNotFoundError):
         asyncio.run(guard.awrap_tool_call(_Request("read_file"), _araises))
@@ -181,6 +185,10 @@ def test_a_workspace_with_no_tools_hands_back_no_exception_of_its_own(cfg, sessi
     guard = _guard_in(built)
     assert guard is not None
     assert guard.names == frozenset()
+    # And the layer that answers for a workspace tool's own failure is not installed at
+    # all: there is no name for it to answer for, and a middleware that cannot act reads
+    # as one that does.
+    assert not [m for m in built.middleware or () if isinstance(m, WorkspaceToolFailureMiddleware)]
 
 
 def _a_model():
@@ -479,6 +487,73 @@ def test_a_built_in_refusing_a_host_path_reads_as_written_beside_a_workspace_too
 
     assert answer.content == "Error: '/Users/me/x.csv' is a host path. Use '/inputs/x.csv'."
     assert answer.status == "error"
+
+
+class _FallsOver(AgentMiddleware):
+    """A deployment's middleware that raises on every tool call, as a broken one does."""
+
+    name = "FallsOver"
+
+    def wrap_tool_call(self, request, handler):
+        msg = "the deployment's middleware fell over"
+        raise RuntimeError(msg)
+
+    async def awrap_tool_call(self, request, handler):
+        msg = "the deployment's middleware fell over"
+        raise RuntimeError(msg)
+
+
+def _stack_around(cfg, session_dir, paths, inner):
+    """The agent's standing middleware with `inner` where a deployment's goes."""
+    from kingfisher.core.agent.middlewares.standing import standing_middleware
+
+    return standing_middleware(
+        "agent",
+        names=frozenset({"probe"}),
+        paths=paths,
+        layout=cfg.layout,
+        backend=backend_at(cfg, session_dir),
+        step_limit=cfg.recursion_limit,
+        inner=inner,
+    )
+
+
+def test_a_deployments_middleware_that_falls_over_ends_the_turn_on_either_kind_of_tool(
+    cfg, session_dir, paths, way
+):
+    """It ended the turn on a built-in and came back as a failed result on a workspace
+    tool -- naming the tool, so a deployment's own fault read as the tool's and the turn
+    carried on with the deployment's rule not applied. One answer for both, and it is the
+    loud one: a middleware a deployment registered has no way to report a fault of its own
+    to the model, and a rule that did not run is not a rule.
+    """
+    stack = _stack_around(cfg, session_dir, paths, [_FallsOver()])
+    probe = _raising(FileNotFoundError("never reached"))
+
+    for name in ("probe", "read_file"):
+        with pytest.raises(RuntimeError, match="fell over"):
+            _through(stack, {"name": name, "args": {"note": "x"}, "id": "c1"}, probe, way)
+
+
+def test_the_tools_own_failure_is_still_answered_for_the_tool_under_that_middleware(
+    cfg, session_dir, paths, way
+):
+    """The control for the rule above: with a deployment's middleware installed and the
+    tool itself failing, the model still reads a failed result rather than losing the turn
+    -- otherwise that rule would pass against a stack that had stopped converting
+    anything.
+    """
+
+    class _Quiet(AgentMiddleware):
+        name = "Quiet"
+
+    stack = _stack_around(cfg, session_dir, paths, [_Quiet()])
+    probe = _raising(FileNotFoundError(MISSING))
+
+    answer = _through(stack, {"name": "probe", "args": {"note": "x"}, "id": "c1"}, probe, way)
+
+    assert answer.status == "error"
+    assert MISSING in answer.content
 
 
 #: What the workspace tool raises in each case, and the argument it is called with.

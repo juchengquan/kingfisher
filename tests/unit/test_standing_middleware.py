@@ -72,7 +72,9 @@ def _everything(cfg, session_dir):
 
 def test_the_agent_is_wrapped_in_standing_then_switched_then_offered(cfg, session_dir):
     """A setting's middleware or a definition's landing among the standing ones, where it
-    would see a call before a guard had judged it or rewritten its paths."""
+    would see a call before a guard had judged it or rewritten its paths -- and, under
+    both of them, the one layer that answers for what the tool itself raised, which read
+    a deployment's own fault as the tool's failure while it sat outside them."""
     built = _everything(cfg, session_dir)
 
     assert [type(m).__name__ for m in built.middleware] == [
@@ -89,6 +91,7 @@ def test_the_agent_is_wrapped_in_standing_then_switched_then_offered(cfg, sessio
         "MemoryMiddleware",
         "CodeInterpreterMiddleware",
         "_Offered",
+        "WorkspaceToolFailureMiddleware",
     ]
 
 
@@ -106,6 +109,7 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
         "LargePdfMiddleware",
         "BuiltinToolsMiddleware",
         "_Offered",
+        "WorkspaceToolFailureMiddleware",
     ]
 
 

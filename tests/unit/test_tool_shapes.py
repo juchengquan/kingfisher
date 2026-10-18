@@ -115,8 +115,8 @@ def test_the_docstring_and_the_annotations_are_what_the_model_gets(cfg, session_
 
 
 def test_a_plain_function_fails_the_way_a_decorated_one_does(cfg, session_dir):
-    """`GuardedCallsMiddleware` is built from the names the workspace defined, and a plain
-    function's name comes from the same `tool_name` everything else uses -- so the
+    """`WorkspaceToolFailureMiddleware` is built from the names the workspace defined, and
+    a plain function's name comes from the same `tool_name` everything else uses -- so the
     guard covers it without knowing which kind it is.
     """
     _install(cfg, "bare_boom", BARE_FAILS)

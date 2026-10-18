@@ -51,9 +51,12 @@ class GuardedCallsMiddleware(AgentMiddleware):
     What running the call raised, not a call another middleware refused before it ran:
     that is the refusing middleware's to answer. A built-in's other failures are reported
     already and the model carries on; without this, upstream re-raises anything but bad
-    arguments, and one wrong path ends the run. It cannot tell a workspace tool's
-    exception from one raised below it, so a deployment middleware, appended last and
-    nearest the tool, that raises on a workspace tool's call becomes a failed result too.
+    arguments, and one wrong path ends the run.
+
+    A workspace tool's own exception is converted from here but not *at* here: that is
+    `WorkspaceToolFailureMiddleware` below, which runs under whatever a deployment's
+    definitions add. Read the two together -- they answer alike and `GuardedTool` answers
+    alike again -- and see that class for why one of them is somewhere else.
     """
 
     def __init__(
@@ -81,13 +84,6 @@ class GuardedCallsMiddleware(AgentMiddleware):
     def _failed(self, request: Any, exc: Exception) -> ToolMessage | None:
         """The result to hand back, or `None` when the exception is not this one's."""
         call = request.tool_call
-        # Ahead of the host-path case: a workspace tool's exceptions were not written for
-        # a model, and `FileNotFoundError: /inputs/x.csv` reads better than the path.
-        if call.get("name") in self.names:
-            # The one exception a tool writes for the model.
-            if isinstance(exc, ToolException):
-                return failed(call, str(exc))
-            return failed(call, f"Error: {type(exc).__name__}: {exc}")
         if isinstance(exc, HostPathError):
             return failed(call, f"Error: {exc}")
         return _handed_back(call, exc)
@@ -115,6 +111,53 @@ class GuardedCallsMiddleware(AgentMiddleware):
             return self._refusal(request, escaped)
         try:
             return await handler(translated)
+        except Exception as exc:
+            if (result := self._failed(request, exc)) is None:
+                raise
+            return result
+
+
+class WorkspaceToolFailureMiddleware(AgentMiddleware):
+    """What a workspace tool itself raised, as a failed tool result, so the turn goes on.
+    `GuardedTool` answers a compiled subagent's the same way, and so must this.
+
+    Innermost of every graph, under whatever a deployment's definitions add, because it
+    cannot tell a workspace tool's exception from one raised above it. Sitting outside
+    them, it reported a deployment's middleware falling over as the tool's own failure --
+    the tool's name on the failed message -- and let the turn carry on with the
+    deployment's rule not applied, while the same middleware falling over on a built-in
+    ended the turn. One answer for both now, and it is the loud one.
+    """
+
+    def __init__(self, names: frozenset[str]) -> None:
+        super().__init__()
+        self.names = names
+
+    def _failed(self, request: Any, exc: Exception) -> ToolMessage | None:
+        call = request.tool_call
+        if call.get("name") not in self.names:
+            return None
+        # The type as well as the message, and ahead of the host-path wording a built-in
+        # gets: a workspace tool's exceptions were not written for a model, and
+        # `FileNotFoundError: /inputs/x.csv` reads better than the path alone.
+        if isinstance(exc, ToolException):
+            # The one exception a tool writes for the model.
+            return failed(call, str(exc))
+        return failed(call, f"Error: {type(exc).__name__}: {exc}")
+
+    def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        try:
+            return handler(request)
+        except Exception as exc:
+            if (result := self._failed(request, exc)) is None:
+                raise
+            return result
+
+    async def awrap_tool_call(
+        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
+    ) -> Any:
+        try:
+            return await handler(request)
         except Exception as exc:
             if (result := self._failed(request, exc)) is None:
                 raise
