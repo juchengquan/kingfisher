@@ -605,3 +605,15 @@ def test_a_subagent_is_handed_no_memory_to_be_told_how_to_save(scripted, subagen
 
     assert "<agent_memory>" in systems[0], "the control: the agent was handed no memory"
     assert "<agent_memory>" not in systems[1]
+
+
+def test_the_built_in_names_are_deepagents_and_langchains_own():
+    """The file tools were listed three times and held to nothing: one deepagents added
+    would be recorded, never cleared to a handle, and go unnamed in the prompt."""
+    from deepagents.middleware.filesystem import FilesystemMiddleware
+    from langchain.agents.middleware import TodoListMiddleware
+
+    from kingfisher.core.agent.prompting import EXECUTE, FILE_TOOLS, WRITE_TODOS
+
+    assert {tool.name for tool in FilesystemMiddleware().tools} == {*FILE_TOOLS, EXECUTE}
+    assert [tool.name for tool in TodoListMiddleware().tools] == [WRITE_TODOS]

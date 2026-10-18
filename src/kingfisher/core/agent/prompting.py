@@ -53,6 +53,7 @@ FILE_TOOLS_FILE = "file_tools.md"
 #: deepagents' file tools, in the order their section names them.
 FILE_TOOLS = ("ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep")
 EXECUTE = "execute"
+WRITE_TODOS = "write_todos"
 
 #: The tools anything in the prompt is said of. Nothing else in a grant changes the prompt,
 #: so nothing else goes in `render_system_prompt`'s cache key.

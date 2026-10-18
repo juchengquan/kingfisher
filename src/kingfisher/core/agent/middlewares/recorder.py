@@ -17,6 +17,7 @@ from langgraph.types import Command
 
 from kingfisher.core.access.reach import stated
 from kingfisher.core.access.source_ids import Audience, jointly, listed, unlisted
+from kingfisher.core.agent.prompting import FILE_TOOLS, WRITE_TODOS
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.layout import TOOL_RESULTS_ROUTE
 from kingfisher.core.result import MAIN, WORKING, LedgerEntry, Listed
@@ -33,9 +34,7 @@ RUN: ContextVar[str | None] = ContextVar("kingfisher_ledger_run", default=None)
 #: What a row would bury the rest of the ledger to say: the file tools, whose reads and
 #: writes are a file already, and `write_todos`, one list the conversation carries. Not
 #: `execute`: what a command did is what a later turn wants to read back.
-UNRECORDED = frozenset({
-    "ls", "glob", "grep", "read_file", "write_file", "edit_file", "delete", "write_todos",
-})
+UNRECORDED = frozenset({*FILE_TOOLS, WRITE_TODOS})
 
 #: How much of one argument, and of a result's first line, a row keeps.
 ARG_LIMIT = 60
