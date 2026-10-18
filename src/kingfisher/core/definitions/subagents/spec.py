@@ -6,11 +6,12 @@ other way, every change to what a subagent may declare had to edit both files.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Required, TypedDict
 
 from kingfisher.core.access.capabilities import ALL, Selection, bare_name
 from kingfisher.core.definitions import fields
@@ -271,6 +272,36 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
         ),
     }
 )
+
+
+class PortableSubagent(TypedDict, total=False):
+    """A `SUBAGENTS` entry with no `build`, for a checker: the keys `PORTABLE` takes."""
+
+    name: Required[str]
+    description: Required[str]
+    system_prompt: Required[str]
+    builtin_tools: Sequence[str]
+    # Not `Sequence`, which a string is: the tools themselves, each bare or a `ToolSpec`.
+    tools: list[Any] | tuple[Any, ...]
+    skills: str | Path | list[str | Path] | tuple[str | Path, ...]
+    metadata: Mapping[str, object]
+    source_ids: Sequence[str | AbstractSet[str]]
+    datazone: str
+
+
+class CompiledSubagent(TypedDict, total=False):
+    """A `SUBAGENTS` entry with a `build`, for a checker: the keys `DECLARED` takes."""
+
+    name: Required[str]
+    description: Required[str]
+    #: Called with a model and the tools this subagent was granted; returns the graph.
+    build: Required[Callable[[Any, list[Any]], Any]]
+    #: Names, as a file writes them, or `{"name": ..., "source": "bundled"}`.
+    tools: Sequence[str | Mapping[str, str]]
+    model: str
+    metadata: Mapping[str, object]
+    source_ids: Sequence[str | AbstractSet[str]]
+    datazone: str
 
 
 def _require(entry: Mapping[str, object], *names: str, source: str) -> None:

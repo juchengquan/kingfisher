@@ -48,8 +48,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from langchain_core.tools import tool
+
+if TYPE_CHECKING:
+    from kingfisher import PortableSubagent
 
 #: Where this definition's own skills are, resolved by the definition rather than
 #: by kingfisher. A package installed into site-packages knows where its files
@@ -86,7 +90,7 @@ def iso_timestamp(written: str) -> str:
     return f"unrecognised: {text!r} is not a date this tool knows how to read"
 
 
-SUBAGENTS = [
+SUBAGENTS: list[PortableSubagent] = [
     {
         "name": "timestamps",
         "description": (

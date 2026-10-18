@@ -43,6 +43,9 @@ _EXPORTS = {
     # One row of `RunResult.ledger`, for a caller that keeps them.
     "LedgerEntry": "kingfisher.core.result",
     "RunOn": "kingfisher.core.definitions.subagents.spec",
+    # For a module's `SUBAGENTS` to be checked against, imported under `TYPE_CHECKING`.
+    "PortableSubagent": "kingfisher.core.definitions.subagents.spec",
+    "CompiledSubagent": "kingfisher.core.definitions.subagents.spec",
     "RunEvent": "kingfisher.core.result",
     "RunResult": "kingfisher.core.result",
     "Session": "kingfisher.core.session.handle",
@@ -68,6 +71,7 @@ __all__ = [
     "ArtifactError",
     "Capabilities",
     "CapabilityError",
+    "CompiledSubagent",
     "Config",
     "ConfigError",
     "Decision",
@@ -80,6 +84,7 @@ __all__ = [
     "Origin",
     "Origins",
     "PendingDecision",
+    "PortableSubagent",
     "QuotaExceededError",
     "Request",
     "Resume",
@@ -124,6 +129,8 @@ if TYPE_CHECKING:
     from kingfisher.core.definitions.seeding import definitions_source as definitions_source
     from kingfisher.core.definitions.seeding import kinds_at as kinds_at
     from kingfisher.core.definitions.seeding import seed as seed
+    from kingfisher.core.definitions.subagents.spec import CompiledSubagent as CompiledSubagent
+    from kingfisher.core.definitions.subagents.spec import PortableSubagent as PortableSubagent
     from kingfisher.core.definitions.subagents.spec import RunOn as RunOn
     from kingfisher.core.definitions.subagents.spec import SubagentError as SubagentError
     from kingfisher.core.definitions.tools.spec import ToolSpec as ToolSpec
