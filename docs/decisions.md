@@ -2092,6 +2092,19 @@ same placement hands a hook host paths: the model wrote
 the opposite of what the recorder sees by its position. *(2026-10-16, from an
 architecture review.)*
 
+**A call refused before it runs is answered by the middleware that refused it; what
+running it raised is `ToolFailureMiddleware`'s.** `WorkspaceToolPathsMiddleware` catches
+around its own translation alone, as `GuardedTool` does. Catching everything below it,
+it answered a built-in's host-path refusal first on any graph holding a workspace tool,
+appending its rule after a doubled full stop, and gave a workspace tool's own refusal
+that rule in place of its type. Each guard's tests passed alone; only the stack showed
+it. A `ToolException` goes back as written on both routes, being the one exception a
+tool writes for the model.
+`test_a_workspace_tool_fails_alike_through_the_stack_and_on_a_compiled_subagent` holds
+the stack to `GuardedTool`'s answers, which `SessionPaths` says must be the same. The
+`task` hand-back of a subagent's refused model call is here by the same rule, and
+`ModelReplyMiddleware` keeps refusing a cut call. *(2026-10-18.)*
+
 **A workspace tool is handed real paths, resolved against its own session.**
 `WorkspaceToolPathsMiddleware` rewrites a `path` argument before the tool sees it, so
 `/inputs/config.ini` means to a workspace tool what it means to `read_file`; how is under

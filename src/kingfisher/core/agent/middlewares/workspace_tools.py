@@ -39,18 +39,22 @@ class WorkspaceToolPathsMiddleware(AgentMiddleware):
         return replace(request, tool_call={**call, "args": self.paths.translated(args)})
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        # Around the translation alone: what running the call raises is
+        # `ToolFailureMiddleware`'s, and a built-in's refusal caught here reads as this rule.
         try:
-            return handler(self._translated(request))
+            translated = self._translated(request)
         except (UnsafeReferenceError, HostPathError) as escaped:
             return self._refusal(request, escaped)
+        return handler(translated)
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
         try:
-            return await handler(self._translated(request))
+            translated = self._translated(request)
         except (UnsafeReferenceError, HostPathError) as escaped:
             return self._refusal(request, escaped)
+        return await handler(translated)
 
     def _refusal(self, request: Any, escaped: ValueError) -> ToolMessage:
         """A path that climbs out, reported the way `reject_host_path` reports one."""

@@ -256,6 +256,9 @@ sixteen-call run through `csv_profile`, because a workspace tool's exception was
 the one kind nothing converted. Which of the two happened depended on the tool
 the model reached for, which a deployment cannot predict.
 
+Raise `ToolException` when the message is already advice for the model: it goes
+back as you wrote it, without its type.
+
 ## Folders, when one file stops being enough
 
 `tools/` may be as deep as you like, and `__init__.py` decides what a folder is:
