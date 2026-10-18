@@ -173,6 +173,36 @@ builtin_tools: ["*"]
 tools: ["*"]
 ```
 
+`kingfisher list` prints what each agent holds under its name, so finding who can use
+`http_fetch` means reading one listing rather than every agent file:
+
+```
+analyst — Answers questions from the data, with the database behind a source id.
+    tools: csv_profile, line_count, sql_query
+    builtin tools: glob, grep, ls, read_file, task
+    subagents: auditor, quarters
+```
+
+A tool is spelt the way the workspace tools section spells it, however the file
+wrote it, so `csv_profile::csv_profile` reads `csv_profile`. A field written `["*"]`
+shows the star and what it covers today, `tools: * — today csv_profile, http_fetch,
+line_count, sql_query`, because tomorrow it also covers whatever is added. A field
+left out prints no line.
+
+Each subagent gets the same two tool lines under its own name, with its own tools
+spelt `counter::count`. A subagent's star reads `* — whatever the calling agent
+holds` and is not expanded: a subagent is never handed more than the agent calling it,
+and that differs from one agent to the next. A compiled subagent prints no `builtin
+tools` line, because it is handed none. With `--as`, every line holds only what that
+caller gets: a tool whose own lock shuts them out is dropped, and so is a subagent's
+tool no agent they reach holds.
+
+`--json` carries each line as `{"every": true|false, "names": [...]}`, under
+`agent_tools`, `agent_builtin_tools`, `agent_subagents`, `subagent_tools` and
+`subagent_builtin_tools`. For an agent's star, `names` is what it covers today. For a
+subagent's, it is only the subagent's own tools, which it holds whoever calls it, and
+it is empty when the subagent has none.
+
 ### An agent grants the helpers its subagents may consult
 
 An agent activates the subagents it names and no others. A subagent may name

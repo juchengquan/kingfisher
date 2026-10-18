@@ -18,6 +18,24 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `kingfisher list` shows what each definition holds, and `--json` writes a grant as an object, after #873
+
+- **`agent_subagents` maps each agent to `{"every": ..., "names": [...]}`**, not to a
+  list. `names` is the list it used to hold, and `every` is `true` where the file wrote
+  `subagents: ["*"]`, which a bare list could not say. Read
+  `document["agent_subagents"]["analyst"]["names"]` where a script read
+  `document["agent_subagents"]["analyst"]`. The old shape is not kept beside it.
+- **Four keys are new, in the same shape:** `agent_tools`, `agent_builtin_tools`,
+  `subagent_tools` and `subagent_builtin_tools`. Every agent and every subagent the
+  listing shows has an entry in each, `{"every": false, "names": []}` for a field left out.
+  A subagent's star has `every: true` and `names` holding only the subagent's own tools,
+  because the rest is whatever the calling agent holds.
+- **The text form prints `tools:` and `builtin tools:` lines** under each agent and each
+  subagent. An agent's `subagents:` line written `["*"]` reads `* — today auditor,
+  quarters` instead of the names alone.
+- **`Inventory.agent_subagents` holds a `Grant` per agent**, `every` and `names`, where it
+  held a tuple of names, and the four new fields hold the same.
+
 ## A tool's lock is in its file, a subagent's on its own line, and only a skill's on an entry, after #868
 
 - **A `tools:` entry may no longer say who may use the tool.** `{name: sql_query,

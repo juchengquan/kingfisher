@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import PurePath
 
 from kingfisher import Inventory, Origins
@@ -13,11 +13,30 @@ from kingfisher.core.access.source_ids import Audience, Stated, spell
 from kingfisher.core.definitions.seeding import SEED_HINT
 from kingfisher.core.definitions.skills.catalogue import SKILL_LAYOUT
 from kingfisher.core.definitions.tools.spec import offered, split_reference
+from kingfisher.core.inventory import Grant
 
 
 def _from(source: str | None, expected: str) -> str:
     """Name the file a definition came from, when it is not the obvious one."""
     return "" if source in (None, expected) else f"  ({source})"
+
+
+def _granted(label: str, grant: Grant | None, star: Callable[[str], str]) -> Iterator[str]:
+    """One grant line under its definition, and none for a field granting nothing."""
+    if grant is None or not (grant.every or grant.names):
+        return
+    names = ", ".join(grant.names)
+    yield f"      {label}: {star(names) if grant.every else names}"
+
+
+def _today(names: str, *, unknown: str = "none") -> str:
+    """An agent's star beside what it covers now, so a reader sees it will cover more."""
+    return f"* — today {names or unknown}"
+
+
+def _callers(names: str) -> str:
+    """A subagent's star, which covers whatever the agent calling it holds."""
+    return "* — whatever the calling agent holds" + (f", plus {names}" if names else "")
 
 
 def _agents(found: Inventory) -> Iterator[str]:
@@ -30,10 +49,15 @@ def _agents(found: Inventory) -> Iterator[str]:
     for name, described in found.agents.items():
         source = found.agent_sources.get(name)
         yield f"  {name}{_from(source, f'{name}.yaml')} — {described}"
-        # Resolved, because `["*"]` names whatever the catalogue holds today; and only
-        # what it names, since a helper one of them consults runs only if named here too.
-        if subagents := found.agent_subagents.get(name):
-            yield f"      subagents: {', '.join(subagents)}"
+        yield from _granted("tools", found.agent_tools.get(name), _today)
+        # An empty built-in set is one that could not be read, as the section below says.
+        yield from _granted(
+            "builtin tools",
+            found.agent_builtin_tools.get(name),
+            lambda names: _today(names, unknown="(could not introspect)"),
+        )
+        # Only what it names, since a helper one of them consults runs only if named here too.
+        yield from _granted("subagents", found.agent_subagents.get(name), _today)
     if not found.agents:
         yield f"  (none)  — a request must name one; try {SEED_HINT}"
     yield ""
@@ -254,6 +278,9 @@ def _subagents(found: Inventory) -> Iterator[str]:
         obvious = f"{plain}.py" if compiled else f"{plain}.yaml"
         marker = "  [compiled]" if compiled else ""
         yield f"  {name}{_from(source, obvious)}{marker} — {described}"
+        # A compiled one never prints the second: it is handed no built-in.
+        yield from _granted("tools", found.subagent_tools.get(name), _callers)
+        yield from _granted("builtin tools", found.subagent_builtin_tools.get(name), _callers)
         # Private tools and skills sit under their owner, because nothing else holds them.
         stranded = found.stranded_skills.get(name, ())
         # Marked, or a bundle installed by pip prints like one a reader can open here.
@@ -306,13 +333,23 @@ def _audience_json(audience: Audience) -> list[object]:
     return [sorted(one) if isinstance(one, frozenset) else one for one in audience]
 
 
+def _grants_json(by_name: Mapping[str, Grant]) -> dict[str, dict[str, object]]:
+    """Each definition's grant as JSON, its star a flag beside the names."""
+    return {
+        name: {"every": grant.every, "names": list(grant.names)}
+        for name, grant in by_name.items()
+    }
+
+
 def as_json(found: Inventory) -> dict[str, object]:
     """The same answer, in the shape a script can read."""
     return {
         "origins": origins_document(found.origins),
         "agents": dict(found.agents),
         "agent_sources": dict(found.agent_sources),
-        "agent_subagents": {name: list(v) for name, v in found.agent_subagents.items()},
+        "agent_subagents": _grants_json(found.agent_subagents),
+        "agent_tools": _grants_json(found.agent_tools),
+        "agent_builtin_tools": _grants_json(found.agent_builtin_tools),
         "agents_error": found.agents_error,
         "builtin_tools": list(found.builtin_tools),
         "tools": list(found.tools),
@@ -326,6 +363,8 @@ def as_json(found: Inventory) -> dict[str, object]:
         "skills_enabled": found.skills_enabled,
         "subagents": dict(found.subagents),
         "subagent_sources": dict(found.subagent_sources),
+        "subagent_tools": _grants_json(found.subagent_tools),
+        "subagent_builtin_tools": _grants_json(found.subagent_builtin_tools),
         "compiled_subagents": list(found.compiled_subagents),
         "subagents_error": found.subagents_error,
         "middlewares": dict(found.middlewares),

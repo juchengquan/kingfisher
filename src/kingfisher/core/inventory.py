@@ -5,14 +5,21 @@ from __future__ import annotations
 from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field
+from functools import partial
 from types import MappingProxyType
 
 from kingfisher.core.access import checks as access
-from kingfisher.core.access.capabilities import CapabilityError, unoffered
+from kingfisher.core.access.capabilities import (
+    ALL,
+    Capabilities,
+    CapabilityError,
+    Selection,
+    unoffered,
+)
 from kingfisher.core.access.reach import activated, handed_work_by, offers, reaches
 from kingfisher.core.access.source_ids import AccessReport, SourceIds, Stated, with_datazone
 from kingfisher.core.config import Config, ConfigError
-from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import (
     Definitions,
     bundled_tool_names,
@@ -41,6 +48,22 @@ _NOTHING: Mapping[str, str] = MappingProxyType({})
 _NO_NAMES: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 #: The same, for the nested audience record.
 _NO_AUDIENCES: Mapping[str, Mapping[str, Stated]] = MappingProxyType({})
+
+
+@dataclass(frozen=True)
+class Grant:
+    """What one grant field of one definition comes to, in this view."""
+
+    #: Written `["*"]`, which `names` alone cannot say: a star covering nothing today
+    #: still covers whatever is added tomorrow.
+    every: bool = False
+    #: An agent's star expanded to what it covers today. A subagent's is not expanded: it
+    #: holds whatever the agent calling it holds, so these are what it holds besides.
+    names: tuple[str, ...] = ()
+
+
+#: The same empty mapping, for the grant fields.
+_NO_GRANTS: Mapping[str, Grant] = MappingProxyType({})
 
 
 @dataclass(frozen=True)
@@ -76,7 +99,11 @@ class Inventory:
     agent_sources: Mapping[str, str] = _NOTHING
     #: The subagents each agent activates: the ones its own file names, and no further.
     #: Walking their helpers would list a subagent the build drops.
-    agent_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    agent_subagents: Mapping[str, Grant] = _NO_GRANTS
+    #: What each agent holds on the two tool axes. A tool is spelt as `tools` spells it,
+    #: so one reads the same under every agent whichever way each file wrote it.
+    agent_tools: Mapping[str, Grant] = _NO_GRANTS
+    agent_builtin_tools: Mapping[str, Grant] = _NO_GRANTS
     agents_error: str | None = None
 
     #: The agent's own tools, granted with `builtin_tools:`. Empty where the build failed,
@@ -113,6 +140,10 @@ class Inventory:
     subagents: Mapping[str, str] = _NOTHING
     #: Subagent name -> the file it came from, where a store can say.
     subagent_sources: Mapping[str, str] = _NOTHING
+    #: What each subagent's own file grants it on the two tool axes. Its own tools are
+    #: `owner::tool`, or one shadowing the catalogue's reads as the catalogue's.
+    subagent_tools: Mapping[str, Grant] = _NO_GRANTS
+    subagent_builtin_tools: Mapping[str, Grant] = _NO_GRANTS
     subagents_error: str | None = None
 
     #: Definition -> the tools it names by a path they have moved from, keyed as a refusal
@@ -339,6 +370,25 @@ def _without(
 def _kept[V](by_name: Mapping[str, V], reached: Container[str]) -> Mapping[str, V]:
     """Only the entries for definitions this caller reaches."""
     return MappingProxyType({name: one for name, one in by_name.items() if name in reached})
+
+
+def _grant(
+    written: Selection,
+    *,
+    today: Iterable[str] = (),
+    own: Iterable[str] = (),
+    spell: Callable[[str], str] = lambda one: one,
+    keep: Callable[[str], bool] = lambda _one: True,
+) -> Grant:
+    """One grant field as this view reads it.
+
+    `today` is what a star covers and `own` what the definition holds whatever it was
+    granted. `keep` sees each entry as `spell` writes it, which is how its answer is keyed.
+    """
+    if written == ALL:
+        return Grant(every=True, names=tuple(sorted({*today, *own})))
+    named = {spelt for one in written or () if keep(spelt := spell(one))}
+    return Grant(names=tuple(sorted({*named, *own})))
 
 
 def _claimed_by(spec: object, held: frozenset[str] | None) -> Mapping[str, str]:
@@ -600,6 +650,47 @@ def _tools(
     return builtin, workspace_tools, sources, tools_error, checked, None
 
 
+def _agents(
+    resolved: Definitions, held: frozenset[str] | None
+) -> tuple[
+    Mapping[str, AgentSpec],
+    Mapping[str, Capabilities],
+    Mapping[str, str],
+    Mapping[str, str],
+    Mapping[str, tuple[str, ...]],
+    str | None,
+]:
+    """Each agent, what it declares for this caller, its description, the file it came
+    from, the subagents it activates, and why they could not all be read.
+
+    What was read before a failure comes back with it: a listing of a broken workspace
+    still shows what it can.
+    """
+    specs: Mapping[str, AgentSpec] = MappingProxyType({})
+    declared: Mapping[str, Capabilities] = MappingProxyType({})
+    described: Mapping[str, str] = _NOTHING
+    sources: Mapping[str, str] = _NOTHING
+    chains: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    try:
+        # One `try`, as for subagents: `sources` parses the files `specs` does.
+        specs = resolved.agents.specs
+        # `declares(held)`, which is what the build reads: an entry the agent's own
+        # audience keeps from this caller is not activated for them.
+        declared = {name: spec.declares(held) for name, spec in specs.items()}
+        described = {name: spec.description for name, spec in specs.items()}
+        sources = MappingProxyType(dict(resolved.agents.sources))
+        chains = MappingProxyType(
+            {
+                name: activated(grants.subagents, resolved.subagents.specs)
+                for name, grants in declared.items()
+            }
+        )
+    except (AgentError, SubagentError) as exc:
+        # `SubagentError` too: resolving the chain reads the subagent catalogue.
+        return specs, declared, described, sources, chains, str(exc)
+    return specs, declared, described, sources, chains, None
+
+
 def inventory(
     cfg: Config,
     *,
@@ -630,6 +721,7 @@ def inventory(
     compiled_subagents: tuple[str, ...] = ()
     # Bound before the `try`: the audience walk reads it even when the catalogue will not load.
     specs: Mapping[str, object] = _NOTHING
+    subagent_declared: Mapping[str, Capabilities] = {}
     try:
         # `sources` in the same `try`: it parses the files `specs` does, and the property
         # raises rather than being absent.
@@ -637,6 +729,7 @@ def inventory(
         # As at `build_agent`, not a duplicate: a cycle is the catalogue's, so a listing of it
         # must report what a run would refuse.
         refuse_cycles(specs)
+        subagent_declared = {name: spec.declares(held) for name, spec in specs.items()}
         subagents = {name: spec.description for name, spec in specs.items()}
         compiled_subagents = tuple(
             name for name, spec in specs.items() if spec.build is not None
@@ -655,27 +748,9 @@ def inventory(
     if subagents_error is None and bundles_error is None:
         bundled_misplaced = resolved.bundled_misplaced
 
-    agents: Mapping[str, str] = _NOTHING
-    defined_agents: Mapping[str, object] = _NOTHING
-    agent_sources: Mapping[str, str] = _NOTHING
-    agent_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    agents_error: str | None = None
-    try:
-        # One `try`, as for subagents: `sources` parses the files `specs` does.
-        defined_agents = resolved.agents.specs
-        agents = {name: spec.description for name, spec in defined_agents.items()}
-        agent_sources = MappingProxyType(dict(resolved.agents.sources))
-        agent_subagents = MappingProxyType(
-            {
-                # `declares(held)`, which is what the build reads: an entry the agent's
-                # own audience keeps from this caller is not activated for them.
-                name: activated(spec.declares(held).subagents, resolved.subagents.specs)
-                for name, spec in defined_agents.items()
-            }
-        )
-    except (AgentError, SubagentError) as exc:
-        # `SubagentError` too: resolving the chain reads the subagent catalogue.
-        agents_error = str(exc)
+    defined_agents, declared, agents, agent_sources, agent_subagents, agents_error = _agents(
+        resolved, held
+    )
 
     stated, report, broken = _access(
         cfg,
@@ -716,12 +791,15 @@ def inventory(
     reached_agents = [spec for name, spec in defined_agents.items() if name in for_caller]
     # `same` on both axes: a grant may spell a tool or a skill the long way, `where::what`,
     # where the catalogue has its own name for it.
-    spelt = set(workspace_tools)
+    spell = partial(placed, offered=set(workspace_tools))
     offers_tool = admitted(
-        offers("tools", held, reached_agents, same=lambda one: placed(one, spelt)),
-        shut=_shut_out(resolved, held),
+        offers("tools", held, reached_agents, same=spell), shut=_shut_out(resolved, held)
     )
     offers_skill = offers("skills", held, reached_agents, same=registry.identity)
+    # Each definition's lines through the answers above rather than a walk of their own: a
+    # tool kept out of `tools` for this caller must not come back under whoever grants it.
+    offered_tools = tuple(name for name in workspace_tools if offers_tool(name))
+    own_tools = _kept(_without(bundled_tools, held_back), for_caller_subagents)
 
     return Inventory(
         # The resolved catalogue, not `cfg`, so staged definitions are listed where they are.
@@ -733,10 +811,25 @@ def inventory(
         # kept to `for_caller_subagents`: the build drops what a subagent's line withholds.
         agent_subagents=MappingProxyType(
             {
-                name: tuple(one for one in chain if one in for_caller_subagents)
+                name: Grant(
+                    every=declared[name].subagents == ALL,
+                    names=tuple(one for one in chain if one in for_caller_subagents),
+                )
                 for name, chain in agent_subagents.items()
                 if name in for_caller
             }
+        ),
+        agent_tools=MappingProxyType(
+            {
+                name: _grant(
+                    declared[name].tools, today=offered_tools, spell=spell, keep=offers_tool
+                )
+                for name in for_caller
+            }
+        ),
+        # Not narrowed for a caller: a built-in has no audience, and is the same for all.
+        agent_builtin_tools=MappingProxyType(
+            {name: _grant(declared[name].builtin_tools, today=builtin) for name in for_caller}
         ),
         # `or`, not replace: a kind that failed to load has the more fundamental problem.
         # `broken` is policy, so withheld from a scoped view; a load error stays, since a
@@ -744,7 +837,7 @@ def inventory(
         agents_error=agents_error or (None if scoped else broken.get("agents")),
         builtin_tools=builtin,
         builtin_tools_checked=builtin_checked,
-        tools=tuple(name for name in workspace_tools if offers_tool(name)),
+        tools=offered_tools,
         tool_sources=MappingProxyType(
             {name: where for name, where in sources.items() if offers_tool(name)}
         ),
@@ -765,6 +858,25 @@ def inventory(
         # Keyed off the names above, not `reaching` again: a second walk answers a second
         # question, naming subagents no agent in reach hands work to.
         subagent_sources=_kept(subagent_sources, for_caller_subagents),
+        # `keep` as for an agent's, which also drops what no agent in reach holds: a
+        # subagent is never handed more than the agent calling it.
+        subagent_tools=MappingProxyType(
+            {
+                name: _grant(
+                    subagent_declared[name].tools,
+                    own=(reference(name, one) for one in own_tools.get(name, ())),
+                    spell=spell,
+                    keep=offers_tool,
+                )
+                for name in for_caller_subagents
+            }
+        ),
+        subagent_builtin_tools=MappingProxyType(
+            {
+                name: _grant(subagent_declared[name].builtin_tools)
+                for name in for_caller_subagents
+            }
+        ),
         subagents_error=subagents_error or (None if scoped else broken.get("subagents")),
         middlewares=middlewares,
         middlewares_error=middlewares_error,
@@ -782,7 +894,7 @@ def inventory(
             else _kept(miscounted_bundles, for_caller_subagents)
         ),
         miscounted_bundles_checked=miscounted_bundles is not None,
-        bundled_tools=_kept(_without(bundled_tools, held_back), for_caller_subagents),
+        bundled_tools=own_tools,
         bundled_skills=_kept(bundled_skills, for_caller_subagents),
         # Here, not in `_bundled`, which does not know which definitions carry a graph.
         stranded_skills=MappingProxyType(
