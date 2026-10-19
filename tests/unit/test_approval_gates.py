@@ -585,14 +585,19 @@ def test_a_refused_resume_leaves_the_pause_answerable(cfg, session_dir):
 # -- superseding -----------------------------------------------------------
 
 
-def test_a_new_request_supersedes_the_pause_and_says_so(cfg):
+def test_a_new_request_supersedes_the_pause_and_says_so(cfg, session_dir):
     """A gate that quietly stops being a gate is the one failure here that would
     otherwise leave no trace anywhere.
+
+    On the real backend, with the next test as its control: in deepagents' in-state
+    filesystem a write carried out and a write discarded both leave no file.
     """
     kf = Kingfisher(
-        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
+        cfg,
+        graph=_gated_on_disk(cfg, session_dir, calls=[_write("/outputs/a.txt", "x", "c1")]),
+        sessions=LocalSessions(),
     )
-    paused = kf.run(Request("write it"))
+    paused = kf.run(Request("write it", session_id=session_dir.name))
 
     events = list(kf.stream(Request("never mind", session_id=paused.session_id)))
     superseded = next(e.result for e in events if e.kind == "finished")
@@ -601,6 +606,25 @@ def test_a_new_request_supersedes_the_pause_and_says_so(cfg):
     assert superseded.discarded == ("write_file",)
     assert not (_session_dir(cfg, paused.session_id) / PAUSED).exists()
     assert not (_session_dir(cfg, paused.session_id) / "outputs" / "a.txt").exists()
+
+
+def test_the_write_a_supersede_discards_lands_when_approved(cfg, session_dir):
+    """Without it the missing file above could be a setup that writes nowhere."""
+    kf = Kingfisher(
+        cfg,
+        graph=_gated_on_disk(cfg, session_dir, calls=[_write("/outputs/a.txt", "x", "c1")]),
+        sessions=LocalSessions(),
+    )
+    paused = kf.run(Request("write it", session_id=session_dir.name))
+
+    kf.run(
+        Resume(
+            session_id=paused.session_id,
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        )
+    )
+
+    assert (_session_dir(cfg, paused.session_id) / "outputs" / "a.txt").read_text() == "x"
 
 
 def test_a_refused_request_leaves_the_pause_it_would_supersede(cfg, session_dir):
