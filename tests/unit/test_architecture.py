@@ -50,6 +50,16 @@ def _package_of(path: Path) -> tuple[str, ...]:
     return tuple(reversed(parts))
 
 
+def _source_module(node: ast.ImportFrom, package: tuple[str, ...]) -> str:
+    """The module a `from` import reads, a relative one resolved against `package` -- the
+    package itself for `from . import x`. Every reader here resolves through this one."""
+    if not node.level:
+        return node.module or ""
+    # `.` is this package, `..` its parent, and so on.
+    base = package[: max(len(package) - (node.level - 1), 0)]
+    return ".".join((*base, *([node.module] if node.module else [])))
+
+
 def _imported_modules(path: Path) -> set[str]:
     """Every module this file imports, relative ones resolved to their real name."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -59,18 +69,13 @@ def _imported_modules(path: Path) -> set[str]:
         if isinstance(node, ast.Import):
             modules.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
-            if not node.level:
-                if node.module:
-                    modules.add(node.module)
-                continue
-            # `.` is this package, `..` its parent, and so on.
-            base = package[: max(len(package) - (node.level - 1), 0)]
+            source = _source_module(node, package)
             if node.module:
-                modules.add(".".join((*base, node.module)))
+                modules.add(source)
             else:
                 held = _held_by_the_package(path, node)
                 modules.update(
-                    ".".join(base if alias.name in held else (*base, alias.name))
+                    source if alias.name in held else f"{source}.{alias.name}"
                     for alias in node.names
                 )
     return modules
@@ -79,7 +84,9 @@ def _imported_modules(path: Path) -> set[str]:
 def _held_by_the_package(path: Path, node: ast.ImportFrom) -> set[str]:
     """What `from . import ...` takes from the package's own `__init__` rather than as a
     module: `TASK_TOOL`, which no module is called."""
-    init = path.parents[node.level - 1] / "__init__.py"
+    package = _package_of(path)
+    reached = _source_module(node, package).split(".")
+    init = path.parents[len(package)].joinpath(*reached) / "__init__.py"
     taken = {alias.name for alias in node.names}
     return _defined_names(init) & taken if init.is_file() else set()
 
@@ -95,19 +102,15 @@ def _imported_names(path: Path) -> dict[str, frozenset[str]]:
                 taken.setdefault(alias.name, set())
         elif isinstance(node, ast.ImportFrom):
             names = {alias.name for alias in node.names}
-            if not node.level:
-                if node.module:
-                    taken.setdefault(node.module, set()).update(names)
-                continue
-            base = package[: max(len(package) - (node.level - 1), 0)]
+            source = _source_module(node, package)
             if node.module:
-                taken.setdefault(".".join((*base, node.module)), set()).update(names)
+                taken.setdefault(source, set()).update(names)
             else:
                 held = _held_by_the_package(path, node)
                 if held:
-                    taken.setdefault(".".join(base), set()).update(held)
+                    taken.setdefault(source, set()).update(held)
                 for name in names - held:
-                    taken.setdefault(".".join((*base, name)), set())
+                    taken.setdefault(f"{source}.{name}", set())
     return {module: frozenset(names) for module, names in taken.items()}
 
 
@@ -193,7 +196,8 @@ def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
     module = package / "domain" / "subagent.py"
     module.write_text(
         "from . import fields\nfrom .. import config\nfrom .capabilities import ALL\n"
-        "from . import TASK_TOOL\n",
+        "from . import TASK_TOOL\n"
+        "if TYPE_CHECKING:\n    from .capabilities import ALL as ALL\n",
         encoding="utf-8",
     )
 
@@ -206,14 +210,36 @@ def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
         "kingfisher.domain",  # a name the package's `__init__` holds is not a module
     }
     assert _imported_names(module)["kingfisher.domain"] == {"TASK_TOOL"}
+    assert _stub_reexports(module) == ({"ALL": "kingfisher.domain.capabilities"}, [])
 
 
-def _source_module(node: ast.ImportFrom, package: tuple[str, ...]) -> str:
-    """The module a `from` import reads, a relative one resolved against `package`."""
-    if not node.level:
-        return node.module or ""
-    base = package[: max(len(package) - (node.level - 1), 0)]
-    return ".".join((*base, *([node.module] if node.module else [])))
+def test_a_relative_import_is_resolved_in_one_place():
+    """A second copy of `_source_module`'s arithmetic, which a fix to one would leave the
+    rules reading the other misreading imports while they still pass."""
+    here = Path(__file__).resolve()
+    copies = []
+    for path in _every(sorted((REPO / "tests").rglob("*.py")), "tests"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        resolver = {
+            id(node)
+            for top in tree.body
+            if path.resolve() == here
+            and isinstance(top, ast.FunctionDef)
+            and top.name == "_source_module"
+            for node in ast.walk(top)
+        }
+        copies += [
+            f"{path.relative_to(REPO).as_posix()}:{node.lineno}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.BinOp)
+            and id(node) not in resolver
+            and any(
+                isinstance(side, ast.Attribute) and side.attr == "level"
+                for side in (node.left, node.right)
+            )
+        ]
+
+    assert not copies, f"{copies} count an import's level -- resolve it with `_source_module`"
 
 
 def _misfiled_imports(path: Path) -> list[tuple[int, str, bool]]:
@@ -1636,8 +1662,7 @@ def _bases_of(path: Path) -> dict[str, list[tuple[str, str]]]:
                 else:
                     modules[alias.name.split(".")[0]] = alias.name.split(".")[0]
         elif isinstance(node, ast.ImportFrom):
-            base = package[: max(len(package) - (node.level - 1), 0)] if node.level else ()
-            source = ".".join((*base, *([node.module] if node.module else [])))
+            source = _source_module(node, package)
             for alias in node.names:
                 names[alias.asname or alias.name] = (source, alias.name)
                 modules[alias.asname or alias.name] = f"{source}.{alias.name}"
@@ -2052,6 +2077,7 @@ def test_a_name_witnessed_as_an_interface_is_written_where_that_claims():
 def _stub_reexports(path: Path) -> tuple[dict[str, str], list[str]]:
     """The `if TYPE_CHECKING:` block: `{name: module}`, and what is not re-exported."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
+    package = _package_of(path)
     found: dict[str, str] = {}
     bare: list[str] = []
     for node in ast.walk(tree):
@@ -2062,7 +2088,7 @@ def _stub_reexports(path: Path) -> tuple[dict[str, str], list[str]]:
         for sub in ast.walk(node):
             if isinstance(sub, ast.ImportFrom) and sub.module:
                 for alias in sub.names:
-                    found[alias.name] = sub.module
+                    found[alias.name] = _source_module(sub, package)
                     if alias.asname != alias.name:
                         bare.append(alias.name)
     return found, bare
@@ -2115,16 +2141,12 @@ def _dotted(node: ast.Import | ast.ImportFrom, package: tuple[str, ...]) -> list
     """What one import statement names, one dotted string per name it takes.
 
     `from x import y` is `x.y` rather than `x`, because whether that loads a module is
-    the question every rule below it asks. Relative imports are resolved the way
-    `_imported_modules` resolves them, since every import within a folder of `src/` is one.
+    the question every rule below it asks.
     """
     if isinstance(node, ast.Import):
         return [alias.name for alias in node.names]
-    if not node.level:
-        return [f"{node.module}.{alias.name}" for alias in node.names] if node.module else []
-    base = package[: max(len(package) - (node.level - 1), 0)]
-    stem = (*base, node.module) if node.module else base
-    return [".".join((*stem, alias.name)) for alias in node.names]
+    source = _source_module(node, package)
+    return [f"{source}.{alias.name}" for alias in node.names]
 
 
 def _on_type_checking(test: ast.expr) -> bool:
