@@ -731,6 +731,22 @@ that number. A byte cap has one more effect worth knowing: it stops mid-characte
 `errors="replace"` then writes a character the page never sent, which a caller reads as
 the page's own corruption.
 
+**And a cap on an answer is not a check on what it holds.** The same tool spent 20,000
+characters on a PNG -- 12,283 of them the replacement character, most of the rest
+control codes -- which is half of what one call may spend, on nothing a reader can use,
+with nothing in the answer to say the body was never text. The check that catches it is
+on what arrived rather than on what the server called it: text served as
+`application/octet-stream` measured 0.0% unreadable and is worth answering, while a
+page declaring `text/plain; charset=utf-8` whose bytes are really UTF-16 measured 55.2%
+and is not. So the content type is named in the refusal and does not make it -- and it
+is named only if it looks like a type, a header being the server's own writing and a
+refusal being one line. What counts as unreadable has to be the replacement character
+*and* the control codes that are not whitespace: a PNG is 49.9% replacement, and those
+UTF-16 bytes are almost all NUL with no replacement past the first two. The share it
+refuses at is a quarter, which is measured rather than round -- the most text-like
+binary there is, gzipped text, came to 50.0%, and the least readable thing that is
+still text, French written in Latin-1 and declared UTF-8, to 10.3%.
+
 **A pattern over text you did not write is a cost too, and it shows up in neither
 bytes nor rows.** `mask_secrets` matched addresses with `[A-Za-z0-9._%+-]+@…`, and `.`,
 `-`, `+` and `%` sit in that class while being word characters to nobody -- so each one

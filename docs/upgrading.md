@@ -18,6 +18,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `http_fetch` refuses a body that does not read as text, after #942
+
+- **A body more than a quarter unreadable comes back as a refusal** naming the share
+  and the declared type: `refused: image/png: 12642 of the 20488 characters at <url>
+  do not read as text -- ask for a URL that answers text, which is what this tool
+  answers with`. Measured, a PNG had been answered as 20,000 characters of which
+  12,283 were the replacement character and most of the rest control codes, and a PDF
+  the same. If you call this tool on anything but a text URL, you now get a refusal
+  where you got mojibake.
+- **The declared type does not decide it.** Text served as `application/octet-stream`
+  is answered exactly as before, measuring 0.0% unreadable; a body declaring
+  `text/plain; charset=utf-8` whose bytes are really UTF-16 is refused, at 55.2%.
+- **A page the wrong encoding only dents is still answered.** French prose written in
+  Latin-1 and declared UTF-8 measures 10.3% and comes back as it did, accents replaced.
+- **A content type the server invented is not printed back**: only one shaped like
+  `name/name`, at most 40 characters either side, reaches the refusal.
+
 ## A session keeps the datazone of its first zoned turn, after #936
 
 - **A session a turn in a datazone ran in is reached only from that datazone.** Reading
