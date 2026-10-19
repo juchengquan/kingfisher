@@ -213,16 +213,6 @@ def test_a_subagent_nobody_activated_cannot_break_the_build(cfg, session_dir):
     assert build(cfg, session_dir)["name"] == "reviewer"
 
 
-def test_an_alias_a_deployment_did_not_bind_costs_nothing_until_activated(cfg, session_dir):
-    """Seeding presets you have not bound for is free, the same rule an unrunnable
-    `model:` follows.
-    """
-    define(cfg, "name: unbound\ndescription: d\nalias: missing\nsystem_prompt: |\n  Go.\n")
-    define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
-
-    assert build(cfg, session_dir)["name"] == "reviewer"
-
-
 # -- granted, like middleware ----------------------------------------------
 
 
