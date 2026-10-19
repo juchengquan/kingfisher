@@ -1875,14 +1875,6 @@ system_prompt: |
 """
 
 
-NAMED = """name: named
-description: An agent.
-source_ids: [ab]
-system_prompt: |
-  You do the task.
-"""
-
-
 def test_an_inline_requirement_reads_as_the_set_it_is_written_as(cfg, at_the_command_line, capsys):
     """The listing prints what a reader would write in the file. It printed `A+B` when
     the file said `all_of`, which was a third spelling of the same idea and ambiguous
@@ -1911,29 +1903,6 @@ def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(
     assert "both  [A, B]" in after
 
 
-def test_a_named_compound_says_what_it_requires(cfg, at_the_command_line, capsys):
-    """A name tells a reader nothing on the line it appears on, and every line it
-    appears on needs it -- so it is said once, above.
-    """
-    _workspace(cfg, NAMED,
-        vocabulary="source_ids:\n  A:\n  B:\n  ab: {A, B}\n",
-    )
-
-    assert main(["list"]) == 0
-
-    shown = capsys.readouterr().out
-    assert "source ids that require others" in shown
-    assert "ab = {A, B}" in shown
-    assert "agent named  [ab]" in shown
-
-
-def test_a_vocabulary_with_no_compounds_gets_no_such_section(policied, capsys):
-    """It exists to make audiences readable, so it earns its lines or it has none."""
-    assert main(["list"]) == 0
-
-    assert "source ids that require others" not in capsys.readouterr().out
-
-
 def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
     """`json` holds neither a set nor a tuple, so this is not a formality: an audience
     carrying a conjunction used to be unencodable outright.
@@ -1943,9 +1912,7 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
     from kingfisher import config_from_env, inventory
     from kingfisher.cli.listing import as_json
 
-    _workspace(cfg, BOTH, NAMED,
-        vocabulary="source_ids:\n  A:\n  B:\n  ab: {A, B}\n", skills=("routine",),
-    )
+    _workspace(cfg, BOTH, skills=("routine",))
 
     # From the environment, not the fixture: the vocabulary is a file the
     # helper just wrote, and the fixture config predates it.
@@ -1954,8 +1921,7 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
     # Nested, not the braces the file writes: a script should not have to parse a
     # set out of a string.
     assert document["audiences"]["agents"]["both"]["source_ids"] == [["A", "B"]]
-    assert document["access"]["requires"]["ab"] == ["A", "B"]
-    assert document["access"]["names"]["A"] == ["A"]
+    assert document["access"] == {"names": ["A", "B"]}
 
 
 NARROWED = """name: narrowed
@@ -1992,11 +1958,11 @@ def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, at_the_command_line
     assert reach is not None
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["narrowed"]
 
-    assert spec.declares(reach.expand(["A", "C"])).skills == ("routine",)
-    assert spec.declares(reach.expand(["A"])).skills == ()
+    assert spec.declares(reach.known(["A", "C"])).skills == ("routine",)
+    assert spec.declares(reach.known(["A"])).skills == ()
     # And the definition's own line still gates the agent itself: C alone opens
     # nothing, so there is no way to reach the skill by holding only C.
-    assert not reaches(spec.source_ids, reach.expand(["C"]))
+    assert not reaches(spec.source_ids, reach.known(["C"]))
 
 
 def test_a_callers_view_carries_no_audiences(policied, capsys):

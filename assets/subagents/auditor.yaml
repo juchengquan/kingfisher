@@ -1,13 +1,13 @@
 name: auditor
 description: Re-checks figures against their sources. Use before reporting numbers computed once.
-# Reachable by all three, and narrower inside. This subagent is the worked
+# Reachable by both, and narrower inside. This subagent is the worked
 # example of the case the whole feature exists for: **one definition, different
 # tools per caller.**
 #
 # Nothing below says so. `sql_query` *is* the sales database, so it says
 # `[sales_db]` in its own file, `tools/sql_query.py`, and holds wherever it is
 # granted; an entry under `tools:` is a name and nothing more.
-source_ids: [sales_db, audit_log, warehouse]
+source_ids: [sales_db, audit_log]
 builtin_tools: [read_file, glob, grep]
 tools:
   # Reached on `audit_log` alone, this subagent holds `line_count` and not

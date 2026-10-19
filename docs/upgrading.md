@@ -18,6 +18,24 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A source id stands only for itself, after #972
+
+- **`source_ids.yaml` lists names and nothing else**: `source_ids: [sales_db, audit_log,
+  pii]`, with `datazones:` as before. A name written with a body -- `warehouse:
+  [sales_db, audit_log]`, `sales_db_pii: {sales_db, pii}`, or the mapping form
+  `sales_db:` -- is refused at startup, saying where each went. So is a name listed
+  twice, as a datazone listed twice already was.
+- **A role that covered others is the caller's to spell out.** A caller you sent as
+  `warehouse` now sends `["sales_db", "audit_log"]`, or `--as sales_db,audit_log`, from
+  the code that decides who your callers are.
+- **A named requirement is written where it is needed**, as the set it named:
+  `source_ids: [{sales_db, pii}]` in each definition that named `sales_db_pii`, or
+  `ToolSpec(tool, source_ids=[{"sales_db", "pii"}])` in a tool's file.
+- **`kingfisher list --json`** carries `"access": {"names": [...]}`: a sorted list, with
+  no `requires` and no mapping of each name to what it covered.
+- **A hand-built `Config(access=SourceIds(...))`** passes `names` as a set of names;
+  `compounds=` is gone.
+
 ## `InputsError` is on `kingfisher`, after #970
 
 - **`from kingfisher import InputsError`** names what `Kingfisher.run`, `stream`,

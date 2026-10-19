@@ -28,8 +28,8 @@ Kind = tuple[str, "Mapping[str, object]"]
 def held_by(
     vocabulary: SourceIds | None, source_ids: Iterable[str] | _Unscoped | None
 ) -> frozenset[str] | None:
-    """What a caller holds, expanded -- or `None` where nothing narrows: no vocabulary,
-    nobody named, or `UNSCOPED`.
+    """What a caller holds -- or `None` where nothing narrows: no vocabulary, nobody named,
+    or `UNSCOPED`.
 
     The one place the shape of `source_ids` is read: any sequence of names means what it
     looks like, and a bare string is refused rather than read a letter at a time.
@@ -55,13 +55,13 @@ def held_by(
             )
             raise AccessError(msg)
         return None
-    return vocabulary.expand(named)
+    return vocabulary.known(named)
 
 
 def _zoned(
     vocabulary: SourceIds | None, named: tuple[str, ...], zones: tuple[Datazone, ...]
 ) -> frozenset[str]:
-    """What a caller in a datazone holds: their source ids, expanded, and the zone."""
+    """What a caller in a datazone holds: their source ids, and the zone."""
     if vocabulary is None:
         msg = (
             f"this deployment declares no datazones, so {zones[0]!r} narrows nothing. "
@@ -78,7 +78,7 @@ def _zoned(
             f"{', '.join(sorted(vocabulary.datazones)) or 'none'}"
         )
         raise AccessError(msg)
-    return vocabulary.expand(named) | {zone_name(zone)}
+    return vocabulary.known(named) | {zone_name(zone)}
 
 
 def caller_holds(

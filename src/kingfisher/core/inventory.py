@@ -230,7 +230,7 @@ class Inventory:
     #: definition saying who reaches what, a tool named as a grant writes it and a
     #: subagent's own as `subagent::tool`. Carried so no renderer reads the specs itself.
     audiences: Mapping[str, Mapping[str, Stated]] = _NO_AUDIENCES
-    #: Whose view this is, expanded, or `None` for the operator's view of everything. Set,
+    #: Whose view this is, or `None` for the operator's view of everything. Set,
     #: every field is answered for this caller here, so the printer never filters: a field
     #: naming a definition keeps what the caller reaches, a catalogue keeps what those
     #: definitions offer, and the policy and faults reaching nobody are dropped.
