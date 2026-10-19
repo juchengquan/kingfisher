@@ -29,13 +29,6 @@ system_prompt: |
   You read.
 """
 
-ASKED_BY_ALIAS = """name: cheap
-description: Reads a lot.
-alias: {alias}
-system_prompt: |
-  You read.
-"""
-
 ASKED_FOR_NOTHING = """name: reviewer
 description: Checks figures.
 system_prompt: |
@@ -259,25 +252,12 @@ def test_the_message_names_the_subagent(cfg, session_dir):
     assert "second-opinion" in rendered
 
 
-# -- a definition naming several, and what passes one over --------------------
-#
-# Everything above reports, which is now all there is to do. A `distinct: true`
-# turned the same computation into a refusal and went with `second-opinion`, its
-# only user. What survives it is the other reason a candidate is passed over:
-# an alias this deployment never bound, which is the case a file naming several
-# anticipated -- it is saying which deployments it can still be useful in.
+# -- a model this deployment may not be able to run ------------------------
 
 
 ELSEWHERE_BY_MODEL = """name: elsewhere
 description: Answers again, elsewhere.
 model: {model}
-system_prompt: |
-  You answer on your own.
-"""
-
-ELSEWHERE_BY_ALIAS = """name: elsewhere
-description: Answers again, elsewhere.
-alias: {alias}
 system_prompt: |
   You answer on your own.
 """
