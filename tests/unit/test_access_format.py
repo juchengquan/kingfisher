@@ -6,8 +6,7 @@ import re
 
 import pytest
 
-from kingfisher.core.access import policy as access_policy
-from kingfisher.core.access.policy import parse
+from kingfisher.core.access.policy import load_access_policy, parse
 from kingfisher.core.access.source_ids import AccessError, SourceIds
 
 
@@ -93,13 +92,13 @@ def test_an_absent_file_is_no_vocabulary_rather_than_an_error(tmp_path):
     """Absent means the feature is off, so every deployment that predates it is
     unaffected by the code landing.
     """
-    assert access_policy.load(tmp_path / "source_ids.yaml") is None
+    assert load_access_policy(tmp_path / "source_ids.yaml") is None
 
 
 def test_a_present_file_is_read(tmp_path):
     written = tmp_path / "source_ids.yaml"
     written.write_text("source_ids: [A, B]\n", encoding="utf-8")
-    source_ids = access_policy.load(written)
+    source_ids = load_access_policy(written)
     assert source_ids is not None
     assert set(source_ids.names) == {"A", "B"}
 
@@ -111,14 +110,14 @@ def test_a_malformed_file_refuses_rather_than_starting_open(tmp_path):
     written = tmp_path / "source_ids.yaml"
     written.write_text("source_ids: [A\n", encoding="utf-8")
     with pytest.raises(AccessError, match=r"source_ids\.yaml"):
-        access_policy.load(written)
+        load_access_policy(written)
 
 
 def test_a_document_that_is_not_a_mapping_is_refused(tmp_path):
     written = tmp_path / "source_ids.yaml"
     written.write_text("- A\n- B\n", encoding="utf-8")
     with pytest.raises(AccessError, match="mapping"):
-        access_policy.load(written)
+        load_access_policy(written)
 
 
 def test_an_empty_file_is_refused_rather_than_read_as_nothing(tmp_path):
@@ -128,7 +127,7 @@ def test_an_empty_file_is_refused_rather_than_read_as_nothing(tmp_path):
     written = tmp_path / "source_ids.yaml"
     written.write_text("", encoding="utf-8")
     with pytest.raises(AccessError, match="empty"):
-        access_policy.load(written)
+        load_access_policy(written)
 
 
 # -- requiring several source ids at once ---------------------------------------

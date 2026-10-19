@@ -1453,9 +1453,9 @@ def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):
 
 def _vocabulary(shipped):
     """The shipped `source_ids.yaml`, read the way a deployment would."""
-    from kingfisher.core.access import policy as access_policy
+    from kingfisher.core.access.policy import load_access_policy
 
-    return access_policy.load(shipped / "source_ids.yaml")
+    return load_access_policy(shipped / "source_ids.yaml")
 
 
 def test_the_vocabulary_ships_and_reads(shipped):

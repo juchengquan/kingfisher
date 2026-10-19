@@ -26,7 +26,7 @@ _WENT = (
 MOVED: Final[Mapping[str, str]] = dict.fromkeys(("agents", "subagents", "tools"), _WENT)
 
 
-def load(path: Path) -> SourceIds | None:
+def load_access_policy(path: Path) -> SourceIds | None:
     """The policy at `path`, or `None` if there is no file there."""
     if not path.is_file():
         return None
