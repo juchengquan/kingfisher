@@ -419,11 +419,6 @@ class Preparation:
             ),
             deadline=monotonic() + cfg.turn_timeout_s,
             timeout_s=cfg.turn_timeout_s,
-            unprotected=unprotected,
-            placement=placement,
-            withheld=withheld,
-            indistinct=indistinct,
-            subagent_only=shared,
         )
 
     def _restored(self, session: Conversation, state: bytes) -> Any:

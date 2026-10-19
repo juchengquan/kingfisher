@@ -31,6 +31,7 @@ from tests.conftest import (
     an_agent,
     middleware_of,
     subagents_dir,
+    withheld_told,
 )
 
 HEAD = "name: n\ndescription: d\nsystem_prompt: |\n  Go.\n"
@@ -262,4 +263,4 @@ def test_the_run_reports_no_skill_withheld_where_none_could_be_opened(
 
     prepared = drive(Kingfisher(on, sessions=LocalSessions())._prepare_steps(asked))
 
-    assert ("skill" in dict(prepared.withheld)) is reported
+    assert ("skill" in dict(withheld_told(prepared.events))) is reported

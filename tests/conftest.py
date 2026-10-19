@@ -567,6 +567,23 @@ def dispatched(graph) -> tuple[str, ...]:
     return names
 
 
+def withheld_told(events) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """`(what, names)` read back off each `withheld` line a turn opens with.
+
+    Off the lines, not a field kept beside them: they are all the caller is told.
+    """
+    found = []
+    for event in events:
+        if event.kind != "withheld":
+            continue
+        head, names = event.text.split(" not granted: ", 1)
+        count, what = head.removesuffix("(s)").split(" ", 1)
+        listed = tuple(names.split(", "))
+        assert int(count) == len(listed), event.text
+        found.append((what, listed))
+    return tuple(found)
+
+
 #: Both tool lists at `["*"]`, for an `an_agent` that has to act: left out, each grants none.
 EVERY_TOOL = {"builtin_tools": '["*"]', "tools": '["*"]'}
 

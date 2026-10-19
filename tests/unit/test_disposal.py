@@ -6,7 +6,6 @@ from kingfisher import Kingfisher
 from kingfisher.core.request import Request
 from kingfisher.core.session import retention
 from kingfisher.plugins import LocalSessions
-from kingfisher.plugins.sessions.backend import still_held
 from tests.conftest import Through, start
 from tests.unit.test_run import StubAgent
 
@@ -257,9 +256,7 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
 
     # The instant the turn runs out of time, and a little after.
     at_deadline = taken + cfg.turn_timeout_s
-    assert still_held(
-        ((held, taken),), stale_after=cfg.claim_stale_after, now=at_deadline
-    ) == (held,)
+    assert LocalSessions().held(cfg, held, stale_after=cfg.claim_stale_after, now=at_deadline)
 
     # And a second caller is refused for the whole of that window.
     assert not LocalSessions().claim(
@@ -268,8 +265,8 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
 
     # Long enough after, the slot is takeable again -- a holder that died must
     # not lock the session out for good.
-    assert (
-        still_held(((held, taken),), stale_after=cfg.claim_stale_after, now=taken + 1e6) == ()
+    assert not LocalSessions().held(
+        cfg, held, stale_after=cfg.claim_stale_after, now=taken + 1e6
     )
 
 
@@ -317,10 +314,18 @@ def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg, way):
     assert kf.run(Request("go", session_id="reused")).answer == "ok"
 
 
-def test_the_staleness_rule_needs_no_filesystem():
-    ordered = still_held((("fresh", 100.0), ("old", 10.0)), stale_after=50.0, now=120.0)
+def test_a_claim_is_stale_the_moment_its_age_reaches_stale_after(cfg):
+    """Catches `<` becoming `<=`: a claim exactly `stale_after` old is no longer held."""
+    import os
 
-    assert ordered == ("fresh",)
+    session = start(cfg, "aged")
+    assert LocalSessions().claim(cfg, session, stale_after=50.0)
+    # Whole seconds, set rather than read: an mtime from the clock would put the
+    # boundary between two floats this could not name exactly.
+    os.utime(_claim(cfg, session), (1000.0, 1000.0))
+
+    assert LocalSessions().held(cfg, session, stale_after=50.0, now=1049.0)
+    assert not LocalSessions().held(cfg, session, stale_after=50.0, now=1050.0)
 
 
 # -- a run that disposes of its own session -------------------------------

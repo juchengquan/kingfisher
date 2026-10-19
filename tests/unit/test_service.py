@@ -29,6 +29,7 @@ from tests.conftest import (
     harness_in,
     start,
     subagents_dir,
+    withheld_told,
 )
 from tests.unit.test_run import StubAgent
 
@@ -324,7 +325,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
 
     prepared = drive(service._prepare_steps(asked))
 
-    by_kind = dict(prepared.withheld)
+    by_kind = dict(withheld_told(prepared.events))
 
     # The two kinds are reported apart, which is the whole point of the split.
     assert "http_fetch" in by_kind["tool"]  # a workspace tool
@@ -364,7 +365,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
 
     prepared = drive(service._prepare_steps(asked))
 
-    by_kind = dict(prepared.withheld)
+    by_kind = dict(withheld_told(prepared.events))
 
     # Asked of what `seed` actually wrote, rather than named here. The literal
     # tuples this used to assert were arithmetic about the shipped catalogue,
@@ -414,7 +415,7 @@ def test_nothing_is_withheld_from_the_skills_axis_when_the_switch_is_off(cfg, sh
     )
 
     prepared = drive(Kingfisher(off, sessions=LocalSessions())._prepare_steps(asked))
-    withheld = dict(prepared.withheld)
+    withheld = dict(withheld_told(prepared.events))
 
     assert "skill" not in withheld, "a skill cannot be withheld where none is offered"
 
@@ -436,7 +437,7 @@ def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
     )
 
     prepared = drive(Kingfisher(on, sessions=LocalSessions())._prepare_steps(asked))
-    withheld = dict(prepared.withheld)
+    withheld = dict(withheld_told(prepared.events))
 
     assert withheld["skill"] == tuple(sorted(set(available_skills(on)) - {"code-review"}))
     assert withheld["skill"], "and the catalogue really does offer more than the one granted"
@@ -464,7 +465,7 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
 
     prepared = drive(service._prepare_steps(asked))
 
-    assert [kind for kind, _ in prepared.withheld] == ["builtin tool"]
+    assert [kind for kind, _ in withheld_told(prepared.events)] == ["builtin tool"]
 
 
 def test_each_kind_gets_its_own_line(cfg):
