@@ -538,6 +538,20 @@ def test_the_json_form_stays_a_document_when_the_config_will_not_load(
     assert "KINGFISHER_API_STYLE" in captured.err
 
 
+def test_an_unknown_shell_sandbox_is_a_configuration_error_not_a_traceback(
+    at_the_command_line, monkeypatch, capsys
+):
+    """`KINGFISHER_SHELL_SANDBOX=bogus` stopped `doctor` with a `ValueError` from the fence
+    and printed no rows, where every other malformed setting gets a one-line refusal."""
+    monkeypatch.setenv("KINGFISHER_SHELL_SANDBOX", "bogus")
+
+    assert main(["doctor"]) == 2
+
+    err = capsys.readouterr().err
+    assert "configuration error: KINGFISHER_SHELL_SANDBOX" in err
+    assert "'bogus'" in err
+
+
 # -- a credential that is absent, and what it takes down -------------------
 
 TWO_ENDPOINTS = """
