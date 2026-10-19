@@ -72,6 +72,7 @@ def _imported_modules(path: Path) -> set[str]:
             source = _source_module(node, package)
             if node.module:
                 modules.add(source)
+                modules |= _submodules_taken(path, node, source)
             else:
                 held = _held_by_the_package(path, node)
                 modules.update(
@@ -91,6 +92,28 @@ def _held_by_the_package(path: Path, node: ast.ImportFrom) -> set[str]:
     return _defined_names(init) & taken if init.is_file() else set()
 
 
+def _submodules_taken(path: Path, node: ast.ImportFrom, source: str) -> set[str]:
+    """The modules `from source import ...` takes by name: `from kingfisher import plugins`
+    imports `kingfisher.plugins`, which a rule reading only `kingfisher` never sees."""
+    roots = (path.parents[len(_package_of(path))], SRC.parent, REPO)
+    return {
+        f"{source}.{alias.name}"
+        for alias in node.names
+        if any(_is_a_module_under(root, f"{source}.{alias.name}") for root in roots)
+    }
+
+
+def _is_a_module_under(root: Path, dotted: str) -> bool:
+    """Matched against the folder's own entries, never `exists()`: a case-insensitive
+    filesystem finds `access/capabilities.py` for the class `access.Capabilities`."""
+    *packages, last = dotted.split(".")
+    folder = root.joinpath(*packages)
+    entries = {entry.name for entry in folder.iterdir()} if folder.is_dir() else set()
+    return f"{last}.py" in entries or (
+        last in entries and (folder / last / "__init__.py").is_file()
+    )
+
+
 def _imported_names(path: Path) -> dict[str, frozenset[str]]:
     """Every module this file imports, and the names it takes from each."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -105,6 +128,8 @@ def _imported_names(path: Path) -> dict[str, frozenset[str]]:
             source = _source_module(node, package)
             if node.module:
                 taken.setdefault(source, set()).update(names)
+                for module in _submodules_taken(path, node, source):
+                    taken.setdefault(module, set())
             else:
                 held = _held_by_the_package(path, node)
                 if held:
@@ -211,6 +236,46 @@ def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
     }
     assert _imported_names(module)["kingfisher.domain"] == {"TASK_TOOL"}
     assert _stub_reexports(module) == ({"ALL": "kingfisher.domain.capabilities"}, [])
+
+
+def test_a_module_taken_by_name_is_read_as_that_module(tmp_path):
+    """`from kingfisher import plugins` read as `kingfisher` alone, which left a core module
+    importing it green under every rule here, the plugin rule included."""
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "from kingfisher import plugins\n"
+        "from kingfisher.core.access import Capabilities\n"
+        "from kingfisher.core.agent import prompts\n",
+        encoding="utf-8",
+    )
+    # The collisions the last two lines are for, on the real tree: a case-insensitive
+    # filesystem says the class is a file, and a folder of prompts is data, not a package.
+    assert (SRC / "core" / "access" / "capabilities.py").is_file()
+    assert (SRC / "core" / "agent" / "prompts").is_dir()
+
+    assert _imported_modules(probe) == {
+        "kingfisher",
+        "kingfisher.plugins",
+        "kingfisher.core.access",
+        "kingfisher.core.agent",
+    }
+    assert _imported_names(probe) == {
+        "kingfisher": {"plugins"},
+        "kingfisher.plugins": frozenset(),
+        "kingfisher.core.access": {"Capabilities"},
+        "kingfisher.core.agent": {"prompts"},
+    }
+
+    # A relative one, against its own tree rather than the installed package's.
+    package = tmp_path / "kingfisher"
+    (package / "domain" / "inner").mkdir(parents=True)
+    for init in ("__init__.py", "domain/__init__.py", "domain/inner/__init__.py"):
+        (package / init).touch()
+    (package / "domain" / "inner" / "leaf.py").touch()
+    module = package / "domain" / "subagent.py"
+    module.write_text("from .inner import leaf\n", encoding="utf-8")
+
+    assert _imported_modules(module) == {"kingfisher.domain.inner", "kingfisher.domain.inner.leaf"}
 
 
 def test_a_relative_import_is_resolved_in_one_place():
