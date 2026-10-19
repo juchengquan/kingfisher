@@ -4197,7 +4197,8 @@ measurement.)*
     `RUNS_AN_AGENT`. `langchain_core` counts as the runtime, since `ToolSpec` names no
     langchain type.
   - **`RECORDS` touch nothing outside the process**, so a record can be built without
-    a workspace behind it.
+    a workspace behind it. `core/access/policy.py` is held to it outside `load`, the one
+    function that opens the file, so a vocabulary parses from a mapping.
   - **The flat core writes nothing to disk** except `core/workspace.py`, asserted to
     write, so a move fails rather than excusing nothing.
   - **`test_only_one_module_changes_a_mode`**, over the whole package: scoped to a
