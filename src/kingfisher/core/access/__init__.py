@@ -33,7 +33,7 @@ _EXPORTS = {
     "refuse_undeclared": "kingfisher.core.access.checks",
     "undeclared_in": "kingfisher.core.access.checks",
     "walked": "kingfisher.core.access.checks",
-    "load": "kingfisher.core.access.policy",
+    "load_access_policy": "kingfisher.core.access.policy",
     "activated": "kingfisher.core.access.reach",
     "handed_work_by": "kingfisher.core.access.reach",
     "narrowed_for": "kingfisher.core.access.reach",
@@ -87,7 +87,7 @@ if TYPE_CHECKING:
     from kingfisher.core.access.checks import refuse_undeclared as refuse_undeclared
     from kingfisher.core.access.checks import undeclared_in as undeclared_in
     from kingfisher.core.access.checks import walked as walked
-    from kingfisher.core.access.policy import load as load
+    from kingfisher.core.access.policy import load_access_policy as load_access_policy
     from kingfisher.core.access.reach import activated as activated
     from kingfisher.core.access.reach import handed_work_by as handed_work_by
     from kingfisher.core.access.reach import narrowed_for as narrowed_for

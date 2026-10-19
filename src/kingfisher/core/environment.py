@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from kingfisher.core.access import load as load_access_policy
+from kingfisher.core.access import load_access_policy
 
 from . import model_catalogue
 from .config import (
@@ -168,8 +168,8 @@ class Environment:
                 keys_file=self.optional_path("KINGFISHER_MODEL_KEYS_FILE"),
             ),
             access=load_access_policy(access_file),
-            # The path too: `load` answers `None` for a missing file, and a deployment
-            # that meant to have a policy needs to hear where it was looked for.
+            # The path too: `load_access_policy` answers `None` for a missing file, and a
+            # deployment that meant to have a policy needs to hear where it was looked for.
             access_source=access_file,
             execution_timeout_s=self.number("KINGFISHER_EXECUTION_TIMEOUT_S", 120),
             turn_timeout_s=self.number("KINGFISHER_TURN_TIMEOUT_S", 3600),

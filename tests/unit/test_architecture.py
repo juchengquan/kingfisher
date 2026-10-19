@@ -2732,7 +2732,7 @@ RECORDS = (
 #: The vocabulary's reader, held to the same rule but for the one function that opens the
 #: file: the rest is handed a decoded document, so a vocabulary parses from a mapping. Named
 #: and asserted to reach, so a rename fails instead of excusing nothing.
-OPENS_THE_POLICY = (SRC / "core" / "access" / "policy.py", "load")
+OPENS_THE_POLICY = (SRC / "core" / "access" / "policy.py", "load_access_policy")
 
 
 def test_the_records_touch_nothing_outside_the_process():
