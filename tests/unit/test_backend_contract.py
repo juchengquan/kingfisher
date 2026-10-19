@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import re
 from dataclasses import replace
 from typing import Any
@@ -13,6 +14,7 @@ from deepagents.backends.protocol import ReadResult, WriteResult
 from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH_ROUTE, Layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
+from tests.checks import backend as backend_kit
 from tests.checks.backend import (
     BACKEND_CHECKS,
     execution_support,
@@ -69,10 +71,21 @@ def test_the_kit_reads_and_writes_where_the_deployment_keeps_its_outputs(cfg):
     filesystem_consistency(lambda: (made, backend))
 
 
-def test_the_contract_is_not_quietly_empty():
-    """A kit with no checks passes whatever it was meant to check."""
-    assert len(BACKEND_CHECKS) >= 4
-    assert all(callable(check) for check in BACKEND_CHECKS)
+def test_the_kit_runs_every_check_it_defines():
+    """A check the kit defines and `BACKEND_CHECKS` leaves out is one no deployment running
+    the kit ever runs."""
+    # Public and defined in the kit itself: its helpers are private, and what it imports
+    # is not a check.
+    defined = {
+        name
+        for name, value in vars(backend_kit).items()
+        if inspect.isfunction(value)
+        and value.__module__ == backend_kit.__name__
+        and not name.startswith("_")
+    }
+
+    assert defined
+    assert sorted(check.__name__ for check in BACKEND_CHECKS) == sorted(defined)
 
 
 class NotRecognised:
