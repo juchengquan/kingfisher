@@ -63,9 +63,8 @@ def _unrunnable(cfg: Config, specs: Mapping[str, Any]) -> tuple[tuple[str, str],
     found: list[tuple[str, str]] = []
     for name, spec in sorted(specs.items()):
         try:
-            model = resolved_model(spec.wanted)
-            if model is not None:
-                cfg.models.resolve(model)
+            if spec.wanted is not None:
+                cfg.models.resolve(spec.wanted)
         except ConfigError as exc:
             found.append((name, str(exc)))
     return tuple(found)
@@ -218,13 +217,14 @@ def indistinct_subagents(  # noqa: PLR0913 -- the agent and caller make this the
     # A name nothing defines is skipped, not refused: `build_agent` refuses it.
     for name in within_reach((n for n in named if n in defined), defined, held):
         spec = defined[name]
+        model = resolved_model(spec.wanted, override=wanted.get(name))
         try:
-            model = resolved_model(spec.wanted, override=wanted.get(name))
+            why = indistinct(spec, cfg, model=model)
         except ConfigError:
-            # The build refuses an unrunnable model with the message worth reading;
-            # a second copy from here would reach the caller twice.
+            # The build refuses an unrunnable model with the message worth reading, and a
+            # supplied graph is not built here at all: a report must not fail the turn.
             continue
-        if why := indistinct(spec, cfg, model=model):
+        if why:
             found.append((name, why))
     return tuple(found)
 
