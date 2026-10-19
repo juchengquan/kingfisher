@@ -79,7 +79,8 @@ def _explain(
     """Why this one key is not accepted, in the terms that fit it."""
     if (reason := declined.get(key)) is not None:
         return f"{key!r} is not a {noun} of this format -- {reason}"
-    near = get_close_matches(key, known, n=1, cutoff=SIMILARITY)
+    # `str`: decoding stringifies a YAML file's keys, and nothing does a Python entry's.
+    near = get_close_matches(str(key), known, n=1, cutoff=SIMILARITY)
     # Parenthesised: `; ` already separates one key's explanation from the next.
     hint = f" (did you mean {near[0]!r}?)" if near else ""
     return f"unknown {noun} {key!r}{hint}"
@@ -110,6 +111,30 @@ class Reader:
     #: The format's own exception, so a caller catching `AgentError` is never handed a
     #: `SubagentError`.
     error: type[Exception]
+
+    def refuse_unrecognised(
+        self,
+        document: Iterable[str],
+        *,
+        known: Collection[str],
+        declined: Mapping[str, str] | None = None,
+    ) -> None:
+        """Refuse every key the format does not define, saying why for each it declines."""
+        complaint = unrecognised(document, known=known, declined=declined)
+        if complaint is not None:
+            msg = f"{self.source}: {complaint}"
+            raise self.error(msg)
+
+    def require(self, document: Mapping[str, object], *names: str) -> None:
+        """Refuse a document without each of `names`, present and not blank."""
+        for required in names:
+            # Absent and blank told apart: "missing" sends a reader hunting for a line they wrote.
+            if required not in document:
+                msg = f"{self.source}: missing required field {required!r}"
+                raise self.error(msg)
+            if not text(document[required]):
+                msg = f"{self.source}: {required!r} is present but empty"
+                raise self.error(msg)
 
     def one_name(self, value: object, *, key: str) -> str | None:
         """One name, or `None` when the field is absent. A list is refused."""

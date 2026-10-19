@@ -53,9 +53,9 @@ def test_each_type_names_exactly_the_keys_its_reader_takes(typed, taken, _):
 
 @pytest.mark.parametrize(("typed", "_", "minimal"), SHAPES)
 def test_the_keys_a_type_requires_are_the_ones_its_reader_requires(typed, _, minimal):
-    """Driven through `declared` rather than read off `_require`: a type marking a key
-    optional that the reader demands passes a checker and fails at load, and the reverse
-    makes every author write a key nothing needs.
+    """Driven through `declared` rather than read off its `require` calls: a type marking
+    a key optional that the reader demands passes a checker and fails at load, and the
+    reverse makes every author write a key nothing needs.
     """
     required = {key for key, needed in _keys(typed).items() if needed}
     assert set(minimal) == required, "the minimal entry is not this type's"

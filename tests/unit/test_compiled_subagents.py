@@ -237,7 +237,7 @@ def test_an_unknown_key_lists_what_the_format_takes():
     with pytest.raises(SubagentError, match="temperature") as raised:
         declared(_entry(temperature=0.2), "researcher.py")
 
-    assert "'build'" in str(raised.value)
+    assert ", ".join(sorted(DECLARED)) in str(raised.value)
 
 
 def test_build_has_to_be_callable():

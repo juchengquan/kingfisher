@@ -303,21 +303,6 @@ class CompiledSubagent(TypedDict, total=False):
     datazone: str
 
 
-def _require(entry: Mapping[str, object], *names: str, source: str) -> None:
-    """The fields a Python declaration must carry, present and not blank.
-
-    Absent and blank stay different messages: "missing" sends somebody hunting for a line
-    they can see they wrote.
-    """
-    for required in names:
-        if required not in entry:
-            msg = f"{source}: {EXPORT} entry is missing {required!r}"
-            raise SubagentError(msg)
-        if not fields.text(entry[required]):
-            msg = f"{source}: {EXPORT} entry has {required!r} present but empty"
-            raise SubagentError(msg)
-
-
 def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     """One entry of a module's `SUBAGENTS` into a spec.
 
@@ -333,20 +318,10 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     if "build" not in entry:
         return _portable(entry, source)
 
-    if declined := sorted(set(entry) & set(NOT_COMPILED)):
-        reasons = "; ".join(f"{key!r} -- {NOT_COMPILED[key]}" for key in declined)
-        msg = f"{source}: {reasons}"
-        raise SubagentError(msg)
-
-    if unknown := sorted(set(entry) - DECLARED):
-        msg = (
-            f"{source}: {EXPORT} entry names {unknown}, which this format does not "
-            f"define; it takes {sorted(DECLARED)}"
-        )
-        raise SubagentError(msg)
-
+    read = fields.Reader(source=source, error=SubagentError)
+    read.refuse_unrecognised(entry, known=DECLARED, declined=NOT_COMPILED)
     # Not `build`, which chose this branch, nor `system_prompt`, which is refused above.
-    _require(entry, "name", "description", source=source)
+    read.require(entry, "name", "description")
 
     build = entry["build"]
     if not callable(build):
@@ -357,8 +332,6 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         )
         raise SubagentError(msg)
 
-    where = Path(source)
-    read = fields.Reader(source=where.name, error=SubagentError)
     wanted = fields.wanted_model(entry, read)
     # A list of names, as a file writes it, and absent grants none: `["*"]` asks for every
     # tool the request granted. What each tool admits is in the tool's own file.
@@ -387,21 +360,9 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
 
 def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
     """One `SUBAGENTS` entry with no `build`: a definition kingfisher assembles."""
-    if declined := sorted(set(entry) & set(NOT_PORTABLE)):
-        reasons = "; ".join(f"{key!r} -- {NOT_PORTABLE[key]}" for key in declined)
-        msg = f"{source}: {reasons}"
-        raise SubagentError(msg)
-
-    if unknown := sorted(set(entry) - PORTABLE):
-        msg = (
-            f"{source}: {EXPORT} entry names {unknown}, which this format does not "
-            f"define; a declaration without 'build' takes {sorted(PORTABLE)}"
-        )
-        raise SubagentError(msg)
-
-    _require(entry, "name", "description", "system_prompt", source=source)
-
     read = fields.Reader(source=source, error=SubagentError)
+    read.refuse_unrecognised(entry, known=PORTABLE, declined=NOT_PORTABLE)
+    read.require(entry, "name", "description", "system_prompt")
     # Absent grants none, so a spec typed to deepagents' `SubAgent`, which has no word for
     # this, holds no built-in until the deployment's own file adds one.
     builtin = read.selection(entry.get("builtin_tools"), absent=None, key="builtin_tools")
@@ -508,14 +469,6 @@ def _skills_directory(value: object, reader: fields.Reader) -> Path:
     return found
 
 
-def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
-    """Refuse every field this format does not define, saying why for the known ones."""
-    complaint = fields.unrecognised(document, known=KNOWN, declined=REFUSED)
-    if complaint is not None:
-        msg = f"{source.name}: {complaint}"
-        raise SubagentError(msg)
-
-
 def uncallable_helpers(builtin_tools: Selection, subagents: Selection) -> str | None:
     """Why a definition could never call the subagents it names, or `None` if it can.
 
@@ -585,16 +538,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     """One definition, from its decoded fields."""
     reader = fields.Reader(source=source.name, error=SubagentError)
     # Before the required fields, so `nmae:` is reported as a typo, not a missing `name`.
-    _refuse_unknown(document, source)
-
-    for required in ("name", "description", "system_prompt"):
-        # Absent and blank apart: "missing" sends someone hunting for a line they wrote.
-        if required not in document:
-            msg = f"{source.name}: missing required field {required!r}"
-            raise SubagentError(msg)
-        if not fields.text(document[required]):
-            msg = f"{source.name}: {required!r} is present but empty"
-            raise SubagentError(msg)
+    reader.refuse_unrecognised(document, known=KNOWN, declined=REFUSED)
+    reader.require(document, "name", "description", "system_prompt")
 
     wanted = fields.wanted_model(document, reader)
 

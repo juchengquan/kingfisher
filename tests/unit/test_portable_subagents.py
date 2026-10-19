@@ -8,7 +8,7 @@ hang on the shape, and these drive the shape rather than the origin.
 
 from __future__ import annotations
 
-from typing import get_type_hints
+from typing import Any, get_type_hints
 
 import pytest
 from deepagents import CompiledSubAgent, SubAgent
@@ -183,9 +183,20 @@ def test_an_unknown_key_lists_what_a_portable_entry_takes():
     with pytest.raises(SubagentError, match="temperature") as raised:
         declared(entry, "acme.py")
 
-    # The list a portable entry is shown, not the compiled one. Both messages name
-    # `build`, one as a key you may write and one as the thing you did not.
-    assert str(sorted(PORTABLE)) in str(raised.value)
+    # The list a portable entry is shown, not the compiled one, which offers `build`.
+    assert ", ".join(sorted(PORTABLE)) in str(raised.value)
+    assert "build" not in str(raised.value)
+
+
+def test_a_key_that_is_not_a_string_is_refused_rather_than_crashing_the_typo_hint():
+    """A Python entry's keys are not stringified the way a YAML file's are, and the
+    typo hint raised `TypeError` on `1` instead of refusing it as unknown.
+    """
+    # `Any` keys: what the annotation forbids, and a module run without a checker can hold.
+    entry: dict[Any, object] = {"name": "s", "description": "d", "system_prompt": "Go.", 1: "x"}
+
+    with pytest.raises(SubagentError, match="unknown field 1"):
+        declared(entry, "acme.py")
 
 
 def test_the_shape_decides_the_rules_rather_than_where_the_entry_came_from():
