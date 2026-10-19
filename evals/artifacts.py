@@ -13,7 +13,7 @@ RESULT = "outputs/result.json"
 
 
 def load_result(content: bytes | None) -> dict | None:
-    """The smoke's result, from the bytes `Kingfisher.artifact` fetched, if it parses."""
+    """The smoke's result, from the bytes `Session.artifact` fetched, if it parses."""
     if content is None:
         return None
     try:
