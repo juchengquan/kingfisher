@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher.cli.health_isolation import fence_of
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
@@ -17,8 +18,10 @@ from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.environment import paths_from_env
+from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from kingfisher.plugins.sessions.shell import shell_env, skills_view
+from kingfisher.plugins.sessions.sandbox import confinement
+from kingfisher.plugins.sessions.shell import SKILLS_VIEW, shell_env, skills_view
 from tests.conftest import FakeToolCallingModel
 
 macos = pytest.mark.skipif(
@@ -369,3 +372,37 @@ def test_the_linux_fence_is_granted_the_view(mounted, session_dir, monkeypatch):
     view = skills_view(mounted.skills_dir, mounted.skills_mounts, mounted.kingfisher_dir)
     assert view in handed[0]
     assert mounted.skills_mounts["vendor"] in handed[0]
+
+
+def test_doctor_asks_the_fence_what_a_run_asks(mounted, monkeypatch):
+    """`doctor` left the view out of the skills it asked with, so with a mount it wrote
+    and answered from a macOS profile no turn runs under.
+
+    Both driven, a run through `LocalSessions` as the service opens one, and compared on
+    everything the fence is asked: inspecting either alone cannot see them drift apart.
+    """
+    asked = []
+    real = confinement.resolve
+    monkeypatch.setattr(
+        confinement, "resolve", lambda *a, **kw: asked.append((a, kw)) or real(*a, **kw)
+    )
+    LocalSessions().open(mounted, "run")
+    fence_of(mounted, LocalSessions())
+
+    run, doctor = asked
+    # The control: without the view among a run's skills there is nothing to drift.
+    assert any(path.parent.name == SKILLS_VIEW for path in run[1]["skills"])
+    assert doctor == run
+
+
+def test_a_mount_a_run_refuses_does_not_stop_doctor_at_the_fence(mounted):
+    """Reading the run's skills raises for a mount a run refuses, which would end
+    `doctor` before the rows between the fence and the one saying why.
+    """
+    cfg = replace(mounted, skills_mounts={"a/b": mounted.skills_mounts["vendor"]})
+
+    shell = confinement.ShellSettings.from_env()
+    assert (
+        fence_of(cfg, LocalSessions(shell=shell)).mechanism
+        == confinement.shell_confinement(cfg, shell).mechanism
+    )

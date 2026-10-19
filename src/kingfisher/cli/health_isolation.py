@@ -5,7 +5,7 @@ from __future__ import annotations
 import platform
 from collections.abc import Iterator
 
-from kingfisher import Config
+from kingfisher import Config, ConfigError
 from kingfisher.cli.check import Check
 from kingfisher.plugins import ShellSettings
 from kingfisher.plugins.sessions.sandbox import confinement
@@ -111,7 +111,16 @@ def fence_of(cfg: Config, sessions: object) -> Confinement:
     name different fences. Sessions doctor cannot see into get the environment's settings,
     which only the `shell` row reads: every other row is quiet or warns for them.
     """
-    return shell_confinement(cfg, shell_of(sessions) or ShellSettings.from_env())
+    # Here, not at the top: it loads deepagents, as `LocalSessions` does.
+    from kingfisher.plugins.sessions.shell import shell_skills  # noqa: PLC0415
+
+    try:
+        skills = shell_skills(cfg)
+    except ConfigError:
+        # A mount a run refuses before it has a shell. Raised here, it would drop every
+        # row between this one and the row that says why.
+        skills = None
+    return shell_confinement(cfg, shell_of(sessions) or ShellSettings.from_env(), skills=skills)
 
 
 def _shell(confined: Confinement) -> Iterator[Check]:
