@@ -433,7 +433,9 @@ than opening another. Where each `open` is a sandbox, that is one sandbox rather
 two -- and the `Session` keeps the one it opened, so asking it again opens nothing.
 `afiles` is the same for a caller on an event loop, opening it with `aopen`. The
 request has to run in the session they were opened for -- a request naming none runs
-in `default`. `kf.session(session_id, create=True)` makes a session no turn has made
+in `default` -- and one naming another is refused with `UnknownSessionError` before
+the turn claims or writes anything. A backend kingfisher did not open is taken at
+your word. `kf.session(session_id, create=True)` makes a session no turn has made
 yet, so a caller can place its inputs before the first turn. The caller named to
 `kf.session` is checked there, once; hand what `files()` returns only to code entitled
 to that session, and the turn still checks the caller it is given.

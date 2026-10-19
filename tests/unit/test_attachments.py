@@ -380,6 +380,23 @@ def test_a_call_after_no_model_call_names_no_tool():
     assert "pdf_text" not in answer.text
 
 
+def test_a_tool_offered_as_a_dict_is_one_the_advice_may_name():
+    """Read by its attribute alone, a tool offered as a dict went missing from what the
+    model was offered, while the filter outside held it to the grant by name."""
+    guard = AttachmentsMiddleware(UNPROFILED)
+    data = "A" * (400 * KB)
+    result = ToolMessage(
+        content=[{"type": "file", "base64": data, "mime_type": "application/pdf"}],
+        tool_call_id="c1",
+    )
+    request = SimpleNamespace(tool_call={"name": "read_file", "args": {}, "id": "c1"})
+
+    guard.wrap_model_call(SimpleNamespace(tools=[{"name": "pdf_text"}]), lambda _: None)
+    answer = guard.wrap_tool_call(request, lambda _: result)
+
+    assert "Call pdf_text on it" in answer.text
+
+
 def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_dir, way):
     """With the guard outside the recorder, the recorder saved an empty row for the PDF and
     stamped the result, and the stamp left the call reading as one that succeeded.
