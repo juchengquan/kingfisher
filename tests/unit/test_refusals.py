@@ -315,7 +315,7 @@ REFUSALS: dict[str, Refusal] = {
         1, defect=a_portable_subagent_carrying_two_tools_of_a_name),
     "core/definitions/tools/catalogue.py::LocalToolRepository.found": Refusal(
         1, defect=a_tool_module_defining_a_name_twice),
-    "core/definitions/tools/catalogue.py::refuse_untoollike": Refusal(
+    "core/definitions/tools/catalogue.py::_refuse_untoollike": Refusal(
         2, defect=a_portable_subagent_carrying_a_class),
     "core/definitions/tools/catalogue.py::_as_named": Refusal(
         3, defect=a_tool_spec_giving_a_description_its_tool_ignores),

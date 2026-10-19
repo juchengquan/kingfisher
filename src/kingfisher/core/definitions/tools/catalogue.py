@@ -6,11 +6,10 @@ import inspect
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from kingfisher.core.definitions.fields import Reader
 from kingfisher.core.definitions.importing import (
-    PACKAGE_MARKER,
     Export,
     LoadError,
     exported_from,
@@ -19,17 +18,11 @@ from kingfisher.core.definitions.importing import (
 
 from .spec import FoundTool, ToolSpec, named, tool_name
 
-if TYPE_CHECKING:
-    pass
-
 __all__ = [
     "EXPORT",
-    "PACKAGE_MARKER",
     "CarriedTools",
-    "FoundTool",
     "LocalToolRepository",
     "ToolError",
-    "refuse_untoollike",
     "tool_name",
 ]
 
@@ -44,11 +37,8 @@ class ToolError(LoadError):
 DECLARES = Export(EXPORT, error=ToolError, holding="tools", example="my_tool")
 
 
-def refuse_untoollike(tool: Any, *, where: str, holder: str) -> None:
-    """Refuse an entry that is not a tool, saying which of the two mistakes it is.
-
-    Shared by a module's `TOOLS` and a definition carrying its own, so the two agree.
-    """
+def _refuse_untoollike(tool: Any, *, where: str, holder: str) -> None:
+    """Refuse an entry that is not a tool, saying which of the two mistakes it is."""
     # A class loads, is advertised under its `__name__`, and calling it instantiates it:
     # a wrong answer reported as a success rather than an error.
     if isinstance(tool, type):
@@ -78,7 +68,7 @@ def found_in(entry: Any, *, where: str, holder: str) -> FoundTool:
     A bare tool is read as `ToolSpec(tool)`, open to everyone.
     """
     spec = entry if isinstance(entry, ToolSpec) else ToolSpec(entry)
-    refuse_untoollike(spec.tool, where=where, holder=holder)
+    _refuse_untoollike(spec.tool, where=where, holder=holder)
     tool = _as_named(spec, where=where)
     read = Reader(source=f"{where}: tool {tool_name(tool)!r}", error=ToolError)
     return FoundTool(
