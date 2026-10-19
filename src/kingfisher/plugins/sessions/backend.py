@@ -113,7 +113,7 @@ def _listing(result: Any, path: str, routes: Iterable[tuple[str, Any]]) -> Any:
         if _directly_under(prefix, here) and prefix not in named
     ]
     kept.sort(key=lambda one: one.get("path", ""))
-    return _once(replace(result, entries=kept), key=lambda one: one.get("path"), field="entries")
+    return _once(replace(result, entries=kept), key=_by_path, field="entries")
 
 
 class WorkspaceScopedBackend(CompositeBackend):
