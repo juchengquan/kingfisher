@@ -639,6 +639,29 @@ that reason, and releases each page's caches as it goes -- `flush_cache()` and
 `get_textmap.cache_clear()`, both, which took the same work to 93 MB. So cap the bytes,
 and then measure the thing your tool actually spends.
 
+**And the input cap bounds the answer only if the answer is a fixed size.** An answer
+of one line per thing the file names grows with the file by construction, and the input
+cap is the wrong order of magnitude to hold it: `csv_profile` writes a line per column,
+and a 10 MB header of 5,242,880 columns answered **334,433,239 characters** -- out of a
+tool whose docstring said the answer does not grow with the file -- while `csv_columns`
+answered the header back, 10,485,759 characters of it. A shape a deployment really
+holds costs too: 4,000 columns over 1,250 rows answered 218,913, some 55,000 tokens for
+one call asking what shape a file is. So cap what the answer has a line per, and say
+the total beside the number kept. That cap is also the only bound on the gathering --
+the 1,833 MB those columns peaked at is five million lists and the strings naming them,
+and capping the columns took the same file to 185 MB, where the cap in bytes had let
+all of it through. What is left unbounded by anything but the bytes is the header row
+itself, which `csv.reader` hands back whole.
+
+**One name can be the whole answer, too.** A header cell is uploaded text, and the CSV
+reader parses one up to 131,072 characters: 76 columns named that long answered
+9,959,656 characters. Cut it, with the count of what was cut in its place -- unlike a
+query's row that will not fit, nothing a reader can ask for makes a column's name
+shorter. Cut it before anything is appended to the name, as well: the number that tells
+two columns sharing a name apart went on the end, and a cut taken after that took the
+number off. And count which names repeat *after* the cut, because two names that differ
+only past it are one name in the answer, so the lines that told them apart stopped.
+
 ## A tool that runs a query
 
 The section above ends in the right place for a file and the wrong one for a database,

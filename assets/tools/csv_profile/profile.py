@@ -23,13 +23,22 @@ from langchain_core.tools import tool
 
 from kingfisher import ToolContext
 
-from .columns import profile_column, shown
+from .columns import fitted, profile_column
 
 #: Rows read before stopping. A profile is a shape, not a census: the type and
 #: the missing-value pattern of a column settle long before the file ends, and
 #: reading 2 million rows to say "number, 3% missing" costs the deployment time
 #: the agent then waits on.
 SAMPLE_ROWS = 5_000
+
+
+#: Columns gathered, profiled and named. The row cap above is 5,000 and this one is two
+#: hundred because the two cost differently: a row adds a number to a count, and a
+#: column adds a line of the answer and a list holding every sampled cell. Measured, a
+#: 10 MB header of 5,242,880 columns answered 334,433,239 characters and peaked at 1,833
+#: MB resident -- and a plausible 4,000-column feature table answered 218,913, some
+#: 55,000 tokens for one call asking what shape a file is.
+MAX_COLUMNS = 200
 
 
 #: What one call reads. A backend hands a file back whole, into kingfisher's own
@@ -57,12 +66,19 @@ def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
 class _Read:
     """One file as a profile saw it."""
 
+    #: Every name the header holds, in the file's own order: the number of columns a
+    #: reader is told and the width a row is judged against, profiled or not.
     header: list[str]
-    #: One list of cells per column, in the file's own order.
+    #: One list of cells per column profiled, which is the first `MAX_COLUMNS` of them.
     columns: list[list[str]]
     rows: int
     #: Rows whose cell count was not the header's, whichever way.
     ragged: int
+
+    @property
+    def profiled(self) -> list[str]:
+        """The names of the columns whose cells were gathered, so the two line up."""
+        return self.header[: len(self.columns)]
 
 
 #: What the `csv` module refuses to parse: one field longer than this raises
@@ -93,11 +109,16 @@ def _report_names(header: list[str]) -> list[str]:
     A reader handed `region` twice cannot tell which column is which, and the file is
     the only place that distinction lives -- so the repeated ones say which column of
     the file they are. Unique names are left exactly as the file wrote them.
+
+    Counted after fitting, not before: two names that differ only past the cut are one
+    name in the answer, and counting the file's spelling left both lines identical with
+    nothing to tell them apart -- which is the whole failure this function exists for.
     """
-    seen = Counter(header)
+    names = [fitted(name) for name in header]
+    seen = Counter(names)
     return [
         f"{name} (column {at + 1})" if seen[name] > 1 else name
-        for at, name in enumerate(header)
+        for at, name in enumerate(names)
     ]
 
 
@@ -130,15 +151,16 @@ def _gathered(text: str) -> _Read:
         except StopIteration:
             return _Read([], [], 0, 0)
 
-        gathered: list[list[str]] = [[] for _ in header]
+        gathered: list[list[str]] = [[] for _ in header[:MAX_COLUMNS]]
         seen = ragged = 0
         for row in reader:
             if len(row) != len(header):
                 ragged += 1
-            # Truncated to the header, which is what a column profile can speak about:
-            # the cells past it belong to no column and were silently dropped before,
-            # so the count above is what says the file is not rectangular.
-            for at, value in enumerate(row[: len(header)]):
+            # Truncated to the columns gathered, which past `MAX_COLUMNS` is fewer
+            # than the header holds: the cells past it belong to no column anybody is
+            # told about, and were silently dropped before, so the count above is what
+            # says the file is not rectangular.
+            for at, value in enumerate(row[: len(gathered)]):
                 gathered[at].append(value)
             seen += 1
             if seen >= SAMPLE_ROWS:
@@ -151,7 +173,9 @@ def csv_profile(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Summarise a CSV: every column's type, how much is missing, how varied.
 
     Use before analysing a file you have not seen. Cheaper and more reliable
-    than reading it, and the answer does not grow with the file.
+    than reading it, and the answer does not grow with the file: a file wider
+    than one answer carries is profiled to its first columns, and the first line
+    says how many columns it has and how many of them were read.
 
     `file_path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session, read through the session's backend.
@@ -162,9 +186,11 @@ def csv_profile(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
 
     lines = [
         profile_column(name, cells).line()
-        for name, cells in zip(_report_names(read.header), read.columns, strict=True)
+        for name, cells in zip(_report_names(read.profiled), read.columns, strict=True)
     ]
     said = []
+    if len(read.header) > len(read.columns):
+        said.append(f"first {len(read.columns)} columns profiled")
     if read.rows >= SAMPLE_ROWS:
         said.append(f"first {read.rows} rows")
     if read.ragged:
@@ -178,12 +204,22 @@ def csv_columns(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Just the column names of a CSV, one per line.
 
     The cheap half of `csv_profile`, for when the question is only what the
-    file contains and not what state it is in.
+    file contains and not what state it is in. A file wider than one answer
+    carries stops at the same number of columns, and says so on a last line.
 
     `file_path` is the same virtual path the file tools take -- `/inputs/<name>` --
     rooted at this session, read through the session's backend.
     """
     header = _read(runtime, file_path).header
-    # `shown`, because this answer is one name a line and a name may hold a newline:
-    # three columns came back as four names, one of them invented.
-    return "\n".join(shown(name) for name in header) if header else f"{file_path}: empty"
+    if not header:
+        return f"{file_path}: empty"
+    # `fitted`, because this answer is one name a line and a name is uploaded text:
+    # three columns came back as four names, one of them invented, and 10 MB of header
+    # came back as a 10 MB answer.
+    named = [fitted(name) for name in header[:MAX_COLUMNS]]
+    if len(header) > MAX_COLUMNS:
+        # On a line of its own, the way the two sql tools mark a cut, because this
+        # answer is one name a line: handed 200 names of 5,242,880 with nothing said,
+        # a reader cannot tell a narrow file from a file this tool stopped reading.
+        named.append(f"-- first {MAX_COLUMNS} of {len(header)} columns")
+    return "\n".join(named)

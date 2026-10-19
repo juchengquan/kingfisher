@@ -18,6 +18,25 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Both CSV tools stop at the columns an answer carries, after #927
+
+- **`csv_profile` profiles the first 200 columns, and says so**, where it wrote a line
+  for every column the file had. Measured: a 10 MB header of 5,242,880 columns answered
+  334,433,239 characters and peaked at 1,833 MB resident, out of a tool whose docstring
+  says the answer does not grow with the file; a 4,000-column file answered 218,913. The
+  first line already carries the file's own column count, and the note beside it now
+  says how many were read -- `250 columns, 2 rows (first 200 columns profiled)`.
+- **`csv_columns` stops at the same 200 names**, with a last line reading `-- first 200
+  of 5242880 columns`. An answer of one name a line cannot say it was cut any other
+  way, and the same header had been answered back whole: 10,485,759 characters.
+- **A column name longer than 100 characters is cut**, with what was cut said in its
+  place: `xxx...(+50 characters)`. The CSV reader parses a cell up to 131,072
+  characters and every one of them reached the answer, so 76 columns were 9,959,656 of
+  it. If you parse these answers, a name you match on may now be a prefix of the file's.
+- **Only the columns profiled are gathered**, so a file wider than the cap no longer
+  costs a list per column. Nothing about a file inside the caps changed: the same
+  5-column file answers the same 281 characters it did.
+
 ## `sql_query` refuses a row it cannot carry, after #918
 
 - **A `SELECT` whose single row passes the answer cap is refused**, with the width in
