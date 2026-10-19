@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.access.checks import caller_holds
 from kingfisher.core.access.reach import reaches
+from kingfisher.core.access.source_ids import with_datazone, zoned
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.request import Request, Resume
 from kingfisher.core.session.files import read_artifact
@@ -20,8 +22,8 @@ from kingfisher.core.session.model import (
 from kingfisher.core.session.steps import Steps, adrive, drive, reading
 from kingfisher.core.session.store import (
     HarnessFiles,
-    agent_started_with,
     pending_from_mark,
+    pinned_in,
     read_pause_mark,
 )
 
@@ -62,18 +64,20 @@ class SessionMethods:
         """Whether a caller holding `held` may touch the session `harness` belongs to.
 
         The rule reading a session and running a turn in it share: a caller who cannot
-        reach the pinned agent cannot touch the session. `None` (no vocabulary, or an
-        `UNSCOPED` call) reaches everything, as does a session with nothing pinned yet.
+        reach the pinned agent, or is not in the session's datazone, cannot touch the
+        session. `None` (no vocabulary, or an `UNSCOPED` call) reaches everything, as does
+        a session with nothing pinned yet.
         """
         if held is None:
             return True
-        return self._reaches_pin((yield from agent_started_with(harness)), held)
+        kept, zone = yield from pinned_in(harness)
+        return self._reaches_pin(kept, zone, held)
 
-    def _reaches_pin(self, kept: Any, held: frozenset[str] | None) -> bool:
-        """`_reaches_session`, for a pin already read."""
-        if held is None or kept is None:
+    def _reaches_pin(self, kept: Any, zone: str | None, held: frozenset[str] | None) -> bool:
+        """`_reaches_session`, for the pins already read."""
+        if held is None:
             return True
-        return reaches(read(kept).source_ids, held)
+        return reaches(zoned(ALL if kept is None else read(kept).source_ids, zone), held)
 
     def _known_steps(self) -> Steps[tuple[str, ...]]:
         """The id of every session the deployment's backends hold."""
@@ -93,33 +97,49 @@ class SessionMethods:
             raise QuotaExceededError(msg)
 
     def session(
-        self, session_id: str, *, source_ids: Held | None = None, create: bool = False
+        self,
+        session_id: str,
+        *,
+        source_ids: Held | None = None,
+        datazone: str | None = None,
+        create: bool = False,
     ) -> Session | None:
         """One session, or `None` when this caller has no such session.
 
-        **A session whose pinned agent this caller cannot reach answers `None` too**, so
-        a leaked id confirms nothing; the reason is in that caller's audit line.
+        **A session whose pinned agent this caller cannot reach, or whose datazone they
+        are not in, answers `None` too**, so a leaked id confirms nothing.
 
         `create` makes a session not there yet, as a turn naming it would, so files can
         be placed before the first turn. One out of this caller's reach is still `None`.
         """
-        return drive(self._session_steps(session_id, source_ids, create=create))
+        caller = with_datazone(source_ids, datazone)
+        return drive(self._session_steps(session_id, caller, create=create))
 
     async def asession(
-        self, session_id: str, *, source_ids: Held | None = None, create: bool = False
+        self,
+        session_id: str,
+        *,
+        source_ids: Held | None = None,
+        datazone: str | None = None,
+        create: bool = False,
     ) -> Session | None:
         """`session`, for a caller on an event loop."""
-        return await adrive(self._session_steps(session_id, source_ids, create=create))
+        caller = with_datazone(source_ids, datazone)
+        return await adrive(self._session_steps(session_id, caller, create=create))
 
-    def sessions(self, *, source_ids: Held | None = None) -> tuple[Session, ...]:
+    def sessions(
+        self, *, source_ids: Held | None = None, datazone: str | None = None
+    ) -> tuple[Session, ...]:
         """Every session this caller reaches, most recently used first; every session
-        there is when no caller is named. Naming one costs a read per session, of its pin.
+        there is when no caller is named. Naming one costs a read per session, of its pins.
         """
-        return drive(self._sessions_steps(source_ids))
+        return drive(self._sessions_steps(with_datazone(source_ids, datazone)))
 
-    async def asessions(self, *, source_ids: Held | None = None) -> tuple[Session, ...]:
+    async def asessions(
+        self, *, source_ids: Held | None = None, datazone: str | None = None
+    ) -> tuple[Session, ...]:
         """`sessions`, for a caller on an event loop."""
-        return await adrive(self._sessions_steps(source_ids))
+        return await adrive(self._sessions_steps(with_datazone(source_ids, datazone)))
 
     def _session_steps(
         self, session_id: str, source_ids: Held | None, *, create: bool

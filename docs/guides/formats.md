@@ -1858,9 +1858,9 @@ system_prompt: |
 kf.run(Request(task="...", agent="analyst"), source_ids=["sales_db"], datazone="finance")
 ```
 
-`kingfisher run`, `decide` and `list` take `--datazone NAME` beside `--as`. In
-Python, a subagent declared without `build` writes `"datazone": "finance"`, and a
-tool file writes `ToolSpec(tool, datazone="finance")`.
+`kingfisher run`, `decide`, `list` and `artifact` take `--datazone NAME` beside
+`--as`. In Python, a subagent declared without `build` writes `"datazone": "finance"`,
+and a tool file writes `ToolSpec(tool, datazone="finance")`.
 
 - **It is an *and* with everything else.** A caller has to pass the subagent's or
   tool's `source_ids` *and* be in its datazone.
@@ -1870,6 +1870,11 @@ tool file writes `ToolSpec(tool, datazone="finance")`.
   whichever datazone its caller names. Nor does an entry —
   `{name: payroll, datazone: hr}` is refused, since on an entry it could only repeat
   the tool's own or contradict it.
+- **A session keeps the datazone of its first zoned turn.** What that turn's tools
+  returned stays in it, so from then on the session is read and carried on only from
+  that datazone -- `kf.session(id, source_ids=["sales_db"], datazone="finance")`, and
+  `--datazone` on `artifact` and `decide`. Any other caller is told there is no such
+  session. One no zoned turn ran in is reached from every datazone.
 - **A datazone the vocabulary does not declare stops the deployment**, as an
   undeclared source id does. With no `source_ids.yaml`, `datazone:` lines have no
   effect, and a caller naming a datazone is refused. `seed` leaves a definition
