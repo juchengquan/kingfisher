@@ -11,9 +11,10 @@ from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import ConfigError, Endpoint, ModelProfile
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.environment import config_from_env
 from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, subagent_of
+from tests.conftest import FakeToolCallingModel, subagent_of, subagents_dir
 
 #: A second endpoint, on a different wire format, so a test can tell "went
 #: elsewhere" from "went to the default" by which attribute the value landed on.
@@ -206,10 +207,19 @@ def test_a_subagent_naming_an_unrunnable_model_is_refused_by_name(cfg, session_d
 
 
 def test_a_subagent_nobody_activated_cannot_break_the_build(cfg, session_dir):
-    """Seeding a preset you cannot run costs nothing until you ask for it."""
-    define(cfg, "name: unreachable\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
+    """Seeding a preset you cannot run costs nothing until you ask for it.
+
+    The catalogue is read first because both definitions once went to `reviewer.yaml`,
+    so the unreachable one was overwritten and the build never saw it.
+    """
+    define(
+        cfg,
+        "name: unreachable\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n",
+        name="unreachable",
+    )
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
 
+    assert sorted(LocalSubagentRepository(subagents_dir(cfg)).specs) == ["reviewer", "unreachable"]
     assert build(cfg, session_dir)["name"] == "reviewer"
 
 
