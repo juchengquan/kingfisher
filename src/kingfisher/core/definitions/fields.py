@@ -8,12 +8,12 @@ from difflib import get_close_matches
 from types import MappingProxyType
 from typing import TYPE_CHECKING, NoReturn
 
-from kingfisher.core.access.capabilities import ALL, SEPARATOR, Selection
+from kingfisher.core.access import ALL, SEPARATOR, Selection
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
 
-    from kingfisher.core.access.source_ids import Audience
+    from kingfisher.core.access import Audience
 
 #: How alike two names must look for one to be called a typo of the other. It only ever
 #: words a refusal, never decides one: a guess must not change behaviour.

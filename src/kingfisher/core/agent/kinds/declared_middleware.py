@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
 
-from kingfisher.core.access.capabilities import (
+from kingfisher.core.access import (
     CapabilityError,
     Selection,
     approved_middleware,

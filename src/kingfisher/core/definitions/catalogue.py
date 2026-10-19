@@ -8,7 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from kingfisher.core.access.capabilities import ALL, SEPARATOR
+from kingfisher.core.access import ALL, SEPARATOR
 from kingfisher.core.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.agents.spec import DIRECTORY as AGENT_DIRECTORY

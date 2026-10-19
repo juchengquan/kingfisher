@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 
-from kingfisher.core.access.capabilities import ALL, Capabilities, bare_name
+from kingfisher.core.access import ALL, Capabilities, bare_name
 from kingfisher.core.definitions import fields
 from kingfisher.core.definitions.definition import SpecBase
 

@@ -16,14 +16,14 @@ from deepagents import FilesystemPermission, MemoryMiddleware, create_deep_agent
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 
-from kingfisher.core.access.capabilities import (
+from kingfisher.core.access import (
     ALL,
     Capabilities,
     CapabilityError,
     Selection,
+    offers,
     refuse_ungranted_models,
 )
-from kingfisher.core.access.reach import offers
 from kingfisher.core.agent.kinds.declared_middleware import (
     ByName,
     MiddlewareFactory,

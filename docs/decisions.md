@@ -4196,6 +4196,22 @@ every import beneath it. `core/`, `core/definitions/` and `core/agent/kinds/` im
 nothing: each kind is 5.2ms, where `import deepagents` alone is 845ms. *(Same
 measurement.)*
 
+**A folder table lists what the package's other folders take from one folder.**
+`core/access/__init__.py` is the first: a lazy `_EXPORTS` and its `X as X` stubs, carrying
+exactly the names imported from outside the folder, so a move inside it edits the table
+rather than its importers. The split that made `reach.py` edited an import in ten files
+outside the folder, where a table would have changed seven of its own entries. It is not
+an address and not an interface: nothing outside the wheel is told to import it, so it
+has no witness, and no `__all__`, since nobody star-imports a private folder; the two
+listings left are held to each other as a door's are. Lazy because the folders loop
+where the modules do not -- `core/access` and `core/definitions` with its kinds import
+each other, as do `core/agent` and `core/session` -- so an eager re-export would turn the
+loop into an import cycle. The public tables keep naming the module defining each name,
+so the startup check finds a public name in one step. `FOLDER_TABLES` and
+`test_a_folder_with_a_table_is_reached_through_it` hold it. A pilot: whether another
+folder gets one waits on what this one cost, and so does how the plugin rule reads a
+table, since no plugin takes anything from `core/access`. *(2026-10-19.)*
+
 **The rules**, all in `tests/unit/test_architecture.py`:
 
   - **`THIRD_PARTY`**, a per-folder library allowlist, deny by default, so an upgrade
@@ -4266,8 +4282,9 @@ the shape.
 `from .store import ...`, and anything in another folder, a child folder included, from
 `kingfisher.`. Held both ways, because ruff's `TID252` refuses only `..`: `from .child.x`
 passes it, nothing asks for the dot where it belongs, and a tree allowed either spelling
-grows both. The two public tables are exempt, so a stub names the same module as its
-`_EXPORTS` string. `test_a_dot_means_this_folder_and_a_full_path_another`.
+grows both. Every lazy table is exempt, a folder table as much as a door, so a stub
+names the module its `_EXPORTS` string does.
+`test_a_dot_means_this_folder_and_a_full_path_another`.
 *(2026-10-19.)*
 
 **A file is split where its history already splits it.** Two definitions belong

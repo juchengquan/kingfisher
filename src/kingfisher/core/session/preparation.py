@@ -7,8 +7,7 @@ from dataclasses import replace
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.core.access.source_ids import Held, zone_held
+from kingfisher.core.access import Capabilities, Held, zone_held
 from kingfisher.core.agent.activation import (
     for_the_caller,
     indistinct_subagents,

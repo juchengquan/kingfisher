@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from kingfisher.core.access.capabilities import ALL, Selection, refuse_ungranted_endpoint
+from kingfisher.core.access import ALL, Selection, refuse_ungranted_endpoint
 from kingfisher.core.config import ConfigError, Landing, WireFormat
 
 if TYPE_CHECKING:

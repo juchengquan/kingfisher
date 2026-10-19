@@ -7,15 +7,16 @@ from typing import TYPE_CHECKING, Any
 
 from deepagents import FilesystemPermission
 
-from kingfisher.core.access.capabilities import (
+from kingfisher.core.access import (
     ALL,
     Capabilities,
     Selection,
     bare_name,
+    handed_work_by,
     narrowed,
     refuse_unoffered,
+    within_reach,
 )
-from kingfisher.core.access.reach import handed_work_by, within_reach
 from kingfisher.core.agent.kinds.subagents import indistinct
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions, bundled_skill_mounts

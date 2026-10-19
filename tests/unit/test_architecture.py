@@ -9,6 +9,7 @@ import sys
 from collections.abc import Iterable, Mapping, Sequence
 from functools import cache
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
@@ -257,8 +258,8 @@ def _misfiled_imports(path: Path) -> list[tuple[int, str, bool]]:
 def test_a_dot_means_this_folder_and_a_full_path_another():
     """A module in this folder imported by its full path, or another folder reached with a
     dot, which ruff refuses only as `..` and so lets the tree grow two spellings of one import."""
-    # The public tables spell each stub as its `_EXPORTS` string does, so the two read alike.
-    exempt = set(LAZY_TABLES.values())
+    # A lazy table spells each stub as its `_EXPORTS` string does, so the two read alike.
+    exempt = {*LAZY_TABLES.values(), *FOLDER_TABLES.values()}
     found = [
         f"{_module_id(path)}:{line} reaches `{module}` with a dot -- another folder, so "
         "spell it from `kingfisher.`"
@@ -1746,6 +1747,71 @@ LAZY_TABLES: dict[str, Path] = {
     "kingfisher.plugins": SRC / "plugins" / "__init__.py",
 }
 
+#: Packages whose lazy `__init__` lists what the package's other folders take from this
+#: one. Not doors: nothing outside the wheel is told to import them, so no witness.
+FOLDER_TABLES: dict[str, Path] = {
+    "kingfisher.core.access": SRC / "core" / "access" / "__init__.py",
+}
+
+
+def test_every_lazy_init_is_a_door_or_a_folder_table():
+    """A lazy `__init__` registered as neither is invisible to `_loaded_by`, so every rule
+    reading the import graph would see an import through it load nothing past the package."""
+    lazy = {
+        ".".join(path.relative_to(SRC.parent).parent.parts): path
+        for path in _every(
+            [p for p in _package_modules() if p.name == "__init__.py"], "the package's __init__s"
+        )
+        if any(
+            isinstance(node, ast.FunctionDef) and node.name == "__getattr__"
+            for node in ast.parse(path.read_text(encoding="utf-8")).body
+        )
+    }
+
+    assert not set(LAZY_TABLES) & set(FOLDER_TABLES), "a table is a door or a folder's, not both"
+    assert lazy == {**LAZY_TABLES, **FOLDER_TABLES}, (
+        f"lazy `__init__`s {sorted(lazy)} against those registered "
+        f"{sorted({**LAZY_TABLES, **FOLDER_TABLES})}: a door goes in LAZY_TABLES with a "
+        "witness table, a folder's list of what its neighbours take in FOLDER_TABLES"
+    )
+
+
+def test_a_folder_with_a_table_is_reached_through_it():
+    """An import reaching past a folder's table is one a move inside the folder breaks, one
+    inside the folder through its own table bypasses the import graph's view of it, and a
+    name on the table nothing outside takes is one nobody asked for."""
+    doors = set(LAZY_TABLES.values())
+    past, own, unasked = [], [], []
+    for package, table_path in sorted(FOLDER_TABLES.items()):
+        folder, table = table_path.parent, set(_folder_tables()[package])
+        taken: set[str] = set()
+        for path in _every(_package_modules(), "the package"):
+            if path in doors:
+                continue
+            for module, names in _imported_names(path).items():
+                stem, _, last = module.rpartition(".")
+                if path.is_relative_to(folder):
+                    # `from . import X` arrives as the module `package.X`, taking nothing.
+                    through = names if module == package else {last} if stem == package else set()
+                    own += [f"{_module_id(path)}: {name}" for name in sorted(through & table)]
+                elif module.startswith(f"{package}."):
+                    past.append(f"{_module_id(path)} -> {module}")
+                elif module == package:
+                    taken |= names
+                    # A whole module taken through the package gets around the list.
+                    past += [f"{_module_id(path)} -> {package}:{n}" for n in sorted(names - table)]
+        unasked += [f"{package}:{name}" for name in sorted(table - taken)]
+
+    assert not past, (
+        f"{past} reach past a folder's table -- take the name from the package, and put it "
+        "on the table if it is not there"
+    )
+    assert not own, (
+        f"{own} take a name from their own folder's table -- import it from the module "
+        "defining it, as the rest of the folder does"
+    )
+    assert not unasked, f"{unasked} are on a folder's table and nothing outside it takes them"
+
 
 #: Who asked for each public name, one table per door. Keyed by `LAZY_TABLES`, which
 #: is the list of doors, so opening a third without a table of its own fails below --
@@ -2009,7 +2075,7 @@ def test_the_stub_block_and_the_export_table_name_the_same_things():
     every test -- it is simply untyped, which is why this asks `ty` rather than the
     suite.
     """
-    for package, path in sorted(LAZY_TABLES.items()):
+    for package, path in sorted({**LAZY_TABLES, **FOLDER_TABLES}.items()):
         import importlib
 
         table = importlib.import_module(package)._EXPORTS
@@ -2126,18 +2192,27 @@ def _lazy_tables() -> dict[str, dict[str, str]]:
     return {package: importlib.import_module(package)._EXPORTS for package in LAZY_TABLES}
 
 
+@cache
+def _folder_tables() -> dict[str, dict[str, str]]:
+    """Each folder table, read off the package as `_lazy_tables` reads a door."""
+    import importlib
+
+    return {package: importlib.import_module(package)._EXPORTS for package in FOLDER_TABLES}
+
+
 def _loaded_by(dotted: str) -> str | None:
     """The module an import statement actually puts in `sys.modules`.
 
     `from kingfisher import Kingfisher` loads `core.service`, not `kingfisher`:
-    the name resolves through `__getattr__`. That is the one place walking the prefix
-    gives the wrong answer, and it is the answer the three `cli` modules
-    turn on -- each reaches a dozen names through the front door and would otherwise
-    look like it loads nothing but `kingfisher` itself.
+    the name resolves through `__getattr__`, as one through a folder table does. Those
+    are the places walking the prefix gives the wrong answer, and it is the answer the
+    three `cli` modules turn on -- each reaches a dozen names through the front door and
+    would otherwise look like it loads nothing but `kingfisher` itself.
     """
     package, _, name = dotted.rpartition(".")
-    if name in _lazy_tables().get(package, {}):
-        return _lazy_tables()[package][name]
+    for tables in (_lazy_tables(), _folder_tables()):
+        if name in tables.get(package, {}):
+            return tables[package][name]
     candidate = dotted
     while candidate and candidate not in _module_paths():
         candidate = candidate.rpartition(".")[0]
@@ -3759,16 +3834,21 @@ def _package_named(module: str, modules: set[str]) -> tuple[str, ...]:
 
 
 def _bound_by(
-    imports: Sequence[ast.stmt], modules: set[str], package: tuple[str, ...]
+    imports: Sequence[ast.stmt],
+    modules: set[str],
+    package: tuple[str, ...],
+    tables: Mapping[str, Mapping[str, str]] = MappingProxyType({}),
 ) -> dict[str, tuple[str, ...]]:
-    """What each imported local name stands for: `("module", m)` or `("name", m, n)`."""
+    """What each imported local name stands for: `("module", m)` or `("name", m, n)`,
+    a name taken through a folder table standing for the module the table names."""
     bound: dict[str, tuple[str, ...]] = {}
     for node in imports:
         if isinstance(node, ast.ImportFrom) and (source := _source_module(node, package)):
             for alias in node.names:
                 whole = f"{source}.{alias.name}"
+                where = tables.get(source, {}).get(alias.name, source)
                 bound[alias.asname or alias.name] = (
-                    ("module", whole) if whole in modules else ("name", source, alias.name)
+                    ("module", whole) if whole in modules else ("name", where, alias.name)
                 )
         elif isinstance(node, ast.Import):
             for alias in node.names:
@@ -3777,16 +3857,18 @@ def _bound_by(
     return bound
 
 
-def _reads_of(
+def _reads_of(  # noqa: PLR0913 -- the walk's state, passed so `_live` runs on sources of its own
     owner: list[ast.stmt],
     module: str,
     local: dict[str, tuple[str, list[ast.stmt]]],
     bound: dict[str, tuple[str, ...]],
     modules: set[str],
+    *,
+    tables: Mapping[str, Mapping[str, str]],
 ) -> set[Named]:
     """The module-level names these statements read, each resolved to where it is defined."""
     nested = [n for o in owner for n in ast.walk(o) if isinstance(n, ast.Import | ast.ImportFrom)]
-    names = {**bound, **_bound_by(nested, modules, _package_named(module, modules))}
+    names = {**bound, **_bound_by(nested, modules, _package_named(module, modules), tables)}
     found: set[Named] = set()
     for node in (n for o in owner for n in ast.walk(o)):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
@@ -3819,6 +3901,7 @@ def _live(
     whole: frozenset[str] = frozenset(),
     public: tuple[str, ...] = PUBLIC_ADDRESSES,
     entry_points: frozenset[Named] = frozenset(),
+    tables: Mapping[str, Mapping[str, str]] = MappingProxyType({}),
 ) -> tuple[dict[Named, str], set[Named]]:
     """Every module-level definition and constant, by kind, and the ones something reaches.
 
@@ -3834,13 +3917,13 @@ def _live(
     defined: dict[Named, str] = {}
     for module, tree in trees.items():
         local = {} if module in whole else _module_definitions(tree)
-        bound = _bound_by(_top_level(tree), modules, _package_named(module, modules))
+        bound = _bound_by(_top_level(tree), modules, _package_named(module, modules), tables)
         owned = {id(node) for _, nodes in local.values() for node in nodes}
         for name, (kind, nodes) in local.items():
             defined[(module, name)] = kind
-            edges[(module, name)] = _reads_of(nodes, module, local, bound, modules)
+            edges[(module, name)] = _reads_of(nodes, module, local, bound, modules, tables=tables)
         rest = [node for node in tree.body if id(node) not in owned]
-        roots |= _reads_of(rest, module, local, bound, modules)
+        roots |= _reads_of(rest, module, local, bound, modules, tables=tables)
         if module in public:
             roots |= {(b[1], b[2]) for b in bound.values() if b[0] == "name"}
     live: set[Named] = set()
@@ -3871,7 +3954,9 @@ def _package_liveness() -> tuple[dict[Named, str], set[Named]]:
             target.partition(":") for target in scripts["project"]["scripts"].values()
         )
     )
-    return _live(sources, whole=frozenset(whole), entry_points=entry_points)
+    return _live(
+        sources, whole=frozenset(whole), entry_points=entry_points, tables=_folder_tables()
+    )
 
 
 def test_a_dead_name_is_found_by_its_module_not_its_spelling():
@@ -3911,6 +3996,18 @@ def test_a_dead_name_is_found_by_its_module_not_its_spelling():
         ("pkg.a", "read_only_by_the_dead"),
         ("pkg.b", "unused"),
     ]
+
+
+def test_a_name_taken_through_a_folder_table_is_the_definition_it_names():
+    """Read as the package's own name, every definition reached only through the
+    `core.access` table looked dead the day the table was added."""
+    sources = {"pkg.a": "def routed(): ...\n", "pkg.b": "from pkg import routed\nrouted()\n"}
+
+    _, live = _live(sources, tables={"pkg": {"routed": "pkg.a"}})
+    _, unrouted = _live(sources)
+
+    assert ("pkg.a", "routed") in live
+    assert ("pkg.a", "routed") not in unrouted, "the control: without the table it is dead"
 
 
 def _mixed_into(public: frozenset[str]) -> frozenset[str]:

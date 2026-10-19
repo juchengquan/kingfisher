@@ -6,23 +6,24 @@ from dataclasses import KW_ONLY, dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access.capabilities import (
+from kingfisher.core.access import (
     ALL,
     SEPARATOR,
     CapabilityError,
     Selection,
     belongs_in,
+    jointly,
     narrowed,
+    reaches,
     refuse_unoffered,
+    zoned,
 )
-from kingfisher.core.access.reach import reaches
-from kingfisher.core.access.source_ids import jointly, zoned
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
-    from kingfisher.core.access.source_ids import Audience
+    from kingfisher.core.access import Audience
 
 
 def reference(source: str, name: str) -> str:

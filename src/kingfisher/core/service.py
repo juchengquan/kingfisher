@@ -10,14 +10,19 @@ from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import checks as access
-from kingfisher.core.access.capabilities import (
+from kingfisher.core.access import (
     UNRESTRICTED,
+    AccessReport,
     Capabilities,
     CapabilityError,
+    Held,
+    SourceIds,
+    audit,
+    caller_holds,
+    held_by,
+    reaches,
+    refuse_undeclared,
 )
-from kingfisher.core.access.reach import reaches
-from kingfisher.core.access.source_ids import AccessReport, Held, SourceIds
 from kingfisher.core.agent.activation import defined_subagents
 from kingfisher.core.agent.assembly import (
     build_agent,
@@ -158,10 +163,10 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
             # Refusals first: a typo makes a line both undeclared and narrowing, and as a
             # narrowing it would explain the wrong fault. Tools are checked, not audited:
             # one stating no audience is open to whoever opens an agent granting it.
-            access.refuse_undeclared(
+            refuse_undeclared(
                 *kinds, ("tool", self.catalogue.audienced_tools), vocabulary=self.access
             )
-            self.access_report = access.audit(*kinds, vocabulary=self.access)
+            self.access_report = audit(*kinds, vocabulary=self.access)
 
         # Last, so the line reports what was resolved, and a wiring failure raises
         # instead of announcing a deployment that never came up.
@@ -179,7 +184,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
 
     def _held_for(self, source_ids: Held | None) -> frozenset[str] | None:
         """The caller's expanded source ids, or `None` where nothing narrows."""
-        return access.held_by(self.access, source_ids)
+        return held_by(self.access, source_ids)
 
     def _effective_grants(self, source_ids: Held | None) -> Capabilities:
         """The ceiling for one call: this deployment's, narrowed by the caller's."""
@@ -187,7 +192,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # reaching nothing. Source ids narrow per definition, in `AgentSpec.declares`.
         # No branch on `source_ids is not None`: `UNSCOPED` is not `None`, and must run
         # where there is no policy.
-        access.caller_holds(self.access, source_ids)
+        caller_holds(self.access, source_ids)
         return self.grants
 
     def _graph_for(  # noqa: PLR0913 -- setup holds each; deriving one here derives it twice
@@ -292,7 +297,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         offered = self.catalogue.agents.specs
         # Filtered before the listing is built: an agent out of reach must read exactly
         # like one never written, or a caller could enumerate the catalogue by guessing.
-        if (held := access.caller_holds(self.access, source_ids)) is not None:
+        if (held := caller_holds(self.access, source_ids)) is not None:
             offered = {
                 n: spec for n, spec in offered.items() if reaches(spec.source_ids, held)
             }
