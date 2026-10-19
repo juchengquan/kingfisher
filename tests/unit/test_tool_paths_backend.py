@@ -16,7 +16,7 @@ from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins import LocalSessions, ShellSettings
-from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
+from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced, shell_confinement
 from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_session_files import Elsewhere, ElsewhereFiles
@@ -72,7 +72,7 @@ def test_the_pinned_agent_is_not_handed_to_a_tool(scripted):
     """Nothing signs the pin, so nothing would catch a tool that writes to its `path`.
     The file tools are refused `/.harness`, and a tool is refused it the same way now.
     """
-    if harness_unfenced(scripted, ShellSettings()) is not None:
+    if harness_unfenced(ShellSettings(), shell_confinement(scripted, ShellSettings())) is not None:
         pytest.skip("no sandbox kingfisher applies itself is available on this host")
     _with_the_tool(scripted)
     start(scripted, "s")

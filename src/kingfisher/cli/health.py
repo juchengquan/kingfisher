@@ -21,7 +21,7 @@ from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.confinement import (
     LINUX_FENCES,
     SANDBOX_EXEC,
-    shell_confinement,
+    Confinement,
 )
 
 #: Settings nothing reads any more, and what to write instead. A renamed variable fails
@@ -99,7 +99,7 @@ def _key_source(endpoint: Any) -> str:
     return endpoint.key_env or "set in code"
 
 
-def _keys_file(cfg: Config, sessions: object) -> Iterator[Check]:
+def _keys_file(cfg: Config, sessions: object, confined: Confinement) -> Iterator[Check]:
     """Whether the agent's shell can read the keys file, by the fence that is running.
 
     A report, never a refusal: nothing keeps the shell from the keys but where the file sits.
@@ -117,7 +117,7 @@ def _keys_file(cfg: Config, sessions: object) -> Iterator[Check]:
             "fence allows",
         )
         return
-    mechanism = shell_confinement(cfg, shell).mechanism
+    mechanism = confined.mechanism
     reason = confinement.shell_reads(
         path,
         mechanism=mechanism,
@@ -157,7 +157,7 @@ def _keys_file_mode(cfg: Config) -> Iterator[Check]:
 
 
 def _starting_environment(
-    cfg: Config, from_dotenv: frozenset[str] | None, sessions: object
+    cfg: Config, from_dotenv: frozenset[str] | None, sessions: object, confined: Confinement
 ) -> Iterator[Check]:
     """Keys that were in the environment before kingfisher started, where the shell reads it.
 
@@ -165,10 +165,9 @@ def _starting_environment(
     no fence nothing stops it; what `.env` added later is not in it. Silent, rather than
     possibly wrong, where `from_dotenv` is `None` or the shell cannot be seen.
     """
-    shell = health_isolation.shell_of(sessions)
-    if from_dotenv is None or shell is None:
+    if from_dotenv is None or health_isolation.shell_of(sessions) is None:
         return
-    mechanism = shell_confinement(cfg, shell).mechanism
+    mechanism = confined.mechanism
     if mechanism == SANDBOX_EXEC:
         where = "on this Mac"
     elif mechanism in LINUX_FENCES:
@@ -383,15 +382,16 @@ def examine(
         # First: a setting that stopped being read looks exactly like one nobody set.
         checks += _retired()
         checks += _models(cfg)
-        checks += _keys_file(cfg, sessions)
+        confined = health_isolation.fence_of(cfg, sessions)
+        checks += _keys_file(cfg, sessions, confined)
         checks += _keys_file_mode(cfg)
-        checks += _starting_environment(cfg, from_dotenv, sessions)
+        checks += _starting_environment(cfg, from_dotenv, sessions, confined)
         checks += _packs(cfg)
         checks += _at_rest(cfg, sessions)
         if found is None:
             found = inventory(cfg, sessions=sessions)
         checks += health_definitions.checks(cfg, found)
-        checks += health_isolation.checks(cfg, sessions)
+        checks += health_isolation.checks(cfg, sessions, confined)
     except ConfigError as exc:  # pragma: no cover -- belt and braces
         checks.append(Check("configuration", "fail", str(exc)))
     return tuple(checks)

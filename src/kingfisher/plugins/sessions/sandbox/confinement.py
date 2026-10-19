@@ -268,9 +268,12 @@ def shell_confinement(
 FENCES_HARNESS = (SANDBOX_EXEC, BUBBLEWRAP, LANDLOCK)
 
 
-def harness_unfenced(cfg: Config, shell: ShellSettings) -> str | None:
-    """Why nothing kingfisher runs keeps the shell out of `.harness`, or `None`."""
-    if shell_confinement(cfg, shell).mechanism in FENCES_HARNESS:
+def harness_unfenced(shell: ShellSettings, confined: Confinement) -> str | None:
+    """Why nothing kingfisher runs keeps the shell out of `.harness`, or `None`.
+
+    `confined` is what `shell_confinement` gave `shell`.
+    """
+    if confined.mechanism in FENCES_HARNESS:
         return None
     return (
         f"KINGFISHER_SHELL_SANDBOX is {shell.sandbox!r}, and nothing kingfisher "
