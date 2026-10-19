@@ -189,4 +189,17 @@ def _gated_tools(written: object, source: Path) -> tuple[str, ...]:
             f"opposite. Name the tools that need a person."
         )
         raise AgentError(msg)
+    # Not a `where::what` reference, which `tools:` takes and this field cannot: a pause is
+    # keyed by the name the call carries, so a reference reached deepagents matching nothing
+    # and the gated tool ran. Refused rather than resolved to the bare name, because the
+    # bare name stops every tool answering to it and the reference asks for one of them.
+    if written_by_file := tuple(one for one in names if bare_name(one) != one):
+        msg = (
+            f"{source.name}: interrupt_on names {', '.join(written_by_file)} by file, "
+            f"and a gate is keyed by the name a call carries -- write "
+            f"{', '.join(bare_name(one) for one in written_by_file)}. A call carries "
+            f"the name alone, so the gate stops every tool answering to it, wherever "
+            f"each one is defined."
+        )
+        raise AgentError(msg)
     return tuple(dict.fromkeys(names))

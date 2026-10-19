@@ -546,6 +546,21 @@ went together. `distinct: true` turned `indistinct`'s report into a refusal, and
 `second-opinion` was its only user in the shipped catalogue, so both went; the field
 can come back if that subagent does.
 
+**A gate is keyed by the name a call carries, and `interrupt_on` takes nothing else.**
+It was judged against the spelling a *grant* uses, which is `vendor_a.py::fetch` once
+two files define `fetch` -- so the bare name was refused as unknown, the long one was
+accepted, and deepagents, which keys an interrupt by the name on the call, matched
+neither. Driven: the subagent holding the tool ran it unapproved, and no spelling
+existed that worked. A bundled tool could not be gated in any spelling at all, in the
+one graph it exists in. Both read off the names calls carry now. The reference form is
+refused at the read rather than resolved to the bare name, because the bare name stops
+every tool answering to it: that is more than the reference asks for, and a gate
+silently doing more is the same defect the other way round. A name only a *compiled*
+subagent's folder holds is refused with the reason it cannot fire -- deepagents hands a
+graph it did not build none of this agent's gates. **Still open:** a gated *catalogue*
+tool handed to a compiled subagent runs there unapproved, which predates this and is
+measured. *(2026-10-19, from an architecture review.)*
+
 **A turn resolves its agent once.** Admission resolved it twice down two branches --
 from the catalogue, writing the pin, then reading the pin back -- counted at two calls,
 two snapshot reads and two parses per turn under a policy. `_claimed` resolves it and

@@ -18,6 +18,26 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A gate names the tool a call carries, after #903
+
+- **`interrupt_on` no longer takes a `where::what` reference.** An agent file gating
+  `vendor_a.py::fetch` is refused at the read, and the message names what to write:
+
+  ```
+  operator.yaml: interrupt_on names vendor_a.py::fetch by file, and a gate is keyed by
+  the name a call carries -- write fetch. A call carries the name alone, so the gate
+  stops every tool answering to it, wherever each one is defined.
+  ```
+
+  Nothing is lost by the refusal: that spelling built and then gated nothing, because
+  deepagents keys an interrupt by the name on the call. The bare name is what to write,
+  where it used to be refused as a name nothing answered to, and it stops a call on
+  every tool of that name.
+- **A subagent's own bundled tool can be gated**, by its name. No spelling of one was
+  accepted before, in the one graph it exists in.
+- **A gate on a name only a compiled subagent's folder holds is refused**: deepagents
+  hands a graph it did not build no gates at all, so that call would run unapproved.
+
 ## A definition naming skills holds `read_file`, after #877
 
 - **A file whose `skills:` names anything is refused at startup unless its

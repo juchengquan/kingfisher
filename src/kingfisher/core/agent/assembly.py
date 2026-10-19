@@ -56,6 +56,7 @@ from kingfisher.core.agent.kinds.tools import (
     _private_tools,
     _resolve_tools,
     bundled_tools_in,
+    handed_graphs_in,
     registered_tools,
 )
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware, high_mark
@@ -170,22 +171,34 @@ def _gates_for(agent: AgentSpec | None, checkpointer: Any) -> tuple[str, ...]:
 
 
 def _refuse_unknown_gates(
-    agent: AgentSpec | None, gated: tuple[str, ...], offers: Any
+    # `Any`: naming `_ToolSurface` here is naming a private of the module this one calls.
+    agent: AgentSpec | None, gated: tuple[str, ...], surface: Any
 ) -> None:
-    """Refuse a gate on a name no tool in this workspace answers to.
+    """Refuse a gate on a name no tool anywhere in this build answers to.
 
     Against what the workspace offers, not this caller's grant: a gate on a tool one
     caller was not granted is fine, and a name matching nothing is a typo that leaves
     the author believing a call is gated.
+
+    The names calls carry, which is what an interrupt is keyed by, so a subagent's own
+    bundled tool can be gated and an ambiguous one is gated by the name both answer to.
     """
     if not gated or agent is None:
         return
-    known = set(offers.builtin) | set(offers.workspace)
-    if unknown := tuple(name for name in gated if name not in known):
+    if held := tuple(name for name in gated if name in surface.only_compiled):
+        owners = ", ".join(sorted({surface.only_compiled[name] for name in held}))
+        msg = (
+            f"{agent.name}: interrupt_on names {', '.join(held)}, which only compiled "
+            f"subagent(s) {owners} hold, in their own folder. deepagents runs a compiled "
+            f"graph as it was given and hands it none of this agent's gates, so the call "
+            f"would run unapproved. Drop the gate, or make it a subagent kingfisher builds"
+        )
+        raise AgentError(msg)
+    if unknown := tuple(name for name in gated if name not in surface.dispatchable):
         msg = (
             f"{agent.name}: interrupt_on names {', '.join(unknown)}, which no tool "
             f"here answers to -- a gate on a name nothing matches never fires. "
-            f"Offered: {', '.join(sorted(known))}"
+            f"Offered: {', '.join(sorted(surface.dispatchable))}"
         )
         raise AgentError(msg)
 
@@ -350,7 +363,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     # A bundle's tools too: a subagent's calls are recorded, and a bundled tool may say
     # who it admits.
     own = (
-        own_audiences((*walked, *(found for found, _ in bundled)))
+        own_audiences((*walked, *(found for found, _, _ in bundled)))
         if cfg.access is not None
         else {}
     )
@@ -521,6 +534,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         walked,
         assemble,
         bundled=bundled,
+        handed=handed_graphs_in(roots),
         # Either tool list naming anything needs the offered sets, and a subagent
         # naming a helper the built tool objects: the probe is what yields both.
         names_needed=bool(gated)
@@ -539,7 +553,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     )
     # After the probe: what a workspace offers is only knowable from an assembled graph,
     # and asking `builtin_tool_names` from here would recurse. `gated` forces the probe.
-    _refuse_unknown_gates(agent, gated, surface.offers)
+    _refuse_unknown_gates(agent, gated, surface)
     permitted = surface.permitted
 
     if interpreter_at is not None and (permitted is not None or gated):
