@@ -378,22 +378,45 @@ def examine(
 
         sessions = configured_sessions()
     checks: list[Check] = []
+    # First: a setting that stopped being read looks exactly like one nobody set.
+    checks += _retired()
+    checks += _models(cfg)
+    # A refusal per input, not one around every row: a bad shell setting or skills mount
+    # would otherwise hide every row after it, including the many that never read it.
+    confined: Confinement | None = None
+    unfenced: list[Check] = []
     try:
-        # First: a setting that stopped being read looks exactly like one nobody set.
-        checks += _retired()
-        checks += _models(cfg)
         confined = health_isolation.fence_of(cfg, sessions)
+    except ConfigError as exc:
+        unfenced.append(
+            Check(
+                "shell",
+                "fail",
+                str(exc),
+                "fix it; until then the rows that ask the fence are not checked",
+            )
+        )
+    if confined is not None:
         checks += _keys_file(cfg, sessions, confined)
-        checks += _keys_file_mode(cfg)
+    checks += _keys_file_mode(cfg)
+    if confined is not None:
         checks += _starting_environment(cfg, from_dotenv, sessions, confined)
-        checks += _packs(cfg)
-        checks += _at_rest(cfg, sessions)
+    checks += _packs(cfg)
+    checks += _at_rest(cfg, sessions)
+    try:
         if found is None:
             found = inventory(cfg, sessions=sessions)
         checks += health_definitions.checks(cfg, found)
-        checks += health_isolation.checks(cfg, sessions, confined)
     except ConfigError as exc:
-        checks.append(Check("configuration", "fail", str(exc)))
+        checks.append(
+            Check(
+                "definitions",
+                "fail",
+                str(exc),
+                "fix it; until then the rows on what the workspace defines are not checked",
+            )
+        )
+    checks += unfenced if confined is None else health_isolation.checks(cfg, sessions, confined)
     return tuple(checks)
 
 
