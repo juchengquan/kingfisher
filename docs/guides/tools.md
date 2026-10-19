@@ -362,7 +362,7 @@ workspace defines is worse than a run that stops.
 | A class where an instance was meant | `TOOLS = [Shout]` for `[Shout()]`. See [the note above](#or-a-class-when-you-want-to-declare-the-schema) |
 | A `ToolSpec` name or description that did not take | The tool computes its own, so the model would never be shown yours. See [above](#another-name-or-another-description) |
 | A module that will not import | Skipping it gives the agent silently fewer tools |
-| Two modules claiming one tool name | `tools_by_name` is a dict; the later would win in silence. Checked across folders, so two people cannot each add a `find_company` |
+| One file defining a tool name twice | `tools_by_name` is a dict; the later would win in silence. Across files the path tells them apart — see [above](#two-files-may-define-one-name) |
 | A tool named like a built-in | Same, except the thing that vanishes is `read_file` |
 | A relative import in a loose file | It has no parent package and never will. The error says to make the folder a package |
 

@@ -230,7 +230,7 @@ def _denied_path(read_at: str) -> str:
     return f"{SKILLS_ROUTE}{read_at.lstrip('/').rsplit('/', 1)[0]}/**"
 
 
-def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[FilesystemPermission]:
+def skill_denials(activated: tuple[str, ...], registry: Any) -> list[FilesystemPermission]:
     """Deny reads of skills this request did not activate.
 
     From each skill's own path, not its name: a skill in a folder is not at
@@ -246,7 +246,7 @@ def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[Filesystem
     ]
 
 
-def _private_skills(
+def private_skills(
     catalogue: Definitions, name: str
 ) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]] | None:
     """The skills a subagent brings itself, and where they are mounted."""
@@ -279,7 +279,7 @@ def _private_skills(
     )
 
 
-def _activated_subagents(
+def activated_subagents(
     cfg: Config,
     capabilities: Capabilities,
     *,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 import time
@@ -20,6 +21,7 @@ from kingfisher.core.layout import DEFAULT_LAYOUT, SKILLS_ROUTE, Layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, _claim_at
 from kingfisher.plugins.sessions.folders import LocalSessionDirs
+from tests.checks import sessions as sessions_kit
 from tests.checks.sessions import CONTRACT_SESSIONS, SESSIONS_CHECKS
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere
@@ -77,11 +79,21 @@ def test_the_kit_writes_where_the_deployment_keeps_its_outputs(cfg):
         check(lambda: (made, OnlyItsOwnFolders()))
 
 
-def test_the_contract_is_not_quietly_empty():
-    """A hand-maintained tuple, and a rule walking an empty one passes having checked
-    nothing.
-    """
-    assert len(SESSIONS_CHECKS) >= 5
+def test_the_kit_runs_every_check_it_defines():
+    """A check the kit defines and `SESSIONS_CHECKS` leaves out is one no deployment running
+    the kit ever runs."""
+    # Public and defined in the kit itself: its helpers are private, and what it imports
+    # is not a check.
+    defined = {
+        name
+        for name, value in vars(sessions_kit).items()
+        if inspect.isfunction(value)
+        and value.__module__ == sessions_kit.__name__
+        and not name.startswith("_")
+    }
+
+    assert defined
+    assert sorted(check.__name__ for check in SESSIONS_CHECKS) == sorted(defined)
 
 
 class Shared(LocalSessions):

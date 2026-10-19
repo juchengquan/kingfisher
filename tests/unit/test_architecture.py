@@ -120,7 +120,7 @@ def _every(collection: list[Path], what: str) -> list[Path]:
     A rule that walks a collection, gathers offenders and asserts the list is empty
     passes when the collection is empty too -- the loop simply never runs. That is
     the failure `test_no_rule_here_is_parametrized_over_nothing` exists for, and it
-    watches five collections *by name*, so a rule walking a sixth was never covered
+    watches only the collections it names, so a rule walking another was never covered
     by it. Asked here instead, by every rule at the point it walks anything, which is
     the one place the question cannot be forgotten.
 
@@ -187,7 +187,7 @@ def test_a_layer_rule_reaches_into_a_subpackage(tmp_path):
 
 
 def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
-    """`from .."""
+    """`from .. import config` once passed every rule here, read as importing nothing."""
     package = tmp_path / "kingfisher"
     (package / "domain").mkdir(parents=True)
     (package / "__init__.py").touch()
@@ -832,17 +832,24 @@ def test_no_docstring_stops_mid_sentence():
     Cheap where the module rule was expensive: whether a sentence ends is syntax,
     where whether a module exists needed tense and intent. Measured against the
     tree before the prose was cut -- 2,705 docstrings, no false positives -- and
-    it catches all three the cutting produced.
+    it catches all three the cutting produced. A cut inside a code span ends on
+    anything, so an unclosed backtick is the other half; a fence is stripped first,
+    since one mentioned in passing is three.
     """
-    unfinished = []
+    unfinished, unclosed = [], []
     for path in _everything_that_imports_kingfisher():
         for name, doc in _docstrings(path):
             if inspect.cleandoc(doc).rstrip().endswith(UNFINISHED):
                 unfinished.append(f"{_module_id(path)}::{name}")
+            if doc.replace("```", "").count("`") % 2:
+                unclosed.append(f"{_module_id(path)}::{name}")
 
     assert not unfinished, (
         f"{unfinished} end on a dash, a colon or a conjunction — each promises "
         "something underneath it that is not there, which reads as finished prose"
+    )
+    assert not unclosed, (
+        f"{unclosed} open a code span they never close — the sentence was cut inside it"
     )
 
 
@@ -1856,9 +1863,6 @@ WITNESSES: dict[str, dict[str, str]] = {
         "config_from_env": "document",
         "Request": "document",
         "Capabilities": "document",
-        # `ports.md` tells an adapter to raise this one, imported from `kingfisher`,
-        # because a caller tells a bad session id from a broken store by the class.
-        "UnsafeReferenceError": "document",
         # What those documented calls take and hand back -- `Kingfisher` takes a
         # `Config`, `run` returns a `RunResult`, `stream` yields `RunEvent`s. The
         # type of a documented call's answer cannot be private.
@@ -1972,15 +1976,15 @@ WITNESSES: dict[str, dict[str, str]] = {
         "Layout": "document",
         "DEFAULT_LAYOUT": "document",
         # The shipped pair behind two of the interfaces above, public so a deployment
-        # can wrap one rather than reimplement it. `upgrading.md` records the move:
-        # they were "not public anywhere" before this door existed.
-        "JsonlRunEvents": "document",
-        "InstructionsFile": "document",
-        # What `KINGFISHER_WIRE_FORMATS` returns, and the shipped two a factory adding a
-        # third starts from. `configuration.md` writes the setting and the factory out,
-        # importing `WireFormat` from this door.
+        # can wrap one rather than reimplement it. No page writes either name out.
+        "JsonlRunEvents": "embedder",
+        "InstructionsFile": "embedder",
+        # What `KINGFISHER_WIRE_FORMATS` returns. `configuration.md` writes the setting
+        # and the factory out, importing `WireFormat` from this door.
         "WireFormat": "document",
-        "WIRE_FORMATS": "document",
+        # The shipped two, public so a factory adding a third can extend them rather
+        # than reimplement them; no page writes the name out.
+        "WIRE_FORMATS": "embedder",
         # What `KINGFISHER_PLUGINS` returns, which `configuration.md` tells a deployment
         # to build in a module of its own.
         "Plugins": "document",
@@ -2994,6 +2998,8 @@ def test_only_the_record_says_what_a_skipped_definition_needs():
 
     searched = [
         *SRC.rglob("*.py"),
+        # The snippet most people copy, and it once dropped a file's datazone.
+        repo / "README.md",
         repo / "tests" / "integration" / "driver.py",
         repo / "tests" / "integration" / "seed_example.py",
         *(repo / "evals").glob("*.py"),
@@ -3305,13 +3311,12 @@ def test_every_record_this_package_hands_out_is_frozen():
 CALLER_FACING_ERRORS = frozenset({
     "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
     "SessionBusyError", "SubagentError", "UnknownSessionError",
-    "UnsafeReferenceError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.
-#: `HostPathError` is the backend refusing a host path the *agent* produced
-#: mid-turn, so it is not a request-time fault at all. Being here does not mean
-#: private -- `ConfigError` was public long before this rule existed -- it
+#: `HostPathError` and `UnsafeReferenceError` refuse a path the *agent* produced
+#: mid-turn, and reach the model as a correction, never a caller. Being here does
+#: not mean private -- `ConfigError` was public long before this rule existed -- it
 #: means a consumer is not expected to branch on it.
 DEPLOYMENT_ERRORS = frozenset({
     # `MiddlewareError` joins `ToolError` here for the reason `AgentError` sits here
@@ -3319,7 +3324,7 @@ DEPLOYMENT_ERRORS = frozenset({
     # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
     "AccessError", "AgentError", "ConfigError", "HostPathError", "InputsError",
-    "LoadError", "MiddlewareError", "ToolError",
+    "LoadError", "MiddlewareError", "ToolError", "UnsafeReferenceError",
 })
 
 #: Caused by the model's provider, and never raised to a caller: a turn ends on it as a

@@ -37,6 +37,7 @@ from .ledger import Ledger
 from .model import (
     Conversation,
     SessionBusyError,
+    refuse_files_of_another,
     unknown_session,
 )
 from .runlog import RunLogger
@@ -109,7 +110,9 @@ class Preparation:
         # its pinned agent, and that is read through the backend too.
         if files is None:
             files = yield from self._files_for(session.id)
-        harness = HarnessFiles(files, session.id)
+        else:
+            refuse_files_of_another(files, session.id)
+        harness = HarnessFiles(files)
         held = self._held_for(source_ids)
         # Read once, for reach here and for the agent the turn runs; neither asks for a
         # supplied graph under no policy.
