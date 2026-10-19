@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kingfisher.core.access.capabilities import ALL
-from kingfisher.core.access.reach import stated
-from kingfisher.core.access.source_ids import (
+from .capabilities import ALL
+from .reach import stated
+from .source_ids import (
     AccessError,
     AccessReport,
     Datazone,
@@ -19,7 +19,7 @@ from kingfisher.core.access.source_ids import (
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
 
-    from kingfisher.core.access.source_ids import SourceIds, Stated
+    from .source_ids import SourceIds, Stated
 
 #: One kind of definition and what this deployment has of it: `("agent", {name: spec})`.
 Kind = tuple[str, "Mapping[str, object]"]

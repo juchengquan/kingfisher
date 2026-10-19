@@ -8,22 +8,23 @@ from typing import Any, Literal
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
-from kingfisher.core.agent.middlewares.attachments import AttachmentsMiddleware
-from kingfisher.core.agent.middlewares.builtin_tools import BuiltinToolsMiddleware
-from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware
-from kingfisher.core.agent.middlewares.guarded_calls import (
+from kingfisher.core.agent.session_paths import SessionPaths
+from kingfisher.core.layout import Layout
+
+from .attachments import AttachmentsMiddleware
+from .builtin_tools import BuiltinToolsMiddleware
+from .clearing import ResultClearingMiddleware
+from .guarded_calls import (
     GuardedCallsMiddleware,
     WorkspaceToolFailureMiddleware,
 )
-from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
-from kingfisher.core.agent.middlewares.narrowing import (
+from .model_reply import ModelReplyMiddleware
+from .narrowing import (
     GrantedOnlyMiddleware,
     NarrowedSkillsMiddleware,
 )
-from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
-from kingfisher.core.agent.middlewares.step_budget import STEPS_PER_CALL, StepBudgetMiddleware
-from kingfisher.core.agent.session_paths import SessionPaths
-from kingfisher.core.layout import Layout
+from .recorder import RecorderMiddleware
+from .step_budget import STEPS_PER_CALL, StepBudgetMiddleware
 
 #: The graphs kingfisher builds itself: the agent, a subagent a definition declares, and
 #: deepagents' `general-purpose`, which is handed the agent's own tools. A compiled

@@ -4262,6 +4262,14 @@ file it no longer matches loses its exemption in silence.
 until a cold import failed; `test_no_module_in_the_package_can_reach_itself` refuses
 the shape.
 
+**A dot means this folder, a full path another.** A module imports its neighbours as
+`from .store import ...`, and anything in another folder, a child folder included, from
+`kingfisher.`. Held both ways, because ruff's `TID252` refuses only `..`: `from .child.x`
+passes it, nothing asks for the dot where it belongs, and a tree allowed either spelling
+grows both. The two public tables are exempt, so a stub names the same module as its
+`_EXPORTS` string. `test_a_dot_means_this_folder_and_a_full_path_another`.
+*(2026-10-19.)*
+
 **A file is split where its history already splits it.** Two definitions belong
 together when a commit touched both. Git's default hunk header names any line in column
 one, which inside a long class reports every method as the class, so `.gitattributes`

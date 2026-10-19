@@ -15,10 +15,11 @@ from kingfisher.core.definitions.importing import (
     modules_in,
     skipped,
 )
-from kingfisher.core.definitions.subagents import reading
-from kingfisher.core.definitions.subagents.spec import EXPORT, SubagentError, SubagentSpec, declared
 from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository
 from kingfisher.core.definitions.tools.spec import SEPARATOR, reference
+
+from . import reading
+from .spec import EXPORT, SubagentError, SubagentSpec, declared
 
 #: The folders a bundle keeps its own tools and skills in, which the definition walk must
 #: not descend into; any other folder under `subagents/` only groups definitions.

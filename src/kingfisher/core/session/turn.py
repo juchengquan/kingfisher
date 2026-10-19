@@ -10,14 +10,16 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.core.agent.middlewares.recorded import readable_size
 from kingfisher.core.layout import Layout
 from kingfisher.core.result import LedgerEntry, PendingDecision, RunEvent
-from kingfisher.core.session import runtime
+
+from . import runtime
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from kingfisher.core.config import Config
-    from kingfisher.core.session.store import KeptLedger
-    from kingfisher.core.session.transcript import Message
+
+    from .store import KeptLedger
+    from .transcript import Message
 
 
 @dataclass(frozen=True)

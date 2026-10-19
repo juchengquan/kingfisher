@@ -10,7 +10,6 @@ from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core import environment as config_module
 from kingfisher.core.access import checks as access
 from kingfisher.core.access.capabilities import (
     UNRESTRICTED,
@@ -30,14 +29,10 @@ from kingfisher.core.agent.kinds.declared_middleware import (
 )
 from kingfisher.core.agent.prompting import InstructionsFile, refuse_a_workspace_prompt
 from kingfisher.core.agent.usable_backend import refuse_unusable_backend
-from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
 from kingfisher.core.definitions.seeding import SEED_HINT, starter_agent
-from kingfisher.core.interfaces import Instructions, Sessions
-from kingfisher.core.origins import Origins
-from kingfisher.core.request import Request, Resume
 from kingfisher.core.session.disposal import Disposal
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.methods import SessionMethods
@@ -54,12 +49,18 @@ from kingfisher.core.session.store import (
     remember_agent,
 )
 from kingfisher.core.session.threads import thread_pool
-from kingfisher.core.workspace import ensure_layout
+
+from . import environment as config_module
+from .config import Config, ConfigError
+from .interfaces import Instructions, Sessions
+from .origins import Origins
+from .request import Request, Resume
+from .workspace import ensure_layout
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from kingfisher.core.interfaces import RunEvents
+    from .interfaces import RunEvents
 
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.

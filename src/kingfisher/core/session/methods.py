@@ -10,17 +10,18 @@ from kingfisher.core.access.reach import reaches
 from kingfisher.core.access.source_ids import with_datazone, zoned
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.request import Request, Resume
-from kingfisher.core.session.files import read_artifact
-from kingfisher.core.session.handle import Session
-from kingfisher.core.session.model import (
+
+from .files import read_artifact
+from .handle import Session
+from .model import (
     DEFAULT_SESSION,
     Conversation,
     QuotaExceededError,
     known,
     unknown_session,
 )
-from kingfisher.core.session.steps import Steps, adrive, drive, reading
-from kingfisher.core.session.store import (
+from .steps import Steps, adrive, drive, reading
+from .store import (
     HarnessFiles,
     pending_from_mark,
     pinned_in,

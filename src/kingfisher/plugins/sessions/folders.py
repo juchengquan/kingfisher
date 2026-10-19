@@ -8,7 +8,8 @@ from pathlib import Path
 
 from kingfisher.core.layout import Layout
 from kingfisher.core.session.model import UnknownSessionError
-from kingfisher.plugins.sessions.permissions import keep_tmp_private, unlock_and_retry
+
+from .permissions import keep_tmp_private, unlock_and_retry
 
 AGENTS_SCAFFOLD = """\
 # Project memory

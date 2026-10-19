@@ -11,7 +11,8 @@ from typing import Any
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.access.source_ids import SourceIds
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS_OWNED, SESSIONS, Layout
+
+from .layout import DEFAULT_LAYOUT, HARNESS_OWNED, SESSIONS, Layout
 
 #: The default `extra`, shared with `WireFormat.extra` because both spread into one
 #: `build_model` call under one rule: additive only, never a value the deployment set.

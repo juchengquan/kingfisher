@@ -9,8 +9,9 @@ from typing import TYPE_CHECKING, Literal
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 
 if TYPE_CHECKING:
-    from kingfisher.core.config import Config
     from kingfisher.core.definitions.catalogue import Definitions
+
+    from .config import Config
 
 __all__ = ["Kind", "Origin", "Origins"]
 

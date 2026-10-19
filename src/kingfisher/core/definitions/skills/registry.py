@@ -11,14 +11,15 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access.capabilities import SEPARATOR, CapabilityError
-from kingfisher.core.definitions.skills import spec as skill
-from kingfisher.core.definitions.skills.catalogue import DEEPEST, MOUNT_DEEPEST, reachable
+
+from . import spec as skill
+from .catalogue import DEEPEST, MOUNT_DEEPEST, reachable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
+    from .catalogue import LocalSkillRepository
 
 #: The key a qualified id travels under in deepagents' metadata, beside `name` rather
 #: than replacing it: rewriting `name` would make it depend on where the folder sits.

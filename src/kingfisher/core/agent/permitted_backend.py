@@ -33,7 +33,7 @@ from deepagents.middleware.filesystem import (
     _grep_backend,
 )
 
-from kingfisher.core.agent.references import UnsafeReferenceError
+from .references import UnsafeReferenceError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

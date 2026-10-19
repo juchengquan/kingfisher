@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
-from kingfisher.core.definitions.agents import reading
-from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
-
 # Shared with subagents, which read the same YAML from the same shape of directory.
 from kingfisher.core.definitions.documents import DefinitionText, documents_in
+
+from . import reading
+from .spec import AgentError, AgentSpec
 
 
 @dataclass(frozen=True)

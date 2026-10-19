@@ -13,8 +13,9 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from kingfisher.core.session.threads import off_loop, thread_pool
 
 if TYPE_CHECKING:
-    from kingfisher.core.config import Config
     from kingfisher.core.definitions.catalogue import Definitions
+
+    from .config import Config
 
 
 @dataclass(frozen=True)

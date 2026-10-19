@@ -11,7 +11,7 @@ from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 
-from kingfisher.core.session import runtime
+from . import runtime
 
 MODEL_CALL = "model_call"
 

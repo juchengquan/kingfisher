@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING, Final
 
 import yaml
 
-from kingfisher.core.access.source_ids import DATAZONE_PREFIX, AccessError, SourceIds
 from kingfisher.core.definitions.fields import text, unrecognised
+
+from .source_ids import DATAZONE_PREFIX, AccessError, SourceIds
 
 if TYPE_CHECKING:
     from pathlib import Path

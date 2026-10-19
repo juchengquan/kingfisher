@@ -10,7 +10,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.config import get_config
 
-from kingfisher.core.agent.middlewares.replies import last_reply, replaced, text_of
+from .replies import last_reply, replaced, text_of
 
 #: The share of a run's steps after which the agent is told what is left.
 WARN_AT = 0.8

@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.session.steps import adrive, drive
+from .steps import adrive, drive
 
 if TYPE_CHECKING:
     from kingfisher.core.result import PendingDecision

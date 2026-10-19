@@ -5,7 +5,7 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
-from kingfisher.core.config import ConfigError
+from .config import ConfigError
 
 
 def _wanted(port: type) -> str:

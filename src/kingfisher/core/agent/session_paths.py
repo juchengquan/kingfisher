@@ -6,8 +6,9 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
-from kingfisher.core.agent.host_paths import HOST_ROOTS, HostPathError
 from kingfisher.core.layout import INPUTS_ROUTE, OUTPUTS_ROUTE, Layout
+
+from .host_paths import HOST_ROOTS, HostPathError
 
 #: Which arguments name a file: a convention `tools.md` documents, so widening it
 #: means a sentence there too.

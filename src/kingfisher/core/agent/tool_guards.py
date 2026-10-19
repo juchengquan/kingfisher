@@ -8,9 +8,9 @@ from typing import Any
 
 from langchain_core.tools import BaseTool, StructuredTool, ToolException
 
-from kingfisher.core.agent.host_paths import HostPathError
-from kingfisher.core.agent.references import UnsafeReferenceError
-from kingfisher.core.agent.session_paths import SessionPaths, refusal_text
+from .host_paths import HostPathError
+from .references import UnsafeReferenceError
+from .session_paths import SessionPaths, refusal_text
 
 
 class GuardedTool(BaseTool):

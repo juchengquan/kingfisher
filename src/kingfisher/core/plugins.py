@@ -6,10 +6,10 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.interfaces import RunEvents
+from .interfaces import RunEvents
 
 if TYPE_CHECKING:
-    from kingfisher.core.interfaces import Instructions
+    from .interfaces import Instructions
 
 
 @dataclass(frozen=True)

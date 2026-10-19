@@ -13,9 +13,10 @@ from deepagents.backends.utils import _get_backend_read_file_type
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
-from kingfisher.core.agent.middlewares.recorded import readable_size
-from kingfisher.core.agent.middlewares.results import answer_in, answered, failed
 from kingfisher.core.definitions.skills import READ_FILE
+
+from .recorded import readable_size
+from .results import answer_in, answered, failed
 
 KB = 1024
 MB = KB * KB

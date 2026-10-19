@@ -6,8 +6,8 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from kingfisher.core.access.capabilities import ALL, Selection
-from kingfisher.core.access.source_ids import AUDIENCED, Audience, Stated
+from .capabilities import ALL, Selection
+from .source_ids import AUDIENCED, Audience, Stated
 
 
 def reaches(audience: Audience, held: frozenset[str]) -> bool:

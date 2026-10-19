@@ -26,8 +26,9 @@ from kingfisher.core.layout import (
     TRANSCRIPT_FILE,
 )
 from kingfisher.core.result import LedgerEntry, Listed, PendingDecision
-from kingfisher.core.session.steps import Steps, changing, reading
-from kingfisher.core.session.transcript import Message, as_json, from_json
+
+from .steps import Steps, changing, reading
+from .transcript import Message, as_json, from_json
 
 
 class HarnessFiles:

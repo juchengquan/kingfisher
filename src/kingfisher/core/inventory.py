@@ -18,7 +18,6 @@ from kingfisher.core.access.capabilities import (
 )
 from kingfisher.core.access.reach import activated, handed_work_by, offers, reaches
 from kingfisher.core.access.source_ids import AccessReport, SourceIds, Stated, with_datazone
-from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import (
     Definitions,
@@ -40,7 +39,9 @@ from kingfisher.core.definitions.tools.spec import (
     reference,
     split_reference,
 )
-from kingfisher.core.origins import Origin, Origins
+
+from .config import Config, ConfigError
+from .origins import Origin, Origins
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})
