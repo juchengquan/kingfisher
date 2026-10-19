@@ -329,7 +329,7 @@ def harness_in(cfg, session_dir: Path):
     """
     from kingfisher.core.session.store import HarnessFiles
 
-    return HarnessFiles(_backend_in(cfg, session_dir), Path(session_dir).name)
+    return HarnessFiles(_backend_in(cfg, session_dir))
 
 
 def paths_in(cfg, session_dir: Path, *, sessions: Path | None = None):
@@ -514,10 +514,11 @@ def isolated_from_the_developer(monkeypatch):
     """
     for module in READS_DOTENV:
         monkeypatch.setattr(f"{module}.load_dotenv", refusing(repository_root() / ".env"))
-    # `LocalSessions` reads its shell's settings from here, so a developer who exported
-    # `off` would unfence every backend a test builds.
-    for setting in ("KINGFISHER_SHELL_SANDBOX", "KINGFISHER_SHELL_PATH_EXTRA"):
-        monkeypatch.delenv(setting, raising=False)
+    # Every `KINGFISHER_` name, not a list of the live ones: `doctor` reports a retired
+    # name too, and an exported `KINGFISHER_SHELL_SANDBOX=off` would unfence every
+    # backend a test builds.
+    for setting in [name for name in os.environ if name.startswith("KINGFISHER_")]:
+        monkeypatch.delenv(setting)
     with environment_restored():
         yield
 

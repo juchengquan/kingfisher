@@ -247,8 +247,9 @@ class Running:
         """Run one task, yielding progress as it happens.
 
         A `Resume` comes through here too, so the admission checks have one door.
-        `files` is the session's backend from `files_for`, for a caller that uses it
-        around the turn; the request must name that session.
+        `files` is the session's backend from `Session.files()`, for a caller that uses it
+        around the turn; one opened for another session is refused with
+        `UnknownSessionError` before anything is claimed or written.
         """
         # Coerced here: setup reads the session id first, and a bare string has none.
         yield from self._stream_turn(

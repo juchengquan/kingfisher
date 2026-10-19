@@ -1505,7 +1505,7 @@ def test_a_request_is_refused_a_name_only_by_an_agent_that_offers_every_subagent
     """Which is the premise a narrower answer at that refusal rests on, and the reason
     no rule can assert the narrower answer itself.
 
-    `_activated_subagents` lists what the agent the build *opened* hands work to,
+    `activated_subagents` lists what the agent the build *opened* hands work to,
     rather than what every agent this caller can open does, because
     `Capabilities.subagents` may only narrow what that agent declares. Measured, the
     two answers cannot differ: a refusal there needs the request's name to survive the

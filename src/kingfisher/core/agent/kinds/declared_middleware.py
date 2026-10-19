@@ -244,8 +244,16 @@ def _instantiate(
         raise CapabilityError(msg) from exc
 
 
-#: The two deepagents will not run without, by the `.name` each answers to.
-REQUIRED_BY_DEEPAGENTS = ("FilesystemMiddleware", "SubAgentMiddleware")
+#: The two deepagents will not run without, by the `.name` each answers to, and the
+#: job whatever replaces one has to do as well.
+REQUIRED_BY_DEEPAGENTS = {
+    "FilesystemMiddleware": (
+        "it backs every built-in file tool and enforces the `permissions` rules"
+    ),
+    "SubAgentMiddleware": (
+        "it backs the `task` tool, through which the agent hands work to a subagent"
+    ),
+}
 
 
 @cache
@@ -272,11 +280,11 @@ def _warn_if_it_replaces_deepagents(
     if name not in _deepagents_middleware_names():
         return
 
+    job = REQUIRED_BY_DEEPAGENTS.get(name)
     weight = (
         f" {name} is also one of the two deepagents refuses to run without, so "
-        f"whatever replaces it has to do that job as well -- unreplaced, it backs "
-        f"every built-in file tool and enforces the `permissions` rules."
-        if name in REQUIRED_BY_DEEPAGENTS
+        f"whatever replaces it has to do that job as well -- unreplaced, {job}."
+        if job
         else ""
     )
     warnings.warn(

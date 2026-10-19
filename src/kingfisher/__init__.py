@@ -24,7 +24,6 @@ _EXPORTS = {
     "QuotaExceededError": "kingfisher.core.session.model",
     "SessionBusyError": "kingfisher.core.session.model",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
-    "UnsafeReferenceError": "kingfisher.core.agent.references",
     # For a workspace tool file, outside the wheel by construction, to annotate
     # `runtime: ToolRuntime[ToolContext]`: a bare `ToolRuntime` has pydantic warn per call.
     "ToolContext": "kingfisher.core.agent.tool_context",
@@ -98,7 +97,6 @@ __all__ = [
     "ToolContext",
     "ToolSpec",
     "UnknownSessionError",
-    "UnsafeReferenceError",
     "WorkspacePaths",
     "config_from_env",
     "definitions_source",
@@ -119,7 +117,6 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import UNSCOPED as UNSCOPED
     from kingfisher.core.access.source_ids import AccessError as AccessError
     from kingfisher.core.access.source_ids import Held as Held
-    from kingfisher.core.agent.references import UnsafeReferenceError as UnsafeReferenceError
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.config import Config as Config
     from kingfisher.core.config import ConfigError as ConfigError

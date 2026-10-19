@@ -302,6 +302,79 @@ def test_a_gate_on_a_name_nothing_answers_to_is_refused_through_the_command(
     assert "Traceback" not in said, "the refusal reached the terminal as a traceback"
 
 
+def _paused_at_the_command_line(cfg, monkeypatch, tmp_path) -> None:
+    """Session `s-1` waiting on `abc123#0`, in a working directory with nothing in it."""
+    from kingfisher.core.session.store import pending_as_mark, write_pause_mark
+    from tests.conftest import harness_of, start
+
+    start(cfg, "s-1")
+    mark = {"pending": pending_as_mark([PAUSED.pending[0]])}
+    drive(write_pause_mark(harness_of(cfg, "s-1"), mark))
+    monkeypatch.chdir(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "given",
+    [("--agent", "operator"), ("--delete-session",), ("--log", "kept/turns.jsonl")],
+    ids=lambda given: given[0],
+)
+def test_the_listing_refuses_a_flag_only_an_answer_uses(
+    given, at_the_command_line, monkeypatch, tmp_path, capsys
+):
+    """Each was taken and dropped with nothing said -- `--agent` promising a check it
+    never made, and `--log` creating its directory for a turn that never ran.
+    """
+    _paused_at_the_command_line(at_the_command_line, monkeypatch, tmp_path)
+
+    code = cli.main(["decide", "--session", "s-1", *given])
+
+    said = capsys.readouterr().err
+    assert code == 2
+    assert f"{given[0]} applies only when answering" in said
+    assert "abc123#0" not in said
+    assert not (tmp_path / "kept").exists(), "the log's directory was made for no turn"
+
+
+def test_the_listing_without_them_still_shows_what_is_waiting(
+    at_the_command_line, monkeypatch, tmp_path, capsys
+):
+    """The control beside the refusal: without it, a `decide` refusing every listing
+    would pass the test above."""
+    _paused_at_the_command_line(at_the_command_line, monkeypatch, tmp_path)
+
+    code = cli.main(["decide", "--session", "s-1"])
+
+    assert code == 1
+    assert "abc123#0" in capsys.readouterr().err
+
+
+def test_an_answer_still_takes_all_three(at_the_command_line, monkeypatch, tmp_path):
+    """The other control: refusing the flags whenever they are given would refuse the
+    one form they exist for."""
+    _paused_at_the_command_line(at_the_command_line, monkeypatch, tmp_path)
+    resumed: list[tuple[Resume, bool]] = []
+    monkeypatch.setattr(
+        cli,
+        "_drive",
+        lambda _kf, resume, *, held, delete_session: (
+            resumed.append((resume, delete_session)) or 0
+        ),
+    )
+
+    code = cli.main(
+        [
+            "decide", "--session", "s-1", "--approve", "abc123#0",
+            "--agent", "operator", "--delete-session", "--log", "kept/turns.jsonl",
+        ]
+    )
+
+    ((resume, delete_session),) = resumed
+    assert code == 0
+    assert resume.agent == "operator"
+    assert delete_session
+    assert (tmp_path / "kept").is_dir(), "--log never reached the turn's run events"
+
+
 def test_asking_about_a_session_that_does_not_exist_says_that_instead(
     cfg, monkeypatch, capsys
 ):

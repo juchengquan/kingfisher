@@ -150,7 +150,7 @@ def _file(actual: Path | None, default: Path) -> Origin:
 
 
 def _configured(actual: Path | None) -> Origin:
-    """A path with no derived fallback: seeding's source, and the session store."""
+    """A path with no derived fallback: seeding's source."""
     return Origin("relocated", actual) if actual is not None else Origin("unset")
 
 

@@ -1,11 +1,13 @@
-"""What keeps a developer's machine out of the suite: their `.env`, and one test's
-environment reaching the next.
+"""What keeps a developer's machine out of the suite: their `.env`, their exported
+settings, and one test's environment reaching the next.
 """
 
 from __future__ import annotations
 
 import ast
 import os
+import subprocess
+import sys
 from importlib import import_module
 
 import dotenv
@@ -54,6 +56,34 @@ def test_what_a_test_sets_outside_monkeypatch_is_put_back(monkeypatch):
     assert os.environ["ISOLATION_KEPT"] == "before"
     assert os.environ["ISOLATION_GONE"] == "before"
     assert "ISOLATION_ADDED" not in os.environ
+
+
+def test_no_kingfisher_setting_reaches_a_test():
+    """A setting the developer exported would be read by whatever this test built."""
+    assert [name for name in os.environ if name.startswith("KINGFISHER_")] == []
+
+
+def test_a_setting_the_guard_never_named_is_cleared_all_the_same():
+    """A guard listing settings one by one passes a run where nothing is exported and lets
+    through every name it did not list.
+
+    A second pytest, under a name no setting has, because by the time a test here could
+    export anything the guard has already run.
+    """
+    done = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
+        [
+            sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+            f"{__file__}::test_no_kingfisher_setting_reaches_a_test",
+        ],
+        cwd=repository_root(),
+        env={**os.environ, "KINGFISHER_ISOLATION_PROBE": "leaked"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "1 passed" in done.stdout
 
 
 def test_every_test_runs_behind_the_guard(request):
