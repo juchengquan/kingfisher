@@ -9,11 +9,7 @@ import yaml
 from langchain.agents.middleware import AgentMiddleware
 
 from kingfisher.core.access.capabilities import ALL, CapabilityError
-from kingfisher.core.agent.assembly import (
-    _deployment_middleware,
-    _model_named,
-    _provisions,
-)
+from kingfisher.core.agent.assembly import _deployment_middleware, _provisions
 from kingfisher.core.agent.kinds.declared_middleware import ByName, declared_middleware
 from kingfisher.core.definitions.agents import spec as agent_format
 from kingfisher.core.definitions.agents.spec import AgentError
@@ -603,16 +599,26 @@ def test_the_builder_resolves_a_named_model_through_the_requests_ceiling(cfg):
     assert provisions["model"].resolve("cheap-model", "subject").model == "cheap-model"
 
 
+def _resolve_under(cfg, endpoints):
+    """The resolver the harness's builder hands a middleware, under `endpoints`."""
+    definition = agent_spec(written("middlewares: [needs-model]\n"))
+    provisions = _provisions(
+        object(), definition, cfg=cfg, endpoints=endpoints, backend=object()
+    )
+    return provisions["model"].resolve
+
+
 def test_a_model_named_beside_a_middleware_is_held_to_the_endpoints_granted(cfg):
-    """The ceiling the wrapper exists to apply, and the reason it is not
-    `model_named` itself at the call site.
+    """A resolver that dropped the build's endpoint ceiling would hand a middleware a
+    model on an endpoint the caller refused.
 
     `elsewhere-model` resolves to a second endpoint, so a build permitted only
     `fake` must refuse it here rather than at the provider. The subject travels
     with the refusal because it is the only thing saying *who asked*.
     """
+    resolve = _resolve_under(cfg, ("fake",))
     with pytest.raises(CapabilityError, match="may not reach") as raised:
-        _model_named("elsewhere-model", "middleware 'compact'", cfg, ("fake",))
+        resolve("elsewhere-model", "middleware 'compact'")
 
     assert "middleware 'compact'" in str(raised.value)
 
@@ -621,9 +627,8 @@ def test_a_model_on_a_granted_endpoint_still_builds(cfg):
     """The control on the refusal above: a ceiling that refused everything would
     pass that test while making every `model:` beside a middleware unusable.
     """
-    assert _model_named("cheap-model", "middleware 'compact'", cfg, ("fake",)).model == (
-        "cheap-model"
-    )
+    resolve = _resolve_under(cfg, ("fake",))
+    assert resolve("cheap-model", "middleware 'compact'").model == "cheap-model"
 
 
 # -- what a deployment's own middleware is built from ----------------------

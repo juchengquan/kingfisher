@@ -4364,7 +4364,7 @@ by nothing, and was fixed by reaching its subject:
     `test_a_path_that_climbs_out_is_an_error_on_the_result` lacked `way`, so `adelete`
     could pass a malformed path through with the suite green.
 
-**The sixth cannot be given a rule, and that is the finding.** `_activated_subagents`
+**The sixth cannot be given a rule, and that is the finding.** `activated_subagents`
 lists what the agent the build *opened* delegates to, rather than what every reachable
 agent does, because `Capabilities.subagents` may only narrow that agent's declaration.
 Collapsing it to the broader answer left 243 tests green, because only `"*"` lets a
@@ -4756,13 +4756,13 @@ one thing to the graph. Four decisions constrain the shape further -- the middle
 registry merged once before either branch reads it, both `wants` sites through one
 builder, `test_both_kinds_are_handed_the_same_things_to_want` guarding a second inline
 mapping, and one compiled agent per definition because per path is exponential. The
-piece that could come out did: `_resolve_tools`, whose probe is 7.7ms and is skipped
+piece that could come out did: `resolve_tools`, whose probe is 7.7ms and is skipped
 when nothing needs it -- no definition names a tool, the workspace defines none, and
 the request asks for every tool.
 
 The thin seams the review saw were one seam: 21 test files monkeypatched
 `create_deep_agent` by string path and read its kwargs. A build returning a record of
-what it attached, as `_ToolSurface` already does inside it, was declined here for no
+what it attached, as `ToolSurface` already does inside it, was declined here for no
 behaviour change at the cost of every one of those files and the return type's
 callers. *(2026-09-16.)* That half was taken later -- see *Taken after all: a build
 says what it attached* below.

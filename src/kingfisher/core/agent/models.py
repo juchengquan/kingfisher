@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from kingfisher.core.access import ALL, Selection, refuse_ungranted_endpoint
+from kingfisher.core.access import Selection, refuse_ungranted_endpoint
 from kingfisher.core.config import ConfigError, Landing, WireFormat
 
 if TYPE_CHECKING:
@@ -221,7 +221,7 @@ def _refuse_what_did_not_land(
 
 
 def model_named(
-    written: str, cfg: Config, *, endpoints: Selection = ALL, subject: str
+    written: str, cfg: Config, *, endpoints: Selection, subject: str
 ) -> BaseChatModel:
     """The model a written name means, on an endpoint this request may reach.
 
