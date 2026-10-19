@@ -335,20 +335,20 @@ class Reader:
             raise self.error(msg)
         return name
 
-    def datazone(self, value: object, *, key: str = "datazone") -> str | None:
+    def datazone(self, value: object) -> str | None:
         """The one datazone something is for, or `None` for any."""
         if value is None:
             return None
         if not isinstance(value, str) or not value.strip():
-            msg = f"{self.source}: {key} is one name -- write {key}: finance -- got {value!r}"
+            msg = f"{self.source}: datazone is one name -- write datazone: finance -- got {value!r}"
             raise self.error(msg)
         return value.strip()
 
-    def source_ids(self, value: object, *, key: str = "source_ids") -> Audience:
+    def source_ids(self, value: object) -> Audience:
         """A definition's own audience: who may reach it at all."""
         if value is None:
             return ALL
-        return self.audience_list(value, where=f"{self.source}: {key}", lone_name=True)
+        return self.audience_list(value, where=f"{self.source}: source_ids", lone_name=True)
 
     def audience_list(self, listed: object, *, where: str, lone_name: bool) -> Audience:
         """A list of source ids, any entry of which may be a set `{a, b}`."""
@@ -595,11 +595,9 @@ class Reader:
             raise self.error(msg)
         return found
 
-    def flag(self, value: object, *, key: str) -> bool:
-        """A yes/no field, refusing the spellings YAML would quietly accept."""
-        if value is None:
-            return False
-        if isinstance(value, bool):
+    def flag(self, value: object, *, key: str) -> bool | None:
+        """A yes/no field, `None` if absent, refusing the spellings YAML would quietly accept."""
+        if value is None or isinstance(value, bool):
             return value
         msg = (
             f"{self.source}: {key} is {value!r}; write true or false. A quoted "

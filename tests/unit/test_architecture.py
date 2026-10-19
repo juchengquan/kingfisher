@@ -2662,9 +2662,10 @@ def test_the_package_names_nothing_in_assets():
     roots = Definitions.from_roots({kind: assets / kind for kind in DEFINITION_KINDS})
     names = {
         name.split("::")[-1]
-        for name in (*roots.agents.names, *roots.subagents.names, *roots.tools.names,
-                     *roots.middlewares.names, *roots.registry.offered,
-                     *(n for bundle in roots.bundled_tools.values() for n in bundle.names))
+        for name in (*roots.agents.specs, *roots.subagents.specs,
+                     *(one.name for one in roots.tools.found), *roots.middlewares.classes,
+                     *roots.registry.offered,
+                     *(one.name for bundle in roots.bundled_tools.values() for one in bundle.found))
     }
     named = re.compile(
         r"\bassets/|"

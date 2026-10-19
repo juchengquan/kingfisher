@@ -45,14 +45,16 @@ def test_a_tool_in_a_subfolder_is_found(tmp_path):
     """The ask, at its simplest: `tools/research/find_company.py` loads."""
     _tool(tmp_path / "research", "find_company")
 
-    assert LocalToolRepository(tmp_path).names == ("find_company",)
+    assert [one.name for one in LocalToolRepository(tmp_path).found] == ["find_company"]
 
 
 def test_nesting_does_not_reach_the_name(tmp_path):
     """The rule everything else depends on."""
     _tool(tmp_path / "research" / "deep" / "deeper", "find_company")
 
-    assert LocalToolRepository(tmp_path).names == ("find_company",), "the folders reached the name"
+    assert [one.name for one in LocalToolRepository(tmp_path).found] == ["find_company"], (
+        "the folders reached the name"
+    )
 
 
 def test_a_package_is_one_unit_and_its_helpers_are_not_scanned(tmp_path):
@@ -72,7 +74,7 @@ def test_a_package_is_one_unit_and_its_helpers_are_not_scanned(tmp_path):
         "from .finder import find_company\n\nTOOLS = [find_company]\n", encoding="utf-8"
     )
 
-    tools = LocalToolRepository(tmp_path).tools
+    tools = [one.tool for one in LocalToolRepository(tmp_path).found]
 
     assert [tool_name(t) for t in tools] == ["find_company"]
     assert tools[0].invoke({"name": "acme"}) == "found:acme", "the relative import did not resolve"
@@ -101,8 +103,8 @@ def test_two_catalogues_may_each_hold_a_package_of_the_same_name(tmp_path):
             "from .probe import probe\n\nTOOLS = [probe]\n", encoding="utf-8"
         )
 
-    a = LocalToolRepository(tmp_path / "wsA").tools[0]
-    b = LocalToolRepository(tmp_path / "wsB").tools[0]
+    a = LocalToolRepository(tmp_path / "wsA").found[0].tool
+    b = LocalToolRepository(tmp_path / "wsB").found[0].tool
 
     assert a.invoke({"x": ""}) == "wsA"
     assert b.invoke({"x": ""}) == "wsB", "the second package resolved the first one's helper"
@@ -115,7 +117,7 @@ def test_a_package_must_still_declare_its_exports(tmp_path):
     (pkg / "__init__.py").write_text("VALUE = 1\n", encoding="utf-8")
 
     with pytest.raises(ToolError, match=r"research/__init__\.py: must define TOOLS"):
-        _ = LocalToolRepository(tmp_path).tools
+        _ = LocalToolRepository(tmp_path).found
 
 
 def test_an_error_names_the_folder_it_came_from(tmp_path):
@@ -124,7 +126,7 @@ def test_an_error_names_the_folder_it_came_from(tmp_path):
     (tmp_path / "research" / "broken.py").write_text("VALUE = 1\n", encoding="utf-8")
 
     with pytest.raises(ToolError, match=r"research/broken\.py"):
-        _ = LocalToolRepository(tmp_path).tools
+        _ = LocalToolRepository(tmp_path).found
 
 
 def test_a_relative_import_in_a_loose_file_says_what_to_do(tmp_path):
@@ -143,7 +145,7 @@ def test_a_relative_import_in_a_loose_file_says_what_to_do(tmp_path):
     )
 
     with pytest.raises(ToolError, match=r"a relative import needs a package"):
-        _ = LocalToolRepository(tmp_path).tools
+        _ = LocalToolRepository(tmp_path).found
 
 
 def test_two_folders_may_each_define_one_name(tmp_path):
@@ -170,7 +172,7 @@ def test_the_walk_refuses_to_descend_into_debris(tmp_path):
                                       encoding="utf-8")
         _tool(tmp_path, "safe")
 
-        assert LocalToolRepository(tmp_path).names == ("safe",)
+        assert [one.name for one in LocalToolRepository(tmp_path).found] == ["safe"]
 
 
 def test_sources_say_where_a_nested_tool_lives(tmp_path):

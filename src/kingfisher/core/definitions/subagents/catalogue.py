@@ -19,11 +19,11 @@ from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolR
 from kingfisher.core.definitions.tools.spec import SEPARATOR, reference
 
 from . import reading
-from .spec import EXPORT, SubagentError, SubagentSpec, declared
+from .spec import BUNDLE_KEYS, EXPORT, SubagentError, SubagentSpec, declared
 
 #: The folders a bundle keeps its own tools and skills in, which the definition walk must
 #: not descend into; any other folder under `subagents/` only groups definitions.
-ASSET_DIRECTORIES: frozenset[str] = frozenset({"tools", "skills"})
+ASSET_DIRECTORIES: frozenset[str] = frozenset(BUNDLE_KEYS)
 
 DECLARES = Export(EXPORT, error=SubagentError, holding="subagents", example="my_subagent")
 
@@ -51,7 +51,6 @@ class Holdings:
     Not named for the bundle: `SubagentSpec.bundled` is the list checked against these.
     """
 
-    name: str
     where: str
     #: The folder these are in, or `None` for a definition that carried them, as one
     #: imported from an installed package does.
@@ -92,14 +91,12 @@ def _bundle_of(spec: SubagentSpec, where: str, root: Path, key: str) -> Holdings
     if spec.carried:
         # Labelled by its grant key, the one label guaranteed unique: two packages may
         # each ship a `probe`. A route may not hold the separator, so it becomes a dash.
-        return Holdings(
-            name=spec.name, where=key.replace(SEPARATOR, "-"), carried=spec.carried
-        )
+        return Holdings(where=key.replace(SEPARATOR, "-"), carried=spec.carried)
     parent = Path(where).parent
     # A definition directly under the catalogue has no folder: `parent.name` is empty.
     if not parent.name or parent.name != spec.name:
         return None
-    return Holdings(name=spec.name, root=root / parent, where=str(parent))
+    return Holdings(root=root / parent, where=str(parent))
 
 
 @dataclass(frozen=True)
@@ -137,10 +134,6 @@ class LocalSubagentRepository:
     def specs(self) -> dict[str, SubagentSpec]:
         """Every subagent defined here, keyed as a grant would name it."""
         return {name: spec for name, (spec, _) in self._defined.items()}
-
-    @property
-    def names(self) -> tuple[str, ...]:
-        return tuple(self._defined)
 
     @cached_property
     def bundles(self) -> dict[str, Holdings]:

@@ -144,7 +144,7 @@ def serving():
 @pytest.fixture
 def fetch(shipped):
     """The shipped tool's own function, called directly: it takes no runtime."""
-    tools = {tool_name(t): t for t in LocalToolRepository(shipped / "tools").tools}
+    tools = {tool_name(one.tool): one.tool for one in LocalToolRepository(shipped / "tools").found}
     return tools["http_fetch"]
 
 

@@ -36,7 +36,7 @@ def tools(shipped):
     # A plain function is made a tool as the graph makes one, so all three are invoked alike.
     return {
         tool_name(t): t if isinstance(t, BaseTool) else tool(t)
-        for t in LocalToolRepository(shipped / "tools").tools
+        for t in (one.tool for one in LocalToolRepository(shipped / "tools").found)
     }
 
 

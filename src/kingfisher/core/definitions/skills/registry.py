@@ -43,15 +43,13 @@ def split_qualified(text: str) -> tuple[str | None, str]:
     return source.strip() or None, name.strip()
 
 
-def sources(root: Path | None) -> tuple[tuple[str, str], ...]:
+def sources(root: Path) -> tuple[tuple[str, str], ...]:
     """`(label, path)` for every place a skill may sit, in a stable order.
 
     The root, plus each folder directly inside it that holds a skill: deepagents lists a
     source one level deep, so a folder is a source or its skills are invisible.
     """
     found = [(CATALOGUE, ROOT)]
-    if root is None:
-        return tuple(found)
     # None at all: deepagents logs "Cannot load skills" every turn about a missing source.
     if not root.is_dir():
         return ()

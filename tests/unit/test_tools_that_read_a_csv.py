@@ -21,7 +21,7 @@ from tests.conftest import on_backend
 
 @pytest.fixture
 def tools(shipped):
-    return {tool_name(t): t for t in LocalToolRepository(shipped / "tools").tools}
+    return {tool_name(one.tool): one.tool for one in LocalToolRepository(shipped / "tools").found}
 
 
 @pytest.fixture
