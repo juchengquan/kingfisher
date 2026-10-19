@@ -392,7 +392,7 @@ def examine(
             found = inventory(cfg, sessions=sessions)
         checks += health_definitions.checks(cfg, found)
         checks += health_isolation.checks(cfg, sessions, confined)
-    except ConfigError as exc:  # pragma: no cover -- belt and braces
+    except ConfigError as exc:
         checks.append(Check("configuration", "fail", str(exc)))
     return tuple(checks)
 
