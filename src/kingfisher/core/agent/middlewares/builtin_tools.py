@@ -30,6 +30,8 @@ from kingfisher.core.agent.prompting import (
 from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import Layout
 
+from .narrowing import tool_name
+
 #: deepagents' advice in `execute`'s description, wrong on kingfisher's own shell: the
 #: only absolute paths a model knows are the file tools', and that shell reads `/inputs`
 #: from the host's root.
@@ -383,10 +385,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
 
     def _told(self, request: Any) -> Any:
         # Inside `GrantedOnlyMiddleware`, so the request holds only what was granted.
-        held = {
-            tool.get("name") if isinstance(tool, dict) else getattr(tool, "name", None)
-            for tool in request.tools
-        }
+        held = {tool_name(tool) for tool in request.tools}
         lines = _held_lines(held)
         tools = [
             _offered(_described(_naming_held(tool, lines), self._rule)) for tool in request.tools
