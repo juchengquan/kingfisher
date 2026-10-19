@@ -3009,22 +3009,76 @@ def test_the_mode_rule_can_tell_a_chmod_from_the_calls_around_it(tmp_path):
     assert _mode_changes(innocent) == [], "the neighbouring filesystem calls are not modes"
 
 
+def _agent_construction_stubs(path: Path) -> list[int]:
+    """The lines on which a module's `setattr` call names `create_deep_agent`.
+
+    The whole call rather than the line it starts on, or a stub whose arguments wrap
+    onto the next line goes unseen.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return sorted(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute | ast.Name)
+        # a substring, so `object.__setattr__` is a setattr too
+        and "setattr" in (node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id)
+        and "create_deep_agent" in ast.unparse(node)
+    )
+
+
 def test_no_test_stubs_out_agent_construction():
     """The blind spot, closed and kept closed."""
-    here = Path(__file__).resolve()
-    offenders = []
-    for path in sorted(here.parent.glob("test_*.py")):
-        if path == here:  # this module names the thing it forbids
-            continue
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "setattr" in line and "create_deep_agent" in line:
-                offenders.append(f"{path.name}:{number}")
+    offenders = [
+        f"{path.name}:{line}"
+        for path in sorted(Path(__file__).resolve().parent.glob("test_*.py"))
+        for line in _agent_construction_stubs(path)
+    ]
 
     assert not offenders, (
         f"patch create_deep_agent directly at {offenders} — read what the build "
         "attached off the `Assembled` record `build_agent` returns, which needs no "
         "patching and still lets deepagents validate the call"
     )
+
+
+def test_the_stub_rule_reads_a_call_that_wraps(tmp_path):
+    """A `monkeypatch.setattr(` whose target sits on the next line escaped the rule above.
+
+    Both directions, as for the mode rule: it runs over a tree with no offenders.
+    """
+    split = tmp_path / "test_split.py"
+    split.write_text(
+        "def test(monkeypatch):\n"
+        "    monkeypatch.setattr(\n"
+        '        builder, "create_deep_agent", fake\n'
+        "    )\n"
+    )
+    one_line = tmp_path / "test_one_line.py"
+    one_line.write_text(
+        'def test(monkeypatch):\n    monkeypatch.setattr(builder, "create_deep_agent", fake)\n'
+    )
+    bare = tmp_path / "test_bare.py"
+    bare.write_text(
+        "def test():\n"
+        "    setattr(builder,\n"
+        '            "create_deep_agent", fake)\n'
+        "    object.__setattr__(builder,\n"
+        '                       "create_deep_agent", fake)\n'
+    )
+    innocent = tmp_path / "test_innocent.py"
+    innocent.write_text(
+        "def test(monkeypatch):\n"
+        "    monkeypatch.setattr(\n"
+        '        builder, "other", fake\n'
+        "    )\n"
+        "    assert built(create_deep_agent)\n"
+    )
+
+    assert _agent_construction_stubs(split) == [2], "the wrapped call is the case this exists for"
+    assert _agent_construction_stubs(one_line) == [2], "the one-line form was caught before"
+    assert _agent_construction_stubs(bare) == [2, 4], "the builtins stub as much as the fixture"
+    assert _agent_construction_stubs(innocent) == [], "naming it outside a setattr is not a stub"
 
 
 def test_only_one_module_decides_what_a_skill_is():

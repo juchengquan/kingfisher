@@ -6,7 +6,8 @@ from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-from kingfisher.core.run import Request, stream
+from kingfisher.core.request import Request
+from kingfisher.core.run import stream
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at

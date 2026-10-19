@@ -11,33 +11,10 @@ from typing import Any
 from .config import Config
 from .interfaces import Sessions
 from .request import Request
-from .result import RunEvent, RunResult, normalize_answer
+from .result import RunEvent, RunResult
 from .service import Kingfisher
 
-__all__ = [
-    "Kingfisher",
-    "Request",
-    "RunEvent",
-    "RunResult",
-    "normalize_answer",
-    "run",
-    "stream",
-]
-
-
-def _service(
-    cfg: Config | None,
-    *,
-    graph: Any,
-    sessions: Sessions,
-    run_events: Any,
-) -> Kingfisher:
-    return Kingfisher(
-        cfg,
-        graph=graph,
-        sessions=sessions,
-        run_events=run_events,
-    )
+__all__ = ["run", "stream"]
 
 
 def stream(
@@ -49,7 +26,7 @@ def stream(
     run_events: Any | None = None,
 ) -> Iterator[RunEvent]:
     """Run one task, yielding progress as it happens."""
-    return _service(
+    return Kingfisher(
         cfg,
         graph=graph,
         sessions=sessions,
@@ -66,7 +43,7 @@ def run(
     run_events: Any | None = None,
 ) -> RunResult:
     """Run one task to completion and return where its outputs landed."""
-    return _service(
+    return Kingfisher(
         cfg,
         graph=graph,
         sessions=sessions,

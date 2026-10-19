@@ -3697,10 +3697,11 @@ and both commands print it, so a new place appears in both untouched.
 *(2026-09-02, `where-this-deployment-reads-from.md`.)*
 
 **It reports what was loaded, not what was configured.** `Config.catalogue_roots` is the
-fallback -- a `Kingfisher` may be handed its own `Definitions` -- so a report from
-configuration alone is wrong for the deployment that moved something. `Origins.of` does not
-call `resolve_definitions`, which creates derived roots: a report must not bring into being
-what it reports on.
+fallback -- a `Kingfisher` reads only the folder `Config.definitions` names, but
+`inventory` may be handed a `Definitions` of the caller's own -- so a report from
+configuration alone is wrong for the caller that read somewhere else. `Origins.of` does
+not call `resolve_definitions`, which refuses a definitions folder that is not there: a
+report must say where an unseeded deployment would read, not fail on it.
 
 **`sessions` is asked of the sessions in use, never of the setting that built them.**
 `inventory` held only a `Config`, so every surface printed `<workspace>/sessions` whatever
@@ -3932,6 +3933,13 @@ transcript; only `_built_turn` is host work -- inline for `stream`, on the pool 
 `astream`. A refused request leaves no turn behind because `allocate_turn` makes
 nothing and the sequence's order keeps that promise;
 `test_a_refused_request_starts_no_turn_and_keeps_no_claim` says so.
+
+**A refused request takes back a session it made.** Opening a session makes it, and the
+refusals read it through what was opened, so a refused `kingfisher run` left an empty
+`default`. Setup asks the listing before the open, and on a refusal deletes a session
+that was not there, before the claim goes back. Not taken: making the session after the
+refusals, which need its backend to read the pin and the pause; and deleting one found
+empty, which would take a session `create=True` made for its first turn. *(2026-10-19.)*
 
 **A cancel can land at any of setup's steps now, and each is tried.** The claim goes
 back from the sequence's own `except`. A cancel during the build has no later step to
