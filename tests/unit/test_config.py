@@ -11,7 +11,7 @@ from kingfisher.core.access.source_ids import AccessError
 from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, Config, ConfigError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.environment import Environment, config_from_env
-from tests.conftest import FAKE_CATALOGUE, subagents_dir
+from tests.conftest import FAKE_CATALOGUE, repository_root, subagents_dir
 
 CATALOGUE = """
 endpoints:
@@ -364,14 +364,8 @@ def test_the_file_shows_exactly_the_knobs_that_exist():
     learns one does not.
     """
     import re
-    from pathlib import Path as _Path
 
-    # The repository, found by its marker rather than counted in parents: this
-    # is two levels further up since the library moved under `packages/`, and a
-    # count would have gone looking for `.env.example` inside the package.
-    root = next(
-        p for p in _Path(__file__).resolve().parents if (p / ".env.example").is_file()
-    )
+    root = repository_root()
     read = _looked_up()
     # `#?` because a knob with no sensible default is shown commented out, and
     # a line nobody uncommented still documents it.
@@ -464,13 +458,10 @@ def test_every_retired_name_is_one_the_file_lists():
     variable nobody has, and stays silent about the one they do.
     """
     import re
-    from pathlib import Path as _Path
 
     from kingfisher.cli import health
 
-    root = next(
-        p for p in _Path(__file__).resolve().parents if (p / ".env.example").is_file()
-    )
+    root = repository_root()
     # The two lists in that file spell a retired name to the left of an arrow,
     # which is how it shows one without re-advertising it as an assignment.
     listed = set(

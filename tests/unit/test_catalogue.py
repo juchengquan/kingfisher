@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import platform
 import shutil
 from dataclasses import replace
 from pathlib import Path
@@ -27,6 +26,7 @@ from kingfisher.core.service import Kingfisher
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from tests.conftest import (
     FakeToolCallingModel,
+    macos,
     middlewares_dir,
     subagents_dir,
     tools_dir,
@@ -50,10 +50,6 @@ def elsewhere(x: int) -> int:
 
 TOOLS = [elsewhere]
 """
-
-macos = pytest.mark.skipif(
-    platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
-)
 
 
 def _staged(root, *, skill=None, subagent=None, tool=None):
