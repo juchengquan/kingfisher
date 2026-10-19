@@ -298,3 +298,28 @@ def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):
 
     assert resolved_model(spec.wanted) == cfg.models.default
     assert "cheap" in _found(cfg, ("cheap",))
+
+
+def test_a_model_the_deployment_cannot_run_is_left_to_the_build(cfg, session_dir):
+    """The guard wrapped `resolved_model`, which cannot raise, and left `indistinct`'s own
+    `cfg.models.resolve` outside it, so a subagent pinned to a model this deployment does
+    not have raised `ConfigError` from a report instead of being skipped.
+    """
+    _define(cfg, ASKED_FOR_A_MODEL.format(model="no-such-model"))
+
+    assert _found(cfg, ("cheap",)) == {}
+
+
+def test_a_supplied_graph_runs_beside_a_subagent_it_cannot_run(cfg, session_dir):
+    """Nothing builds a supplied graph to refuse the model first, so the report was the
+    only reader, and its `ConfigError` failed every turn that deployment served.
+    """
+    from kingfisher import Kingfisher
+    from kingfisher.plugins import LocalSessions
+    from tests.unit.test_run import StubAgent
+
+    _define(cfg, ASKED_FOR_A_MODEL.format(model="no-such-model"))
+    service = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+    start(cfg, "s")
+
+    assert service.run(Request("go", session_id="s")).answer == "ok"
