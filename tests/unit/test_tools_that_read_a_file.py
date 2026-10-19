@@ -20,7 +20,7 @@ from tests.conftest import a_pdf, on_backend
 
 @pytest.fixture
 def tools(shipped):
-    return {tool_name(t): t for t in LocalToolRepository(shipped / "tools").tools}
+    return {tool_name(one.tool): one.tool for one in LocalToolRepository(shipped / "tools").found}
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def _readers(shipped) -> dict[str, dict[str, Any]]:
     reading one some other way would be invisible to this walk.
     """
     found = {}
-    for one in LocalToolRepository(shipped / "tools").tools:
+    for one in [entry.tool for entry in LocalToolRepository(shipped / "tools").found]:
         module = _module_of(one)
         if "_fetched" in module:
             found[tool_name(one)] = module

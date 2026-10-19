@@ -624,7 +624,8 @@ def test_seeding_never_makes_a_workspace(tmp_path, shipped, monkeypatch):
 
     assert main(["seed"]) == 0
 
-    assert "http_fetch" in LocalToolRepository(definitions / "tools").names, "nothing seeded"
+    seeded = LocalToolRepository(definitions / "tools").found
+    assert "http_fetch" in {one.name for one in seeded}, "nothing seeded"
     assert not workspace.exists()
 
 

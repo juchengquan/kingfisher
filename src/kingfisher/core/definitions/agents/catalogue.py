@@ -51,10 +51,6 @@ class LocalAgentRepository:
         """Every agent defined here, by name."""
         return {name: spec for name, (spec, _, _) in self._defined.items()}
 
-    @property
-    def names(self) -> tuple[str, ...]:
-        return tuple(self._defined)
-
     @cached_property
     def documents(self) -> dict[str, str]:
         """The text each agent was parsed from, by name."""

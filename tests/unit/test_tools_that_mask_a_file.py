@@ -21,8 +21,8 @@ from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, too
 @pytest.fixture
 def mask(shipped):
     """The tool's own function. It takes no runtime object beyond the context."""
-    found = LocalToolRepository(shipped / "subagents" / "redactor" / "tools").tools
-    one = {tool_name(t): t for t in found}["mask_secrets"]
+    found = LocalToolRepository(shipped / "subagents" / "redactor" / "tools").found
+    one = {tool_name(t.tool): t.tool for t in found}["mask_secrets"]
     return getattr(one, "func", one)
 
 

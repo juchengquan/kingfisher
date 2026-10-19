@@ -213,7 +213,9 @@ def test_two_tools_one_file_gives_one_name_are_refused_by_the_names_given(tmp_pa
     (tmp_path / "count.py").write_text(
         RENAMED_ONTO_ITS_NEIGHBOUR.replace('name="count"', 'name="total"'), encoding="utf-8"
     )
-    assert LocalToolRepository(tmp_path).names == ("count", "total"), "the control"
+    assert [one.name for one in LocalToolRepository(tmp_path).found] == ["count", "total"], (
+        "the control"
+    )
 
 
 def test_tools_a_definition_carries_are_read_as_a_files_are():
@@ -224,7 +226,7 @@ def test_tools_a_definition_carries_are_read_as_a_files_are():
         tools=(count, ToolSpec(count, name="tally", source_ids=["A"])), source="counter"
     )
 
-    assert carried.names == ("count", "tally")
+    assert [one.name for one in carried.found] == ["count", "tally"]
     assert [one.source_ids for one in carried.found] == ["*", ("A",)]
     with pytest.raises(ToolError, match="tool 'count' is carried twice"):
         _ = CarriedTools(tools=(count, ToolSpec(count_later, name="count")), source="x").found

@@ -90,10 +90,6 @@ class LocalMiddlewareRepository:
         """`name -> class`, which is the shape a registry already has."""
         return {entry.name: entry.middleware for entry in self.found}
 
-    @property
-    def names(self) -> tuple[str, ...]:
-        return tuple(entry.name for entry in self.found)
-
 
 def _refuse_unless_buildable(entry: Any, *, where: str) -> None:
     """A class, and one deepagents will run.

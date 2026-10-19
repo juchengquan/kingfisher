@@ -170,7 +170,7 @@ def test_the_extractor_preset_demonstrates_the_optional_fields(shipped):
 
 def test_every_preset_tool_loads(shipped):
     """A tool is code, so "does it parse" means "does it import"."""
-    tools = LocalToolRepository(shipped / "tools").tools
+    tools = [one.tool for one in LocalToolRepository(shipped / "tools").found]
 
     assert {tool_name(t) for t in tools} == {
         "http_fetch", "sql_tables", "sql_query", "csv_profile", "csv_columns",
@@ -197,7 +197,7 @@ def test_the_preset_tools_load_where_the_agent_group_is_not_installed(shipped, m
     monkeypatch.setitem(sys.modules, "pdfplumber", None)
     monkeypatch.setitem(sys.modules, "pypdf", None)
 
-    tools = LocalToolRepository(shipped / "tools").tools
+    tools = [one.tool for one in LocalToolRepository(shipped / "tools").found]
 
     assert {"pdf_text", "pdf_pages"} <= {tool_name(t) for t in tools}
 
@@ -233,7 +233,7 @@ def test_the_class_shaped_preset_exports_an_instance(shipped):
     which is callable, so nothing would notice until the model called it and got a
     tool object back instead of an answer.
     """
-    tools = LocalToolRepository(shipped / "tools").tools
+    tools = [one.tool for one in LocalToolRepository(shipped / "tools").found]
     found = next(t for t in tools if tool_name(t) == "sql_explain")
 
     assert not isinstance(found, type), "exported the class, not an instance"
@@ -247,7 +247,7 @@ def test_the_placeholder_search_says_so_in_its_own_results(shipped):
     citation attached. The description is read once, when the model decides to call;
     the result is what gets quoted into an answer, so the result has to say it too.
     """
-    tools = LocalToolRepository(shipped / "tools").tools
+    tools = [one.tool for one in LocalToolRepository(shipped / "tools").found]
     search = next(t for t in tools if tool_name(t) == "web_search")
 
     answer = search.invoke({"query": "kingfisher"})
@@ -258,7 +258,7 @@ def test_the_placeholder_search_says_so_in_its_own_results(shipped):
 
 def test_every_preset_tool_describes_itself_to_the_model(shipped):
     """The docstring is what the model reads when deciding whether to call it."""
-    for tool in LocalToolRepository(shipped / "tools").tools:
+    for tool in [one.tool for one in LocalToolRepository(shipped / "tools").found]:
         described = getattr(tool, "description", None) or (tool.__doc__ or "")
         assert len(described.strip()) > 60, f"{tool_name(tool)} says too little"
 
@@ -278,7 +278,7 @@ def test_the_log_tools_answer_from_a_log(shipped, tmp_path):
     """Code, so "does it run" is the bar: a pattern that matched nothing would load,
     describe itself, and answer every log with zero.
     """
-    tools = {tool_name(t): t for t in LocalToolRepository(shipped / "tools").tools}
+    tools = {tool_name(one.tool): one.tool for one in LocalToolRepository(shipped / "tools").found}
     app = tmp_path / "app.log"
     app.write_text(
         "2026-09-01T14:03:22 WARN pool at 90% of 50 connections\n"
@@ -1004,7 +1004,7 @@ def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(ship
 
     offered = LocalMiddlewareRepository(shipped / "middlewares")
 
-    assert set(offered.names) == set(_documented_registry(shipped)), (
+    assert set(offered.classes) == set(_documented_registry(shipped)), (
         "the directory offers different names from the wiring block beside it, so "
         "seeding it and pasting the block would give a workspace two vocabularies"
     )
@@ -1181,7 +1181,7 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
 
     seed(cfg, shipped, everything=True)
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["assistant"]
-    offered = set(LocalMiddlewareRepository(cfg.catalogue_roots["middlewares"]).names)
+    offered = set(LocalMiddlewareRepository(cfg.catalogue_roots["middlewares"]).classes)
     wired = replace(cfg, skills_enabled=True)
     built = build_agent(
         wired,

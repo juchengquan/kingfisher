@@ -155,12 +155,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         middlewares=written_middleware,
         middleware_settings=middleware_settings,
         wanted=fields.wanted_model(document, read),
-        # Absent is `None`, not `False`: `flag` alone cannot say "no opinion".
-        memory=(
-            None
-            if document.get("memory") is None
-            else read.flag(document.get("memory"), key="memory")
-        ),
+        memory=read.flag(document.get("memory"), key="memory"),
         metadata=read.mapping(document.get("metadata"), key="metadata"),
         interrupt_on=_gated_tools(document.get("interrupt_on"), read),
     )

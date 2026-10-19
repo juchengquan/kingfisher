@@ -25,7 +25,7 @@ MB = 1024 * 1024
 @pytest.fixture
 def logs(shipped):
     """Both log tools, found the way a workspace finds them: under `logs/`."""
-    found = LocalToolRepository(shipped / "tools" / "logs").tools
+    found = [one.tool for one in LocalToolRepository(shipped / "tools" / "logs").found]
     return {tool_name(one): getattr(one, "func", one) for one in found}
 
 
@@ -217,7 +217,7 @@ def test_both_tools_are_found_where_a_workspace_finds_them(shipped):
     """They live in a folder of their own, and a walk that found neither would pass
     every rule above by having no cases.
     """
-    found = {tool_name(one) for one in LocalToolRepository(shipped / "tools" / "logs").tools}
+    found = {tool_name(one.tool) for one in LocalToolRepository(shipped / "tools" / "logs").found}
 
     assert found == {"log_levels", "status_codes"}
     assert (shipped / "tools" / "logs" / "access" / "status_codes.py").is_file()

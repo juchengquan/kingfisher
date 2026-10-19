@@ -107,22 +107,11 @@ def test_nothing_reads_a_repository_member_with_a_default():
     )
 
 
-def test_the_kinds_a_grant_names_answer_the_one_question_it_asks(catalogue):
-    """`names` is the whole of the shared vocabulary, and it is shared because
-    capabilities filter every kind by name and by nothing else.
-
-    Skills are not here, and that is the one exception: which skills there are is the
-    registry's answer, because a directory holding a `SKILL.md` is not the same set as
-    the skills deepagents parses. A listing here answered both halves wrongly at once
-    -- it missed every skill in a source folder and offered one whose file does not
-    parse -- so `LocalSkillRepository` stopped offering it.
+def test_a_skill_repository_lists_no_skills_of_its_own(catalogue):
+    """A skill repository that listed its skills again, which missed every skill in a
+    source folder and offered one whose file does not parse: which skills there are is
+    the registry's answer, because only deepagents' parse decides what loads.
     """
-    every = (
-        LocalSubagentRepository(catalogue / "subagents"),
-        LocalToolRepository(catalogue / "tools"),
-    )
-
-    assert [repo.names for repo in every] == [("alpha",), ("noisy",)]
     assert not hasattr(LocalSkillRepository(catalogue / "skills"), "names")
 
 
@@ -133,10 +122,8 @@ def test_a_tool_repository_imports_each_module_once_for_every_view_of_it(catalog
     """The reason this kind became a class."""
     tools = LocalToolRepository(catalogue / "tools")
 
-    assert tools.names == ("noisy",)
     assert Offering.of(tools.found).sources == {"noisy": "noisy.py"}
     assert [entry.name for entry in tools.found] == ["noisy"]
-    assert len(tools.tools) == 1
 
     assert capfd.readouterr().err.count("EXECUTED") == 1
 
@@ -158,7 +145,6 @@ def test_a_subagent_repository_parses_each_definition_once_for_both_views(catalo
     subagents = LocalSubagentRepository(catalogue / "subagents")
     assert set(subagents.specs) == {"alpha"}
     assert subagents.sources == {"alpha": "one.yaml"}
-    assert subagents.names == ("alpha",)
 
     assert len(parsed) == 1, "the definition was parsed more than once"
 

@@ -171,11 +171,6 @@ class CarriedTools:
         return tuple(entries)
 
     @property
-    def names(self) -> tuple[str, ...]:
-        """Tool names carried here."""
-        return tuple(found.name for found in self.found)
-
-    @property
     def root(self) -> None:
         """No directory: these arrived as objects."""
         return None
@@ -217,13 +212,3 @@ class LocalToolRepository:
                 found.append(one)
 
         return tuple(found)
-
-    @property
-    def tools(self) -> tuple[Any, ...]:
-        """The tool objects alone."""
-        return tuple(found.tool for found in self.found)
-
-    @property
-    def names(self) -> tuple[str, ...]:
-        """Tool names offered here."""
-        return tuple(found.name for found in self.found)

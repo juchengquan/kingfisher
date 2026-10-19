@@ -51,8 +51,8 @@ def _below(root: Path, deepest: int) -> tuple[str, ...]:
 class LocalSkillRepository:
     """The skills in one directory, and in any mounted beside it.
 
-    No `names`, unlike every other kind's reader: which skills there are is
-    `SkillRegistry`'s answer, because only deepagents' parse decides what loads.
+    No listing of its own: which skills there are is `SkillRegistry`'s answer, because
+    only deepagents' parse decides what loads.
     """
 
     root: Path

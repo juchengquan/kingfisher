@@ -197,8 +197,7 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
 )
 
 
-#: The halves a subagent's own folder holds. Must match `catalogue.ASSET_DIRECTORIES`, or
-#: the walk would skip a folder no definition could list from.
+#: The halves a subagent's own folder holds.
 BUNDLE_KEYS: tuple[str, ...] = ("tools", "skills")
 
 

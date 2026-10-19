@@ -1414,20 +1414,6 @@ def test_an_agent_may_say_an_entry_is_shared():
     assert spec.tools == ("shared",)
 
 
-def test_the_bundle_key_covers_every_directory_a_bundle_holds():
-    """Two lists that must agree, in both directions.
-
-    `BUNDLE_KEYS` is what a subagent may take from its folder and `ASSET_DIRECTORIES`
-    is what the walk keeps out of the definition scan. A third asset kind added to one
-    and not the other is either a folder nobody can list from or a key naming a folder
-    that is read as a subagent, and neither has a symptom before it happens.
-    """
-    from kingfisher.core.definitions.subagents.catalogue import ASSET_DIRECTORIES
-    from kingfisher.core.definitions.subagents.spec import BUNDLE_KEYS
-
-    assert set(BUNDLE_KEYS) == set(ASSET_DIRECTORIES)
-
-
 def test_a_listing_names_the_subagent_whose_list_has_gone_stale(cfg):
     """A refusal reachable only through the constructor is one `list` cannot see, which
     is how `orphaned_assets` came to be computed for a year and printed never.

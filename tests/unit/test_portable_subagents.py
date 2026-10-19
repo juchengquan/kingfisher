@@ -285,7 +285,7 @@ def test_a_carried_tool_is_offered_to_nobody_else(cfg):
     catalogue = Definitions.from_config(cfg).warm()
 
     assert "probe" not in {found.name for found in catalogue.tools.found}
-    assert "probe" in catalogue.bundled_tools["surveyor"].names
+    assert "probe" in {found.name for found in catalogue.bundled_tools["surveyor"].found}
 
 
 def test_builtin_tools_stay_narrowed_for_a_portable_subagent(cfg, session_dir):

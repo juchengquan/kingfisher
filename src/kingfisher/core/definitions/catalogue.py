@@ -99,8 +99,6 @@ class Definitions:
     def bundled_tools(self) -> Mapping[str, LocalToolRepository | CarriedTools]:
         """Each subagent's own tools, by the name a grant would use."""
         bundles = self.subagents.bundles
-        if not bundles:
-            return {}
         # Asked of the bundle, not rebuilt here: a folder or carried objects back it, and
         # a second reading could disagree with the bundle's about what it holds.
         return {
@@ -125,8 +123,6 @@ class Definitions:
     def bundled_skills(self) -> Mapping[str, SkillRegistry]:
         """Each subagent's own skills, as deepagents will actually load them."""
         bundles = self.subagents.bundles
-        if not bundles:
-            return {}
         return {
             name: _one_registry(name, bundle.skills)
             for name, bundle in bundles.items()

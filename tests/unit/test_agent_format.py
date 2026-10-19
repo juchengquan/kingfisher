@@ -276,7 +276,7 @@ def _write(root: Path, where: str, name: str, description: str = "One.") -> None
 def test_a_folder_is_organisation_and_the_name_field_is_the_identity(tmp_path):
     _write(tmp_path, "support/triage.yaml", "triage", "Sorts.")
 
-    assert LocalAgentRepository(tmp_path).names == ("triage",)
+    assert set(LocalAgentRepository(tmp_path).specs) == {"triage"}
 
 
 def test_a_folder_called_tools_is_organisation_here_too(tmp_path):
@@ -287,7 +287,7 @@ def test_a_folder_called_tools_is_organisation_here_too(tmp_path):
     """
     _write(tmp_path, "tools/triage.yaml", "triage", "Sorts.")
 
-    assert LocalAgentRepository(tmp_path).names == ("triage",)
+    assert set(LocalAgentRepository(tmp_path).specs) == {"triage"}
 
 
 def test_two_agents_of_one_name_are_refused_rather_than_disambiguated(tmp_path):
@@ -296,7 +296,7 @@ def test_two_agents_of_one_name_are_refused_rather_than_disambiguated(tmp_path):
     _write(tmp_path, "nested/b.yaml", "assistant", "Two.")
 
     with pytest.raises(AgentError, match="two agents are called 'assistant'"):
-        _ = LocalAgentRepository(tmp_path).names
+        _ = LocalAgentRepository(tmp_path).specs
 
 
 @pytest.mark.parametrize("name", ["assistant.yml", "assistant.YML", "assistant.YAML"])
@@ -307,14 +307,14 @@ def test_a_yml_file_is_named_rather_than_silently_skipped(tmp_path, name):
     _write(tmp_path, name, "assistant")
 
     with pytest.raises(AgentError, match=r"rename it to assistant\.yaml"):
-        _ = LocalAgentRepository(tmp_path).names
+        _ = LocalAgentRepository(tmp_path).specs
 
 
 def test_a_directory_that_is_not_there_holds_no_agents(tmp_path):
     """Empty rather than an error, which is the same answer a derived catalogue gives
     before anyone seeds it.
     """
-    assert LocalAgentRepository(tmp_path / "nope").names == ()
+    assert LocalAgentRepository(tmp_path / "nope").specs == {}
 
 
 def test_an_agent_naming_several_models_is_refused():
