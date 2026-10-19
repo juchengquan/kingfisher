@@ -103,8 +103,13 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # wiring mistake, to fail at startup rather than serve an agent told about nothing.
         self.catalogue: Definitions = resolve_definitions(self.cfg).warm()
         # Whether a workspace tool wears a built-in's name, refused at startup: only an
-        # assembled graph can say, so `warm` cannot. Only with tools: nothing else shadows.
-        if self.catalogue.tools.found:
+        # assembled graph can say, so `warm` cannot. A subagent's own tools as well as the
+        # catalogue's: a bundled `read_file` replaced deepagents' own in that subagent and
+        # crashed every model call it made, and nothing said so -- `doctor` called the
+        # workspace healthy.
+        if self.catalogue.tools.found or any(
+            repository.found for repository in self.catalogue.bundled_tools.values()
+        ):
             # Only `ConfigError`: the deployment could not be assembled, which the turn and
             # `doctor` report, and raised here it would stop the `sessions` and `reap`
             # commands, which need no model. `CapabilityError` still refuses.

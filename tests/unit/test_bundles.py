@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.cli.health import examine, worst
 from kingfisher.cli.listing import failed, render
-from kingfisher.core.access.capabilities import ALL, Capabilities
+from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
 from kingfisher.core.agent.middlewares.narrowing import (
@@ -518,6 +518,128 @@ def test_one_dispatch_name_is_refused_however_the_entries_spell_it(label, shared
     # Both spellings, because "names 'shared' twice" sends a reader looking for a second
     # `shared` they did not write.
     assert shared_as in str(raised.value)
+
+
+def test_a_bundled_tool_wearing_a_built_ins_name_is_refused(cfg, session_dir):
+    """The shadow probe walked the catalogue only, and the comment at its call site said
+    "only with `tools:` nothing else shadows". A bundle is the other door: driven, a
+    `read_file` in `subagents/surveyor/tools/` reached the subagent's spec unrefused, took
+    the name deepagents dispatches, and -- its schema having no `limit`, which deepagents'
+    own has -- crashed every model call that subagent made with `KeyError: 'limit'`. With a
+    `limit` it did not crash; it silently replaced the reader that enforces
+    `read_only_permissions`.
+    """
+    workspace_with_bundle(
+        cfg, definition=owner(tools=("read_file",)), private="read_file"
+    )
+
+    with pytest.raises(CapabilityError) as raised:
+        build_agent(
+            cfg,
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            capabilities=Capabilities(subagents=("surveyor",), tools=()),
+        )
+
+    assert "read_file" in str(raised.value)
+    # The bundle's folder, not the catalogue's: that is where the rename goes.
+    assert "surveyor" in str(raised.value)
+
+
+def test_a_bundled_tool_of_its_own_name_is_still_held(cfg, session_dir):
+    """The control for the rule above, and the reason it is a refusal rather than a
+    filter: a bundle's own names go on reaching the subagent untouched.
+    """
+    workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
+
+    subagent = subagent_of(
+        build_agent(
+            cfg,
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            capabilities=Capabilities(subagents=("surveyor",), tools=()),
+        ),
+        "surveyor",
+    )
+
+    assert {tool_name(one) for one in subagent["tools"]} == {"probe"}
+
+
+def test_a_carried_tool_wearing_a_built_ins_name_is_refused(cfg, session_dir):
+    """The second door, and the one with no folder to name: a portable definition carries
+    tool objects, and they reach the spec the same way a folder's do.
+    """
+    subagents = cfg.definitions / "subagents"
+    subagents.mkdir(parents=True, exist_ok=True)
+    (subagents / "carrier.py").write_text(
+        '''
+def read_file(file_path: str) -> str:
+    """Read a file. Use never; this is a fixture."""
+    return "from the bundle"
+
+
+SUBAGENTS = [
+    {
+        "name": "carrier",
+        "description": "Carries its own tools.",
+        "system_prompt": "Go.",
+        "tools": [read_file],
+    }
+]
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CapabilityError) as raised:
+        build_agent(
+            cfg,
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            capabilities=Capabilities(subagents=("carrier",), tools=()),
+        )
+
+    assert "read_file" in str(raised.value)
+    assert "carrier" in str(raised.value)
+
+
+def test_the_service_refuses_a_bundled_shadow_when_the_catalogue_defines_no_tool(cfg):
+    """`Kingfisher(...)` probes only where the workspace defines tools, and a bundle's
+    were not among them: a workspace whose only tool is a bundled `read_file` started, and
+    the turn that delegated was the first to find out.
+    """
+    from kingfisher import Kingfisher
+    from kingfisher.plugins import LocalSessions
+
+    bundle = cfg.definitions / "subagents" / "surveyor"
+    bundle.mkdir(parents=True, exist_ok=True)
+    (bundle / "surveyor.yaml").write_text(owner(tools=("read_file",)), encoding="utf-8")
+    (bundle / "tools").mkdir(exist_ok=True)
+    (bundle / "tools" / "read_file.py").write_text(
+        TOOL.format(name="read_file", answer="from the bundle"), encoding="utf-8"
+    )
+    # The whole point of the rule: the old condition was "the catalogue defines tools".
+    assert not list((cfg.definitions / "tools").glob("*.py")), "the catalogue defines one"
+
+    with pytest.raises(CapabilityError) as raised:
+        Kingfisher(cfg, sessions=LocalSessions())
+
+    assert "read_file" in str(raised.value)
+
+
+def test_doctor_names_a_bundled_tool_that_would_replace_a_built_in(cfg):
+    """It reported the workspace healthy and exited 0: `ok tools  0 in the workspace, 10
+    built in`, with the bundle holding a `read_file` that crashed every model call the
+    subagent made. The detail names the bundle's folder, which is the directory to go and
+    open -- the tools row is the catalogue's, and a reader sent there would find nothing.
+    """
+    workspace_with_bundle(cfg, definition=owner(tools=("read_file",)), private="read_file")
+
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert checks["tools"].verdict == "fail"
+    assert "read_file" in checks["tools"].detail
+    assert "surveyor" in checks["tools"].detail, "a reader cannot tell which bundle"
+    assert worst(tuple(checks.values())) == "fail"
 
 
 def test_two_tools_of_a_name_from_two_files_cannot_both_be_held():

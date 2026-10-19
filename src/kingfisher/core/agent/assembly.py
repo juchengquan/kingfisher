@@ -70,7 +70,8 @@ from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.config import DEFAULT_LAYOUT, Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.subagents.spec import RunOn, opens_skills
+from kingfisher.core.definitions.subagents.spec import RunOn, SubagentError, opens_skills
+from kingfisher.core.definitions.tools.catalogue import ToolError
 from kingfisher.core.definitions.tools.spec import FoundTool, own_audiences
 from kingfisher.core.layout import Layout
 
@@ -275,6 +276,19 @@ def _probe_backend(cfg: Config, scratch: Path) -> CompositeBackend:
     return CompositeBackend(
         default=LocalShellBackend(root_dir=scratch, virtual_mode=True), routes=routes
     )
+
+
+def _bundles_of(roots: Definitions) -> Mapping[str, Any]:
+    """Each subagent's own tools, for the shadow probe, or none readable.
+
+    A subagent file that will not parse is answered by the subagent rows of `doctor` and
+    refused by `warm` for a service; raised from here it would land on the tools row and
+    send a reader to the wrong directory.
+    """
+    try:
+        return roots.bundled_tools
+    except (SubagentError, ToolError):
+        return {}
 
 
 def builtin_tool_names(
@@ -517,6 +531,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         capabilities,
         walked,
         assemble,
+        bundles=_bundles_of(roots),
         # Either tool list naming anything needs the offered sets, and a subagent
         # naming a helper the built tool objects: the probe is what yields both.
         names_needed=bool(gated)

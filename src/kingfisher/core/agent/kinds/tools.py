@@ -15,10 +15,11 @@ from kingfisher.core.access.capabilities import (
 from kingfisher.core.access.reach import reaches
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
+from kingfisher.core.definitions.tools.catalogue import ToolError
 from kingfisher.core.definitions.tools.spec import FoundTool, Offering, out_of_reach
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
 
     from kingfisher.core.config import Config
 
@@ -121,6 +122,31 @@ class _ToolSurface:
         return tuple(name for name in granted or () if name not in self.out_of_reach)
 
 
+def _bundled_tools(
+    bundles: Mapping[str, Any] | None,
+) -> Iterator[tuple[FoundTool, str]]:
+    """Every tool a bundle holds, with where a rename would go.
+
+    A folder for a bundle on disk and the entry's own label for one a portable definition
+    carries: the two doors a tool reaches a subagent through without passing the catalogue.
+    """
+    for repository in (bundles or {}).values():
+        # `where`, which both readers answer: a folder for a bundle on disk and the entry's
+        # own label for carried tools. Read with a default instead, this answered nothing
+        # for whichever reader lacked the member -- `test_nothing_reads_a_repository_member
+        # _with_a_default` is about exactly that, and caught this.
+        holder = repository.where
+        try:
+            found = repository.found
+        except ToolError:
+            # A bundle that will not load shadows nothing, and saying so here would put the
+            # failure on the catalogue's row: `doctor`'s `subagent tools` names the subagent
+            # to go and open, and `warm` refuses it for a service.
+            continue
+        for one in found:
+            yield one, holder
+
+
 def _private_tools(
     catalogue: Definitions, name: str, *, held: frozenset[str] | None = None
 ) -> tuple[FoundTool, ...]:
@@ -162,6 +188,11 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
     # this module.
     assemble: Callable[[tuple[Any, ...]], Any],
     *,
+    #: Each subagent's own tools, by its name, so the probe judges them too. Every bundle
+    #: the catalogue holds, not only the subagents this request activated: a name that
+    #: replaces a built-in is a fact about the workspace, and a deployment finds out from
+    #: whichever request comes first otherwise.
+    bundles: Mapping[str, Any] | None = None,
     names_needed: bool = False,
     #: What a refusal may list, for this caller.
     in_reach: Callable[[str], bool] | None = None,
@@ -173,7 +204,8 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
     the built-ins; it costs a compile, so a caller asks only when one does.
     """
     unrestricted = capabilities.builtin_tools == ALL and capabilities.tools == ALL
-    if not names_needed and not workspace_tools and unrestricted:
+    bundled = tuple(_bundled_tools(bundles))
+    if not names_needed and not workspace_tools and not bundled and unrestricted:
         return _ToolSurface()
 
     probe = assemble(()).graph
@@ -181,6 +213,8 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
     # crashing here.
     builtin = registered_tools(probe) or ()
     _refuse_shadowed(workspace_tools, builtin=builtin, where=where)
+    for found, holder in bundled:
+        _refuse_shadowed((found,), builtin=builtin, where=holder)
     offering = Offering.of(workspace_tools, builtin=builtin)
     offering.refuse_unknown(
         capabilities.builtin_tools,

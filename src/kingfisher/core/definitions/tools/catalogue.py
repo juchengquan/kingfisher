@@ -147,6 +147,13 @@ class CarriedTools:
     #: is no file to open.
     source: str
 
+    @property
+    def where(self) -> str:
+        """Where an author would go to rename one of these: the label, there being no
+        folder. Both readers answer it, because the shadow probe asks whichever backs a
+        bundle."""
+        return self.source
+
     @cached_property
     def found(self) -> tuple[FoundTool, ...]:
         """Every tool carried here, checked the way a module's are."""
@@ -178,6 +185,11 @@ class LocalToolRepository:
     """The tools defined in one directory, imported into this process."""
 
     root: Path
+
+    @property
+    def where(self) -> str:
+        """Where an author would go to rename one: this directory. See `CarriedTools`."""
+        return str(self.root)
 
     @cached_property
     def found(self) -> tuple[FoundTool, ...]:
