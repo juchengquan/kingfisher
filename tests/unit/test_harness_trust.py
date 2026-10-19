@@ -134,9 +134,9 @@ def test_doctor_warns_where_nothing_it_can_see_keeps_the_shell_out(cfg, sessions
     """A warning and never a failure: the deployment runs, and may well be fenced by
     something this command cannot see. What it can say is where to look.
     """
-    from kingfisher.cli.health_isolation import _session_files
+    from kingfisher.cli.health_isolation import _session_files, fence_of
 
-    (check,) = _session_files(cfg, sessions)
+    (check,) = _session_files(sessions, fence_of(cfg, sessions))
 
     assert check.verdict == "warn"
     assert because in check.detail
@@ -144,13 +144,14 @@ def test_doctor_warns_where_nothing_it_can_see_keeps_the_shell_out(cfg, sessions
 
 
 def test_doctor_is_satisfied_where_the_sandbox_keeps_the_shell_out(cfg):
-    from kingfisher.cli.health_isolation import _session_files
+    from kingfisher.cli.health_isolation import _session_files, fence_of
     from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
 
-    if harness_unfenced(cfg, ShellSettings()) is not None:
+    confined = fence_of(cfg, LocalSessions())
+    if harness_unfenced(ShellSettings(), confined) is not None:
         pytest.skip("no sandbox kingfisher applies itself is available on this host")
 
-    (check,) = _session_files(cfg, LocalSessions())
+    (check,) = _session_files(LocalSessions(), confined)
 
     assert check.verdict == "ok"
 

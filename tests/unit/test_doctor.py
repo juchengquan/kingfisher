@@ -1353,14 +1353,35 @@ def _fenced_by(monkeypatch, mechanism):
     from kingfisher.plugins.sessions.sandbox.confinement import Confinement
 
     seen = Confinement(wrap=lambda command: command, mechanism=mechanism)
-    # Both readers: the keys-file checks and the session-paths checks each ask.
-    for module in (health, health_isolation):
-        monkeypatch.setattr(module, "shell_confinement", lambda cfg, shell, **kw: seen)
+    monkeypatch.setattr(health_isolation, "shell_confinement", lambda cfg, shell, **kw: seen)
 
 
 def _row(checks, name):
     found = [c for c in checks if c.name == name]
     return found[0] if found else None
+
+
+def test_doctor_asks_the_fence_once(cfg, tmp_path, monkeypatch):
+    """Each of six rows asked for itself, rewriting the macOS profile each time, and
+    `session files` asked past the seam the others were patched at, so they could name
+    different fences. Counted at the real `resolve`, with a keys file and `from_dotenv`
+    so every row that reads the fence is reached.
+    """
+    from kingfisher.plugins.sessions.sandbox import confinement
+
+    asked = []
+    real = confinement.resolve
+    monkeypatch.setattr(
+        confinement, "resolve", lambda *a, **kw: asked.append(a) or real(*a, **kw)
+    )
+
+    examine(
+        _with_keys_file(cfg, tmp_path / "keys.yaml"),
+        from_dotenv=frozenset(),
+        sessions=LocalSessions(),
+    )
+
+    assert len(asked) == 1, f"doctor asked the fence {len(asked)} times"
 
 
 def test_a_keys_file_the_shell_can_read_is_warned_about(cfg, tmp_path, monkeypatch):
