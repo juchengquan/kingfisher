@@ -310,9 +310,9 @@ def build_parser() -> argparse.ArgumentParser:
             "The size is a walk per session -- about a millisecond each -- which\n"
             "a workspace holding thousands will feel.\n"
             "\n"
-            "Asked of the sessions KINGFISHER_SESSIONS\n"
-            "names, or of <workspace>/sessions where it names none -- so a\n"
-            "deployment whose own keep sessions elsewhere sets it for this to see them."
+            "Asked of the sessions KINGFISHER_SESSIONS names, or of\n"
+            "<workspace>/sessions where it names none -- so a deployment that\n"
+            "keeps its sessions elsewhere sets it for this to see them."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -325,9 +325,9 @@ def build_parser() -> argparse.ArgumentParser:
         "reap",
         help="delete sessions this workspace is finished with",
         description=(
-            "Deletes a session's directory, its conversation, the lock a turn\n"
-            "holds, and whatever a wired store kept. All four, because removing\n"
-            "three of them leaves the fourth to accumulate.\n"
+            "Deletes a session and everything in it -- its files, its\n"
+            "conversation, the lock a turn holds -- through the sessions that\n"
+            "keep it: those KINGFISHER_SESSIONS names, or <workspace>/sessions.\n"
             "\n"
             "With nothing else said it sweeps whatever KINGFISHER_SESSION_TTL_S\n"
             "calls expired -- seven days by default -- and spares any session\n"
@@ -718,8 +718,7 @@ def _sessions(*, as_document: bool = False) -> int:
     kf = _configured(cfg)
     # From `origins`, not the workspace: configured sessions live where their backends
     # say. A path only where kingfisher knows it, rather than a guess.
-    kept = kf.origins.sessions
-    root: Path | None = kf.cfg.sessions_root if kept.kind == "default" else None
+    root = kf.origins.sessions.path
     where = str(root) if root is not None else "the sessions this deployment configured"
     now = time.time()
     # A walk per session, ~0.8ms each: a workspace large enough to mind wants an index,
