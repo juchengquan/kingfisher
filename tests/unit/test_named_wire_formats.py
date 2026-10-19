@@ -12,9 +12,10 @@ from kingfisher.core.agent.models import WIRE_FORMATS, build_model
 from kingfisher.core.config import ConfigError, Landing, WireFormat
 from kingfisher.core.environment import config_from_env
 from kingfisher.core.model_catalogue import load, wire_formats
+from tests.conftest import repository_root
 
 HERE = __name__
-GUIDE = Path(__file__).parents[2] / "docs" / "guides" / "configuration.md"
+GUIDE = repository_root() / "docs" / "guides" / "configuration.md"
 
 CATALOGUE = """
 endpoints:

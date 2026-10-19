@@ -27,6 +27,7 @@ from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
     agent_for,
+    agent_named,
     an_agent,
     declared_subagents,
     dispatched,
@@ -99,7 +100,7 @@ def built(kf, source_ids, name: str):
     session = session_at(kf, name)
     assembled = build_agent(
         kf.cfg,
-        agent=kf._agent_named("surveyor", source_ids=held),
+        agent=agent_named(kf, "surveyor", source_ids=held),
         held=caller_holds(kf.access, held),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf.grants,
@@ -517,7 +518,7 @@ def _refused_listing(cfg, source_ids):
     with pytest.raises(CapabilityError, match=r"unknown tool\(s\): line_counts;") as refused:
         build_agent(
             kf.cfg,
-            agent=kf._agent_named("surveyor", source_ids=source_ids),
+            agent=agent_named(kf, "surveyor", source_ids=source_ids),
             held=caller_holds(kf.access, source_ids),
             backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
             capabilities=kf.grants,
@@ -576,7 +577,7 @@ def _subagents_offered(cfg, source_ids) -> set[str]:
     with pytest.raises(CapabilityError, match=r"unknown subagent\(s\): ghost;") as refused:
         build_agent(
             kf.cfg,
-            agent=kf._agent_named("surveyor", source_ids=source_ids),
+            agent=agent_named(kf, "surveyor", source_ids=source_ids),
             held=caller_holds(kf.access, source_ids),
             backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
             capabilities=kf.grants,
@@ -681,7 +682,7 @@ def test_a_definition_naming_a_real_tool_out_of_reach_is_not_refused(
 
     built = build_agent(
         kf.cfg,
-        agent=kf._agent_named("surveyor", source_ids=("A",)),
+        agent=agent_named(kf, "surveyor", source_ids=("A",)),
         held=caller_holds(kf.access, ("A",)),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf.grants,
@@ -793,7 +794,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
             kf.cfg,
             graph,
             kf.catalogue,
-            agent=kf._agent_named("surveyor", source_ids=held),
+            agent=agent_named(kf, "surveyor", source_ids=held),
             held=caller_holds(kf.access, held),
         )
     )
@@ -841,10 +842,10 @@ def with_skills(cfg):
 def test_a_skill_audience_narrows_the_selection(with_skills):
     kf = Kingfisher(with_skills, sessions=LocalSessions())
 
-    assert kf._agent_named("skilled", source_ids=UNSCOPED).declares(
+    assert agent_named(kf, "skilled", source_ids=UNSCOPED).declares(
         caller_holds(kf.access, ("A",))
     ).skills == ("audit", "review")
-    assert kf._agent_named("skilled", source_ids=UNSCOPED).declares(
+    assert agent_named(kf, "skilled", source_ids=UNSCOPED).declares(
         caller_holds(kf.access, ("B",))
     ).skills == ("review",)
 
@@ -1129,7 +1130,7 @@ def delegated(cfg, source_ids: tuple[str, ...]):
     session = session_at(kf, "as-" + "".join(source_ids))
     return build_agent(
         kf.cfg,
-        agent=kf._agent_named("boss", source_ids=source_ids),
+        agent=agent_named(kf, "boss", source_ids=source_ids),
         held=caller_holds(kf.access, source_ids),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf.grants,
