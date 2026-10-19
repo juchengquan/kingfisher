@@ -163,23 +163,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     # Unlike `list --as`, absent is not the operator's view: a turn acts, so the library
     # refuses it.
-    doing.add_argument(
-        "--as",
-        dest="held",
-        type=_held,
-        default=None,
-        metavar="SOURCE_IDS",
-        help=(
-            "who is calling: comma-separated source ids, or UNSCOPED to run "
-            "with no caller. Required where the workspace declares source ids"
-        ),
-    )
-    doing.add_argument(
-        "--datazone",
-        default=None,
-        metavar="NAME",
-        help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
-    )
+    _add_caller(doing, _TURN_CALLER)
     # A verb rather than flags on `run`: answering is not asking, and `run`'s task would
     # have to become optional.
     deciding = sub.add_parser(
@@ -246,23 +230,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="append what the resumed turn did to FILE as JSON lines, as `run --log` does",
     )
-    deciding.add_argument(
-        "--as",
-        dest="held",
-        type=_held,
-        default=None,
-        metavar="SOURCE_IDS",
-        help=(
-            "who is calling: comma-separated source ids, or UNSCOPED to run "
-            "with no caller. Required where the workspace declares source ids"
-        ),
-    )
-    deciding.add_argument(
-        "--datazone",
-        default=None,
-        metavar="NAME",
-        help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
-    )
+    _add_caller(deciding, _TURN_CALLER)
     checkup = sub.add_parser(
         "doctor",
         help="check everything that stands between this install and a run",
@@ -302,22 +270,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="emit the same answer as JSON, for a script rather than a person",
     )
-    listing.add_argument(
-        "--as",
-        dest="held",
-        type=_held,
-        default=None,
-        metavar="SOURCE_IDS",
-        help=(
-            "show what these source ids reach: comma-separated names, or UNSCOPED "
-            "for the operator's view of everything"
-        ),
-    )
-    listing.add_argument(
-        "--datazone",
-        default=None,
-        metavar="NAME",
-        help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
+    _add_caller(
+        listing,
+        "show what these source ids reach: comma-separated names, or UNSCOPED "
+        "for the operator's view of everything",
     )
     fetching = sub.add_parser(
         "artifact",
@@ -335,16 +291,11 @@ def build_parser() -> argparse.ArgumentParser:
     fetching.add_argument("--session", metavar="ID", required=True, help="the session")
     fetching.add_argument("name", help="the artifact, as the run named it")
     fetching.add_argument("--out", metavar="PATH", help="write it here instead")
-    fetching.add_argument(
-        "--as",
-        dest="held",
-        type=_held,
-        default=None,
-        metavar="SOURCE_IDS",
-        help=(
-            "who is calling: comma-separated source ids, or UNSCOPED to read "
-            "with no caller. Required where the workspace declares source ids"
-        ),
+    _add_caller(
+        fetching,
+        "who is calling: comma-separated source ids, or UNSCOPED to read "
+        "with no caller. Required where the workspace declares source ids",
+        datazone=False,
     )
     holding = sub.add_parser(
         "sessions",
@@ -407,6 +358,30 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     return parser
+
+
+_TURN_CALLER = (
+    "who is calling: comma-separated source ids, or UNSCOPED to run "
+    "with no caller. Required where the workspace declares source ids"
+)
+
+
+def _add_caller(parser: argparse.ArgumentParser, help_text: str, *, datazone: bool = True) -> None:
+    parser.add_argument(
+        "--as",
+        dest="held",
+        type=_held,
+        default=None,
+        metavar="SOURCE_IDS",
+        help=help_text,
+    )
+    if datazone:
+        parser.add_argument(
+            "--datazone",
+            default=None,
+            metavar="NAME",
+            help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
+        )
 
 
 def _seed(source: str | None = None, *, everything: bool = False) -> int:
