@@ -29,7 +29,7 @@ def _mechanism(confined: Confinement) -> str:
     named = (
         "bubblewrap (Landlock is unavailable here, and the shell has no network)"
         if confined.mechanism == confinement.BUBBLEWRAP
-        else confined.mechanism or "the platform's sandbox"
+        else confined.mechanism
     )
     # A local supplied runner still receives the confined command, so the mechanism
     # holds; it is just not the whole story.
