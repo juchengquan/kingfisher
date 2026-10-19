@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import platform
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import fields, replace
@@ -483,6 +484,12 @@ def repository_root(start: Path | None = None) -> Path:
         f"otherwise scan the wrong tree, or nothing, and report success."
     )
     raise AssertionError(msg)
+
+
+#: For a test that drives `sandbox-exec`, which no other platform has.
+macos = pytest.mark.skipif(
+    platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
+)
 
 
 #: Every module that calls `load_dotenv`, each reached by a test. Named rather than

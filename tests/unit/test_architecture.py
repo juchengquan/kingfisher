@@ -13,25 +13,12 @@ from types import MappingProxyType
 
 import pytest
 
-
-def _repository_root(start: Path | None = None) -> Path:
-    """The checkout this file is in, found rather than counted."""
-    here = (start or Path(__file__)).resolve()
-    for candidate in here.parents:
-        if (candidate / "pyproject.toml").is_file() and (candidate / "src" / "kingfisher").is_dir():
-            return candidate
-    msg = (
-        f"no repository root above {here}: expected a directory holding both "
-        f"pyproject.toml and src/kingfisher. These rules read files by path and "
-        f"would otherwise scan the wrong tree, or nothing, and report success."
-    )
-    raise AssertionError(msg)
-
+from tests.conftest import repository_root
 
 #: The checkout, and the library inside it. Everything path-shaped here starts from one
 #: of these two, so a move is one line rather than four -- which is how three of the
 #: four came to disagree the last time this tree changed shape.
-REPO = _repository_root()
+REPO = repository_root()
 SRC = REPO / "src" / "kingfisher"
 
 #: The definition kinds' own directory. Named here rather than spelled at each of
@@ -4689,7 +4676,7 @@ def test_the_resolve_rule_does_not_see_a_reach_that_is_not_one(source):
 
 
 def _fake_checkout(root: Path) -> Path:
-    """A directory that looks like this repository to `_repository_root`."""
+    """A directory that looks like this repository to `repository_root`."""
     (root / "src" / "kingfisher").mkdir(parents=True)
     (root / "pyproject.toml").write_text("", encoding="utf-8")
     return root
@@ -4707,7 +4694,7 @@ def test_the_root_is_the_nearest_one_not_an_outer_one(tmp_path):
     deep = inner / "tests"
     deep.mkdir()
 
-    assert _repository_root(deep / "a_test.py") == inner
+    assert repository_root(deep / "a_test.py") == inner
 
 
 def test_no_root_at_all_is_an_error_rather_than_a_climb(tmp_path):
@@ -4718,7 +4705,7 @@ def test_no_root_at_all_is_an_error_rather_than_a_climb(tmp_path):
     lonely.mkdir(parents=True)
 
     with pytest.raises(AssertionError, match="no repository root"):
-        _repository_root(lonely / "a_test.py")
+        repository_root(lonely / "a_test.py")
 
 
 def test_a_directory_that_only_half_matches_is_not_the_root(tmp_path):
@@ -4728,7 +4715,7 @@ def test_a_directory_that_only_half_matches_is_not_the_root(tmp_path):
     (half / "tests").mkdir(parents=True)
     (half / "pyproject.toml").write_text("", encoding="utf-8")  # no src/kingfisher
 
-    assert _repository_root(half / "tests" / "a_test.py") == outer
+    assert repository_root(half / "tests" / "a_test.py") == outer
 
 
 def test_every_path_rule_starts_from_the_same_two_names():

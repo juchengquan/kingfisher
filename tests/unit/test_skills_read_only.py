@@ -6,10 +6,8 @@ It was writable. Measured against a catalogue on disk, `backend.write` created
 
 from __future__ import annotations
 
-import platform
 from typing import Any
 
-import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
@@ -17,11 +15,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.sandbox import sandbox_exec
-from tests.conftest import FakeToolCallingModel
-
-macos = pytest.mark.skipif(
-    platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
-)
+from tests.conftest import FakeToolCallingModel, macos
 
 SKILL = "---\nname: demo\ndescription: A skill.\n---\n\nDo the thing.\n"
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import asyncio
 import threading
-from pathlib import Path
 
 import pytest
 
@@ -17,8 +16,9 @@ from kingfisher.core.session.steps import (
     on_host,
     reading,
 )
+from tests.conftest import repository_root
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = repository_root()
 SRC = ROOT / "src" / "kingfisher"
 CALLERS = [ROOT / d for d in ("src", "tests", "spikes", "evals", "assets")]
 DRIVERS = {"drive", "adrive", "adrive_finished"}

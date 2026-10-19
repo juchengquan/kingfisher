@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import platform
 from dataclasses import replace
 from pathlib import Path
 
@@ -22,11 +21,7 @@ from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.shell import SKILLS_VIEW, shell_env, skills_view
-from tests.conftest import FakeToolCallingModel
-
-macos = pytest.mark.skipif(
-    platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
-)
+from tests.conftest import FakeToolCallingModel, macos
 
 SKILL = "---\nname: {name}\ndescription: {desc}\n---\nBody of {name}.\n"
 
