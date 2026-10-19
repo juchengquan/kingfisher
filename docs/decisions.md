@@ -3094,7 +3094,7 @@ nobody was reading.
 that will not import, a missing attribute, a result of the wrong shape: `ConfigError`,
 naming the setting. A factory raising its *own* exception passes through untouched -- that
 is the deployment's code failing at its own job, in a type their handling may know, and
-`store_named` is on the traceback saying which setting reached it.
+`built_from_setting` is on the traceback saying which setting reached it.
 
 **Two settings naming one thing are refused at startup, not resolved by precedence**, on
 the record so a config assembled in Python obeys it too. Preferring one silently leaves
@@ -3554,8 +3554,8 @@ is registered in code, a source id declared in a file -- hence `UNCONSULTED` and
 held total. The integration driver and `seed_example.py`, the script people copy, each told
 a reader to *register* a source id. `Seeded.report()` is every line a person is owed, and
 every caller prints it; `test_only_the_record_says_what_a_skipped_definition_needs` finds
-any `skipped …` line composed outside `seeding.py`, searching the driver, the example and
-`evals/` too. *(2026-09-23.)*
+any `skipped …` line composed outside `seeding.py`, searching the README, the driver, the
+example and `evals/` too. *(2026-09-23.)*
 
 ## What doctor promises
 

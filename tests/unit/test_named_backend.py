@@ -10,24 +10,24 @@ from kingfisher.cli.configured import configured_sessions
 from kingfisher.core.config import REMOVED_SETTINGS, RENAMED_SETTINGS, ConfigError
 from kingfisher.core.environment import Environment
 from kingfisher.core.interfaces import Sessions
-from kingfisher.core.wiring import store_named
+from kingfisher.core.wiring import built_from_setting
 from kingfisher.plugins import LocalSessions
 
 HERE = __name__
 
-#: The setting these are about. `store_named` takes the name a message must carry
+#: The setting these are about. `built_from_setting` takes the name a message must carry
 #: as an argument, so a test that spelled it at every call would stop checking
 #: that the caller passes it.
 SETTING = "KINGFISHER_SESSIONS"
 
 
 def named(spec: str):
-    """`store_named` as `configured_sessions` calls it."""
-    return store_named(spec, setting=SETTING, port=Sessions)
+    """`built_from_setting` as `configured_sessions` calls it."""
+    return built_from_setting(spec, setting=SETTING, interface=Sessions)
 
 
 class Recording(Sessions):
-    """A `Sessions` that satisfies the port and keeps nothing."""
+    """A `Sessions` that satisfies the interface and keeps nothing."""
 
     def open(self, cfg, session_id, /, *, catalogue=None):
         return None
@@ -174,5 +174,5 @@ def test_a_renamed_setting_is_refused_under_its_old_name(tmp_path: Path, old, ne
         read.config()
 
 
-def test_the_default_satisfies_the_port_it_is_the_default_for():
+def test_the_default_satisfies_the_interface_it_is_the_default_for():
     assert isinstance(LocalSessions(), Sessions)

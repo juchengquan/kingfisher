@@ -307,7 +307,7 @@ class Config:
     #: What bounds one shell command or one interpreter run.
     execution_timeout_s: int = 120
     # What one session may consume, not one caller: kingfisher is tenant-blind by
-    # design (T1), so bounding a caller is the job of whatever knows who is calling.
+    # design, so bounding a caller is the job of whatever knows who is calling.
     #
     # Nothing else bounds `recursion_limit` times a model's `timeout_s`, which allows
     # 150 x 120s, about 5 hours; an hour is far past any real turn.
