@@ -6,6 +6,7 @@ import ast
 import inspect
 import re
 import sys
+from collections.abc import Mapping, Sequence
 from functools import cache
 from pathlib import Path
 
@@ -1107,6 +1108,7 @@ def test_no_rule_here_is_parametrized_over_nothing():
         "the flat core": _flat_core(),
         "the package": _package_modules(),
         "consumers": _consumer_modules(),
+        "named definitions": _package_liveness()[0],
     }
     empty = sorted(name for name, found in collections.items() if not found)
     assert not empty, (
@@ -3458,6 +3460,210 @@ def _referenced_in_code() -> set[str]:
     return seen
 
 
+# -- which definition a name is ------------------------------------------------
+#
+# A bare name cannot say whose it is. `layout.denied_scopes` outlived every caller for as
+# long as `Layout.denied_scopes` was called, and `subagents.spec.DIRECTORY` for as long as
+# `agents.spec.DIRECTORY` was imported: a dead name passed by sharing a live one's
+# spelling. So a module-level name is resolved to the module defining it, and is live
+# only if something live reaches it -- which also catches a table read only by the dead
+# functions beside it, as `layout.ROUTES` was.
+
+#: The two addresses whose `__init__` publishes what it imports.
+PUBLIC_ADDRESSES = ("kingfisher", "kingfisher.plugins")
+
+#: A module-level name, as the module defining it and the name.
+Named = tuple[str, str]
+
+
+def _module_definitions(tree: ast.Module) -> dict[str, tuple[str, list[ast.stmt]]]:
+    """What a module defines at its top level that a rule here asks about, by kind.
+
+    A decorated function is registered by its decorator and a dunder by Python, so both
+    are left to the module's own reads rather than asked whether anything calls them.
+    """
+    found: dict[str, tuple[str, list[ast.stmt]]] = {}
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            if not node.decorator_list and not node.name.startswith("__"):
+                found.setdefault(node.name, ("definition", []))[1].append(node)
+        elif isinstance(node, ast.ClassDef):
+            found.setdefault(node.name, ("definition", []))[1].append(node)
+        elif isinstance(node, ast.Assign | ast.AnnAssign) and node.value is not None:
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id.isupper():
+                    found.setdefault(target.id, ("constant", []))[1].append(node)
+    return found
+
+
+def _top_level(tree: ast.Module) -> list[ast.stmt]:
+    """A module's own statements, into `if TYPE_CHECKING:` and `try` but not into a def."""
+    found: list[ast.stmt] = []
+    pending = list(tree.body)
+    while pending:
+        node = pending.pop(0)
+        found.append(node)
+        if isinstance(node, ast.If | ast.Try):
+            pending += [*node.body, *node.orelse, *getattr(node, "finalbody", [])]
+            for handler in getattr(node, "handlers", []):
+                pending += handler.body
+    return found
+
+
+def _bound_by(imports: Sequence[ast.stmt], modules: set[str]) -> dict[str, tuple[str, ...]]:
+    """What each imported local name stands for: `("module", m)` or `("name", m, n)`."""
+    bound: dict[str, tuple[str, ...]] = {}
+    for node in imports:
+        if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            for alias in node.names:
+                whole = f"{node.module}.{alias.name}"
+                bound[alias.asname or alias.name] = (
+                    ("module", whole) if whole in modules else ("name", node.module, alias.name)
+                )
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                first = alias.name.split(".")[0]
+                bound[alias.asname or first] = ("module", alias.name if alias.asname else first)
+    return bound
+
+
+def _reads_of(
+    owner: list[ast.stmt],
+    module: str,
+    local: dict[str, tuple[str, list[ast.stmt]]],
+    bound: dict[str, tuple[str, ...]],
+    modules: set[str],
+) -> set[Named]:
+    """The module-level names these statements read, each resolved to where it is defined."""
+    nested = [n for o in owner for n in ast.walk(o) if isinstance(n, ast.Import | ast.ImportFrom)]
+    names = {**bound, **_bound_by(nested, modules)}
+    found: set[Named] = set()
+    for node in (n for o in owner for n in ast.walk(o)):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            if node.id in local:
+                found.add((module, node.id))
+            elif (binding := names.get(node.id)) and binding[0] == "name":
+                found.add((binding[1], binding[2]))
+        elif isinstance(node, ast.Attribute):
+            # `module.name`, through however many packages: the longest prefix that is a
+            # module owns the next segment.
+            parts: list[str] = []
+            base: ast.expr = node
+            while isinstance(base, ast.Attribute):
+                parts.insert(0, base.attr)
+                base = base.value
+            binding = names.get(base.id) if isinstance(base, ast.Name) else None
+            if not binding or binding[0] != "module":
+                continue
+            segments = [binding[1], *parts]
+            for cut in range(len(segments) - 1, 0, -1):
+                if ".".join(segments[:cut]) in modules:
+                    found.add((".".join(segments[:cut]), segments[cut]))
+                    break
+    return found
+
+
+def _live(
+    sources: Mapping[str, str],
+    *,
+    whole: frozenset[str] = frozenset(),
+    public: tuple[str, ...] = PUBLIC_ADDRESSES,
+    entry_points: frozenset[Named] = frozenset(),
+) -> tuple[dict[Named, str], set[Named]]:
+    """Every module-level definition and constant, by kind, and the ones something reaches.
+
+    `whole` modules are read and never asked about: the driver and `evals/`, whose every
+    line is a caller. Reached means from a module's own top-level statements, from what a
+    public address imports, from an entry point, or from a definition already reached --
+    never from a test, and never from a dead definition beside it.
+    """
+    trees = {module: ast.parse(source) for module, source in sources.items()}
+    modules = set(trees)
+    edges: dict[Named, set[Named]] = {}
+    roots: set[Named] = set(entry_points)
+    defined: dict[Named, str] = {}
+    for module, tree in trees.items():
+        local = {} if module in whole else _module_definitions(tree)
+        bound = _bound_by(_top_level(tree), modules)
+        owned = {id(node) for _, nodes in local.values() for node in nodes}
+        for name, (kind, nodes) in local.items():
+            defined[(module, name)] = kind
+            edges[(module, name)] = _reads_of(nodes, module, local, bound, modules)
+        rest = [node for node in tree.body if id(node) not in owned]
+        roots |= _reads_of(rest, module, local, bound, modules)
+        if module in public:
+            roots |= {(b[1], b[2]) for b in bound.values() if b[0] == "name"}
+    live: set[Named] = set()
+    pending = list(roots)
+    while pending:
+        if (one := pending.pop()) not in live:
+            live.add(one)
+            pending += edges.get(one, ())
+    return defined, live
+
+
+@cache
+def _package_liveness() -> tuple[dict[Named, str], set[Named]]:
+    """`_live` over the package, with the driver, `evals/` and the console scripts calling."""
+    import tomllib
+
+    sources = {name: path.read_text(encoding="utf-8") for name, path in _module_paths().items()}
+    whole = {
+        f"<{path.relative_to(REPO)}>": path
+        for path in _production_files()
+        if not path.is_relative_to(SRC)
+    }
+    sources |= {key: path.read_text(encoding="utf-8") for key, path in whole.items()}
+    scripts = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    entry_points = frozenset(
+        (module, attribute)
+        for module, _, attribute in (
+            target.partition(":") for target in scripts["project"]["scripts"].values()
+        )
+    )
+    return _live(sources, whole=frozenset(whole), entry_points=entry_points)
+
+
+def test_a_dead_name_is_found_by_its_module_not_its_spelling():
+    """Pinned against modules written for the purpose: the real tree is meant to be clean,
+    and a walk that found nothing dead would look the same as one that works.
+    """
+    sources = {
+        "pkg.a": (
+            "ROUTES = (1,)\n"
+            "PUBLISHED = 2\n"
+            "def denied_scopes():\n    return ROUTES\n"
+            "def imported(): ...\n"
+            "def by_attribute(): ...\n"
+            "def read_only_by_the_dead(): ...\n"
+            "def for_the_driver(): ...\n"
+            "class Layout:\n    def denied_scopes(self): ...\n"
+        ),
+        "pkg.b": (
+            "import pkg.a as a\n"
+            "from pkg.a import Layout, imported, read_only_by_the_dead\n"
+            "Layout().denied_scopes()\n"
+            "imported()\n"
+            "a.by_attribute()\n"
+            "def unused():\n    return read_only_by_the_dead()\n"
+        ),
+        "pub": "from pkg.a import PUBLISHED\n",
+        "<driver>": "from pkg.a import for_the_driver\ndef main():\n    for_the_driver()\n",
+    }
+
+    defined, live = _live(sources, whole=frozenset({"<driver>"}), public=("pub",))
+
+    assert sorted(name for name in defined if name not in live) == [
+        # The method of the same name is called; the module function is not.
+        ("pkg.a", "ROUTES"),
+        ("pkg.a", "denied_scopes"),
+        # Imported, but only by a function nothing calls.
+        ("pkg.a", "read_only_by_the_dead"),
+        ("pkg.b", "unused"),
+    ]
+
+
 def _mixed_into(public: frozenset[str]) -> frozenset[str]:
     """Classes an exported class inherits from, which are exported through it."""
     found: set[str] = set()
@@ -3468,25 +3674,21 @@ def _mixed_into(public: frozenset[str]) -> frozenset[str]:
     return frozenset(found)
 
 
-def _defined_in_package(public: frozenset[str]) -> dict[str, Path]:
-    """Module-level functions and classes, plus methods of classes that stand alone."""
+def _standalone_methods(public: frozenset[str]) -> dict[str, Path]:
+    """Methods of classes that stand alone, by bare name: an attribute read cannot say
+    which class it reaches, so a method is used wherever its name is read."""
     published = public | _mixed_into(public)
     found: dict[str, Path] = {}
     for path in sorted(SRC.rglob("*.py")):
         for node in ast.parse(path.read_text(encoding="utf-8")).body:
-            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-                if not node.decorator_list and not node.name.startswith("__"):
-                    found[node.name] = path
-            elif isinstance(node, ast.ClassDef):
-                found[node.name] = path
-                if node.bases or node.name in published:
+            if not isinstance(node, ast.ClassDef) or node.bases or node.name in published:
+                continue
+            for inner in node.body:
+                if not isinstance(inner, ast.FunctionDef | ast.AsyncFunctionDef):
                     continue
-                for inner in node.body:
-                    if not isinstance(inner, ast.FunctionDef | ast.AsyncFunctionDef):
-                        continue
-                    if inner.name.startswith("_") or inner.decorator_list:
-                        continue
-                    found[inner.name] = path
+                if inner.name.startswith("_") or inner.decorator_list:
+                    continue
+                found[inner.name] = path
     return found
 
 
@@ -3510,18 +3712,24 @@ def test_nothing_is_defined_for_tests_alone():
     """
     import kingfisher
 
+    defined, live = _package_liveness()
+    orphans = {
+        f"{module}.{name}"
+        for (module, name), kind in defined.items()
+        if kind == "definition" and (module, name) not in live
+        and name not in DISPATCHED_ELSEWHERE
+    }
     used = _referenced_in_code()
     public = frozenset(kingfisher.__all__)
-
-    orphans = {
-        name: str(path.relative_to(SRC))
-        for name, path in _defined_in_package(public).items()
+    orphans |= {
+        f"{path.relative_to(SRC)}: {name}"
+        for name, path in _standalone_methods(public).items()
         if name not in used and name not in public and name not in DISPATCHED_ELSEWHERE
     }
 
     assert not orphans, (
-        f"defined but never used outside tests: {orphans} -- delete it, export it, "
-        "or add it to DISPATCHED_ELSEWHERE with the contract that calls it"
+        f"defined but never used outside tests: {sorted(orphans)} -- delete it, export "
+        "it, or add it to DISPATCHED_ELSEWHERE with the contract that calls it"
     )
 
 
@@ -3585,12 +3793,12 @@ def _constants_in_package() -> dict[str, Path]:
     return found
 
 
-def _unread(found: dict[str, Path], read: set[str], public: frozenset[str]) -> dict[str, Path]:
-    """Of the constants defined, the ones nothing outside a test reads."""
+def _unread(defined: Mapping[Named, str], live: set[Named]) -> set[Named]:
+    """Of the constants defined, the ones nothing outside a test reaches."""
     return {
-        name: path
-        for name, path in found.items()
-        if name not in read and name not in public and name not in READ_ELSEWHERE
+        one
+        for one, kind in defined.items()
+        if kind == "constant" and one not in live and one[1] not in READ_ELSEWHERE
     }
 
 
@@ -3647,10 +3855,6 @@ def test_no_mixin_declares_what_it_does_not_read():
 
 def test_no_constant_is_published_for_tests_alone():
     """A constant nothing reads is a claim about the code the code does not make."""
-    import kingfisher
-
-    read = _referenced_in_code()
-    public = frozenset(kingfisher.__all__)
     found = _constants_in_package()
 
     # A collector pointed at the wrong root finds nothing and reports success --
@@ -3665,10 +3869,7 @@ def test_no_constant_is_published_for_tests_alone():
         "and this rule is now about whatever is left"
     )
 
-    orphans = {
-        name: str(path.relative_to(SRC))
-        for name, path in _unread(found, read, public).items()
-    }
+    orphans = sorted(f"{module}.{name}" for module, name in _unread(*_package_liveness()))
 
     assert not orphans, (
         f"defined but never read outside tests: {orphans} -- delete it, export it, "
@@ -3677,16 +3878,15 @@ def test_no_constant_is_published_for_tests_alone():
     )
 
 
-def test_the_unread_check_knows_the_three_ways_out():
-    """Every constant in the tree is read, published or exempted, so the rule above
-    passes whether `_unread` subtracts anything or nothing.
+def test_the_unread_check_knows_its_two_ways_out():
+    """Every constant in the tree is reached or exempted, so the rule above passes
+    whether `_unread` subtracts anything or nothing.
     """
-    here = Path("core/result.py")
-    found = {"READ": here, "PUBLISHED": here, "KINDS": here, "ORPHAN": here}
+    defined = {("m", "READ"): "constant", ("m", "KINDS"): "constant", ("m", "ORPHAN"): "constant"}
 
-    assert _unread(found, {"READ"}, frozenset({"PUBLISHED"})) == {"ORPHAN": here}
+    assert _unread(defined, {("m", "READ")}) == {("m", "ORPHAN")}
     # And the direction that must not fire: nothing defined is nothing to report.
-    assert _unread({}, set(), frozenset()) == {}
+    assert _unread({}, set()) == set()
 
 
 def test_a_constant_is_not_counted_as_its_own_reader():

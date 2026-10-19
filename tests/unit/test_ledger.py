@@ -38,7 +38,6 @@ from kingfisher.core.layout import (
     SCRATCH,
     SCRATCH_ROUTE,
     TOOL_RESULTS,
-    TOOL_RESULTS_ROUTE,
     TRANSCRIPT_FILE,
     Layout,
 )
@@ -61,6 +60,8 @@ from tests.conftest import (
     tools_dir,
 )
 from tests.unit.scripted import Scripted
+
+TOOL_RESULTS_ROUTE = DEFAULT_LAYOUT.tool_results_route
 
 TOOLS = '''
 def web_search(query: str) -> str:

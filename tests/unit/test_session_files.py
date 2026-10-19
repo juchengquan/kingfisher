@@ -17,14 +17,7 @@ from kingfisher.cli.__main__ import main
 from kingfisher.core.access.source_ids import parse
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import Sessions
-from kingfisher.core.layout import (
-    DEFAULT_LAYOUT,
-    HARNESS,
-    INPUTS,
-    SKILLS_ROUTE,
-    Layout,
-    routed_paths,
-)
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS, SKILLS_ROUTE, Layout
 from kingfisher.core.session.files import (
     collect_artifacts,
     place_inputs,
@@ -50,7 +43,7 @@ class ElsewhereFiles(CompositeBackend):
                 route: FilesystemBackend(
                     root_dir=skills if route == SKILLS_ROUTE else kept / route.strip("/")
                 )
-                for route in routed_paths()
+                for route in DEFAULT_LAYOUT.routed_paths()
             },
         )
 

@@ -16,15 +16,7 @@ import pytest
 
 from kingfisher.core.agent.assembly import memory_is_denied, read_only_permissions
 from kingfisher.core.agent.backend import memory_sources
-from kingfisher.core.layout import (
-    MEMORY,
-    OUTPUTS,
-    ROUTES,
-    Layout,
-    denied_read_scopes,
-    denied_scopes,
-    routed_paths,
-)
+from kingfisher.core.layout import MEMORY, OUTPUTS, Layout
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 
@@ -48,10 +40,6 @@ def test_the_default_layout_is_the_module_constants():
     default = Layout()
     assert default.session_dirs == ("inputs", "outputs", "memory", "scratchpad")
     assert default.artifact_dirs == (OUTPUTS, MEMORY)
-    assert default.routes == ROUTES
-    assert default.routed_paths() == routed_paths()
-    assert default.denied_scopes() == denied_scopes()
-    assert default.denied_read_scopes() == denied_read_scopes()
     assert (default.inputs_route, default.memory_route, default.outputs_route) == (
         "/inputs/",
         "/memory/",

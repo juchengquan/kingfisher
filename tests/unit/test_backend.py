@@ -12,17 +12,7 @@ from kingfisher.core.agent.host_paths import (
     HostPathError,
     reject_host_path,
 )
-from kingfisher.core.layout import (
-    BUNDLED_SKILLS_ROUTE,
-    DEFAULT_LAYOUT,
-    OFFLOADS_ROUTE,
-    ROUTES,
-    SCRATCH_ROUTE,
-    TOOL_RESULTS_ROUTE,
-    denied_read_scopes,
-    denied_scopes,
-    routed_paths,
-)
+from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, DEFAULT_LAYOUT, SCRATCH_ROUTE
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.shell import shell_env
@@ -104,26 +94,26 @@ def test_skills_is_routed_for_the_same_reason(cfg, session_dir):
 def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_dir):
     """The table and what backs it are in two modules, so something has to tie them."""
     backend = backend_at(cfg, session_dir)
-    declared = set(routed_paths())
+    declared = set(DEFAULT_LAYOUT.routed_paths())
     generated = {r for r in backend.routes if r.startswith(BUNDLED_SKILLS_ROUTE)}
 
     assert declared <= set(backend.routes), "declared in the layout, mounted nowhere"
     assert set(backend.routes) - generated == declared, (
-        "mounted by the builder, absent from kingfisher.core.layout.ROUTES -- add it there, "
+        "mounted by the builder, absent from `Layout.routes` -- add it there, "
         "or it has no deny rule and nothing says it exists"
     )
 
 
 def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
     """Pinned rather than derived twice."""
-    assert denied_scopes() == (
+    assert DEFAULT_LAYOUT.denied_scopes() == (
         "/.harness/**",
         "/inputs/**",
         "/scratchpad/large_tool_results/**",
         "/scratchpad/tool_results/**",
         "/skills/**",
     )
-    assert denied_read_scopes() == ("/.harness/**",)
+    assert DEFAULT_LAYOUT.denied_read_scopes() == ("/.harness/**",)
     rules = read_only_permissions(DEFAULT_LAYOUT)
     assert [p.paths for p in rules] == [
         ["/.harness/**"],
@@ -140,7 +130,7 @@ def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
 def test_outputs_is_unrouted_and_the_table_says_so(cfg, session_dir):
     """The absence used to be the only record of it."""
     backend = backend_at(cfg, session_dir)
-    unrouted = {r.path for r in ROUTES if not r.routed}
+    unrouted = {r.path for r in DEFAULT_LAYOUT.routes if not r.routed}
 
     assert unrouted == {"/outputs/", "/scratchpad/"}
     assert not (unrouted & set(backend.routes)), "an unrouted path was mounted"
@@ -573,8 +563,8 @@ def test_a_route_below_another_is_listed_under_the_one_above_it(cfg, session_dir
 
     found = [one["path"] for one in _entries(_asked(backend, way, "ls", SCRATCH_ROUTE))]
 
-    assert TOOL_RESULTS_ROUTE in found
-    assert OFFLOADS_ROUTE in found
+    assert DEFAULT_LAYOUT.tool_results_route in found
+    assert DEFAULT_LAYOUT.offloads_route in found
 
 
 def test_a_directory_still_lists_what_it_actually_holds(cfg, session_dir, way):

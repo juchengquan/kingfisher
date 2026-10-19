@@ -76,7 +76,6 @@ def _route(*parts: str) -> str:
 
 
 INPUTS_ROUTE = _route(INPUTS)
-MEMORY_ROUTE = _route(MEMORY)
 SKILLS_ROUTE = _route(SKILLS)
 BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 
@@ -84,8 +83,6 @@ BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 #: whose `TMPDIR` is the scratchpad, and the file tools write the same place.
 OUTPUTS_ROUTE = _route(OUTPUTS)
 SCRATCH_ROUTE = _route(SCRATCH)
-TOOL_RESULTS_ROUTE = _route(SCRATCH, TOOL_RESULTS)
-OFFLOADS_ROUTE = _route(SCRATCH, OFFLOADS)
 
 #: Routed only so it can be denied: `FilesystemMiddleware` refuses `permissions=` unless
 #: every rule path sits under a route.
@@ -112,61 +109,6 @@ class Route:
     family: bool = False
 
 
-#: What the agent addresses: one table for both the mounts and the deny rules, so the
-#: two cannot disagree about which paths exist.
-ROUTES: tuple[Route, ...] = (
-    # The only copy of a caller's inputs. This binds the file tools only; the shell
-    # bypasses them, so `plugins.sessions.permissions.protect_inputs` drops the write bits.
-    Route(INPUTS_ROUTE, deny_write_under=f"{INPUTS_ROUTE}**"),
-    # Routed so a request that declines the memory a deployment wired has
-    # somewhere to hang a deny rule, not because memory needs isolating.
-    Route(MEMORY_ROUTE),
-    # Instructions the agent follows: a skill edited in one request is read by every
-    # later one, in every deployment sharing the directory.
-    Route(SKILLS_ROUTE, deny_write_under=f"{SKILLS_ROUTE}**"),
-    # One mount per subagent bundle that ships skills, keyed by where it sits. Under
-    # `/skills/`, not beside it: the deny rule and the sandbox profile that keep skills
-    # read-only are both scoped to that prefix.
-    Route(BUNDLED_SKILLS_ROUTE, deny_write_under=f"{SKILLS_ROUTE}**", family=True),
-    # Unrouted, and listed so a reader finds that here: the agent's to write.
-    Route(OUTPUTS_ROUTE, routed=False),
-    Route(SCRATCH_ROUTE, routed=False),
-    # Read-only to the file tools, routed only so the rule is expressible: a row names its
-    # file and the prompt tells the model to read it back, so a write here forges what a
-    # later turn reads as true. The shell is the fences' to refuse, via `Layout.saved_results`,
-    # and Landlock cannot inside a scratchpad it grants whole, so no boundary is claimed.
-    Route(TOOL_RESULTS_ROUTE, deny_write_under=f"{TOOL_RESULTS_ROUTE}**"),
-    # The same, for the folder a row names once its result was too long to show whole.
-    Route(OFFLOADS_ROUTE, deny_write_under=f"{OFFLOADS_ROUTE}**"),
-    # Denied both ways: a write could rewrite the pinned agent or the conversation the
-    # next turn is rebuilt from, and a read gains nothing the run was not already told.
-    Route(
-        HARNESS_ROUTE,
-        deny_write_under=f"{HARNESS_ROUTE}**",
-        deny_read_under=f"{HARNESS_ROUTE}**",
-    ),
-)
-
-
-def denied_scopes() -> tuple[str, ...]:
-    """Every scope a write is refused under, once each, sorted so table order is moot."""
-    return tuple(sorted({r.deny_write_under for r in ROUTES if r.deny_write_under}))
-
-
-def denied_read_scopes() -> tuple[str, ...]:
-    """Every scope a read is refused under, the same way.
-
-    Not a parameter on `denied_scopes`: the answers go to two rules, and a read deny on
-    `/inputs/` would break what it is for.
-    """
-    return tuple(sorted({r.deny_read_under for r in ROUTES if r.deny_read_under}))
-
-
-def routed_paths() -> tuple[str, ...]:
-    """The paths the composite mounts itself, families excluded."""
-    return tuple(r.path for r in ROUTES if r.routed and not r.family)
-
-
 #: Names a renamed session leaf may not take: it shares the session with these folders,
 #: kingfisher's and deepagents', and would overwrite one.
 _RESERVED_LEAF_NAMES = frozenset(
@@ -185,7 +127,6 @@ class Layout:
 
     Fixed: the `sessions` root, which the agent never addresses; `.harness` and `skills`;
     and deepagents' own leaves under the scratchpad, which only move with their parent.
-    `Layout()` reproduces the module-level constants.
     """
 
     inputs: str = INPUTS
@@ -285,28 +226,55 @@ class Layout:
 
     @property
     def routes(self) -> tuple[Route, ...]:
-        """The route table for this layout: the renamable leaves spelled from the
-        instance, the fixed skills and harness routes unchanged."""
+        """What the agent addresses: one table for both the mounts and the deny rules, so
+        the two cannot disagree about which paths exist."""
         return (
+            # The only copy of a caller's inputs. This binds the file tools only; the shell
+            # bypasses them, so `plugins.sessions.permissions.protect_inputs` drops the
+            # write bits.
             Route(self.inputs_route, deny_write_under=f"{self.inputs_route}**"),
+            # Routed so a request that declines the memory a deployment wired has
+            # somewhere to hang a deny rule, not because memory needs isolating.
             Route(self.memory_route),
+            # Instructions the agent follows: a skill edited in one request is read by
+            # every later one, in every deployment sharing the directory.
             Route(SKILLS_ROUTE, deny_write_under=f"{SKILLS_ROUTE}**"),
+            # One mount per subagent bundle that ships skills, keyed by where it sits.
+            # Under `/skills/`, not beside it: the deny rule and the sandbox profile that
+            # keep skills read-only are both scoped to that prefix.
             Route(BUNDLED_SKILLS_ROUTE, deny_write_under=f"{SKILLS_ROUTE}**", family=True),
+            # Unrouted, and listed so a reader finds that here: the agent's to write.
             Route(self.outputs_route, routed=False),
             Route(self.scratch_route, routed=False),
+            # Read-only to the file tools, routed only so the rule is expressible: a row
+            # names its file and the prompt tells the model to read it back, so a write
+            # here forges what a later turn reads as true. The shell is the fences' to
+            # refuse, via `saved_results`, and Landlock cannot inside a scratchpad it
+            # grants whole, so no boundary is claimed.
             Route(self.tool_results_route, deny_write_under=f"{self.tool_results_route}**"),
+            # The same, for the folder a row names once its result was too long to show.
             Route(self.offloads_route, deny_write_under=f"{self.offloads_route}**"),
+            # Denied both ways: a write could rewrite the pinned agent or the conversation
+            # the next turn is rebuilt from, and a read gains nothing the run was not
+            # already told.
             Route(HARNESS_ROUTE, deny_write_under=f"{HARNESS_ROUTE}**",
                   deny_read_under=f"{HARNESS_ROUTE}**"),
         )
 
     def denied_scopes(self) -> tuple[str, ...]:
+        """Every scope a write is refused under, once each, sorted so table order is moot."""
         return tuple(sorted({r.deny_write_under for r in self.routes if r.deny_write_under}))
 
     def denied_read_scopes(self) -> tuple[str, ...]:
+        """Every scope a read is refused under, the same way.
+
+        Not a parameter on `denied_scopes`: the answers go to two rules, and a read deny on
+        `/inputs/` would break what it is for.
+        """
         return tuple(sorted({r.deny_read_under for r in self.routes if r.deny_read_under}))
 
     def routed_paths(self) -> tuple[str, ...]:
+        """The paths the composite mounts itself, families excluded."""
         return tuple(r.path for r in self.routes if r.routed and not r.family)
 
 
