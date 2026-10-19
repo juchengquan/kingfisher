@@ -25,6 +25,7 @@ from kingfisher import (
     Decision,
     DecisionError,
     Held,
+    InputsError,
     QuotaExceededError,
     Request,
     Resume,
@@ -43,7 +44,6 @@ from kingfisher.core.access import with_datazone
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.config import MissingCredentialsWarning
 from kingfisher.core.definitions.agents.spec import AgentError
-from kingfisher.core.session.files import InputsError
 
 from .health import _retired, examine, worst
 from .listing import as_json, failed, origins_document, render

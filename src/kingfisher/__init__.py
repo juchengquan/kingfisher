@@ -21,6 +21,7 @@ _EXPORTS = {
     "ToolSpec": "kingfisher.core.definitions.tools.spec",
     "Capabilities": "kingfisher.core.access.capabilities",
     "CapabilityError": "kingfisher.core.access.capabilities",
+    "InputsError": "kingfisher.core.session.files",
     "QuotaExceededError": "kingfisher.core.session.model",
     "SessionBusyError": "kingfisher.core.session.model",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
@@ -81,6 +82,7 @@ __all__ = [
     "Decision",
     "DecisionError",
     "Held",
+    "InputsError",
     "Inventory",
     "Kingfisher",
     "Landing",
@@ -156,6 +158,7 @@ if TYPE_CHECKING:
     from kingfisher.core.run import run as run
     from kingfisher.core.run import stream as stream
     from kingfisher.core.service import Kingfisher as Kingfisher
+    from kingfisher.core.session.files import InputsError as InputsError
     from kingfisher.core.session.handle import Session as Session
     from kingfisher.core.session.model import QuotaExceededError as QuotaExceededError
     from kingfisher.core.session.model import SessionBusyError as SessionBusyError
