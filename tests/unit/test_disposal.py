@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
+import pytest
+
 from kingfisher import Kingfisher
 from kingfisher.core.request import Request
 from kingfisher.core.session import retention
@@ -268,6 +272,98 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
     assert not LocalSessions().held(
         cfg, held, stale_after=cfg.claim_stale_after, now=taken + 1e6
     )
+
+
+#: Longer than every bound the `cfg` fixture carries, so whichever one a case lengthens
+#: is unambiguously the bound the window has to cover.
+LONGEST = 900
+
+
+def _timing_out_after(cfg, seconds):
+    """`cfg` with every model bounded at `seconds`, the catalogue otherwise unchanged."""
+    bounded = {
+        name: replace(profile, timeout_s=seconds)
+        for name, profile in cfg.models.models.items()
+    }
+    return replace(cfg, models=replace(cfg.models, models=bounded))
+
+
+@pytest.mark.parametrize(
+    ("held_by", "lengthen"),
+    [
+        ("a shell command", lambda cfg: replace(cfg, execution_timeout_s=LONGEST)),
+        ("a model call", lambda cfg: _timing_out_after(cfg, LONGEST)),
+    ],
+)
+def test_a_claim_outlives_whatever_held_the_superstep_the_deadline_fell_in(
+    cfg, held_by, lengthen
+):
+    """A turn stops between stream chunks, so a deadline passing inside a superstep
+    stops nothing until that superstep ends -- and `execution_timeout_s` bounds one as
+    surely as a model's `timeout_s` does.
+
+    The shell command is the bug: `claim_stale_after` added the model timeout alone, so
+    raising `execution_timeout_s` for a build or a test suite reopened the overlap the
+    constant exists to close. Measured on 2026-10-20, a 6s command under a 1s turn and a
+    1s model timeout let a second caller take the session 3.0s into a turn that ran to
+    6.0s. The model call is the control, and it is not redundant: the fixture's longest
+    model timeout equals the `ModelProfile` default the `max` falls back to, so a rule
+    built on the fixture alone holds neither half of it.
+    """
+    import time
+
+    bounded = lengthen(cfg)
+    held = start(bounded, "held")
+    taken = time.time()
+    sessions = LocalSessions()
+    assert sessions.claim(bounded, held, stale_after=bounded.claim_stale_after, now=taken)
+
+    # While the turn's own work can still be running: its deadline, then the superstep
+    # that straddled it, inside the bound by the same minute the retention rule above
+    # uses. Not the bound exactly -- `held` reads the age off the claim's mtime rather
+    # than the `now` it was taken with, so the bound itself falls either side of that
+    # `<` by the filesystem's timestamp granularity: asked there, this was green on
+    # APFS and red on ext4.
+    running = taken + bounded.turn_timeout_s + LONGEST - 60
+    assert sessions.held(bounded, held, stale_after=bounded.claim_stale_after, now=running)
+    assert not sessions.claim(
+        bounded, held, stale_after=bounded.claim_stale_after, now=running
+    )
+
+    # The control beside the escape: with that one bound back where the fixture left it,
+    # the same instant is past the window -- so the assertions above were carried by the
+    # bound this case lengthened and not by another that happens to be long enough.
+    assert not sessions.held(cfg, held, stale_after=cfg.claim_stale_after, now=running)
+
+
+def test_a_claim_outlives_the_deadline_in_a_deployment_that_bounds_nothing(cfg):
+    """The window is never the deadline alone, however little a deployment bounds.
+
+    `claim_stale_after` takes the longest bound on a superstep, and every one of them
+    can be absent: a catalogue with no models, and no bound on a command. The `max`
+    falls back to `ModelProfile.timeout_s` for exactly this, and nothing held that --
+    neither here nor under the `default=` this replaced. Zero would make the claim
+    takeable the instant the deadline passed, which is the overlap the constant exists
+    to close.
+    """
+    import time
+
+    # Only the two bounds are read here, so an empty catalogue needs no reachable default.
+    bounds_nothing = replace(
+        cfg, execution_timeout_s=0, models=replace(cfg.models, models={})
+    )
+    assert bounds_nothing.claim_stale_after > bounds_nothing.turn_timeout_s
+
+    held = start(bounds_nothing, "held")
+    taken = time.time()
+    sessions = LocalSessions()
+    stale_after = bounds_nothing.claim_stale_after
+    assert sessions.claim(bounds_nothing, held, stale_after=stale_after, now=taken)
+
+    # The instant the deadline passes, which is when the turn is still stopping.
+    passed = taken + bounds_nothing.turn_timeout_s
+    assert sessions.held(bounds_nothing, held, stale_after=stale_after, now=passed)
+    assert not sessions.claim(bounds_nothing, held, stale_after=stale_after, now=passed)
 
 
 def test_a_sweep_leaves_no_claim_behind(cfg):

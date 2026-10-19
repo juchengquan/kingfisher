@@ -18,6 +18,24 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session stays claimed for a shell command's bound too, after #977
+
+- **`Config.claim_stale_after` grew, and nothing you wrote has to change.** It was the
+  turn deadline plus the longest model timeout, and it is now the turn deadline plus the
+  longest bound on one superstep — whichever of `execution_timeout_s` and the models'
+  `timeout_s` is larger. At the defaults, where both are 120s, the number is the same
+  3,720s it was.
+- **If you raised `KINGFISHER_EXECUTION_TIMEOUT_S`** — for a build, a test suite,
+  anything a shell command may take minutes over — a session now stays claimed longer
+  after a turn dies, by however much that bound exceeds your longest model timeout. That
+  is the fix: a turn out of time finishes the step it is inside before it stops, so the
+  old window let a second caller take a session whose turn was still running. Measured,
+  a 6s command under a 1s turn and a 1s model timeout let one in 3.0s into a turn that
+  ran to 6.0s.
+- **A backend that implements `claim` reads the number it is handed**, as before. If
+  yours derives its own staleness instead of using `stale_after`, derive it the same
+  way or it keeps the old overlap.
+
 ## A source id stands only for itself, after #972
 
 - **`source_ids.yaml` lists names and nothing else**: `source_ids: [sales_db, audit_log,
