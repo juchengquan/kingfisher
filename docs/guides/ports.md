@@ -25,9 +25,9 @@ kingfisher = Kingfisher(cfg, sessions=LocalSessions(runner=my_runner), run_event
 ```
 
 **As a setting**, for the command line only. A constructor argument reaches the
-construction site you control, and `kingfisher run`, `sessions`, `reap` and
-`artifact` build their own instance with nowhere to point it. `KINGFISHER_SESSIONS`
-is where they are told the sessions, and `KINGFISHER_PLUGINS` the rest, as a
+construction site you control, and the `kingfisher` command builds its own with
+nowhere to point it. `KINGFISHER_SESSIONS` is where every verb but `seed` is told
+the sessions, and `KINGFISHER_PLUGINS` the rest, as a
 `kingfisher.plugins.Plugins` whose fields are the keywords above:
 
 ```
@@ -113,8 +113,8 @@ Things to know:
   included, so the obvious implementation gets it wrong and nothing else would
   say so.
 
-`CommandResult` is exported from `kingfisher` — you return one of these, so you
-need it. It carries `output`, `exit_code` and `truncated`; `exit_code` is not
+`CommandResult` is exported from `kingfisher.plugins` — you return one of these, so
+you need it. It carries `output`, `exit_code` and `truncated`; `exit_code` is not
 optional, because a caller deciding whether a command worked has nothing to do
 with `None` but guess.
 
@@ -499,8 +499,8 @@ sessions = LocalSessions(shell=ShellSettings(sandbox="external", path_extra=("/o
 `kingfisher doctor` builds its sessions from the environment, so it reports a fence chosen
 this way only where the two agree.
 
-For the command line, name it with `KINGFISHER_SESSIONS`; without it,
-`kingfisher sessions`, `reap` and `artifact` run on `LocalSessions`.
+For the command line, name it with `KINGFISHER_SESSIONS`; without it, every verb
+but `seed` runs on `LocalSessions`.
 
 ### Checking what you returned
 
