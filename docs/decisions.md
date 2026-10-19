@@ -3731,10 +3731,17 @@ record per construction. `print` would make the library unusable by a server, an
 is every other logger's parent, so raising it to INFO for this would have turned on the
 audit trail a deployment had left off, while there was one.
 
-**`doctor` gained two checks a path alone could not express.** Resolving a catalogue
-*creates* its directory, so a mistyped root yields a real empty one, which says `0 defined`
-as a fresh workspace does. And a configuration being ignored is said out loud, which needed
-`examine` to take the inventory rather than build one agreeing with `cfg` by construction.
+**Reversed: `doctor` says where a catalogue came from, not only what it holds.** It
+gained two rows a path alone could not express. One warned of an empty catalogue at a
+relocated path, because resolving a catalogue *created* its directory, so a mistyped root
+said `0 defined` as a fresh workspace does; it went when a start stopped making the folder
+and began refusing a missing one. The other said a configuration was being ignored, which
+needed `examine` to take the inventory rather than build one agreeing with `cfg` by
+construction. Its premise was `Kingfisher(catalogue=)`; once #784 removed that, `doctor`'s
+inventory and `cfg` read the one folder, and the row could not fire -- breaking it turned
+red only a test handing `examine` an inventory built by hand. Removed rather than kept
+guarding nothing. `examine` still takes the inventory, so the header `doctor` prints and
+the rows under it come from one read. *(2026-09-02. Reversed 2026-10-13 and 2026-10-19.)*
 
 **Rejected along the way, each for its own reason.** In-code configuration as a first-class
 path -- `Models`, `Endpoint` and `ModelProfile` are constructible, but this was about making
