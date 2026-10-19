@@ -31,7 +31,7 @@ from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
-from tests.conftest import Through, subagents_dir, tools_dir
+from tests.conftest import Through, agent_named, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted
 
 VOCABULARY = "source_ids: [A, B]\ndatazones: [finance, hr]\n"
@@ -100,7 +100,7 @@ def built(kf: Kingfisher, source_ids, datazone: str | None) -> tuple[set[str], s
     ensure_session_layout(session, DEFAULT_LAYOUT)
     assembled = build_agent(
         kf.cfg,
-        agent=kf._agent_named("surveyor", source_ids=caller),
+        agent=agent_named(kf, "surveyor", source_ids=caller),
         held=caller_holds(kf.access, caller),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf.grants,

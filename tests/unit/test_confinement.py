@@ -11,7 +11,6 @@ import ast
 import asyncio
 import inspect
 import os
-import platform
 import re
 import shutil
 import tempfile
@@ -31,10 +30,7 @@ from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox import confinement, sandbox_exec
 from kingfisher.plugins.sessions.sandbox.bubblewrap import BubblewrapRunner
 from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner
-
-macos = pytest.mark.skipif(
-    platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
-)
+from tests.conftest import macos, repository_root
 
 #: Two tests need the agent's shell to start *this* interpreter, with this project's
 #: dependencies importable, from inside the sandbox. That works on a developer's machine
@@ -1428,8 +1424,8 @@ def test_every_rule_reading_the_written_profile_is_marked_for_macos():
     find its own description -- the first version of this rule named itself.
 
     Over every test file and not `Path(__file__)`, which was the second version's
-    mistake: six files define a `macos` marker of their own, so the one file this rule
-    sits in was the only one it could see. The same test planted unmarked in
+    mistake: six other files wear the `macos` marker, so the one file this rule sits in
+    was the only one it could see. The same test planted unmarked in
     `test_harness_directory.py` left the suite green and this rule silent.
     """
     import ast
@@ -1459,7 +1455,7 @@ def test_every_rule_reading_the_written_profile_is_marked_for_macos():
                 reads = True
         return drives and reads
 
-    tests_root = Path(__file__).resolve().parents[1]
+    tests_root = repository_root() / "tests"
     files = sorted(tests_root.rglob("test_*.py"))
     # The collection is the whole rule: pointed at nothing it reports success over
     # nothing, which is what `test_no_rule_here_is_parametrized_over_nothing` exists for

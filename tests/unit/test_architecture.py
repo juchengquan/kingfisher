@@ -13,25 +13,12 @@ from types import MappingProxyType
 
 import pytest
 
-
-def _repository_root(start: Path | None = None) -> Path:
-    """The checkout this file is in, found rather than counted."""
-    here = (start or Path(__file__)).resolve()
-    for candidate in here.parents:
-        if (candidate / "pyproject.toml").is_file() and (candidate / "src" / "kingfisher").is_dir():
-            return candidate
-    msg = (
-        f"no repository root above {here}: expected a directory holding both "
-        f"pyproject.toml and src/kingfisher. These rules read files by path and "
-        f"would otherwise scan the wrong tree, or nothing, and report success."
-    )
-    raise AssertionError(msg)
-
+from tests.conftest import repository_root
 
 #: The checkout, and the library inside it. Everything path-shaped here starts from one
 #: of these two, so a move is one line rather than four -- which is how three of the
 #: four came to disagree the last time this tree changed shape.
-REPO = _repository_root()
+REPO = repository_root()
 SRC = REPO / "src" / "kingfisher"
 
 #: The definition kinds' own directory. Named here rather than spelled at each of
@@ -1960,6 +1947,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         "AccessError": "embedder",
         "CapabilityError": "embedder",
         "ConfigError": "embedder",
+        "InputsError": "embedder",
         "QuotaExceededError": "embedder",
         "SessionBusyError": "embedder",
         "SubagentError": "embedder",
@@ -3008,22 +2996,76 @@ def test_the_mode_rule_can_tell_a_chmod_from_the_calls_around_it(tmp_path):
     assert _mode_changes(innocent) == [], "the neighbouring filesystem calls are not modes"
 
 
+def _agent_construction_stubs(path: Path) -> list[int]:
+    """The lines on which a module's `setattr` call names `create_deep_agent`.
+
+    The whole call rather than the line it starts on, or a stub whose arguments wrap
+    onto the next line goes unseen.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return sorted(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute | ast.Name)
+        # a substring, so `object.__setattr__` is a setattr too
+        and "setattr" in (node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id)
+        and "create_deep_agent" in ast.unparse(node)
+    )
+
+
 def test_no_test_stubs_out_agent_construction():
     """The blind spot, closed and kept closed."""
-    here = Path(__file__).resolve()
-    offenders = []
-    for path in sorted(here.parent.glob("test_*.py")):
-        if path == here:  # this module names the thing it forbids
-            continue
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "setattr" in line and "create_deep_agent" in line:
-                offenders.append(f"{path.name}:{number}")
+    offenders = [
+        f"{path.name}:{line}"
+        for path in sorted(Path(__file__).resolve().parent.glob("test_*.py"))
+        for line in _agent_construction_stubs(path)
+    ]
 
     assert not offenders, (
         f"patch create_deep_agent directly at {offenders} — read what the build "
         "attached off the `Assembled` record `build_agent` returns, which needs no "
         "patching and still lets deepagents validate the call"
     )
+
+
+def test_the_stub_rule_reads_a_call_that_wraps(tmp_path):
+    """A `monkeypatch.setattr(` whose target sits on the next line escaped the rule above.
+
+    Both directions, as for the mode rule: it runs over a tree with no offenders.
+    """
+    split = tmp_path / "test_split.py"
+    split.write_text(
+        "def test(monkeypatch):\n"
+        "    monkeypatch.setattr(\n"
+        '        builder, "create_deep_agent", fake\n'
+        "    )\n"
+    )
+    one_line = tmp_path / "test_one_line.py"
+    one_line.write_text(
+        'def test(monkeypatch):\n    monkeypatch.setattr(builder, "create_deep_agent", fake)\n'
+    )
+    bare = tmp_path / "test_bare.py"
+    bare.write_text(
+        "def test():\n"
+        "    setattr(builder,\n"
+        '            "create_deep_agent", fake)\n'
+        "    object.__setattr__(builder,\n"
+        '                       "create_deep_agent", fake)\n'
+    )
+    innocent = tmp_path / "test_innocent.py"
+    innocent.write_text(
+        "def test(monkeypatch):\n"
+        "    monkeypatch.setattr(\n"
+        '        builder, "other", fake\n'
+        "    )\n"
+        "    assert built(create_deep_agent)\n"
+    )
+
+    assert _agent_construction_stubs(split) == [2], "the wrapped call is the case this exists for"
+    assert _agent_construction_stubs(one_line) == [2], "the one-line form was caught before"
+    assert _agent_construction_stubs(bare) == [2, 4], "the builtins stub as much as the fixture"
+    assert _agent_construction_stubs(innocent) == [], "naming it outside a setattr is not a stub"
 
 
 def test_only_one_module_decides_what_a_skill_is():
@@ -3379,8 +3421,8 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
-    "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
-    "SessionBusyError", "SubagentError", "UnknownSessionError",
+    "ArtifactError", "CapabilityError", "DecisionError", "InputsError",
+    "QuotaExceededError", "SessionBusyError", "SubagentError", "UnknownSessionError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.
@@ -3393,8 +3435,8 @@ DEPLOYMENT_ERRORS = frozenset({
     # while `SubagentError` sits above: a caller may upload a subagent and cannot
     # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
-    "AccessError", "AgentError", "ConfigError", "HostPathError", "InputsError",
-    "LoadError", "MiddlewareError", "ToolError", "UnsafeReferenceError",
+    "AccessError", "AgentError", "ConfigError", "HostPathError", "LoadError",
+    "MiddlewareError", "ToolError", "UnsafeReferenceError",
 })
 
 #: Caused by the model's provider, and never raised to a caller: a turn ends on it as a
@@ -4634,7 +4676,7 @@ def test_the_resolve_rule_does_not_see_a_reach_that_is_not_one(source):
 
 
 def _fake_checkout(root: Path) -> Path:
-    """A directory that looks like this repository to `_repository_root`."""
+    """A directory that looks like this repository to `repository_root`."""
     (root / "src" / "kingfisher").mkdir(parents=True)
     (root / "pyproject.toml").write_text("", encoding="utf-8")
     return root
@@ -4652,7 +4694,7 @@ def test_the_root_is_the_nearest_one_not_an_outer_one(tmp_path):
     deep = inner / "tests"
     deep.mkdir()
 
-    assert _repository_root(deep / "a_test.py") == inner
+    assert repository_root(deep / "a_test.py") == inner
 
 
 def test_no_root_at_all_is_an_error_rather_than_a_climb(tmp_path):
@@ -4663,7 +4705,7 @@ def test_no_root_at_all_is_an_error_rather_than_a_climb(tmp_path):
     lonely.mkdir(parents=True)
 
     with pytest.raises(AssertionError, match="no repository root"):
-        _repository_root(lonely / "a_test.py")
+        repository_root(lonely / "a_test.py")
 
 
 def test_a_directory_that_only_half_matches_is_not_the_root(tmp_path):
@@ -4673,7 +4715,7 @@ def test_a_directory_that_only_half_matches_is_not_the_root(tmp_path):
     (half / "tests").mkdir(parents=True)
     (half / "pyproject.toml").write_text("", encoding="utf-8")  # no src/kingfisher
 
-    assert _repository_root(half / "tests" / "a_test.py") == outer
+    assert repository_root(half / "tests" / "a_test.py") == outer
 
 
 def test_every_path_rule_starts_from_the_same_two_names():

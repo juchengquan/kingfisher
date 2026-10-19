@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import platform
 import time
 from pathlib import Path
 
@@ -15,13 +14,9 @@ from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
 from kingfisher.core.request import Decision, Resume
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
-from tests.conftest import Through
+from tests.conftest import Through, macos
 from tests.unit.test_files_for import DOORS, _turn
 from tests.unit.test_run import StubAgent
-
-macos = pytest.mark.skipif(
-    platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
-)
 
 DEFAULT = "default"
 

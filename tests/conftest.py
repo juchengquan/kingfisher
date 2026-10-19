@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import platform
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import fields, replace
@@ -334,10 +335,19 @@ def harness_in(cfg, session_dir: Path):
 
 def agent_for(service, request, harness, *, source_ids=None):
     """The agent a turn on this session runs, with its pin read first as setup reads it."""
+    from kingfisher.core.access import caller_holds
     from kingfisher.core.session.store import pinned_in
 
     pinned, _zone = drive(pinned_in(harness))
-    return drive(service._agent_for(request, harness, source_ids=source_ids, pinned=pinned))
+    held = caller_holds(service.access, source_ids)
+    return drive(service._agent_for(request, harness, held=held, pinned=pinned))
+
+
+def agent_named(service, name, *, source_ids=None):
+    """The agent a first turn naming `name` runs, with the caller asked first as setup asks."""
+    from kingfisher.core.access import caller_holds
+
+    return service._agent_named(name, held=caller_holds(service.access, source_ids))
 
 
 def paths_in(cfg, session_dir: Path, *, sessions: Path | None = None):
@@ -474,6 +484,12 @@ def repository_root(start: Path | None = None) -> Path:
         f"otherwise scan the wrong tree, or nothing, and report success."
     )
     raise AssertionError(msg)
+
+
+#: For a test that drives `sandbox-exec`, which no other platform has.
+macos = pytest.mark.skipif(
+    platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
+)
 
 
 #: Every module that calls `load_dotenv`, each reached by a test. Named rather than
