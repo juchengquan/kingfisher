@@ -206,7 +206,7 @@ def _said(shell: ShellPrompt | None, part: str, layout: Layout) -> str:
     return _fill(text or "", layout, f"ShellPrompt {part}")
 
 
-def execute_line(shell: ShellPrompt | None, layout: Layout = DEFAULT_LAYOUT) -> str | None:
+def execute_line(shell: ShellPrompt | None, layout: Layout) -> str | None:
     """The line that replaces deepagents' advice in `execute`'s description, or `None`
     to leave that advice as it is.
     """
@@ -226,7 +226,7 @@ def _saver(held: tuple[str, ...]) -> str | None:
 
 
 def memory_guidelines(
-    tools: Collection[str] | None = None, layout: Layout = DEFAULT_LAYOUT
+    tools: Collection[str] | None, layout: Layout
 ) -> str:
     """The template `MemoryMiddleware` puts the memory file into, `{agent_memory}` and all,
     for an agent granted `tools`, `None` being everything."""
@@ -271,7 +271,7 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     skills_enabled: bool = False,
     memory_enabled: bool = False,
     extra: str = "",
-    layout: Layout = DEFAULT_LAYOUT,
+    layout: Layout,
     shell: ShellPrompt | None = None,
     tools: frozenset[str] | None = None,
 ) -> str:

@@ -12,7 +12,7 @@ from deepagents.backends import CompositeBackend, LocalShellBackend
 
 from kingfisher.core.agent.backend import shell_prompt_of
 from kingfisher.core.agent.prompting import render_system_prompt
-from kingfisher.core.layout import Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import CommandResult, LocalSessions, ShellPrompt, backend_at
 from kingfisher.plugins.sessions.shell import kingfishers_shell
 
@@ -51,8 +51,9 @@ def _seen(output: str) -> dict[str, str]:
     return dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
 
 
-def _told(shell: ShellPrompt | None, **kwargs: object) -> str:
-    return " ".join(render_system_prompt(skills_enabled=True, shell=shell, **kwargs).split())
+def _told(shell: ShellPrompt | None, layout: Layout = DEFAULT_LAYOUT, **kwargs: object) -> str:
+    told = render_system_prompt(skills_enabled=True, layout=layout, shell=shell, **kwargs)
+    return " ".join(told.split())
 
 
 def test_kingfishers_own_shell_is_described_by_what_holds_of_it(cfg, session_dir):
@@ -200,5 +201,5 @@ def test_a_part_left_out_is_said_neutrally_and_an_empty_one_says_nothing():
     assert neutral_skills not in _told(ShellPrompt(prompt="Mine.", skills=""))
     assert "## The shell" not in _told(ShellPrompt(prompt=""))
     assert neutral_skills not in " ".join(
-        render_system_prompt(shell=ShellPrompt(prompt="Mine.")).split()
+        render_system_prompt(layout=DEFAULT_LAYOUT, shell=ShellPrompt(prompt="Mine.")).split()
     ), "skills are off"

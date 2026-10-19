@@ -28,7 +28,7 @@ from kingfisher.core.agent.middlewares.narrowing import (
     NarrowedSkillsMiddleware,
 )
 from kingfisher.core.agent.prompting import memory_guidelines
-from kingfisher.core.layout import MEMORY
+from kingfisher.core.layout import DEFAULT_LAYOUT, MEMORY
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
@@ -557,7 +557,7 @@ def test_the_memory_guidelines_promise_nothing_past_the_session(cfg, session_dir
     is deleted with its session.
     """
     sent = "".join(block["text"] for block in _system_blocks_sent(cfg, session_dir))
-    ours = set(memory_guidelines().splitlines())
+    ours = set(memory_guidelines(None, DEFAULT_LAYOUT).splitlines())
     # Read off the library rather than listed: whatever deepagents says that
     # kingfisher's copy does not is what must not arrive, in whatever words.
     theirs_only = [

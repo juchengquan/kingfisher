@@ -8,7 +8,7 @@ from typing import Any
 from deepagents.backends import CompositeBackend
 
 from kingfisher.core.agent.prompting import ShellPrompt
-from kingfisher.core.config import DEFAULT_LAYOUT, ConfigError
+from kingfisher.core.config import ConfigError
 from kingfisher.core.layout import (
     BUNDLED_SKILLS_ROUTE,
     RESERVED_SKILL_FOLDER,
@@ -66,7 +66,7 @@ def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     ]
 
 
-def memory_sources(layout: Layout = DEFAULT_LAYOUT) -> list[str]:
+def memory_sources(layout: Layout) -> list[str]:
     """The one memory file the agent is told to read, under this layout's `/memory/`.
 
     `/memory/` is a route so a request that declined memory can be given a deny rule

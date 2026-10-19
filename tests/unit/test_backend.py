@@ -124,7 +124,8 @@ def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
         "/skills/**",
     )
     assert denied_read_scopes() == ("/.harness/**",)
-    assert [p.paths for p in read_only_permissions()] == [
+    rules = read_only_permissions(DEFAULT_LAYOUT)
+    assert [p.paths for p in rules] == [
         ["/.harness/**"],
         ["/inputs/**"],
         ["/scratchpad/large_tool_results/**"],
@@ -132,8 +133,8 @@ def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
         ["/skills/**"],
         ["/.harness/**"],
     ]
-    assert {p.mode for p in read_only_permissions()} == {"deny"}
-    assert {tuple(p.operations) for p in read_only_permissions()} == {("write",), ("read",)}
+    assert {p.mode for p in rules} == {"deny"}
+    assert {tuple(p.operations) for p in rules} == {("write",), ("read",)}
 
 
 def test_outputs_is_unrouted_and_the_table_says_so(cfg, session_dir):

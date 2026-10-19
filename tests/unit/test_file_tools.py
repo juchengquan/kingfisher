@@ -39,6 +39,7 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
     alternatives,
 )
 from kingfisher.core.agent.prompting import EXECUTE, execute_line
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.shell import kingfishers_shell
@@ -317,7 +318,7 @@ def test_an_unrestricted_graph_is_told_what_deepagents_says_but_the_false_claim(
     """Narrowing for every graph, the rewrite would change what an agent holding every tool
     was told, which only `edit_file`'s untrue line should."""
     cfg, offered = reading
-    rule = execute_line(kingfishers_shell())
+    rule = execute_line(kingfishers_shell(), DEFAULT_LAYOUT)
     assert rule is not None
     asked = {"description": "look", "subagent_type": subagent}
     consulting = AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}])

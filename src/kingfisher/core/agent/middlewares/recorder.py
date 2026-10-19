@@ -20,7 +20,6 @@ from kingfisher.core.agent.middlewares.recorded import arguments, stamp, summary
 from kingfisher.core.agent.middlewares.results import answer_in, answered
 from kingfisher.core.agent.prompting import FILE_TOOLS, WRITE_TODOS
 from kingfisher.core.definitions.subagents import TASK_TOOL
-from kingfisher.core.layout import TOOL_RESULTS_ROUTE
 from kingfisher.core.result import MAIN, WORKING, LedgerEntry, Listed
 
 if TYPE_CHECKING:
@@ -93,7 +92,7 @@ class RecorderMiddleware(AgentMiddleware):
         ledger: Ledger,
         backend: Any,
         audiences: Audiences | None,
-        tool_results_route: str = TOOL_RESULTS_ROUTE,
+        tool_results_route: str,
     ) -> None:
         super().__init__()
         self._ledger = ledger

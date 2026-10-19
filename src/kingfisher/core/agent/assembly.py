@@ -67,7 +67,7 @@ from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.agent.tool_context import ToolContext
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.agent.usable_backend import refuse_unusable_backend
-from kingfisher.core.config import DEFAULT_LAYOUT, Config
+from kingfisher.core.config import Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import RunOn, SubagentError, opens_skills
@@ -115,7 +115,7 @@ class Assembled:
     subagents: list[Any] | None = None
 
 
-def memory_is_denied(layout: Layout = DEFAULT_LAYOUT) -> FilesystemPermission:
+def memory_is_denied(layout: Layout) -> FilesystemPermission:
     """For a request that declined memory a deployment did wire.
 
     Reads are denied rather than the prompt rewritten: the prompt is the cached prefix.
@@ -127,7 +127,7 @@ def memory_is_denied(layout: Layout = DEFAULT_LAYOUT) -> FilesystemPermission:
     )
 
 
-def read_only_permissions(layout: Layout = DEFAULT_LAYOUT) -> list[FilesystemPermission]:
+def read_only_permissions(layout: Layout) -> list[FilesystemPermission]:
     """A deny rule for every scope the layout refuses writes or reads under.
 
     One rule per scope, not per mount, so `/skills/**` covers the catalogue and every

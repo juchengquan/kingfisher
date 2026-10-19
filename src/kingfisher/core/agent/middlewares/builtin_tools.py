@@ -18,7 +18,7 @@ from langchain_core.tools import BaseTool
 
 from kingfisher.core.agent.prompting import EXECUTE, WRITE_TODOS, ShellPrompt, execute_line
 from kingfisher.core.definitions.skills import READ_FILE
-from kingfisher.core.layout import DEFAULT_LAYOUT, SESSION_DIRS, Layout
+from kingfisher.core.layout import Layout
 
 #: deepagents' advice in `execute`'s description, wrong on kingfisher's own shell: the
 #: only absolute paths a model knows are the file tools', and that shell reads `/inputs`
@@ -57,10 +57,6 @@ def _virtual(session_dirs: tuple[str, ...]) -> re.Pattern[str]:
     )
 
 
-#: The default-layout matcher, which a test importing `missed` reads; a renamed layout
-#: builds its own on the instance.
-_VIRTUAL = _virtual(SESSION_DIRS)
-
 #: What a shell, `python` and the usual tools say of a path they could not use. A
 #: refusal counts as a miss: a file-tool path the fence stops is still the wrong path.
 _MISSING = (
@@ -75,7 +71,7 @@ _MISSING = (
 )
 
 
-def missed(output: str, virtual: re.Pattern[str] = _VIRTUAL) -> str | None:
+def missed(output: str, virtual: re.Pattern[str]) -> str | None:
     """The first file-tool path the shell reported missing in `output`, if any.
 
     Both on one line, so a path the command printed and an unrelated miss elsewhere in
@@ -367,7 +363,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
 
     def __init__(
         self,
-        layout: Layout = DEFAULT_LAYOUT,
+        layout: Layout,
         shell: ShellPrompt | None = None,
         *,
         here: bool = True,

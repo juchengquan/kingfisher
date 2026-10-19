@@ -35,8 +35,6 @@ MEMORY = "memory"
 #: saved, swept when the session goes.
 SCRATCH = "scratchpad"
 
-SESSION_DIRS: tuple[str, ...] = (INPUTS, OUTPUTS, MEMORY, SCRATCH)
-
 #: Where a recorded tool result is kept, under the scratchpad. Not `results`, the name
 #: anyone gives a folder of their own work: the agent writes there too, and this is the
 #: recorder's.

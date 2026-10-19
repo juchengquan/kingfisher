@@ -18,9 +18,9 @@ from kingfisher.core.access.source_ids import parse
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import Sessions
 from kingfisher.core.layout import (
+    DEFAULT_LAYOUT,
     HARNESS,
     INPUTS,
-    SESSION_DIRS,
     SKILLS_ROUTE,
     Layout,
     routed_paths,
@@ -69,7 +69,7 @@ class Elsewhere(Sessions):
 
     def open(self, cfg, session_id, /, *, catalogue=None):
         kept = self.root / session_id
-        for name in (*SESSION_DIRS, HARNESS):
+        for name in (*DEFAULT_LAYOUT.session_dirs, HARNESS):
             (kept / name).mkdir(parents=True, exist_ok=True)
         skills = (catalogue or Definitions.from_config(cfg)).skills.root
         return ElsewhereFiles(kept, skills)

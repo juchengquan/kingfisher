@@ -12,7 +12,6 @@ from deepagents.backends import CompositeBackend
 from deepagents.backends.utils import sanitize_tool_call_id
 
 from kingfisher.core.agent.middlewares.recorded import stamp
-from kingfisher.core.layout import TOOL_RESULTS_ROUTE
 from kingfisher.core.session.steps import Steps, changing, reading
 from kingfisher.core.session.store import (
     KeptLedger,
@@ -79,7 +78,7 @@ def keep_ledger(
     ledger: Ledger,
     *,
     summarised: bool,
-    tool_results_route: str = TOOL_RESULTS_ROUTE,
+    tool_results_route: str,
 ) -> Steps[tuple[LedgerEntry, ...]]:
     """Keep this turn's entries, and say where each result is now.
 
@@ -160,7 +159,7 @@ def _swept(
     files: Any,
     named: frozenset[str] | set[str],
     *,
-    tool_results_route: str = TOOL_RESULTS_ROUTE,
+    tool_results_route: str,
 ) -> Steps[None]:
     """Remove every result file a recorder wrote that no row names.
 

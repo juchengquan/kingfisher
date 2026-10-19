@@ -4215,3 +4215,107 @@ def test_the_class_attribute_rule_is_looking_at_something():
         ("Config", "resolve_model")
     ]
     assert PROSE_ATTR.findall("`models.yaml` and `core.session`") == []
+
+
+#: Types, not values: a parameter typed `Layout` names no folder.
+LAYOUT_TYPES = frozenset({"Layout", "Route"})
+
+#: A public signature a plugin calls with the arguments it has; its default is the one
+#: a plugin outside any `Config` would want.
+LAYOUT_DEFAULT_KEPT = frozenset({"core/agent/host_paths.py:reject_host_path(scratch_route)"})
+
+
+def _layout_values(tree: ast.Module, path: Path) -> set[str]:
+    """Every name here that holds the shipped layout or a folder of it.
+
+    Imported from `core.layout`, `DEFAULT_LAYOUT` from wherever, and a module-level
+    name computed from either: a matcher built from the default folders is the default
+    as surely as the folders are.
+    """
+    names = {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("kingfisher")
+        for alias in node.names
+        if alias.name == "DEFAULT_LAYOUT"
+        or (node.module == "kingfisher.core.layout" and alias.name not in LAYOUT_TYPES)
+    }
+    if path == SRC / "core" / "layout.py":
+        names |= {
+            target.id
+            for node in tree.body
+            if isinstance(node, (ast.Assign, ast.AnnAssign))
+            for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+            if isinstance(target, ast.Name)
+        }
+    for node in tree.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+            read = {n.id for n in ast.walk(node.value) if isinstance(n, ast.Name)}
+            if read & names:
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                names |= {t.id for t in targets if isinstance(t, ast.Name)}
+    return names
+
+
+def _defaulted_to_the_layout(path: Path) -> set[str]:
+    """`function(parameter)` for each parameter whose default is a layout value."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    values = _layout_values(tree, path)
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        args = node.args
+        positional = [*args.posonlyargs, *args.args]
+        pairs = [
+            *zip(positional[len(positional) - len(args.defaults) :], args.defaults, strict=True),
+            *(
+                (arg, d)
+                for arg, d in zip(args.kwonlyargs, args.kw_defaults, strict=True)
+                if d is not None
+            ),
+        ]
+        for arg, default in pairs:
+            if {n.id for n in ast.walk(default) if isinstance(n, ast.Name)} & values:
+                found.add(f"{node.name}({arg.arg})")
+    return found
+
+
+def test_no_parameter_defaults_to_the_shipped_layout():
+    """A forgotten argument served the shipped folder names under a renamed layout:
+    fourteen parameters, `turn_message`'s and `keep_ledger`'s among them, defaulted to
+    them while every caller in the package passed its own, so only a new caller that
+    forgot would ever have read the default -- and read it wrong.
+    """
+    found = {
+        f"{_module_id(path)}:{entry}"
+        for path in _every(_package_modules(), "the package")
+        for entry in _defaulted_to_the_layout(path)
+    }
+    assert found == LAYOUT_DEFAULT_KEPT, (
+        f"defaulted to the shipped layout: {sorted(found - LAYOUT_DEFAULT_KEPT)}; "
+        f"kept but no longer found: {sorted(LAYOUT_DEFAULT_KEPT - found)}. Take the "
+        "layout from the caller, which has `cfg.layout`"
+    )
+
+
+def test_the_layout_default_rule_sees_each_way_a_default_names_it(tmp_path):
+    """Direct, through a route, and through a value built from one -- the shape
+    `missed`'s matcher had -- and not a parameter merely typed `Layout`."""
+    module = tmp_path / "shapes.py"
+    module.write_text(
+        "from kingfisher.core.config import DEFAULT_LAYOUT\n"
+        "from kingfisher.core.layout import TOOL_RESULTS_ROUTE, Layout\n"
+        "MATCHER = compile(TOOL_RESULTS_ROUTE)\n"
+        "def direct(layout=DEFAULT_LAYOUT): ...\n"
+        "def routed(*, route=TOOL_RESULTS_ROUTE): ...\n"
+        "def built(matcher=MATCHER): ...\n"
+        "def typed(layout: Layout, other=None): ...\n",
+        encoding="utf-8",
+    )
+
+    assert _defaulted_to_the_layout(module) == {
+        "direct(layout)",
+        "routed(route)",
+        "built(matcher)",
+    }
