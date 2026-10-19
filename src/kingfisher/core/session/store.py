@@ -155,10 +155,6 @@ def entry_id(number: int) -> str:
 #: The shape `entry_id` gives, its number the one group; a result's stamp is read by it too.
 ENTRY_ID = re.compile(r"A-(\d+)")
 
-#: The same shape at the front of a file name, which is how the sweep knows its own
-#: writing. Built from `ENTRY_ID`, so the id and its file cannot drift apart.
-_RESULT_FILE = re.compile(ENTRY_ID.pattern)
-
 
 def names_a_result(name: str) -> bool:
     """Whether a file in the tool results folder is one a recorder wrote.
@@ -166,7 +162,8 @@ def names_a_result(name: str) -> bool:
     The agent writes in that folder too, so the sweep cannot treat everything there as
     a result whose row has gone.
     """
-    return _RESULT_FILE.match(name) is not None
+    # `match`, not `fullmatch`: the id is only the front of the file's name.
+    return ENTRY_ID.match(name) is not None
 
 
 #: On the closing line of a turn that resumed a paused one, and only there.

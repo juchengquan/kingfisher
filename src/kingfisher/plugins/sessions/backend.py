@@ -10,7 +10,7 @@ import re
 import time
 import uuid
 import warnings
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
@@ -450,7 +450,7 @@ class LocalSessions(Sessions):
             taken = _claim_at(cfg, session_id).stat().st_mtime
         except FileNotFoundError:
             return False
-        return bool(still_held(((CLAIM, taken),), stale_after=stale_after, now=at))
+        return at - taken < stale_after
 
 
 def _where(cfg: Config, session_id: str) -> Path:
@@ -492,17 +492,6 @@ def _identity(path: Path) -> str | None:
     except FileNotFoundError:
         return None
     return f"untokened-{seen.st_ino}"
-
-
-def still_held(
-    entries: Sequence[tuple[str, float]], *, stale_after: float, now: float
-) -> tuple[str, ...]:
-    """Which of these claims somebody could still be holding.
-
-    Not every claim: one left by a dead process would exempt its session from retention
-    for good.
-    """
-    return tuple(name for name, taken in entries if now - taken < stale_after)
 
 
 def _claim_at(cfg: Config, session_id: str) -> Path:

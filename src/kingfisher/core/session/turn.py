@@ -62,22 +62,9 @@ class Prepared:
     #: Tools an earlier turn was waiting on that this one superseded. Carried to the end
     #: as well as announced: `run` drains the stream, so its caller would otherwise never hear.
     discarded: tuple[str, ...] = ()
-    #: Paths `protect_inputs` could not harden, reported to the caller rather than raised.
-    unprotected: tuple[str, ...] = ()
     #: The token the session's claim answered, which the turn's ending gives back: a
     #: claim is released only by the token that took it.
     claim: str = ""
-    #: What this request's `inputs` placed in `/inputs`, and what that replaced.
-    placement: Any = None
-    #: `(what, names)` for each tool, skill or subagent offered that the request did
-    #: not grant: a fact about the run, not a refusal.
-    withheld: tuple[tuple[str, tuple[str, ...]], ...] = ()
-    #: `(name, why)` for each subagent that asked to run elsewhere and did not: a fact
-    #: about the run, like `withheld`, that nothing else would say.
-    indistinct: tuple[tuple[str, str], ...] = ()
-    #: Tool names more than one file defines, which the agent holding the grant
-    #: cannot hold. Reported rather than dropped in silence.
-    subagent_only: tuple[str, ...] = ()
 
 
 def turn_message(
