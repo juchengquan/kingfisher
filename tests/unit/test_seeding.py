@@ -468,6 +468,61 @@ def test_an_edited_file_inside_a_skill_is_named_exactly(cfg):
     assert seeding.seed(cfg, FIXTURE).overwritten == ("skills/probe-skill/SKILL.md",)
 
 
+def _grouped_source(tmp_path):
+    """A source whose `subagents/group/` holds one definition seed copies, one it holds
+    back for its middleware, and a dotfile."""
+    group = tmp_path / "source" / "subagents" / "group"
+    group.mkdir(parents=True)
+    (group / "plain.yaml").write_text(
+        "name: plain\ndescription: d\nsystem_prompt: |\n  Hi.\n", encoding="utf-8"
+    )
+    (group / "needs_mw.yaml").write_text(
+        "name: wired\ndescription: d\nmiddlewares: [audit]\nsystem_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+    (group / ".DS_Store").write_text("theirs", encoding="utf-8")
+    return tmp_path / "source"
+
+
+def test_a_held_back_definition_is_not_reported_as_overwritten(cfg, tmp_path):
+    """A second seed warned it overwrote the workspace's own copy of a definition it held
+    back for its middleware, and left that copy untouched."""
+    source = _grouped_source(tmp_path)
+    seeding.seed(cfg, source)
+    mine = subagents_dir(cfg) / "group" / "needs_mw.yaml"
+    mine.write_text("edited by me\n", encoding="utf-8")
+
+    result = seeding.seed(cfg, source)
+
+    assert "subagents/group/needs_mw.yaml" not in result.overwritten
+    assert mine.read_text(encoding="utf-8") == "edited by me\n"
+
+
+def test_a_dotfile_is_not_reported_as_overwritten(cfg, tmp_path):
+    """A second seed warned it overwrote the workspace's `.DS_Store`, which the copy never
+    touches."""
+    source = _grouped_source(tmp_path)
+    seeding.seed(cfg, source)
+    mine = subagents_dir(cfg) / "group" / ".DS_Store"
+    mine.write_text("mine", encoding="utf-8")
+
+    result = seeding.seed(cfg, source)
+
+    assert "subagents/group/.DS_Store" not in result.overwritten
+    assert mine.read_text(encoding="utf-8") == "mine"
+
+
+def test_an_edited_copy_beside_what_seed_leaves_out_still_warns(cfg, tmp_path):
+    """The control for `test_a_held_back_definition_is_not_reported_as_overwritten` and
+    `test_a_dotfile_is_not_reported_as_overwritten`: in the same folder, a file the copy
+    does replace is still named."""
+    source = _grouped_source(tmp_path)
+    seeding.seed(cfg, source)
+    (subagents_dir(cfg) / "group" / "plain.yaml").write_text("edited\n", encoding="utf-8")
+
+    assert seeding.seed(cfg, source).overwritten == ("subagents/group/plain.yaml",)
+
+
 def test_the_readme_subagent_table_matches_the_real_field_set(formats_doc):
     """The table is where a contributor learns which fields exist, and now that an
     unlisted one is an error, a stale row is a definition that will not load.

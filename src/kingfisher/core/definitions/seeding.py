@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import yaml
 
 from kingfisher.core.config import ConfigError, definition_roots_for
+from kingfisher.core.definitions import importing
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.workspace import ensure_definitions
 
@@ -211,11 +214,6 @@ def middleware_named(text: str) -> tuple[str, ...]:
     return tuple(found)
 
 
-def _is_debris(name: str) -> bool:
-    """Bytecode and dotfiles: present in a source tree, never part of a definition."""
-    return name == "__pycache__" or name.startswith(".")
-
-
 def _deployment_specific(path: Path) -> tuple[str, tuple[str, ...]] | None:
     """What this file needs that a workspace may not have, or `None` for nothing."""
     if path.suffix not in (".yaml", ".yml") or not path.is_file():
@@ -232,42 +230,55 @@ def _deployment_specific(path: Path) -> tuple[str, tuple[str, ...]] | None:
     return None
 
 
-def _ignoring(
-    root: Path, kind: str, *, everything: bool, found: list[Skipped]
-) -> Callable[[str, list[str]], set[str]]:
-    """`copytree(ignore=...)` that drops debris and deployment-specific definitions."""
+#: What a copy of one directory leaves out of it: each name, with the `Skipped` it is
+#: reported as, or `None` for debris.
+_LeftOut = Callable[[Path, list[str]], dict[str, Skipped | None]]
+
+
+def _left_out(
+    root: Path, kind: str, directory: Path, names: list[str], *, everything: bool
+) -> dict[str, Skipped | None]:
+    """Debris, and the deployment-specific definitions seed holds back."""
+    left: dict[str, Skipped | None] = dict.fromkeys(filter(importing.skipped, names))
+    if everything or kind not in DOCUMENT_KINDS:
+        return left
+    for name in names:
+        if name not in left and (wanted := _deployment_specific(directory / name)) is not None:
+            label = f"{kind}/{(directory / name).relative_to(root)}"
+            left[name] = Skipped(label, wanted[1], wants=wanted[0])
+    return left
+
+
+def _ignoring(left_out: _LeftOut, found: list[Skipped]) -> Callable[[str, list[str]], set[str]]:
+    """`copytree(ignore=...)` that drops what `left_out` names, recording what it held back."""
 
     def ignore(directory: str, names: list[str]) -> set[str]:
-        dropped = {name for name in names if _is_debris(name)}
-        if everything or kind not in DOCUMENT_KINDS:
-            return dropped
-        here = Path(directory)
-        for name in names:
-            if name in dropped:
-                continue
-            if (wanted := _deployment_specific(here / name)) is not None:
-                label = f"{kind}/{(here / name).relative_to(root)}"
-                found.append(Skipped(label, wanted[1], wants=wanted[0]))
-                dropped.add(name)
-        return dropped
+        left = left_out(Path(directory), names)
+        found.extend(one for one in left.values() if one is not None)
+        return set(left)
 
     return ignore
 
 
-def _overwritten(source: Path, target: Path, label: str) -> list[str]:
+def _overwritten(source: Path, target: Path, label: str, left_out: _LeftOut) -> list[str]:
     """Files under `target` this copy is about to change, by content."""
     if source.is_file():
         changed = target.is_file() and target.read_bytes() != source.read_bytes()
         return [label] if changed else []
 
     found = []
-    for path in sorted(source.rglob("*")):
-        if not path.is_file() or "__pycache__" in path.parts:
-            continue
-        landing = target / path.relative_to(source)
-        if landing.is_file() and landing.read_bytes() != path.read_bytes():
-            found.append(f"{label}/{path.relative_to(source)}")
-    return found
+    for directory, dirs, files in os.walk(source):
+        here = Path(directory)
+        # What the copy leaves out, asked the copy's own way: a file it does not write
+        # is one it cannot have overwritten.
+        left = left_out(here, [*dirs, *files])
+        dirs[:] = [name for name in dirs if name not in left]
+        for name in files:
+            path = here / name
+            landing = target / path.relative_to(source)
+            if name not in left and landing.is_file() and landing.read_bytes() != path.read_bytes():
+                found.append(f"{label}/{path.relative_to(source)}")
+    return sorted(found)
 
 
 def kinds_at(source: Path) -> tuple[str, ...]:
@@ -315,9 +326,10 @@ def _copy(
         if not source.is_dir():
             # A source holding only some of the kinds is ordinary, not a refusal.
             continue
-        ignore = _ignoring(source, kind, everything=everything, found=skipped)
+        left_out = partial(_left_out, source, kind, everything=everything)
+        ignore = _ignoring(left_out, skipped)
         for item in sorted(source.iterdir()):
-            if _is_debris(item.name):
+            if importing.skipped(item.name):
                 continue
             target = destination / item.name
             label = f"{kind}/{item.name}"
@@ -326,7 +338,7 @@ def _copy(
                 skipped.append(Skipped(label, wanted[1], wants=wanted[0]))
                 continue
             # Before the copy: afterwards there is nothing left to compare.
-            overwritten += _overwritten(item, target, label)
+            overwritten += _overwritten(item, target, label, left_out)
             target.parent.mkdir(parents=True, exist_ok=True)
             if item.is_dir():
                 # `ignore` too: a packaged tool is a directory, and can hold bytecode of its own.
