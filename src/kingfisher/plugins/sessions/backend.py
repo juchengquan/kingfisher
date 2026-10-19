@@ -38,7 +38,7 @@ from kingfisher.plugins.sessions.shell import (
     kingfishers_shell,
     runs_locally,
     shell_env,
-    skills_view,
+    shell_skills,
 )
 
 
@@ -233,15 +233,10 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     """
     _refuse_wording_without_runner(runner, shell_prompt)
     definitions = catalogue or Definitions.from_config(cfg)
-    skills = definitions.skills
-    skills_dir = skills.root
+    skills_dir = definitions.skills.root
 
     _require_layout(session_dir, cfg.layout)
-    # The skills folder is not created where missing: a start only reads the definitions
-    # folder, and a missing one means no skills. The view as well as its targets: every
-    # fence checks the resolved path, and the Linux ones also have to reach the links.
-    view = skills_view(skills_dir, skills.mounts, cfg.kingfisher_dir) if skills.mounts else None
-    every_skills_dir = (skills_dir, *skills.mounts.values(), *((view,) if view else ()))
+    every_skills_dir = shell_skills(cfg, definitions)
 
     settings = shell if shell is not None else confinement.ShellSettings.from_env()
     confined = confinement.shell_confinement(cfg, settings, skills=every_skills_dir)

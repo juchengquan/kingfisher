@@ -109,6 +109,18 @@ def skills_view(root: Path, mounts: Mapping[str, Path], kingfisher_dir: Path) ->
     return view
 
 
+def shell_skills(cfg: Config, catalogue: Definitions | None = None) -> tuple[Path, ...]:
+    """Every directory the shell reaches skills through, as a run's fence is asked them.
+
+    The view as well as its targets: every fence checks the resolved path, and the Linux
+    ones also have to reach the links. The skills folder is not created where missing: a
+    start only reads the definitions folder, and a missing one means no skills.
+    """
+    skills = (catalogue or Definitions.from_config(cfg)).skills
+    view = skills_view(skills.root, skills.mounts, cfg.kingfisher_dir) if skills.mounts else None
+    return (skills.root, *skills.mounts.values(), *((view,) if view else ()))
+
+
 class ConfinedLocalShellBackend(LocalShellBackend):
     """`LocalShellBackend` with every command run through a confinement.
 
