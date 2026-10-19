@@ -35,6 +35,12 @@ ENCODED = {
 }
 
 
+#: One run each of ASCII and Japanese, which `iso-2022-jp` writes with a shift into
+#: its run and back out again: nine bytes for two characters, so the byte cap bites
+#: before the character cap and the answer comes back under the cap it names.
+SHIFTY = "a\u65e5" * 20_000
+
+
 class _Handler(http.server.BaseHTTPRequestHandler):
     """One route per thing a server can do that this tool has to survive."""
 
@@ -59,8 +65,12 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path == "/plain":
             self._sent(b"a plain page")
-        elif self.path == "/long":
-            self._sent(b"x" * 200_000)
+        elif self.path.startswith("/sized/"):
+            # Sized by the request, so a rule can ask for a body of exactly the cap
+            # without writing that number down beside the tool's own copy of it.
+            self._sent(b"x" * int(self.path.removeprefix("/sized/")))
+        elif self.path == "/shifty":
+            self._sent(SHIFTY.encode("iso-2022-jp"), "text/plain; charset=iso-2022-jp")
         elif self.path == "/dribble":
             # A content length it never finishes sending, a byte at a time. Every byte
             # resets the socket clock, which is how a socket timeout bounds nothing.
@@ -162,13 +172,55 @@ def test_a_page_comes_back_as_its_text(fetch, serving):
     assert fetch.func(url=f"{serving}/plain") == "a plain page"
 
 
-def test_a_body_past_the_cap_is_cut_to_it(fetch, serving):
+def test_a_body_past_the_cap_is_cut_to_it_and_says_so(fetch, serving):
     """A tool result goes into the model's context, which is the one resource an agent
-    cannot ask for more of.
+    cannot ask for more of -- and a cut nothing mentions is read as the whole page:
+    measured, 200,000 bytes and 20,000 bytes came back as the same 20,000 characters,
+    with nothing in either to say which of them was complete.
     """
-    said = fetch.func(url=f"{serving}/long")
+    cap = _globals(fetch)["MAX_CHARS"]
 
-    assert len(said) == _globals(fetch)["MAX_CHARS"]
+    said = fetch.func(url=f"{serving}/sized/{cap * 10}")
+
+    assert said.startswith("x" * 100)
+    assert said.splitlines()[-1] == (
+        f"-- cut at {cap} characters, which is as much as one answer carries"
+    )
+    assert len(said) <= cap, "the note is part of the answer the docstring bounds"
+
+
+def test_a_page_that_ends_at_the_cap_says_nothing_about_a_cut(fetch, serving):
+    """The other half, at the size where it is hardest: a page of exactly the cap is
+    whole, and a note on it sends the caller looking for the rest of what it has.
+    """
+    cap = _globals(fetch)["MAX_CHARS"]
+
+    assert fetch.func(url=f"{serving}/sized/{cap}") == "x" * cap
+
+
+def test_a_page_the_bytes_cut_before_the_characters_did_says_that_instead(fetch, serving):
+    """The byte cap is `MAX_CHARS` times UTF-8's longest character, and other encodings
+    spend more: `iso-2022-jp` shifts in and out of each run, nine bytes for two
+    characters, so 180,000 bytes of it answered 17,779 -- under the character cap, and
+    cut all the same. A note naming the characters would name a number this answer
+    never reached.
+    """
+    held = _globals(fetch)
+
+    said = fetch.func(url=f"{serving}/shifty")
+
+    assert len(said) < held["MAX_CHARS"]
+    assert said.splitlines()[-1] == (
+        f"-- cut at {held['MAX_CHARS'] * 4} bytes, which is as much as one fetch reads"
+    )
+
+
+def test_the_character_the_cut_invented_is_not_in_the_answer(fetch, serving):
+    """The byte cap stops mid-character and `errors="replace"` writes a character the
+    page never sent, so the answer ended `\u65e5a\u65e5\ufffd` -- which a caller reads
+    as the page's own corruption, and this page holds nothing of the kind.
+    """
+    assert "\ufffd" not in fetch.func(url=f"{serving}/shifty")
 
 
 def test_a_server_that_answers_a_byte_at_a_time_is_given_up_on(fetch, serving, monkeypatch):
