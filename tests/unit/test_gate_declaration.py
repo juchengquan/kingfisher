@@ -4,6 +4,10 @@ The other half of the approval gate. `test_approval_gates.py` drives the pause a
 the answer through an injected graph; this one starts from the YAML and goes through
 `build_agent`, which is the path a real deployment takes and the only one that can
 show a declared gate reaching deepagents at all.
+
+The rules at the end go one step further and run a whole turn through the service,
+because what a gate *name* may be is only answerable where the call is dispatched: a
+subagent is where a tool two files define, or a tool a bundle holds, is held at all.
 """
 
 from __future__ import annotations
@@ -16,13 +20,25 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
+from kingfisher import Kingfisher
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.documents import DefinitionText
-from kingfisher.plugins import backend_at
-from tests.conftest import EVERY_TOOL, FakeToolCallingModel, tools_dir
+from kingfisher.core.request import Request
+from kingfisher.core.result import AWAITING
+from kingfisher.plugins import LocalSessions, backend_at
+from tests.conftest import (
+    EVERY_TOOL,
+    FakeToolCallingModel,
+    an_agent,
+    start,
+    subagents_dir,
+    tools_dir,
+)
+from tests.unit.scripted import Scripted
+from tests.unit.test_bundles import compiled_bundle
 
 WRITES = [
     AIMessage(
@@ -144,10 +160,10 @@ def test_the_gates_reach_deepagents_as_the_argument_a_subagent_inherits(
     workspace could gate the shell and lose the gate the moment work was delegated.
 
     What this checks is the half kingfisher owns: the top-level argument is set, and
-    nothing per-subagent is, so deepagents' own inheritance is the only route there
-    is. It does not drive a subagent to a pause -- doing that through `build_agent`
-    means scripting a model the subagent resolves for itself -- so a change in how
-    deepagents propagates the argument would pass here.
+    nothing per-subagent is, so deepagents' own inheritance is the only route there is.
+    The pause itself is driven at the end of this file, where a turn runs through the
+    service: a change in how deepagents propagates the argument passes here and fails
+    there.
     """
     directory = cfg.definitions / "subagents"
     directory.mkdir(exist_ok=True)
@@ -200,3 +216,188 @@ def test_a_gate_on_a_tool_this_caller_was_not_granted_is_allowed(cfg, session_di
 
     assert "__interrupt__" not in out, "a tool nobody was granted still gated something"
     assert (session_dir / "outputs" / "a.txt").read_text() == "x"
+
+
+FETCHES = '''
+def fetch(what: str) -> str:
+    """Fetch a thing, from VENDOR."""
+    return "from VENDOR"
+
+
+TOOLS = [fetch]
+'''
+
+MASKS = '''
+def mask(what: str) -> str:
+    """Mask a thing."""
+    return "masked"
+
+
+TOOLS = [mask]
+'''
+
+
+def _two_vendors(cfg) -> None:
+    """Two files each defining a `fetch`, which is what makes the name ambiguous."""
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    for vendor in ("vendor_a", "vendor_b"):
+        (tools_dir(cfg) / f"{vendor}.py").write_text(
+            FETCHES.replace("VENDOR", vendor), encoding="utf-8"
+        )
+
+
+def _a_subagent_holding(cfg, grant: str) -> None:
+    """A subagent that holds the tool and calls it.
+
+    Where the holder has to be for the ambiguous case: an agent carries nothing a
+    second file also defines, so the only graph a `fetch` exists in is a subagent's.
+    """
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "runner.yaml").write_text(
+        f"name: runner\ndescription: Fetches.\ntools: [{grant}]\nbuiltin_tools: []\n"
+        f"system_prompt: |\n  Fetch it.\n",
+        encoding="utf-8",
+    )
+
+
+def _a_bundle(cfg) -> None:
+    """A subagent with a tool of its own, in the folder named after it."""
+    folder = subagents_dir(cfg) / "redactor"
+    (folder / "tools").mkdir(parents=True, exist_ok=True)
+    (folder / "tools" / "mask.py").write_text(MASKS, encoding="utf-8")
+    (folder / "redactor.yaml").write_text(
+        "name: redactor\ndescription: Masks.\ntools:\n  - name: mask\n    source: bundled\n"
+        "builtin_tools: []\nsystem_prompt: |\n  Mask it.\n",
+        encoding="utf-8",
+    )
+
+
+def _delegated(cfg, subagent: str, tool: str, *, gate: str | None) -> Any:
+    """One turn, through the service: the agent delegates and the subagent calls `tool`.
+
+    Through `Kingfisher` rather than `build_agent`, because a subagent resolves its own
+    model and only the service's catalogue row can script it.
+    """
+    gated = {"interrupt_on": f"[{gate}]"} if gate is not None else {}
+    an_agent(cfg, subagents=f"[{subagent}]", **gated, **EVERY_TOOL)
+    Scripted.script.extend(
+        [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "task",
+                        "args": {"description": "do it", "subagent_type": subagent},
+                        "id": "p1",
+                    }
+                ],
+            ),
+            AIMessage(
+                content="", tool_calls=[{"name": tool, "args": {"what": "x"}, "id": "d1"}]
+            ),
+            AIMessage(content="subagent done"),
+            AIMessage(content="parent done"),
+        ]
+    )
+    start(cfg, "s")
+    service = Kingfisher(cfg, sessions=LocalSessions())
+    return service.run(Request("go", agent="only", session_id="s"))
+
+
+def test_a_gate_on_a_name_two_files_define_stops_the_subagent_that_holds_one(scripted):
+    """A gate was judged against the spelling a *grant* uses, which is the long
+    `vendor_a.py::fetch` once two files define `fetch` -- so the bare name was refused,
+    the long one accepted, and deepagents, which keys an interrupt by the name the call
+    carries, matched neither: the subagent ran the gated tool unapproved, in the only
+    graph it exists in.
+    """
+    _two_vendors(scripted)
+    _a_subagent_holding(scripted, "vendor_a.py::fetch")
+
+    result = _delegated(scripted, "runner", "fetch", gate="fetch")
+
+    assert result.stop_reason == AWAITING, "the subagent's gated call ran unapproved"
+    assert [call.tool for call in result.pending] == ["fetch"]
+    # The ledger, not the pause alone: a turn can stop at a gate after the call it
+    # gated has already returned, and that is the failure, not the fix.
+    assert not result.ledger, "the gated tool returned a result, so it had run"
+
+
+def test_the_same_delegation_without_the_gate_runs_it(scripted):
+    """The control. Without it the rule above passes against a subagent that never
+    reached `fetch` -- which is what a grant it could not spell would do.
+    """
+    _two_vendors(scripted)
+    _a_subagent_holding(scripted, "vendor_a.py::fetch")
+
+    result = _delegated(scripted, "runner", "fetch", gate=None)
+
+    assert result.stop_reason != AWAITING
+    assert [(entry.role, entry.tool) for entry in result.ledger] == [
+        ("working", "fetch"),
+        ("main", "task"),
+    ]
+
+
+def test_a_gate_naming_the_file_a_tool_comes_from_is_refused(scripted):
+    """`interrupt_on: [vendor_a.py::fetch]` is the spelling a `tools:` entry takes, and
+    it built -- then gated nothing. It cannot be honoured rather than merely resolved:
+    a call carries the name alone, so a gate on one of two files is a gate on both.
+    """
+    _two_vendors(scripted)
+    _a_subagent_holding(scripted, "vendor_a.py::fetch")
+
+    with pytest.raises(AgentError, match="write fetch"):
+        _delegated(scripted, "runner", "fetch", gate="vendor_a.py::fetch")
+
+
+def test_a_subagents_own_bundled_tool_can_be_gated(scripted):
+    """A bundle's tool was judged against what the catalogue offers, so every spelling
+    of it was refused as a name nothing answers to -- while deepagents hands a subagent
+    the parent's gates, so the one graph it can be called in was the one place no gate
+    could reach it.
+    """
+    _a_bundle(scripted)
+
+    result = _delegated(scripted, "redactor", "mask", gate="mask")
+
+    assert result.stop_reason == AWAITING, "a bundled tool ran unapproved under a gate"
+    assert [call.tool for call in result.pending] == ["mask"]
+    assert not result.ledger, "the gated tool returned a result, so it had run"
+
+
+def test_the_same_bundle_without_the_gate_runs_it(scripted):
+    """The control for the rule above."""
+    _a_bundle(scripted)
+
+    result = _delegated(scripted, "redactor", "mask", gate=None)
+
+    assert result.stop_reason != AWAITING
+    assert [(entry.role, entry.tool) for entry in result.ledger] == [
+        ("working", "mask"),
+        ("main", "task"),
+    ]
+
+
+def test_a_gate_on_a_tool_only_a_compiled_subagent_holds_is_refused(cfg, session_dir):
+    """A gate on a name only a compiled subagent's own folder holds cannot fire:
+    deepagents runs a compiled graph as it was given and hands it none of the parent's
+    gates, and kingfisher adds no middleware to one either. Judging a gate against every
+    bundled name accepts it, and a gate that is accepted and never fires is the whole
+    failure `interrupt_on` is checked to prevent.
+    """
+    compiled_bundle(cfg)
+
+    with pytest.raises(AgentError, match="runs a compiled graph as it was given"):
+        _run(cfg, session_dir, _agent(interrupt_on="[probe]"))
+
+
+def test_the_same_workspace_still_gates_a_built_in(cfg, session_dir):
+    """The control: a compiled subagent is handed workspace tools and no built-in, so
+    its presence must not cost the deployment the gates it can have.
+    """
+    compiled_bundle(cfg)
+
+    out = _run(cfg, session_dir, _agent(interrupt_on="[write_file]"))
+
+    assert "__interrupt__" in out

@@ -383,6 +383,12 @@ for the next reader who reaches for one.*
   graph it runs as given. A compiled one is never given middleware and never gets
   a skills middleware added to it. *(2026-08-18.)*
 - **A skill's `allowed-tools` is prompt text, not enforcement.** *(2026-08-16.)*
+- **`interrupt_on` is keyed by the tool name on the call, and only a subagent deepagents
+  builds inherits it.** The parent's mapping is passed down to each declarative spec; a
+  `CompiledSubAgent` runnable and a remote `AsyncSubAgent` are given none, as its own
+  docstring says. Measured: a compiled subagent ran a gated tool of its own with no
+  pause, and so did a gated catalogue tool it had been handed. *(2026-10-19, deepagents
+  0.7.22.)*
 
 - **deepagents reads a skills source one level deep.** One root source finds nothing in a
   nested layout; three folder sources find all nine. Four directories each holding a skill of

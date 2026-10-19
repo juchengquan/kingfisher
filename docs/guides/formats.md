@@ -272,10 +272,27 @@ A gate on a tool *this* caller was not granted is neither of those, and is
 allowed: the grant already narrows per request, so there is simply nothing for
 the gate to fire on.
 
+**A gate names the tool a call carries**, which is the flat name the model sees,
+and never a `where::what` reference — that spelling is refused, with the name to
+write instead. So where two files each define a `fetch`, the gate is `fetch`, and
+it stops a call on either of them: a call carries the name alone, so nothing
+downstream can tell the two apart. It is the one place a gate is wider than the
+line that wrote it.
+
 Subagents inherit their parent's gates and cannot declare their own — the field
 is refused in a subagent file. The caller answering a pause is the agent's
 caller, and a subagent that could widen or narrow what stops for them would be
-deciding that on their behalf.
+deciding that on their behalf. A subagent's own bundled tool is gated like any
+other, by its name, which is how a tool that exists in no other graph can be
+stopped at all.
+
+**A compiled subagent's own tools cannot be.** deepagents runs a graph it was
+handed as it is and gives it none of this agent's gates, and kingfisher adds no
+middleware to one either. A gate on a name only one of those folders holds is
+refused, with that reason rather than as a name nothing answers to. A gate on a
+catalogue tool such a subagent was *also* handed stops the agent's own calls and
+not that subagent's — worth knowing before you grant a compiled subagent a tool
+you gate.
 
 ### Two fields are refused
 
@@ -411,7 +428,8 @@ tools: [vendor_a/fetch.py::fetch]
 Both subagents then have a `fetch`, and each calls its own vendor's. The model
 sees a flat `fetch` in every agent and never sees a reference — a tool name goes
 to the provider as an identifier, so the qualifier resolves before any schema is
-built.
+built. An `interrupt_on` gate is on that flat name for the same reason, and stops
+a call on either tool; see [Approval gates](#approval-gates).
 
 The agent holding the grant is told what it could not take:
 

@@ -275,7 +275,7 @@ REFUSALS: dict[str, Refusal] = {
         1, defect=two_agents_of_a_name),
     "core/definitions/agents/spec.py::parse": Refusal(4, defect=an_agent_missing_a_field),
     "core/definitions/agents/spec.py::_gated_tools": Refusal(
-        1, defect=an_agent_gating_every_tool_with_a_star),
+        2, defect=an_agent_gating_every_tool_with_a_star),
     # Raises the error class it was handed, which is how it stayed out of the first
     # version of the rule below.
     # The walk both kinds' definition roots are read by. A subagent catalogue reaches

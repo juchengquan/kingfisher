@@ -81,6 +81,14 @@ class _ToolSurface:
     #: Tools whose audience shuts this caller out. Taken out of the grant, not `found`: a
     #: definition naming one names a real tool, which `refuse_unknown` must not call a typo.
     out_of_reach: frozenset[str] = frozenset()
+    #: Every name a call anywhere under this build can carry, bundles included -- what a gate
+    #: is judged against. Not `offering.workspace`, which spells a name two files share the
+    #: long way: a gate written that way was accepted and then matched nothing.
+    dispatchable: frozenset[str] = frozenset()
+    #: Names only a compiled subagent's own folder holds, each with whose folder it is, so a
+    #: gate on one is refused for the reason it cannot fire rather than as a name nothing
+    #: answers to.
+    only_compiled: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def carried(self) -> tuple[Any, ...]:
@@ -123,8 +131,8 @@ class _ToolSurface:
         return tuple(name for name in granted or () if name not in self.out_of_reach)
 
 
-def bundled_tools_in(catalogue: Definitions) -> tuple[tuple[FoundTool, str], ...]:
-    """Every tool a bundle holds that loads, with where a rename would go.
+def bundled_tools_in(catalogue: Definitions) -> tuple[tuple[FoundTool, str, str], ...]:
+    """Every tool a bundle holds that loads, with where a rename would go and whose it is.
 
     Every bundle the catalogue holds, not only the subagents a request activates: a name
     that replaces a built-in is a fact about the workspace, and a deployment would find
@@ -137,16 +145,29 @@ def bundled_tools_in(catalogue: Definitions) -> tuple[tuple[FoundTool, str], ...
         bundles = catalogue.bundled_tools
     except SubagentError:
         return ()
-    loaded: list[tuple[FoundTool, str]] = []
-    for repository in bundles.values():
+    loaded: list[tuple[FoundTool, str, str]] = []
+    for owner, repository in bundles.items():
         try:
             found = repository.found
         except ToolError:
             continue
         # A member of both readers, not a `getattr` with a default: a default answers
         # nothing for whichever reader lacks it.
-        loaded.extend((one, repository.where) for one in found)
+        loaded.extend((one, repository.where, owner) for one in found)
     return tuple(loaded)
+
+
+def handed_graphs_in(catalogue: Definitions) -> frozenset[str]:
+    """The subagents whose graph arrives built, so nothing kingfisher adds reaches it.
+
+    Guarded like the read above, and for the same reason: a definition that will not
+    parse is answered by the subagent rows, not by the catalogue's `tools`.
+    """
+    try:
+        specs = catalogue.subagents.specs
+    except SubagentError:
+        return frozenset()
+    return frozenset(name for name, spec in specs.items() if spec.build is not None)
 
 
 def _private_tools(
@@ -191,7 +212,9 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
     assemble: Callable[[tuple[Any, ...]], Any],
     *,
     #: What `bundled_tools_in` loaded, so the probe judges a subagent's own tools too.
-    bundled: Sequence[tuple[FoundTool, str]] = (),
+    bundled: Sequence[tuple[FoundTool, str, str]] = (),
+    #: What `handed_graphs_in` found, so a gate is not offered a graph it cannot reach.
+    handed: frozenset[str] = frozenset(),
     names_needed: bool = False,
     #: What a refusal may list, for this caller.
     in_reach: Callable[[str], bool] | None = None,
@@ -211,7 +234,7 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
     # crashing here.
     builtin = registered_tools(probe) or ()
     _refuse_shadowed(workspace_tools, builtin=builtin, where=where)
-    for found, holder in bundled:
+    for found, holder, _ in bundled:
         _refuse_shadowed((found,), builtin=builtin, where=holder)
     offering = Offering.of(workspace_tools, builtin=builtin)
     offering.refuse_unknown(
@@ -220,10 +243,24 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
         subject="this request",
         in_reach=in_reach,
     )
+    dispatchable = (
+        frozenset(builtin)
+        | {one.name for one in workspace_tools}
+        # Left out where the bundle is a compiled subagent's: deepagents hands a graph it
+        # did not build none of this agent's gates, so a gate on a name nothing else holds
+        # would be accepted and never fire -- the outcome gates are refused to prevent.
+        | {one.name for one, _, owner in bundled if owner not in handed}
+    )
     return _ToolSurface(
         offering=offering,
         asked=capabilities,
         objects=_tool_objects(probe),
         found=tuple(workspace_tools),
         out_of_reach=out_of_reach(workspace_tools, held),
+        dispatchable=dispatchable,
+        only_compiled={
+            one.name: owner
+            for one, _, owner in bundled
+            if owner in handed and one.name not in dispatchable
+        },
     )
