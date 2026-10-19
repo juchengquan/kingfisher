@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 
-from kingfisher.core.wiring import store_named
+from kingfisher.core.wiring import built_from_setting
 from kingfisher.plugins import LocalSessions, Plugins, Sessions
 
 
@@ -27,7 +27,7 @@ def configured_sessions(environ: Mapping[str, str] | None = None) -> Sessions:
     named = _named("KINGFISHER_SESSIONS", environ)
     if named is None:
         return LocalSessions()
-    return store_named(named, setting="KINGFISHER_SESSIONS", port=Sessions)
+    return built_from_setting(named, setting="KINGFISHER_SESSIONS", interface=Sessions)
 
 
 def configured_plugins(environ: Mapping[str, str] | None = None) -> Plugins:
@@ -38,4 +38,4 @@ def configured_plugins(environ: Mapping[str, str] | None = None) -> Plugins:
     named = _named("KINGFISHER_PLUGINS", environ)
     if named is None:
         return Plugins()
-    return store_named(named, setting="KINGFISHER_PLUGINS", port=Plugins)
+    return built_from_setting(named, setting="KINGFISHER_PLUGINS", interface=Plugins)

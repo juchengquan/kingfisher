@@ -18,6 +18,18 @@ if TYPE_CHECKING:
     from kingfisher.core.config import Config
 
 
+def _tools_by_name(graph: Any) -> dict[str, Any] | None:
+    """A compiled graph's tool table, or `None` where it holds none.
+
+    langgraph does not publish this shape, so it is read here and nowhere else.
+    """
+    nodes = getattr(graph, "nodes", None)
+    if not hasattr(nodes, "get"):
+        return None
+    by_name = getattr(getattr(nodes.get("tools"), "bound", None), "tools_by_name", None)
+    return by_name if isinstance(by_name, dict) else None
+
+
 def registered_tools(graph: Any) -> tuple[str, ...] | None:
     """Tool names the compiled agent can actually dispatch, or `None` if unreadable.
 
@@ -28,8 +40,8 @@ def registered_tools(graph: Any) -> tuple[str, ...] | None:
     nodes = getattr(graph, "nodes", None)
     if not hasattr(nodes, "get"):
         return None
-    by_name = getattr(getattr(nodes.get("tools"), "bound", None), "tools_by_name", None)
-    if isinstance(by_name, dict):
+    by_name = _tools_by_name(graph)
+    if by_name is not None:
         return tuple(sorted(by_name))
     return () if "model" in nodes else None
 
@@ -45,7 +57,7 @@ def workspace_tool_names(
 def _refuse_shadowed(
     walked: Sequence[FoundTool], *, builtin: tuple[str, ...], where: str
 ) -> None:
-    """What the workspace defines, refusing anything that shadows a built-in."""
+    """Refuse a workspace tool that shadows a built-in."""
     shadowed = tuple(sorted({one.name for one in walked} & set(builtin)))
     if shadowed:
         msg = (
@@ -56,7 +68,7 @@ def _refuse_shadowed(
 
 
 @dataclass(frozen=True)
-class _ToolSurface:
+class ToolSurface:
     """The tool picture one build works from, resolved once."""
 
     #: What this build has to offer, or `None` when the probe was skipped. Not an empty
@@ -163,7 +175,7 @@ def handed_graphs_in(catalogue: Definitions) -> frozenset[str]:
     return frozenset(name for name, spec in specs.items() if spec.build is not None)
 
 
-def _private_tools(
+def private_tools(
     catalogue: Definitions, name: str, *, held: frozenset[str] | None = None
 ) -> tuple[FoundTool, ...]:
     """The tools a subagent brings itself that this caller may use, or none."""
@@ -185,10 +197,7 @@ def _private_tools(
 
 def _tool_objects(graph: Any) -> Mapping[str, Any]:
     """The built tool objects a compiled graph dispatches, by name."""
-    node = getattr(graph, "nodes", {}).get("tools")
-    by_name = getattr(getattr(node, "bound", None), "tools_by_name", None)
-    if not isinstance(by_name, dict):
-        return {}
+    by_name = _tools_by_name(graph) or {}
     # Not the probe's `eval`, never narrowed: a helper holding it would reach `task()` past
     # its allowlist, and it would outlive the turn, as `release_interpreter` closes only the
     # agent's.
@@ -196,7 +205,7 @@ def _tool_objects(graph: Any) -> Mapping[str, Any]:
     return {name: tool for name, tool in by_name.items() if name not in left_out}
 
 
-def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the composition root knows
+def resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the composition root knows
     where: str,
     capabilities: Capabilities,
     workspace_tools: Sequence[FoundTool],
@@ -212,7 +221,7 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
     #: What a refusal may list, for this caller.
     in_reach: Callable[[str], bool] | None = None,
     held: frozenset[str] | None = None,
-) -> _ToolSurface:
+) -> ToolSurface:
     """What this request may call, and what this agent offers at all.
 
     `names_needed` asks for the probe a definition naming tools needs, to check them against
@@ -220,7 +229,7 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
     """
     unrestricted = capabilities.builtin_tools == ALL and capabilities.tools == ALL
     if not names_needed and not workspace_tools and not bundled and unrestricted:
-        return _ToolSurface()
+        return ToolSurface()
 
     probe = assemble(()).graph
     # `None` is unreachable on our own probe; `or ()` keeps an upstream shape change from
@@ -244,7 +253,7 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
         # would be accepted and never fire -- the outcome gates are refused to prevent.
         | {one.name for one, _, owner in bundled if owner not in handed}
     )
-    return _ToolSurface(
+    return ToolSurface(
         offering=offering,
         asked=capabilities,
         objects=_tool_objects(probe),

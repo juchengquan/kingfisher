@@ -28,7 +28,7 @@ the definitions folder, since that is all it writes.
 | `KINGFISHER_MODEL_KEYS_FILE` | The file an endpoint's `key:` names an entry in, one `name: key` line each. Read only once this names it; named and missing, unreadable or not such a list, it refuses startup. Keep it out of the workspace, and on macOS under the home folder — see *What each fence hides*. `seed` places a `keys.yaml.example` to copy out; `doctor` says where each key came from, and warns when the shell or another user can read the file. | none |
 | `KINGFISHER_WIRE_FORMATS` | `module:name` naming something callable with no arguments that returns wire formats of your own, for an endpoint's `api` to name. See [below](#a-wire-format-kingfisher-does-not-ship). `KINGFISHER_ADAPTERS_FACTORY`, its old name, is refused if still set. | none — `anthropic` and `openai_responses` only |
 | `KINGFISHER_SKILLS_MOUNTS` | Further skills directories, as `label=path` pairs separated by `:`. Each is offered at `/skills/<label>/` and granted as `<label>::<name>`, for a party that cannot write into the catalogue. Skills sit directly in each one, and nothing creates or seeds it. The shell reaches a mount's scripts as `$KINGFISHER_SKILLS/<label>/...`, through a view of links kingfisher keeps in `<workspace>/.kingfisher/`. | none |
-| `KINGFISHER_SESSIONS` | `module:name` naming something callable with no arguments that returns a `Sessions`, for the `kingfisher` command. Only the command reads it — `Kingfisher` takes its sessions as `sessions=` — and it is how `sessions`, `reap` and `artifact` see sessions yours keep elsewhere. `KINGFISHER_SESSION_STORE` and `KINGFISHER_SESSION_STORE_FACTORY`, which configured the store this replaced, are refused if still set, and so are `KINGFISHER_SESSION_BACKENDS_FACTORY` and `KINGFISHER_BACKEND_FACTORY`, this setting's old names. | `LocalSessions` |
+| `KINGFISHER_SESSIONS` | `module:name` naming something callable with no arguments that returns a `Sessions`, for the `kingfisher` command. Only the command reads it — `Kingfisher` takes its sessions as `sessions=` — and it is how every verb but `seed` sees sessions yours keep elsewhere. `KINGFISHER_SESSION_STORE` and `KINGFISHER_SESSION_STORE_FACTORY`, which configured the store this replaced, are refused if still set, and so are `KINGFISHER_SESSION_BACKENDS_FACTORY` and `KINGFISHER_BACKEND_FACTORY`, this setting's old names. `KINGFISHER_SESSION_ID` is refused too: a request names its session. | `LocalSessions` |
 | `KINGFISHER_PLUGINS` | `module:name` naming something callable with no arguments that returns a `kingfisher.plugins.Plugins`: the run events, offered middleware and instructions the `kingfisher` command hands every `Kingfisher` it builds, as `Kingfisher` takes them as keywords. A field left unset is kingfisher's own. `kingfisher run --log` replaces the run events it names. | kingfisher's own of each |
 | *(none)* | Where session directories are, while a turn runs. No setting moves them; mount `<workspace>/sessions` on whatever device you want them on. | `<workspace>/sessions` |
 
@@ -55,7 +55,7 @@ into the definitions folder.
 
 | Variable | What it does | Default |
 | --- | --- | --- |
-| `KINGFISHER_EXECUTION_TIMEOUT_S` | How long one shell command may run. | `120` |
+| `KINGFISHER_EXECUTION_TIMEOUT_S` | How long one shell command, or one `eval` in the interpreter, may run. | `120` |
 | `KINGFISHER_TURN_TIMEOUT_S` | How long one turn may run. | `3600` |
 | `KINGFISHER_RECURSION_LIMIT` | How many steps a turn may take before it stops. | `150` |
 | `KINGFISHER_THREAD_POOL_SIZE` | How many threads `astream` and `arun` hand blocking work to. One pool per process: a second service asking for a different number is refused when it is built. It serves the short work a turn does on this host, and any session-backends method left to its default, which runs the sync one on it: raise it for many turns at once on remote sessions whose async methods are those defaults. | `16` |
@@ -88,9 +88,9 @@ names are read by nothing. `kingfisher doctor` reports one that is still set,
 which is the only thing that will: a name that stops being read takes its
 setting's effect with it and says nothing.
 
-These two are the only capabilities with a flag, and the reason is the prompt.
-Each splices a section into the base prompt, which is the cached prefix every
-turn is compared against — so whether they are on has to be a deployment-stable
+Skills, memory and the interpreter are switched per deployment, and the reason is
+the prompt. Each splices a section into the base prompt, which is the cached prefix
+every turn is compared against — so whether they are on has to be a deployment-stable
 fact, decided once. Tools, subagents and agents are attached per request through
 capabilities instead, and leave the prefix alone. A request may decline memory
 this deployment wired, and when it does the *reads* are denied rather than the

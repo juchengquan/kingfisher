@@ -512,8 +512,8 @@ def _subagent_behind(task: Any, snapshot: Any) -> str | None:
 def resume_payload(answers: Iterable[Decision], pending: Iterable[PendingDecision]) -> Any:
     """The caller's answers as a graph is driven with them: per interrupt, in order.
 
-    Returns the `Command`, not the mapping inside it, so this stays the one module
-    naming langgraph. Keyed by interrupt id, so a turn paused in two places is answered
+    Returns the `Command`, not the mapping inside it, so its caller never names
+    langgraph. Keyed by interrupt id, so a turn paused in two places is answered
     in one resume; a wrong or missing id is named here rather than counted by langgraph.
     """
     waiting = {item.call_id: item for item in pending}

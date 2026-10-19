@@ -16,7 +16,9 @@ from kingfisher.core.definitions.subagents import TASK_TOOL
 from .results import failed
 
 
-def _tool_name(tool: Any) -> str | None:
+def tool_name(tool: Any) -> str | None:
+    """The name a tool in a model request goes by, which every middleware reading one reads
+    the same way, or `None` where it has none."""
     name = getattr(tool, "name", None)
     if isinstance(name, str):
         return name
@@ -48,7 +50,7 @@ class GrantedOnlyMiddleware(AgentMiddleware):
         kept = [
             tool
             for tool in request.tools
-            if (name := _tool_name(tool)) is None or name in self._allowed
+            if (name := tool_name(tool)) is None or name in self._allowed
         ]
         # `override`: langchain deprecated mutating a ModelRequest in place.
         return request.override(tools=kept)

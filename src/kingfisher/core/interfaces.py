@@ -139,8 +139,8 @@ class Sessions(Protocol):
     def mark_used(self, cfg: Config, session_id: str) -> None:
         """Record that a turn is running in this session now.
 
-        A port because retention depends on it: a turn writes *inside* a session, which
-        on an ordinary filesystem leaves the session's own timestamp alone.
+        Part of the interface because retention depends on it: a turn writes *inside* a
+        session, which on an ordinary filesystem leaves the session's own timestamp alone.
         """
         ...
 

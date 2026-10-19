@@ -330,7 +330,7 @@ REFUSALS: dict[str, Refusal] = {
     "core/definitions/skills/registry.py::SkillRegistry.resolve": Refusal(
         3, unreachable="a grant naming a skill two sources both offer, which is a request"),
     "core/definitions/subagents/rules.py::refuse_cycles": Refusal(
-        1, unreachable="asked in `_activated_subagents`, over the set a request "
+        1, unreachable="asked in `activated_subagents`, over the set a request "
                        "activates rather than over a file on disk"),
     "core/definitions/subagents/rules.py::refuse_two_of_a_name": Refusal(
         1, unreachable="two of a name coexist in a catalogue on purpose; it is an agent "
