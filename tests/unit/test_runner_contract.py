@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import subprocess
 import sys
 from collections.abc import Callable
@@ -10,6 +11,7 @@ from dataclasses import dataclass
 import pytest
 
 from kingfisher.core.interfaces import CommandResult, CommandRunner
+from tests.checks import runner as runner_kit
 from tests.checks.runner import RUNNER_CHECKS
 
 
@@ -89,12 +91,21 @@ def test_the_reference_runner_satisfies_the_port_it_was_written_from() -> None:
     assert _built_by(ReferenceRunner).local is True
 
 
-def test_the_contracts_are_not_quietly_empty():
-    """A hand-maintained tuple, and a rule walking an empty one passes having checked
-    nothing.
-    """
-    assert len(RUNNER_CHECKS) >= 5
-    assert all(callable(check) for check in RUNNER_CHECKS)
+def test_the_kit_runs_every_check_it_defines():
+    """A check the kit defines and `RUNNER_CHECKS` leaves out is one no deployment running
+    the kit ever runs."""
+    # Public and defined in the kit itself: its helpers are private, and what it imports
+    # is not a check.
+    defined = {
+        name
+        for name, value in vars(runner_kit).items()
+        if inspect.isfunction(value)
+        and value.__module__ == runner_kit.__name__
+        and not name.startswith("_")
+    }
+
+    assert defined
+    assert sorted(check.__name__ for check in RUNNER_CHECKS) == sorted(defined)
 
 
 # -- what the checks refuse -------------------------------------------------
