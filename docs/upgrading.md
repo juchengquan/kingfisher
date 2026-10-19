@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `KINDS` and `STOP_REASONS` are on `kingfisher`, after #962
+
+- **`from kingfisher import KINDS, STOP_REASONS`** gives every value `RunEvent.kind`
+  and `RunResult.stop_reason` can hold. They were only in `kingfisher.core.result`,
+  which is private and may move; if you imported them from there, import them from
+  `kingfisher` instead.
+- **Both lists grow.** A value you do not know is one to ignore rather than fail on,
+  and `RunResult.completed` is the question to ask about a turn finishing.
+
 ## `UnsafeReferenceError` leaves `kingfisher`, after #955
 
 - **`from kingfisher import UnsafeReferenceError` fails.** Nothing raised it at a
