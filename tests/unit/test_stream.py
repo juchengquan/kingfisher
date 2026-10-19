@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from kingfisher.core.run import Request, stream
+from kingfisher.core.request import Request
+from kingfisher.core.run import stream
 from kingfisher.plugins import LocalSessions
 from tests.conftest import start
 from tests.unit.test_run import StubAgent
