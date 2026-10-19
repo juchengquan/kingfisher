@@ -12,6 +12,7 @@ from langchain_core.runnables import RunnableConfig
 
 from kingfisher.core.agent.middlewares.results import failed
 from kingfisher.core.definitions.skills.registry import KEY, alist_skills, list_skills, qualified
+from kingfisher.core.definitions.subagents import TASK_TOOL
 
 
 def _tool_name(tool: Any) -> str | None:
@@ -69,7 +70,7 @@ class GrantedOnlyMiddleware(AgentMiddleware):
                 f"Error: {name} is not available for {self._subject}. "
                 f"Available tools: {', '.join(sorted(self._allowed))}.",
             )
-        if name != "task" or self._declared is None:
+        if name != TASK_TOOL or self._declared is None:
             return None
         wanted = (call.get("args") or {}).get("subagent_type")
         if wanted in self._declared:

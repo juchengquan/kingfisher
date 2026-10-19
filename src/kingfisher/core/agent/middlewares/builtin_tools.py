@@ -16,7 +16,17 @@ from langchain.agents.middleware.todo import WRITE_TODOS_SYSTEM_PROMPT
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
-from kingfisher.core.agent.prompting import EXECUTE, WRITE_TODOS, ShellPrompt, execute_line
+from kingfisher.core.agent.prompting import (
+    EDIT_FILE,
+    EXECUTE,
+    GLOB,
+    GREP,
+    LS,
+    WRITE_FILE,
+    WRITE_TODOS,
+    ShellPrompt,
+    execute_line,
+)
 from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import Layout
 
@@ -136,8 +146,6 @@ def _without(request: Any, headings: tuple[str, ...]) -> Any:
     return request.override(system_message=SystemMessage(content_blocks=kept))
 
 
-GREP = "grep"
-
 #: The lines `read_file` returns when the model names no limit: under deepagents'
 #: 80,000-character cut for code of ordinary width, so most files come back in one call.
 READ_LINES = 1_000
@@ -199,11 +207,6 @@ def _offered(tool: Any) -> Any:
         update={"description": described, "args_schema": _shown(tool.args_schema)}
     )
 
-
-LS = "ls"
-GLOB = "glob"
-WRITE_FILE = "write_file"
-EDIT_FILE = "edit_file"
 
 #: deepagents' advice on searching to the shell's holder, by whether it holds `grep` and
 #: `glob`. deepagents picks one from the tools it sees, which is every built-in: it runs

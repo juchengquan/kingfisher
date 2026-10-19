@@ -13,7 +13,6 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.types import Command
 
-from kingfisher.core.agent.middlewares.builtin_tools import GREP, READ_FILE
 from kingfisher.core.agent.middlewares.model_reply import NOT_RUN
 from kingfisher.core.agent.middlewares.recorded import (
     STAMP_PATTERN,
@@ -22,7 +21,8 @@ from kingfisher.core.agent.middlewares.recorded import (
     stamped_id,
 )
 from kingfisher.core.agent.models import summarizer_trigger
-from kingfisher.core.agent.prompting import FILE_TOOLS
+from kingfisher.core.agent.prompting import EDIT_FILE, FILE_TOOLS, GREP, WRITE_FILE
+from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.session.runtime import with_call_args
 
@@ -46,7 +46,7 @@ KEEP_RECENT = 3
 WORTH = 1 / 4
 
 #: The arguments that carry a file's text, by the file tool they belong to.
-FILE_TEXT = {"write_file": ("content",), "edit_file": ("old_string", "new_string")}
+FILE_TEXT = {WRITE_FILE: ("content",), EDIT_FILE: ("old_string", "new_string")}
 
 #: How deepagents' eviction stub begins, `_TOO_LARGE_TOOL_MSG` up to its first field.
 EVICTED = "Tool result too large, the result of this tool call "
