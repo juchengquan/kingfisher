@@ -229,25 +229,23 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
     return resolved, dropped
 
 
-def _retries(value: object, where: str) -> int | None:
-    """A model's `max_retries`: unset, or a count of further tries, never negative."""
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        msg = f"{where} max_retries is {value!r}; it takes a whole number, 0 or more"
-        raise ConfigError(msg)
-    return value
+def _count(written: object, subject: str, field: str, *, least: int, of: str) -> int:
+    """A whole number of `of`, refusing what YAML reads as something else.
 
-
-def _mark(written: Any, subject: str) -> int | None:
-    """A `clear_results_at` as tokens, refusing what cannot be a count of them.
-
-    Not compared with the summariser here: that needs the built model's own window.
+    `int()` would not: `true` is an int to Python, and a fraction is truncated.
     """
+    if isinstance(written, bool) or not isinstance(written, int) or written < least:
+        msg = f"{subject}: {field} is {written!r}; it takes a whole number of {of}, {least} or more"
+        raise ConfigError(msg)
+    return written
+
+
+def _number(written: object, subject: str, field: str) -> float | None:
+    """A sampling value as written, or unset. Not ranged: each provider has its own."""
     if written is None:
         return None
-    if isinstance(written, bool) or not isinstance(written, int) or written < 1:
-        msg = f"{subject}: clear_results_at is {written!r}, and must be a number of tokens"
+    if isinstance(written, bool) or not isinstance(written, int | float):
+        msg = f"{subject}: {field} is {written!r}; it takes a number"
         raise ConfigError(msg)
     return written
 
@@ -276,16 +274,30 @@ def _models(
                 f"which this format already defines; write it directly instead"
             )
             raise ConfigError(msg)
+        subject = f"{source}: model {name!r}"
+        retries, mark = entry.get("max_retries"), entry.get("clear_results_at")
         profiles[name] = ModelProfile(
             model=name,
             endpoint=endpoint_name,
-            max_tokens=int(entry.get("max_tokens", 4096)),
-            timeout_s=int(entry.get("timeout_s", 120)),
-            max_retries=_retries(entry.get("max_retries"), f"{source}: model {name!r}"),
-            temperature=entry.get("temperature"),
-            top_p=entry.get("top_p"),
+            max_tokens=_count(
+                entry.get("max_tokens", ModelProfile.max_tokens),
+                subject, "max_tokens", least=1, of="tokens",
+            ),
+            timeout_s=_count(
+                entry.get("timeout_s", ModelProfile.timeout_s),
+                subject, "timeout_s", least=1, of="seconds",
+            ),
+            # Unset, it is not sent, and the SDK's own count stands.
+            max_retries=None
+            if retries is None
+            else _count(retries, subject, "max_retries", least=0, of="further tries"),
+            temperature=_number(entry.get("temperature"), subject, "temperature"),
+            top_p=_number(entry.get("top_p"), subject, "top_p"),
             extra=dict(extra),
-            clear_results_at=_mark(entry.get("clear_results_at"), f"{source}: model {name!r}"),
+            # Not compared with the summariser here: that needs the built model's window.
+            clear_results_at=None
+            if mark is None
+            else _count(mark, subject, "clear_results_at", least=1, of="tokens"),
         )
 
     # An endpoint not in the file is a mistake and refused; one dropped for want of a key
