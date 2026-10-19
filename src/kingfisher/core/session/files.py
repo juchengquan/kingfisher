@@ -7,13 +7,16 @@ elsewhere holds the session there, and a directory on this host is one the agent
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.layout import Layout
 from kingfisher.core.result import ArtifactError
 from kingfisher.core.session.steps import Steps, changing, on_host, reading
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # The layout arrives as an argument, never as `layout`'s route constants such as
 # `INPUTS_ROUTE`: a deployment may rename the folders a caller's files cross.
@@ -46,19 +49,21 @@ def checked(sources: tuple[Path, ...]) -> dict[str, Path]:
 
 @dataclass(frozen=True)
 class InputsPlacement:
-    """What `place_inputs` did. `replaced` is a subset of `placed`."""
+    """What `planned_inputs` found to place. `replaced` is a subset of `placed`."""
 
     placed: tuple[str, ...] = ()
     replaced: tuple[str, ...] = ()
+    #: Where each placed name is read from, when `place_inputs` sends it.
+    sources: Mapping[str, Path] = field(default_factory=dict)
 
 
-def place_inputs(
+def planned_inputs(
     sources: tuple[Path, ...], backend: Any, layout: Layout
 ) -> Steps[InputsPlacement]:
-    """Copy caller-supplied files into a session's inputs folder, through its backend.
+    """What placing these files in a session's inputs folder would place and replace.
 
-    The folder this deployment named, which is not always `/inputs`: under a renamed
-    layout that route is not mounted, and a write there lands in a folder nothing fences.
+    Changes nothing: a request refused after this must leave the session's files as they
+    were.
     """
     if not sources:
         return InputsPlacement()
@@ -67,18 +72,29 @@ def place_inputs(
     seen = yield on_host(checked, sources)
     listing = yield reading(backend, "ls", layout.inputs_route)
     existing = {PurePosixPath(entry["path"]).name for entry in listing.entries or ()}
-    contents = yield on_host(_contents_of, seen, layout.inputs_route)
+    return InputsPlacement(
+        placed=tuple(seen),
+        replaced=tuple(name for name in seen if name in existing),
+        sources=seen,
+    )
+
+
+def place_inputs(placement: InputsPlacement, backend: Any, layout: Layout) -> Steps[None]:
+    """Copy what `planned_inputs` found into a session's inputs folder, through its backend.
+
+    The folder this deployment named, which is not always `/inputs`: under a renamed
+    layout that route is not mounted, and a write there lands in a folder nothing fences.
+    """
+    if not placement.placed:
+        return
+    contents = yield on_host(_contents_of, placement.sources, layout.inputs_route)
     answers = yield changing(backend, "upload_files", contents)
     if refused := [f"{answer.path}: {answer.error}" for answer in answers if answer.error]:
         msg = f"the session's backend refused {', '.join(refused)}"
         raise InputsError(msg)
-    return InputsPlacement(
-        placed=tuple(seen),
-        replaced=tuple(name for name in seen if name in existing),
-    )
 
 
-def _contents_of(seen: dict[str, Path], route: str) -> list[tuple[str, bytes]]:
+def _contents_of(seen: Mapping[str, Path], route: str) -> list[tuple[str, bytes]]:
     return [(f"{route}{name}", source.read_bytes()) for name, source in seen.items()]
 
 

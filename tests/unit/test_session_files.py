@@ -27,12 +27,11 @@ from kingfisher.core.layout import (
 )
 from kingfisher.core.session.files import (
     collect_artifacts,
-    place_inputs,
     read_artifact,
 )
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import EVERY_TOOL, Through, an_agent, pin, start
+from tests.conftest import EVERY_TOOL, Through, an_agent, pin, start, supplied
 from tests.unit.scripted import Scripted
 
 
@@ -300,7 +299,7 @@ def test_inputs_placed_through_the_default_backend_land_read_only(cfg, session_d
     source.write_text("x")
     backend = backend_at(cfg, session_dir)
 
-    placement = drive(place_inputs((source,), backend, cfg.layout))
+    placement = drive(supplied((source,), backend, cfg.layout))
 
     assert placement.placed == ("in.csv",)
     assert (session_dir / INPUTS / "in.csv").read_text() == "x"
@@ -328,7 +327,7 @@ def test_a_refused_upload_is_an_inputs_error_naming_the_file(session_dir, tmp_pa
     )
 
     with pytest.raises(ValueError, match=r"/inputs/in\.csv: permission_denied"):
-        drive(place_inputs((source,), backend, Layout()))
+        drive(supplied((source,), backend, Layout()))
 
 
 def test_collecting_and_reading_agree_on_every_name(cfg, session_dir):
