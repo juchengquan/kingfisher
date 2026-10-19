@@ -1960,6 +1960,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         "AccessError": "embedder",
         "CapabilityError": "embedder",
         "ConfigError": "embedder",
+        "InputsError": "embedder",
         "QuotaExceededError": "embedder",
         "SessionBusyError": "embedder",
         "SubagentError": "embedder",
@@ -3433,8 +3434,8 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
-    "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
-    "SessionBusyError", "SubagentError", "UnknownSessionError",
+    "ArtifactError", "CapabilityError", "DecisionError", "InputsError",
+    "QuotaExceededError", "SessionBusyError", "SubagentError", "UnknownSessionError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.
@@ -3447,8 +3448,8 @@ DEPLOYMENT_ERRORS = frozenset({
     # while `SubagentError` sits above: a caller may upload a subagent and cannot
     # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
-    "AccessError", "AgentError", "ConfigError", "HostPathError", "InputsError",
-    "LoadError", "MiddlewareError", "ToolError", "UnsafeReferenceError",
+    "AccessError", "AgentError", "ConfigError", "HostPathError", "LoadError",
+    "MiddlewareError", "ToolError", "UnsafeReferenceError",
 })
 
 #: Caused by the model's provider, and never raised to a caller: a turn ends on it as a

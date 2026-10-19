@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `InputsError` is on `kingfisher`, after #970
+
+- **`from kingfisher import InputsError`** names what `Kingfisher.run`, `stream`,
+  `arun` and `astream` raise when `Request.inputs` names a file that is not there, one
+  with no filename, or two files under one filename. It was only in
+  `kingfisher.core.session.files`, which is private and may move, so a caller could
+  catch it only as `ValueError`, beside any bug. It is still a `ValueError`; if you
+  imported it from there, import it from `kingfisher` instead.
+
 ## `KINDS` and `STOP_REASONS` are on `kingfisher`, after #962
 
 - **`from kingfisher import KINDS, STOP_REASONS`** gives every value `RunEvent.kind`

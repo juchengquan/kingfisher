@@ -287,6 +287,20 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
     assert not _claim(budgeted, session).exists()
 
 
+def test_a_caller_naming_one_file_twice_catches_it_by_the_front_door_name(cfg, tmp_path):
+    """`InputsError` was filed as the deployment's and not exported, so a library caller
+    could catch two `Request.inputs` of one filename only as `ValueError`, beside any bug."""
+    import kingfisher
+
+    for folder in ("a", "b"):
+        (tmp_path / folder).mkdir()
+        (tmp_path / folder / "same.csv").write_text(folder)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+
+    with pytest.raises(kingfisher.InputsError, match=r"same\.csv: supplied twice"):
+        kf.run(Request("go", inputs=(tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv")))
+
+
 def test_a_narrowed_request_is_told_what_it_did_not_grant(cfg):
     """The silence this closes: the caller found out when the model reached for a tool
     mid-turn and was refused, not when the turn opened.
