@@ -16,14 +16,7 @@ from kingfisher.core.agent.prompting import (
     render_system_prompt,
     system_prompt,
 )
-from kingfisher.core.layout import (
-    DEFAULT_LAYOUT,
-    INPUTS,
-    OUTPUTS,
-    SCRATCH,
-    TOOL_RESULTS_ROUTE,
-    Layout,
-)
+from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS, OUTPUTS, SCRATCH, Layout
 from kingfisher.core.session.store import entry_id
 from kingfisher.core.session.turn import ledger_delta, ledger_index
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
@@ -138,7 +131,7 @@ def test_the_prompt_names_a_recorded_result_as_the_ledger_does():
     """
     text = shipped()
 
-    assert f"`{TOOL_RESULTS_ROUTE}`" in text
+    assert f"`{DEFAULT_LAYOUT.tool_results_route}`" in text
     assert f"`[{entry_id(42)}]`" in text
     for block in (ledger_delta(()), ledger_index(())):
         assert f"`{block.splitlines()[0]}`" in text

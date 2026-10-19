@@ -3146,6 +3146,16 @@ nothing to back it raises at build. **Unrouted paths are in the table** too -- `
 and `/scratchpad` reach the shell's backend -- because an absence from a dict literal is
 not a record.
 
+**The table outlived its readers anyway, past the rule meant to catch it.** Once the routes
+came off a `Layout`, the module-level `ROUTES` and its three functions were read by tests
+and by a test pinning them to `Layout.routes`, and `test_nothing_is_defined_for_tests_alone`
+passed: it matched names by spelling, and `Layout.denied_scopes` was called. Both dead-name
+rules now resolve a module-level name to the module defining it, and count it live only if
+something live reaches it, so a table read only by dead functions is dead too. A method is
+still matched by spelling, since an attribute read cannot say which class it means. The
+first walk found the table, its three functions, three route constants only it read, and
+`subagents.spec.DIRECTORY`, alive on `agents.spec.DIRECTORY`'s import. *(2026-10-19.)*
+
 **The rename reached everything the agent addresses and neither edge the caller does.**
 `Layout` threaded the leaves through the routes, fences, prompt, ledger, sweep and
 `doctor`, while the module where a caller's files go in and results come out read the

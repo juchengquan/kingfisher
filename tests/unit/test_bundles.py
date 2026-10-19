@@ -28,7 +28,7 @@ from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import ToolError
 from kingfisher.core.definitions.tools.spec import Offering, tool_name
 from kingfisher.core.inventory import inventory
-from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
+from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, DEFAULT_LAYOUT, SKILLS_ROUTE
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, a_subagent, subagent_of
 
@@ -872,7 +872,7 @@ def test_a_bundles_skills_add_a_mount_and_no_rule(cfg, session_dir):
     mounted = [route for route in backend.routes if route.startswith(BUNDLED_SKILLS_ROUTE)]
 
     assert mounted, "no bundle mounted, so this asserts nothing about bundles"
-    assert denied_scopes() == (
+    assert DEFAULT_LAYOUT.denied_scopes() == (
         "/.harness/**",
         "/inputs/**",
         "/scratchpad/large_tool_results/**",

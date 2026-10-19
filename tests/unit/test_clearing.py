@@ -39,7 +39,7 @@ from kingfisher.core.agent.middlewares.recorded import arguments, stamp, summary
 from kingfisher.core.agent.middlewares.recorder import UNRECORDED
 from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
-from kingfisher.core.layout import HARNESS, OFFLOADS_ROUTE, TOOL_RESULTS_ROUTE, TRANSCRIPT_FILE
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TRANSCRIPT_FILE
 from kingfisher.core.result import MAIN, LedgerEntry
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
@@ -55,6 +55,9 @@ from tests.conftest import (
     tools_dir,
 )
 from tests.unit.scripted import Scripted
+
+OFFLOADS_ROUTE = DEFAULT_LAYOUT.offloads_route
+TOOL_RESULTS_ROUTE = DEFAULT_LAYOUT.tool_results_route
 
 #: About 2,000 tokens, which a mark of 1,000 clears at once.
 BIG = "x" * 8_000

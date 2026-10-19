@@ -172,7 +172,7 @@ def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
     safe there is the pair of denials `.harness` carries, so that is what this
     asserts instead of a location.
     """
-    from kingfisher.core.layout import HARNESS, denied_read_scopes, denied_scopes
+    from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS
 
     session = start(cfg, "s")
     assert LocalSessions().claim(cfg, session, stale_after=3600)
@@ -181,8 +181,8 @@ def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
     assert claim.exists()
     assert claim.is_relative_to(cfg.workspace / "sessions" / session)
     assert claim.parent.name == HARNESS
-    assert f"/{HARNESS}/**" in denied_scopes()
-    assert f"/{HARNESS}/**" in denied_read_scopes()
+    assert f"/{HARNESS}/**" in DEFAULT_LAYOUT.denied_scopes()
+    assert f"/{HARNESS}/**" in DEFAULT_LAYOUT.denied_read_scopes()
 
 
 def test_two_sessions_do_not_block_each_other(cfg):

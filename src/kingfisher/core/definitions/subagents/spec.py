@@ -20,8 +20,6 @@ from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.definitions.tools.spec import claimed_sources
 
-DIRECTORY = "subagents"
-
 
 class SubagentError(ValueError):
     """Raised when a subagent definition cannot be read."""
