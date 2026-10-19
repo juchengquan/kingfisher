@@ -118,7 +118,7 @@ class LocalSubagentRepository:
         # grant writes, and only an agent holding two is refused.
         read: list[tuple[SubagentSpec, str]] = []
         for path in documents_in(directory, error=SubagentError, skipping=ASSET_DIRECTORIES):
-            # Relative to the catalogue: a file name alone no longer identifies one.
+            # Relative to the catalogue, since a file name alone does not identify one.
             where = str(path.relative_to(directory))
             read.append((reading.read(DefinitionText.at(path)), where))
         # Counted with the documents: both formats share one namespace of names.

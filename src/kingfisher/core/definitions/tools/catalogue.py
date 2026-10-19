@@ -188,7 +188,8 @@ class LocalToolRepository:
 
     @property
     def where(self) -> str:
-        """Where an author would go to rename one: this directory. See `CarriedTools`."""
+        """Where an author would go to rename one: this directory. `bundled_tools_in` asks
+        it of whichever reader backs a bundle."""
         return str(self.root)
 
     @cached_property

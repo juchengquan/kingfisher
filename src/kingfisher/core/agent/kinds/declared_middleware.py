@@ -85,8 +85,7 @@ def declared_middleware(
         granted=allowed,
         subject=subject,
     )
-    # Absent on a spec built in code rather than parsed; nothing was written either way.
-    wrote = getattr(spec, "middleware_settings", None) or {}
+    wrote = spec.middleware_settings
     built = []
     for name in approved:
         instance = _instantiate(

@@ -37,8 +37,8 @@ def _handed_back(call: Any, exc: Exception) -> ToolMessage | None:
 # The other half of `reject_host_path`.
 class GuardedCallsMiddleware(AgentMiddleware):
     """Translate a workspace tool call's paths into the session's real ones, and turn what
-    running any call raised into a failed result: anything a workspace tool raises, a host
-    path refused on any tool, and a subagent's model refusing its `task`.
+    running any call raised into a failed result: a host path refused on any tool, and a
+    subagent's model refusing its `task`.
 
     `GuardedTool` does the same two things on a compiled subagent's tools, which no
     middleware reaches, and the two must answer alike.
@@ -53,10 +53,8 @@ class GuardedCallsMiddleware(AgentMiddleware):
     already and the model carries on; without this, upstream re-raises anything but bad
     arguments, and one wrong path ends the run.
 
-    A workspace tool's own exception is converted from here but not *at* here: that is
-    `WorkspaceToolFailureMiddleware` below, which runs under whatever a deployment's
-    definitions add. Read the two together -- they answer alike and `GuardedTool` answers
-    alike again -- and see that class for why one of them is somewhere else.
+    A workspace tool's own exception is `WorkspaceToolFailureMiddleware`'s, which must sit
+    innermost.
     """
 
     def __init__(
@@ -122,11 +120,7 @@ class WorkspaceToolFailureMiddleware(AgentMiddleware):
     `GuardedTool` answers a compiled subagent's the same way, and so must this.
 
     Innermost of every graph, under whatever a deployment's definitions add, because it
-    cannot tell a workspace tool's exception from one raised above it. Sitting outside
-    them, it reported a deployment's middleware falling over as the tool's own failure --
-    the tool's name on the failed message -- and let the turn carry on with the
-    deployment's rule not applied, while the same middleware falling over on a built-in
-    ended the turn. One answer for both now, and it is the loud one.
+    cannot tell a workspace tool's exception from one raised above it.
     """
 
     def __init__(self, names: frozenset[str]) -> None:
