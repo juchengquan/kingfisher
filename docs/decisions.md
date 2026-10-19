@@ -3697,10 +3697,11 @@ and both commands print it, so a new place appears in both untouched.
 *(2026-09-02, `where-this-deployment-reads-from.md`.)*
 
 **It reports what was loaded, not what was configured.** `Config.catalogue_roots` is the
-fallback -- a `Kingfisher` may be handed its own `Definitions` -- so a report from
-configuration alone is wrong for the deployment that moved something. `Origins.of` does not
-call `resolve_definitions`, which creates derived roots: a report must not bring into being
-what it reports on.
+fallback -- a `Kingfisher` reads only the folder `Config.definitions` names, but
+`inventory` may be handed a `Definitions` of the caller's own -- so a report from
+configuration alone is wrong for the caller that read somewhere else. `Origins.of` does
+not call `resolve_definitions`, which refuses a definitions folder that is not there: a
+report must say where an unseeded deployment would read, not fail on it.
 
 **`sessions` is asked of the sessions in use, never of the setting that built them.**
 `inventory` held only a `Config`, so every surface printed `<workspace>/sessions` whatever
