@@ -227,6 +227,15 @@ def at_the_command_line(cfg, monkeypatch):
     return cfg
 
 
+def supplied(sources, backend, layout):
+    """`sources` planned and placed, as setup does either side of the build."""
+    from kingfisher.core.session.files import place_inputs, planned_inputs
+
+    placement = yield from planned_inputs(sources, backend, layout)
+    yield from place_inputs(placement, backend, layout)
+    return placement
+
+
 def start(cfg, session_id: str) -> str:
     """Create a named session, as a service would before serving a turn.
 

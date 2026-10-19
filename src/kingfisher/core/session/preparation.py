@@ -31,7 +31,7 @@ from kingfisher.core.session.checkpointing import (
     harness_mark,
     resumed_saver,
 )
-from kingfisher.core.session.files import place_inputs
+from kingfisher.core.session.files import place_inputs, planned_inputs
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.model import (
     Conversation,
@@ -165,8 +165,8 @@ class Preparation:
         # Before the inputs are placed: placing them grows the session.
         yield from self._refuse_if_over_budget(session)
 
-        # Before the turn exists, so a missing file fails with nothing placed.
-        placement = yield from place_inputs(
+        # Before the turn exists, so a missing file fails before anything else is asked.
+        placement = yield from planned_inputs(
             getattr(request, "inputs", ()), files, self.cfg.layout
         )
 
@@ -214,14 +214,17 @@ class Preparation:
             history=history,
             earlier=earlier,
         )
-        if superseded:
-            # After the build's refusals and before the graph runs: a refused request must
-            # leave the gate waiting, and a turn must not run with a pause it superseded.
-            try:
+        # After the build's refusals and before the graph runs: a refused request must
+        # leave the session's files and its gate as they were. The inputs first: a caller
+        # can send a file again, and nobody can recreate a pause.
+        try:
+            yield from place_inputs(placement, files, self.cfg.layout)
+            if superseded:
                 yield from clear_pause(harness)
-            except BaseException:
-                release_interpreter(self.cfg, prepared.graph)
-                raise
+        except BaseException:
+            # Built and not yet handed over, so no ending will let go of it.
+            release_interpreter(self.cfg, prepared.graph)
+            raise
         return prepared
 
     def _take_pause(

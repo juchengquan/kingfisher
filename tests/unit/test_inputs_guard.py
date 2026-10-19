@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
-from kingfisher.core.session.files import InputsError, place_inputs
+from kingfisher.core.session.files import InputsError
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import LocalSessionDirs
 from kingfisher.plugins.sessions.permissions import protect_inputs, writable_inputs
-from tests.conftest import start
+from tests.conftest import start, supplied
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
@@ -48,7 +48,7 @@ def test_the_callers_files_land_in_the_folder_this_deployment_named_and_are_fenc
     session = cfg.workspace / "sessions" / "s"
     backend = backend_at(cfg, session)
 
-    drive(place_inputs((source,), backend, cfg.layout))
+    drive(supplied((source,), backend, cfg.layout))
 
     landed = session / MOVED.inputs / "secret.csv"
     assert landed.is_file(), "the caller's file is not in the folder the agent is told"
@@ -78,9 +78,9 @@ def test_resupplying_under_a_renamed_layout_still_says_what_was_replaced(cfg, tm
     start(cfg, "s")
     backend = backend_at(cfg, cfg.workspace / "sessions" / "s")
 
-    first = drive(place_inputs((source,), backend, cfg.layout))
+    first = drive(supplied((source,), backend, cfg.layout))
     source.write_text("second\n", encoding="utf-8")
-    again = drive(place_inputs((source,), backend, cfg.layout))
+    again = drive(supplied((source,), backend, cfg.layout))
 
     assert first.placed == ("given.csv",) and first.replaced == ()
     assert again.replaced == ("given.csv",), "a resupply read as a first supply"
@@ -227,7 +227,7 @@ def test_a_supplied_file_lands_in_the_sessions_inputs(cfg, session_dir, tmp_path
     source = tmp_path / "sales.csv"
     source.write_text("a,b\n1,2\n")
 
-    placement = drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
+    placement = drive(supplied((source,), backend_at(cfg, session_dir), cfg.layout))
 
     assert placement.placed == ("sales.csv",)
     assert (session_dir / "inputs" / "sales.csv").read_text() == "a,b\n1,2\n"
@@ -238,7 +238,7 @@ def test_inputs_are_read_only_again_afterwards(cfg, session_dir, tmp_path):
     source = tmp_path / "sales.csv"
     source.write_text("x")
 
-    drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
+    drive(supplied((source,), backend_at(cfg, session_dir), cfg.layout))
 
     assert not os.access(session_dir / "inputs", os.W_OK)
     with pytest.raises(PermissionError):
@@ -253,7 +253,7 @@ def test_the_folder_an_upload_lands_in_is_the_one_hardened(cfg, session_dir, tmp
     source = tmp_path / "sales.csv"
     source.write_text("x")
 
-    drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
+    drive(supplied((source,), backend_at(cfg, session_dir), cfg.layout))
 
     # Found rather than named: a folder spelled here would agree with whichever side
     # spelled it the same way, and pass against the drift it is meant to catch.
@@ -277,7 +277,7 @@ def test_inputs_are_read_only_again_even_when_a_copy_fails(cfg, session_dir, tmp
     )
 
     with pytest.raises(OSError, match=gone):
-        drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
+        drive(supplied((source,), backend_at(cfg, session_dir), cfg.layout))
 
     monkeypatch.undo()
     assert not os.access(session_dir / "inputs", os.W_OK)
@@ -293,7 +293,7 @@ def test_two_sources_with_one_basename_are_refused(cfg, session_dir, tmp_path):
     second.write_text("two")
 
     with pytest.raises(InputsError, match=r"report\.pdf"):
-        drive(place_inputs((first, second), backend_at(cfg, session_dir), cfg.layout))
+        drive(supplied((first, second), backend_at(cfg, session_dir), cfg.layout))
 
     assert not (session_dir / "inputs" / "report.pdf").exists()
 
@@ -303,7 +303,7 @@ def test_a_missing_source_is_refused_before_anything_is_written(cfg, session_dir
     good.write_text("x")
 
     with pytest.raises(InputsError, match=r"ghost\.csv"):
-        drive(place_inputs(
+        drive(supplied(
             (good, tmp_path / "ghost.csv"), backend_at(cfg, session_dir), cfg.layout
         ))
 
@@ -326,10 +326,10 @@ def test_resupplying_replaces_and_says_so(cfg, session_dir, tmp_path):
     """
     source = tmp_path / "sales.csv"
     source.write_text("first")
-    drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
+    drive(supplied((source,), backend_at(cfg, session_dir), cfg.layout))
 
     source.write_text("second")
-    placement = drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
+    placement = drive(supplied((source,), backend_at(cfg, session_dir), cfg.layout))
 
     assert (session_dir / "inputs" / "sales.csv").read_text() == "second"
     assert placement.replaced == ("sales.csv",)
@@ -339,11 +339,11 @@ def test_nothing_is_replaced_on_a_first_supply(cfg, session_dir, tmp_path):
     source = tmp_path / "new.csv"
     source.write_text("x")
 
-    assert drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout)).replaced == ()
+    assert drive(supplied((source,), backend_at(cfg, session_dir), cfg.layout)).replaced == ()
 
 
 def test_supplying_nothing_touches_nothing(cfg, session_dir):
-    placement = drive(place_inputs((), backend_at(cfg, session_dir), cfg.layout))
+    placement = drive(supplied((), backend_at(cfg, session_dir), cfg.layout))
 
     assert placement.placed == ()
     assert placement.replaced == ()
@@ -358,7 +358,7 @@ def test_a_session_that_was_given_inputs_can_still_be_removed(cfg, session_dir, 
     """
     source = tmp_path / "orders.csv"
     source.write_text("a,b\n1,2\n")
-    drive(place_inputs((source,), backend_at(cfg, session_dir), cfg.layout))
+    drive(supplied((source,), backend_at(cfg, session_dir), cfg.layout))
     assert not os.access(session_dir / "inputs", os.W_OK), "not hardened; test proves nothing"
 
     failure = LocalSessionDirs().remove_tree(session_dir)

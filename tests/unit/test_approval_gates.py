@@ -657,6 +657,88 @@ def test_a_supersede_that_cannot_drop_the_pause_lets_go_of_the_built_turn(cfg, m
     assert kf.run(Request("again", session_id=paused.session_id)).stop_reason == END_TURN
 
 
+def test_a_refused_request_leaves_the_inputs_it_would_replace(cfg, tmp_path):
+    """Setup copied a request's files into the session before the build's refusals had run,
+    so a refused request overwrote the caller's earlier file and ran no turn.
+    """
+    kf = Kingfisher(cfg, graph=_gated(calls=[], after="ok"), sessions=LocalSessions())
+    report = tmp_path / "report.txt"
+    report.write_text("first", encoding="utf-8")
+    first = kf.run(Request("read it", inputs=(report,)))
+    report.write_text("second", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="pre-built graph"):
+        kf.run(
+            Request(
+                "again",
+                session_id=first.session_id,
+                inputs=(report,),
+                capabilities=Capabilities(tools=()),
+            )
+        )
+
+    placed = _session_dir(cfg, first.session_id) / "inputs" / "report.txt"
+    assert placed.read_text(encoding="utf-8") == "first"
+
+
+def test_a_turn_that_runs_still_places_its_inputs_and_says_what_it_replaced(cfg, tmp_path):
+    """The control for the rule above: placed after the build, a re-supplied file still
+    lands before the graph runs and is still reported as replaced.
+    """
+    kf = Kingfisher(cfg, graph=_gated(calls=[], after="ok"), sessions=LocalSessions())
+    report = tmp_path / "report.txt"
+    report.write_text("first", encoding="utf-8")
+    first = kf.run(Request("read it", inputs=(report,)))
+    report.write_text("second", encoding="utf-8")
+
+    events = list(kf.stream(Request("again", session_id=first.session_id, inputs=(report,))))
+
+    (placed,) = [event for event in events if event.kind == "inputs_placed"]
+    assert placed.text == "report.txt (1 replaced)"
+    inputs = _session_dir(cfg, first.session_id) / "inputs" / "report.txt"
+    assert inputs.read_text(encoding="utf-8") == "second"
+
+
+def test_a_supersede_whose_inputs_cannot_be_placed_leaves_the_pause_waiting(
+    cfg, session_dir, tmp_path, monkeypatch
+):
+    """The upload runs after the build and before the pause is dropped: a backend refusing
+    it must let go of the built graph and leave the gate to be answered, since a caller can
+    send a file again and nobody can recreate a pause.
+    """
+    from kingfisher.core.session import preparation
+
+    kf = Kingfisher(
+        cfg,
+        graph=_gated_on_disk(cfg, session_dir, calls=[_write("/outputs/a.txt", "kept", "c1")]),
+        sessions=LocalSessions(),
+    )
+    paused = kf.run(Request("write it", session_id=session_dir.name))
+    report = tmp_path / "report.txt"
+    report.write_text("x", encoding="utf-8")
+    released: list[Any] = []
+
+    def failing(*_):
+        msg = "the session's backend refused the inputs"
+        raise OSError(msg)
+        yield
+
+    monkeypatch.setattr(preparation, "place_inputs", failing)
+    monkeypatch.setattr(preparation, "release_interpreter", lambda _, graph: released.append(graph))
+    with pytest.raises(OSError, match="refused the inputs"):
+        kf.run(Request("never mind", session_id=paused.session_id, inputs=(report,)))
+    monkeypatch.undo()
+
+    assert len(released) == 1, "the turn's graph was built and never let go of"
+    answered = kf.run(
+        Resume(
+            session_id=paused.session_id,
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        )
+    )
+    assert answered.stop_reason == END_TURN
+
+
 def test_superseding_is_silent_where_there_was_no_pause(cfg):
     """Every ordinary turn takes this path, so a false positive would be on all of them."""
     kf = Kingfisher(cfg, graph=_gated(calls=[], after="ok"), sessions=LocalSessions())
