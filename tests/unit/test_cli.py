@@ -444,6 +444,41 @@ def test_run_refuses_an_unknown_shell_sandbox_before_it_opens_a_session(
     assert not cfg.sessions_root.exists() or not any(cfg.sessions_root.iterdir())
 
 
+def _refused(how: str, folder: Path) -> list[str]:
+    """`run`'s arguments for a request the library turns down after opening its session."""
+    if how == "no such agent":
+        return ["--agent", "nobody"]
+    for name in ("a", "b"):
+        (folder / name).mkdir()
+        (folder / name / "same.csv").write_text(name)
+    return ["--agent", "only", "--input", str(folder / "a" / "same.csv"),
+            "--input", str(folder / "b" / "same.csv")]
+
+
+@pytest.mark.parametrize("how", ["no such agent", "inputs under one name"])
+def test_a_refused_run_leaves_no_session_behind(cfg, at_the_command_line, tmp_path, how):
+    """`run` with no `--session`, refused, left an empty `default` behind: the session was
+    made when it was opened, before the refusals that read it."""
+    an_agent(cfg)
+
+    assert main(["run", "t", *_refused(how, tmp_path)]) == 2
+
+    assert not cfg.sessions_root.exists() or not any(cfg.sessions_root.iterdir())
+
+
+@pytest.mark.parametrize("how", ["no such agent", "inputs under one name"])
+def test_a_refused_run_keeps_a_session_that_was_there(cfg, at_the_command_line, tmp_path, how):
+    """The control beside the escape: a session there before the refused request, empty
+    as one just made, is not this request's to take back."""
+    an_agent(cfg)
+    start(cfg, "default")
+
+    assert main(["run", "t", *_refused(how, tmp_path)]) == 2
+
+    assert sorted(p.name for p in cfg.sessions_root.iterdir()) == ["default"]
+    assert (cfg.sessions_root / "default" / "memory").is_dir()
+
+
 def test_a_warning_of_kingfishers_own_is_one_plain_line(cfg, session_dir, monkeypatch, capsys):
     """The unconfined-shell warning reached `run` in Python's default shape: a path into
     the package, a line number and the `warnings.warn` source line, around the one
