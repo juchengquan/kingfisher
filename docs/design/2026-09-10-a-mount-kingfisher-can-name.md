@@ -193,7 +193,7 @@ than no setting"*.
 
 **The sequence lives in `Kingfisher.__init__`, gated on the setting.** Call the
 factories, probe every mount with something that *raises*, then drop the
-bounding capability. Same home as `store_named` for the same reason -- *"a
+bounding capability. Same home as `built_from_setting` for the same reason -- *"a
 setting resolved inside `Kingfisher.__init__` is inherited by every entry point
 at once"* -- and gated so that a deployment which has not asked for mounts never
 has a capability touched by importing a library.
