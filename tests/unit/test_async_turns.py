@@ -15,7 +15,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
-from kingfisher.core.session import runtime
+from kingfisher.core.session import running, runtime
 from kingfisher.core.session.model import SessionBusyError
 from kingfisher.plugins import LocalSessions
 from tests.conftest import start
@@ -655,6 +655,100 @@ def test_the_turns_ending_runs_to_the_end_however_often_it_is_cancelled(cfg, mon
         assert reached == len(made), f"cancelled at {step!r}, the ending stopped at {reached}"
         assert not _claim(cfg, session).exists(), f"cancelled at {step!r}, the claim stayed"
         assert kf.run(asked).completed, f"cancelled at {step!r}, the session was left unusable"
+
+
+#: Both ways a turn is driven: `_ending_steps` is one sequence, run inline by `stream`
+#: and as a task by `astream`, and a cleanup either one skipped is the bug.
+DRIVES = ["stream", "astream"]
+
+
+def _drive(kf, request, how):
+    return kf.run(request) if how == "stream" else asyncio.run(kf.arun(request))
+
+
+def _released(monkeypatch) -> list[object]:
+    """Each graph whose interpreter the ending let go of."""
+    released: list[object] = []
+    monkeypatch.setattr(running, "release_interpreter", lambda _cfg, graph: released.append(graph))
+    return released
+
+
+@pytest.mark.parametrize("how", DRIVES)
+def test_a_healthy_ending_lets_go_of_the_claim_and_the_interpreter(cfg, monkeypatch, how):
+    """The control for the failing endings: with nothing failing, both are let go of."""
+    released = _released(monkeypatch)
+    session = start(cfg, "s")
+
+    _drive(service(cfg), Request("go", session_id=session), how)
+
+    assert released
+    assert not _claim(cfg, session).exists()
+
+
+@pytest.mark.parametrize("how", DRIVES)
+def test_an_ending_whose_record_fails_still_lets_go_of_the_interpreter(cfg, monkeypatch, how):
+    """`release_interpreter` ran after the `try` whose `finally` released the claim, so a
+    backend refusing the transcript left the QuickJS runtime open, which hangs the
+    process at exit.
+    """
+    released = _released(monkeypatch)
+
+    def refused(self, prepared, snapshot):
+        yield from ()
+        msg = "the backend refused the write"
+        raise OSError(msg)
+
+    monkeypatch.setattr(running.Running, "_keep", refused)
+    session = start(cfg, "s")
+
+    with pytest.raises(OSError, match="refused the write"):
+        _drive(service(cfg), Request("go", session_id=session), how)
+
+    assert released, "the interpreter outlived an ending that failed to record"
+    assert not _claim(cfg, session).exists()
+
+
+@pytest.mark.parametrize("how", DRIVES)
+def test_an_ending_whose_state_read_fails_still_lets_go_of_the_session(cfg, monkeypatch, how):
+    """The graph's final state was read before the `try` that releases the claim, so a
+    `get_state` that raised left the session claimed until the claim went stale.
+    """
+    released = _released(monkeypatch)
+
+    def unreadable(self, prepared):
+        msg = "the saver could not be read"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(running.Running, "_settled", unreadable)
+    session = start(cfg, "s")
+
+    with pytest.raises(RuntimeError, match="could not be read"):
+        _drive(service(cfg), Request("go", session_id=session), how)
+
+    assert not _claim(cfg, session).exists(), "the claim outlived a failed state read"
+    assert released
+
+
+@pytest.mark.parametrize("how", DRIVES)
+def test_an_ending_whose_claim_release_fails_still_lets_go_of_the_interpreter(
+    cfg, monkeypatch, how
+):
+    """The two releases were one after the other, so a store unreachable for the claim
+    skipped the interpreter as well.
+    """
+    released = _released(monkeypatch)
+
+    def unreachable(self, cfg, session_id, /):
+        msg = "the store is unreachable"
+        raise OSError(msg)
+
+    monkeypatch.setattr(LocalSessions, "release", unreachable)
+    session = start(cfg, "s")
+
+    with pytest.raises(OSError, match="unreachable"):
+        _drive(service(cfg), Request("go", session_id=session), how)
+
+    assert released, "the interpreter outlived a claim that could not be released"
 
 
 def test_the_callers_context_reaches_the_turn(cfg):
