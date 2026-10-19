@@ -176,7 +176,7 @@ class SessionMethods:
         if held is None:
             return True, []
         files = yield from self._files_for(session_id)
-        reached = yield from self._reaches_session(HarnessFiles(files, session_id), held)
+        reached = yield from self._reaches_session(HarnessFiles(files), held)
         return reached, [files]
 
     def _files_in(self, session_id: str, opened: list[Any]) -> Steps[Any]:
@@ -189,7 +189,7 @@ class SessionMethods:
 
     def _pending_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[Any, ...]]:
         files = yield from self._files_in(session_id, opened)
-        mark = yield from read_pause_mark(HarnessFiles(files, session_id))
+        mark = yield from read_pause_mark(HarnessFiles(files))
         return pending_from_mark(mark or {})
 
     def _artifact_in(self, session_id: str, name: str, opened: list[Any]) -> Steps[bytes]:

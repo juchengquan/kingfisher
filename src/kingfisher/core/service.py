@@ -41,6 +41,7 @@ from kingfisher.core.definitions.seeding import SEED_HINT, starter_agent
 from kingfisher.core.session.disposal import Disposal
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.methods import SessionMethods
+from kingfisher.core.session.model import opened_for
 from kingfisher.core.session.preparation import Preparation
 from kingfisher.core.session.runlog import LoggedRunEvents
 from kingfisher.core.session.running import Running
@@ -249,6 +250,9 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # Here as well as at the build: a pre-built graph has none, and setup reads the
         # session through this backend before any build.
         refuse_unusable_backend(files, self.cfg.layout)
+        # Every backend kingfisher opens comes through here, so a turn handed one as
+        # `files=` can tell whose it is.
+        opened_for(files, session_id)
         return files
 
     def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> Steps[None]:

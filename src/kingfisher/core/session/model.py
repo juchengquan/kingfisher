@@ -4,8 +4,11 @@ name one, and where kingfisher's own sessions keep their folders."""
 from __future__ import annotations
 
 from collections.abc import Sequence
+from contextlib import suppress
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
+from weakref import WeakKeyDictionary
 
 
 class UnknownSessionError(ValueError):
@@ -41,6 +44,37 @@ def unknown_session(session_id: str) -> UnknownSessionError:
     touch. One wording for both, so that holding a real id teaches nothing.
     """
     return UnknownSessionError(f"no session {session_id!r}")
+
+
+#: Which session each backend kingfisher opened is the one of. Weak, so a backend the
+#: caller drops is not kept open by having been asked about.
+_OPENED_FOR: WeakKeyDictionary[Any, str] = WeakKeyDictionary()
+
+
+def opened_for(files: Any, session_id: str) -> None:
+    """Record that `files` is `session_id`'s backend, for `refuse_files_of_another`."""
+    # A backend that cannot be weakly keyed goes unrecorded, and is taken at the
+    # caller's word as every backend was: refusing it would refuse every `files=`.
+    with suppress(TypeError):
+        _OPENED_FOR[files] = session_id
+
+
+def refuse_files_of_another(files: Any, session_id: str) -> None:
+    """Refuse a turn in `session_id` handed the backend kingfisher opened for another.
+
+    Run on, it writes this session's conversation into that one and claims this one,
+    leaving the other free for a second turn.
+    """
+    try:
+        owner = _OPENED_FOR.get(files)
+    except TypeError:
+        return
+    if owner is not None and owner != session_id:
+        msg = (
+            f"files= was opened for session {owner!r}, and this request runs in "
+            f"{session_id!r}; open the files of the session the request names"
+        )
+        raise UnknownSessionError(msg)
 
 
 def known(entries: Sequence[tuple[str, float]]) -> tuple[tuple[str, float], ...]:
