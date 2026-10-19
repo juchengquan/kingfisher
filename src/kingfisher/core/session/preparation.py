@@ -174,7 +174,9 @@ class Preparation:
         allowed = granted.intersect(request.capabilities)
         held = self._held_for(source_ids)
         # Before the build: a resume runs on a saver that already holds the pause.
-        paused, resume, discarded = yield from self._take_pause(request, session, harness)
+        paused, resume, discarded, superseded = yield from self._take_pause(
+            request, session, harness
+        )
         # Not resolved for a supplied graph with no policy: that would refuse a
         # request naming another agent.
         agent = (
@@ -195,44 +197,49 @@ class Preparation:
         history = yield from read_transcript(harness)
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
         earlier = (yield from read_ledger(harness)) if self._graph is None else None
-        return (
-            yield on_host(
-                self._built_turn,
-                request,
-                session,
-                files=files,
-                harness=harness,
-                allowed=allowed,
-                held=held,
-                agent=agent,
-                paused=paused,
-                resume=resume,
-                discarded=discarded,
-                unprotected=unprotected,
-                placement=placement,
-                history=history,
-                earlier=earlier,
-            )
+        prepared = yield on_host(
+            self._built_turn,
+            request,
+            session,
+            files=files,
+            harness=harness,
+            allowed=allowed,
+            held=held,
+            agent=agent,
+            paused=paused,
+            resume=resume,
+            discarded=discarded,
+            unprotected=unprotected,
+            placement=placement,
+            history=history,
+            earlier=earlier,
         )
+        if superseded:
+            # After the build's refusals and before the graph runs: a refused request must
+            # leave the gate waiting, and a turn must not run with a pause it superseded.
+            try:
+                yield from clear_pause(harness)
+            except BaseException:
+                release_interpreter(self.cfg, prepared.graph)
+                raise
+        return prepared
 
     def _take_pause(
         self, request: Request | Resume, session: Conversation, harness: HarnessFiles
-    ) -> Steps[tuple[bytes | None, dict[str, Any] | None, tuple[str, ...]]]:
+    ) -> Steps[tuple[bytes | None, dict[str, Any] | None, tuple[str, ...], bool]]:
         """Whatever an earlier turn left waiting: the state and answers a resume restores,
-        or the tools a new request superseded.
+        or the tools a new request supersedes and whether there is a pause to drop.
 
-        Both before the graph exists: an answer needs the saver holding its state, and a
-        supersede needs that state gone before a turn runs on it.
+        Before the graph exists: an answer needs the saver holding its state. A supersede
+        is dropped by the caller, once the build has had its chance to refuse.
         """
         held = yield from read_pause_mark(harness)
         if not isinstance(request, Resume):
             if held is None:
-                return None, None, ()
+                return None, None, (), False
             # Superseded: `PatchToolCallsMiddleware` tells the model the unanswered call
             # was cancelled, and the caller is told by `decision_discarded`.
-            waiting = tuple(item.tool for item in pending_from_mark(held))
-            yield from clear_pause(harness)
-            return None, None, waiting
+            return None, None, tuple(item.tool for item in pending_from_mark(held)), True
         if held is None:
             msg = f"session {session.id} is not waiting on a decision"
             raise DecisionError(msg)
@@ -243,7 +250,7 @@ class Preparation:
             raise DecisionError(msg)
         # The ids read back, not re-derived: they are the ones the caller was handed, and
         # re-deriving would need the graph, which does not exist yet.
-        return state, runtime.resume_payload(request.decisions, pending_from_mark(held)), ()
+        return state, runtime.resume_payload(request.decisions, pending_from_mark(held)), (), False
 
     def _refuse_stale_pause(
         self, session: Conversation, held: Mapping[str, str], request: Resume

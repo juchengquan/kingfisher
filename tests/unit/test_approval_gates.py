@@ -18,6 +18,7 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.layout import HARNESS, PAUSED_MARK, PAUSED_STATE
 from kingfisher.core.request import Decision, DecisionError, Request, Resume
 from kingfisher.core.result import AWAITING, DECISIONS, END_TURN
@@ -601,6 +602,59 @@ def test_a_new_request_supersedes_the_pause_and_says_so(cfg):
     assert superseded.discarded == ("write_file",)
     assert not (_session_dir(cfg, paused.session_id) / PAUSED).exists()
     assert not (_session_dir(cfg, paused.session_id) / "outputs" / "a.txt").exists()
+
+
+def test_a_refused_request_leaves_the_pause_it_would_supersede(cfg, session_dir):
+    """Setup dropped the pause before the build's refusals had run, so a request refused
+    there destroyed a waiting gate with no turn to report `decision_discarded`.
+    """
+    kf = Kingfisher(
+        cfg,
+        graph=_gated_on_disk(cfg, session_dir, calls=[_write("/outputs/a.txt", "kept", "c1")]),
+        sessions=LocalSessions(),
+    )
+    paused = kf.run(Request("write it", session_id=session_dir.name))
+
+    with pytest.raises(ValueError, match="pre-built graph"):
+        kf.run(
+            Request("never mind", session_id=paused.session_id, capabilities=Capabilities(tools=()))
+        )
+
+    answered = kf.run(
+        Resume(
+            session_id=paused.session_id,
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        )
+    )
+    assert answered.stop_reason == END_TURN
+    assert (_session_dir(cfg, paused.session_id) / "outputs" / "a.txt").read_text() == "kept"
+
+
+def test_a_supersede_that_cannot_drop_the_pause_lets_go_of_the_built_turn(cfg, monkeypatch):
+    """The drop runs after the build, so a backend failing it holds a graph no ending will
+    release: its interpreter, and the session's claim, must be let go of there.
+    """
+    from kingfisher.core.session import preparation
+
+    kf = Kingfisher(
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
+    )
+    paused = kf.run(Request("write it"))
+    released: list[Any] = []
+
+    def failing(harness):
+        msg = "the session's backend kept the pause"
+        raise OSError(msg)
+        yield
+
+    monkeypatch.setattr(preparation, "clear_pause", failing)
+    monkeypatch.setattr(preparation, "release_interpreter", lambda _, graph: released.append(graph))
+    with pytest.raises(OSError, match="kept the pause"):
+        kf.run(Request("never mind", session_id=paused.session_id))
+    monkeypatch.undo()
+
+    assert len(released) == 1, "the turn's graph was built and never let go of"
+    assert kf.run(Request("again", session_id=paused.session_id)).stop_reason == END_TURN
 
 
 def test_superseding_is_silent_where_there_was_no_pause(cfg):
