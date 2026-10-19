@@ -272,6 +272,10 @@ class FilesystemMiddleware(AgentMiddleware):
     """A deployment's own middleware, named like deepagents' scaffolding."""
 
 
+class SubAgentMiddleware(AgentMiddleware):
+    """The other one deepagents refuses to run without, named the same way."""
+
+
 class _Summarization(AgentMiddleware):
     """deepagents' own, but not one it refuses to run without."""
 
@@ -340,10 +344,17 @@ def test_the_warning_names_both_of_the_deployments_two_names():
     assert "rename the class" in message
 
 
-def test_replacing_one_deepagents_needs_says_so_more_loudly():
-    """Two sentences, because the two cases are not the same size."""
+@pytest.mark.parametrize(
+    ("replacement", "its_job", "the_others"),
+    [
+        (FilesystemMiddleware, "permissions", "`task`"),
+        (SubAgentMiddleware, "`task`", "permissions"),
+    ],
+)
+def test_replacing_one_deepagents_needs_says_so_more_loudly(replacement, its_job, the_others):
+    """One job sentence served both, telling a SubAgentMiddleware it backed the file tools."""
     with pytest.warns(UserWarning) as recorded:
-        declared_middleware(_named(("audit",)), {"audit": FilesystemMiddleware}, ALL, kind="agent")
+        declared_middleware(_named(("audit",)), {"audit": replacement}, ALL, kind="agent")
     required = _replacement_warnings(recorded)[0]
 
     with pytest.warns(UserWarning) as recorded:
@@ -353,7 +364,8 @@ def test_replacing_one_deepagents_needs_says_so_more_loudly():
     ordinary = _replacement_warnings(recorded)[0]
 
     assert "refuses to run without" in required
-    assert "permissions" in required
+    assert its_job in required
+    assert the_others not in required, "the other required middleware's job"
     assert "refuses to run without" not in ordinary
     assert "deepagents merges by name" in ordinary, "still said, just not as loudly"
 

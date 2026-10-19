@@ -1863,9 +1863,6 @@ WITNESSES: dict[str, dict[str, str]] = {
         "config_from_env": "document",
         "Request": "document",
         "Capabilities": "document",
-        # `ports.md` tells an adapter to raise this one, imported from `kingfisher`,
-        # because a caller tells a bad session id from a broken store by the class.
-        "UnsafeReferenceError": "document",
         # What those documented calls take and hand back -- `Kingfisher` takes a
         # `Config`, `run` returns a `RunResult`, `stream` yields `RunEvent`s. The
         # type of a documented call's answer cannot be private.
@@ -1979,15 +1976,15 @@ WITNESSES: dict[str, dict[str, str]] = {
         "Layout": "document",
         "DEFAULT_LAYOUT": "document",
         # The shipped pair behind two of the interfaces above, public so a deployment
-        # can wrap one rather than reimplement it. `upgrading.md` records the move:
-        # they were "not public anywhere" before this door existed.
-        "JsonlRunEvents": "document",
-        "InstructionsFile": "document",
-        # What `KINGFISHER_WIRE_FORMATS` returns, and the shipped two a factory adding a
-        # third starts from. `configuration.md` writes the setting and the factory out,
-        # importing `WireFormat` from this door.
+        # can wrap one rather than reimplement it. No page writes either name out.
+        "JsonlRunEvents": "embedder",
+        "InstructionsFile": "embedder",
+        # What `KINGFISHER_WIRE_FORMATS` returns. `configuration.md` writes the setting
+        # and the factory out, importing `WireFormat` from this door.
         "WireFormat": "document",
-        "WIRE_FORMATS": "document",
+        # The shipped two, public so a factory adding a third can extend them rather
+        # than reimplement them; no page writes the name out.
+        "WIRE_FORMATS": "embedder",
         # What `KINGFISHER_PLUGINS` returns, which `configuration.md` tells a deployment
         # to build in a module of its own.
         "Plugins": "document",
@@ -3001,6 +2998,8 @@ def test_only_the_record_says_what_a_skipped_definition_needs():
 
     searched = [
         *SRC.rglob("*.py"),
+        # The snippet most people copy, and it once dropped a file's datazone.
+        repo / "README.md",
         repo / "tests" / "integration" / "driver.py",
         repo / "tests" / "integration" / "seed_example.py",
         *(repo / "evals").glob("*.py"),
@@ -3312,13 +3311,12 @@ def test_every_record_this_package_hands_out_is_frozen():
 CALLER_FACING_ERRORS = frozenset({
     "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
     "SessionBusyError", "SubagentError", "UnknownSessionError",
-    "UnsafeReferenceError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.
-#: `HostPathError` is the backend refusing a host path the *agent* produced
-#: mid-turn, so it is not a request-time fault at all. Being here does not mean
-#: private -- `ConfigError` was public long before this rule existed -- it
+#: `HostPathError` and `UnsafeReferenceError` refuse a path the *agent* produced
+#: mid-turn, and reach the model as a correction, never a caller. Being here does
+#: not mean private -- `ConfigError` was public long before this rule existed -- it
 #: means a consumer is not expected to branch on it.
 DEPLOYMENT_ERRORS = frozenset({
     # `MiddlewareError` joins `ToolError` here for the reason `AgentError` sits here
@@ -3326,7 +3324,7 @@ DEPLOYMENT_ERRORS = frozenset({
     # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
     "AccessError", "AgentError", "ConfigError", "HostPathError", "InputsError",
-    "LoadError", "MiddlewareError", "ToolError",
+    "LoadError", "MiddlewareError", "ToolError", "UnsafeReferenceError",
 })
 
 #: Caused by the model's provider, and never raised to a caller: a turn ends on it as a

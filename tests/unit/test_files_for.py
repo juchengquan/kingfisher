@@ -10,7 +10,8 @@ from langchain_core.messages import AIMessage
 from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.core import service as service_module
 from kingfisher.core.interfaces import CommandResult
-from kingfisher.plugins.sessions.backend import LocalSessions
+from kingfisher.core.layout import HARNESS
+from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_dir
 from tests.conftest import EVERY_TOOL, Through, an_agent, start
 from tests.unit.scripted import Scripted
@@ -210,3 +211,84 @@ def test_files_for_a_session_a_turn_made_opens_it(cfg, way):
 
     assert counting.asked == [issued, issued]
     assert files is counting.opened[-1]
+
+
+class Watching(Counting):
+    """`Counting`, recording each session a turn marked or claimed."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.touched: list[tuple[str, str]] = []
+
+    def mark_used(self, cfg, session_id):
+        self.touched.append(("mark_used", session_id))
+        return super().mark_used(cfg, session_id)
+
+    def claim(self, cfg, session_id, /, **kwargs):
+        self.touched.append(("claim", session_id))
+        return super().claim(cfg, session_id, **kwargs)
+
+
+@pytest.mark.parametrize("door", DOORS)
+def test_files_opened_for_one_session_are_refused_by_a_turn_in_another(cfg, door, way):
+    """Catches `files=` from session a run as session b: the turn wrote b's transcript
+    into a, claimed b and left a unclaimed for a second turn to run on concurrently.
+    """
+    watching = Watching()
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=watching)
+    start(cfg, "b")
+    files = Through(kf, way).files("a")
+
+    with pytest.raises(UnknownSessionError, match="opened for session 'a'"):
+        _turn(kf, door, Request("go", session_id="b"), files=files)
+
+    assert watching.touched == [], "the session was marked or claimed before the refusal"
+    for name in ("a", "b"):
+        harness = session_dir(cfg.sessions_root, name) / HARNESS
+        assert not harness.exists() or not any(harness.iterdir()), f"{name} was written to"
+
+
+@pytest.mark.parametrize("door", DOORS)
+def test_files_for_another_session_make_no_session_of_the_one_named(cfg, door):
+    """Catches a turn in a session never made, handed another's files, failing at the
+    claim with a raw `NotADirectoryError` rather than refusing the files.
+    """
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+    files = kf.session("a", create=True).files()
+
+    with pytest.raises(UnknownSessionError, match="opened for session 'a'"):
+        _turn(kf, door, Request("go", session_id="b"), files=files)
+
+    assert [s.id for s in kf.sessions()] == ["a"]
+
+
+class Unkeyed(Counting):
+    """`Counting`, opening backends that cannot be hashed, as a dataclass's with `eq` is."""
+
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        files = super().open(cfg, session_id, catalogue=catalogue)
+        files.__class__ = type("Unkeyed", (type(files),), {"__hash__": None})
+        return files
+
+
+@pytest.mark.parametrize("door", DOORS)
+def test_files_that_cannot_record_their_session_still_serve_it(cfg, door, way):
+    """Catches recording whose files these are refusing every backend that cannot be
+    weakly keyed, at `files()` and again at the turn.
+    """
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=Unkeyed())
+    files = Through(kf, way).files("s")
+
+    assert _turn(kf, door, Request("go", session_id="s"), files=files).completed
+
+
+@pytest.mark.parametrize("door", DOORS)
+def test_a_backend_kingfisher_did_not_open_is_taken_at_the_callers_word(cfg, door):
+    """The control beside the refusal: a backend with no session recorded on it, built
+    by the caller rather than opened by kingfisher, still runs the turn it is handed to.
+    """
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+    start(cfg, "s")
+    files = backend_at(cfg, session_dir(cfg.sessions_root, "s"))
+
+    assert _turn(kf, door, Request("go", session_id="s"), files=files).completed

@@ -549,12 +549,40 @@ def test_the_agent_is_required_because_there_is_no_honest_default(cfg, monkeypat
     assert exit_code.value.code == 2
 
 
-def test_a_file_that_is_not_there_is_refused_before_the_model(cfg, monkeypatch, capsys):
-    """The one mistake that would otherwise cost money to discover."""
-    _ran(monkeypatch, [_finished()], cfg)
+def test_every_file_that_is_not_there_is_named_at_once(cfg, at_the_command_line, capsys):
+    """The library refuses a missing input too, but names only the first, so a caller
+    with two typos would find the second on the next run. Against the real library: a
+    stub refuses nothing, so a run without the check would fail here for another reason."""
+    agent = an_agent(cfg)
 
-    assert main(["run", "t", "--agent", "a", "--input", "/nope/missing.csv"]) == 2
-    assert "no such file" in capsys.readouterr().err
+    code = main([
+        "run", "t", "--agent", agent, "--input", "/nope/one.csv", "--input", "/nope/two.csv"
+    ])
+
+    assert code == 2
+    assert "no such file: /nope/one.csv, /nope/two.csv" in capsys.readouterr().err
+
+
+def test_two_inputs_under_one_name_are_refused_through_the_command(
+    cfg, at_the_command_line, tmp_path, capsys
+):
+    """`InputsError` was in no `except`, so `--input a/same.csv --input b/same.csv` gave a
+    traceback and exit 1, the code the help gives a turn that ran and stopped at a bound."""
+    agent = an_agent(cfg)
+    for folder in ("a", "b"):
+        (tmp_path / folder).mkdir()
+        (tmp_path / folder / "same.csv").write_text(folder)
+
+    code = main([
+        "run", "hi", "--agent", agent,
+        "--input", str(tmp_path / "a" / "same.csv"),
+        "--input", str(tmp_path / "b" / "same.csv"),
+    ])
+
+    said = capsys.readouterr().err
+    assert code == 2
+    assert "InputsError: same.csv: supplied twice" in said
+    assert "Traceback" not in said, "the refusal reached the terminal as a traceback"
 
 
 def test_who_is_calling_reaches_the_library(cfg, monkeypatch):

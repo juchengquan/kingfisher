@@ -8,7 +8,7 @@ import pytest
 
 from kingfisher.core import environment as config_module
 from kingfisher.core.access.source_ids import AccessError
-from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, ConfigError
+from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, Config, ConfigError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.environment import Environment, config_from_env
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
@@ -174,6 +174,33 @@ def test_the_thread_pool_size_is_read_from_its_setting(env):
     """Read but not passed on, every service would run on the default and say nothing."""
     assert config_from_env(env).thread_pool_size == DEFAULT_THREAD_POOL_SIZE
     assert config_from_env({**env, "KINGFISHER_THREAD_POOL_SIZE": "8"}).thread_pool_size == 8
+
+
+LIMITS = {
+    "execution_timeout_s": "KINGFISHER_EXECUTION_TIMEOUT_S",
+    "turn_timeout_s": "KINGFISHER_TURN_TIMEOUT_S",
+    "session_max_bytes": "KINGFISHER_SESSION_MAX_BYTES",
+    "session_ttl_s": "KINGFISHER_SESSION_TTL_S",
+    "recursion_limit": "KINGFISHER_RECURSION_LIMIT",
+    "thread_pool_size": "KINGFISHER_THREAD_POOL_SIZE",
+}
+
+
+def test_an_unset_limit_is_the_one_a_library_caller_gets(env):
+    """A default written again in the reader would let the command and an embedded
+    `Config` run on different limits with the suite green.
+    """
+    defaults = {f.name: f.default for f in fields(Config) if f.name in LIMITS}
+    built = config_from_env(env)
+
+    assert set(defaults) == set(LIMITS)
+    assert {name: getattr(built, name) for name in LIMITS} == defaults
+
+
+@pytest.mark.parametrize(("name", "key"), sorted(LIMITS.items()))
+def test_a_limit_that_is_set_is_passed_on(env, name, key):
+    """The control beside the defaults: a reader that ignored the setting passes that."""
+    assert getattr(config_from_env({**env, key: "7"}), name) == 7
 
 
 def test_the_keys_file_resolves_like_the_other_path_settings(env, tmp_path, monkeypatch):
@@ -561,7 +588,7 @@ def test_a_reader_answers_from_the_mapping_it_was_given(monkeypatch):
     monkeypatch.setenv("KINGFISHER_RECURSION_LIMIT", "9999")
     reading = Environment({"KINGFISHER_RECURSION_LIMIT": "7"})
 
-    assert reading.number("KINGFISHER_RECURSION_LIMIT", 150) == 7
+    assert reading.optional_number("KINGFISHER_RECURSION_LIMIT") == 7
 
 
 def test_one_path_reading_now_rather_than_two(tmp_path):
