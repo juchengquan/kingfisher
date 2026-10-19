@@ -279,7 +279,8 @@ system_prompt: |
 
 def _subagent_prompt(cfg, instructions: str = ""):
     spec = a_subagent(SUBAGENT, "reviewer.yaml")
-    return as_subagent(spec, cfg, instructions=instructions)["system_prompt"]
+    runs = FakeToolCallingModel(responses=[])
+    return as_subagent(spec, cfg, runs=runs, instructions=instructions)["system_prompt"]
 
 
 def test_a_subagent_is_given_the_deployments_instructions(cfg):

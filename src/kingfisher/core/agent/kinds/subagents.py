@@ -20,7 +20,7 @@ from kingfisher.core.access.capabilities import (
     refuse_unoffered,
 )
 from kingfisher.core.agent.middlewares.standing import standing_middleware
-from kingfisher.core.agent.models import build_model, model_named
+from kingfisher.core.agent.models import build_model, model_named, summarizer_trigger
 from kingfisher.core.agent.prompting import behind_instructions
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.agent.tool_guards import guarded_tools
@@ -208,6 +208,9 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     spec: SubagentSpec,
     cfg: Config,
     *,
+    #: What it runs: its own model, else its summoner's, which deepagents hands a spec
+    #: naming none. Its summariser sizes the PDFs this subagent's turn may hold open.
+    runs: Any,
     endpoints: Selection = ALL,
     builtin_tools: Selection = ALL,
     tools: Selection = ALL,
@@ -313,6 +316,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
             # The parent's, whose shell is the one this subagent's `execute` runs on.
             backend=backend,
             step_limit=cfg.recursion_limit,
+            trigger=summarizer_trigger(runs),
             recorder=recorder,
             # `None` permits nothing: an empty allowlist, not an absent one.
             tools=None

@@ -39,6 +39,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     layout: Layout,
     backend: Any,
     step_limit: int,
+    trigger: int,
     recorder: RecorderMiddleware | None = None,
     clearing: Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None = None,
     tools: Sequence[str] | None = None,
@@ -55,7 +56,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     offered and `skills` its skills index, each `None` where nothing narrows; `clearing`,
     which builds the result clearing for that grant, and `reachable` are the agent's alone.
     `step_limit` is the turn's, which reaches only the agent's own run, so a subagent is held
-    to it in model calls.
+    to it in model calls. `trigger` is where this graph's own model is summarised, which
+    sizes the PDFs its turn may hold open.
 
     `inner` is what the deployment's settings switch on and what its definitions name, which
     go inside every standing one. Taken here rather than appended by each caller so that the
@@ -108,7 +110,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # arguments before anything after it judges them.
     standing.append(GuardedCallsMiddleware(names, paths))
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.
-    standing.append(AttachmentsMiddleware())
+    standing.append(AttachmentsMiddleware(trigger))
     standing.append(
         BuiltinToolsMiddleware(layout, shell_prompt_of(backend), here=shell_runs_here(backend))
     )

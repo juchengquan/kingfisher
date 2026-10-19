@@ -60,7 +60,7 @@ from kingfisher.core.agent.kinds.tools import (
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware, high_mark
 from kingfisher.core.agent.middlewares.recorder import Audiences, RecorderMiddleware
 from kingfisher.core.agent.middlewares.standing import standing_middleware
-from kingfisher.core.agent.models import build_model, model_named
+from kingfisher.core.agent.models import build_model, model_named, summarizer_trigger
 from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.prompting import memory_guidelines, system_prompt
 from kingfisher.core.agent.session_paths import SessionPaths
@@ -382,6 +382,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         return RecorderMiddleware(ledger, backend, audiences, cfg.layout.tool_results_route)
 
     running, mark = _running(agent, cfg, capabilities.endpoints, model)
+    # The agent's and `general-purpose`'s, which deepagents runs on the agent's model.
+    trigger = summarizer_trigger(running)
     # The agent's alone, and only with a ledger for its handles to name.
     clearing = (
         None
@@ -469,6 +471,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             layout=cfg.layout,
             backend=backend,
             step_limit=cfg.recursion_limit,
+            trigger=trigger,
             recorder=recording(agent),
             clearing=clearing,
             tools=tools,
@@ -605,6 +608,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             return as_subagent(
                 defined[name],
                 cfg,
+                runs=runs,
                 instructions=instructions,
                 backend=backend,
                 endpoints=capabilities.endpoints,
@@ -730,6 +734,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     layout=cfg.layout,
                     backend=backend,
                     step_limit=cfg.recursion_limit,
+                    trigger=trigger,
                     recorder=recording(agent),
                     tools=permitted,
                 )

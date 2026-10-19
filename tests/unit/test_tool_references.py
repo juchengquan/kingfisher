@@ -19,7 +19,7 @@ from kingfisher.core.definitions.tools.spec import (
     split_reference,
     tool_name,
 )
-from tests.conftest import a_subagent, tools_dir
+from tests.conftest import FakeToolCallingModel, a_subagent, tools_dir
 
 TOOL = """from langchain_core.tools import tool
 
@@ -336,7 +336,12 @@ def test_a_subagents_long_form_grant_reaches_the_tools_it_holds(cfg):
     spec = _spec(tools="probe.py::probe")
 
     built = as_subagent(
-        spec, cfg, catalogue=PROBE, tools=("probe",), builtin_tools=("read_file",)
+        spec,
+        cfg,
+        runs=FakeToolCallingModel(responses=[]),
+        catalogue=PROBE,
+        tools=("probe",),
+        builtin_tools=("read_file",),
     )
 
     assert [tool_name(one) for one in built["tools"]] == ["probe"]
@@ -349,7 +354,12 @@ def test_a_subagents_long_form_grant_survives_the_ceiling(cfg):
     spec = _spec(tools="probe.py::probe")
 
     built = as_subagent(
-        spec, cfg, catalogue=PROBE, tools=("probe",), builtin_tools=("read_file",)
+        spec,
+        cfg,
+        runs=FakeToolCallingModel(responses=[]),
+        catalogue=PROBE,
+        tools=("probe",),
+        builtin_tools=("read_file",),
     )
 
     allowlists = [

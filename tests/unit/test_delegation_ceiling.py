@@ -361,7 +361,8 @@ def test_a_subagent_is_narrowed_by_it(cfg):
             a_subagent(HELPER, "helper.md"), tools=selection, builtin_tools=selection
         )
 
-        built = as_subagent(spec, cfg, tools=cap, builtin_tools=cap)
+        runs = FakeToolCallingModel(responses=[])
+        built = as_subagent(spec, cfg, runs=runs, tools=cap, builtin_tools=cap)
 
         allowlists = [
             m for m in built.get("middleware", []) if isinstance(m, GrantedOnlyMiddleware)
