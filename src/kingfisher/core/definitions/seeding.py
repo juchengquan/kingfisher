@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -99,6 +99,8 @@ class Seeded:
     written: tuple[str, ...] = ()
     overwritten: tuple[str, ...] = ()
     skipped: tuple[Skipped, ...] = ()
+    #: The tree it was copied from, which the closing line names.
+    source: Path = field(kw_only=True)
 
     def report(self) -> tuple[str, ...]:
         """Every line a person is owed about this, in the order to print them.
@@ -117,6 +119,20 @@ class Seeded:
         # Last, where it survives skimming: losing an edited copy is what matters most.
         lines += [f"warning: overwrote your edited {name}" for name in self.overwritten]
         return tuple(lines)
+
+    def nothing_seeded(self) -> str | None:
+        """The closing line when nothing was written, else `None`."""
+        if self.written:
+            return None
+        if self.skipped:
+            # No reason restated: each `skipped` line gives its own, and they may differ.
+            # "Holds none of" would send a reader looking elsewhere for files that are
+            # right where they thought.
+            return (
+                f"nothing seeded — every definition in {self.source} was held back; "
+                "each line above says what to do first"
+            )
+        return f"nothing to seed — {self.source} holds none of {', '.join(DEFINITION_KINDS)}"
 
     def _declaration(self) -> tuple[str, ...]:
         """The `source_ids.yaml` to write, or nothing when no source id was missing."""
@@ -284,7 +300,7 @@ def seed(into: Destination, source: Path, *, everything: bool = False) -> Seeded
         raise ConfigError(msg)
     written, overwritten, skipped = _copy(into, source, everything=everything)
 
-    return Seeded(tuple(written), tuple(overwritten), tuple(skipped))
+    return Seeded(tuple(written), tuple(overwritten), tuple(skipped), source=source)
 
 
 def _copy(

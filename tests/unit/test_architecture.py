@@ -2654,7 +2654,8 @@ def test_only_the_record_says_what_a_skipped_definition_needs():
     opposite: middleware is registered in code, a source id is declared in a file.
     The command said so; the integration driver and the example script each wrote
     their own line saying "register those" for both. Nothing bound the three, and the
-    one people copy was one of the wrong ones.
+    one people copy was one of the wrong ones. The closing line too: the command's read
+    the first skipped definition's reason as every one's.
     """
     repo = REPO
     owner = KINDS_DIR / "seeding.py"
@@ -2668,13 +2669,17 @@ def test_only_the_record_says_what_a_skipped_definition_needs():
     offenders = [
         path.relative_to(repo)
         for path in searched
-        if path != owner and 'f"skipped ' in path.read_text(encoding="utf-8")
+        if path != owner
+        and any(
+            line in path.read_text(encoding="utf-8")
+            for line in ('f"skipped ', '"nothing seeded', '"nothing to seed ')
+        )
     ]
 
     assert not offenders, (
         f"{offenders} build their own line for a skipped definition; print "
-        "`Seeded.report()`, which knows that a source id is declared rather than "
-        "registered"
+        "`Seeded.report()` and `Seeded.nothing_seeded()`, which know that a source id "
+        "is declared rather than registered"
     )
 
 
