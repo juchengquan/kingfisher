@@ -14,10 +14,10 @@ paths = paths_from_env()
 ensure_definitions(paths.definitions)
 
 done = seed(paths, definitions_source(paths))
-for name in done.written:
-    print(f"seeded {name}")
-for left in done.skipped:
-    print(f"skipped {left.label} — needs {', '.join(left.names)}")
+for line in done.report():
+    print(line)
+if (closing := done.nothing_seeded()) is not None:
+    print(closing)
 ```
 
 A deployment keeps two folders apart. `KINGFISHER_DEFINITIONS_DIR` is what people

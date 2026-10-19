@@ -209,6 +209,15 @@ class Reader:
         key: str,
     ) -> tuple[Selection, Mapping[str, Mapping[str, object]]]:
         """One name-list field whose entries may also carry settings."""
+        if isinstance(value, Mapping):
+            # Before `selection`, whose mapping refusal is about who reaches an entry.
+            first = next(iter(value), "<name>")
+            msg = (
+                f"{self.source}: {key} is a mapping; this field takes a list. An "
+                f"entry with settings is written long -- "
+                f"- {{name: {first}, settings: {{...}}}} -- beside the plain names"
+            )
+            raise self.error(msg)
         if not isinstance(value, (list, tuple)):
             # A bare `"*"`, one name, or nothing: none can carry a setting.
             return self.selection(value, absent=absent, key=key), MappingProxyType({})

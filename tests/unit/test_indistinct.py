@@ -10,7 +10,6 @@ from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import Endpoint, ModelProfile
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn
-from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
 from kingfisher.core.session.steps import drive
 from tests.conftest import EVERY_TOOL, a_subagent, an_agent, start, subagents_dir
@@ -34,13 +33,6 @@ description: Checks figures.
 system_prompt: |
   You check figures.
 """
-
-
-class _NoPlacement:
-    """`opening_events` reads two attributes off a placement and nothing else."""
-
-    placed = ()
-    replaced = ()
 
 
 def _define(cfg, *definitions: str) -> None:
@@ -205,13 +197,12 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
 
     prepared = drive(service._prepare_steps(asked))
 
-    (name, why) = prepared.indistinct[0]
-    assert name == "second-opinion"
-    assert "same host" in why
+    (said,) = [e for e in prepared.events if e.kind == "indistinct"]
+    assert said.agent == "second-opinion"
+    assert "same host" in said.text
 
-    # And it reaches the caller as an event, before the run starts.
-    told = opening_events("t001", (), _NoPlacement(), (), prepared.indistinct)
-    kinds = [e.kind for e in told]
+    # Before the run starts.
+    kinds = [e.kind for e in prepared.events]
     assert kinds.index("indistinct") < kinds.index("run_start")
 
 
@@ -233,12 +224,8 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
 
     prepared = drive(service._prepare_steps(asked))
 
-    assert prepared.indistinct == ()
-    assert not [
-        e
-        for e in opening_events("t001", (), _NoPlacement(), (), prepared.indistinct)
-        if e.kind == "indistinct"
-    ]
+    assert "run_start" in [e.kind for e in prepared.events], "these are the opening lines"
+    assert not [e for e in prepared.events if e.kind == "indistinct"]
 
 
 def test_the_message_names_the_subagent(cfg, session_dir):

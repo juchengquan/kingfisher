@@ -134,35 +134,6 @@ class Running:
         yield from self._record_transcript(prepared, snapshot)
         return (yield from collect_artifacts(prepared.files, self.cfg.layout))
 
-    def _finished(  # noqa: PLR0913 -- a parameter object would only be unpacked a line later
-        self,
-        prepared: Prepared,
-        answer: str,
-        kept: tuple[str, ...],
-        *,
-        stop_reason: str,
-        waiting: tuple[PendingDecision, ...] = (),
-        discarded: tuple[str, ...] = (),
-        ledger: tuple[LedgerEntry, ...] = (),
-    ) -> RunEvent:
-        """The terminal event, built the same way whichever loop produced it."""
-        return RunEvent(
-            kind="finished",
-            text=answer,
-            result=RunResult(
-                pending=waiting,
-                discarded=discarded,
-                session_id=prepared.session.id,
-                turn_id=prepared.turn.id,
-                answer=answer,
-                # Collected after the graph finished, so it includes what the shell
-                # wrote, which no file tool would have reported.
-                artifacts=kept,
-                stop_reason=stop_reason,
-                ledger=ledger,
-            ),
-        )
-
     def _settled(self, prepared: Prepared) -> Any:
         """This turn's final graph state, or `None` where there is none.
 
@@ -247,8 +218,9 @@ class Running:
         """Run one task, yielding progress as it happens.
 
         A `Resume` comes through here too, so the admission checks have one door.
-        `files` is the session's backend from `files_for`, for a caller that uses it
-        around the turn; the request must name that session.
+        `files` is the session's backend from `Session.files()`, for a caller that uses it
+        around the turn; one opened for another session is refused with
+        `UnknownSessionError` before anything is claimed or written.
         """
         # Coerced here: setup reads the session id first, and a bare string has none.
         yield from self._stream_turn(
@@ -366,18 +338,24 @@ class Running:
 
     def _ending(self, turn: _Turn) -> tuple[RunEvent, ...]:
         """What a turn owes its caller once the lifecycle has closed."""
-        return (
-            *turn.pending,
-            self._finished(
-                turn.prepared,
-                turn.answer,
-                turn.kept,
+        prepared = turn.prepared
+        finished = RunEvent(
+            kind="finished",
+            text=turn.answer,
+            result=RunResult(
+                pending=turn.awaiting,
+                discarded=prepared.discarded,
+                session_id=prepared.session.id,
+                turn_id=prepared.turn.id,
+                answer=turn.answer,
+                # Collected after the graph finished, so it includes what the shell
+                # wrote, which no file tool would have reported.
+                artifacts=turn.kept,
                 stop_reason=turn.stop_reason,
-                waiting=turn.awaiting,
-                discarded=turn.prepared.discarded,
                 ledger=turn.recorded,
             ),
         )
+        return (*turn.pending, finished)
 
     def _stream_turn(
         self,

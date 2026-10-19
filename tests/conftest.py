@@ -329,7 +329,7 @@ def harness_in(cfg, session_dir: Path):
     """
     from kingfisher.core.session.store import HarnessFiles
 
-    return HarnessFiles(_backend_in(cfg, session_dir), Path(session_dir).name)
+    return HarnessFiles(_backend_in(cfg, session_dir))
 
 
 def paths_in(cfg, session_dir: Path, *, sessions: Path | None = None):
@@ -514,10 +514,11 @@ def isolated_from_the_developer(monkeypatch):
     """
     for module in READS_DOTENV:
         monkeypatch.setattr(f"{module}.load_dotenv", refusing(repository_root() / ".env"))
-    # `LocalSessions` reads its shell's settings from here, so a developer who exported
-    # `off` would unfence every backend a test builds.
-    for setting in ("KINGFISHER_SHELL_SANDBOX", "KINGFISHER_SHELL_PATH_EXTRA"):
-        monkeypatch.delenv(setting, raising=False)
+    # Every `KINGFISHER_` name, not a list of the live ones: `doctor` reports a retired
+    # name too, and an exported `KINGFISHER_SHELL_SANDBOX=off` would unfence every
+    # backend a test builds.
+    for setting in [name for name in os.environ if name.startswith("KINGFISHER_")]:
+        monkeypatch.delenv(setting)
     with environment_restored():
         yield
 
@@ -564,6 +565,23 @@ def dispatched(graph) -> tuple[str, ...]:
     names = registered_tools(graph)
     assert names is not None, "a graph built here must be readable"
     return names
+
+
+def withheld_told(events) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """`(what, names)` read back off each `withheld` line a turn opens with.
+
+    Off the lines, not a field kept beside them: they are all the caller is told.
+    """
+    found = []
+    for event in events:
+        if event.kind != "withheld":
+            continue
+        head, names = event.text.split(" not granted: ", 1)
+        count, what = head.removesuffix("(s)").split(" ", 1)
+        listed = tuple(names.split(", "))
+        assert int(count) == len(listed), event.text
+        found.append((what, listed))
+    return tuple(found)
 
 
 #: Both tool lists at `["*"]`, for an `an_agent` that has to act: left out, each grants none.

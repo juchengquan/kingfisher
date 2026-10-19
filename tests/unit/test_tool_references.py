@@ -7,7 +7,7 @@ from langchain_core.tools import tool
 
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.kinds.subagents import as_subagent
-from kingfisher.core.agent.kinds.tools import _ToolSurface
+from kingfisher.core.agent.kinds.tools import ToolSurface
 from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
 from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.catalogue import Definitions
@@ -320,7 +320,7 @@ def test_an_agents_long_form_grant_reaches_the_tools_it_carries():
     form did not raise here, it silently resolved to nothing and the agent carried no
     workspace tools at all.
     """
-    surface = _ToolSurface(
+    surface = ToolSurface(
         offering=Offering.of(PROBE),
         asked=Capabilities(tools=("probe.py::probe",), builtin_tools=()),
         found=PROBE,

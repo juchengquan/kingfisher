@@ -37,6 +37,7 @@ from .ledger import Ledger
 from .model import (
     Conversation,
     SessionBusyError,
+    refuse_files_of_another,
     unknown_session,
 )
 from .runlog import RunLogger
@@ -109,7 +110,9 @@ class Preparation:
         # its pinned agent, and that is read through the backend too.
         if files is None:
             files = yield from self._files_for(session.id)
-        harness = HarnessFiles(files, session.id)
+        else:
+            refuse_files_of_another(files, session.id)
+        harness = HarnessFiles(files)
         held = self._held_for(source_ids)
         # Read once, for reach here and for the agent the turn runs; neither asks for a
         # supplied graph under no policy.
@@ -416,11 +419,6 @@ class Preparation:
             ),
             deadline=monotonic() + cfg.turn_timeout_s,
             timeout_s=cfg.turn_timeout_s,
-            unprotected=unprotected,
-            placement=placement,
-            withheld=withheld,
-            indistinct=indistinct,
-            subagent_only=shared,
         )
 
     def _restored(self, session: Conversation, state: bytes) -> Any:

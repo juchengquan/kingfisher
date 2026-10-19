@@ -96,7 +96,7 @@ class Confinement:
     @property
     def confined(self) -> bool:
         """Whether *this* process confines the command; `elsewhere` is the other way."""
-        return self.warning == "" and (self.mechanism != "" or self.wrap is not _unwrapped)
+        return self.warning == "" and self.mechanism != ""
 
 
 def with_supplied_runner(confined: Confinement, *, local: bool) -> Confinement:

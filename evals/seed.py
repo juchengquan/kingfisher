@@ -1,19 +1,8 @@
 """Putting the smoke's fixtures into a workspace.
 
-The sample skill is copied from `assets/skills/tabular-qa`, not held here
-as a string. It used to be both -- a constant in `smoke.py` *and* files under
-the presets directory -- which meant two homes for sample content and no way to
-tell which one a run had actually used.
-
-From `assets/` in this repository, found by marker rather than counted.
-It came through `importlib.resources` while the definitions rode inside the
-wheel; nothing ships them now, so that route resolves to a package that is not
-there.
-
-Deliberately not through `KINGFISHER_ASSETS`. The smoke asserts against a
-*known* skill, and the variable exists precisely so a deployment can point
-somewhere else -- reading it here would make the smoke pass or fail on whatever
-content a developer happened to configure.
+The sample skill is copied from `assets/skills/tabular-qa`, never held here as well.
+Not through `KINGFISHER_ASSETS`, which exists to point somewhere else: the smoke asserts
+against a known skill.
 """
 
 from __future__ import annotations

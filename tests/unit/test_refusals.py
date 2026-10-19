@@ -315,7 +315,7 @@ REFUSALS: dict[str, Refusal] = {
         1, defect=a_portable_subagent_carrying_two_tools_of_a_name),
     "core/definitions/tools/catalogue.py::LocalToolRepository.found": Refusal(
         1, defect=a_tool_module_defining_a_name_twice),
-    "core/definitions/tools/catalogue.py::refuse_untoollike": Refusal(
+    "core/definitions/tools/catalogue.py::_refuse_untoollike": Refusal(
         2, defect=a_portable_subagent_carrying_a_class),
     "core/definitions/tools/catalogue.py::_as_named": Refusal(
         3, defect=a_tool_spec_giving_a_description_its_tool_ignores),
@@ -330,7 +330,7 @@ REFUSALS: dict[str, Refusal] = {
     "core/definitions/skills/registry.py::SkillRegistry.resolve": Refusal(
         3, unreachable="a grant naming a skill two sources both offer, which is a request"),
     "core/definitions/subagents/rules.py::refuse_cycles": Refusal(
-        1, unreachable="asked in `_activated_subagents`, over the set a request "
+        1, unreachable="asked in `activated_subagents`, over the set a request "
                        "activates rather than over a file on disk"),
     "core/definitions/subagents/rules.py::refuse_two_of_a_name": Refusal(
         1, unreachable="two of a name coexist in a catalogue on purpose; it is an agent "
