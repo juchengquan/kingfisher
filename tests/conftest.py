@@ -329,7 +329,7 @@ def harness_in(cfg, session_dir: Path):
     """
     from kingfisher.core.session.store import HarnessFiles
 
-    return HarnessFiles(_backend_in(cfg, session_dir), Path(session_dir).name)
+    return HarnessFiles(_backend_in(cfg, session_dir))
 
 
 def paths_in(cfg, session_dir: Path, *, sessions: Path | None = None):
