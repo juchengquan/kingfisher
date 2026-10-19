@@ -47,9 +47,12 @@ same two:
     kingfisher seed --from ./my-definitions  # from here instead
 
 **Read `skipped`, or your deployment will quietly be missing agents.** A
-definition naming middleware or source ids this deployment has not registered is
-refused when it is built, so seeding one produces a file that cannot run.
-`seed` leaves those behind and says which names each would have needed;
+definition naming middleware, source ids or a datazone this deployment has not
+registered is refused when it is built, so seeding one produces a file that
+cannot run — and under a source-id policy it stops the whole catalogue loading,
+not only itself. `seed` leaves those behind and says which names each would have
+needed, source ids and datazones on their own lines because that is how
+`source_ids.yaml` takes them;
 `seed(..., everything=True)` and `kingfisher seed --all` take them once you have
 registered the names. The shipped `assets/` has several, `assistant`
 among them, and ships the middleware they name beside them -- so seed that set

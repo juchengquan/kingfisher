@@ -1015,6 +1015,11 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
 
     Driven against the real tree rather than asserted over it, because what could
     regress is the copying rather than the wording.
+
+    `quarters.py` and `sql_query.py` are here because an audience in Python counts as
+    one: `quarters.py` was seeded for months and left `kingfisher list` and `doctor`
+    failing on a datazone no deployment had declared, and `sql_query.py` only escaped
+    that by naming a source id two YAML files named as well.
     """
     from kingfisher.core.definitions.seeding import seed
 
@@ -1030,6 +1035,8 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
         "subagents/sweeper.yaml",
         "agents/analyst.yaml",
         "subagents/auditor.yaml",
+        "subagents/quarters.py",
+        "tools/sql_query.py",
     }
     for left in ("agents/assistant.yaml", "subagents/sweeper.yaml"):
         assert left not in done.written
@@ -1039,20 +1046,58 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     # makes them actionable: "names middleware" sends a reader to a registry
     # and "names source ids" to a file, so one sentence for both would send half
     # its readers to the wrong place.
-    assert {left.label: (left.wants, left.names) for left in done.skipped} == {
+    assert {
+        left.label: (left.wants, left.names, left.datazones) for left in done.skipped
+    } == {
         "agents/assistant.yaml": (
             "middlewares",
             ("call-cap-strict", "call-cap-generous", "tool-note", "compact"),
+            (),
         ),
-        "subagents/sweeper.yaml": ("middlewares", ("call-cap-generous", "tool-note")),
-        "agents/analyst.yaml": ("source_ids", ("sales_db", "audit_log")),
-        "subagents/auditor.yaml": ("source_ids", ("sales_db", "audit_log", "warehouse")),
+        "subagents/sweeper.yaml": ("middlewares", ("call-cap-generous", "tool-note"), ()),
+        "agents/analyst.yaml": ("source_ids", ("sales_db", "audit_log"), ()),
+        "subagents/auditor.yaml": ("source_ids", ("sales_db", "audit_log", "warehouse"), ()),
+        # The datazone beside the source id, from one file that names both: the two go on
+        # separate lines of `source_ids.yaml`, so a record holding them together could not
+        # tell a reader what to write.
+        "subagents/quarters.py": ("source_ids", ("sales_db",), ("emea",)),
+        "tools/sql_query.py": ("source_ids", ("sales_db",), ()),
     }
 
     # And everything else still arrives, which is the half that would break
     # quietly if the rule were ever widened by accident.
     assert "agents/operator.yaml" in done.written
     assert "subagents/reviewer.yaml" in done.written
+
+
+def test_a_seeded_workspace_still_loads_once_a_policy_exists(
+    cfg, at_the_command_line, monkeypatch, shipped, capsys
+):
+    """The whole point of the skip list, end to end and through the command: a deployment
+    that has adopted source ids at all has to be able to run what `seed` left it.
+
+    Driven rather than asserted over the skip list, because that list is what was wrong:
+    `subagents/quarters.py` was copied, and `kingfisher list` then exited 1 with `subagent
+    'quarters': names undeclared datazone 'emea'` -- the whole seed report mentioning
+    neither quarters nor datazones, so the operator had done exactly what they were told.
+
+    A vocabulary declaring one unrelated name, not the one the report prints: what was
+    copied must need nothing, and declaring the names of the files seed *left behind*
+    would pass against a tree that copied them all.
+    """
+    from kingfisher.cli.__main__ import main
+
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
+    assert main(["seed"]) == 0
+    capsys.readouterr()
+    (cfg.definitions / "source_ids.yaml").write_text(
+        "source_ids: [unrelated]\n", encoding="utf-8"
+    )
+
+    assert main(["list"]) == 0, "a seeded workspace refused to load under a policy"
+
+    printed = capsys.readouterr().out
+    assert "cannot load" not in printed, printed
 
 
 def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_path):

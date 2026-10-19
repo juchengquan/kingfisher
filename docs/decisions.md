@@ -3513,6 +3513,29 @@ a task. **`--list` stayed, and not as a listing**: it is the only way to reach t
 `main` without calling a model, which six tests are built on -- written into the flag,
 because it looks as removable as the ones that went. *(2026-09-04.)*
 
+**And what it reads is the syntax of a definition, in both languages it has.** `seed`
+decided what a deployment could not build by reading two YAML fields of two kinds, so
+three ways of naming an audience were invisible: `datazone:`, which it never looked at;
+anything a subagent declared in Python; and a tool's audience, which has nowhere but
+Python to live. Driven, on the README's own path: `kingfisher seed`, then exactly the
+`source_ids.yaml` the report printed, left `kingfisher list` and `doctor` failing with
+`subagent 'quarters': names undeclared datazone 'emea'` -- the shipped `quarters.py`,
+copied for months, with nothing in the report naming it. A tool was one coincidence from
+the same fault: `sql_query.py` requires `sales_db`, and only two YAML files happening to
+require it too put that name in the printed line.
+
+So the reader reads Python as well, by `ast` rather than by importing -- seeding runs
+before there is a catalogue, and importing a definition to decide whether to copy it
+would run a deployment's code to answer a question about it. By syntax rather than by
+text, because `subagents/timestamps/timestamps.py` documents `source_ids` and `datazone`
+in its docstring: a reader matching the words leaves a worked example behind. A tool
+*package* is decided whole, since dropping the module that names the audience and copying
+the rest leaves a folder that is not a tool. And the remedy is keyed by what a file asks
+for rather than by the field that said so: told to declare source ids, a reader writes one
+line of the two that file needs. The tolerant-reader limit is unchanged and still
+stated -- a name computed rather than written out is invisible, as a value the YAML reader
+cannot walk is. *(2026-10-19, from an architecture review.)*
+
 **`Seeded` says what it left behind, because three callers said it and two were wrong.**
 `seed` leaves a definition alone for one of two reasons with opposite remedies -- middleware
 is registered in code, a source id declared in a file -- hence `UNCONSULTED` and `REMEDY`,

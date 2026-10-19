@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import os
 import shutil
 from collections.abc import Callable
@@ -69,6 +70,11 @@ def destinations(into: Destination) -> tuple[tuple[str, Path], ...]:
 #: detected: a `.yaml` under `tools/` is a tool's data file, not a definition.
 DOCUMENT_KINDS = ("agents", "subagents")
 
+#: The kinds whose definitions may say who reaches them from inside Python: a subagent
+#: declared in a module, and a tool, whose audience has nowhere else to live. Not every
+#: kind: `source_ids=` in a script a skill ships is somebody's variable, not a field.
+AUDIENCED_KINDS = ("subagents", "tools")
+
 
 @dataclass(frozen=True)
 class Skipped:
@@ -79,19 +85,55 @@ class Skipped:
     #: What those names are, `middlewares` or `source_ids`, since the remedy differs: one
     #: is registered in code, the other declared in `source_ids.yaml`.
     wants: str = "middlewares"
+    #: Datazones the same file names, which go on a line of their own in that file. Kept
+    #: apart from `names` rather than pooled with it: `source_ids: [emea]` declares the
+    #: wrong thing, and a deployment copying the remedy would still not load.
+    datazones: tuple[str, ...] = ()
+
+    @property
+    def asked_of(self) -> str:
+        """What this file asks of the deployment, which both message tables answer for.
+
+        Not `wants`, which says which field spoke: one file may name source ids *and* a
+        datazone, and a sentence naming only the source ids sends a reader to write one
+        line of the two.
+        """
+        if self.wants != "source_ids":
+            return self.wants
+        return " and ".join(
+            part
+            for part, written in (("source_ids", self.names), ("datazone", self.datazones))
+            if written
+        )
+
+    @property
+    def asked_for(self) -> str:
+        """The same, with the names, in the words of the fields it wrote."""
+        named = [f"{self.wants} ({', '.join(self.names)})"] if self.names else []
+        if self.datazones:
+            named.append(f"datazone ({', '.join(self.datazones)})")
+        return " and ".join(named)
 
 
-#: What `seed` did *not* look at before leaving a definition behind, per kind.
+#: What `seed` did *not* look at before leaving a definition behind, per kind. Keyed by
+#: what a definition asks of the deployment, `Skipped.asked_of`, not by the field that
+#: said so: a file naming source ids and a datazone asks for two lines of one file.
 UNCONSULTED = {
     "middlewares": "what this deployment registered",
     "source_ids": "your source_ids.yaml",
+    "datazone": "your source_ids.yaml",
+    "source_ids and datazone": "your source_ids.yaml",
 }
 
-#: And what to do about it, per kind: one sentence could not be right for both.
+#: And what to do about it, per kind: one sentence could not be right for all of them. A
+#: file may name source ids, a datazone, or both, and those are two lines of one file:
+#: told only about the source ids, a reader writes one of the two and still cannot load.
 REMEDY = {
     "middlewares": "Seed or write the middlewares first",
     # No example file named: `Seeded.report` prints one from the names actually missing.
     "source_ids": "Declare the source ids in source_ids.yaml",
+    "datazone": "Declare the datazone in source_ids.yaml",
+    "source_ids and datazone": "Declare them in source_ids.yaml",
 }
 
 
@@ -113,9 +155,9 @@ class Seeded:
         lines = [f"seeded {name}" for name in self.written]
         lines += [
             # With the remedy, because "skipped" alone reads as a failure and this is a choice.
-            f"skipped {left.label} — names {left.wants} ({', '.join(left.names)}), "
-            f"and seed does not check {UNCONSULTED[left.wants]}. "
-            f"{REMEDY[left.wants]}, then seed again with --all"
+            f"skipped {left.label} — names {left.asked_for}, "
+            f"and seed does not check {UNCONSULTED[left.asked_of]}. "
+            f"{REMEDY[left.asked_of]}, then seed again with --all"
             for left in self.skipped
         ]
         lines += self._declaration()
@@ -138,11 +180,11 @@ class Seeded:
         return f"nothing to seed — {self.source} holds none of {', '.join(DEFINITION_KINDS)}"
 
     def _declaration(self) -> tuple[str, ...]:
-        """The `source_ids.yaml` to write, or nothing when no source id was missing."""
-        wanted = sorted(
-            {name for left in self.skipped if left.wants == "source_ids" for name in left.names}
-        )
-        if not wanted:
+        """The `source_ids.yaml` to write, or nothing when no audience was missing."""
+        audienced = [left for left in self.skipped if left.wants == "source_ids"]
+        wanted = sorted({name for left in audienced for name in left.names})
+        zones = sorted({name for left in audienced for name in left.datazones})
+        if not wanted and not zones:
             return ()
         return (
             "",
@@ -150,7 +192,11 @@ class Seeded:
             # can give the one list covering all of them.
             "the source_ids.yaml that unblocks every one of them:",
             "",
-            f"    source_ids: [{', '.join(wanted)}]",
+            # Both lines, each only where something needs it: a deployment told to declare
+            # source ids and left to find `datazones:` for itself copies this and still
+            # cannot load, which is how a datazone came to stop a seeded workspace.
+            *([f"    source_ids: [{', '.join(wanted)}]"] if wanted else []),
+            *([f"    datazones: [{', '.join(zones)}]"] if zones else []),
         )
 
 
@@ -174,6 +220,74 @@ def source_ids_named(text: str) -> tuple[str, ...]:
             if isinstance(entry, dict):
                 _collect(entry.get("source_ids"), into=found)
     return tuple(dict.fromkeys(found))
+
+
+def datazones_named(text: str) -> tuple[str, ...]:
+    """The datazone a definition names, for a document that may not parse.
+
+    One name, never a list, and only ever a definition's own top-level field: an agent
+    writing one is refused and so is an entry, so there is nowhere else to look.
+    """
+    try:
+        parsed = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return ()
+    if not isinstance(parsed, dict):
+        return ()
+    written = parsed.get("datazone")
+    if isinstance(written, str) and written.strip() and written.strip() != "*":
+        return (written.strip(),)
+    return ()
+
+
+def audiences_in_code(text: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The source ids and datazones a Python definition names, as its source says them.
+
+    The two shapes a definition has in Python: a `"source_ids":` key, which is how a
+    subagent entry says it, and a `source_ids=` argument, which is how a `ToolSpec` does.
+    A tool's audience is only ever here -- there is no YAML for it to be in -- and a
+    module is where a subagent says it too.
+
+    Parsed rather than imported: seeding runs before there is a catalogue, and importing
+    a definition to find out whether to copy it would run a deployment's code to decide.
+    A name computed rather than written out is invisible to this, as a value the reader
+    above cannot walk is to that one.
+    """
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        # Copied anyway, as an unparseable document is: the loader reports it in its own
+        # words, and this is not the place to refuse a file.
+        return (), ()
+    found: dict[str, list[str]] = {"source_ids": [], "datazone": []}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values, strict=True):
+                field_name = key.value if isinstance(key, ast.Constant) else None
+                if isinstance(field_name, str) and field_name in found:
+                    _written(value, into=found[field_name])
+        elif isinstance(node, ast.Call):
+            for keyword in node.keywords:
+                if keyword.arg in found:
+                    _written(keyword.value, into=found[keyword.arg])
+    return tuple(dict.fromkeys(found["source_ids"])), tuple(dict.fromkeys(found["datazone"]))
+
+
+def _written(node: ast.expr, *, into: list[str]) -> None:
+    """Every name one audience spells out, by any of the shapes the field takes."""
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, str) and node.value.strip() and node.value.strip() != "*":
+            into.append(node.value.strip())
+    elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        for one in node.elts:
+            _written(one, into=into)
+    elif isinstance(node, ast.Dict):
+        # A requirement, which is a set: written in Python it is `{"a", "b"}`, and a
+        # reader that walked only `ast.Set` would miss the mapping YAML's `{a, b}` becomes
+        # when somebody copies it across.
+        for key in node.keys:
+            if key is not None:
+                _written(key, into=into)
 
 
 def _collect(written: object, *, into: list[str]) -> None:
@@ -214,20 +328,57 @@ def middleware_named(text: str) -> tuple[str, ...]:
     return tuple(found)
 
 
-def _deployment_specific(path: Path) -> tuple[str, tuple[str, ...]] | None:
-    """What this file needs that a workspace may not have, or `None` for nothing."""
-    if path.suffix not in (".yaml", ".yml") or not path.is_file():
-        return None
+def _read(path: Path) -> str | None:
+    """One file's text, or `None` where it cannot be read.
+
+    Unreadable is copied anyway: the loader reports such a file in its own words, and
+    refusing to seed over it would leave a workspace with a hole and no explanation.
+    """
     try:
-        text = path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        # Copied anyway: the loader reports an unreadable file in its own words.
         return None
-    if named := middleware_named(text):
-        return "middlewares", named
-    if declared := source_ids_named(text):
-        return "source_ids", declared
+
+
+def _audienced(
+    source_ids: tuple[str, ...], datazones: tuple[str, ...]
+) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
+    """One audience answer, or `None` where a file names nobody."""
+    if not source_ids and not datazones:
+        return None
+    return "source_ids", source_ids, datazones
+
+
+def _deployment_specific(
+    path: Path, *, kind: str
+) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
+    """What this file needs that a workspace may not have, or `None` for nothing."""
+    if path.is_dir():
+        # A tool package is one definition, so it is decided as one: dropping the module
+        # that names an audience and copying the rest leaves a folder that is not a tool.
+        return _in_a_package(path) if kind in AUDIENCED_KINDS else None
+    if not path.is_file() or (text := _read(path)) is None:
+        return None
+    if path.suffix in (".yaml", ".yml") and kind in DOCUMENT_KINDS:
+        if named := middleware_named(text):
+            return "middlewares", named, ()
+        return _audienced(source_ids_named(text), datazones_named(text))
+    if path.suffix == ".py" and kind in AUDIENCED_KINDS:
+        return _audienced(*audiences_in_code(text))
     return None
+
+
+def _in_a_package(folder: Path) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
+    """What a folder of modules needs, read as the one definition it is."""
+    source_ids: list[str] = []
+    datazones: list[str] = []
+    for path in sorted(folder.rglob("*.py")):
+        if importing.skipped(path.name) or (text := _read(path)) is None:
+            continue
+        named, zones = audiences_in_code(text)
+        source_ids.extend(named)
+        datazones.extend(zones)
+    return _audienced(tuple(dict.fromkeys(source_ids)), tuple(dict.fromkeys(datazones)))
 
 
 #: What a copy of one directory leaves out of it: each name, with the `Skipped` it is
@@ -240,12 +391,16 @@ def _left_out(
 ) -> dict[str, Skipped | None]:
     """Debris, and the deployment-specific definitions seed holds back."""
     left: dict[str, Skipped | None] = dict.fromkeys(filter(importing.skipped, names))
-    if everything or kind not in DOCUMENT_KINDS:
+    # Every kind that can say who reaches it, not only the two written as documents: a
+    # tool says it in Python, which is the one place it can, and seeding one a deployment
+    # has not declared for stops the whole catalogue loading.
+    if everything or (kind not in DOCUMENT_KINDS and kind not in AUDIENCED_KINDS):
         return left
     for name in names:
-        if name not in left and (wanted := _deployment_specific(directory / name)) is not None:
+        wanted = None if name in left else _deployment_specific(directory / name, kind=kind)
+        if wanted is not None:
             label = f"{kind}/{(directory / name).relative_to(root)}"
-            left[name] = Skipped(label, wanted[1], wants=wanted[0])
+            left[name] = Skipped(label, wanted[1], wants=wanted[0], datazones=wanted[2])
     return left
 
 
@@ -334,8 +489,10 @@ def _copy(
             target = destination / item.name
             label = f"{kind}/{item.name}"
             # `ignore` asks this of nested files; `copytree` never shows it a top-level one.
-            if not everything and (wanted := _deployment_specific(item)) is not None:
-                skipped.append(Skipped(label, wanted[1], wants=wanted[0]))
+            if not everything and (
+                wanted := _deployment_specific(item, kind=kind)
+            ) is not None:
+                skipped.append(Skipped(label, wanted[1], wants=wanted[0], datazones=wanted[2]))
                 continue
             # Before the copy: afterwards there is nothing left to compare.
             overwritten += _overwritten(item, target, label, left_out)
