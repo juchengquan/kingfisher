@@ -119,7 +119,7 @@ def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
 
 def belongs_in(names: tuple[str, ...], *, field: str) -> str:
     """"that is a builtin tool -- name it in builtin_tools", agreeing in number."""
-    # `split`/`join`, not `.replace`, which `test_domain_touches_nothing_outside_the_process`
+    # `split`/`join`, not `.replace`, which `test_the_records_touch_nothing_outside_the_process`
     # forbids here by name: `Path.replace` renames a file, and a blunt guard is the point.
     kind = " ".join(field[:-1].split("_"))
     if len(names) == 1:
@@ -349,9 +349,8 @@ def refuse_written_wants(
 UNRESTRICTED = Capabilities()
 
 
-#: Here, not in `core.definitions.tools.spec`: it answers two `Selection`s with a third and
-#: never touches a registry, which is the line that module draws.
-
+# Here, not in `core.definitions.tools.spec`: it answers two `Selection`s with a third and
+# never touches a registry, which is the line that module draws.
 def ceiling(
     asked_builtin: Selection,
     asked_tools: Selection,

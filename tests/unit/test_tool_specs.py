@@ -253,12 +253,12 @@ def test_a_subagent_is_built_with_its_carried_tool_under_the_new_name(cfg):
     """Driven through the real catalogue: a subagent built with the author's object
     rather than the loader's would offer the model `count` while its spec said `tally`.
     """
-    from kingfisher.core.agent.kinds.tools import _private_tools
+    from kingfisher.core.agent.kinds.tools import private_tools
 
     subagents = cfg.catalogue_roots["subagents"]
     subagents.mkdir(parents=True, exist_ok=True)
     (subagents / "counter.py").write_text(CARRIER, encoding="utf-8")
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
-    (one,) = _private_tools(kf.catalogue, "counter", held=None)
+    (one,) = private_tools(kf.catalogue, "counter", held=None)
     assert shown(one.tool) == ("tally", "Count the lines in a text file.")

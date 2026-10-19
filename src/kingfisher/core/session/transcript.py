@@ -39,7 +39,7 @@ class Message:
 
 
 def as_json(messages: tuple[Message, ...]) -> str:
-    """The transcript as one JSON document, newline-delimited."""
+    """The transcript as one JSON object per line."""
     return "".join(
         json.dumps(
             {

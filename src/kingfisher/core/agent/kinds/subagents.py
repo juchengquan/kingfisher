@@ -112,7 +112,7 @@ def model_object(  # a parameter per rule picking the model: folding two hides w
     spec: SubagentSpec | AgentSpec,
     cfg: Config,
     *,
-    endpoints: Selection = ALL,
+    endpoints: Selection,
     run_on: RunOn | None = None,
     inherited: Any = None,
 ) -> Any | None:
@@ -272,7 +272,6 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         # The deployment's instructions first, so delegated work cannot escape a house rule.
         "system_prompt": behind_instructions(spec.system_prompt, instructions),
     }
-    middleware: list[Any] = []
     # A subagent inherits none of the parent's `GrantedOnlyMiddleware`, so the ceiling is applied
     # here or a withheld `execute` reaches every subagent. What it is stays `ceiling`'s call.
     allowed = ceiling(
@@ -304,41 +303,37 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         skill_sources = [*(skill_sources or []), *own_sources]
     # From `standing_middleware`, so the agent, this subagent and `general-purpose` cannot
     # differ. `paths` is handed down, not read off the backend, which need not carry it.
-    middleware.extend(
-        standing_middleware(
-            "subagent",
-            # Inside every standing one: deepagents gives a subagent no `task` tool, and
-            # `middleware` is the only spec field that carries code, so `task` comes the way
-            # the main agent gets it; the deployment's own go after that, so they see
-            # kingfisher's narrowing rather than running ahead of it.
-            inner=[
-                *([SubAgentMiddleware(backend=backend, subagents=helpers)] if helpers else []),
-                *(extra_middleware or []),
-            ],
-            names=frozenset(entry.name for entry in (*catalogue, *private)),
-            paths=paths,
-            layout=cfg.layout,
-            # The parent's, whose shell is the one this subagent's `execute` runs on.
-            backend=backend,
-            step_limit=cfg.recursion_limit,
-            trigger=summarizer_trigger(runs),
-            recorder=recorder,
-            # `None` permits nothing: an empty allowlist, not an absent one.
-            tools=None
-            if allowed == ALL
-            else tuple(split_reference(one)[1] for one in (allowed or ()))
-            + tuple(one.name for one in private),
-            tools_subject=f"the {spec.name!r} subagent",
-            # The parent's sources, passed in rather than rebuilt: two walks could disagree
-            # and offer the subagent a different skill than the one named.
-            skills=None
-            if skills is None or skills == ALL or backend is None
-            else tuple(skills),
-            skill_sources=skill_sources or [],
-        )
+    subagent["middleware"] = standing_middleware(
+        "subagent",
+        # Inside every standing one: deepagents gives a subagent no `task` tool, and
+        # `middleware` is the only spec field that carries code, so `task` comes the way
+        # the main agent gets it; the deployment's own go after that, so they see
+        # kingfisher's narrowing rather than running ahead of it.
+        inner=[
+            *([SubAgentMiddleware(backend=backend, subagents=helpers)] if helpers else []),
+            *(extra_middleware or []),
+        ],
+        names=frozenset(entry.name for entry in (*catalogue, *private)),
+        paths=paths,
+        layout=cfg.layout,
+        # The parent's, whose shell is the one this subagent's `execute` runs on.
+        backend=backend,
+        step_limit=cfg.recursion_limit,
+        trigger=summarizer_trigger(runs),
+        recorder=recorder,
+        # `None` permits nothing: an empty allowlist, not an absent one.
+        tools=None
+        if allowed == ALL
+        else tuple(split_reference(one)[1] for one in (allowed or ()))
+        + tuple(one.name for one in private),
+        tools_subject=f"the {spec.name!r} subagent",
+        # The parent's sources, passed in rather than rebuilt: two walks could disagree
+        # and offer the subagent a different skill than the one named.
+        skills=None
+        if skills is None or skills == ALL or backend is None
+        else tuple(skills),
+        skill_sources=skill_sources or [],
     )
-    if middleware:
-        subagent["middleware"] = middleware
 
     # Objects, not names: names raise inside `ToolNode`. The whole set goes in and
     # `GrantedOnlyMiddleware` decides. Set even when empty: deepagents reads a missing key

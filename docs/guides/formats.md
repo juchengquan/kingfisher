@@ -306,13 +306,15 @@ reason rather than as a name nothing answers to. Withholding there would empty t
 subagent of the tool it was shipped with and say nothing, and a gate on a name
 nothing else in the workspace defines is more likely a mistake than a decision.
 
-### Two fields are refused
+### Three fields are refused
 
 Each with its own message rather than a generic "unknown field", because the
 generic one reads as *not supported yet* and sends you looking for a workaround:
 
 - **`permissions`** — deepagents' permissions *replace* the parent's rather than
   narrowing them, so writing this here would drop `/inputs` being read-only.
+- **`datazone`** — an agent runs in whichever datazone its caller names; a
+  datazone belongs on the subagents and tools it holds.
 - **`response_format`** — it changes what a run *returns*, so the result and
   streaming both have a stake in it.
 
@@ -320,7 +322,7 @@ generic one reads as *not supported yet* and sends you looking for a workaround:
 
 ### Two agents with the same name
 
-Refused, and this is the one kind that refuses. Two files claiming `assistant`
+Refused, as two middlewares of one name are. Two files claiming `assistant`
 means a request for `assistant` gets whichever the walk reached last, with
 nothing anywhere saying which:
 
@@ -489,10 +491,9 @@ Write the left-hand side exactly as `--list` prints it — `csv_profile`, not
 `csv_profile/`. The `.py` is what tells you a file from a folder, so a package
 needs no trailing slash and a pasted one is ignored.
 
-It is a claim about *location*, never a choice between tools. Two tools cannot
-share a name — the loader refuses the pair, because the agent dispatches by name
-and one would silently replace the other — so there is never a second candidate
-for a path to pick out.
+Where one file defines the name, it is a claim about *location* and nothing
+more. Where two do, it is also the choice between them, and the short form is
+refused — see [Two tools with the same name](#two-tools-with-the-same-name).
 
 **Built-ins take no path.** They have no file, and they live on the separate
 `builtin_tools:` axis.
@@ -599,7 +600,7 @@ on the spot, so every entry after the first would be unreachable.
 | `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
-| `subagents` | optional | Subagents this one may consult mid-job. Unset grants **none**. One level — see below |
+| `subagents` | optional | Subagents this one may consult mid-job. Unset grants **none**. Any depth, no loops — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the subagent runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 | `source_ids` | optional | Who may reach this subagent, wherever it is used, and the only place that is said: a `subagents:` entry naming it takes no audience. Unset means everyone. Also the default audience, and the ceiling, for its `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
@@ -776,10 +777,10 @@ add one to later; a changed constructor is not easy to take back.
 `tools`, `skills` and `middlewares` take either form:
 
 ```yaml
-tools: [read_file, grep]
+tools: [sql_query, http_fetch]
 tools:
-  - read_file
-  - grep
+  - sql_query
+  - http_fetch
 ```
 
 **A field not in the table above is an error, not a field that gets ignored.**
@@ -879,8 +880,8 @@ this format has to refuse below.
 | `middlewares` | middleware wraps a graph deepagents builds; this one is already built |
 | `subagents` | delegation arrives through middleware, which a compiled graph is not given |
 
-`name`, `description`, `build`, `tools`, `model`, `metadata` and `source_ids` are
-what remain.
+`name`, `description`, `build`, `tools`, `model`, `metadata`, `source_ids` and
+`datazone` are what remain.
 
 **A compiled subagent can own a bundle, and gets half of one.** Put
 `surveyor.py` in `subagents/surveyor/`, list its tools in `"tools"` with
@@ -954,14 +955,14 @@ SUBAGENTS = [
 ```
 
 **It may write `name`, `description`, `system_prompt`, `builtin_tools`, `tools`,
-`skills`, `metadata` and `source_ids`, and nothing else.** `tools` and `skills` mean
-something different here: they hold what the definition brought, never names,
-because a name is a lookup in *your* catalogue and a string or `{name: ...}` entry
-in `tools` is refused. The fields it may not write name something only one
-deployment knows — `subagents` names *your* subagents, `middlewares` selects code
-*you* registered, `model` a profile in *your* `models.yaml`. A definition written
-somewhere else cannot mean anything by them, so each is refused with that reason
-rather than a generic "unknown key".
+`skills`, `metadata`, `source_ids` and `datazone`, and nothing else.** `tools` and
+`skills` mean something different here: they hold what the definition brought,
+never names, because a name is a lookup in *your* catalogue and a string or
+`{name: ...}` entry in `tools` is refused. The fields it may not write name
+something only one deployment knows — `subagents` names *your* subagents,
+`middlewares` selects code *you* registered, `model` a profile in *your*
+`models.yaml`. A definition written somewhere else cannot mean anything by them, so
+each is refused with that reason rather than a generic "unknown key".
 
 `source_ids` names ids in *your* `source_ids.yaml` too, and is taken anyway, because
 it fails the safe way: a name your vocabulary does not declare stops the deployment
