@@ -305,17 +305,17 @@ def test_a_subagents_own_tool_is_held_back_from_a_caller_it_shuts_out(policied):
     """A bundle skips the request's grant -- the subagent is made of its parts -- and the
     tool's own audience is the one thing that must not be skipped with it.
     """
-    from kingfisher.core.agent.kinds.tools import _private_tools
+    from kingfisher.core.agent.kinds.tools import private_tools
 
     subagents = policied.catalogue_roots["subagents"]
     subagents.mkdir(parents=True, exist_ok=True)
     (subagents / "counter.py").write_text(CARRIER, encoding="utf-8")
     kf = Kingfisher(policied, sessions=LocalSessions())
 
-    assert [one.name for one in _private_tools(kf.catalogue, "counter", held=frozenset({"A"}))] == [
+    assert [one.name for one in private_tools(kf.catalogue, "counter", held=frozenset({"A"}))] == [
         "count"
     ], "the control: A is admitted"
-    assert _private_tools(kf.catalogue, "counter", held=frozenset({"B"})) == ()
+    assert private_tools(kf.catalogue, "counter", held=frozenset({"B"})) == ()
 
 
 def test_the_operator_listing_says_who_each_tool_admits(policied):
@@ -341,11 +341,11 @@ def test_an_unrestricted_grant_still_gets_an_allowlist_without_the_tool():
     between a shut-out caller and the tool would be that nothing registered it.
     """
     from kingfisher.core.access.capabilities import Capabilities
-    from kingfisher.core.agent.kinds.tools import _ToolSurface
+    from kingfisher.core.agent.kinds.tools import ToolSurface
     from kingfisher.core.definitions.tools.spec import FoundTool, Offering
 
     found = (FoundTool(tool=count, source="count.py", source_ids=("A",)),)
-    surface = _ToolSurface(
+    surface = ToolSurface(
         offering=Offering.of(found, builtin=("read_file",)),
         asked=Capabilities(),
         found=found,

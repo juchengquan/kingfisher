@@ -33,7 +33,7 @@ def quieten_expected_snapshot_drop() -> None:
         logger.addFilter(_ExpectedSnapshotDrop())
 
 
-def _interpreter(
+def interpreter(
     cfg: Config,
     permitted: tuple[str, ...] | None,
     *,
