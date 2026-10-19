@@ -47,6 +47,9 @@ _EXPORTS = {
     "CompiledSubagent": "kingfisher.core.definitions.subagents.spec",
     "RunEvent": "kingfisher.core.result",
     "RunResult": "kingfisher.core.result",
+    # Every `kind` a `RunEvent` can carry, and every `stop_reason` a `RunResult` can.
+    "KINDS": "kingfisher.core.result",
+    "STOP_REASONS": "kingfisher.core.result",
     "Session": "kingfisher.core.session.handle",
     "definitions_source": "kingfisher.core.definitions.seeding",
     "ensure_definitions": "kingfisher.core.workspace",
@@ -65,6 +68,8 @@ _EXPORTS = {
 }
 
 __all__ = [
+    "KINDS",
+    "STOP_REASONS",
     "UNSCOPED",
     "AccessError",
     "ArtifactError",
@@ -141,6 +146,8 @@ if TYPE_CHECKING:
     from kingfisher.core.request import DecisionError as DecisionError
     from kingfisher.core.request import Request as Request
     from kingfisher.core.request import Resume as Resume
+    from kingfisher.core.result import KINDS as KINDS
+    from kingfisher.core.result import STOP_REASONS as STOP_REASONS
     from kingfisher.core.result import ArtifactError as ArtifactError
     from kingfisher.core.result import LedgerEntry as LedgerEntry
     from kingfisher.core.result import PendingDecision as PendingDecision

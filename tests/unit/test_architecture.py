@@ -1937,6 +1937,10 @@ WITNESSES: dict[str, dict[str, str]] = {
         "Landing": "document",
         "RunResult": "embedder",
         "RunEvent": "embedder",
+        # Every value those two carry as `stop_reason` and `kind`. A caller branching on
+        # either is owed the whole list, and `core/result.py` is not somewhere it may import.
+        "KINDS": "embedder",
+        "STOP_REASONS": "embedder",
         # What `Kingfisher.sessions()` and `session()` return.
         "Session": "embedder",
         # The four an approval gate needs. A turn that stops at one hands back
@@ -4183,25 +4187,6 @@ def test_nothing_is_defined_for_tests_alone():
 # the first half could not see.
 
 
-#: Constants whose reader is somewhere neither `PRODUCTION` nor a test, named one
-#: at a time with what reads them. Deliberately not a general "it is published"
-#: escape: a name this package publishes belongs in `kingfisher.__all__`, which
-#: the rule already exempts, and reaching for this table instead would be the way
-#: to publish something without saying so.
-READ_ELSEWHERE = frozenset({
-    # The event kinds `stream()` yields. Nothing in `src/`, the driver or `evals/`
-    # reads it, so its readers are the callers of `stream()` branching on
-    # `event.kind`, and they are not in this repository to be counted.
-    "KINDS",
-    # The stop reasons, and the same argument one line for line: every caller gets
-    # one as `RunResult.stop_reason`, so its readers are the callers branching on
-    # that value and they are not in this repository. It is a declaration with
-    # nothing to derive from -- the rule below is what pins it, against the reasons
-    # the package actually assigns.
-    "STOP_REASONS",
-})
-
-
 def _constants_defined(source: str) -> list[tuple[str, str]]:
     """Every SCREAMING_CASE name a module binds at its top level, with its value."""
     found: list[tuple[str, str]] = []
@@ -4234,11 +4219,7 @@ def _constants_in_package() -> dict[str, Path]:
 
 def _unread(defined: Mapping[Named, str], live: set[Named]) -> set[Named]:
     """Of the constants defined, the ones nothing outside a test reaches."""
-    return {
-        one
-        for one, kind in defined.items()
-        if kind == "constant" and one not in live and one[1] not in READ_ELSEWHERE
-    }
+    return {one for one, kind in defined.items() if kind == "constant" and one not in live}
 
 
 #: Class shapes whose bare annotations are the point rather than a requirement: a
@@ -4311,17 +4292,17 @@ def test_no_constant_is_published_for_tests_alone():
     orphans = sorted(f"{module}.{name}" for module, name in _unread(*_package_liveness()))
 
     assert not orphans, (
-        f"defined but never read outside tests: {orphans} -- delete it, export it, "
-        "or add it to READ_ELSEWHERE naming what reads it. A constant a test is "
-        "the sole reader of pins the test to itself"
+        f"defined but never read outside tests: {orphans} -- delete it, or export it "
+        "for the caller who reads it. A constant a test is the sole reader of pins the "
+        "test to itself"
     )
 
 
-def test_the_unread_check_knows_its_two_ways_out():
-    """Every constant in the tree is reached or exempted, so the rule above passes
-    whether `_unread` subtracts anything or nothing.
+def test_the_unread_check_lets_out_what_is_reached():
+    """Every constant in the tree is reached, so the rule above passes whether `_unread`
+    subtracts anything or nothing.
     """
-    defined = {("m", "READ"): "constant", ("m", "KINDS"): "constant", ("m", "ORPHAN"): "constant"}
+    defined = {("m", "READ"): "constant", ("m", "ORPHAN"): "constant"}
 
     assert _unread(defined, {("m", "READ")}) == {("m", "ORPHAN")}
     # And the direction that must not fire: nothing defined is nothing to report.
@@ -4366,18 +4347,6 @@ def test_the_constant_reader_reads_module_level_constants():
         ("FIRST", "1"),
         ("SECOND", "1"),
     ]
-
-
-def test_every_named_constant_exemption_is_a_real_constant():
-    """An exemption for a name nobody defines any more silences nothing, and reads as
-    though somebody thought about it.
-    """
-    defined = set(_constants_in_package())
-
-    assert defined >= READ_ELSEWHERE, (
-        f"{sorted(READ_ELSEWHERE - defined)} is exempted but no longer defined in "
-        "the package -- drop the entry"
-    )
 
 
 def test_every_console_script_points_at_something_that_exists():

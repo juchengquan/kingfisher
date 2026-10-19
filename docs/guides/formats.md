@@ -241,6 +241,12 @@ one `Decision` per pending call — `approve` runs it, `reject` does not, and
 do; a plain request sent to it instead runs, and says so with a
 `decision_discarded` event.
 
+`awaiting_decision` and `decision_discarded` come from lists you can import:
+`from kingfisher import KINDS, STOP_REASONS` is every kind of event `stream()`
+yields and every reason a turn stops for. Each grows, so treat a value you do not
+know as one to ignore, and ask `RunResult.completed` whether the agent finished
+rather than comparing reasons.
+
 From a terminal that is `kingfisher decide`:
 
     kingfisher run --agent operator "clean up the build"
