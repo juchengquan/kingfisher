@@ -80,21 +80,64 @@ def a_claim_is_exclusive(make: Callable[[], Any]) -> None:
     one, two = CONTRACT_SESSIONS
     backends.open(cfg, one)
     backends.open(cfg, two)
-    if not backends.claim(cfg, one, stale_after=3600):
+    if (first := backends.claim(cfg, one, stale_after=3600)) is None:
         msg = "a claim nobody held was refused"
         raise AssertionError(msg)
-    if backends.claim(cfg, one, stale_after=3600):
+    if backends.claim(cfg, one, stale_after=3600) is not None:
         msg = f"{one!r} was claimed a second time while the first claim still holds"
         raise AssertionError(msg)
-    if not backends.claim(cfg, two, stale_after=3600):
+    if (other := backends.claim(cfg, two, stale_after=3600)) is None:
         msg = f"claiming {one!r} refused a claim on {two!r}: one lock for every session"
         raise AssertionError(msg)
-    backends.release(cfg, one)
-    if not backends.claim(cfg, one, stale_after=3600):
+    backends.release(cfg, one, first)
+    if (again := backends.claim(cfg, one, stale_after=3600)) is None:
         msg = "a released claim could not be taken again"
         raise AssertionError(msg)
-    backends.release(cfg, one)
-    backends.release(cfg, two)
+    backends.release(cfg, one, again)
+    backends.release(cfg, two, other)
+
+
+def a_claim_is_released_only_by_its_token(make: Callable[[], Any]) -> None:
+    """`release` is told whose claim to give back. One that gave back whatever was there
+    would let any caller holding a session id end the turn running in it.
+    """
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends.open(cfg, one)
+    if (token := backends.claim(cfg, one, stale_after=3600)) is None:
+        msg = "a claim nobody held was refused"
+        raise AssertionError(msg)
+    backends.release(cfg, one, "a-token-this-claim-was-never-given")
+    if backends.claim(cfg, one, stale_after=3600) is not None:
+        msg = "a release naming another token gave back a claim it did not take"
+        raise AssertionError(msg)
+    backends.release(cfg, one, token)
+
+
+def a_late_release_leaves_the_claim_that_took_over(make: Callable[[], Any]) -> None:
+    """A turn that outlived `stale_after` has had its claim taken over. Its release, when
+    it does end, must not end the claim of the turn that took it -- that turn would then
+    share its session with the next one.
+    """
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends.open(cfg, one)
+    if (late := backends.claim(cfg, one, stale_after=3600)) is None:
+        msg = "a claim nobody held was refused"
+        raise AssertionError(msg)
+    # Seen from an hour on, the first claim is a dead turn's.
+    later = time.time() + 7200
+    if (taken := backends.claim(cfg, one, stale_after=3600, now=later)) is None:
+        msg = "a claim older than stale_after was not taken over"
+        raise AssertionError(msg)
+    if taken == late:
+        msg = "the claim that took over was handed the token of the one it replaced"
+        raise AssertionError(msg)
+    backends.release(cfg, one, late)
+    if backends.claim(cfg, one, stale_after=3600) is not None:
+        msg = "a late release gave back the claim of the turn that took it over"
+        raise AssertionError(msg)
+    backends.release(cfg, one, taken)
 
 
 def a_deleted_session_is_gone(make: Callable[[], Any]) -> None:
@@ -257,23 +300,23 @@ def aclaim_and_claim_exclude_each_other(make: Callable[[], Any]) -> None:
     one = CONTRACT_SESSIONS[0]
     backends.open(cfg, one)
 
-    async def taken() -> bool:
+    async def taken() -> str | None:
         return await backends.aclaim(cfg, one, stale_after=3600)
 
-    if not backends.claim(cfg, one, stale_after=3600):
+    if (first := backends.claim(cfg, one, stale_after=3600)) is None:
         msg = "a claim nobody held was refused"
         raise AssertionError(msg)
-    if _on_a_loop_of_its_own(taken):
+    if _on_a_loop_of_its_own(taken) is not None:
         msg = "aclaim took a claim that claim still holds"
         raise AssertionError(msg)
-    backends.release(cfg, one)
-    if not _on_a_loop_of_its_own(taken):
+    backends.release(cfg, one, first)
+    if (second := _on_a_loop_of_its_own(taken)) is None:
         msg = "aclaim could not take a released claim"
         raise AssertionError(msg)
-    if backends.claim(cfg, one, stale_after=3600):
+    if backends.claim(cfg, one, stale_after=3600) is not None:
         msg = "claim took a claim that aclaim still holds"
         raise AssertionError(msg)
-    backends.release(cfg, one)
+    backends.release(cfg, one, second)
 
 
 def arelease_gives_back_what_claim_took(make: Callable[[], Any]) -> None:
@@ -284,17 +327,18 @@ def arelease_gives_back_what_claim_took(make: Callable[[], Any]) -> None:
     one = CONTRACT_SESSIONS[0]
     backends.open(cfg, one)
 
-    async def released() -> None:
-        await backends.arelease(cfg, one)
-
-    if not backends.claim(cfg, one, stale_after=3600):
+    if (token := backends.claim(cfg, one, stale_after=3600)) is None:
         msg = "a claim nobody held was refused"
         raise AssertionError(msg)
+
+    async def released() -> None:
+        await backends.arelease(cfg, one, token)
+
     _on_a_loop_of_its_own(released)
-    if not backends.claim(cfg, one, stale_after=3600):
+    if (again := backends.claim(cfg, one, stale_after=3600)) is None:
         msg = "arelease left the claim held: a second turn could not take it"
         raise AssertionError(msg)
-    backends.release(cfg, one)
+    backends.release(cfg, one, again)
 
 
 def asize_counts_what_size_does(make: Callable[[], Any]) -> None:
@@ -344,6 +388,8 @@ SESSIONS_CHECKS: tuple[Callable[[Callable[[], Any]], None], ...] = (
     two_sessions_are_kept_apart,
     a_session_is_there_on_the_next_turn,
     a_claim_is_exclusive,
+    a_claim_is_released_only_by_its_token,
+    a_late_release_leaves_the_claim_that_took_over,
     a_session_asked_for_is_listed,
     a_deleted_session_is_gone,
     a_host_path_stays_in_its_session,

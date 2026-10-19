@@ -6,9 +6,12 @@ it would its own.
 
 from __future__ import annotations
 
+import re
 import time
+import uuid
 import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -397,17 +400,51 @@ class LocalSessions(Sessions):
 
     def claim(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
-    ) -> bool:
+    ) -> str | None:
         dirs, path = LocalSessionDirs(), _claim_at(cfg, session_id)
-        if dirs.create_exclusive(path):
-            return True
+        token = uuid.uuid4().hex
+        if _take(dirs, path, token):
+            return token
+        judged = _identity(path)
+        if judged is None:
+            # Released between the two looks: one more try, as for a slot never held.
+            return token if _take(dirs, path, token) else None
         if self.held(cfg, session_id, stale_after=stale_after, now=now):
-            return False
-        dirs.remove_tree(path)
-        return dirs.create_exclusive(path)
+            return None
+        # Moved aside under a name only the claim judged stale has, rather than deleted:
+        # a second caller who judged the same claim renames onto that name and fails,
+        # where a delete would take whatever fresh claim had replaced it.
+        aside = path.with_name(f"{CLAIM}.{judged}.stale")
+        try:
+            path.rename(aside)
+        except OSError:
+            return None
+        if aside.is_dir():
+            # Before the slot can be taken again: an empty directory is a rename target.
+            (aside / _TAKEN).touch()
+        if _identity(aside) != judged:
+            # Its owner released it and a new turn claimed between the two looks, which
+            # only a turn outliving `stale_after` allows: that claim goes back.
+            with suppress(OSError):
+                aside.rename(path)
+            return None
+        return token if _take(dirs, path, token) else None
 
-    def release(self, cfg: Config, session_id: str, /) -> None:
-        LocalSessionDirs().remove_tree(_claim_at(cfg, session_id))
+    def release(self, cfg: Config, session_id: str, token: str, /) -> None:
+        path = _claim_at(cfg, session_id)
+        if _identity(path) != token:
+            # Taken over by a later turn, or never held: either way not this one's.
+            return
+        gone = path.with_name(f"{CLAIM}.{token}.released")
+        try:
+            path.rename(gone)
+        except OSError:
+            return
+        if _identity(gone) != token:
+            with suppress(OSError):
+                gone.rename(path)
+            return
+        LocalSessionDirs().remove_tree(gone)
 
     def held(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
@@ -427,6 +464,38 @@ def _where(cfg: Config, session_id: str) -> Path:
 
 #: The turn lock's name, a directory in the session's `.harness`.
 CLAIM = "claim"
+
+#: The file in a claim naming the turn that took it, and in a claim moved aside, that
+#: it was.
+_TOKEN, _TAKEN = "token", "taken"
+
+
+def _take(dirs: LocalSessionDirs, path: Path, token: str) -> bool:
+    """Create the claim, naming its taker; `False` where one is there."""
+    if not dirs.create_exclusive(path):
+        return False
+    (path / _TOKEN).write_text(token, encoding="utf-8")
+    return True
+
+
+def _identity(path: Path) -> str | None:
+    """Which claim is at `path`: its token, or `None` where there is none.
+
+    One without a token -- written before claims had them, or by a taker that died
+    between the two writes -- is named by its inode, which two callers judging it agree
+    on. Not its mtime: marking a claim taken writes into it, which moves that.
+    """
+    try:
+        token = (path / _TOKEN).read_text(encoding="utf-8")
+    except OSError:
+        token = ""
+    if re.fullmatch(r"[0-9a-f]{32}", token):
+        return token
+    try:
+        seen = path.stat()
+    except FileNotFoundError:
+        return None
+    return f"untokened-{seen.st_ino}"
 
 
 def still_held(

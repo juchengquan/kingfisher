@@ -3237,6 +3237,19 @@ default needs it.
 another claim is live, which `write` cannot be. Not chosen: a lock beside the backend,
 which asks less of an adapter and gives a session two things to wire to one place.
 
+**A claim answers a token, and only that token releases it.** `release(cfg, session_id)`
+removed whatever claim was there, so a turn that outlived `stale_after` ended the claim
+of the turn that had taken it over, and the stale bound -- the turn deadline plus the
+longest model timeout -- was all that protected it. A takeover was check, delete,
+create, and two callers judging one dead claim at once could both win: forced, the
+second deleted the claim the first had just taken. Now the stale claim is renamed
+aside under a name derived from it, so only one rename succeeds, and checked to be the
+claim judged before the slot is taken. What is left needs a turn outliving
+`stale_after`, as before, and only in the instant between reading a claim and moving
+it. Not chosen: a separate lock for takeovers, which a crash would hold for good. The
+interface changed rather than `LocalSessions` alone, on the maintainer's call: a token
+is the only way a release can say whose claim it gives back. *(2026-10-19.)*
+
 **`SessionRoot` and `SessionStore` are gone**, and `KINGFISHER_SESSION_STORE` and
 `KINGFISHER_SESSION_STORE_FACTORY` are refused rather than ignored: ignored, a deployment
 relying on one for durable sessions would lose them on upgrade with nothing said. Keeping

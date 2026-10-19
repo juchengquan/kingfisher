@@ -18,6 +18,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A claim answers a token, and a release names it, after #916
+
+- **`Sessions.claim` returns a token, or `None`, instead of `True` or `False`.** A
+  `Sessions` of your own returns a string naming this taker where it returned `True`,
+  and `None` where it returned `False`. `aclaim` changes the same way.
+- **`Sessions.release(cfg, session_id, token, /)` takes that token**, and gives back the
+  claim only if it is the one the token took; anything else is a no-op. `arelease`
+  changes the same way. A release that ignores the token fails
+  `a_claim_is_released_only_by_its_token` and
+  `a_late_release_leaves_the_claim_that_took_over` in `tests/checks/sessions.py`.
+- **A takeover must have one winner.** Two callers that judge one claim stale at once
+  must not both take it, which delete-then-create allows. `LocalSessions` renames the
+  stale claim aside under a name only that claim has; a lock with compare-and-set does
+  it directly.
+- **A claim an older kingfisher took** carries no token. A new one never releases it,
+  and takes it over once it is older than `claim_stale_after`, as any dead turn's.
+
 ## A compiled subagent is handed none of the gated tools, after #907
 
 - **A tool the agent gates with `interrupt_on` is kept out of what a compiled

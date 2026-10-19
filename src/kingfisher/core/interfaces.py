@@ -153,17 +153,21 @@ class Sessions(Protocol):
 
     def claim(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
-    ) -> bool:
-        """Take this session's turn lock, or answer False because a live turn holds it.
+    ) -> str | None:
+        """Take this session's turn lock and answer a token naming this taker, or `None`
+        because a live turn holds it.
 
         Two turns in one session share a conversation and the last write wins, so this
         refuses the second. A claim older than `stale_after` seconds belongs to a dead
-        turn and is taken over; `now` is the clock that judges it.
+        turn and is taken over -- by one caller only, however many judged it stale at
+        once; `now` is the clock that judges it.
         """
         ...
 
-    def release(self, cfg: Config, session_id: str, /) -> None:
-        """Give the lock back. Safe where it was never taken."""
+    def release(self, cfg: Config, session_id: str, token: str, /) -> None:
+        """Give back the lock `token` took. Safe where it was never taken, and a no-op
+        where a later turn holds it: a turn that outlived its claim must not end the
+        claim of the turn that took it over."""
         ...
 
     def held(
@@ -199,13 +203,13 @@ class Sessions(Protocol):
 
     async def aclaim(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
-    ) -> bool:
+    ) -> str | None:
         return await off_loop(
             thread_pool(), self.claim, cfg, session_id, stale_after=stale_after, now=now
         )
 
-    async def arelease(self, cfg: Config, session_id: str, /) -> None:
-        return await off_loop(thread_pool(), self.release, cfg, session_id)
+    async def arelease(self, cfg: Config, session_id: str, token: str, /) -> None:
+        return await off_loop(thread_pool(), self.release, cfg, session_id, token)
 
 
 class Instructions(Protocol):
