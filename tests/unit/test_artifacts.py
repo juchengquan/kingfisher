@@ -7,8 +7,9 @@ from dataclasses import replace
 import pytest
 
 from kingfisher.core.layout import Layout
+from kingfisher.core.request import Request
 from kingfisher.core.result import ArtifactError
-from kingfisher.core.run import Request, run
+from kingfisher.core.run import run
 from kingfisher.core.session.files import collect_artifacts, read_artifact
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at

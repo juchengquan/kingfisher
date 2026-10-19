@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import platform
 from dataclasses import replace
 from pathlib import Path
 
@@ -13,11 +12,7 @@ from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import LocalSessionDirs
 from kingfisher.plugins.sessions.permissions import protect_inputs, writable_inputs
-from tests.conftest import start, supplied
-
-macos = pytest.mark.skipif(
-    platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
-)
+from tests.conftest import macos, start, supplied
 
 #: A deployment that renamed the folder the caller's files go in.
 MOVED = Layout(inputs="in", outputs="out", memory="mem", scratchpad="scratch")

@@ -13,25 +13,12 @@ from types import MappingProxyType
 
 import pytest
 
-
-def _repository_root(start: Path | None = None) -> Path:
-    """The checkout this file is in, found rather than counted."""
-    here = (start or Path(__file__)).resolve()
-    for candidate in here.parents:
-        if (candidate / "pyproject.toml").is_file() and (candidate / "src" / "kingfisher").is_dir():
-            return candidate
-    msg = (
-        f"no repository root above {here}: expected a directory holding both "
-        f"pyproject.toml and src/kingfisher. These rules read files by path and "
-        f"would otherwise scan the wrong tree, or nothing, and report success."
-    )
-    raise AssertionError(msg)
-
+from tests.conftest import repository_root
 
 #: The checkout, and the library inside it. Everything path-shaped here starts from one
 #: of these two, so a move is one line rather than four -- which is how three of the
 #: four came to disagree the last time this tree changed shape.
-REPO = _repository_root()
+REPO = repository_root()
 SRC = REPO / "src" / "kingfisher"
 
 #: The definition kinds' own directory. Named here rather than spelled at each of
@@ -1960,11 +1947,12 @@ WITNESSES: dict[str, dict[str, str]] = {
         "AccessError": "embedder",
         "CapabilityError": "embedder",
         "ConfigError": "embedder",
+        "InputsError": "embedder",
         "QuotaExceededError": "embedder",
         "SessionBusyError": "embedder",
         "SubagentError": "embedder",
         "UnknownSessionError": "embedder",
-        # What `Kingfisher.artifact` raises for a name that is not an artifact, which a
+        # What `Session.artifact` raises for a name that is not an artifact, which a
         # caller fetching by a name it was handed tells apart from a session it cannot
         # reach.
         "ArtifactError": "embedder",
@@ -2884,7 +2872,7 @@ def test_the_world_rule_sees_a_bare_open_and_not_a_name_that_shadows_it(tmp_path
 
 
 #: Calls that *change* the filesystem, as opposed to reading it or the
-#: environment. `open`, `replace` and `copy` are left out because `Session.open`,
+#: environment. `open`, `replace` and `copy` are left out because `Sessions.open`,
 #: `dataclasses.replace` and a compiled graph's `copy` are named the same, and all three
 #: are legitimate where this rule runs; `shutil.copy` is refused by its import instead.
 MUTATING_CALLS = frozenset({
@@ -3008,22 +2996,76 @@ def test_the_mode_rule_can_tell_a_chmod_from_the_calls_around_it(tmp_path):
     assert _mode_changes(innocent) == [], "the neighbouring filesystem calls are not modes"
 
 
+def _agent_construction_stubs(path: Path) -> list[int]:
+    """The lines on which a module's `setattr` call names `create_deep_agent`.
+
+    The whole call rather than the line it starts on, or a stub whose arguments wrap
+    onto the next line goes unseen.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return sorted(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute | ast.Name)
+        # a substring, so `object.__setattr__` is a setattr too
+        and "setattr" in (node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id)
+        and "create_deep_agent" in ast.unparse(node)
+    )
+
+
 def test_no_test_stubs_out_agent_construction():
     """The blind spot, closed and kept closed."""
-    here = Path(__file__).resolve()
-    offenders = []
-    for path in sorted(here.parent.glob("test_*.py")):
-        if path == here:  # this module names the thing it forbids
-            continue
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "setattr" in line and "create_deep_agent" in line:
-                offenders.append(f"{path.name}:{number}")
+    offenders = [
+        f"{path.name}:{line}"
+        for path in sorted(Path(__file__).resolve().parent.glob("test_*.py"))
+        for line in _agent_construction_stubs(path)
+    ]
 
     assert not offenders, (
         f"patch create_deep_agent directly at {offenders} — read what the build "
         "attached off the `Assembled` record `build_agent` returns, which needs no "
         "patching and still lets deepagents validate the call"
     )
+
+
+def test_the_stub_rule_reads_a_call_that_wraps(tmp_path):
+    """A `monkeypatch.setattr(` whose target sits on the next line escaped the rule above.
+
+    Both directions, as for the mode rule: it runs over a tree with no offenders.
+    """
+    split = tmp_path / "test_split.py"
+    split.write_text(
+        "def test(monkeypatch):\n"
+        "    monkeypatch.setattr(\n"
+        '        builder, "create_deep_agent", fake\n'
+        "    )\n"
+    )
+    one_line = tmp_path / "test_one_line.py"
+    one_line.write_text(
+        'def test(monkeypatch):\n    monkeypatch.setattr(builder, "create_deep_agent", fake)\n'
+    )
+    bare = tmp_path / "test_bare.py"
+    bare.write_text(
+        "def test():\n"
+        "    setattr(builder,\n"
+        '            "create_deep_agent", fake)\n'
+        "    object.__setattr__(builder,\n"
+        '                       "create_deep_agent", fake)\n'
+    )
+    innocent = tmp_path / "test_innocent.py"
+    innocent.write_text(
+        "def test(monkeypatch):\n"
+        "    monkeypatch.setattr(\n"
+        '        builder, "other", fake\n'
+        "    )\n"
+        "    assert built(create_deep_agent)\n"
+    )
+
+    assert _agent_construction_stubs(split) == [2], "the wrapped call is the case this exists for"
+    assert _agent_construction_stubs(one_line) == [2], "the one-line form was caught before"
+    assert _agent_construction_stubs(bare) == [2, 4], "the builtins stub as much as the fixture"
+    assert _agent_construction_stubs(innocent) == [], "naming it outside a setattr is not a stub"
 
 
 def test_only_one_module_decides_what_a_skill_is():
@@ -3379,8 +3421,8 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
-    "ArtifactError", "CapabilityError", "DecisionError", "QuotaExceededError",
-    "SessionBusyError", "SubagentError", "UnknownSessionError",
+    "ArtifactError", "CapabilityError", "DecisionError", "InputsError",
+    "QuotaExceededError", "SessionBusyError", "SubagentError", "UnknownSessionError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.
@@ -3393,8 +3435,8 @@ DEPLOYMENT_ERRORS = frozenset({
     # while `SubagentError` sits above: a caller may upload a subagent and cannot
     # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
-    "AccessError", "AgentError", "ConfigError", "HostPathError", "InputsError",
-    "LoadError", "MiddlewareError", "ToolError", "UnsafeReferenceError",
+    "AccessError", "AgentError", "ConfigError", "HostPathError", "LoadError",
+    "MiddlewareError", "ToolError", "UnsafeReferenceError",
 })
 
 #: Caused by the model's provider, and never raised to a caller: a turn ends on it as a
@@ -4634,7 +4676,7 @@ def test_the_resolve_rule_does_not_see_a_reach_that_is_not_one(source):
 
 
 def _fake_checkout(root: Path) -> Path:
-    """A directory that looks like this repository to `_repository_root`."""
+    """A directory that looks like this repository to `repository_root`."""
     (root / "src" / "kingfisher").mkdir(parents=True)
     (root / "pyproject.toml").write_text("", encoding="utf-8")
     return root
@@ -4652,7 +4694,7 @@ def test_the_root_is_the_nearest_one_not_an_outer_one(tmp_path):
     deep = inner / "tests"
     deep.mkdir()
 
-    assert _repository_root(deep / "a_test.py") == inner
+    assert repository_root(deep / "a_test.py") == inner
 
 
 def test_no_root_at_all_is_an_error_rather_than_a_climb(tmp_path):
@@ -4663,7 +4705,7 @@ def test_no_root_at_all_is_an_error_rather_than_a_climb(tmp_path):
     lonely.mkdir(parents=True)
 
     with pytest.raises(AssertionError, match="no repository root"):
-        _repository_root(lonely / "a_test.py")
+        repository_root(lonely / "a_test.py")
 
 
 def test_a_directory_that_only_half_matches_is_not_the_root(tmp_path):
@@ -4673,7 +4715,7 @@ def test_a_directory_that_only_half_matches_is_not_the_root(tmp_path):
     (half / "tests").mkdir(parents=True)
     (half / "pyproject.toml").write_text("", encoding="utf-8")  # no src/kingfisher
 
-    assert _repository_root(half / "tests" / "a_test.py") == outer
+    assert repository_root(half / "tests" / "a_test.py") == outer
 
 
 def test_every_path_rule_starts_from_the_same_two_names():
@@ -4820,11 +4862,36 @@ def test_the_provider_lookup_is_not_fooled_by_a_shared_root_name():
 #: class this package owns from one it is describing in someone else's library.
 PROSE_ATTR = re.compile(r"`([A-Z][A-Za-z0-9]*)\.([a-z_][a-z0-9_]*)`")
 
-#: Prose naming a class attribute *because* it is gone, excused per file. Empty,
-#: and kept for the reason `PROSE_GONE` is keyed by file: the day a docstring
-#: explains which rename removed an attribute, that is the rule working rather
-#: than a defect, and there has to be somewhere to say so.
-PROSE_ATTR_GONE: dict[str, frozenset[str]] = {}
+#: Prose naming a class attribute *because* it is gone, excused per file for the
+#: reason `PROSE_GONE` is: one name was a removal in `upgrading.md` and a wrong
+#: pointer in `evals/` at once, and a table keyed by name would excuse both.
+PROSE_ATTR_GONE: dict[str, frozenset[str]] = {
+    # What a release took away, and the replacements a later release took away too.
+    "docs/upgrading.md": frozenset({
+        "Config.backend_factory", "Config.deployment_prompt", "Config.plugins_factory",
+        "Config.session_backends_factory", "Config.session_id", "Config.sessions_factory",
+        "Config.shell_path_extra", "Config.shell_sandbox", "Kingfisher.agent_named",
+        "Kingfisher.artifact", "Kingfisher.held_for", "Kingfisher.pending",
+        "Kingfisher.session_size", "Request.data", "RunResult.log_path",
+        "RunResult.session_dir",
+    }),
+    # What a decision removed, or declined to build.
+    "docs/decisions.md": frozenset({
+        "Capabilities.including", "Config.paths", "Config.shell",
+        "Kingfisher.remember_agent", "Request.input_refs", "Request.skill_refs",
+    }),
+    # The wrong citations this rule was written against, quoted as such.
+    "tests/unit/test_architecture.py": frozenset({
+        "Capabilities.unknown", "Config.resolve_model", "Kingfisher._snapshot",
+    }),
+}
+
+
+def _has_attribute(cls: type, attr: str) -> bool:
+    """Annotations too: a dataclass field with no default is not a class attribute."""
+    return hasattr(cls, attr) or any(
+        attr in inspect.get_annotations(base) for base in cls.__mro__
+    )
 
 
 def _exported_classes() -> dict[str, type]:
@@ -4843,14 +4910,14 @@ def test_prose_names_class_attributes_that_exist():
     """A docstring pointing at a method nobody has is a wrong map, not a typo."""
     classes = _exported_classes()
     wrong: list[str] = []
-    for path in _package_modules():
+    for path in _every(_prose_bearing_files(), "the prose"):
         relative = path.relative_to(REPO).as_posix()
         excused = PROSE_ATTR_GONE.get(relative, frozenset())
         for head, attr in PROSE_ATTR.findall(path.read_text(encoding="utf-8")):
             reference = f"{head}.{attr}"
             if head not in classes or reference in excused:
                 continue
-            if not hasattr(classes[head], attr):
+            if not _has_attribute(classes[head], attr):
                 wrong.append(f"{relative}: `{reference}`")
 
     assert not wrong, (
@@ -4859,6 +4926,20 @@ def test_prose_names_class_attributes_that_exist():
         + " -- correct it, or add it to PROSE_ATTR_GONE with the rename that "
         "removed it"
     )
+
+
+def test_every_excused_class_attribute_is_named_and_gone():
+    """An excusal for prose since edited away, or an attribute since restored, excuses nothing."""
+    classes = _exported_classes()
+    dead = []
+    for relative, excused in PROSE_ATTR_GONE.items():
+        named = {f"{h}.{a}" for h, a in PROSE_ATTR.findall((REPO / relative).read_text("utf-8"))}
+        for reference in sorted(excused):
+            head, _, attr = reference.partition(".")
+            if reference not in named or _has_attribute(classes[head], attr):
+                dead.append(f"{relative}: `{reference}`")
+
+    assert not dead, f"{dead} are excused in PROSE_ATTR_GONE and need not be"
 
 
 def test_the_class_attribute_rule_is_looking_at_something():

@@ -10,10 +10,8 @@ workspace -- the shell could reach them anyway.
 
 from __future__ import annotations
 
-import platform
 from pathlib import Path
 
-import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
@@ -23,11 +21,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import CLAIM, backend_at
-from tests.conftest import FakeToolCallingModel, Through, pin, start
-
-macos = pytest.mark.skipif(
-    platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
-)
+from tests.conftest import FakeToolCallingModel, Through, macos, pin, start
 
 AGENT = """name: assistant
 description: An agent.

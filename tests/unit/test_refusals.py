@@ -17,8 +17,9 @@ import pytest
 
 from kingfisher.cli.health import examine, worst
 from kingfisher.core.definitions.catalogue import Definitions
+from tests.conftest import repository_root
 
-SRC = Path(__file__).resolve().parents[2] / "src" / "kingfisher"
+SRC = repository_root() / "src" / "kingfisher"
 
 #: The areas a definition is read in. A refusal outside these is something else --
 #: a request being narrowed, a port being wired -- and is not what `doctor` promises.
