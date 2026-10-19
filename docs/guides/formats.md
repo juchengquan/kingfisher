@@ -246,11 +246,14 @@ From a terminal that is `kingfisher decide`:
     kingfisher run --agent operator "clean up the build"
     # stopped: awaiting_decision -- waiting for a decision on 1 call(s):
     #   4f2a91c0#0  execute  {'command': 'rm -rf build'}
+    #       takes: approve, reject, respond
+    # answer with: kingfisher decide --session <id> --approve 4f2a91c0#0
     kingfisher decide --session <id> --approve 4f2a91c0#0
 
 `--reject` and `--respond CALL_ID=TEXT` are the other two. Every pending call has
 to be answered in one go: the turn resumes mid-superstep, and a half-answered
-gate would run the approved call and leave the other hanging. `kingfisher decide
+gate would run the approved call and leave the other hanging. So the line a run
+prints answers every call, each by the first decision it takes. `kingfisher decide
 --session ID` with no decision prints what is waiting and changes nothing, which
 is how to get the ids back if you have lost the output of the run that paused.
 

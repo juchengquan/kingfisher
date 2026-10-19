@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 import time
 import warnings
@@ -50,10 +51,10 @@ from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.definitions.seeding import REMEDY, UNCONSULTED
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Sequence
     from typing import TextIO
 
-    from kingfisher import Config, Kingfisher, RunResult
+    from kingfisher import Config, Kingfisher, PendingDecision, RunResult
     from kingfisher.plugins import JsonlRunEvents
 
 #: Read from the working directory only: a bare `load_dotenv()` walks up looking for
@@ -611,11 +612,27 @@ def _show_pending(kf: Kingfisher, session_id: str, held: Held | None) -> int:
         print(f"session {session_id} is not waiting on a decision", file=sys.stderr)
         return 2
     print(f"session {session_id} is waiting on {len(waiting)} call(s):", file=sys.stderr)
-    for call in waiting:
+    _list_calls(waiting)
+    return 1
+
+
+def _list_calls(calls: Sequence[PendingDecision]) -> None:
+    """Each waiting call, and what it will accept."""
+    for call in calls:
         whose = f" (via {call.agent})" if call.agent else ""
         print(f"  {call.call_id}  {call.tool}{whose}  {call.args}", file=sys.stderr)
         print(f"      takes: {', '.join(call.decisions)}", file=sys.stderr)
-    return 1
+
+
+def _answer(call: PendingDecision) -> str:
+    """One flag answering `call`, by the first decision it takes: a flag it refuses would
+    make the whole printed line one `decide` refuses."""
+    takes = call.decisions or ("approve",)
+    if "approve" in takes:
+        return f"--approve {call.call_id}"
+    if "reject" in takes:
+        return f"--reject {call.call_id}"
+    return f"--respond {shlex.quote(f'{call.call_id}=<your answer>')}"
 
 
 def _awaiting(result: RunResult) -> None:
@@ -629,12 +646,11 @@ def _awaiting(result: RunResult) -> None:
         f"{len(result.pending)} call(s):",
         file=sys.stderr,
     )
-    for call in result.pending:
-        whose = f" (via {call.agent})" if call.agent else ""
-        print(f"  {call.call_id}  {call.tool}{whose}  {call.args}", file=sys.stderr)
+    _list_calls(result.pending)
+    # Every call: `decide` refuses an answer that leaves one waiting.
     print(
         f"answer with: kingfisher decide --session {result.session_id} "
-        f"--approve {result.pending[0].call_id}",
+        + " ".join(_answer(call) for call in result.pending),
         file=sys.stderr,
     )
     print(
