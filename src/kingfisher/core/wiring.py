@@ -8,13 +8,13 @@ from typing import Any
 from .config import ConfigError
 
 
-def _wanted(port: type) -> str:
-    """The method names a protocol asks for, so a refusal can say what is missing."""
-    return ", ".join(sorted(name for name in dir(port) if not name.startswith("_")))
+def _wanted(interface: type) -> str:
+    """Every public name on `interface`, field or method, so a refusal can say what is missing."""
+    return ", ".join(sorted(name for name in dir(interface) if not name.startswith("_")))
 
 
-def store_named(spec: str, *, setting: str, port: type) -> Any:
-    """Import `spec`, call it, and check the result is a `port`."""
+def built_from_setting(spec: str, *, setting: str, interface: type) -> Any:
+    """Import `spec`, call it, and check the result is an `interface`."""
     module_name, separator, attribute = spec.partition(":")
     if not separator or not module_name or not attribute:
         msg = (
@@ -42,10 +42,10 @@ def store_named(spec: str, *, setting: str, port: type) -> Any:
         raise ConfigError(msg) from exc
 
     built = factory()
-    if not isinstance(built, port):
+    if not isinstance(built, interface):
         msg = (
             f"{setting} names {spec!r}, which returned {type(built).__name__} -- not "
-            f"a {port.__name__}. It has to answer to {_wanted(port)}"
+            f"a {interface.__name__}. It has to answer to {_wanted(interface)}"
         )
         raise ConfigError(msg)
     return built
