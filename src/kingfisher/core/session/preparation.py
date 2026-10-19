@@ -85,6 +85,7 @@ class Preparation:
     _reaches_pin: Callable[..., bool]
     _refuse_if_over_budget: Callable[..., Steps[None]]
     _files_for: Callable[..., Steps[Any]]
+    _known_steps: Callable[[], Steps[tuple[str, ...]]]
     _agent_for: Callable[..., Steps[AgentSpec | None]]
     _graph_for: Callable[..., Any]
 
@@ -98,7 +99,8 @@ class Preparation:
         """Everything up to the model call, as the one sequence both loops drive.
 
         Every refusal comes before `run_start`, so a refused request leaves no turn
-        behind; the claim is taken before them and given back if one refuses.
+        behind; the claim is taken before them and given back if one refuses, and a
+        session this request made goes with it.
         """
         cfg = self.cfg
         session = yield from self._session_for(request)
@@ -109,8 +111,12 @@ class Preparation:
         # Opened before anything else reads the session: who may touch it is decided by
         # its pinned agent, and that is read through the backend too.
         if files is None:
+            # Asked before the open, which makes the session it is asked for: a refusal
+            # may take back only a session this request made.
+            made = session.id not in (yield from self._known_steps())
             files = yield from self._files_for(session.id)
         else:
+            made = False
             refuse_files_of_another(files, session.id)
         harness = HarnessFiles(files)
         # Read once, for reach here and for the agent the turn runs; neither asks for a
@@ -147,7 +153,11 @@ class Preparation:
                 held=held,
             )
         except BaseException:
-            # A call that changes something, so a cancel arriving during it waits for it.
+            # Each a call that changes something, so a cancel arriving during it waits for
+            # it. The delete before the release: once the claim is back, a turn may start
+            # in what is being removed.
+            if made:
+                yield changing(self._sessions, "delete", cfg, session.id)
             yield changing(self._sessions, "release", cfg, session.id, claimed)
             raise
         return replace(prepared, claim=claimed)
