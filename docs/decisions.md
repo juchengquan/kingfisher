@@ -1270,8 +1270,10 @@ nothing red -- accepted as the documented meaning of an absent vocabulary.
 of three doors; reading a session answered, because `held_by` returns `None` for no
 vocabulary, nobody named and `UNSCOPED`, and every reach check reads `None` as everything
 -- wrong for the second, and the answer named the agent someone else's session is pinned
-to. `caller_holds` is the refusal and the lookup together, and `_prepare_steps`,
-`_agent_named` and `Kingfisher.session` go through it. Housekeeping takes no caller:
+to. `caller_holds` is the refusal and the lookup together, and `_prepare_steps` and
+`Kingfisher.session` go through it. `_agent_named` is not a door: it filters on what
+`_prepare_steps` found, since a second ask could only repeat the answer or refuse what
+the first had already refused. Housekeeping takes no caller:
 `sessions()` naming nobody is the operator's view of every session, and deleting acts on
 a `Session` handle already handed out. `kingfisher reap` passes `source_ids=UNSCOPED`
 where it reads a session, which is what a caller who means no caller writes, and

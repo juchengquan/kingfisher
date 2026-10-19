@@ -10,7 +10,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.prompting import INSTRUCTIONS_FILE, InstructionsFile
 from kingfisher.core.config import ConfigError
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import EVERY_TOOL, an_agent, subagent_of, subagents_dir
+from tests.conftest import EVERY_TOOL, agent_named, an_agent, subagent_of, subagents_dir
 from tests.unit.scripted import Scripted
 
 HELPER = """name: helper
@@ -81,7 +81,7 @@ def test_a_build_hands_the_instructions_to_every_subagent(cfg, session_dir):
 
     built = build_agent(
         cfg,
-        agent=kf._agent_named("lead"),
+        agent=agent_named(kf, "lead"),
         backend=backend_at(cfg, session_dir),
         checkpointer=None,
         instructions="House rule: cite every figure.",
