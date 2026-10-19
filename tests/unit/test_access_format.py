@@ -7,7 +7,8 @@ import re
 import pytest
 
 from kingfisher.core.access import policy as access_policy
-from kingfisher.core.access.source_ids import AccessError, SourceIds, parse
+from kingfisher.core.access.policy import parse
+from kingfisher.core.access.source_ids import AccessError, SourceIds
 
 
 def test_a_whole_document_parses():

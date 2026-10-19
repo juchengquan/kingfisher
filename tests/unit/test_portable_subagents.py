@@ -136,7 +136,7 @@ def test_a_portable_subagent_is_built_only_for_a_caller_it_admits(cfg, session_d
 
     import yaml
 
-    from kingfisher.core.access.source_ids import parse
+    from kingfisher.core.access.policy import parse
 
     write_portable(cfg, extra='    "source_ids": ["A"],')
     policied = replace(

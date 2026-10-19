@@ -12,7 +12,8 @@ from langchain_core.tools import tool
 
 from kingfisher import ToolSpec
 from kingfisher.core.access.capabilities import ALL
-from kingfisher.core.access.source_ids import AccessError, parse
+from kingfisher.core.access.policy import parse
+from kingfisher.core.access.source_ids import AccessError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorder import Audiences
 from kingfisher.core.definitions.tools.catalogue import (

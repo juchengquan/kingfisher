@@ -3959,7 +3959,7 @@ def test_the_resolve_rule_sees_every_spelling_of_that_reach(source):
     "source",
     [
         "other.resolve(cfg)",
-        "from kingfisher.core.access.source_ids import parse",
+        "from kingfisher.core.access.policy import parse",
         "confinement.profile(home=h)",
         'getattr(confinement, "profile")(home=h)',
         "make().resolve(cfg)",

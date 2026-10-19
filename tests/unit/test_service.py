@@ -705,7 +705,7 @@ def _policied(cfg):
     """A deployment with a vocabulary, which is the only case that resolved twice."""
     import yaml
 
-    from kingfisher.core.access.source_ids import parse
+    from kingfisher.core.access.policy import parse
 
     an_agent(cfg, "only", source_ids="[A]")
     return replace(cfg, access=parse(yaml.safe_load("source_ids: [A]\n"), source="s.yaml"))

@@ -25,7 +25,7 @@ from langgraph.types import Command
 
 from assets.middlewares.tool_note import ToolNote
 from kingfisher import Kingfisher, Request
-from kingfisher.core.access.source_ids import parse
+from kingfisher.core.access.policy import parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorded import summary
 from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware

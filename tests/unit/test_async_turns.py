@@ -485,7 +485,7 @@ def test_cancelling_at_any_step_of_setup_leaves_the_session_free(cfg, monkeypatc
     """
     import yaml
 
-    from kingfisher.core.access.source_ids import parse
+    from kingfisher.core.access.policy import parse
     from kingfisher.core.session import steps as steps_module
     from tests.conftest import an_agent
 

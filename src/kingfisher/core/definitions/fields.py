@@ -13,7 +13,6 @@ from kingfisher.core.access.capabilities import ALL, SEPARATOR, Selection
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
 
-    # Type-only: `core.access.source_ids` imports this module, so a runtime import is a cycle.
     from kingfisher.core.access.source_ids import Audience
 
 #: How alike two names must look for one to be called a typo of the other. It only ever
