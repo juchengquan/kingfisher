@@ -594,7 +594,6 @@ def test_a_new_request_supersedes_the_pause_and_says_so(cfg):
     )
     paused = kf.run(Request("write it"))
 
-    kf.graph = _gated(calls=[], after="something else")
     events = list(kf.stream(Request("never mind", session_id=paused.session_id)))
     superseded = next(e.result for e in events if e.kind == "finished")
 
