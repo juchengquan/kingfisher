@@ -980,6 +980,56 @@ def test_the_operator_still_sees_all_of_it(form, cfg, at_the_command_line, capsy
     assert "secret_export" in printed
 
 
+#: An agent that stops on one tool of each kind: a built-in, which has no audience and so
+#: is shown to everybody, and `line_count`, whose own lock keeps it from `B`.
+GATED = """name: gatekeeper
+description: An agent.
+source_ids: [A, B]
+tools: [line_count]
+interrupt_on: [execute, line_count]
+system_prompt: |
+  You do the task.
+"""
+
+
+def test_the_listing_names_what_an_agent_stops_on(cfg, at_the_command_line, capsys):
+    """`interrupt_on` reached no listing at all: an operator could read every tool an
+    agent holds and not learn that a person is asked before two of them run -- and a gate
+    is the one line of an agent file that changes what happens rather than what is held.
+    """
+    _workspace(cfg, GATED)
+
+    assert main(["list"]) == 0
+
+    assert "      interrupt_on: execute, line_count" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("form", ["text", "json"])
+def test_a_scoped_listing_names_no_gated_tool_out_of_reach(
+    form, cfg, at_the_command_line, capsys
+):
+    """A gate names a tool, so the line filters as the tools line does: `line_count`'s own
+    lock keeps it from `B`, and naming it under an agent they *can* open is the leak the
+    per-agent maps here have had before.
+
+    The built-in beside it is the control, and it is read off the gate line rather than
+    searched for in the output: `execute` is in the built-in section whatever this filter
+    does, so a bare `"execute" in printed` is a check that cannot fail.
+    """
+    _workspace(cfg, GATED)
+
+    assert main(["list", "--as", "B"] + (["--json"] if form == "json" else [])) == 0
+
+    printed = capsys.readouterr().out
+    assert "line_count" not in printed, "a gate named a tool this caller's lock shuts out"
+    kept = (
+        json.loads(printed)["agent_gates"]["gatekeeper"]
+        if form == "json"
+        else [one.split(": ", 1)[1] for one in printed.splitlines() if "interrupt_on:" in one]
+    )
+    assert kept == ["execute"], f"the {form} form dropped the gate it should still name"
+
+
 @pytest.mark.parametrize("form", ["text", "json"])
 def test_a_scoped_listing_carries_no_tool_out_of_reach(form, cfg, at_the_command_line, capsys):
     """Neither the tool whose own lock keeps it from this caller, nor the one

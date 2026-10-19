@@ -58,6 +58,8 @@ def _agents(found: Inventory) -> Iterator[str]:
         )
         # Only what it names, since a helper one of them consults runs only if named here too.
         yield from _granted("subagents", found.agent_subagents.get(name), _today)
+        if gates := found.agent_gates.get(name):
+            yield f"      interrupt_on: {', '.join(gates)}"
     if not found.agents:
         yield f"  (none)  — a request must name one; try {SEED_HINT}"
     yield ""
@@ -350,6 +352,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "agent_subagents": _grants_json(found.agent_subagents),
         "agent_tools": _grants_json(found.agent_tools),
         "agent_builtin_tools": _grants_json(found.agent_builtin_tools),
+        "agent_gates": {name: list(gates) for name, gates in found.agent_gates.items()},
         "agents_error": found.agents_error,
         "builtin_tools": list(found.builtin_tools),
         "tools": list(found.tools),

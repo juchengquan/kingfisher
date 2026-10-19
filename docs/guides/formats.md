@@ -289,13 +289,22 @@ deciding that on their behalf. A subagent's own bundled tool is gated like any
 other, by its name, which is how a tool that exists in no other graph can be
 stopped at all.
 
-**A compiled subagent's own tools cannot be.** deepagents runs a graph it was
-handed as it is and gives it none of this agent's gates, and kingfisher adds no
-middleware to one either. A gate on a name only one of those folders holds is
-refused, with that reason rather than as a name nothing answers to. A gate on a
-catalogue tool such a subagent was *also* handed stops the agent's own calls and
-not that subagent's — worth knowing before you grant a compiled subagent a tool
-you gate.
+**A compiled subagent is handed none of the gated tools.** deepagents runs a graph
+it was handed as it is and gives it none of this agent's gates, and kingfisher adds
+no middleware to one either, so a call there would meet nothing. A gated tool is
+therefore kept out of what `build` receives — the same answer `eval` gives, for the
+same reason — and the subagent calling it anyway is told it is not one of its tools,
+which ends that call and not the turn.
+
+So a gate costs a compiled subagent the catalogue tools it names, and that is the
+trade: the promise that nothing runs unasked is kept, and a capability it inherited
+goes. `kingfisher list` prints each agent's `interrupt_on` line, which is where to
+read what a gate takes away.
+
+A gate on a name **only** one of those folders holds is refused instead, with that
+reason rather than as a name nothing answers to. Withholding there would empty the
+subagent of the tool it was shipped with and say nothing, and a gate on a name
+nothing else in the workspace defines is more likely a mistake than a decision.
 
 ### Two fields are refused
 

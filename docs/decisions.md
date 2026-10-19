@@ -557,9 +557,22 @@ refused at the read rather than resolved to the bare name, because the bare name
 every tool answering to it: that is more than the reference asks for, and a gate
 silently doing more is the same defect the other way round. A name only a *compiled*
 subagent's folder holds is refused with the reason it cannot fire -- deepagents hands a
-graph it did not build none of this agent's gates. **Still open:** a gated *catalogue*
-tool handed to a compiled subagent runs there unapproved, which predates this and is
-measured. *(2026-10-19, from an architecture review.)*
+graph it did not build none of this agent's gates. *(2026-10-19, from an architecture
+review.)*
+
+**And a compiled subagent is handed none of the gated tools, rather than refused one.**
+The same hole one door along, and older: a gated *catalogue* tool handed to a compiled
+subagent ran there unapproved, measured on a tree without either change. `eval` had
+already settled it -- `interpreter.py` leaves a gated tool out of `tools.*`, "since from
+here it would run with nobody asked" -- and a compiled graph is the only other surface a
+call reaches without meeting a gate, so it gets the same answer. Refusing the build
+instead was not taken: a compiled subagent inheriting `["*"]` would stop every deployment
+whose agent gates any workspace tool, over a tool that subagent may never call. The cost
+is real and stated rather than hidden -- the subagent loses a capability it inherited, and
+`kingfisher list` grew an `interrupt_on` line so a reader can see which. The exception
+above stands: where **only** a compiled subagent's folder holds the name, withholding
+would empty it of the tool it ships with, and being told beats a subagent that silently
+cannot work. *(2026-10-19, from an architecture review.)*
 
 **A turn resolves its agent once.** Admission resolved it twice down two branches --
 from the catalogue, writing the pin, then reading the pin back -- counted at two calls,
