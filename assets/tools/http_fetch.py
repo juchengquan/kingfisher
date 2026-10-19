@@ -14,7 +14,9 @@ written, and say what the arguments mean in the words a caller would use.
 from __future__ import annotations
 
 import codecs
+import re
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 from typing import Any
@@ -40,6 +42,38 @@ MAX_SECONDS = 30
 #: Read in pieces rather than in one call, which is what gives the deadline somewhere
 #: to be checked.
 CHUNK_BYTES = 64 * 1024
+
+#: The share of a body that may be characters no reader can use before this tool
+#: refuses it rather than spend the context on it. Measured: a 20 KB PNG answered
+#: 20,000 characters of which 12,283 were unreadable, 61.4%, and a PDF the same;
+#: gzipped text, the most text-like binary there is, 50.0%. Real pages measured 0.0%,
+#: and the closest text came to this number was 10.3% -- French prose written in
+#: Latin-1 and declared UTF-8, where the accents are lost and the sentences still read.
+#: So the question is not text or binary but readable or not, and this sits between the
+#: two things measured either side of it.
+MAX_UNREADABLE_SHARE = 0.25
+
+#: What a content type has to look like before a refusal prints it. A header is the
+#: server's own text and a refusal is one line: `get_content_type()` hands back
+#: whatever it parsed, so a type of five thousand characters would put five thousand
+#: characters of someone else's writing in an answer about their page.
+CONTENT_TYPE = re.compile(r"[\w.+-]{1,40}/[\w.+-]{1,40}")
+
+
+def _unreadable(text: str) -> int:
+    """How much of `text` no reader can use.
+
+    The character `decode` writes where the bytes were not its encoding's, and the
+    control codes that are not whitespace. Both, because either alone misses half of
+    this: a PNG is 49.9% replacement characters, and UTF-16 bytes read as UTF-8 are
+    almost all control codes -- one NUL per ASCII character -- with no replacement at
+    all past the first two bytes.
+    """
+    return sum(
+        1
+        for one in text
+        if one == "\ufffd" or (unicodedata.category(one) == "Cc" and one not in "\t\n\r")
+    )
 
 
 def _is_http(url: str) -> bool:
@@ -143,8 +177,10 @@ def http_fetch(url: str) -> str:
 
     Use for reading a public web page or API response. Returns at most
     20,000 characters, and gives up after 30 seconds. A page longer than that
-    comes back cut, with a last line saying so. Does not run JavaScript, so
-    a page that renders client-side will come back close to empty.
+    comes back cut, with a last line saying so. A body that does not read as
+    text, such as an image or a PDF, is refused rather than answered. Does not
+    run JavaScript, so a page that renders client-side will come back close to
+    empty.
     """
     if not _is_http(url):
         return f"refused: {url!r} is not an http(s) URL"
@@ -157,6 +193,7 @@ def http_fetch(url: str) -> str:
         with opener.open(url, timeout=TIMEOUT_S) as response:
             body, more = _read_by(time.monotonic() + MAX_SECONDS, response)
             text = body.decode(_charset(response), errors="replace")
+            kind = response.headers.get_content_type()
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         # Returned rather than raised, so the message names the URL -- a
         # `URLError` alone does not say which fetch failed. Raising would not
@@ -164,6 +201,20 @@ def http_fetch(url: str) -> str:
         # exception into a failed result. What returning costs is that status,
         # so a record such as `show-your-work`'s counts this call as succeeded.
         return f"could not fetch {url}: {type(exc).__name__}: {exc}"
+
+    # Judged on what arrived, not on what the server called it. Text served as
+    # `application/octet-stream` measured 0.0% unreadable and is worth answering, and a
+    # page declaring `text/plain; charset=utf-8` whose bytes are really UTF-16 measured
+    # 55.2% and is not -- so the type is named in the refusal rather than trusted to
+    # make it. Measured before the cut, over everything that arrived rather than the
+    # part that would be answered: the same share, read off four times the sample.
+    if (unreadable := _unreadable(text)) > len(text) * MAX_UNREADABLE_SHARE:
+        named = f"{kind}: " if CONTENT_TYPE.fullmatch(kind) else ""
+        return (
+            f"refused: {named}{unreadable} of the {len(text)} characters at {url} do "
+            f"not read as text -- ask for a URL that answers text, which is what this "
+            f"tool answers with"
+        )
 
     return text if not more and len(text) <= MAX_CHARS else _cut(text)
 

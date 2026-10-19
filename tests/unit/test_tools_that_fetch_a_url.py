@@ -40,6 +40,37 @@ ENCODED = {
 #: before the character cap and the answer comes back under the cap it names.
 SHIFTY = "a\u65e5" * 20_000
 
+#: Eight bytes of PNG signature and then every byte value there is, which is what a
+#: body that was never text looks like to a decoder: 61.4% of its characters came back
+#: unreadable, and a PDF measured the same.
+BINARY = b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 80
+
+#: Prose with accents in it, served below as Latin-1 while declaring UTF-8. Every
+#: accent decodes as the replacement character and the sentences still read, which is
+#: the closest text measured to the share where this tool stops answering: 10.3%.
+FRENCH = (
+    "Le caf\u00e9 co\u00fbte cinq euros, et la p\u00e2tisserie \u00e0 c\u00f4t\u00e9 "
+    "vend des g\u00e2teaux tr\u00e8s appr\u00e9ci\u00e9s par les \u00e9tudiants. " * 20
+)
+
+#: Every route that is only "these bytes, declared that": a table, because the handler
+#: below is held to twelve branches and these are not branches, they are rows.
+BODIES: dict[str, tuple[bytes, str]] = {
+    "/plain": (b"a plain page", "text/plain"),
+    "/bogus-charset": (b"whatever", "text/plain; charset=moonspeak"),
+    "/shifty": (SHIFTY.encode("iso-2022-jp"), "text/plain; charset=iso-2022-jp"),
+    "/binary": (BINARY, "image/png"),
+    "/text-called-binary": (b"a plain page", "application/octet-stream"),
+    "/wrongly-declared": (FRENCH.encode("utf-16"), "text/plain; charset=utf-8"),
+    "/dented": (FRENCH.encode("iso-8859-1"), "text/plain; charset=utf-8"),
+    # A type the server made up, long enough to be worth not printing back.
+    "/forged-type": (BINARY, "evil/" + "x" * 300),
+    **{
+        f"/{name}": (body.encode(name), f"text/plain; charset={name}")
+        for name, body in ENCODED.items()
+    },
+}
+
 
 class _Handler(http.server.BaseHTTPRequestHandler):
     """One route per thing a server can do that this tool has to survive."""
@@ -63,8 +94,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
-        if self.path == "/plain":
-            self._sent(b"a plain page")
+        if self.path in BODIES:
+            self._sent(*BODIES[self.path])
         elif self.path.startswith("/sized/"):
             # Sized by the request, so a rule can ask for a body of exactly the cap
             # without writing that number down beside the tool's own copy of it.
@@ -90,11 +121,6 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self._redirect("ftp://nowhere.invalid/welcome.msg")
         elif self.path == "/to-plain":
             self._redirect("/plain")
-        elif self.path == "/bogus-charset":
-            self._sent(b"whatever", "text/plain; charset=moonspeak")
-        elif self.path.lstrip("/") in ENCODED:
-            name = self.path.lstrip("/")
-            self._sent(ENCODED[name].encode(name), f"text/plain; charset={name}")
         else:  # pragma: no cover -- every route a rule asks for is above
             self.send_error(404)
 
@@ -278,6 +304,64 @@ def test_a_redirect_that_stays_in_http_is_followed(fetch, serving):
     and a redirect is how half the web answers.
     """
     assert fetch.func(url=f"{serving}/to-plain") == "a plain page"
+
+
+def test_a_body_that_does_not_read_as_text_is_refused_rather_than_answered(fetch, serving):
+    """20,000 characters of a PNG went into the model's context, 12,283 of them the
+    replacement character and most of the rest control codes: half of what one call may
+    spend, on nothing anybody can read, and nothing in the answer saying the body was
+    never text. A PDF measured the same, and gzipped text 50.0%.
+    """
+    said = fetch.func(url=f"{serving}/binary")
+
+    assert said.startswith("refused: image/png: ")
+    assert "do not read as text" in said
+    assert "\ufffd" not in said
+    assert len(said) < 300, len(said)
+
+
+def test_a_text_body_the_server_called_binary_is_still_answered(fetch, serving):
+    """The control that keeps the rule above from becoming a check on the header, which
+    is what it was going to be: a server may serve text as `application/octet-stream`,
+    and that body measured 0.0% unreadable. So the type is named in the refusal and
+    does not decide it.
+    """
+    assert fetch.func(url=f"{serving}/text-called-binary") == "a plain page"
+
+
+def test_a_body_whose_declared_encoding_loses_most_of_it_is_refused(fetch, serving):
+    """Not every body nobody can read is binary: UTF-16 bytes declared `utf-8` decode
+    to one NUL per character -- 55.2% unreadable, with no replacement character past
+    the first two bytes -- so counting only those would have answered this whole.
+    """
+    said = fetch.func(url=f"{serving}/wrongly-declared")
+
+    assert said.startswith("refused: text/plain: ")
+    assert "do not read as text" in said
+
+
+def test_a_body_the_wrong_encoding_only_dents_is_answered(fetch, serving):
+    """The other side of the share, and the reason it is not the 10% it nearly was:
+    French prose written in Latin-1 and declared UTF-8 loses every accent to the
+    replacement character, 10.3% of it, and reads perfectly well without them.
+    """
+    said = fetch.func(url=f"{serving}/dented")
+
+    assert said.startswith("Le caf\ufffd co\ufffdte cinq euros")
+    assert "refused" not in said
+
+
+def test_a_content_type_the_server_made_up_is_not_printed_back(fetch, serving):
+    """A header is the server's own text and a refusal is one line: `get_content_type()`
+    hands back whatever it parsed, so a type of three hundred characters would be three
+    hundred characters of someone else's writing inside an answer about their page.
+    """
+    said = fetch.func(url=f"{serving}/forged-type")
+
+    assert said.startswith("refused: ")
+    assert "evil/" not in said
+    assert "xxx" not in said
+    assert "do not read as text" in said
 
 
 @pytest.mark.parametrize("declared", sorted(ENCODED))
