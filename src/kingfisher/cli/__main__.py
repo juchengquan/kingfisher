@@ -291,6 +291,8 @@ def build_parser() -> argparse.ArgumentParser:
     fetching.add_argument("--session", metavar="ID", required=True, help="the session")
     fetching.add_argument("name", help="the artifact, as the run named it")
     fetching.add_argument("--out", metavar="PATH", help="write it here instead")
+    # No --datazone: a session read is decided by its pinned agent's audience, and an agent
+    # has no datazone, so a flag here would be taken and narrow nothing.
     _add_caller(
         fetching,
         "who is calling: comma-separated source ids, or UNSCOPED to read "
