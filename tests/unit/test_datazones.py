@@ -11,10 +11,10 @@ import yaml
 
 from kingfisher import ToolSpec
 from kingfisher.cli.__main__ import main
+from kingfisher.core.access.policy import parse
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
     AccessError,
-    parse,
     with_datazone,
     zone_name,
 )

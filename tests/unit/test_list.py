@@ -1759,7 +1759,7 @@ def test_a_scoped_view_carries_no_policy(cfg, at_the_command_line):
 
     import yaml
 
-    from kingfisher.core.access.source_ids import parse
+    from kingfisher.core.access.policy import parse
     from kingfisher.core.inventory import inventory
 
     # A definition restricting nobody, so the operator's report has something in it

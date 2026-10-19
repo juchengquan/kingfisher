@@ -14,7 +14,8 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
-from kingfisher.core.access.source_ids import UNSCOPED, AccessError, parse
+from kingfisher.core.access.policy import parse
+from kingfisher.core.access.source_ids import UNSCOPED, AccessError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
 from kingfisher.core.layout import DEFAULT_LAYOUT

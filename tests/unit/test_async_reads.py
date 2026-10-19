@@ -10,7 +10,7 @@ import yaml
 from deepagents.backends import CompositeBackend, FilesystemBackend
 
 from kingfisher import Kingfisher
-from kingfisher.core.access.source_ids import parse
+from kingfisher.core.access.policy import parse
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions
 from tests.conftest import an_agent, pin, start

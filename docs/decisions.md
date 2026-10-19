@@ -4217,6 +4217,10 @@ Taken:
   - `sandbox/confinement.py`, the macOS profile to `sandbox_exec.py`: 10 of 20, half of
     it parameter plumbing.
   - `core/access/source_ids.py`, who reaches what to `reach.py`: 3 of 8, thin evidence.
+  - `core/access/source_ids.py` again, its `source_ids.yaml` reader to `policy.py`, the
+    module already named for reading it: 1 of 5, none touching the reader alone. Thin
+    as well, and taken for what the reader imported: `core.definitions.fields`, which
+    imported the vocabulary back, the one cycle in the tree. *(2026-10-19.)*
 
 Left whole:
 

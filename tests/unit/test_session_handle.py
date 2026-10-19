@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from kingfisher import Kingfisher, UnknownSessionError
-from kingfisher.core.access.source_ids import parse
+from kingfisher.core.access.policy import parse
 from kingfisher.plugins import LocalSessions
 from tests.conftest import Through, an_agent, pin, start
 from tests.unit.test_session_files import Counting

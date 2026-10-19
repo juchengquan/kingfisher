@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import ArtifactError, Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
-from kingfisher.core.access.source_ids import parse
+from kingfisher.core.access.policy import parse
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import Sessions
 from kingfisher.core.layout import (
