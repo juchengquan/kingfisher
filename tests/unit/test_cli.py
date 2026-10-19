@@ -14,7 +14,7 @@ from kingfisher import Kingfisher, Origin
 from kingfisher.cli.__main__ import build_parser, main
 from kingfisher.core.definitions.skills.catalogue import reachable
 from kingfisher.plugins import LocalSessions
-from tests.conftest import repository_root, start, verbs
+from tests.conftest import an_agent, repository_root, start, verbs
 
 
 def test_bare_invocation_prints_help_and_does_nothing(capsys):
@@ -428,6 +428,20 @@ def test_an_answer_that_did_not_stream_is_printed_when_the_run_ends(cfg, monkeyp
     assert main(["run", "do a thing", "--agent", "assistant"]) == 0
 
     assert capsys.readouterr().out == "42"
+
+
+def test_run_refuses_an_unknown_shell_sandbox_before_it_opens_a_session(
+    cfg, at_the_command_line, monkeypatch, capsys
+):
+    """`run` with `KINGFISHER_SHELL_SANDBOX=bogus` made a session and then died on its
+    first turn with a `ValueError` traceback and exit 1, the code for a turn that ran."""
+    agent = an_agent(cfg)
+    monkeypatch.setenv("KINGFISHER_SHELL_SANDBOX", "bogus")
+
+    assert main(["run", "t", "--agent", agent]) == 2
+
+    assert "configuration error: KINGFISHER_SHELL_SANDBOX" in capsys.readouterr().err
+    assert not cfg.sessions_root.exists() or not any(cfg.sessions_root.iterdir())
 
 
 def test_a_warning_of_kingfishers_own_is_one_plain_line(cfg, session_dir, monkeypatch, capsys):

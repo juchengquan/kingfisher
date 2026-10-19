@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 
-from kingfisher.core.config import Config
+from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.layout import Layout
 from kingfisher.plugins.sessions.sandbox.sandbox_exec import (
     SANDBOX_PROFILE,
@@ -231,8 +231,17 @@ class ShellSettings:
     def from_env(cls, environ: Mapping[str, str] | None = None) -> ShellSettings:
         """What the two variables say, in `environ` or in this process's environment."""
         values = os.environ if environ is None else environ
+        sandbox = (values.get("KINGFISHER_SHELL_SANDBOX") or "").strip() or AUTO
+        # Here as well as in `resolve`: `LocalSessions` reads this as it is built, so a
+        # typo stops the start naming the setting, where the fence raises on the first turn.
+        if sandbox not in MODES:
+            msg = (
+                f"KINGFISHER_SHELL_SANDBOX must be one of {', '.join(MODES)}, "
+                f"got {sandbox!r}"
+            )
+            raise ConfigError(msg)
         return cls(
-            sandbox=values.get("KINGFISHER_SHELL_SANDBOX", AUTO),
+            sandbox=sandbox,
             path_extra=tuple(
                 part
                 for part in (values.get("KINGFISHER_SHELL_PATH_EXTRA") or "").split(":")

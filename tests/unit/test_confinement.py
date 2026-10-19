@@ -98,6 +98,14 @@ def test_an_unknown_mode_is_refused_rather_than_treated_as_off(cfg, tmp_path):
         )
 
 
+def test_a_blank_shell_sandbox_reads_as_the_default():
+    """An emptied `KINGFISHER_SHELL_SANDBOX=` line was mode `''`, a traceback on the first
+    turn, where every other setting reads blank as unset -- and unset here is `auto`."""
+    read = confinement.ShellSettings.from_env({"KINGFISHER_SHELL_SANDBOX": " "})
+
+    assert read.sandbox == confinement.AUTO
+
+
 @macos
 def test_auto_confines_and_says_nothing(cfg, tmp_path):
     chosen = confinement.resolve(
