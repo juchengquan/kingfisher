@@ -104,6 +104,9 @@ class Inventory:
     #: so one reads the same under every agent whichever way each file wrote it.
     agent_tools: Mapping[str, Grant] = _NO_GRANTS
     agent_builtin_tools: Mapping[str, Grant] = _NO_GRANTS
+    #: What each agent stops for a person on, as its `interrupt_on` names them. Not a
+    #: `Grant`: the field takes no star, so there is nothing for one to expand.
+    agent_gates: Mapping[str, tuple[str, ...]] = _NOTHING
     agents_error: str | None = None
 
     #: The agent's own tools, granted with `builtin_tools:`. Empty where the build failed,
@@ -830,6 +833,19 @@ def inventory(
         # Not narrowed for a caller: a built-in has no audience, and is the same for all.
         agent_builtin_tools=MappingProxyType(
             {name: _grant(declared[name].builtin_tools, today=builtin) for name in for_caller}
+        ),
+        agent_gates=MappingProxyType(
+            {
+                name: tuple(
+                    one
+                    for one in defined_agents[name].interrupt_on
+                    # Filtered as the tools line is: a gate names a tool, and a name this
+                    # caller's locks shut out must not arrive under an agent they can open.
+                    # A built-in has no audience, so it is shown to everyone.
+                    if one in builtin or offers_tool(one)
+                )
+                for name in for_caller
+            }
         ),
         # `or`, not replace: a kind that failed to load has the more fundamental problem.
         # `broken` is policy, so withheld from a scoped view; a load error stays, since a

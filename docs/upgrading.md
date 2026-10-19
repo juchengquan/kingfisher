@@ -18,6 +18,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A compiled subagent is handed none of the gated tools, after #907
+
+- **A tool the agent gates with `interrupt_on` is kept out of what a compiled
+  subagent's `build` receives.** deepagents hands a graph it did not build none of the
+  parent's gates, so a call there met nothing and ran unapproved. The subagent calling
+  it now gets `Error: <name> is not a valid tool, try one of [...]`, which ends that
+  call and not the turn — the same answer `eval` gives a program that asks for a gated
+  tool.
+
+  A compiled subagent that needs a tool the agent gates needs its own copy of it, in
+  its folder and under another name; otherwise the gate has to go. What you cannot have
+  is the gate and the call, because nothing in that graph can pause.
+- **`kingfisher list` prints what each agent stops on**, as an `interrupt_on` line under
+  the agent, and `--json` carries it as `agent_gates`. A scoped listing filters it the
+  way it filters the tools line, so a gated tool a caller's own locks shut out is not
+  named under an agent they can open.
+
 ## A gate names the tool a call carries, after #903
 
 - **`interrupt_on` no longer takes a `where::what` reference.** An agent file gating

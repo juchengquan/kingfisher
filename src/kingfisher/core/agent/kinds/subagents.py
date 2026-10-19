@@ -5,7 +5,7 @@ Nothing here calls into `assembly.py`: a call back that way would make the two o
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
@@ -166,6 +166,8 @@ def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfi
     run_on: RunOn | None = None,
     default_model: Any = None,
     held: frozenset[str] | None = None,
+    #: What the agent stops on, as the names calls carry.
+    gated: Collection[str] = (),
 ) -> dict[str, Any]:
     """A subagent the workspace built itself, wrapped the way deepagents takes one."""
     model = model_object(
@@ -184,7 +186,12 @@ def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfi
     # Bundle first and the catalogue's namesake dropped: `build` dispatches by name, and a
     # subagent's own `fetch` should not change because somebody else shipped one.
     owned = {one.name for one in private}
-    granted = [one.tool for one in (*private, *(o for o in shared if o.name not in owned))]
+    mine = (*private, *(o for o in shared if o.name not in owned))
+    # A gated tool is left out, as `eval`'s `tools.*` leaves one out and for the same reason:
+    # this graph gets no `HumanInTheLoopMiddleware` -- deepagents hands a built graph none of
+    # the parent's gates -- so a call here would run with nobody asked. By name, which is what
+    # a call carries, so a bundle's namesake of a gated tool goes too.
+    granted = [one.tool for one in mine if one.name not in gated]
 
     # Wrapped: this graph gets no kingfisher middleware, so its tools carry their guards or
     # have none.
@@ -244,6 +251,9 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     recorder: RecorderMiddleware | None = None,
     #: The deployment's instructions, which every subagent is given ahead of its own.
     instructions: str = "",
+    #: What the agent stops on. Read only for a compiled subagent, which is the one kind
+    #: no gate reaches: deepagents installs the pause on every graph it builds itself.
+    gated: Collection[str] = (),
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`."""
     if spec.build is not None:
@@ -259,6 +269,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
             run_on=run_on,
             default_model=default_model,
             held=held,
+            gated=gated,
         )
 
     subagent: dict[str, Any] = {

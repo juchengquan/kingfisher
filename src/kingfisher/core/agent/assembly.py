@@ -611,6 +611,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 runs=runs,
                 instructions=instructions,
                 backend=backend,
+                gated=gated,
                 endpoints=capabilities.endpoints,
                 builtin_tools=surface.granted_builtin,
                 tools=surface.granted_workspace,

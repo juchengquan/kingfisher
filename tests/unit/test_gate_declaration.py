@@ -401,3 +401,67 @@ def test_the_same_workspace_still_gates_a_built_in(cfg, session_dir):
     out = _run(cfg, session_dir, _agent(interrupt_on="[write_file]"))
 
     assert "__interrupt__" in out
+
+
+#: A catalogue tool that leaves a trace on the host when it runs, so "it did not run" is
+#: a measurement rather than the absence of a ledger row -- a compiled subagent's calls go
+#: unrecorded, so the ledger says nothing either way about what happened inside one.
+MARKS = '''
+import os
+import pathlib
+
+
+def shared(what: str) -> str:
+    "A tool, taking the argument `_delegated` writes."
+    pathlib.Path(os.environ["GATE_MARKER"]).write_text("ran")
+    return "from the catalogue"
+
+
+TOOLS = [shared]
+'''
+
+
+def _marked(cfg, tmp_path, monkeypatch):
+    """`compiled_bundle`'s workspace, with the catalogue's `shared` leaving a trace."""
+    compiled_bundle(cfg)
+    marker = tmp_path / "ran"
+    monkeypatch.setenv("GATE_MARKER", str(marker))
+    (cfg.definitions / "tools" / "shared.py").write_text(MARKS, encoding="utf-8")
+    return marker
+
+
+def _surveyed(cfg, *, gate: str | None) -> Any:
+    """One turn: the agent delegates to the compiled `surveyor`, which calls `shared`."""
+    return _delegated(cfg, "surveyor", "shared", gate=gate)
+
+
+def test_a_gated_catalogue_tool_is_not_handed_to_a_compiled_subagent(
+    scripted, tmp_path, monkeypatch
+):
+    """The gate cannot fire inside a graph deepagents was handed, so the tool is kept out
+    of it instead -- `eval`'s rule, in the only other place a call meets no gate. Left in,
+    it ran with nobody asked: measured, the tool wrote its marker and the turn ended.
+    """
+    marker = _marked(scripted, tmp_path, monkeypatch)
+
+    result = _surveyed(scripted, gate="shared")
+
+    assert not marker.exists(), "the gated tool ran inside the compiled subagent"
+    # And the turn goes on rather than dying: the subagent is told the tool is not one of
+    # its own, which is what `eval` answers a program asking for a gated tool.
+    assert result.stop_reason != AWAITING, "nothing was gated, so nothing should pause"
+    assert result.answer == "parent done"
+
+
+def test_the_same_compiled_subagent_without_the_gate_is_handed_it(
+    scripted, tmp_path, monkeypatch
+):
+    """The control. Without it the rule above passes against a compiled subagent that
+    was never handed `shared` in the first place, which is most ways of getting the
+    fixture wrong.
+    """
+    marker = _marked(scripted, tmp_path, monkeypatch)
+
+    _surveyed(scripted, gate=None)
+
+    assert marker.exists(), "the compiled subagent never called the catalogue's tool"
