@@ -186,6 +186,17 @@ def test_a_gate_list_refuses_the_star():
         _read(MINIMAL.rstrip() + '\ninterrupt_on: ["*"]\n', "plain.yaml")
 
 
+def test_a_gate_list_written_as_deepagents_mapping_is_refused_where_it_is_read():
+    """`interrupt_on: {execute: true}`, deepagents' own shape, was read as one tool named
+    "{'execute': True}" and refused only at the build, as a tool nothing defines.
+    """
+    with pytest.raises(AgentError) as raised:
+        _read(MINIMAL.rstrip() + "\ninterrupt_on:\n  execute: true\n", "plain.yaml")
+
+    assert "plain.yaml: interrupt_on is a mapping" in str(raised.value)
+    assert "[execute]" in str(raised.value), "it says what to write instead"
+
+
 def test_an_agent_that_gates_nothing_says_so_as_an_empty_tuple():
     """Absent and empty are the same posture here, unlike `memory` -- there is no
     third state a gate list could be in, so neither needs to be `None`.

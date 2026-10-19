@@ -173,33 +173,43 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
             else read.flag(document.get("memory"), key="memory")
         ),
         metadata=read.mapping(document.get("metadata"), key="metadata"),
-        interrupt_on=_gated_tools(document.get("interrupt_on"), source),
+        interrupt_on=_gated_tools(document.get("interrupt_on"), read),
     )
 
 
-def _gated_tools(written: object, source: Path) -> tuple[str, ...]:
+def _gated_tools(written: object, read: fields.Reader) -> tuple[str, ...]:
     """The tools this agent stops on, as names."""
-    names = fields.names(written)
-    if names is None:
-        return ()
-    if ALL in names:
+    if isinstance(written, Mapping):
+        # Before `selection`, whose mapping refusal is about who reaches an entry: this is
+        # deepagents' `{tool: settings}`, and kingfisher writes that from the names.
         msg = (
-            f"{source.name}: interrupt_on may not be {ALL!r} -- everywhere else in "
-            f"this file the star means 'no limit', and gating every tool is the "
-            f"opposite. Name the tools that need a person."
+            f"{read.source}: interrupt_on is a mapping; this field takes a list of tool "
+            f"names -- write [{', '.join(map(str, written))}]"
         )
-        raise AgentError(msg)
+        raise read.error(msg)
+    names = read.selection(
+        written,
+        absent=None,
+        key="interrupt_on",
+        refuse_all=(
+            "everywhere else in this file the star means 'no limit', and gating every "
+            "tool is the opposite. Name the tools that need a person."
+        ),
+    )
+    if not isinstance(names, tuple):
+        # Absent: no tool is gated. The star never gets here; `refuse_all` raises on it.
+        return ()
     # Not a `where::what` reference, which `tools:` takes and this field cannot: a pause is
     # keyed by the name the call carries, so a reference reached deepagents matching nothing
     # and the gated tool ran. Refused rather than resolved to the bare name, because the
     # bare name stops every tool answering to it and the reference asks for one of them.
     if written_by_file := tuple(one for one in names if bare_name(one) != one):
         msg = (
-            f"{source.name}: interrupt_on names {', '.join(written_by_file)} by file, "
+            f"{read.source}: interrupt_on names {', '.join(written_by_file)} by file, "
             f"and a gate is keyed by the name a call carries -- write "
             f"{', '.join(bare_name(one) for one in written_by_file)}. A call carries "
             f"the name alone, so the gate stops every tool answering to it, wherever "
             f"each one is defined."
         )
-        raise AgentError(msg)
+        raise read.error(msg)
     return tuple(dict.fromkeys(names))
