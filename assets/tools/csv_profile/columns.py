@@ -39,6 +39,28 @@ def shown(name: str) -> str:
     return name
 
 
+#: What one name may add to an answer that is one line per column, and the rest of it is
+#: said as a count. A header cell is uploaded data and the CSV reader parses one up to
+#: 131,072 characters: measured, a file of 76 columns named that long answered 9,959,656
+#: characters out of a tool whose docstring says the answer does not grow with the file.
+#: Cut rather than refused, unlike a query's row that will not fit -- nothing a reader
+#: can ask for makes a column's name shorter.
+MAX_NAME_CHARS = 100
+
+
+def fitted(name: str) -> str:
+    """One column name as an answer of one line per column carries it.
+
+    Cut after the escaping, so the number it names is what the answer would have
+    carried rather than what the file holds: a name of 50,000 newlines is written as
+    100,000 characters.
+    """
+    name = shown(name)
+    if len(name) <= MAX_NAME_CHARS:
+        return name
+    return f"{name[:MAX_NAME_CHARS]}...(+{len(name) - MAX_NAME_CHARS} characters)"
+
+
 def is_blank(value: str) -> bool:
     """True for a cell nobody filled in."""
     return value.strip().casefold() in BLANKS
@@ -56,6 +78,8 @@ def _is_number(value: str) -> bool:
 class Column:
     """One column, as a profile sees it."""
 
+    #: Already `fitted` by its caller, not here: a repeated name carries its column
+    #: number, and a cut taken after that was appended takes the number off.
     name: str
     filled: int
     missing: int
@@ -70,7 +94,7 @@ class Column:
         """One row of the report, which is what both tools ultimately return."""
         share = (self.missing / self.total * 100) if self.total else 0.0
         return (
-            f"{shown(self.name)}: {self.kind}, {self.filled} filled, "
+            f"{self.name}: {self.kind}, {self.filled} filled, "
             f"{self.missing} missing ({share:.0f}%), {self.distinct} distinct"
         )
 

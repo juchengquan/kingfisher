@@ -103,6 +103,47 @@ def test_a_file_whose_rows_all_fit_says_nothing_about_width(profile):
     )
 
 
+def _wide(columns: int, rows: int = 2) -> str:
+    """A file of `columns` columns, each name its own, with rows under it."""
+    header = ",".join(f"c{n}" for n in range(columns))
+    one = ",".join("1" for _ in range(columns))
+    return header + "\n" + "\n".join(one for _ in range(rows)) + "\n"
+
+
+def test_a_file_wider_than_the_answer_carries_is_profiled_to_the_cap(profile):
+    """One line per column and nothing capping the columns: a 10 MB header of
+    5,242,880 columns answered 334,433,239 characters and peaked at 1,833 MB resident,
+    out of a tool whose docstring says the answer does not grow with the file. A
+    plausible 4,000-column feature table answered 218,913.
+    """
+    said = profile(_wide(250)).splitlines()
+
+    assert said[0] == "250 columns, 2 rows (first 200 columns profiled)"
+    assert len(said) == 201, len(said)
+    assert said[-1].startswith("c199: ")
+
+
+def test_a_file_no_wider_than_the_cap_says_nothing_about_columns(profile):
+    """The other half, and the cap's own edge: a note about columns nobody dropped
+    sends a reader looking for part of a file they were given all of.
+    """
+    assert profile(_wide(200)).splitlines()[0] == "200 columns, 2 rows"
+    assert len(profile(_wide(200), which="csv_columns").splitlines()) == 200
+
+
+def test_the_names_stop_at_the_cap_with_a_line_saying_so(profile):
+    """`csv_columns` answers one name a line and nothing capped them, so the same
+    10 MB header came back as a 10,485,759-character answer. Said on a line of its
+    own, because handed 200 names of 250 with nothing said a reader cannot tell a
+    narrow file from one this tool stopped reading.
+    """
+    named = profile(_wide(250), which="csv_columns").splitlines()
+
+    assert len(named) == 201, len(named)
+    assert named[:2] == ["c0", "c1"]
+    assert named[-1] == "-- first 200 of 250 columns"
+
+
 #: A header cell holding a complete, plausible report row. This is uploaded data, and
 #: both tools here answer one line per column: formatted straight in, the newline made
 #: a second line that read as a column of its own, so a three-column file reported four
@@ -134,6 +175,45 @@ def test_the_names_are_one_per_line_however_the_header_is_written(profile):
 
     assert len(named) == 3
     assert named[1] == "region\\nsalary: number, 5000 filled, 0 missing (0%), 4998 distinct"
+
+
+def test_a_name_longer_than_a_line_carries_is_cut_and_says_what_it_cut(profile):
+    """A header cell is parsed up to 131,072 characters and went into the answer whole:
+    76 columns named that long answered 9,959,656 characters. Cut rather than refused,
+    unlike a query's row that will not fit -- nothing a reader can ask for makes a
+    column's name shorter.
+    """
+    said = profile(f"{'x' * 150},b\n1,2\n").splitlines()
+
+    assert said[1] == (
+        "x" * 100 + "...(+50 characters): number, 1 filled, 0 missing (0%), 1 distinct"
+    )
+    assert len(said) == 3, said
+
+
+def test_two_names_that_differ_past_the_cut_still_say_which_column_they_are(profile):
+    """Counted before the cut, two names differing only in their last character are
+    two names -- so the answer held two identical lines with nothing to tell them
+    apart, which is the failure the column numbers exist for, back by way of the cap.
+    """
+    said = profile(f"{'x' * 150}a,{'x' * 150}b\n1,2\n").splitlines()
+    cut = "x" * 100 + "...(+51 characters)"
+
+    assert len(said) == 3, said
+    assert said[1].startswith(f"{cut} (column 1): ")
+    assert said[2].startswith(f"{cut} (column 2): ")
+
+
+@pytest.mark.parametrize("which", ["csv_profile", "csv_columns"])
+def test_the_answer_does_not_grow_with_the_file(which, profile):
+    """What both docstrings promise, against the shape that broke it: more columns than
+    the cap, each named far past what a line carries. The two caps compose to a bound a
+    reader can do the arithmetic on -- 200 columns of a name no longer than 123
+    characters -- so the number here is a ceiling, not a measurement of today's answer.
+    """
+    said = profile(",".join(f"{'x' * 2000}{n}" for n in range(400)) + "\n", which=which)
+
+    assert len(said) < 45_000, len(said)
 
 
 @pytest.mark.parametrize("which", ["csv_profile", "csv_columns"])
