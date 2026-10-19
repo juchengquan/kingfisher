@@ -117,13 +117,15 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
     ("kind", "given"),
     [
         ("subagent", {"reachable": ("helper",)}),
+        ("subagent", {"clearing": lambda _: None}),
         ("general-purpose", {"reachable": ("helper",)}),
         ("general-purpose", {"skills": ("tabular-qa",)}),
     ],
 )
 def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
-    """A subagent handed the declared-subagent check meant for the agent's own `task`, or
-    `general-purpose` a skills index, which it is never handed."""
+    """A subagent handed the declared-subagent check meant for the agent's own `task` or
+    the result clearing sized to the agent's grant, or `general-purpose` a skills index,
+    which it is never handed."""
     with pytest.raises(ValueError, match="agent"):
         standing_middleware(
             kind,

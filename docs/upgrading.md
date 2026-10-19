@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `UnsafeReferenceError` leaves `kingfisher`, after #955
+
+- **`from kingfisher import UnsafeReferenceError` fails.** Nothing raised it at a
+  caller: a tool handed a path its turn may not reach gets the refusal as a failed
+  tool result the model corrects from, as with `HostPathError`, so an `except` naming
+  it never fired. Delete the `except`. The class is still
+  `kingfisher.core.agent.references.UnsafeReferenceError`, which may move.
+- **`kingfisher run` with two `--input`s of one filename exits `2`**, saying
+  `InputsError: <name>: supplied twice`. It printed a traceback and exited `1`, the
+  code for a turn that ran and stopped at a bound.
+
 ## `http_fetch` refuses a body that does not read as text, after #942
 
 - **A body more than a quarter unreadable comes back as a refusal** naming the share

@@ -391,6 +391,16 @@ def test_the_refusal_of_a_mapping_names_skills_as_the_one_field_taking_an_audien
         )
 
 
+def test_a_mapping_under_middlewares_is_sent_to_the_long_form_not_told_about_builtin_tools():
+    """It got the builtin_tools refusal, which says nothing about where settings go."""
+    with pytest.raises(AgentError, match=r"- \{name: cap, settings: \{\.\.\.\}\}") as refused:
+        _read(
+            MINIMAL.rstrip() + "\nmiddlewares:\n  cap:\n    settings: {n: 1}\n",
+            "plain.yaml",
+        )
+    assert "builtin" not in str(refused.value)
+
+
 def test_an_entry_audience_outside_the_definitions_own_is_recorded_not_judged():
     """Whether one audience can ever reach another is a question about what the names
     *mean*, and this format has no vocabulary to answer it with: `B` may contain `C`,

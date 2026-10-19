@@ -45,15 +45,6 @@ def test_the_conversation_is_a_file_inside_the_session(cfg):
     assert (_session_dir(cfg, result.session_id) / TRANSCRIPT).is_file()
 
 
-def test_nothing_is_written_to_a_workspace_wide_database(cfg):
-    """The shared file is what orphans came from."""
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
-
-    kf.run(Request("go"))
-
-    assert not (cfg.workspace / ".kingfisher" / "threads.db").exists()
-
-
 def test_the_conversation_counts_against_the_session_quota(cfg):
     """`session_max_bytes` measures a directory, so checkpoint state was invisible to it
     while it sat above every session -- the same blind spot the tool caches had
@@ -71,7 +62,7 @@ def test_the_conversation_counts_against_the_session_quota(cfg):
 # -- what it has to keep doing -------------------------------------------
 
 
-def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
+def test_a_real_graph_carries_the_conversation_within_a_saver(cfg, session_dir):
     """The whole reason a checkpointer exists."""
     from langchain_core.messages import AIMessage
 
@@ -99,16 +90,19 @@ def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
     # carries it, and nothing here outlives the turn that made it.
 
 
-def test_two_sessions_keep_separate_conversations(cfg):
-    """Structural, not enforced: they are different files."""
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+def test_two_sessions_keep_separate_conversations(scripted):
+    """A transcript shared across sessions would replay one caller's exchange to another."""
+    an_agent(scripted, "plain")
+    kf = Kingfisher(scripted, sessions=LocalSessions())
+    Scripted.script.extend([AIMessage(content="answer one"), AIMessage(content="answer two")])
 
-    one, two = kf.run(Request("a", session_id="one")), kf.run(Request("b", session_id="two"))
+    kf.run(Request("question one", agent="plain", session_id="one"))
+    kf.run(Request("question two", agent="plain", session_id="two"))
 
-    assert one.session_id != two.session_id
-    assert (_session_dir(cfg, one.session_id) / TRANSCRIPT) != (
-        _session_dir(cfg, two.session_id) / TRANSCRIPT
-    )
+    one = (_session_dir(scripted, "one") / TRANSCRIPT).read_text(encoding="utf-8")
+    two = (_session_dir(scripted, "two") / TRANSCRIPT).read_text(encoding="utf-8")
+    assert "question one" in one and "question two" not in one, one
+    assert "question two" in two and "question one" not in two, two
 
 
 def test_deleting_a_session_takes_its_conversation_with_it(cfg, way):
@@ -152,7 +146,6 @@ def test_conversation_can_be_turned_off_entirely(cfg):
     # Conversation off means nothing is remembered between turns, so there is
     # no transcript either -- the file and the flag say the same thing.
     assert not (_session_dir(cfg, result.session_id) / TRANSCRIPT).exists()
-    assert not any((cfg.workspace / "sessions").rglob("*threads.db*"))
 
 
 def test_files_survive_a_stateless_turn(cfg):
@@ -193,10 +186,10 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
     """What the conversation carries, and what it deliberately does not.
 
     It holds because the saver is built per turn -- `build_session_checkpointer` in
-    `_checkpointer_for`, released when the turn ends -- so the next turn's graph
-    starts with nothing in its channels. That is structural rather than enforced,
-    which is why it is worth a test: a deployment injecting a persistent `threads`
-    factory takes it back, and nothing else would say so.
+    `_checkpointer`, released when the turn ends -- so the next turn's graph starts
+    with nothing in its channels. That is structural rather than enforced, which is
+    why it is worth a test: a saver kept across turns takes it back, and nothing else
+    would say so.
 
     One turn's state *is* kept now, and only one: a turn that stopped at an approval
     gate, so a `Resume` can continue the graph it stopped in. That is the whole of

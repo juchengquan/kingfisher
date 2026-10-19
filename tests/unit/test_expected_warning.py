@@ -45,7 +45,7 @@ def test_every_other_warning_still_arrives(caplog):
 
 
 def test_installing_it_twice_leaves_one_filter():
-    """`_interpreter` runs per request, so this is called once a turn."""
+    """`interpreter` runs per request, so this is called once a turn."""
     logger = logging.getLogger(LOGGER)
     quieten_expected_snapshot_drop()
     quieten_expected_snapshot_drop()
@@ -77,7 +77,7 @@ def _installed() -> list:
 def test_building_the_sandbox_installs_it(cfg, session_dir):
     """The wiring, not just the function.
 
-    Found by mutation: deleting the call from `_interpreter` left every other test in
+    Found by mutation: deleting the call from `interpreter` left every other test in
     this file green, because they all call it directly. The filter could have stopped
     being installed and nothing would have said so.
     """

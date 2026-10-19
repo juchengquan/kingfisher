@@ -1157,7 +1157,7 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
 
     for kind in ("agents", "subagents"):
         for path in (tmp_path / kind).rglob("*.yaml"):
-            named = middleware_named(path.read_text(encoding="utf-8"))
+            named = middleware_named(yaml.safe_load(path.read_text(encoding="utf-8")))
             assert not named, (
                 f"{path.relative_to(tmp_path)} was seeded naming {named}, which is "
                 "refused on any deployment that did not register it -- a plain seed "
@@ -1493,7 +1493,7 @@ def test_every_source_id_the_presets_name_is_declared(shipped):
         name
         for kind in ("agents", "subagents")
         for path in sorted((shipped / kind).rglob("*.yaml"))
-        for name in source_ids_named(path.read_text(encoding="utf-8"))
+        for name in source_ids_named(yaml.safe_load(path.read_text(encoding="utf-8")))
     }
 
     assert named, "no preset names a source id, so this rule is checking nothing"

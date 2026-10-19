@@ -38,9 +38,8 @@ class HarnessFiles:
     fence keeps it from rewriting its own pinned agent, conversation or paused turn.
     """
 
-    def __init__(self, backend: Any, session_id: str) -> None:
+    def __init__(self, backend: Any) -> None:
         self._backend = backend
-        self._session_id = session_id
 
     def fetch(self, name: str) -> Steps[bytes | None]:
         """`name`'s content, or `None` where the session has none."""

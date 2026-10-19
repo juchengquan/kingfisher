@@ -205,21 +205,6 @@ def _subagent_tools(found: Inventory) -> Iterator[Check]:
         yield Check("skills", "ok", detail)
 
 
-def _where(cfg: Config, found: Inventory) -> Iterator[Check]:
-    """A catalogue read from somewhere other than the configuration says."""
-    for kind in found.by_kind():
-        origin = kind.origin
-        if origin.kind == "overridden":
-            yield Check(
-                f"{kind.name} directory",
-                "warn",
-                f"read from {origin.path}, while the configuration names "
-                f"{cfg.catalogue_roots[kind.name]} — a catalogue was supplied when this "
-                f"kingfisher was built, and KINGFISHER_DEFINITIONS_DIR does nothing for it",
-                "point KINGFISHER_DEFINITIONS_DIR at what is actually read",
-            )
-
-
 def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
     """Which definitions this deployment cannot actually run."""
     # Only when both catalogues parsed: these read the same files, so a broken one would
@@ -280,6 +265,4 @@ def checks(cfg: Config, found: Inventory) -> Iterator[Check]:
     yield from _subagent_references(found)
     yield from _bundled_entries(found)
     yield from _subagent_tools(found)
-    # After the counts: an ordinary zero and one from a wrong path print the same.
-    yield from _where(cfg, found)
     yield from _definitions(cfg, found)

@@ -9,8 +9,10 @@ from typing import Annotated, Any
 
 import pytest
 from deepagents.middleware.memory import MEMORY_SYSTEM_PROMPT
+from langchain.agents.middleware.types import ModelRequest
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.graph import END, START, StateGraph
 from pydantic import Field
@@ -284,6 +286,30 @@ def test_an_unnamed_tool_survives_the_allowlist():
             return self
 
     assert GrantedOnlyMiddleware(("read_file",))._filter(Request()).tools == [unnamed]
+
+
+def test_a_tool_defined_as_a_dict_is_held_to_the_allowlist():
+    """A dict has no `name` attribute, so a reader of the attribute alone finds no name on
+    a server-side tool and lets it through ungranted as one it cannot identify.
+
+    Driven through `wrap_model_call` with a real `ModelRequest`, which is how the model
+    call reaches the filter; the granted one is the control, without which a filter that
+    dropped every dict would pass.
+    """
+    granted = {"type": "web_search_20250305", "name": "web_search"}
+    ungranted = {"type": "code_execution_20250522", "name": "code_execution"}
+    request = ModelRequest(
+        model=GenericFakeChatModel(messages=iter([])),
+        messages=[HumanMessage("go")],
+        tools=[granted, ungranted],
+    )
+    offered = []
+
+    GrantedOnlyMiddleware(("read_file", "web_search")).wrap_model_call(
+        request, lambda passed: offered.extend(passed.tools)
+    )
+
+    assert offered == [granted]
 
 
 class _Call:

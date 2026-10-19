@@ -31,7 +31,6 @@ from kingfisher import (
     SessionBusyError,
     SubagentError,
     UnknownSessionError,
-    UnsafeReferenceError,
     config_from_env,
     definitions_source,
     ensure_definitions,
@@ -44,6 +43,7 @@ from kingfisher.core.access import with_datazone
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.config import MissingCredentialsWarning
 from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.session.files import InputsError
 
 from .health import _retired, examine, worst
 from .listing import as_json, failed, origins_document, render
@@ -310,9 +310,9 @@ def build_parser() -> argparse.ArgumentParser:
             "The size is a walk per session -- about a millisecond each -- which\n"
             "a workspace holding thousands will feel.\n"
             "\n"
-            "Asked of the sessions KINGFISHER_SESSIONS\n"
-            "names, or of <workspace>/sessions where it names none -- so a\n"
-            "deployment whose own keep sessions elsewhere sets it for this to see them."
+            "Asked of the sessions KINGFISHER_SESSIONS names, or of\n"
+            "<workspace>/sessions where it names none -- so a deployment that\n"
+            "keeps its sessions elsewhere sets it for this to see them."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -325,9 +325,9 @@ def build_parser() -> argparse.ArgumentParser:
         "reap",
         help="delete sessions this workspace is finished with",
         description=(
-            "Deletes a session's directory, its conversation, the lock a turn\n"
-            "holds, and whatever a wired store kept. All four, because removing\n"
-            "three of them leaves the fourth to accumulate.\n"
+            "Deletes a session and everything in it -- its files, its\n"
+            "conversation, the lock a turn holds -- through the sessions that\n"
+            "keep it: those KINGFISHER_SESSIONS names, or <workspace>/sessions.\n"
             "\n"
             "With nothing else said it sweeps whatever KINGFISHER_SESSION_TTL_S\n"
             "calls expired -- seven days by default -- and spares any session\n"
@@ -441,7 +441,7 @@ def _run(args: argparse.Namespace) -> int:
     """Run one task, and say how it ended in the only channel that is left."""
     missing = [p for p in args.input if not Path(p).expanduser().is_file()]
     if missing:
-        # Before the model, or this mistake costs money to discover.
+        # Every one in a line: the library refuses as well, but names only the first.
         print(f"no such file: {', '.join(missing)}", file=sys.stderr)
         return 2
 
@@ -544,12 +544,32 @@ def _decide(args: argparse.Namespace) -> int:
             return 2
         decisions.append(Decision(call_id=call_id, action="respond", message=text))
 
+    # Refused, not ignored: with no turn to act on, a silent `--agent` reads as the check
+    # its help promises having passed.
+    unused = [
+        flag
+        for flag, given in (
+            ("--agent", args.agent is not None),
+            ("--delete-session", args.delete_session),
+            ("--log", args.log is not None),
+        )
+        if given and not decisions
+    ]
+    for flag in unused:
+        print(
+            f"{flag} applies only when answering, with --approve, --reject or --respond",
+            file=sys.stderr,
+        )
+    if unused:
+        return 2
+
     cfg = config_from_env()
-    kf = _configured(cfg, log=args.log)
     if not decisions:
-        return _show_pending(kf, args.session, with_datazone(args.held, args.datazone))
+        return _show_pending(
+            _configured(cfg), args.session, with_datazone(args.held, args.datazone)
+        )
     return _drive(
-        kf,
+        _configured(cfg, log=args.log),
         Resume(
             session_id=args.session,
             decisions=tuple(decisions),
@@ -718,8 +738,7 @@ def _sessions(*, as_document: bool = False) -> int:
     kf = _configured(cfg)
     # From `origins`, not the workspace: configured sessions live where their backends
     # say. A path only where kingfisher knows it, rather than a guess.
-    kept = kf.origins.sessions
-    root: Path | None = kf.cfg.sessions_root if kept.kind == "default" else None
+    root = kf.origins.sessions.path
     where = str(root) if root is not None else "the sessions this deployment configured"
     now = time.time()
     # A walk per session, ~0.8ms each: a workspace large enough to mind wants an index,
@@ -864,8 +883,6 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
             print(f"{check.verdict}  {check.name}  {check.detail}", file=sys.stderr)
             print(f"      -> {check.remedy}", file=sys.stderr)
         raise
-    # Built once and handed to `examine`: one it built from `cfg` would agree with `cfg`
-    # by construction, and could never say the configuration is being ignored.
     from .configured import configured_sessions  # noqa: PLC0415
 
     sessions = configured_sessions()
@@ -902,10 +919,10 @@ REFUSALS = (
     ArtifactError,
     CapabilityError,
     DecisionError,
+    InputsError,
     QuotaExceededError,
     SubagentError,
     UnknownSessionError,
-    UnsafeReferenceError,
 )
 
 #: Verb -> what runs it. Each names only the arguments its own verb defines, so none

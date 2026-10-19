@@ -245,22 +245,18 @@ def test_no_code_cites_a_document_that_is_not_there() -> None:
 #: ```python fences, with the line the fence opens on so a failure is clickable.
 PYTHON_FENCE = re.compile(r"^```python\n(.*?)^```", re.M | re.S)
 
-#: Which documents have their Python held to the package, and which do not.
-#:
-#: The split is the one `CLAUDE.md` already draws. A document describing what exists can
-#: be checked against it. **A proposal names things that do not exist yet, which is what
-#: makes it a proposal** -- so resolving its imports would fail for the one reason that
-#: is not a defect. Every entry is checked today, because every document left describes
-#: what exists; the `False` case is kept in the type rather than deleted, since the next
-#: proposal will need it.
-CHECKED_SNIPPETS: dict[str, bool] = {
-    "README.md": True,
-    "docs/guides/configuration.md": True,
-    "docs/guides/formats.md": True,
-    "docs/guides/middleware.md": True,
-    "docs/guides/ports.md": True,
-    "docs/guides/tools.md": True,
-}
+#: The documents whose Python is held to the package: every one carrying any, since each
+#: describes what exists. **A proposal names things that do not exist yet, which is what
+#: makes it a proposal**, so the first to carry Python needs a way out of this rather than
+#: a place in it.
+CHECKED_SNIPPETS: frozenset[str] = frozenset({
+    "README.md",
+    "docs/guides/configuration.md",
+    "docs/guides/formats.md",
+    "docs/guides/middleware.md",
+    "docs/guides/ports.md",
+    "docs/guides/tools.md",
+})
 
 
 def _documents_with_python() -> set[str]:
@@ -275,9 +271,7 @@ def _documents_with_python() -> set[str]:
 def _snippets() -> list[tuple[str, int, str]]:
     """`(document, line, source)` for every fence in a checked document."""
     out = []
-    for name, checked in sorted(CHECKED_SNIPPETS.items()):
-        if not checked:
-            continue
+    for name in sorted(CHECKED_SNIPPETS):
         text = (ROOT / name).read_text(encoding="utf-8")
         for match in PYTHON_FENCE.finditer(text):
             out.append((name, text[: match.start()].count("\n") + 1, match.group(1)))
@@ -287,10 +281,10 @@ def _snippets() -> list[tuple[str, int, str]]:
 def test_every_document_with_python_is_classified() -> None:
     """A document nobody classified is one nobody checks, silently."""
     present = _documents_with_python()
-    assert present == set(CHECKED_SNIPPETS), (
-        "documents with Python that CHECKED_SNIPPETS does not classify: "
-        f"{sorted(present - set(CHECKED_SNIPPETS))}; classified but carrying no "
-        f"Python any more: {sorted(set(CHECKED_SNIPPETS) - present)}"
+    assert present == CHECKED_SNIPPETS, (
+        "documents with Python that CHECKED_SNIPPETS does not check: "
+        f"{sorted(present - CHECKED_SNIPPETS)}; checked but carrying no "
+        f"Python any more: {sorted(CHECKED_SNIPPETS - present)}"
     )
 
 

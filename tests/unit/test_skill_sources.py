@@ -263,7 +263,7 @@ def test_only_the_activated_one_reaches_the_model(cfg, session_dir):
 
 
 def test_a_nested_skill_is_denied_at_the_path_it_actually_has(cfg, session_dir):
-    """`_skill_denials` wrote `/skills/{name}/**`, which is where a skill sits only
+    """`skill_denials` wrote `/skills/{name}/**`, which is where a skill sits only
     while every skill sits at the top level.
     """
     _two_parties(cfg)

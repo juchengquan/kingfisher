@@ -5,19 +5,18 @@ from __future__ import annotations
 import ast
 import os
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from typing import Protocol, runtime_checkable
-
-import yaml
 
 from kingfisher.core.config import ConfigError, definition_roots_for
 from kingfisher.core.workspace import ensure_definitions
 
 from . import importing
 from .catalogue import DEFINITION_KINDS
+from .documents import decode
 
 #: How the "this workspace is empty" messages tell a reader to fill it.
 SEED_HINT = "`kingfisher seed --from DIR`"
@@ -201,18 +200,11 @@ class Seeded:
         )
 
 
-def source_ids_named(text: str) -> tuple[str, ...]:
-    """Every source id a definition names, for a document that may not parse."""
-    try:
-        parsed = yaml.safe_load(text)
-    except yaml.YAMLError:
-        return ()
-    if not isinstance(parsed, dict):
-        return ()
-
+def source_ids_named(fields: Mapping[str, object]) -> tuple[str, ...]:
+    """Every source id a definition names, from fields that may not be valid."""
     found: list[str] = []
-    _collect(parsed.get("source_ids"), into=found)
-    entries = parsed.get("skills")
+    _collect(fields.get("source_ids"), into=found)
+    entries = fields.get("skills")
     # Names, or `{name, source_ids}` mappings. Walking the wrong shape finds nothing,
     # silently: it looks like a definition naming no source id. Only `skills:` entries:
     # one under `tools:` or `subagents:` is refused at load, whatever it names.
@@ -223,19 +215,13 @@ def source_ids_named(text: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(found))
 
 
-def datazones_named(text: str) -> tuple[str, ...]:
-    """The datazone a definition names, for a document that may not parse.
+def datazones_named(fields: Mapping[str, object]) -> tuple[str, ...]:
+    """The datazone a definition names, from fields that may not be valid.
 
     One name, never a list, and only ever a definition's own top-level field: an agent
     writing one is refused and so is an entry, so there is nowhere else to look.
     """
-    try:
-        parsed = yaml.safe_load(text)
-    except yaml.YAMLError:
-        return ()
-    if not isinstance(parsed, dict):
-        return ()
-    written = parsed.get("datazone")
+    written = fields.get("datazone")
     if isinstance(written, str) and written.strip() and written.strip() != "*":
         return (written.strip(),)
     return ()
@@ -305,16 +291,9 @@ def _collect(written: object, *, into: list[str]) -> None:
             into.append(one.strip())
 
 
-def middleware_named(text: str) -> tuple[str, ...]:
-    """The middleware a definition names, for a document that may not parse."""
-    try:
-        parsed = yaml.safe_load(text)
-    except yaml.YAMLError:
-        return ()
-    if not isinstance(parsed, dict):
-        return ()
-
-    written = parsed.get("middlewares")
+def middleware_named(fields: Mapping[str, object]) -> tuple[str, ...]:
+    """The middleware a definition names, from fields that may not be valid."""
+    written = fields.get("middlewares")
     if isinstance(written, str):
         written = [written]
     if not isinstance(written, (list, tuple)):
@@ -361,9 +340,12 @@ def _deployment_specific(
     if not path.is_file() or (text := _read(path)) is None:
         return None
     if path.suffix in (".yaml", ".yml") and kind in DOCUMENT_KINDS:
-        if named := middleware_named(text):
+        decoded = decode(text)
+        # Naming nothing, so it is copied and the loader reports it in its own words.
+        fields = {} if isinstance(decoded, str) else decoded
+        if named := middleware_named(fields):
             return "middlewares", named, ()
-        return _audienced(source_ids_named(text), datazones_named(text))
+        return _audienced(source_ids_named(fields), datazones_named(fields))
     if path.suffix == ".py" and kind in AUDIENCED_KINDS:
         return _audienced(*audiences_in_code(text))
     return None

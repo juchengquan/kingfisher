@@ -1,4 +1,4 @@
-"""The shape of one turn: what it carries, and the two ways it can end early."""
+"""The shape of one turn: what it carries, and the ways it can end early."""
 
 from __future__ import annotations
 

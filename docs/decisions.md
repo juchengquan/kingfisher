@@ -3094,7 +3094,7 @@ nobody was reading.
 that will not import, a missing attribute, a result of the wrong shape: `ConfigError`,
 naming the setting. A factory raising its *own* exception passes through untouched -- that
 is the deployment's code failing at its own job, in a type their handling may know, and
-`store_named` is on the traceback saying which setting reached it.
+`built_from_setting` is on the traceback saying which setting reached it.
 
 **Two settings naming one thing are refused at startup, not resolved by precedence**, on
 the record so a config assembled in Python obeys it too. Preferring one silently leaves
@@ -3554,8 +3554,8 @@ is registered in code, a source id declared in a file -- hence `UNCONSULTED` and
 held total. The integration driver and `seed_example.py`, the script people copy, each told
 a reader to *register* a source id. `Seeded.report()` is every line a person is owed, and
 every caller prints it; `test_only_the_record_says_what_a_skipped_definition_needs` finds
-any `skipped …` line composed outside `seeding.py`, searching the driver, the example and
-`evals/` too. *(2026-09-23.)*
+any `skipped …` line composed outside `seeding.py`, searching the README, the driver, the
+example and `evals/` too. *(2026-09-23.)*
 
 ## What doctor promises
 
@@ -3731,10 +3731,17 @@ record per construction. `print` would make the library unusable by a server, an
 is every other logger's parent, so raising it to INFO for this would have turned on the
 audit trail a deployment had left off, while there was one.
 
-**`doctor` gained two checks a path alone could not express.** Resolving a catalogue
-*creates* its directory, so a mistyped root yields a real empty one, which says `0 defined`
-as a fresh workspace does. And a configuration being ignored is said out loud, which needed
-`examine` to take the inventory rather than build one agreeing with `cfg` by construction.
+**Reversed: `doctor` says where a catalogue came from, not only what it holds.** It
+gained two rows a path alone could not express. One warned of an empty catalogue at a
+relocated path, because resolving a catalogue *created* its directory, so a mistyped root
+said `0 defined` as a fresh workspace does; it went when a start stopped making the folder
+and began refusing a missing one. The other said a configuration was being ignored, which
+needed `examine` to take the inventory rather than build one agreeing with `cfg` by
+construction. Its premise was `Kingfisher(catalogue=)`; once #784 removed that, `doctor`'s
+inventory and `cfg` read the one folder, and the row could not fire -- breaking it turned
+red only a test handing `examine` an inventory built by hand. Removed rather than kept
+guarding nothing. `examine` still takes the inventory, so the header `doctor` prints and
+the rows under it come from one read. *(2026-09-02. Reversed 2026-10-13 and 2026-10-19.)*
 
 **Rejected along the way, each for its own reason.** In-code configuration as a first-class
 path -- `Models`, `Endpoint` and `ModelProfile` are constructible, but this was about making
@@ -4364,7 +4371,7 @@ by nothing, and was fixed by reaching its subject:
     `test_a_path_that_climbs_out_is_an_error_on_the_result` lacked `way`, so `adelete`
     could pass a malformed path through with the suite green.
 
-**The sixth cannot be given a rule, and that is the finding.** `_activated_subagents`
+**The sixth cannot be given a rule, and that is the finding.** `activated_subagents`
 lists what the agent the build *opened* delegates to, rather than what every reachable
 agent does, because `Capabilities.subagents` may only narrow that agent's declaration.
 Collapsing it to the broader answer left 243 tests green, because only `"*"` lets a
@@ -4756,13 +4763,13 @@ one thing to the graph. Four decisions constrain the shape further -- the middle
 registry merged once before either branch reads it, both `wants` sites through one
 builder, `test_both_kinds_are_handed_the_same_things_to_want` guarding a second inline
 mapping, and one compiled agent per definition because per path is exponential. The
-piece that could come out did: `_resolve_tools`, whose probe is 7.7ms and is skipped
+piece that could come out did: `resolve_tools`, whose probe is 7.7ms and is skipped
 when nothing needs it -- no definition names a tool, the workspace defines none, and
 the request asks for every tool.
 
 The thin seams the review saw were one seam: 21 test files monkeypatched
 `create_deep_agent` by string path and read its kwargs. A build returning a record of
-what it attached, as `_ToolSurface` already does inside it, was declined here for no
+what it attached, as `ToolSurface` already does inside it, was declined here for no
 behaviour change at the cost of every one of those files and the return type's
 callers. *(2026-09-16.)* That half was taken later -- see *Taken after all: a build
 says what it attached* below.
