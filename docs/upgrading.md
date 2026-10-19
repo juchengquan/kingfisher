@@ -18,6 +18,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `seed` reads an audience written in Python, after #917
+
+- **`kingfisher seed` no longer copies `subagents/quarters.py` or `tools/sql_query.py`
+  by default.** Both say who reaches them, in Python, which seeding could not see: a
+  `datazone:` was invisible in either format, and a definition declared in a module was
+  never read at all. A deployment that has adopted source ids and seeded one of these
+  had `kingfisher list` and `doctor` failing on a name it had never been told to declare.
+
+  They are reported like every other skipped definition, and `kingfisher seed --all`
+  still takes them. Nothing you have already seeded changes.
+- **The declaration `seed` prints now has both lines of `source_ids.yaml`**, a
+  `datazones:` beside the `source_ids:`, each only where something needs it.
+- **The remedy sentence follows what the file asked for**: `Declare the datazone in
+  source_ids.yaml` where that is what it named, and `Declare them` where it named both.
+  A tool package naming an audience is left behind whole, folder and all, rather than
+  copied with the module that names it removed.
+
 ## A claim answers a token, and a release names it, after #916
 
 - **`Sessions.claim` returns a token, or `None`, instead of `True` or `False`.** A

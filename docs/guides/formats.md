@@ -1387,7 +1387,9 @@ Three files to read alongside this section: `assets/source_ids.yaml`,
 `agents/analyst.yaml` and `subagents/auditor.yaml`. `seed` leaves them behind by
 default, because a workspace that has not declared `sales_db` cannot read a
 definition that names it — copy `source_ids.yaml` first, then
-`kingfisher seed --all`.
+`kingfisher seed --all`. `subagents/quarters.py` and `tools/sql_query.py` are
+left behind for the same reason: an audience written in Python counts as one, and
+a tool's only place to write it is there.
 
 **Audiences live in the definitions.** Each thing says who may reach *it*, in its
 own file: an agent or a subagent on its `source_ids:` line, a tool in its
@@ -1870,6 +1872,9 @@ tool file writes `ToolSpec(tool, datazone="finance")`.
   the tool's own or contradict it.
 - **A datazone the vocabulary does not declare stops the deployment**, as an
   undeclared source id does. With no `source_ids.yaml`, `datazone:` lines have no
-  effect, and a caller naming a datazone is refused.
+  effect, and a caller naming a datazone is refused. `seed` leaves a definition
+  naming one behind, as it does one naming a source id, and prints the
+  `datazones:` line to declare — they are separate lines of that file, and the
+  one it printed is the one you need.
 - **Nothing is refused for being unreachable.** An agent that names a finance tool is
   not wrong for an hr caller — the tool is left out of that caller's build.

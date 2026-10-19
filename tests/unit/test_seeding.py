@@ -308,6 +308,169 @@ def test_every_way_of_naming_a_source_id_is_left_behind(spelling, cfg, tmp_path)
     assert left[0].wants == "source_ids"
 
 
+def test_a_definition_naming_only_a_datazone_is_left_behind(cfg, tmp_path):
+    """`datazone:` was invisible to seeding, in either format: the shipped `quarters.py`
+    was copied for months and left `kingfisher list` and `doctor` failing with `names
+    undeclared datazone 'emea'`, with nothing in seed's report naming it.
+
+    One spelling and not a table: a datazone is one name, never a list, and never on an
+    entry -- an agent writing one is refused, so a subagent's own field is the only place
+    it can be.
+    """
+    source = tmp_path / "presets"
+    (source / "subagents").mkdir(parents=True)
+    (source / "subagents" / "zoned.yaml").write_text(
+        "name: zoned\ndescription: d\ndatazone: emea\nsystem_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert "subagents/zoned.yaml" not in done.written
+    (left,) = done.skipped
+    assert (left.label, left.names, left.datazones) == ("subagents/zoned.yaml", (), ("emea",))
+    # The remedy it is given, which is the half that makes the skip useful: told to
+    # declare source ids, a reader writes the wrong line of the right file.
+    assert "names datazone (emea)" in "\n".join(done.report())
+    assert "Declare the datazone in source_ids.yaml" in "\n".join(done.report())
+
+
+#: Every way a definition says who reaches it *in Python*: the only place a tool can say
+#: it, and one of the two places a subagent can. Read by a tolerant reader of seeding's
+#: own, as the YAML above is, so a spelling it stops covering does not fail -- the
+#: definition reads as naming nobody and is copied into a workspace that cannot load it.
+CODE_SPELLINGS = {
+    "a subagent entry's list": (
+        "subagents",
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+        '             "source_ids": ["A", "B"]}]\n',
+        ("A", "B"),
+        (),
+    ),
+    "a subagent entry's lone name": (
+        "subagents",
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+        '             "source_ids": "A"}]\n',
+        ("A",),
+        (),
+    ),
+    "a subagent entry's requirement set": (
+        "subagents",
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+        '             "source_ids": [{"A", "B"}]}]\n',
+        ("A", "B"),
+        (),
+    ),
+    "a subagent entry's datazone": (
+        "subagents",
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+        '             "datazone": "emea"}]\n',
+        (),
+        ("emea",),
+    ),
+    "a tool spec's source ids": (
+        "tools",
+        "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\nTOOLS = [ToolSpec(t, source_ids=['A'])]\n",
+        ("A",),
+        (),
+    ),
+    "a tool spec's datazone": (
+        "tools",
+        "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\nTOOLS = [ToolSpec(t, datazone='emea')]\n",
+        (),
+        ("emea",),
+    ),
+}
+
+
+@pytest.mark.parametrize("spelling", sorted(CODE_SPELLINGS))
+def test_every_way_python_names_an_audience_is_left_behind(spelling, cfg, tmp_path):
+    """Driven through `seed`, because what goes wrong is the copying: a definition whose
+    audience this cannot see is written into a workspace where the names it asks for are
+    not declared, and the whole catalogue it belongs to then refuses to load.
+    """
+    kind, written, source_ids, datazones = CODE_SPELLINGS[spelling]
+    source = tmp_path / "presets"
+    (source / kind).mkdir(parents=True)
+    (source / kind / "audienced.py").write_text(written, encoding="utf-8")
+
+    done = seeding.seed(cfg, source)
+
+    assert f"{kind}/audienced.py" not in done.written
+    left = [one for one in done.skipped if one.label == f"{kind}/audienced.py"]
+    assert left, f"a definition naming an audience by {spelling} was copied anyway"
+    assert (sorted(left[0].names), sorted(left[0].datazones)) == (
+        sorted(source_ids),
+        sorted(datazones),
+    )
+    assert left[0].wants == "source_ids"
+
+
+def test_a_module_that_only_mentions_an_audience_is_copied(cfg, tmp_path):
+    """The control the table above needs, and the reason this reads the syntax rather
+    than the text: `subagents/timestamps/timestamps.py` is a worked example whose
+    docstring tells you that a definition "may also say who reaches it, with `source_ids`
+    and `datazone`". A reader matching the words would leave it behind.
+    """
+    source = tmp_path / "presets"
+    (source / "subagents").mkdir(parents=True)
+    (source / "subagents" / "documented.py").write_text(
+        '"""A worked example.\n\nIt may also say who reaches it, with source_ids and\n'
+        'datazone, as quarters.py does.\n"""\n\n'
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi."}]\n',
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert "subagents/documented.py" in done.written
+    assert not done.skipped
+
+
+def test_a_tool_package_is_left_behind_whole(cfg, tmp_path):
+    """A package is one definition, so it is decided as one. Dropping the module that
+    names the audience and copying the rest leaves a folder that is not a tool -- which
+    is worse than the copy, because the loader can at least explain the copy.
+    """
+    source = tmp_path / "presets"
+    package = source / "tools" / "profiler"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "profile.py").write_text(
+        "from kingfisher import ToolSpec\n\n\ndef p() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\nTOOLS = [ToolSpec(p, source_ids=['A'])]\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert [(one.label, one.names) for one in done.skipped] == [("tools/profiler", ("A",))]
+    assert not (tools_dir(cfg) / "profiler").exists(), "half a package is not a tool"
+
+
+def test_the_declaration_names_both_lines_of_the_file(cfg, tmp_path):
+    """The block a reader copies. One line for the source ids and one for the datazones,
+    each only where something needs it: a deployment told to declare source ids and left
+    to find `datazones:` for itself writes half of what it needs and still cannot load.
+    """
+    source = tmp_path / "presets"
+    (source / "subagents").mkdir(parents=True)
+    (source / "subagents" / "both.yaml").write_text(
+        "name: both\ndescription: d\nsource_ids: [A]\ndatazone: emea\n"
+        "system_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+
+    report = "\n".join(seeding.seed(cfg, source).report())
+
+    assert "    source_ids: [A]" in report
+    assert "    datazones: [emea]" in report
+    assert "names source_ids (A) and datazone (emea)" in report
+    assert "Declare them in source_ids.yaml" in report
+
+
 def test_a_definition_naming_nobody_is_copied(cfg, tmp_path):
     """The control the rule above needs: seeding leaves a definition behind *because*
     it names source ids, not because it leaves everything behind.
