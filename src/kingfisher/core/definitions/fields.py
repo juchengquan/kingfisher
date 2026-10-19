@@ -119,9 +119,8 @@ class Reader:
             written = ", ".join(str(one) for one in value)
             msg = (
                 f"{self.source}: {key} names {len(value)} things ({written}); "
-                f"it takes one. A list was legal while an unbound alias could be "
-                f"passed over and the next tried -- nothing is passed over now, "
-                f"so every name after the first was unreachable"
+                f"it takes one. There is no fallback, so every name after the first "
+                f"would never be tried"
             )
             raise self.error(msg)
         return text(value) or None
@@ -392,7 +391,7 @@ class Reader:
             raise self.error(msg)
         # `{finance: senior}` is a mapping with a value rather than a set of two
         # names, and reading it as one would take `finance` and throw away what
-        # was written beside it. That is how it behaved before it was refused.
+        # was written beside it.
         if valued := sorted(str(key) for key, value in raw.items() if value is not None):
             msg = (
                 f"{where}: {{{', '.join(valued)}}} has something written after it. "
