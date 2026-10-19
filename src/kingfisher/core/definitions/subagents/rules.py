@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
 
-from kingfisher.core.access.capabilities import ALL, CapabilityError
+from kingfisher.core.access import ALL, CapabilityError
 from kingfisher.core.definitions.tools.spec import split_reference
 
 from .spec import (

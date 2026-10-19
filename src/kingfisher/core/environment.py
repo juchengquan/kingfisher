@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from kingfisher.core.access import policy as access_policy
+from kingfisher.core.access import load as load_access_policy
 
 from . import model_catalogue
 from .config import (
@@ -167,7 +167,7 @@ class Environment:
                 model_catalogue.wire_formats(self.optional_text("KINGFISHER_WIRE_FORMATS")),
                 keys_file=self.optional_path("KINGFISHER_MODEL_KEYS_FILE"),
             ),
-            access=access_policy.load(access_file),
+            access=load_access_policy(access_file),
             # The path too: `load` answers `None` for a missing file, and a deployment
             # that meant to have a policy needs to hear where it was looked for.
             access_source=access_file,

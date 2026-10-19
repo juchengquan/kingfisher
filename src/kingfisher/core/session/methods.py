@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access.capabilities import ALL
-from kingfisher.core.access.checks import caller_holds
-from kingfisher.core.access.reach import reaches
-from kingfisher.core.access.source_ids import with_datazone, zoned
+from kingfisher.core.access import ALL, caller_holds, reaches, with_datazone, zoned
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.request import Request, Resume
 
@@ -31,7 +28,7 @@ from .store import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from kingfisher.core.access.source_ids import Held, SourceIds
+    from kingfisher.core.access import Held, SourceIds
     from kingfisher.core.config import Config
 
 

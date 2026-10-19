@@ -6,10 +6,9 @@ from collections.abc import Callable, Iterator, Mapping
 from pathlib import PurePath
 
 from kingfisher import Inventory, Origins
-from kingfisher.core.access.capabilities import ALL
 
 # Taken where they live, not from the front door: nobody outside this wheel asks for them.
-from kingfisher.core.access.source_ids import Audience, Stated, spell
+from kingfisher.core.access import ALL, Audience, Stated, spell
 from kingfisher.core.definitions.seeding import SEED_HINT
 from kingfisher.core.definitions.skills.catalogue import SKILL_LAYOUT
 from kingfisher.core.definitions.tools.spec import offered, split_reference

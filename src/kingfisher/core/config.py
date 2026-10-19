@@ -9,8 +9,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.core.access.source_ids import SourceIds
+from kingfisher.core.access import Capabilities, SourceIds
 
 from .layout import DEFAULT_LAYOUT, HARNESS_OWNED, SESSIONS, Layout
 

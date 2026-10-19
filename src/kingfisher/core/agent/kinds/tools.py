@@ -5,14 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access.capabilities import (
-    ALL,
-    Capabilities,
-    CapabilityError,
-    Selection,
-    narrowed,
-)
-from kingfisher.core.access.reach import reaches
+from kingfisher.core.access import ALL, Capabilities, CapabilityError, Selection, narrowed, reaches
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.definitions.subagents.spec import SubagentError

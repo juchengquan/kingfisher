@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access.capabilities import SEPARATOR, CapabilityError
+from kingfisher.core.access import SEPARATOR, CapabilityError
 
 from . import spec as skill
 from .catalogue import DEEPEST, MOUNT_DEEPEST, reachable

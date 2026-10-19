@@ -8,16 +8,25 @@ from dataclasses import dataclass, field
 from functools import partial
 from types import MappingProxyType
 
-from kingfisher.core.access import checks as access
-from kingfisher.core.access.capabilities import (
+from kingfisher.core.access import (
     ALL,
+    AccessReport,
     Capabilities,
     CapabilityError,
     Selection,
+    SourceIds,
+    Stated,
+    activated,
+    audit,
+    handed_work_by,
+    held_by,
+    offers,
+    reaches,
+    undeclared_in,
     unoffered,
+    walked,
+    with_datazone,
 )
-from kingfisher.core.access.reach import activated, handed_work_by, offers, reaches
-from kingfisher.core.access.source_ids import AccessReport, SourceIds, Stated, with_datazone
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import (
     Definitions,
@@ -506,7 +515,7 @@ def _audiences(specs: Mapping[str, object], *, kind: str) -> dict[str, Stated]:
     """
     return {
         name: said
-        for _kind, name, said in access.walked((kind, specs))
+        for _kind, name, said in walked((kind, specs))
         if not said.says_nothing
     }
 
@@ -530,11 +539,11 @@ def _access(
     # The walk `Kingfisher` runs at construction, by the same functions, so a listing
     # cannot disagree with startup about who reaches what.
     kinds = (("agent", agents), ("subagent", subagents))
-    report = access.audit(*kinds, vocabulary=cfg.access)
+    report = audit(*kinds, vocabulary=cfg.access)
     broken = {
         f"{kind}s": complaint
         for kind, specs in (*kinds, ("tool", tools))
-        if (complaint := access.undeclared_in(specs, kind=kind, vocabulary=cfg.access))
+        if (complaint := undeclared_in(specs, kind=kind, vocabulary=cfg.access))
         is not None
     }
     return stated, report, broken
@@ -707,7 +716,7 @@ def inventory(
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
     # Whose view this is, before the agents are read: each one's chain is what it
     # activates for this caller.
-    held = access.held_by(cfg.access, with_datazone(source_ids, datazone))
+    held = held_by(cfg.access, with_datazone(source_ids, datazone))
 
     middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved, held)

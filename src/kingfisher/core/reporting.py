@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access.capabilities import Capabilities, withheld
-from kingfisher.core.access.reach import handed_work_by, offers
+from kingfisher.core.access import Capabilities, handed_work_by, offers, withheld
 from kingfisher.core.agent.activation import (
     activatable_skills,
     available_skills,

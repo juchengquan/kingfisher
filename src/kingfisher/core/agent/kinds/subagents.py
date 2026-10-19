@@ -12,13 +12,7 @@ from urllib.parse import urlsplit
 from deepagents.middleware import SubAgentMiddleware
 from langchain_core.runnables import Runnable
 
-from kingfisher.core.access.capabilities import (
-    ALL,
-    Selection,
-    ceiling,
-    narrowed,
-    refuse_unoffered,
-)
+from kingfisher.core.access import ALL, Selection, ceiling, narrowed, refuse_unoffered
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.models import build_model, model_named, summarizer_trigger
 from kingfisher.core.agent.prompting import behind_instructions

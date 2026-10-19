@@ -39,7 +39,7 @@ from kingfisher import (
     paths_from_env,
     seed,
 )
-from kingfisher.core.access.source_ids import with_datazone
+from kingfisher.core.access import with_datazone
 
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.config import MissingCredentialsWarning

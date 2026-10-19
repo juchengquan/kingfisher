@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access.source_ids import Held, with_datazone
+from kingfisher.core.access import Held, with_datazone
 from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.layout import PAUSED_STATE
