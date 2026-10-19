@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.session.model import Conversation, UnknownSessionError
 from kingfisher.plugins.sessions.folders import session_dir
 
@@ -70,7 +71,7 @@ def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace):
     """
     from kingfisher.core.session.turn import turn_message
 
-    message = turn_message("count the rows", ())
+    message = turn_message("count the rows", (), layout=DEFAULT_LAYOUT)
 
     assert "/scratchpad" in message
     # Not a plain `in`: the virtual path *contains* the shell form as a substring, so

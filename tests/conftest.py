@@ -332,8 +332,10 @@ def paths_in(cfg, session_dir: Path, *, sessions: Path | None = None):
     from kingfisher.core.agent.permitted_backend import PermittedBackend
     from kingfisher.core.agent.session_paths import SessionPaths
 
-    under_rules = PermittedBackend(_backend_in(cfg, session_dir), read_only_permissions())
-    return SessionPaths(under_rules, Path(session_dir).parent if sessions is None else sessions)
+    under_rules = PermittedBackend(_backend_in(cfg, session_dir), read_only_permissions(cfg.layout))
+    return SessionPaths(
+        under_rules, Path(session_dir).parent if sessions is None else sessions, cfg.layout
+    )
 
 
 def on_backend(tool, backend, **args):

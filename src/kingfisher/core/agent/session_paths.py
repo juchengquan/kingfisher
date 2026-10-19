@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from kingfisher.core.agent.host_paths import HOST_ROOTS, HostPathError
-from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS_ROUTE, OUTPUTS_ROUTE, Layout
+from kingfisher.core.layout import INPUTS_ROUTE, OUTPUTS_ROUTE, Layout
 
 #: Which arguments name a file: a convention `tools.md` documents, so widening it
 #: means a sentence there too.
@@ -41,7 +41,7 @@ class SessionPaths:
     rules, not a session directory, so paths follow the backend's own mapping.
     """
 
-    def __init__(self, permitted: Any, sessions: Path, layout: Layout = DEFAULT_LAYOUT) -> None:
+    def __init__(self, permitted: Any, sessions: Path, layout: Layout) -> None:
         self._permitted = permitted
         #: The example routes `refusal_text` offers, from this layout so a renamed
         #: session's paths are the ones named.

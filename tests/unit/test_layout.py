@@ -20,7 +20,6 @@ from kingfisher.core.layout import (
     MEMORY,
     OUTPUTS,
     ROUTES,
-    SESSION_DIRS,
     Layout,
     denied_read_scopes,
     denied_scopes,
@@ -47,7 +46,7 @@ def _laid_out(cfg, layout: Layout, session_id: str = "m") -> Path:
 def test_the_default_layout_is_the_module_constants():
     """`Layout()` and the module cannot drift: this is the pin that says so."""
     default = Layout()
-    assert default.session_dirs == SESSION_DIRS
+    assert default.session_dirs == ("inputs", "outputs", "memory", "scratchpad")
     assert default.artifact_dirs == (OUTPUTS, MEMORY)
     assert default.routes == ROUTES
     assert default.routed_paths() == routed_paths()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage, SystemMessage
@@ -15,7 +16,14 @@ from kingfisher.core.agent.prompting import (
     render_system_prompt,
     system_prompt,
 )
-from kingfisher.core.layout import INPUTS, OUTPUTS, SCRATCH, TOOL_RESULTS_ROUTE, Layout
+from kingfisher.core.layout import (
+    DEFAULT_LAYOUT,
+    INPUTS,
+    OUTPUTS,
+    SCRATCH,
+    TOOL_RESULTS_ROUTE,
+    Layout,
+)
 from kingfisher.core.session.store import entry_id
 from kingfisher.core.session.turn import ledger_delta, ledger_index
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
@@ -24,26 +32,31 @@ from tests.conftest import FakeToolCallingModel, a_subagent, an_agent, start, su
 from tests.unit.scripted import Scripted
 
 
+def shipped(**described: Any) -> str:
+    """The prompt under the shipped layout, which most rules here are about."""
+    return render_system_prompt(layout=DEFAULT_LAYOUT, **described)
+
+
 def test_base_prompt_names_no_dataset_and_no_domain():
     """A general agent's base prompt must read the same whatever the project is."""
-    text = render_system_prompt()
+    text = shipped()
     for leaked in ("sales", ".csv", "revenue", "region"):
         assert leaked not in text.lower(), f"domain-specific token {leaked!r} in base prompt"
 
 
 def test_capability_sections_appear_only_when_enabled():
     """The agent must never be told about a capability that is not wired."""
-    off = render_system_prompt()
+    off = shipped()
     assert "/skills" not in off
     assert "/memory" not in off
 
-    on = render_system_prompt(skills_enabled=True, memory_enabled=True)
+    on = shipped(skills_enabled=True, memory_enabled=True)
     assert "/skills" in on
     assert "/memory" in on
 
 
 def test_capability_flags_are_independent():
-    skills_only = render_system_prompt(skills_enabled=True)
+    skills_only = shipped(skills_enabled=True)
     assert "/skills" in skills_only
     assert "/memory" not in skills_only
 
@@ -54,7 +67,7 @@ def test_structural_contract_survives_every_combination():
     """
     for skills in (False, True):
         for memory in (False, True):
-            text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
+            text = shipped(skills_enabled=skills, memory_enabled=memory)
             assert "/inputs" in text
             assert "/outputs" in text
 
@@ -66,7 +79,7 @@ def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
     The names come from `layout` rather than being written out here, since a literal
     copy would be renamed along with the prompt, or not at all, and pass either way.
     """
-    text = render_system_prompt(shell=kingfishers_shell())
+    text = shipped(shell=kingfishers_shell())
 
     for name in (INPUTS, OUTPUTS, SCRATCH):
         assert f"| `/{name}/<name>` | `{name}/<name>` |" in text, name
@@ -110,7 +123,7 @@ def test_the_prompt_names_the_folders_deepagents_writes_on_its_own(cfg, session_
     from kingfisher.plugins.sessions.backend import backend_at
 
     root = backend_at(cfg, session_dir).artifacts_root.rstrip("/")
-    text = render_system_prompt()
+    text = shipped()
 
     for folder in ("large_tool_results", "conversation_history"):
         assert f"`{root}/{folder}/`" in text, folder
@@ -123,7 +136,7 @@ def test_the_prompt_names_a_recorded_result_as_the_ledger_does():
     Read off the code that writes each, since a literal here would be renamed along
     with the prompt, or not at all, and pass either way.
     """
-    text = render_system_prompt()
+    text = shipped()
 
     assert f"`{TOOL_RESULTS_ROUTE}`" in text
     assert f"`[{entry_id(42)}]`" in text
@@ -136,7 +149,7 @@ def test_the_prompt_lets_the_model_cite_a_result_and_does_not_tell_it_to():
     reader wants one; the owner asked for the sentence to give permission instead.
     """
     # As read, not as wrapped in the file.
-    text = " ".join(render_system_prompt().split())
+    text = " ".join(shipped().split())
 
     assert "You can cite it by that id when you rely on that result." in text
     assert "Cite it" not in text
@@ -149,7 +162,7 @@ def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
     """
     from evals.task import SMOKE_TASK
 
-    for text in (render_system_prompt(skills_enabled=True, memory_enabled=True), SMOKE_TASK):
+    for text in (shipped(skills_enabled=True, memory_enabled=True), SMOKE_TASK):
         assert "run directory" not in text
 
 
@@ -161,7 +174,7 @@ def test_instructions_are_appended_to_the_harness_prompt(cfg):
 
 
 def test_no_instructions_leave_the_base_prompt_untouched(cfg):
-    assert system_prompt(cfg) == render_system_prompt()
+    assert system_prompt(cfg) == shipped()
 
 
 def test_enabling_capabilities_changes_the_rendered_prompt(cfg):
@@ -178,7 +191,7 @@ def test_assembly_leaves_no_blank_line_runs_or_markers():
 
     for skills in (False, True):
         for memory in (False, True):
-            text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
+            text = shipped(skills_enabled=skills, memory_enabled=memory)
             assert CAPABILITY_MARKER not in text
             assert "<!--" not in text
             assert not re.search(r"\n{3,}", text)
@@ -189,7 +202,7 @@ def test_shell_section_does_not_contradict_the_injected_host_mappings():
     used, and instructs the agent to substitute them in shell commands.
     """
     # Collapse wrapping: the prompt is hard-wrapped, so phrases span newlines.
-    text = " ".join(render_system_prompt(shell=kingfishers_shell()).lower().split())
+    text = " ".join(shipped(shell=kingfishers_shell()).lower().split())
     assert "do not use host absolute paths" not in text
     # And it must not repeat the middleware's misleading implication that
     # unmapped mounts are unreachable from the shell.
@@ -200,7 +213,7 @@ def test_prompt_warns_about_host_paths_in_file_tools():
     """virtual_mode makes `write_file('/tmp/x')` succeed by creating
     `<workspace>/tmp/x`.
     """
-    text = " ".join(render_system_prompt().lower().split())
+    text = " ".join(shipped().lower().split())
     assert "a host path is not a file-tool path" in text
     assert "recreated *inside* the workspace" in text
 
@@ -211,11 +224,11 @@ def test_the_system_prompt_demands_no_artifacts():
     """
     for skills in (False, True):
         for memory in (False, True):
-            text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
+            text = shipped(skills_enabled=skills, memory_enabled=memory)
             assert "report.md" not in text
             assert "result.json" not in text
 
-    assert "Answer the question. That is the deliverable" in render_system_prompt()
+    assert "Answer the question. That is the deliverable" in shipped()
 
 
 def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements(
@@ -318,7 +331,7 @@ def test_the_prompt_does_not_promise_other_sessions_are_out_of_reach():
     """
     for skills in (False, True):
         for memory in (False, True):
-            text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
+            text = shipped(skills_enabled=skills, memory_enabled=memory)
             assert "another session's files" not in text
 
 
@@ -337,7 +350,7 @@ def test_the_prompt_claims_about_inputs_only_what_holds_with_no_fence():
     The file-tool half holds on every run, and that is what the prompt says now. What
     the fence does is the operator's to know, and `doctor` is where they hear it.
     """
-    text = render_system_prompt()
+    text = shipped()
 
     assert "every file tool\n  refuses a write under it" in text
     assert "by the filesystem itself" not in text
@@ -397,7 +410,7 @@ def test_the_prompt_does_not_count_the_places_a_turn_may_write():
     capability, and the sections that grant a place say so where they grant it.
     """
     for memory in (False, True):
-        text = render_system_prompt(memory_enabled=memory)
+        text = shipped(memory_enabled=memory)
 
         assert "never anywhere else" not in text
         assert "Nothing else in the session is yours to write" in text

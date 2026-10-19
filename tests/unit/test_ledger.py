@@ -31,6 +31,7 @@ from kingfisher.core.agent.middlewares.recorded import summary
 from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
 from kingfisher.core.agent.prompting import render_system_prompt
 from kingfisher.core.layout import (
+    DEFAULT_LAYOUT,
     HARNESS,
     LEDGER_FILE,
     PAUSED_STATE,
@@ -1215,7 +1216,9 @@ def test_a_command_is_stamped_in_a_copy_that_keeps_the_rest_of_it(ledgered):
     answer = ToolMessage(content="thin margins", tool_call_id="t1", name="task")
     returned = Command(update={"messages": [earlier, answer], "todos": ["kept"]}, goto="model")
     recorder = RecorderMiddleware(
-        Ledger("turn", KeptLedger()), backend_at(ledgered, _session(ledgered)), None
+        Ledger("turn", KeptLedger()), backend_at(ledgered, _session(ledgered)),
+        None,
+        DEFAULT_LAYOUT.tool_results_route,
     )
 
     handed = recorder.wrap_tool_call(
@@ -1389,7 +1392,8 @@ def test_the_delta_follows_what_the_turn_message_already_said():
     """The task leads and the turn's own facts follow it, as before; the delta anywhere
     ahead of them splits the task from what it says about where to work.
     """
-    message = turn_message("go", ("a.txt",), KeptLedger(exchanges=((_entry(1, "search"),),)))
+    earlier = KeptLedger(exchanges=((_entry(1, "search"),),))
+    message = turn_message("go", ("a.txt",), earlier, layout=DEFAULT_LAYOUT)
 
     assert message == (
         "go\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
@@ -1822,7 +1826,7 @@ def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):
     with the patterns read out of the prompt rather than written here, so that a test
     spelling them right cannot pass beside a prompt spelling them wrong.
     """
-    taught = " ".join(render_system_prompt().split())
+    taught = " ".join(render_system_prompt(layout=DEFAULT_LAYOUT).split())
     by_name = re.search(r"`glob` for `([^`]+)` in `([^`]+)`", taught)
     by_line = re.search(r"ends in its `([^`]+)` line, so `grep` for that in `([^`]+)`", taught)
     assert by_name and by_line, "the prompt no longer says how to find a file by its id"

@@ -8,7 +8,7 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.agent.middlewares.recorded import readable_size
-from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
+from kingfisher.core.layout import Layout
 from kingfisher.core.result import LedgerEntry, PendingDecision, RunEvent
 from kingfisher.core.session import runtime
 
@@ -80,7 +80,7 @@ def turn_message(
     placed: tuple[str, ...],
     earlier: KeptLedger | None = None,
     *,
-    layout: Layout = DEFAULT_LAYOUT,
+    layout: Layout,
 ) -> str:
     """The task, plus this turn's facts and nothing more.
 

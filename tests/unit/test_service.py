@@ -211,7 +211,7 @@ def test_unhardened_paths_are_reported_before_the_run_starts():
 
 
 def test_a_bare_task_is_told_only_where_to_work():
-    message = turn_message("do a thing", ())
+    message = turn_message("do a thing", (), layout=DEFAULT_LAYOUT)
 
     assert message == (
         "do a thing\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
@@ -222,14 +222,14 @@ def test_files_supplied_with_the_request_are_named():
     """They went to a directory of the turn's own and are session inputs now, so the
     one line that used to name two places names one.
     """
-    message = turn_message("analyse", ("fresh.csv",))
+    message = turn_message("analyse", ("fresh.csv",), layout=DEFAULT_LAYOUT)
 
     assert "New files in /inputs/: fresh.csv." in message
 
 
 def test_the_turn_message_carries_no_output_convention():
     """What the task should *produce* is the task's business."""
-    message = turn_message("say hello", ())
+    message = turn_message("say hello", (), layout=DEFAULT_LAYOUT)
 
     assert "report" not in message.lower()
     assert ".md" not in message

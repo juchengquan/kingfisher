@@ -14,6 +14,7 @@ from kingfisher.core.agent.assembly import build_agent, read_only_permissions
 from kingfisher.core.agent.permitted_backend import PermittedBackend, host_path
 from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.agent.session_paths import SessionPaths
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins import LocalSessions, ShellSettings
 from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
 from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, start, tools_dir
@@ -115,8 +116,8 @@ class Remote(BackendProtocol):
 
 
 def _paths(backend, tmp_path, permissions=None) -> SessionPaths:
-    rules = read_only_permissions() if permissions is None else permissions
-    return SessionPaths(PermittedBackend(backend, rules), tmp_path / "sessions")
+    rules = read_only_permissions(DEFAULT_LAYOUT) if permissions is None else permissions
+    return SessionPaths(PermittedBackend(backend, rules), tmp_path / "sessions", DEFAULT_LAYOUT)
 
 
 def test_a_backend_with_some_routes_here_serves_those_and_refuses_the_rest(tmp_path):
@@ -152,7 +153,7 @@ def test_a_rule_added_after_the_guards_were_built_still_applies(tmp_path):
     """
     (tmp_path / "memory").mkdir()
     (tmp_path / "memory" / "AGENTS.md").write_text("kept")
-    rules = read_only_permissions()
+    rules = read_only_permissions(DEFAULT_LAYOUT)
     paths = _paths(FilesystemBackend(tmp_path), tmp_path, rules)
 
     rules.append(FilesystemPermission(operations=["read"], paths=["/memory/**"], mode="deny"))

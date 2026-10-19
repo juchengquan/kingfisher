@@ -19,6 +19,7 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
     MAPPINGS,
     TIMEOUT,
     BuiltinToolsMiddleware,
+    _virtual,
     hint,
     missed,
 )
@@ -96,7 +97,7 @@ def test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_on
     never shown `system.md`, ran `open('/inputs/cars.csv')` in the shell and failed.
     """
     cfg, offered = shelled
-    rule = execute_line(kingfishers_shell())
+    rule = execute_line(kingfishers_shell(), DEFAULT_LAYOUT)
     assert rule is not None
     _run(cfg, *_consulting(subagent))
     assert len(offered) == 3
@@ -155,7 +156,7 @@ def test_a_miss_is_read_off_the_line_naming_the_path(output, path):
     """A host path ending in a session folder's name was read as a file-tool one, and a
     correct command was told to drop a slash it never had.
     """
-    assert missed(output) == path
+    assert missed(output, _virtual(DEFAULT_LAYOUT.session_dirs)) == path
 
 
 THEIRS = ShellPrompt(execute="- The shell holds this session at `/workspace/{{inputs}}`.")
@@ -424,7 +425,7 @@ def test_the_shell_rule_reaches_execute_and_no_other_tool(shelled):
     it passes just as well when every tool does.
     """
     cfg, offered = shelled
-    rule = execute_line(kingfishers_shell())
+    rule = execute_line(kingfishers_shell(), DEFAULT_LAYOUT)
     assert rule is not None
     _run(cfg, *_consulting("checker"))
 
@@ -446,7 +447,7 @@ def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name(way):
     the suite builds offers one: mutating the mapping branch's name check away leaves
     the whole suite green, so a file tool offered that way would carry the shell's rule.
     """
-    rule = execute_line(kingfishers_shell())
+    rule = execute_line(kingfishers_shell(), DEFAULT_LAYOUT)
     assert rule is not None
 
     told = _told_tools(

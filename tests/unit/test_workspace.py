@@ -8,7 +8,6 @@ from kingfisher.core.layout import (
     DEFAULT_LAYOUT,
     HARNESS,
     LAYOUT_DIRS,
-    SESSION_DIRS,
 )
 from kingfisher.core.workspace import EXAMPLE, EXAMPLES, ensure_definitions, ensure_layout
 from kingfisher.plugins import LocalSessions
@@ -212,15 +211,15 @@ def test_sweep_failures_are_reported_not_swallowed(workspace):
 def test_the_layout_names_no_genre_of_output():
     """`/reports` privileged one kind of result in the workspace structure itself."""
     assert "reports" not in LAYOUT_DIRS
-    assert "reports" not in SESSION_DIRS
-    assert "outputs" in SESSION_DIRS
+    assert "reports" not in DEFAULT_LAYOUT.session_dirs
+    assert "outputs" in DEFAULT_LAYOUT.session_dirs
 
 
 def test_one_pass_makes_a_whole_session(tmp_path):
     """What `LocalSessions` used to finish off, and the reason this exists."""
     session = ensure_session_layout(tmp_path / "s", DEFAULT_LAYOUT)
 
-    for name in (*SESSION_DIRS, HARNESS):
+    for name in (*DEFAULT_LAYOUT.session_dirs, HARNESS):
         assert (session / name).is_dir(), name
 
 

@@ -11,7 +11,7 @@ import pytest
 
 from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT, SESSION_DIRS
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
 from kingfisher.core.request import Decision, Resume
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -54,7 +54,7 @@ def test_a_request_naming_no_session_runs_in_default_and_carries_it_on(cfg, door
     assert (first.session_id, again.session_id) == (DEFAULT, DEFAULT)
     assert "forty" in _sent(kf), "the second turn did not continue the first's conversation"
     folder = cfg.workspace / "sessions" / DEFAULT
-    assert {p.name for p in folder.iterdir()} >= {*SESSION_DIRS, HARNESS}
+    assert {p.name for p in folder.iterdir()} >= {*DEFAULT_LAYOUT.session_dirs, HARNESS}
 
 
 def test_naming_default_reaches_the_same_session(cfg):
