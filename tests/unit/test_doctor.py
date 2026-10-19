@@ -484,6 +484,21 @@ def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatc
     assert "configuration error" in capsys.readouterr().err
 
 
+def test_a_setting_refused_partway_through_is_a_row_after_the_rows_before_it(cfg, tmp_path):
+    """A skills mount is refused only when a later check reads it, so without the
+    catch around every check `doctor` ends in a traceback and loses the rows before it.
+    """
+    vendor = tmp_path / "vendor"
+    vendor.mkdir()
+    cfg = replace(cfg, skills_enabled=True, skills_mounts={"a/b": vendor})
+
+    checks = examine(cfg)
+
+    assert checks[0].name == "catalogue"
+    assert (checks[-1].name, checks[-1].verdict) == ("configuration", "fail")
+    assert "'a/b'" in checks[-1].detail
+
+
 def test_a_retired_setting_is_named_even_when_the_config_will_not_load(
     tmp_path, monkeypatch, capsys
 ):
