@@ -2407,13 +2407,45 @@ WORLD_CALLS = frozenset({
     "write_text", "write_bytes", "read_text", "read_bytes", "open",
     "unlink", "touch", "chmod", "rename", "replace",
     "iterdir", "glob", "rglob", "walk", "exists", "is_dir", "is_file",
-    "stat", "resolve", "run", "check_output", "Popen",
+    "stat", "lstat", "is_symlink", "readlink", "samefile", "symlink_to", "hardlink_to",
+    "resolve", "run", "check_output", "Popen",
+    "create_subprocess_exec", "create_subprocess_shell", "open_connection",
 })
 
-WORLD_MODULES = frozenset({"subprocess", "shutil", "os", "tempfile", "io", "socket"})
+#: `builtins` because `from builtins import open` binds the name, and a bound name is
+#: excused below.
+WORLD_MODULES = frozenset({
+    "subprocess", "shutil", "os", "tempfile", "io", "socket", "glob", "builtins",
+})
+
+#: Builtins that reach outside the process, which no import names: `open(path)` is how
+#: most Python reads a file, and an attribute check never sees it.
+WORLD_BUILTINS = frozenset({"open"})
 
 
-def _contact(nodes: Iterable[ast.AST]) -> list[str]:
+def _builtins_left(tree: ast.Module) -> frozenset[str]:
+    """The `WORLD_BUILTINS` a module never binds, so that a bare one is the builtin.
+
+    Per module, not per scope: a parameter called `open` excuses every bare `open` in its
+    file. A method binds nothing, since a class body does not reach the functions in it."""
+    methods = {id(n) for c in ast.walk(tree) if isinstance(c, ast.ClassDef) for n in c.body}
+    bound = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
+            bound.add(node.id)
+        elif isinstance(node, ast.arg):
+            bound.add(node.arg)
+        elif isinstance(node, ast.alias):
+            bound.add(node.asname or node.name.split(".")[0])
+        elif (
+            isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+            and id(node) not in methods
+        ):
+            bound.add(node.name)
+    return WORLD_BUILTINS - bound
+
+
+def _contact(nodes: Iterable[ast.AST], builtins: frozenset[str]) -> list[str]:
     found = []
     for node in nodes:
         if isinstance(node, ast.Import):
@@ -2434,11 +2466,19 @@ def _contact(nodes: Iterable[ast.AST]) -> list[str]:
             and node.func.attr in WORLD_CALLS
         ):
             found.append(f"L{node.lineno} .{node.func.attr}()")
+        # A load, not only a call: `map(open, paths)` opens as surely as `open(path)`.
+        elif (
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Load)
+            and node.id in builtins
+        ):
+            found.append(f"L{node.lineno} {node.id}")
     return found
 
 
 def _world_contact(path: Path) -> list[str]:
-    return _contact(ast.walk(ast.parse(path.read_text(encoding="utf-8"))))
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return _contact(ast.walk(tree), _builtins_left(tree))
 
 
 def _world_contact_beside(path: Path, opener: str) -> tuple[list[str], list[str]]:
@@ -2446,9 +2486,10 @@ def _world_contact_beside(path: Path, opener: str) -> tuple[list[str], list[str]
     tree = ast.parse(path.read_text(encoding="utf-8"))
     opening = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == opener]
     inside = {id(node) for function in opening for node in ast.walk(function)}
+    builtins = _builtins_left(tree)
     return (
-        _contact(node for node in ast.walk(tree) if id(node) in inside),
-        _contact(node for node in ast.walk(tree) if id(node) not in inside),
+        _contact((node for node in ast.walk(tree) if id(node) in inside), builtins),
+        _contact((node for node in ast.walk(tree) if id(node) not in inside), builtins),
     )
 
 
@@ -2512,6 +2553,38 @@ def test_excusing_the_opener_excuses_nothing_beside_it(tmp_path):
     )
 
     assert _world_contact_beside(reader, "load") == (["L2 .read_text()"], ["L5 .read_bytes()"])
+
+
+def test_the_world_rule_sees_a_bare_open_and_not_a_name_that_shadows_it(tmp_path):
+    """A bare builtin `open(path)` passed the rule, which saw only a method call."""
+    caught = {
+        "open(p)": "def load(p):\n    return open(p).read()\n",
+        "map(open, ps)": "def load(ps):\n    return list(map(open, ps))\n",
+        "open beside an `open` method": "class S:\n    def open(self):\n        return open('x')\n",
+        "from builtins import open": "from builtins import open\n\nopen('x')\n",
+        "import glob": "import glob\n",
+        **{
+            f".{call}()": f"def load(p):\n    return p.{call}()\n"
+            for call in (
+                "lstat", "is_symlink", "readlink", "samefile", "symlink_to", "hardlink_to",
+                "create_subprocess_exec", "create_subprocess_shell", "open_connection",
+            )
+        },
+    }
+    shadowed = {
+        "a parameter": "def load(open):\n    return open(1)\n",
+        "a local": "def load(make):\n    open = make()\n    return open()\n",
+        "a function": "def open(x):\n    return x\n\ndef load():\n    return open(1)\n",
+        "an import": "from functools import partial as open\n\nopen(print)\n",
+    }
+    module = tmp_path / "record.py"
+
+    def reach(source: str) -> list[str]:
+        module.write_text(source)
+        return _world_contact(module)
+
+    assert [form for form, source in caught.items() if not reach(source)] == []
+    assert [form for form, source in shadowed.items() if reach(source)] == []
 
 
 #: Calls that *change* the filesystem, as opposed to reading it or the

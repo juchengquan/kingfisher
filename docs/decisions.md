@@ -4198,7 +4198,10 @@ measurement.)*
     langchain type.
   - **`RECORDS` touch nothing outside the process**, so a record can be built without
     a workspace behind it. `core/access/policy.py` is held to it outside `load`, the one
-    function that opens the file, so a vocabulary parses from a mapping.
+    function that opens the file, so a vocabulary parses from a mapping. A method call is
+    caught by its name whatever it is called on, a bare `open` wherever the module has
+    not bound the name itself; a dynamic import or a `getattr` is not, since the rule
+    makes the easy violation loud rather than the determined one impossible.
   - **The flat core writes nothing to disk** except `core/workspace.py`, asserted to
     write, so a move fails rather than excusing nothing.
   - **`test_only_one_module_changes_a_mode`**, over the whole package: scoped to a
