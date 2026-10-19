@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import shlex
 from typing import Any
 
 import pytest
@@ -19,8 +20,10 @@ import kingfisher
 import kingfisher.plugins
 from kingfisher.cli import __main__ as cli
 from kingfisher.core.plugins import Plugins
+from kingfisher.core.request import Resume
 from kingfisher.core.result import AWAITING, RunResult
 from kingfisher.core.result import PendingDecision as Pending
+from kingfisher.core.session.runtime import resume_payload
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions
 from tests.conftest import RecordedEvents, Through
@@ -482,3 +485,51 @@ def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_pat
     plain, logged = handed
     assert plain["run_events"] is events
     assert isinstance(logged["run_events"], JsonlRunEvents)
+
+
+TWO_WAITING = RunResult(
+    session_id="s-3",
+    turn_id="t-3",
+    answer="",
+    stop_reason=AWAITING,
+    pending=(
+        Pending(call_id="abc123#0", tool="execute", decisions=("approve", "reject")),
+        Pending(call_id="abc123#1", tool="write_file", decisions=("reject", "respond")),
+    ),
+)
+
+
+def _ran_as_printed(monkeypatch, said: str, result: RunResult) -> None:
+    """The `answer with:` line, parsed by the command's own parser and judged by the
+    library: driven rather than matched, because a line that looks right can still be
+    one `decide` refuses."""
+    line = next(one for one in said.splitlines() if one.startswith("answer with: "))
+    argv = shlex.split(line.removeprefix("answer with: "))
+    assert argv[0] == "kingfisher"
+    resumed: list[Resume] = []
+    monkeypatch.setattr(cli, "_configured", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "_drive", lambda _kf, resume, **_k: resumed.append(resume) or 0)
+
+    assert cli._decide(cli.build_parser().parse_args(argv[1:])) == 0
+    resume_payload(resumed[0].decisions, result.pending)
+
+
+def test_the_printed_answer_answers_every_waiting_call(monkeypatch, capsys):
+    """The line named only the first call, and `decide` refuses an answer that leaves
+    one waiting -- so with two calls pending, running it as printed was refused with
+    "still waiting on abc123#1"; and it offered `--approve` to a call that takes none.
+    """
+    _drive(monkeypatch, TWO_WAITING)
+    cli._run(_args())
+
+    _ran_as_printed(monkeypatch, capsys.readouterr().err, TWO_WAITING)
+
+
+def test_one_waiting_call_is_still_answered_by_approving_it(monkeypatch, capsys):
+    """The control beside it: one call that takes approval is answered as before."""
+    _drive(monkeypatch, PAUSED)
+    cli._run(_args())
+
+    said = capsys.readouterr().err
+    assert "answer with: kingfisher decide --session s-1 --approve abc123#0\n" in said
+    _ran_as_printed(monkeypatch, said, PAUSED)
