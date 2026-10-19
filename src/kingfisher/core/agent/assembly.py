@@ -37,11 +37,12 @@ from kingfisher.core.agent.kinds.subagents import (
     subagent_skills,
 )
 from kingfisher.core.agent.kinds.tools import (
-    _private_tools,
-    _resolve_tools,
+    ToolSurface,
     bundled_tools_in,
     handed_graphs_in,
+    private_tools,
     registered_tools,
+    resolve_tools,
 )
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware, high_mark
 from kingfisher.core.agent.middlewares.recorder import Audiences, RecorderMiddleware
@@ -54,21 +55,21 @@ from kingfisher.core.definitions.tools.spec import FoundTool, own_audiences
 from kingfisher.core.layout import Layout
 
 from .activation import (
-    _activated_subagents,
-    _private_skills,
-    _skill_denials,
     activatable_skills,
+    activated_subagents,
     agents_to_ask,
     for_the_caller,
     offered_to,
+    private_skills,
     refuse_misnamed_by,
+    skill_denials,
 )
 from .backend import (
     memory_sources,
     shell_prompt_of,
     skills_sources,
 )
-from .interpreter import _interpreter
+from .interpreter import interpreter
 from .models import build_model, model_named, summarizer_trigger
 from .permitted_backend import PermittedBackend
 from .prompting import memory_guidelines, system_prompt
@@ -172,8 +173,7 @@ def _gates_for(agent: AgentSpec | None, checkpointer: Any) -> tuple[str, ...]:
 
 
 def _refuse_unknown_gates(
-    # `Any`: naming `_ToolSurface` here is naming a private of the module this one calls.
-    agent: AgentSpec | None, gated: tuple[str, ...], surface: Any
+    agent: AgentSpec | None, gated: tuple[str, ...], surface: ToolSurface
 ) -> None:
     """Refuse a gate on a name no tool anywhere in this build answers to.
 
@@ -236,11 +236,6 @@ def _running(
     return mine or build_model(profile, endpoint), profile.clear_results_at
 
 
-def _model_named(written: str, subject: str, cfg: Config, endpoints: Selection) -> Any:
-    """A model named beside a middleware, under one request's ceiling."""
-    return model_named(written, cfg, endpoints=endpoints, subject=subject)
-
-
 def _provisions(
     runs: Any, definition: Any, *, cfg: Config, endpoints: Selection, backend: Any
 ) -> dict[str, Any]:
@@ -250,7 +245,9 @@ def _provisions(
     file and a subagent file; only the values differ, a subagent's model being its own.
     """
     return {
-        "model": ByName(runs, resolve=lambda w, s: _model_named(w, s, cfg, endpoints)),
+        "model": ByName(
+            runs, resolve=lambda w, s: model_named(w, cfg, endpoints=endpoints, subject=s)
+        ),
         "backend": backend,
         "definition": definition,
     }
@@ -448,14 +445,14 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             # argument makes deepagents construct its own SkillsMiddleware,
             # leaving no way to substitute a filtered one.
             narrowed_skills, narrowed_sources = activated, sources
-            permissions.extend(_skill_denials(activated, registry))
+            permissions.extend(skill_denials(activated, registry))
 
     interpreter_at: int | None = None
     if cfg.interpreter_enabled:
         # Unrestricted for now: the probe below has to see `eval` to count it
         # among the built-ins, and the grant is not resolved until after it.
         interpreter_at = len(switched)
-        switched.append(_interpreter(cfg, None))
+        switched.append(interpreter(cfg, None))
 
     def agents_standing(
         *,
@@ -523,13 +520,13 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     # `asked`, not `capabilities`: combined, the agent's names are the ones this caller
     # reaches, and a typo in the file must be refused whoever is calling.
     refuse_misnamed_by(cfg, agent, asked, held=held, catalogue=roots)
-    defined, activated = _activated_subagents(
+    defined, activated = activated_subagents(
         cfg, capabilities, catalogue=roots, held=held, agent=agent
     )
     # What a refusal may list, not what it judges. `None` with nobody to narrow for or no
     # agent resolved: an empty `offered:` list is worse than a wide one.
     in_reach = None if held is None or agent is None else offers("tools", held, [agent])
-    surface = _resolve_tools(
+    surface = resolve_tools(
         str(roots.tools.root) if roots.tools.root is not None else "the catalogue",
         capabilities,
         walked,
@@ -561,7 +558,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         # Re-wired now the grant is known; the probe needed it unrestricted to see
         # `eval`. A caller who withheld the shell must not reach it from code, nor an
         # unrestricted request a gated `task`.
-        switched[interpreter_at] = _interpreter(
+        switched[interpreter_at] = interpreter(
             cfg,
             permitted,
             gated=gated,
@@ -629,10 +626,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 catalogue=walked,
                 # Its own folder's, looked up by the key a grant uses, which is
                 # what `bundled_tools` is keyed by.
-                private=_private_tools(roots, name, held=held),
+                private=private_tools(roots, name, held=held),
                 # Not behind the switch: a bundle is the subagent's own folder, mounted
                 # either way, so withholding its index leaves the files reachable unnamed.
-                private_skills=_private_skills(roots, name),
+                private_skills=private_skills(roots, name),
                 paths=paths,
                 run_on=wanted.get(name),
                 held=held,

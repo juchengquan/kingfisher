@@ -544,12 +544,32 @@ def _decide(args: argparse.Namespace) -> int:
             return 2
         decisions.append(Decision(call_id=call_id, action="respond", message=text))
 
+    # Refused, not ignored: with no turn to act on, a silent `--agent` reads as the check
+    # its help promises having passed.
+    unused = [
+        flag
+        for flag, given in (
+            ("--agent", args.agent is not None),
+            ("--delete-session", args.delete_session),
+            ("--log", args.log is not None),
+        )
+        if given and not decisions
+    ]
+    for flag in unused:
+        print(
+            f"{flag} applies only when answering, with --approve, --reject or --respond",
+            file=sys.stderr,
+        )
+    if unused:
+        return 2
+
     cfg = config_from_env()
-    kf = _configured(cfg, log=args.log)
     if not decisions:
-        return _show_pending(kf, args.session, with_datazone(args.held, args.datazone))
+        return _show_pending(
+            _configured(cfg), args.session, with_datazone(args.held, args.datazone)
+        )
     return _drive(
-        kf,
+        _configured(cfg, log=args.log),
         Resume(
             session_id=args.session,
             decisions=tuple(decisions),

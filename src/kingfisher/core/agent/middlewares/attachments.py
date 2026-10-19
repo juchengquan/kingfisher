@@ -15,6 +15,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.definitions.skills import READ_FILE
 
+from .narrowing import tool_name
 from .recorded import readable_size
 from .results import answer_in, answered, failed
 
@@ -193,7 +194,7 @@ class AttachmentsMiddleware(AgentMiddleware):
         # Inside `GrantedOnlyMiddleware`, so these are the tools the model may call. Not the
         # catalogue's names: `standing_middleware` gets every tool, granted or not.
         self._offered = frozenset(
-            name for tool in request.tools if isinstance(name := getattr(tool, "name", None), str)
+            name for tool in request.tools if (name := tool_name(tool)) is not None
         )
         if self._passed:
             # Answered by now, and counted from the conversation from here on.

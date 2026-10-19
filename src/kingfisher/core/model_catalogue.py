@@ -20,7 +20,7 @@ from .config import (
     Models,
     WireFormat,
 )
-from .wiring import store_named
+from .wiring import built_from_setting
 from .workspace import EXAMPLE
 
 if TYPE_CHECKING:
@@ -81,7 +81,7 @@ def wire_formats(spec: str | None) -> Mapping[str, WireFormat]:
     """The wire formats this deployment can build: kingfisher's, and its own."""
     if spec is None:
         return WIRE_FORMATS
-    theirs = store_named(spec, setting=SETTING, port=Mapping)
+    theirs = built_from_setting(spec, setting=SETTING, interface=Mapping)
     for name, row in theirs.items():
         if not isinstance(row, WireFormat):
             msg = (
