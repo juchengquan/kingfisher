@@ -47,8 +47,6 @@ from kingfisher.core.access.source_ids import with_datazone
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.config import MissingCredentialsWarning
 from kingfisher.core.definitions.agents.spec import AgentError
-from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
-from kingfisher.core.definitions.seeding import REMEDY, UNCONSULTED
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -424,18 +422,8 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
         print(line)
 
     # Non-zero: `--from ./definitions/skills` is a likely mistake that reads without error.
-    if not written.written:
-        if written.skipped:
-            # Found and held back on purpose: "holds none of" would send a reader
-            # looking elsewhere for files that are right where they thought.
-            wants = written.skipped[0].wants
-            print(
-                f"nothing seeded — every definition in {tree} names {wants}, "
-                f"and seed does not check {UNCONSULTED[wants]}. "
-                f"{REMEDY[wants]}, then seed again with --all"
-            )
-            return 1
-        print(f"nothing to seed — {tree} holds none of {', '.join(DEFINITION_KINDS)}")
+    if (closing := written.nothing_seeded()) is not None:
+        print(closing)
         return 1
     return 0
 

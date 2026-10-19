@@ -73,8 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     for line in done.report():
         print(line)
 
-    if not done.written:
-        print("nothing seeded", file=sys.stderr)
+    if (closing := done.nothing_seeded()) is not None:
+        print(closing, file=sys.stderr)
         return 1
     return 0
 

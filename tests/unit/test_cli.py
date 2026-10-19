@@ -173,6 +173,33 @@ def test_seeding_from_an_empty_directory_says_so(cfg, monkeypatch, capsys, tmp_p
         assert kind in printed
 
 
+def test_seeding_nothing_never_gives_one_definitions_reason_as_every_ones(
+    cfg, monkeypatch, capsys, tmp_path
+):
+    """The command closed on `skipped[0].wants`: one agent held back for middleware and
+    one for source ids read "every definition … names middlewares", and told a reader
+    to seed middleware for the agent that needs a `source_ids.yaml`.
+    """
+    tree = tmp_path / "tree"
+    agents = tree / "agents"
+    agents.mkdir(parents=True)
+    body = "description: d\nsystem_prompt: |\n  Hi.\n"
+    (agents / "wired.yaml").write_text(f"name: wired\nmiddlewares: [audit]\n{body}")
+    (agents / "scoped.yaml").write_text(f"name: scoped\nsource_ids: [analysts]\n{body}")
+    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
+
+    assert main(["seed", "--from", str(tree)]) == 1
+
+    lines = capsys.readouterr().out.splitlines()
+    closing = lines[-1]
+    assert closing.startswith("nothing seeded"), lines
+    # Each reason is on its own `skipped` line above; the closing line restates none.
+    assert "middlewares" not in closing
+    assert "source_ids" not in closing
+    assert any(line.startswith("skipped agents/wired.yaml") for line in lines)
+    assert any(line.startswith("skipped agents/scoped.yaml") for line in lines)
+
+
 def test_an_unknown_verb_is_refused(capsys):
     """argparse's own refusal, which names the ones that exist."""
     with pytest.raises(SystemExit) as exit_code:

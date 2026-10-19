@@ -172,6 +172,18 @@ def test_the_example_script_reports_what_it_left(tmp_path, assets, capsys):
     assert "register those" not in printed
 
 
+def test_the_example_script_says_why_nothing_was_seeded(tmp_path, capsys):
+    """It closed on a bare "nothing seeded", leaving a reader to guess between an empty
+    tree and one whose every definition was held back."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    code = main(["--definitions", str(tmp_path / "definitions"), "--from", str(empty)])
+
+    assert code == 1
+    assert f"nothing to seed — {empty} holds none of" in capsys.readouterr().err
+
+
 def test_the_example_script_refuses_with_no_source_configured(tmp_path, monkeypatch, capsys):
     """The error path is part of the example -- it is what makes it pasteable rather
     than a snippet.
