@@ -6,8 +6,9 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.core.result import END_TURN, STOP_REASONS
-from kingfisher.core.run import Request, RunResult, normalize_answer, run
+from kingfisher.core.request import Request
+from kingfisher.core.result import END_TURN, STOP_REASONS, RunResult, normalize_answer
+from kingfisher.core.run import run
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions
 from tests.conftest import FakeGraph, RecordedEvents, start

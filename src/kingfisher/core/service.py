@@ -15,10 +15,8 @@ from kingfisher.core.access import (
     AccessReport,
     Capabilities,
     CapabilityError,
-    Held,
     SourceIds,
     audit,
-    caller_holds,
     reaches,
     refuse_undeclared,
 )
@@ -253,12 +251,12 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         request: Request | Resume,
         harness: HarnessFiles,
         *,
-        source_ids: Held | None = None,
+        held: frozenset[str] | None,
         pinned: DefinitionText | None,
     ) -> Steps[AgentSpec | None]:
         """The agent this turn runs, which is the one its session opened with, `pinned`."""
         if pinned is None:
-            spec = self._agent_named(request.agent, source_ids=source_ids)
+            spec = self._agent_named(request.agent, held=held)
             yield from self._pin_agent_in(harness, request.agent)
             return spec
 
@@ -272,14 +270,16 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
             raise CapabilityError(msg)
         return started
 
-    def _agent_named(
-        self, name: str | None, *, source_ids: Held | None = None
-    ) -> AgentSpec | None:
-        """The agent this request asked for, out of the catalogue."""
+    def _agent_named(self, name: str | None, *, held: frozenset[str] | None) -> AgentSpec | None:
+        """The agent this request asked for, out of the catalogue.
+
+        `held` as `caller_holds` answered it, never `held_by`: `None` offers every agent,
+        which for a caller nobody named under a policy is the hole `caller_holds` refuses.
+        """
         offered = self.catalogue.agents.specs
         # Filtered before the listing is built: an agent out of reach must read exactly
         # like one never written, or a caller could enumerate the catalogue by guessing.
-        if (held := caller_holds(self.access, source_ids)) is not None:
+        if held is not None:
             offered = {
                 n: spec for n, spec in offered.items() if reaches(spec.source_ids, held)
             }
