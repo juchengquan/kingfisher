@@ -108,8 +108,58 @@ def test_retries_that_are_no_count_are_refused(tmp_path, written_as):
         f"  main-model:\n    endpoint: gateway\n    max_retries: {written_as}\n",
     )
 
-    with pytest.raises(ConfigError, match="'main-model' max_retries is"):
+    with pytest.raises(ConfigError, match="'main-model': max_retries is"):
         loaded(tmp_path, body)
+
+
+def test_no_further_tries_is_a_count_and_kept(tmp_path):
+    """The control for the rule above: 0 is a setting, the one that turns retrying off."""
+    body = GOOD.replace(
+        "  main-model:\n    endpoint: gateway\n",
+        "  main-model:\n    endpoint: gateway\n    max_retries: 0\n",
+    )
+
+    assert loaded(tmp_path, body).models["main-model"].kwargs()["max_retries"] == 0
+
+
+@pytest.mark.parametrize("field", ["max_tokens", "timeout_s"])
+@pytest.mark.parametrize("written_as", ["lots", "true", "1.9", "0", "-5", "null"])
+def test_a_size_that_is_no_count_is_refused(tmp_path, field, written_as):
+    """`int()` read these unchecked: "lots" escaped as a bare `ValueError` the command's
+    `ConfigError` handlers miss, `true` and `1.9` became 1, and 0 or -5 were sent."""
+    body = GOOD.replace(
+        "  main-model:\n    endpoint: gateway\n",
+        f"  main-model:\n    endpoint: gateway\n    {field}: {written_as}\n",
+    )
+
+    with pytest.raises(ConfigError, match=f"'main-model': {field} is"):
+        loaded(tmp_path, body)
+
+
+@pytest.mark.parametrize("field", ["temperature", "top_p"])
+@pytest.mark.parametrize("written_as", ["lots", "true", "[0.2]"])
+def test_a_sampling_value_that_is_no_number_is_refused(tmp_path, field, written_as):
+    """Passed through unchecked, these reached the provider as written, and failed the
+    first turn rather than the read."""
+    body = GOOD.replace(
+        "  main-model:\n    endpoint: gateway\n",
+        f"  main-model:\n    endpoint: gateway\n    {field}: {written_as}\n",
+    )
+
+    with pytest.raises(ConfigError, match=f"'main-model': {field} is"):
+        loaded(tmp_path, body)
+
+
+def test_a_zero_temperature_is_a_number_and_kept(tmp_path):
+    """The control for the rule above: 0 is the most common temperature written."""
+    body = GOOD.replace(
+        "  main-model:\n    endpoint: gateway\n",
+        "  main-model:\n    endpoint: gateway\n    temperature: 0\n    top_p: 1\n",
+    )
+
+    profile = loaded(tmp_path, body).models["main-model"]
+
+    assert (profile.temperature, profile.top_p) == (0, 1)
 
 
 def test_a_clearing_mark_under_extra_is_refused(tmp_path):
