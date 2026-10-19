@@ -242,7 +242,7 @@ class SourceIds:
             )
             raise AccessError(msg)
         if unknown := tuple(name for name in wanted if name not in self.names):
-            # Without the compounds, which a caller may not present; `refuse_undeclared`
+            # Without the compounds, which a caller may not present; `undeclared`
             # lists them, since a definition may name one.
             known = ", ".join(sorted(set(self.names) - set(self.compounds))) or "none"
             msg = (
@@ -262,20 +262,20 @@ class SourceIds:
                 reached.update(self.names[name])
         return frozenset(reached)
 
-    def refuse_undeclared(self, audience: Audience, *, where: str, error: type[Exception]) -> None:
-        """Refuse a definition naming a source id this deployment does not declare."""
+    def undeclared(self, audience: Audience, *, where: str) -> str | None:
+        """The complaint about an audience naming a source id this deployment does not declare."""
         if audience == ALL:
-            return
+            return None
         named = tuple(
             n for one in audience for n in ((one,) if isinstance(one, str) else sorted(one))
         )
         if unknown := tuple(name for name in named if name not in self.names):
             listed = ", ".join(repr(u) for u in sorted(set(unknown)))
-            msg = (
+            return (
                 f"{where}: names undeclared source id(s) {listed}; "
                 f"this deployment defines {', '.join(sorted(self.names)) or 'none'}"
             )
-            raise error(msg)
+        return None
 
     def narrowing_in(
         self,

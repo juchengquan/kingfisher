@@ -127,10 +127,8 @@ def undeclared_in(specs: Mapping[str, object], *, kind: str, vocabulary: SourceI
                 for entry, who in said.skills.items()
             ),
         ):
-            try:
-                vocabulary.refuse_undeclared(audience, where=where, error=AccessError)
-            except AccessError as exc:
-                return str(exc)
+            if (complaint := vocabulary.undeclared(audience, where=where)) is not None:
+                return complaint
     return None
 
 

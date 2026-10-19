@@ -174,12 +174,14 @@ def test_a_definition_naming_an_undeclared_source_id_is_refused():
     invent a source id nobody holds, and the only symptom would be something quietly
     reachable by no one.
     """
-    with pytest.raises(ValueError, match="undeclared source id"):
-        vocabulary().refuse_undeclared(("Q",), where="x.yaml: tools", error=ValueError)
+    complaint = vocabulary().undeclared(("Q",), where="x.yaml: tools")
+
+    assert complaint is not None
+    assert "undeclared source id" in complaint
 
 
 def test_a_star_names_no_source_id_so_is_never_undeclared():
-    vocabulary().refuse_undeclared(ALL, where="x.yaml: tools", error=ValueError)
+    assert vocabulary().undeclared(ALL, where="x.yaml: tools") is None
 
 
 def test_unscoped_is_a_sentinel_and_not_a_source_id_name():
@@ -255,10 +257,10 @@ def test_an_undeclared_name_inside_a_conjunction_is_refused():
     """A name typed from memory is no likelier to be right for having been written next
     to another one.
     """
-    with pytest.raises(ValueError, match="'Q'"):
-        vocabulary().refuse_undeclared(
-            (frozenset({"A", "Q"}),), where="x.yaml: tools", error=ValueError
-        )
+    complaint = vocabulary().undeclared((frozenset({"A", "Q"}),), where="x.yaml: tools")
+
+    assert complaint is not None
+    assert "'Q'" in complaint
 
 
 def test_an_audience_is_written_the_way_the_listing_writes_it():

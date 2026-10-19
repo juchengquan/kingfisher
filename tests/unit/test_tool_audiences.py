@@ -12,6 +12,7 @@ from langchain_core.tools import tool
 
 from kingfisher import ToolSpec
 from kingfisher.core.access.capabilities import ALL
+from kingfisher.core.access.checks import caller_holds
 from kingfisher.core.access.policy import parse
 from kingfisher.core.access.source_ids import AccessError
 from kingfisher.core.agent.assembly import build_agent
@@ -113,9 +114,9 @@ def built(kf: Kingfisher, held: tuple[str, ...]) -> list[str]:
     assembled = build_agent(
         kf.cfg,
         agent=kf._agent_named("surveyor", source_ids=held),
-        held=kf._held_for(held),
+        held=caller_holds(kf.access, held),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
-        capabilities=kf._effective_grants(held),
+        capabilities=kf.grants,
         catalogue=kf.catalogue,
         checkpointer=None,
     )
@@ -406,7 +407,7 @@ def test_the_run_report_agrees_with_the_build(policied):
     from kingfisher.core.reporting import withheld_by_kind
     from kingfisher.core.request import Request
     from kingfisher.core.session.steps import drive
-    from tests.conftest import harness_in
+    from tests.conftest import agent_for, harness_in
 
     kf = Kingfisher(policied, sessions=LocalSessions())
 
@@ -414,19 +415,19 @@ def test_the_run_report_agrees_with_the_build(policied):
         session = kf.workspace / "sessions" / f"report-{'-'.join(held_names)}"
         session.mkdir(parents=True, exist_ok=True)
         ensure_session_layout(session, DEFAULT_LAYOUT)
-        held = kf._held_for(held_names)
+        held = caller_holds(kf.access, held_names)
         request = Request(task="t", agent="surveyor")
-        agent = drive(kf._agent_for(request, harness_in(kf.cfg, session), source_ids=held_names))
+        agent = agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held_names)
         graph = kf._graph_for(
             request,
-            capabilities=kf._effective_grants(held_names),
+            capabilities=kf.grants,
             checkpointer=None,
             agent=agent,
             held=held,
             files=drive(kf._files_for(session.name)),
         ).graph
         # A request declining every tool, or the report skips the axis and says nothing.
-        allowed = kf._effective_grants(held_names).intersect(Capabilities(tools=()))
+        allowed = kf.grants.intersect(Capabilities(tools=()))
         return dict(withheld_by_kind(allowed, kf.cfg, graph, kf.catalogue, agent=agent, held=held))
 
     assert "line_count" in report(("A",)).get("tool", ()), "the control: A is told"

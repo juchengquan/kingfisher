@@ -13,7 +13,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import FakeToolCallingModel, harness_in
+from tests.conftest import FakeToolCallingModel, agent_for, harness_in
 
 NARROW = """name: narrow
 description: Reads and nothing else.
@@ -187,10 +187,10 @@ def test_a_later_turn_runs_what_the_session_opened_with(cfg):
     service = Kingfisher(cfg, sessions=LocalSessions())
     asked = Request("go", agent="narrow", session_id="s")
 
-    opened = drive(service._agent_for(asked, _held(cfg)))
+    opened = agent_for(service, asked, _held(cfg))
     _agents(cfg, NARROW.replace("Reads and nothing else.", "Reads and writes now."))
 
-    assert drive(service._agent_for(asked, _held(cfg))).description == opened.description
+    assert agent_for(service, asked, _held(cfg)).description == opened.description
 
 
 def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
@@ -199,10 +199,10 @@ def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
     """
     _agents(cfg, NARROW, CHEAP)
     service = Kingfisher(cfg, sessions=LocalSessions())
-    drive(service._agent_for(Request("go", agent="narrow", session_id="s"), _held(cfg)))
+    agent_for(service, Request("go", agent="narrow", session_id="s"), _held(cfg))
 
     with pytest.raises(CapabilityError, match="running 'narrow'"):
-        drive(service._agent_for(Request("again", agent="cheap-one", session_id="s"), _held(cfg)))
+        agent_for(service, Request("again", agent="cheap-one", session_id="s"), _held(cfg))
 
 
 def test_naming_the_same_agent_again_is_fine(cfg):
@@ -212,18 +212,18 @@ def test_naming_the_same_agent_again_is_fine(cfg):
     _agents(cfg, NARROW)
     service = Kingfisher(cfg, sessions=LocalSessions())
     asked = Request("go", agent="narrow", session_id="s")
-    drive(service._agent_for(asked, _held(cfg)))
+    agent_for(service, asked, _held(cfg))
 
-    assert drive(service._agent_for(asked, _held(cfg))).name == "narrow"
+    assert agent_for(service, asked, _held(cfg)).name == "narrow"
 
 
 def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
     """The session decides, not the turn."""
     _agents(cfg, NARROW)
     service = Kingfisher(cfg, sessions=LocalSessions())
-    drive(service._agent_for(Request("go", agent="narrow", session_id="s"), _held(cfg)))
+    agent_for(service, Request("go", agent="narrow", session_id="s"), _held(cfg))
 
-    assert drive(service._agent_for(Request("again", session_id="s"), _held(cfg))).name == "narrow"
+    assert agent_for(service, Request("again", session_id="s"), _held(cfg)).name == "narrow"
 
 
 def test_a_snapshot_is_written_once_and_not_overwritten(cfg, tmp_path):
@@ -233,10 +233,11 @@ def test_a_snapshot_is_written_once_and_not_overwritten(cfg, tmp_path):
     would reintroduce exactly what the file exists to prevent, and every test above
     would still pass.
     """
-    from kingfisher.core.session.store import agent_started_with, remember_agent
+    from kingfisher.core.session.store import pinned_in, remember_agent
 
     harness = harness_in(cfg, tmp_path)
     drive(remember_agent(harness, "name: first\ndescription: One.\n"))
     drive(remember_agent(harness, "name: second\ndescription: Two.\n"))
 
-    assert drive(agent_started_with(harness)).text.startswith("name: first")
+    pinned, _zone = drive(pinned_in(harness))
+    assert pinned.text.startswith("name: first")

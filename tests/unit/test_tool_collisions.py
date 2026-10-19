@@ -126,14 +126,14 @@ def test_what_the_agent_cannot_hold_is_said_out_loud(cfg):
     """Quietly holding less than was asked for is the failure this codebase refuses
     everywhere.
     """
+    from kingfisher.core.definitions.catalogue import Definitions
     from kingfisher.core.reporting import subagent_only
 
     _two_vendors(cfg)
 
     assert subagent_only(
         Capabilities(tools=("vendor_a/fetch.py::fetch", "vendor_b/fetch.py::fetch")),
-        cfg,
-        catalogue=None,
+        catalogue=Definitions.from_config(cfg),
     ) == ("fetch",)
 
 
