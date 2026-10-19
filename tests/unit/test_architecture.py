@@ -1952,7 +1952,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         "SessionBusyError": "embedder",
         "SubagentError": "embedder",
         "UnknownSessionError": "embedder",
-        # What `Kingfisher.artifact` raises for a name that is not an artifact, which a
+        # What `Session.artifact` raises for a name that is not an artifact, which a
         # caller fetching by a name it was handed tells apart from a session it cannot
         # reach.
         "ArtifactError": "embedder",
@@ -2872,7 +2872,7 @@ def test_the_world_rule_sees_a_bare_open_and_not_a_name_that_shadows_it(tmp_path
 
 
 #: Calls that *change* the filesystem, as opposed to reading it or the
-#: environment. `open`, `replace` and `copy` are left out because `Session.open`,
+#: environment. `open`, `replace` and `copy` are left out because `Sessions.open`,
 #: `dataclasses.replace` and a compiled graph's `copy` are named the same, and all three
 #: are legitimate where this rule runs; `shutil.copy` is refused by its import instead.
 MUTATING_CALLS = frozenset({
@@ -4862,11 +4862,36 @@ def test_the_provider_lookup_is_not_fooled_by_a_shared_root_name():
 #: class this package owns from one it is describing in someone else's library.
 PROSE_ATTR = re.compile(r"`([A-Z][A-Za-z0-9]*)\.([a-z_][a-z0-9_]*)`")
 
-#: Prose naming a class attribute *because* it is gone, excused per file. Empty,
-#: and kept for the reason `PROSE_GONE` is keyed by file: the day a docstring
-#: explains which rename removed an attribute, that is the rule working rather
-#: than a defect, and there has to be somewhere to say so.
-PROSE_ATTR_GONE: dict[str, frozenset[str]] = {}
+#: Prose naming a class attribute *because* it is gone, excused per file for the
+#: reason `PROSE_GONE` is: one name was a removal in `upgrading.md` and a wrong
+#: pointer in `evals/` at once, and a table keyed by name would excuse both.
+PROSE_ATTR_GONE: dict[str, frozenset[str]] = {
+    # What a release took away, and the replacements a later release took away too.
+    "docs/upgrading.md": frozenset({
+        "Config.backend_factory", "Config.deployment_prompt", "Config.plugins_factory",
+        "Config.session_backends_factory", "Config.session_id", "Config.sessions_factory",
+        "Config.shell_path_extra", "Config.shell_sandbox", "Kingfisher.agent_named",
+        "Kingfisher.artifact", "Kingfisher.held_for", "Kingfisher.pending",
+        "Kingfisher.session_size", "Request.data", "RunResult.log_path",
+        "RunResult.session_dir",
+    }),
+    # What a decision removed, or declined to build.
+    "docs/decisions.md": frozenset({
+        "Capabilities.including", "Config.paths", "Config.shell",
+        "Kingfisher.remember_agent", "Request.input_refs", "Request.skill_refs",
+    }),
+    # The wrong citations this rule was written against, quoted as such.
+    "tests/unit/test_architecture.py": frozenset({
+        "Capabilities.unknown", "Config.resolve_model", "Kingfisher._snapshot",
+    }),
+}
+
+
+def _has_attribute(cls: type, attr: str) -> bool:
+    """Annotations too: a dataclass field with no default is not a class attribute."""
+    return hasattr(cls, attr) or any(
+        attr in inspect.get_annotations(base) for base in cls.__mro__
+    )
 
 
 def _exported_classes() -> dict[str, type]:
@@ -4885,14 +4910,14 @@ def test_prose_names_class_attributes_that_exist():
     """A docstring pointing at a method nobody has is a wrong map, not a typo."""
     classes = _exported_classes()
     wrong: list[str] = []
-    for path in _package_modules():
+    for path in _every(_prose_bearing_files(), "the prose"):
         relative = path.relative_to(REPO).as_posix()
         excused = PROSE_ATTR_GONE.get(relative, frozenset())
         for head, attr in PROSE_ATTR.findall(path.read_text(encoding="utf-8")):
             reference = f"{head}.{attr}"
             if head not in classes or reference in excused:
                 continue
-            if not hasattr(classes[head], attr):
+            if not _has_attribute(classes[head], attr):
                 wrong.append(f"{relative}: `{reference}`")
 
     assert not wrong, (
@@ -4901,6 +4926,20 @@ def test_prose_names_class_attributes_that_exist():
         + " -- correct it, or add it to PROSE_ATTR_GONE with the rename that "
         "removed it"
     )
+
+
+def test_every_excused_class_attribute_is_named_and_gone():
+    """An excusal for prose since edited away, or an attribute since restored, excuses nothing."""
+    classes = _exported_classes()
+    dead = []
+    for relative, excused in PROSE_ATTR_GONE.items():
+        named = {f"{h}.{a}" for h, a in PROSE_ATTR.findall((REPO / relative).read_text("utf-8"))}
+        for reference in sorted(excused):
+            head, _, attr = reference.partition(".")
+            if reference not in named or _has_attribute(classes[head], attr):
+                dead.append(f"{relative}: `{reference}`")
+
+    assert not dead, f"{dead} are excused in PROSE_ATTR_GONE and need not be"
 
 
 def test_the_class_attribute_rule_is_looking_at_something():

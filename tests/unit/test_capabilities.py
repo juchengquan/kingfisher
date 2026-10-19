@@ -291,7 +291,7 @@ def test_excluding_everything_grants_none_of_it():
 
 def test_a_name_that_excludes_nothing_is_refused():
     """`--without-tools exec` is a typo that would otherwise grant everything quietly,
-    which is the mirror of what `Capabilities.unknown` refuses.
+    which is the mirror of what `Offering.refuse_unknown` refuses.
     """
     with pytest.raises(CapabilityError, match="cannot exclude unknown name"):
         all_but(("exec",), offered=("execute", "ls"))
