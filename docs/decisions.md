@@ -3554,8 +3554,8 @@ is registered in code, a source id declared in a file -- hence `UNCONSULTED` and
 held total. The integration driver and `seed_example.py`, the script people copy, each told
 a reader to *register* a source id. `Seeded.report()` is every line a person is owed, and
 every caller prints it; `test_only_the_record_says_what_a_skipped_definition_needs` finds
-any `skipped …` line composed outside `seeding.py`, searching the driver, the example and
-`evals/` too. *(2026-09-23.)*
+any `skipped …` line composed outside `seeding.py`, searching the README, the driver, the
+example and `evals/` too. *(2026-09-23.)*
 
 ## What doctor promises
 
