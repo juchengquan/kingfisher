@@ -298,9 +298,9 @@ class Running:
         """What a turn does once it is over, however it ended."""
         prepared = turn.prepared
         yield on_host(prepared.logger.run_end, ok=turn.ok, answer_chars=len(turn.answer))
-        # Before anything is let go of: the saver still holds the paused state.
-        snapshot = yield on_host(self._settled, prepared)
         try:
+            # Before anything is let go of: the saver still holds the paused state.
+            snapshot = yield on_host(self._settled, prepared)
             # Before the pause as well as the transcript: a resume carries on from that
             # state, and a result in either must already have its row.
             turn.recorded = yield from self._record_ledger(prepared, snapshot)
@@ -318,10 +318,13 @@ class Running:
                 turn.pending.append(out_of_tokens(cut))
             turn.kept = yield from self._keep(prepared, snapshot)
         finally:
-            # However the turn ended, and even if the store was unreachable.
-            yield changing(self._sessions, "release", self.cfg, prepared.session.id)
-        # Left open, the QuickJS runtime hangs the process rather than leaking a handle.
-        yield on_host(release_interpreter, self.cfg, prepared.graph)
+            try:
+                # However the turn ended, and even if the store was unreachable.
+                yield changing(self._sessions, "release", self.cfg, prepared.session.id)
+            finally:
+                # Left open, the QuickJS runtime hangs the process rather than leaking a
+                # handle.
+                yield on_host(release_interpreter, self.cfg, prepared.graph)
 
     def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
         """One stream chunk, read as events. The answer accumulates on `turn`."""
