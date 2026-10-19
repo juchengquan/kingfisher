@@ -22,6 +22,7 @@ from kingfisher.core.layout import (
     PAUSED_MARK,
     PAUSED_STATE,
     PINNED_AGENT,
+    PINNED_ZONE,
     TRANSCRIPT_FILE,
 )
 from kingfisher.core.result import LedgerEntry, Listed, PendingDecision
@@ -44,6 +45,10 @@ class HarnessFiles:
         """`name`'s content, or `None` where the session has none."""
         (content,) = yield from self._download(name)
         return content
+
+    def fetch_each(self, *names: str) -> Steps[list[bytes | None]]:
+        """`fetch`, for several names in one read of the backend."""
+        return (yield from self._download(*names))
 
     def store(self, name: str, content: bytes) -> Steps[None]:
         """Replace `name`."""
@@ -105,8 +110,29 @@ def agent_started_with(harness: Any) -> Steps[DefinitionText | None]:
     `None` covers two ordinary cases: a session that named no agent, and a
     deployment whose repository cannot hand over the document it parsed.
     """
-    held = yield from harness.fetch(PINNED_AGENT)
+    return _agent_text((yield from harness.fetch(PINNED_AGENT)))
+
+
+def _agent_text(held: bytes | None) -> DefinitionText | None:
     return None if held is None else DefinitionText(held.decode("utf-8"), Path(AGENT_SNAPSHOT))
+
+
+def remember_zone(harness: Any, zone: str) -> Steps[None]:
+    """Keep the datazone this session's first zoned turn ran in.
+
+    Never rewritten: what that turn's tools returned is in the session for good, and a
+    caller in another datazone is refused before they could reach this.
+    """
+    if (yield from harness.fetch(PINNED_ZONE)) is not None:
+        return
+    yield from harness.store(PINNED_ZONE, zone.encode("utf-8"))
+
+
+def pinned_in(harness: Any) -> Steps[tuple[DefinitionText | None, str | None]]:
+    """The agent this session opened with and the datazone it is in, in one read, since
+    a listing asks it of every session."""
+    agent, zone = yield from harness.fetch_each(PINNED_AGENT, PINNED_ZONE)
+    return _agent_text(agent), None if zone is None else zone.decode("utf-8")
 
 
 def read_transcript(harness: Any) -> Steps[tuple[Message, ...]]:

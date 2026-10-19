@@ -35,6 +35,12 @@ def zone_name(datazone: str) -> str:
     return f"{DATAZONE_PREFIX}{datazone}"
 
 
+def zone_held(held: Iterable[str]) -> str | None:
+    """The datazone a caller holds, or `None` for one in no datazone."""
+    zones = (one.removeprefix(DATAZONE_PREFIX) for one in held if one.startswith(DATAZONE_PREFIX))
+    return next(zones, None)
+
+
 @dataclass(frozen=True)
 class Stated:
     """What one definition says about who reaches what."""

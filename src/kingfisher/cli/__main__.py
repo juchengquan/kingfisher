@@ -291,13 +291,10 @@ def build_parser() -> argparse.ArgumentParser:
     fetching.add_argument("--session", metavar="ID", required=True, help="the session")
     fetching.add_argument("name", help="the artifact, as the run named it")
     fetching.add_argument("--out", metavar="PATH", help="write it here instead")
-    # No --datazone: a session read is decided by its pinned agent's audience, and an agent
-    # has no datazone, so a flag here would be taken and narrow nothing.
     _add_caller(
         fetching,
         "who is calling: comma-separated source ids, or UNSCOPED to read "
         "with no caller. Required where the workspace declares source ids",
-        datazone=False,
     )
     holding = sub.add_parser(
         "sessions",
@@ -368,7 +365,7 @@ _TURN_CALLER = (
 )
 
 
-def _add_caller(parser: argparse.ArgumentParser, help_text: str, *, datazone: bool = True) -> None:
+def _add_caller(parser: argparse.ArgumentParser, help_text: str) -> None:
     parser.add_argument(
         "--as",
         dest="held",
@@ -377,13 +374,12 @@ def _add_caller(parser: argparse.ArgumentParser, help_text: str, *, datazone: bo
         metavar="SOURCE_IDS",
         help=help_text,
     )
-    if datazone:
-        parser.add_argument(
-            "--datazone",
-            default=None,
-            metavar="NAME",
-            help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
-        )
+    parser.add_argument(
+        "--datazone",
+        default=None,
+        metavar="NAME",
+        help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
+    )
 
 
 def _seed(source: str | None = None, *, everything: bool = False) -> int:
@@ -549,7 +545,7 @@ def _decide(args: argparse.Namespace) -> int:
     cfg = config_from_env()
     kf = _configured(cfg, log=args.log)
     if not decisions:
-        return _show_pending(kf, args.session, args.held)
+        return _show_pending(kf, args.session, with_datazone(args.held, args.datazone))
     return _drive(
         kf,
         Resume(
@@ -818,7 +814,7 @@ def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
     cfg = config_from_env()
     kf = _configured(cfg)
-    session = kf.session(args.session, source_ids=args.held)
+    session = kf.session(args.session, source_ids=args.held, datazone=args.datazone)
     if session is None:
         msg = f"no session {args.session!r}"
         raise UnknownSessionError(msg)

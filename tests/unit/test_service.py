@@ -689,15 +689,20 @@ def _snapshot_reads(monkeypatch) -> list[Path]:
     from kingfisher.core.session import preparation
 
     seen: list[Path] = []
-    real = service_module.agent_started_with
 
-    def counting(session_dir):
-        seen.append(session_dir)
-        return real(session_dir)
+    def counting(real):
+        def read(session_dir):
+            seen.append(session_dir)
+            return real(session_dir)
 
-    # Both readers: `_agent_for` on `Kingfisher`, and `_prepare_steps` on `Preparation`.
-    monkeypatch.setattr(service_module, "agent_started_with", counting)
-    monkeypatch.setattr(preparation, "agent_started_with", counting)
+        return read
+
+    # Both readers: `_agent_for` on `Kingfisher`, and `_prepare_steps` on `Preparation`,
+    # which reads the agent with the datazone beside it.
+    monkeypatch.setattr(
+        service_module, "agent_started_with", counting(service_module.agent_started_with)
+    )
+    monkeypatch.setattr(preparation, "pinned_in", counting(preparation.pinned_in))
     return seen
 
 

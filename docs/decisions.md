@@ -944,6 +944,18 @@ or subagent's lock is one line in its own file with nothing that could differ fr
 while a skills entry is a lock per use, and a use wider than its neighbours is what a
 roll-up shows. *(2026-10-17.)*
 
+**A session keeps the datazone of its first zoned turn.** A datazone decided which
+tools a turn was handed and nothing after: a session answered to its pinned agent, which
+has no datazone, so a finance turn's results sat where any caller of that agent could
+read them with `artifact` or carry the session on from no datazone. The zone is pinned
+beside the agent, in `.harness/datazone`, and a session's audience is its agent's and
+that zone, so every door that asks the pin asks the zone. The first *zoned* turn's
+rather than the first turn's: an unzoned turn holds nothing a finance caller may not
+read, so a finance turn may carry on an unzoned session, which from then on answers
+only to finance. Taken from the caller's datazone rather than from the ledger's stamps
+on what the tools returned: a supplied graph keeps no ledger, and the caller's zone is
+what decided everything the turn could reach. *(2026-10-19.)*
+
 **Who holds a tool is printed under each holder.** Each agent and subagent prints
 `tools:` and `builtin tools:` lines beside an agent's `subagents:`, so which agents list
 `http_fetch` needs no file opened. Under the holder, not as a roll-up by tool: listing is

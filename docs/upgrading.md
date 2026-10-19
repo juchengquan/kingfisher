@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session keeps the datazone of its first zoned turn, after #936
+
+- **A session a turn in a datazone ran in is reached only from that datazone.** Reading
+  it -- `session`, `sessions`, `pending`, `artifact` -- and carrying it on both answer
+  as for a session that is not there, to a caller in no datazone or another one.
+  `UNSCOPED` still reaches it. A session no zoned turn ran in is reached from every
+  datazone, as before.
+- **`Kingfisher.session`, `asession`, `sessions` and `asessions` take `datazone=`**,
+  beside `source_ids=`, as `run` and `stream` already did. A finance caller reading a
+  session a finance turn made has to pass it.
+- **`kingfisher artifact` takes `--datazone`**, and `decide` with no answer now passes
+  its `--datazone` to the pending calls it lists.
+- **A session from before this keeps no datazone**, whatever turns ran in it, and stays
+  reached from every datazone until its next zoned turn pins one.
+
 ## Both CSV tools stop at the columns an answer carries, after #927
 
 - **`csv_profile` profiles the first 200 columns, and says so**, where it wrote a line

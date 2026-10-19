@@ -8,8 +8,9 @@ from dataclasses import replace
 
 import pytest
 import yaml
+from langchain_core.messages import AIMessage
 
-from kingfisher import ToolSpec
+from kingfisher import Request, ToolSpec, UnknownSessionError
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.policy import parse
 from kingfisher.core.access.source_ids import (
@@ -29,7 +30,8 @@ from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
-from tests.conftest import subagents_dir, tools_dir
+from tests.conftest import Through, subagents_dir, tools_dir
+from tests.unit.scripted import Scripted
 
 VOCABULARY = "source_ids: [A, B]\ndatazones: [finance, hr]\n"
 
@@ -346,3 +348,94 @@ def test_a_saved_result_is_stamped_with_its_datazone():
     assert stamps.offered("payroll") == (
         frozenset({"A", zone_name("finance"), zone_name("hr")}),
     )
+
+
+# -- a session keeps the datazone a turn ran in -------------------------------------
+
+
+@pytest.fixture
+def turns(zoned, scripted):
+    """`zoned`, with each turn's model answered by `Scripted`."""
+    return replace(zoned, models=scripted.models)
+
+
+def _turn(kf: Kingfisher, session_id: str, datazone: str | None):
+    Scripted.script.append(AIMessage(content="done"))
+    request = Request("t", agent="surveyor", session_id=session_id)
+    return kf.run(request, source_ids=("A",), datazone=datazone)
+
+
+def test_a_session_a_zoned_turn_ran_in_is_reached_only_from_that_datazone(turns, way):
+    """A finance turn left its tools' results in a session that any caller of its agent
+    could read or carry on, in no datazone or in another.
+    """
+    kf = Kingfisher(turns, sessions=LocalSessions())
+    _turn(kf, "s", "finance")
+    reads = Through(kf, way)
+
+    assert reads.session("s", source_ids=("A",), datazone="finance") is not None
+    assert reads.session("s", source_ids=("A",)) is None
+    assert reads.session("s", source_ids=("A",), datazone="hr") is None
+    assert reads.session("s", source_ids=UNSCOPED) is not None
+    with pytest.raises(UnknownSessionError):
+        _turn(kf, "s", "hr")
+
+
+def test_a_listing_leaves_out_a_session_in_another_datazone(turns):
+    kf = Kingfisher(turns, sessions=LocalSessions())
+    _turn(kf, "s", "finance")
+
+    assert [one.id for one in kf.sessions(source_ids=("A",), datazone="finance")] == ["s"]
+    assert kf.sessions(source_ids=("A",)) == ()
+
+
+def test_the_first_zoned_turn_narrows_a_session_that_had_none(turns):
+    """Not the first turn's: an unzoned turn adds nothing a finance caller may not read,
+    and the finance turn after it adds what only they may.
+    """
+    kf = Kingfisher(turns, sessions=LocalSessions())
+    _turn(kf, "s", None)
+    assert kf.session("s", source_ids=("A",)) is not None
+
+    _turn(kf, "s", "finance")
+
+    assert kf.session("s", source_ids=("A",)) is None
+    assert kf.session("s", source_ids=("A",), datazone="finance") is not None
+
+
+def test_a_session_no_zoned_turn_ran_in_is_reached_from_every_datazone(turns):
+    """The control: a caller in a datazone holds everything one in none does."""
+    kf = Kingfisher(turns, sessions=LocalSessions())
+    _turn(kf, "s", None)
+
+    for datazone in (None, "finance", "hr"):
+        assert kf.session("s", source_ids=("A",), datazone=datazone) is not None
+
+
+def test_the_command_reads_an_artifact_from_the_datazone_it_was_made_in(
+    turns, at_the_command_line, capsysbinary
+):
+    kf = Kingfisher(turns, sessions=LocalSessions())
+    _turn(kf, "s", "finance")
+    (turns.sessions_root / "s" / "outputs" / "a.txt").write_text("result")
+
+    asked = ["artifact", "--session", "s", "--as", "A", "outputs/a.txt"]
+    assert main([*asked, "--datazone", "finance"]) == 0
+    assert capsysbinary.readouterr().out == b"result"
+    assert main(asked) == 2
+
+
+def test_the_pending_calls_are_listed_from_the_datazone_the_session_is_in(
+    turns, at_the_command_line, capsys
+):
+    """`decide` with no answer lists what a session waits on, and must not be the one
+    door into a zoned session that drops the caller's datazone.
+    """
+    kf = Kingfisher(turns, sessions=LocalSessions())
+    _turn(kf, "s", "finance")
+
+    asked = ["decide", "--session", "s", "--as", "A"]
+    assert main([*asked, "--datazone", "finance"]) == 2
+    assert "is not waiting on a decision" in capsys.readouterr().err
+    assert main(asked) == 2
+    assert "no such session" in capsys.readouterr().err
