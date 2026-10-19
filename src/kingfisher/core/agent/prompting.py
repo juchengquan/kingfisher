@@ -1,6 +1,6 @@
 """Assembling the system prompt from the markdown that ships with the package.
 
-Nothing here may import more than `Config`, the layout and the standard library:
+Nothing here may import more than `Config`, the layout, `READ_FILE` and the standard library:
 `ShellPrompt` is exported, and a module importing deepagents would load the provider
 SDKs behind it for anyone naming it.
 """
@@ -14,6 +14,7 @@ from importlib import resources
 from typing import TYPE_CHECKING
 
 from kingfisher.core.config import ConfigError
+from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 
 if TYPE_CHECKING:
@@ -50,10 +51,19 @@ SHELL_MARKER = "<!-- shell -->"
 FILE_TOOLS_MARKER = "<!-- file tools -->"
 FILE_TOOLS_FILE = "file_tools.md"
 
-#: deepagents' file tools, in the order their section names them.
-FILE_TOOLS = ("ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep")
+#: The names of deepagents' file tools and shell and of langchain's checklist, spelt
+#: nowhere else but `READ_FILE`, which lives with the definition readers that refuse by it.
+LS = "ls"
+WRITE_FILE = "write_file"
+EDIT_FILE = "edit_file"
+DELETE = "delete"
+GLOB = "glob"
+GREP = "grep"
 EXECUTE = "execute"
 WRITE_TODOS = "write_todos"
+
+#: deepagents' file tools, in the order their section names them.
+FILE_TOOLS = (LS, READ_FILE, WRITE_FILE, EDIT_FILE, DELETE, GLOB, GREP)
 
 #: The tools anything in the prompt is said of. Nothing else in a grant changes the prompt,
 #: so nothing else goes in `render_system_prompt`'s cache key.
@@ -67,18 +77,18 @@ TOOL_RESULTS_FILE = "tool_results.md"
 #: finds a file only `read_file` opens.
 _READING = (
     (
-        ("read_file",),
+        (READ_FILE,),
         "Read one back with `read_file`, a range of lines at a time, rather than calling "
         "the tool again.",
     ),
     (
-        ("grep",),
+        (GREP,),
         "Search them with `grep`, which also finds a result too long to show you whole: "
         "that one is named after its call rather than its id, and ends in its `[A-0042]` "
         "line, so `grep` for that in `/{{scratchpad}}/large_tool_results/`.",
     ),
     (
-        ("glob", "read_file"),
+        (GLOB, READ_FILE),
         "To find an older result by its id, `glob` for `A-0042-*` in "
         "`/{{scratchpad}}/{{tool_results}}/`.",
     ),
@@ -99,7 +109,7 @@ _RECOVERING = {
 
 #: The file tools memory is saved with, `edit_file` first: it changes the file in place,
 #: where `write_file` replaces it whole. Not `execute`, which may run where `/memory` is not.
-_SAVERS = ("edit_file", "write_file")
+_SAVERS = (EDIT_FILE, WRITE_FILE)
 
 #: What is said of a shell that says nothing, which is only what holds wherever a
 #: shell runs. No `execute` line: deepagents' own stands.
@@ -233,7 +243,7 @@ def memory_guidelines(
     held = _held(tools)
     evidence = (
         "evidence from `read_file` and other tools"
-        if "read_file" in held
+        if READ_FILE in held
         else "evidence from your tools"
     )
     saver = _saver(held)
@@ -258,7 +268,7 @@ def _tool_results(held: tuple[str, ...], layout: Layout, *, shelled: bool) -> st
         TOOL_RESULTS_FILE,
         layout,
         reading=_fill("\n".join(told) or unread, layout, TOOL_RESULTS_FILE),
-        recovering=_RECOVERING["read_file" in held, "grep" in held],
+        recovering=_RECOVERING[READ_FILE in held, GREP in held],
     ).strip()
 
 
