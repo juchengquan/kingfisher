@@ -69,8 +69,8 @@ def an_agent_that_will_not_parse(cfg):
     _write(_root(cfg, "agents") / "bad.yaml", "name: [unclosed\n")
 
 
-def an_agent_missing_a_field(cfg):
-    _write(_root(cfg, "agents") / "a.yaml", "name: a\n")
+def an_agent_that_cannot_call_its_subagents(cfg):
+    _write(_root(cfg, "agents") / "a.yaml", AGENT.format(name="a") + "subagents: [s]\n")
 
 
 def an_agent_gating_tools_as_a_mapping(cfg):
@@ -115,20 +115,8 @@ def a_subagent_filed_as_yml(cfg):
     _write(_root(cfg, "subagents") / "near.yml", SUBAGENT.format(name="near"))
 
 
-def a_subagent_with_a_field_nobody_reads(cfg):
-    _write(_root(cfg, "subagents") / "s.yaml", SUBAGENT.format(name="s") + "nope: 1\n")
-
-
-def a_compiled_subagent_with_a_blank_name(cfg):
-    _write(
-        _root(cfg, "subagents") / "m.py",
-        "def build(model, tools):\n    return object()\n\n\n"
-        "SUBAGENTS = [{'name': '', 'description': 'd', 'build': build}]\n",
-    )
-
-
-def a_subagent_missing_a_field(cfg):
-    _write(_root(cfg, "subagents") / "thin.yaml", "description: A subagent.\n")
+def a_subagent_that_cannot_open_its_skills(cfg):
+    _write(_root(cfg, "subagents") / "s.yaml", SUBAGENT.format(name="s") + "skills: [k]\n")
 
 
 def a_subagent_listing_the_code_sandbox(cfg):
@@ -164,8 +152,10 @@ def a_compiled_subagent_whose_build_is_not_callable(cfg):
     )
 
 
-def a_portable_subagent_naming_a_model(cfg):
-    _write(_root(cfg, "subagents") / "p.py", PORTABLE.format(extra=", 'model': 'cheap'"))
+def a_portable_subagent_that_cannot_open_its_skills(cfg):
+    carried = cfg.workspace / "carried"
+    carried.mkdir(parents=True)
+    _write(_root(cfg, "subagents") / "p.py", PORTABLE.format(extra=f", 'skills': {str(carried)!r}"))
 
 
 def a_portable_subagent_carrying_tools_that_are_not_a_list(cfg):
@@ -273,7 +263,8 @@ class Refusal:
 REFUSALS: dict[str, Refusal] = {
     "core/definitions/agents/catalogue.py::LocalAgentRepository._defined": Refusal(
         1, defect=two_agents_of_a_name),
-    "core/definitions/agents/spec.py::parse": Refusal(4, defect=an_agent_missing_a_field),
+    "core/definitions/agents/spec.py::parse": Refusal(
+        1, defect=an_agent_that_cannot_call_its_subagents),
     "core/definitions/agents/spec.py::_gated_tools": Refusal(
         2, defect=an_agent_gating_tools_as_a_mapping),
     # Raises the error class it was handed, which is how it stayed out of the first
@@ -301,18 +292,10 @@ REFUSALS: dict[str, Refusal] = {
         2, defect=a_middleware_that_is_not_one),
     "core/definitions/subagents/catalogue.py::LocalSubagentRepository.bundles": Refusal(
         1, defect=a_bundle_holding_two_definitions),
-    "core/definitions/subagents/spec.py::_refuse_unknown": Refusal(
-        1, defect=a_subagent_with_a_field_nobody_reads),
     "core/definitions/subagents/spec.py::_carried": Refusal(
         2, defect=a_portable_subagent_carrying_tools_that_are_not_a_list),
     "core/definitions/subagents/spec.py::_portable": Refusal(
-        3, defect=a_portable_subagent_naming_a_model),
-    # The required fields of both Python declarations, in one body since the compiled
-    # one had only half of it. Filed on the *blank* name rather than the missing one:
-    # that is the refusal this function added, and what this table is for is proving
-    # `doctor` reports it.
-    "core/definitions/subagents/spec.py::_require": Refusal(
-        2, defect=a_compiled_subagent_with_a_blank_name),
+        1, defect=a_portable_subagent_that_cannot_open_its_skills),
     "core/definitions/subagents/spec.py::_skills_directory": Refusal(
         3, defect=a_portable_subagent_whose_skills_are_a_relative_path),
     "core/definitions/subagents/spec.py::_skills_directories": Refusal(
@@ -323,8 +306,9 @@ REFUSALS: dict[str, Refusal] = {
     # an entry with no `build` is now a portable declaration rather than a compiled
     # one missing a key, so the old defect reaches `_portable` and never gets here.
     "core/definitions/subagents/spec.py::declared": Refusal(
-        4, defect=a_compiled_subagent_whose_build_is_not_callable),
-    "core/definitions/subagents/spec.py::parse": Refusal(3, defect=a_subagent_missing_a_field),
+        2, defect=a_compiled_subagent_whose_build_is_not_callable),
+    "core/definitions/subagents/spec.py::parse": Refusal(
+        1, defect=a_subagent_that_cannot_open_its_skills),
     "core/definitions/subagents/spec.py::_refuse_the_sandbox": Refusal(
         1, defect=a_subagent_listing_the_code_sandbox),
     "core/definitions/tools/catalogue.py::CarriedTools.found": Refusal(

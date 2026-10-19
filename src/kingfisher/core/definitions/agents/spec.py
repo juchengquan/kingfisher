@@ -102,19 +102,8 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     read = fields.Reader(source=source.name, error=AgentError)
 
     # Before the required-field check, so `nmae:` reads as a typo, not a missing `name`.
-    complaint = fields.unrecognised(document, known=KNOWN, declined=REFUSED)
-    if complaint is not None:
-        msg = f"{source.name}: {complaint}"
-        raise AgentError(msg)
-
-    for required in ("name", "description", "system_prompt"):
-        # Absent and blank told apart: "missing" sends a reader hunting for a line they wrote.
-        if required not in document:
-            msg = f"{source.name}: missing required field {required!r}"
-            raise AgentError(msg)
-        if not fields.text(document[required]):
-            msg = f"{source.name}: {required!r} is present but empty"
-            raise AgentError(msg)
+    read.refuse_unrecognised(document, known=KNOWN, declined=REFUSED)
+    read.require(document, "name", "description", "system_prompt")
 
     # `source: shared` is accepted so an entry reads the same here as in a subagent file.
     # Absent grants none on both tool axes, as everywhere: a forgotten line fails closed.
