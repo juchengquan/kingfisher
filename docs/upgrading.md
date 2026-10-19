@@ -18,6 +18,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `sql_query` refuses a row it cannot carry, after #918
+
+- **A `SELECT` whose single row passes the answer cap is refused**, with the width in
+  the message, where it used to be answered in full under a note claiming it had
+  stopped at the cap. Measured: 20 columns of 100,000 characters answered 2,000,225
+  characters, and 2,000 columns answered 400,011,025 — on the turn's own thread, in
+  kingfisher's process. The remedy is in the message: select fewer columns, or shorten
+  them with `substr`.
+- **The cut note counts the rows the answer actually holds.** It counted the row that
+  passed the cap among them, so a reader parsing the CSV found one row fewer than the
+  note claimed.
+- **Column names past the cap are refused too**, since the header is written before any
+  row: `AS "<150,000 characters>"` is a column name.
+
+If you copied `sql_query.py` into your own catalogue, these are three edits to the copy;
+`kingfisher seed --all` takes the shipped one again.
+
 ## `seed` reads an audience written in Python, after #917
 
 - **`kingfisher seed` no longer copies `subagents/quarters.py` or `tools/sql_query.py`

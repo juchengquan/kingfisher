@@ -653,6 +653,19 @@ and the numbers are the argument:
     conversion, because `str()` on that value is where the memory goes. A row at a
     time rather than `fetchmany`, for the same reason: it has every row in this
     process before anything could measure one.
+  - **And a cap on characters is a cap at the granularity you check it.** Asked after
+    the row was written, it bounded the answer to the width of one row: 20 columns of
+    100,000 characters each passed the per-value check and answered 2,000,225
+    characters, ten times the cap, under a note saying it had stopped at it. At 2,000
+    columns the same query answers 400,011,025. So the room left is measured *before*
+    the row is built -- from the values' own lengths, which only quoting can add to --
+    and a row that cannot fit at all is refused with its width rather than cut, because
+    a reader can ask for the same row narrower. The header is measured too: it is
+    written before any row, and `AS "<150,000 characters>"` is a column name.
+  - **A note that asserts the bound is worse than no note.** Both of `sql_query`'s say
+    the number they stopped at, so the one case nothing else catches is the note itself
+    being wrong -- it said `truncated at 200000 characters` on an answer of two million,
+    and it counted the row that passed the cap among the rows it had kept.
   - **Time is the cost nothing else bounds.** A three-way join over a 1,000-row table
     takes 49 seconds, and a fourth table is a thousand times that -- about 14 hours
     inside one call, which the turn deadline notices when it returns.

@@ -229,14 +229,93 @@ def test_the_rows_stop_at_the_characters_the_answer_carries(tools, database, mon
     """The second half of the same number: 200 rows each just inside the per-value
     limit is still 200 times it. Marked `--` outside the rows like the row cap beside
     it, and at least one row always comes back -- a header alone answers nothing.
+
+    The cap is one that admits a row. Asked *after* the row was written, this passed at
+    30 against an answer of 36 -- the row that broke the cap was in the answer and
+    counted among the rows the note said it had kept, so both halves of what is
+    asserted here were asserted of an answer that had already exceeded the bound.
+    """
+    monkeypatch.setitem(_globals(tools["sql_query"]), "MAX_ANSWER_CHARS", 40)
+
+    said = tools["sql_query"].invoke({"statement": "SELECT region, note FROM sales"})
+
+    lines = said.splitlines()
+    assert lines[-1].startswith("-- truncated at 1 rows, past the 40 characters")
+    assert len(_rows("\n".join(lines[:-1]))) == 2, "a header and the one row that fitted"
+    # The bound the note names, against the answer carrying it. Without this the rule
+    # above passes on an answer of any width, which is how it did.
+    assert len(said) - len(lines[-1]) <= 40, "the rows passed the cap the note names"
+
+
+def test_a_first_row_that_will_not_fit_beside_the_names_is_refused(
+    tools, database, monkeypatch
+):
+    """The other side of "at least one row always comes back": where not even one fits,
+    there is nothing to answer with, and a header with a note under it reads as a query
+    that matched nothing. Refused with the width instead, as a single wide value is.
     """
     monkeypatch.setitem(_globals(tools["sql_query"]), "MAX_ANSWER_CHARS", 30)
 
     said = tools["sql_query"].invoke({"statement": "SELECT region, note FROM sales"})
 
+    assert said.startswith("refused: one row of 2 columns needs 36 characters beside")
+    assert "select fewer columns" in said
+
+
+def test_a_row_of_values_each_inside_the_cap_is_still_refused_by_its_width(
+    tools, database, monkeypatch
+):
+    """The per-value check passes every value under the cap, so a row of them passes
+    too, and the character cap was read after the row was written -- which bounded the
+    answer to the width of one row rather than to the cap. Measured on the shipped
+    numbers: 20 columns of 100,000 characters answered 2,000,225 characters, ten times
+    the cap, and 2,000 columns answered 400,011,025 -- 2.9 seconds and 3.3 GB resident,
+    on the turn's own thread, under a note saying it had stopped at 200,000.
+    """
+    monkeypatch.setitem(_globals(tools["sql_query"]), "MAX_ANSWER_CHARS", 100)
+    with sqlite3.connect(database) as writing:
+        writing.execute("CREATE TABLE spread (a TEXT, b TEXT, c TEXT, d TEXT)")
+        writing.execute("INSERT INTO spread VALUES (?, ?, ?, ?)", ["z" * 40] * 4)
+    writing.close()
+
+    said = tools["sql_query"].invoke({"statement": "SELECT * FROM spread"})
+
+    # Every value is 40, well inside the 100 this answers with; the row is 164, and the
+    # column names 8.
+    assert said.startswith("refused: one row of 4 columns needs 172 characters beside")
+
+
+def test_quoting_cannot_leave_the_answer_past_the_cap(tools, database, monkeypatch):
+    """A row is measured before it is built, from the lengths of its values, because
+    converting a 20 MB value is where the memory goes -- and that is the one thing
+    quoting is invisible to: a value of quote characters is written at twice its length,
+    each doubled and the field wrapped. So the exact width is checked once more after
+    the write, and the row dropped rather than left in an answer over the cap.
+    """
+    monkeypatch.setitem(_globals(tools["sql_query"]), "MAX_ANSWER_CHARS", 60)
+    with sqlite3.connect(database) as writing:
+        writing.execute("CREATE TABLE quoted (q TEXT)")
+        writing.executemany("INSERT INTO quoted VALUES (?)", [("ok",), ('"' * 30,)])
+    writing.close()
+
+    said = tools["sql_query"].invoke({"statement": "SELECT q FROM quoted"})
+
     lines = said.splitlines()
-    assert lines[-1].startswith("-- truncated at 1 rows, past the 30 characters")
-    assert len(_rows("\n".join(lines[:-1]))) == 2, "a header and the one row that fitted"
+    assert len(said) - len(lines[-1]) <= 60, "the quoted row stayed in an answer over the cap"
+    assert lines[-1].startswith("-- truncated at 1 rows")
+    assert len(_rows("\n".join(lines[:-1]))) == 2, "the header and the row that fitted"
+
+
+def test_column_names_alone_past_the_cap_are_refused(tools, database, monkeypatch):
+    """The header is written before any row and was measured by nothing: on the shipped
+    numbers, `SELECT "<150,000 characters>" AS "<the same>"` answered 300,137 of them.
+    """
+    monkeypatch.setitem(_globals(tools["sql_query"]), "MAX_ANSWER_CHARS", 10)
+
+    said = tools["sql_query"].invoke({"statement": "SELECT region, note FROM sales"})
+
+    assert said.startswith("refused: the column names alone need 12 characters")
+    assert "alias them shorter with AS" in said
 
 
 def test_the_docstring_names_every_bound_the_tool_applies(tools):
