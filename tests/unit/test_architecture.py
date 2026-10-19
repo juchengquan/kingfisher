@@ -3996,8 +3996,8 @@ def test_every_console_script_points_at_something_that_exists():
         assert callable(getattr(module, attribute, None)), f"{command} -> {target}"
 
 
-def _tracked_python() -> list[str]:
-    """Every Python file git tracks, as a path from the repository root.
+def _tracked() -> list[str]:
+    """Every file git tracks, as a path from the repository root.
 
     Asked of git rather than walked: the root also holds a `.venv`, caches and
     whatever a developer left there, and a walk finds different things on different
@@ -4006,10 +4006,60 @@ def _tracked_python() -> list[str]:
     import subprocess
 
     listed = subprocess.run(
-        ["git", "ls-files", "*.py"], cwd=REPO, capture_output=True, text=True, check=False
+        ["git", "ls-files", "-z"], cwd=REPO, capture_output=True, text=True, check=False
     )
     assert listed.returncode == 0, f"git could not list the tracked files: {listed.stderr}"
-    return listed.stdout.split()
+    # An unmerged path is listed once per stage, and that is exactly the tree the
+    # conflict-marker rule exists for.
+    return sorted(set(filter(None, listed.stdout.split("\0"))))
+
+
+def _tracked_python() -> list[str]:
+    return [path for path in _tracked() if path.endswith(".py")]
+
+
+#: A conflict's opening, base and closing lines. The `=======` between them is left
+#: out: alone it is a Markdown setext underline, and no conflict comes without the
+#: two ends this does match.
+CONFLICT_MARKER = re.compile(rb"^(?:<{7}|\|{7}|>{7})(?:\s|$)", re.MULTILINE)
+
+
+def _conflict_markers(path: Path) -> list[int]:
+    """The line numbers in `path` that a merge left a marker on."""
+    text = path.read_bytes()
+    return [text.count(b"\n", 0, hit.start()) + 1 for hit in CONFLICT_MARKER.finditer(text)]
+
+
+def test_no_tracked_file_carries_a_conflict_marker():
+    """A merge committed with its markers still in `docs/upgrading.md` passed every test.
+
+    Every tracked file rather than the Markdown: a marker inside a docstring parses,
+    and YAML or a lock file is read by nothing here that would choke on one.
+    """
+    # A file deleted but not yet `git rm`-ed is still listed, and has nothing to scan.
+    tracked = [path for path in _tracked() if (REPO / path).is_file()]
+    assert "docs/upgrading.md" in tracked, "git lists no docs -- this rule is about nothing"
+
+    marked = {path: lines for path in tracked if (lines := _conflict_markers(REPO / path))}
+    assert not marked, (
+        f"{marked} still carry a merge's conflict markers (file: line numbers) -- "
+        "resolve the conflict, then delete them"
+    )
+
+
+def test_the_conflict_rule_spares_a_setext_underline(tmp_path):
+    """Matching `=======` would refuse every Markdown title underlined with it."""
+    conflicted = tmp_path / "conflicted.md"
+    conflicted.write_text(
+        f"Upgrading\n{'=' * 7}\n\n{'<' * 7} HEAD\nours\n{'|' * 7} base\nold\n"
+        f"{'=' * 7}\ntheirs\n{'>' * 7} main\n",
+        encoding="utf-8",
+    )
+    assert _conflict_markers(conflicted) == [4, 6, 10]
+
+    titled = tmp_path / "titled.md"
+    titled.write_text(f"Upgrading\n{'=' * 7}\n\nText.\n", encoding="utf-8")
+    assert _conflict_markers(titled) == []
 
 
 def _ty() -> dict:
