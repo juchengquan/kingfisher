@@ -55,6 +55,7 @@ from kingfisher.core.agent.kinds.subagents import (
 from kingfisher.core.agent.kinds.tools import (
     _private_tools,
     _resolve_tools,
+    bundled_tools_in,
     registered_tools,
 )
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware, high_mark
@@ -70,8 +71,7 @@ from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.config import DEFAULT_LAYOUT, Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.subagents.spec import RunOn, SubagentError, opens_skills
-from kingfisher.core.definitions.tools.catalogue import ToolError
+from kingfisher.core.definitions.subagents.spec import RunOn, opens_skills
 from kingfisher.core.definitions.tools.spec import FoundTool, own_audiences
 from kingfisher.core.layout import Layout
 
@@ -278,19 +278,6 @@ def _probe_backend(cfg: Config, scratch: Path) -> CompositeBackend:
     )
 
 
-def _bundles_of(roots: Definitions) -> Mapping[str, Any]:
-    """Each subagent's own tools, for the shadow probe, or none readable.
-
-    A subagent file that will not parse is answered by the subagent rows of `doctor` and
-    refused by `warm` for a service; raised from here it would land on the tools row and
-    send a reader to the wrong directory.
-    """
-    try:
-        return roots.bundled_tools
-    except (SubagentError, ToolError):
-        return {}
-
-
 def builtin_tool_names(
     cfg: Config, catalogue: Definitions, workspace_tools: Sequence[FoundTool] | None = None
 ) -> tuple[str, ...] | None:
@@ -359,12 +346,11 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     under_rules = PermittedBackend(backend, permissions)
     paths = SessionPaths(under_rules, cfg.sessions_root, cfg.layout)
 
+    bundled = bundled_tools_in(roots)
     # A bundle's tools too: a subagent's calls are recorded, and a bundled tool may say
     # who it admits.
     own = (
-        own_audiences(
-            (*walked, *(one for bundle in roots.bundled_tools.values() for one in bundle.found))
-        )
+        own_audiences((*walked, *(found for found, _ in bundled)))
         if cfg.access is not None
         else {}
     )
@@ -534,7 +520,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         capabilities,
         walked,
         assemble,
-        bundles=_bundles_of(roots),
+        bundled=bundled,
         # Either tool list naming anything needs the offered sets, and a subagent
         # naming a helper the built tool objects: the probe is what yields both.
         names_needed=bool(gated)

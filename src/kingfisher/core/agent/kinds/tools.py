@@ -15,11 +15,12 @@ from kingfisher.core.access.capabilities import (
 from kingfisher.core.access.reach import reaches
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
+from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import ToolError
 from kingfisher.core.definitions.tools.spec import FoundTool, Offering, out_of_reach
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from kingfisher.core.config import Config
 
@@ -122,29 +123,30 @@ class _ToolSurface:
         return tuple(name for name in granted or () if name not in self.out_of_reach)
 
 
-def _bundled_tools(
-    bundles: Mapping[str, Any] | None,
-) -> Iterator[tuple[FoundTool, str]]:
-    """Every tool a bundle holds, with where a rename would go.
+def bundled_tools_in(catalogue: Definitions) -> tuple[tuple[FoundTool, str], ...]:
+    """Every tool a bundle holds that loads, with where a rename would go.
 
-    A folder for a bundle on disk and the entry's own label for one a portable definition
-    carries: the two doors a tool reaches a subagent through without passing the catalogue.
+    Every bundle the catalogue holds, not only the subagents a request activates: a name
+    that replaces a built-in is a fact about the workspace, and a deployment would find
+    out from whichever request came first otherwise.
     """
-    for repository in (bundles or {}).values():
-        # `where`, which both readers answer: a folder for a bundle on disk and the entry's
-        # own label for carried tools. Read with a default instead, this answered nothing
-        # for whichever reader lacked the member -- `test_nothing_reads_a_repository_member
-        # _with_a_default` is about exactly that, and caught this.
-        holder = repository.where
+    # Neither failure is raised here: it would land on the catalogue's `tools` row and send
+    # a reader to the wrong directory. The subagent rows and `subagent tools` name the
+    # file to open, and `warm` refuses both for a service.
+    try:
+        bundles = catalogue.bundled_tools
+    except SubagentError:
+        return ()
+    loaded: list[tuple[FoundTool, str]] = []
+    for repository in bundles.values():
         try:
             found = repository.found
         except ToolError:
-            # A bundle that will not load shadows nothing, and saying so here would put the
-            # failure on the catalogue's row: `doctor`'s `subagent tools` names the subagent
-            # to go and open, and `warm` refuses it for a service.
             continue
-        for one in found:
-            yield one, holder
+        # A member of both readers, not a `getattr` with a default: a default answers
+        # nothing for whichever reader lacks it.
+        loaded.extend((one, repository.where) for one in found)
+    return tuple(loaded)
 
 
 def _private_tools(
@@ -188,11 +190,8 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
     # this module.
     assemble: Callable[[tuple[Any, ...]], Any],
     *,
-    #: Each subagent's own tools, by its name, so the probe judges them too. Every bundle
-    #: the catalogue holds, not only the subagents this request activated: a name that
-    #: replaces a built-in is a fact about the workspace, and a deployment finds out from
-    #: whichever request comes first otherwise.
-    bundles: Mapping[str, Any] | None = None,
+    #: What `bundled_tools_in` loaded, so the probe judges a subagent's own tools too.
+    bundled: Sequence[tuple[FoundTool, str]] = (),
     names_needed: bool = False,
     #: What a refusal may list, for this caller.
     in_reach: Callable[[str], bool] | None = None,
@@ -204,7 +203,6 @@ def _resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the com
     the built-ins; it costs a compile, so a caller asks only when one does.
     """
     unrestricted = capabilities.builtin_tools == ALL and capabilities.tools == ALL
-    bundled = tuple(_bundled_tools(bundles))
     if not names_needed and not workspace_tools and not bundled and unrestricted:
         return _ToolSurface()
 

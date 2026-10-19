@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.cli.health import examine, worst
 from kingfisher.cli.listing import failed, render
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
+from kingfisher.core.access.source_ids import parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
 from kingfisher.core.agent.middlewares.narrowing import (
@@ -1015,10 +1017,22 @@ def test_doctor_warns_about_an_orphaned_bundle_and_does_not_fail_on_it(cfg):
     assert worst(checks) != "fail", "a folder naming no definition is legal"
 
 
-def test_doctor_names_the_subagent_whose_private_tools_will_not_load(cfg):
+def policied(cfg, under_a_policy):
+    """`cfg`, with a source-id policy when asked: the build reads bundles again for one."""
+    if not under_a_policy:
+        return cfg
+    return replace(cfg, access=parse({"source_ids": ["analysts"]}, source="source_ids.yaml"))
+
+
+@pytest.mark.parametrize("under_a_policy", [False, True], ids=["open", "policied"])
+def test_doctor_names_the_subagent_whose_private_tools_will_not_load(cfg, under_a_policy):
     """Its own check rather than folded into `tools`, for the reason the field is
     its own: a reader has to be told which subagent to go and open.
+
+    Under a policy too: the build read every bundle's tools a second time, unguarded,
+    for the audiences it records, and put this failure back on the `tools` row.
     """
+    cfg = policied(cfg, under_a_policy)
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
     bundle = cfg.definitions / "subagents" / "surveyor" / "tools"
     (bundle / "probe.py").write_text(BROKEN, encoding="utf-8")
@@ -1027,6 +1041,23 @@ def test_doctor_names_the_subagent_whose_private_tools_will_not_load(cfg):
 
     assert checks["subagent tools"].verdict == "fail"
     assert checks["tools"].verdict == "ok", "the catalogue's own tools still loaded"
+
+
+@pytest.mark.parametrize("under_a_policy", [False, True], ids=["open", "policied"])
+def test_a_subagent_file_that_will_not_parse_is_not_a_tools_failure(cfg, under_a_policy):
+    """The subagent rows answer for a definition that will not parse. Under a policy the
+    build read the bundles unguarded for the audiences it records, and `doctor` died on
+    a `SubagentError` traceback instead of reporting anything.
+    """
+    cfg = policied(cfg, under_a_policy)
+    subagents = cfg.definitions / "subagents"
+    subagents.mkdir(parents=True, exist_ok=True)
+    (subagents / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
+
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert checks["subagents"].verdict == "fail"
+    assert checks["tools"].verdict == "ok", checks["tools"].detail
 
 
 def test_a_broken_tool_catalogue_is_not_reported_as_a_subagent_failure(cfg):
