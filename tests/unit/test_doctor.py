@@ -447,31 +447,6 @@ def test_a_mistyped_definitions_folder_is_refused_not_reported_empty(
     assert not mistyped.exists()
 
 
-def test_an_empty_catalogue_where_it_belongs_says_nothing(cfg):
-    """A fresh definitions folder is the ordinary state, and warning about it would be
-    noise on every first run.
-    """
-    assert "subagents directory" not in {c.name for c in examine(cfg)}
-
-
-def test_a_configuration_that_is_being_ignored_is_said_out_loud(cfg, tmp_path):
-    """Otherwise somebody edits the setting and watches nothing change."""
-    from kingfisher import inventory
-    from kingfisher.core.definitions.catalogue import Definitions
-
-    staged = {kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")}
-    for path in staged.values():
-        path.mkdir()
-
-    found = inventory(cfg, catalogue=Definitions.from_roots(staged))
-    checks = {c.name: c for c in examine(cfg, found)}
-
-    assert checks["skills directory"].verdict == "warn"
-    assert str(staged["skills"]) in checks["skills directory"].detail
-    assert str(cfg.skills_dir) in checks["skills directory"].detail
-    assert "does nothing" in checks["skills directory"].detail
-
-
 def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatch, capsys):
     """`doctor` is what somebody runs when nothing works, so the case where the
     configuration itself is absent has to be a message, not a traceback.

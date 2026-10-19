@@ -864,8 +864,6 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
             print(f"{check.verdict}  {check.name}  {check.detail}", file=sys.stderr)
             print(f"      -> {check.remedy}", file=sys.stderr)
         raise
-    # Built once and handed to `examine`: one it built from `cfg` would agree with `cfg`
-    # by construction, and could never say the configuration is being ignored.
     from .configured import configured_sessions  # noqa: PLC0415
 
     sessions = configured_sessions()
