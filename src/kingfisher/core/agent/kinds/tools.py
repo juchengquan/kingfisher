@@ -45,7 +45,7 @@ def workspace_tool_names(
 def _refuse_shadowed(
     walked: Sequence[FoundTool], *, builtin: tuple[str, ...], where: str
 ) -> None:
-    """What the workspace defines, refusing anything that shadows a built-in."""
+    """Refuse a workspace tool that shadows a built-in."""
     shadowed = tuple(sorted({one.name for one in walked} & set(builtin)))
     if shadowed:
         msg = (

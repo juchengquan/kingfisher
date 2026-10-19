@@ -531,7 +531,8 @@ def test_a_subagents_prose_is_progress_rather_than_answer(cfg, monkeypatch, caps
 
 
 def test_a_turn_stopped_at_a_bound_exits_non_zero(cfg, monkeypatch, capsys):
-    """`kingfisher run ..."""
+    """`kingfisher run ... > report.md && publish report.md` must not publish a report
+    that stopped halfway."""
     _ran(monkeypatch, [_finished(stop_reason="max_steps")], cfg)
 
     assert main(["run", "t", "--agent", "assistant"]) == 1

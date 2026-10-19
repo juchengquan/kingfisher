@@ -1,4 +1,4 @@
-"""The workspace layout, as data. Belongs to no layer, which is why it sits here.
+"""The workspace layout, as data.
 
 Versioning what people author is an operator's business, best done in
 `KINGFISHER_DEFINITIONS_DIR`, which is kept apart from the sessions partly for that reason.

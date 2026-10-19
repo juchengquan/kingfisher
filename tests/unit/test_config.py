@@ -248,7 +248,7 @@ def test_a_default_naming_nothing_is_a_different_error(env, tmp_path):
 
 
 def test_hosted_tracing_is_disabled_explicitly(monkeypatch):
-    """Q13: a stray var from another project must not start exporting."""
+    """A stray var from another project must not start exporting."""
     monkeypatch.setenv("LANGSMITH_TRACING", "true")
     config_module.enforce_local_only_tracing()
     assert os.environ["LANGSMITH_TRACING"] == "false"

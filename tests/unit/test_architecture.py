@@ -120,7 +120,7 @@ def _every(collection: list[Path], what: str) -> list[Path]:
     A rule that walks a collection, gathers offenders and asserts the list is empty
     passes when the collection is empty too -- the loop simply never runs. That is
     the failure `test_no_rule_here_is_parametrized_over_nothing` exists for, and it
-    watches five collections *by name*, so a rule walking a sixth was never covered
+    watches only the collections it names, so a rule walking another was never covered
     by it. Asked here instead, by every rule at the point it walks anything, which is
     the one place the question cannot be forgotten.
 
@@ -187,7 +187,7 @@ def test_a_layer_rule_reaches_into_a_subpackage(tmp_path):
 
 
 def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
-    """`from .."""
+    """`from .. import config` once passed every rule here, read as importing nothing."""
     package = tmp_path / "kingfisher"
     (package / "domain").mkdir(parents=True)
     (package / "__init__.py").touch()
@@ -832,17 +832,24 @@ def test_no_docstring_stops_mid_sentence():
     Cheap where the module rule was expensive: whether a sentence ends is syntax,
     where whether a module exists needed tense and intent. Measured against the
     tree before the prose was cut -- 2,705 docstrings, no false positives -- and
-    it catches all three the cutting produced.
+    it catches all three the cutting produced. A cut inside a code span ends on
+    anything, so an unclosed backtick is the other half; a fence is stripped first,
+    since one mentioned in passing is three.
     """
-    unfinished = []
+    unfinished, unclosed = [], []
     for path in _everything_that_imports_kingfisher():
         for name, doc in _docstrings(path):
             if inspect.cleandoc(doc).rstrip().endswith(UNFINISHED):
                 unfinished.append(f"{_module_id(path)}::{name}")
+            if doc.replace("```", "").count("`") % 2:
+                unclosed.append(f"{_module_id(path)}::{name}")
 
     assert not unfinished, (
         f"{unfinished} end on a dash, a colon or a conjunction — each promises "
         "something underneath it that is not there, which reads as finished prose"
+    )
+    assert not unclosed, (
+        f"{unclosed} open a code span they never close — the sentence was cut inside it"
     )
 
 
