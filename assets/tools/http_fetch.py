@@ -84,11 +84,15 @@ def _charset(response: Any) -> str:
     return declared or "utf-8"
 
 
-def _read_by(deadline: float, response: Any) -> bytes:
-    """The body up to the byte cap, giving up at `deadline`.
+def _read_by(deadline: float, response: Any) -> tuple[bytes, bool]:
+    """The body up to the byte cap, giving up at `deadline`, and whether more was left.
 
     Four bytes a character is UTF-8's longest, so this is the most bytes `MAX_CHARS`
     can need; the answer is cut to characters afterwards.
+
+    One byte past the cap, which is what tells a page that ends there from one that
+    goes on: measured, 200,000 bytes and 20,000 bytes came back as the same 20,000
+    characters, and nothing in either said which of them was the whole page.
 
     `read1`, not `read`. `read` blocks until it has every byte asked for, so reading
     in pieces with `read` leaves the deadline checked between pieces and never during
@@ -98,15 +102,39 @@ def _read_by(deadline: float, response: Any) -> bytes:
     """
     cap = MAX_CHARS * 4
     body = bytearray()
-    while len(body) < cap:
+    while len(body) <= cap:
         if time.monotonic() > deadline:
             msg = f"stopped after {MAX_SECONDS}s, which is as long as one fetch may take"
             raise TimeoutError(msg)
-        piece = response.read1(min(CHUNK_BYTES, cap - len(body)))
+        piece = response.read1(min(CHUNK_BYTES, cap + 1 - len(body)))
         if not piece:
             break
         body += piece
-    return bytes(body)
+    return bytes(body[:cap]), len(body) > cap
+
+
+def _cut(text: str) -> str:
+    """The start of a page, with a last line saying that is what it is.
+
+    Named after the bound that bit, and both can bite: a megabyte of ASCII passes the
+    byte cap and the character cap, and `MAX_CHARS` is the number the docstring
+    promises, so it is the one a caller is told about. The bytes bound it alone only
+    where the decode came back under the character cap -- `iso-2022-jp` spends nine
+    bytes on two characters, and 180,000 bytes of it answered 17,779 -- and naming the
+    characters there would name a number the answer never reached.
+
+    The note is inside the cap rather than appended past it, because the docstring
+    promises at most `MAX_CHARS` characters and the model plans its call on that.
+    """
+    if len(text) > MAX_CHARS:
+        note = f"\n-- cut at {MAX_CHARS} characters, which is as much as one answer carries"
+    else:
+        note = f"\n-- cut at {MAX_CHARS * 4} bytes, which is as much as one fetch reads"
+        # The byte cap can stop mid-character, and `errors="replace"` writes one the
+        # page never sent: dropped, because a caller reads it as the page's own
+        # corruption, and the note says where the answer stops.
+        text = text.removesuffix("\ufffd")
+    return text[: MAX_CHARS - len(note)] + note
 
 
 @tool
@@ -114,7 +142,8 @@ def http_fetch(url: str) -> str:
     """Fetch a URL over HTTP(S) and return its body as text.
 
     Use for reading a public web page or API response. Returns at most
-    20,000 characters, and gives up after 30 seconds. Does not run JavaScript, so
+    20,000 characters, and gives up after 30 seconds. A page longer than that
+    comes back cut, with a last line saying so. Does not run JavaScript, so
     a page that renders client-side will come back close to empty.
     """
     if not _is_http(url):
@@ -126,9 +155,8 @@ def http_fetch(url: str) -> str:
     opener = urllib.request.build_opener(_HttpRedirectsOnly)
     try:
         with opener.open(url, timeout=TIMEOUT_S) as response:
-            body = _read_by(time.monotonic() + MAX_SECONDS, response).decode(
-                _charset(response), errors="replace"
-            )
+            body, more = _read_by(time.monotonic() + MAX_SECONDS, response)
+            text = body.decode(_charset(response), errors="replace")
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         # Returned rather than raised, so the message names the URL -- a
         # `URLError` alone does not say which fetch failed. Raising would not
@@ -137,7 +165,7 @@ def http_fetch(url: str) -> str:
         # so a record such as `show-your-work`'s counts this call as succeeded.
         return f"could not fetch {url}: {type(exc).__name__}: {exc}"
 
-    return body[:MAX_CHARS]
+    return text if not more and len(text) <= MAX_CHARS else _cut(text)
 
 
 #: Declared, never inferred. kingfisher imports this name and nothing else, so

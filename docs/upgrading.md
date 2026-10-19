@@ -33,6 +33,24 @@ replaced the four layers began.
 - **A session from before this keeps no datazone**, whatever turns ran in it, and stays
   reached from every datazone until its next zoned turn pins one.
 
+## `http_fetch` says where it cut a page, after #935
+
+- **A cut answer ends in a line naming the bound that cut it**, where it used to end
+  mid-page with nothing said: `-- cut at 20000 characters, which is as much as one
+  answer carries`. Measured, 200,000 bytes and 20,000 bytes came back as the same
+  20,000 characters, so a caller could not tell a page it had all of from a tenth of
+  one. If you parse this answer, the last line may now be that note.
+- **The note is inside the 20,000 characters, not added past them**, because that
+  number is what the docstring promises and what a caller plans around. A cut answer
+  therefore holds slightly less of the page than it did.
+- **A page whose encoding spends more than four bytes a character says so differently**
+  -- `-- cut at 80000 bytes, which is as much as one fetch reads` -- and comes back
+  under 20,000 characters. `iso-2022-jp` shifts in and out of each run, nine bytes for
+  two characters, so 180,000 bytes of it answered 17,779.
+- **The replacement character a cut mid-character invented is no longer in the answer.**
+  `errors="replace"` wrote one the page never sent, and a caller read it as the page's
+  own corruption.
+
 ## Both CSV tools stop at the columns an answer carries, after #927
 
 - **`csv_profile` profiles the first 200 columns, and says so**, where it wrote a line

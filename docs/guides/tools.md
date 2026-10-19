@@ -715,6 +715,22 @@ for the next byte, and how long the whole call may take. The first is also why t
 second is not enough on its own -- a connection that answers nothing is the socket
 timeout's to end.
 
+**A cut with nothing said is a page the caller reads as whole.** The same tool returned
+`body[:MAX_CHARS]`, so 200,000 bytes and 20,000 bytes came back as the same 20,000
+characters with nothing in either to tell them apart -- the failure the notes above
+exist to prevent, in a tool that had the cap and not the note. Three things it took to
+say it honestly. The read goes one byte past its byte cap, because at the cap exactly a
+page that ends there and a page that goes on for a megabyte have arrived identically.
+The note names whichever bound bit: the byte cap is four bytes a character, UTF-8's
+longest, but `iso-2022-jp` shifts into each run and back out and spends nine bytes on
+two characters, so 180,000 bytes of it answered 17,779 -- under the character cap, cut
+by the byte cap, and a note reading `cut at 20000 characters` would have named a number
+that answer never reached. And the note goes *inside* the cap rather than after it,
+since the docstring promises at most 20,000 characters and the model plans the call on
+that number. A byte cap has one more effect worth knowing: it stops mid-character, and
+`errors="replace"` then writes a character the page never sent, which a caller reads as
+the page's own corruption.
+
 **A pattern over text you did not write is a cost too, and it shows up in neither
 bytes nor rows.** `mask_secrets` matched addresses with `[A-Za-z0-9._%+-]+@…`, and `.`,
 `-`, `+` and `%` sit in that class while being word characters to nobody -- so each one
