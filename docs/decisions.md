@@ -3094,7 +3094,7 @@ nobody was reading.
 that will not import, a missing attribute, a result of the wrong shape: `ConfigError`,
 naming the setting. A factory raising its *own* exception passes through untouched -- that
 is the deployment's code failing at its own job, in a type their handling may know, and
-`store_named` is on the traceback saying which setting reached it.
+`built_from_setting` is on the traceback saying which setting reached it.
 
 **Two settings naming one thing are refused at startup, not resolved by precedence**, on
 the record so a config assembled in Python obeys it too. Preferring one silently leaves
