@@ -485,18 +485,45 @@ def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatc
 
 
 def test_a_setting_refused_partway_through_is_a_row_after_the_rows_before_it(cfg, tmp_path):
-    """A skills mount is refused only when a later check reads it, so without the
-    catch around every check `doctor` ends in a traceback and loses the rows before it.
+    """A skills mount is refused only when the inventory reads it, so without a catch
+    there `doctor` ends in a traceback and loses the rows before it.
     """
     vendor = tmp_path / "vendor"
     vendor.mkdir()
     cfg = replace(cfg, skills_enabled=True, skills_mounts={"a/b": vendor})
 
-    checks = examine(cfg)
+    checks = {c.name: c for c in examine(cfg)}
 
-    assert checks[0].name == "catalogue"
-    assert (checks[-1].name, checks[-1].verdict) == ("configuration", "fail")
-    assert "'a/b'" in checks[-1].detail
+    assert checks["catalogue"].verdict == "ok"
+    assert checks["definitions"].verdict == "fail"
+    assert "'a/b'" in checks["definitions"].detail
+
+
+def test_a_refused_skills_mount_leaves_the_rows_that_never_read_it(cfg, tmp_path):
+    """One `except` around every row turned a mount the inventory refuses into a single
+    row, dropping the isolation rows, which ask nothing of the definitions."""
+    vendor = tmp_path / "vendor"
+    vendor.mkdir()
+    cfg = replace(cfg, skills_enabled=True, skills_mounts={"a/b": vendor})
+
+    names = [c.name for c in examine(cfg, sessions=_shelled("off"))]
+
+    assert {"definitions", "shell", "session files"} <= set(names)
+    assert "agents" not in names
+    assert names.index("definitions") < names.index("shell")
+
+
+def test_a_bad_shell_setting_leaves_the_rows_that_never_ask_the_fence(cfg, monkeypatch):
+    """With a deployment's own sessions the fence reads `KINGFISHER_SHELL_SANDBOX`, and
+    its refusal was one `configuration` row in place of every row after the credentials."""
+    monkeypatch.setenv("KINGFISHER_SHELL_SANDBOX", "bogus")
+
+    checks = {c.name: c for c in examine(cfg, sessions=Remote())}
+
+    assert checks["shell"].verdict == "fail"
+    assert "'bogus'" in checks["shell"].detail
+    assert {"definitions to seed", "agents", "definitions run"} <= set(checks)
+    assert "session files" not in checks
 
 
 def test_a_retired_setting_is_named_even_when_the_config_will_not_load(
