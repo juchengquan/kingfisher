@@ -14,7 +14,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.model import UnknownSessionError
 from kingfisher.plugins import LocalSessions
-from tests.conftest import Through, an_agent, pin, start
+from tests.conftest import Through, agent_named, an_agent, pin, start
 
 VOCABULARY = "source_ids: [A, B]\n"
 
@@ -29,14 +29,14 @@ def two_agents(cfg):
 
 def test_a_caller_reaches_an_agent_their_source_id_is_listed_on(two_agents):
     kf = Kingfisher(two_agents, sessions=LocalSessions())
-    assert kf._agent_named("assistant", source_ids=("A",)) is not None
+    assert agent_named(kf, "assistant", source_ids=("A",)) is not None
 
 
 def test_an_agent_out_of_reach_reads_as_one_that_does_not_exist(two_agents):
     """Decision 15."""
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     with pytest.raises(CapabilityError, match="no agent named 'assistant'"):
-        kf._agent_named("assistant", source_ids=("B",))
+        agent_named(kf, "assistant", source_ids=("B",))
 
 
 def test_the_listing_in_that_refusal_names_only_reachable_agents(two_agents):
@@ -45,7 +45,7 @@ def test_the_listing_in_that_refusal_names_only_reachable_agents(two_agents):
     """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     with pytest.raises(CapabilityError) as raised:
-        kf._agent_named("assistant", source_ids=("B",))
+        agent_named(kf, "assistant", source_ids=("B",))
     offers = str(raised.value).split("offers", 1)[1]
     assert "surveyor" in offers
     assert "assistant" not in offers
@@ -56,17 +56,17 @@ def test_a_caller_who_reaches_no_agent_is_told_the_workspace_offers_none(cfg):
     vocabulary = parse({"source_ids": ["A", "B"]}, source="source_ids.yaml")
     kf = Kingfisher(replace(cfg, access=vocabulary), sessions=LocalSessions())
     with pytest.raises(CapabilityError, match="offers none"):
-        kf._agent_named("anything", source_ids=("A",))
+        agent_named(kf, "anything", source_ids=("A",))
 
 
 def test_unscoped_still_reaches_every_agent(two_agents):
     kf = Kingfisher(two_agents, sessions=LocalSessions())
-    assert kf._agent_named("assistant", source_ids=UNSCOPED) is not None
+    assert agent_named(kf, "assistant", source_ids=UNSCOPED) is not None
 
 
 def test_a_deployment_with_no_vocabulary_reaches_every_agent(cfg):
     an_agent(cfg, "assistant")
-    assert Kingfisher(cfg, sessions=LocalSessions())._agent_named("assistant") is not None
+    assert agent_named(Kingfisher(cfg, sessions=LocalSessions()), "assistant") is not None
 
 
 def test_an_agent_with_no_source_ids_line_is_reachable_by_everyone(two_agents):
@@ -74,7 +74,7 @@ def test_an_agent_with_no_source_ids_line_is_reachable_by_everyone(two_agents):
     audiences incremental rather than all-or-nothing.
     """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
-    assert kf._agent_named("surveyor", source_ids=("B",)) is not None
+    assert agent_named(kf, "surveyor", source_ids=("B",)) is not None
 
 
 def test_naming_no_agent_still_says_so(two_agents):
@@ -83,14 +83,7 @@ def test_naming_no_agent_still_says_so(two_agents):
     """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     with pytest.raises(CapabilityError, match="names no agent"):
-        kf._agent_named(None, source_ids=("B",))
-
-
-def test_agent_named_without_saying_who_is_calling_is_refused(two_agents):
-    """The same rule a turn follows, at the other entry point."""
-    kf = Kingfisher(two_agents, sessions=LocalSessions())
-    with pytest.raises(AccessError, match="source_ids="):
-        kf._agent_named("assistant")
+        agent_named(kf, None, source_ids=("B",))
 
 
 def test_the_session_route_refuses_an_unreachable_agent(two_agents):
@@ -99,7 +92,7 @@ def test_the_session_route_refuses_an_unreachable_agent(two_agents):
     """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     with pytest.raises(CapabilityError, match="no agent named"):
-        kf._agent_named("assistant", source_ids=("B",))
+        agent_named(kf, "assistant", source_ids=("B",))
 
 
 # -- a turn, first and later ------------------------------------------------
@@ -107,7 +100,7 @@ def test_the_session_route_refuses_an_unreachable_agent(two_agents):
 
 def _pinned_by_a(kf) -> str:
     """A session opened for caller A and fixed to the agent only A may run."""
-    kf._agent_named("assistant", source_ids=("A",))
+    agent_named(kf, "assistant", source_ids=("A",))
     session_id = start(kf.cfg, "pinned-by-a")
     pin(kf, session_id, "assistant")
     return session_id
@@ -128,6 +121,20 @@ def test_a_first_turn_naming_an_agent_out_of_reach_is_refused(two_agents):
 
     with pytest.raises(CapabilityError, match="no agent named 'assistant'"):
         _first_event(kf, Request(task="t", agent="assistant"), ("B",))
+
+
+@pytest.mark.parametrize("agent", ["assistant", "missing"], ids=["out-of-reach", "unwritten"])
+def test_a_first_turn_naming_nobody_is_refused_for_that_before_its_agent_is_looked_up(
+    two_agents, agent
+):
+    """The agent is looked up with the caller the turn found, so a turn that stopped asking
+    first would run `assistant` for nobody, or answer "no agent named" where it owes
+    "say who is calling".
+    """
+    kf = Kingfisher(two_agents, sessions=LocalSessions())
+
+    with pytest.raises(AccessError, match="source_ids="):
+        _first_event(kf, Request(task="t", agent=agent), None)
 
 
 def test_a_later_turn_in_a_session_out_of_reach_is_refused(two_agents):
@@ -211,7 +218,7 @@ def test_an_agent_out_of_reach_is_refused_however_the_ids_are_written(two_agents
     kf = Kingfisher(two_agents, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError, match="no agent named 'assistant'"):
-        kf._agent_named("assistant", source_ids=held)
+        agent_named(kf, "assistant", source_ids=held)
 
 
 @pytest.mark.parametrize("held", [("B",), ["B"]], ids=["tuple", "list"])
@@ -269,7 +276,7 @@ def test_a_caller_in_reach_is_let_in_however_the_ids_are_written(two_agents, hel
     """So the refusals above are not passing because a list is turned away outright."""
     kf = Kingfisher(two_agents, sessions=LocalSessions())
 
-    assert kf._agent_named("assistant", source_ids=held) is not None
+    assert agent_named(kf, "assistant", source_ids=held) is not None
     assert Through(kf, way).session(_pinned_by_a(kf), source_ids=held) is not None
 
 
@@ -283,7 +290,7 @@ def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_a
     session_id = _pinned_by_a(kf)
 
     with pytest.raises(AccessError, match="not a string"):
-        kf._agent_named("assistant", source_ids="B")
+        agent_named(kf, "assistant", source_ids="B")
     with pytest.raises(AccessError, match="not a string"):
         Through(kf, way).session(session_id, source_ids="B")
     with pytest.raises(AccessError, match="not a string"):
@@ -430,9 +437,8 @@ def test_a_declared_source_id_is_fine(cfg):
     an_agent(cfg, "analyst", source_ids="[analysts]")
     policied = replace(cfg, access=parse({"source_ids": ["analysts"]}, source="source_ids.yaml"))
 
-    named = Kingfisher(policied, sessions=LocalSessions())._agent_named(
-        "analyst", source_ids=("analysts",)
-    )
+    kf = Kingfisher(policied, sessions=LocalSessions())
+    named = agent_named(kf, "analyst", source_ids=("analysts",))
     assert named is not None
 
 
@@ -440,7 +446,7 @@ def test_nothing_is_checked_where_there_is_no_vocabulary(cfg):
     """A `source_ids:` line on a deployment that declares none is inert, not wrong."""
     an_agent(cfg, "analyst", source_ids="[whatever]")
 
-    assert Kingfisher(cfg, sessions=LocalSessions())._agent_named("analyst") is not None
+    assert agent_named(Kingfisher(cfg, sessions=LocalSessions()), "analyst") is not None
 
 
 def test_a_subagent_cannot_reach_a_looser_middleware_than_its_agent_granted():

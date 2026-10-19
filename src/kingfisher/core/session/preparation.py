@@ -151,7 +151,6 @@ class Preparation:
                 pinned=pinned,
                 zone=zone,
                 held=held,
-                source_ids=source_ids,
             )
         except BaseException:
             # Each a call that changes something, so a cancel arriving during it waits for
@@ -173,7 +172,6 @@ class Preparation:
         pinned: Any,
         zone: str | None,
         held: frozenset[str] | None,
-        source_ids: Held | None = None,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
         # Optional on a backend, like `host_path`; reported rather than raised.
@@ -195,7 +193,7 @@ class Preparation:
         # Not resolved for a supplied graph with no policy: that would refuse a
         # request naming another agent.
         agent = (
-            (yield from self._agent_for(request, harness, source_ids=source_ids, pinned=pinned))
+            (yield from self._agent_for(request, harness, held=held, pinned=pinned))
             if self._graph is None or held is not None
             else None
         )

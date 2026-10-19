@@ -13,7 +13,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import FakeToolCallingModel, agent_for, harness_in
+from tests.conftest import FakeToolCallingModel, agent_for, agent_named, harness_in
 
 NARROW = """name: narrow
 description: Reads and nothing else.
@@ -135,7 +135,7 @@ def test_a_request_that_names_no_agent_is_refused_once_the_workspace_has_any(cfg
     service = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError, match="names no agent"):
-        service._agent_named(None)
+        agent_named(service, None)
 
 
 def test_the_refusal_lists_what_the_workspace_actually_offers(cfg):
@@ -143,7 +143,7 @@ def test_the_refusal_lists_what_the_workspace_actually_offers(cfg):
     service = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError, match="cheap-one, narrow"):
-        service._agent_named("analyst")
+        agent_named(service, "analyst")
 
 
 def test_an_empty_workspace_is_told_how_to_get_one(cfg):
@@ -151,13 +151,13 @@ def test_an_empty_workspace_is_told_how_to_get_one(cfg):
     service = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError, match="kingfisher seed"):
-        service._agent_named("analyst")
+        agent_named(service, "analyst")
 
 
 def test_naming_one_is_required_even_where_there_is_nothing_to_name(cfg):
     """No default, and no exemption for an empty workspace either."""
     with pytest.raises(CapabilityError, match="names no agent"):
-        Kingfisher(cfg, sessions=LocalSessions())._agent_named(None)
+        agent_named(Kingfisher(cfg, sessions=LocalSessions()), None)
 
 
 def test_the_request_carries_the_name_and_nothing_more(cfg):

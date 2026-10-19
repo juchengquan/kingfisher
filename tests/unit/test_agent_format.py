@@ -12,7 +12,7 @@ from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.documents import DefinitionText
 from kingfisher.core.definitions.subagents.spec import SubagentError
-from tests.conftest import a_subagent
+from tests.conftest import a_subagent, agent_named
 
 WHOLE = """name: surveyor
 description: Reads and profiles data without changing anything.
@@ -495,7 +495,7 @@ def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError) as refused:
-        kf._agent_named("assistant")
+        agent_named(kf, "assistant")
 
     said = str(refused.value)
     assert "offers none" in said
@@ -517,7 +517,7 @@ def test_the_starter_names_where_agents_are_read_from(cfg, tmp_path):
     kf = Kingfisher(replace(cfg, definitions=elsewhere.parent), sessions=LocalSessions())
 
     with pytest.raises(CapabilityError) as refused:
-        kf._agent_named("assistant")
+        agent_named(kf, "assistant")
 
     said = str(refused.value)
     assert f"a file in {elsewhere}/" in said
@@ -534,7 +534,7 @@ def test_a_workspace_that_has_agents_is_not_lectured(cfg):
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError) as refused:
-        kf._agent_named("missing")
+        agent_named(kf, "missing")
 
     said = str(refused.value)
     assert "only" in said

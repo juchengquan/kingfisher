@@ -29,7 +29,7 @@ from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
-from tests.conftest import tools_dir
+from tests.conftest import agent_named, tools_dir
 
 #: `line_count` admits A by itself, and nothing in an agent file says so.
 TOOL = '''
@@ -113,7 +113,7 @@ def built(kf: Kingfisher, held: tuple[str, ...]) -> list[str]:
     ensure_session_layout(session, DEFAULT_LAYOUT)
     assembled = build_agent(
         kf.cfg,
-        agent=kf._agent_named("surveyor", source_ids=held),
+        agent=agent_named(kf, "surveyor", source_ids=held),
         held=caller_holds(kf.access, held),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf.grants,
