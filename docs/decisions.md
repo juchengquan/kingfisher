@@ -3934,6 +3934,13 @@ transcript; only `_built_turn` is host work -- inline for `stream`, on the pool 
 nothing and the sequence's order keeps that promise;
 `test_a_refused_request_starts_no_turn_and_keeps_no_claim` says so.
 
+**A refused request takes back a session it made.** Opening a session makes it, and the
+refusals read it through what was opened, so a refused `kingfisher run` left an empty
+`default`. Setup asks the listing before the open, and on a refusal deletes a session
+that was not there, before the claim goes back. Not taken: making the session after the
+refusals, which need its backend to read the pin and the pause; and deleting one found
+empty, which would take a session `create=True` made for its first turn. *(2026-10-19.)*
+
 **A cancel can land at any of setup's steps now, and each is tried.** The claim goes
 back from the sequence's own `except`. A cancel during the build has no later step to
 go in at, so `adrive_finished` hands the built turn back with the cancel and `astream`
