@@ -3,6 +3,7 @@ placed, a pause restored, and the graph built."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
@@ -126,27 +127,26 @@ class Preparation:
         claimed = yield changing(
             self._sessions, "claim", cfg, session.id, stale_after=cfg.claim_stale_after
         )
-        if not claimed:
+        if claimed is None:
             msg = (
                 f"session {session.id} already has a turn running; "
                 f"wait for it to finish or start another session"
             )
             raise SessionBusyError(msg)
         try:
-            return (
-                yield from self._claimed(
-                    request,
-                    session,
-                    files=files,
-                    harness=harness,
-                    pinned=pinned,
-                    source_ids=source_ids,
-                )
+            prepared = yield from self._claimed(
+                request,
+                session,
+                files=files,
+                harness=harness,
+                pinned=pinned,
+                source_ids=source_ids,
             )
         except BaseException:
             # A call that changes something, so a cancel arriving during it waits for it.
-            yield changing(self._sessions, "release", cfg, session.id)
+            yield changing(self._sessions, "release", cfg, session.id, claimed)
             raise
+        return replace(prepared, claim=claimed)
 
     def _claimed(  # noqa: PLR0913 -- setup's, handed on: a second backend is a second sandbox
         self,

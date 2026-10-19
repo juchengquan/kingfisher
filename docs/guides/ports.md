@@ -368,11 +368,17 @@ the backend to avoid. Passing a backend itself is a `TypeError`, and
 id handed the same storage.
 
 **The turn lock is on the sessions.** They have `claim(cfg, session_id, /, *,
-stale_after, now=None)`, `release(cfg, session_id, /)` and `held(cfg, session_id, /, *,
-stale_after, now=None)`: a claim that fails while another is live, which a `write`
+stale_after, now=None)`, `release(cfg, session_id, token, /)` and `held(cfg, session_id,
+/, *, stale_after, now=None)`: a claim that fails while another is live, which a `write`
 cannot be, because a `write` overwrites and two turns would both take it. One lock per
 session, not one for the object: a turn in one session must not refuse a turn in
-another. `LocalSessions` does it with `mkdir` under the session's `.harness`. Subclass
+another. `claim` answers a token naming its taker, or `None` when a live turn holds the
+session, and `release` gives back only the claim that token took: a turn that outlived
+`stale_after` has had its claim taken over, and its release must leave the new one. A
+claim older than `stale_after` is taken over by one caller however many judged it stale
+at once. `LocalSessions` does it with `mkdir` under the session's `.harness`, the token
+in a file inside, and a takeover that renames the stale claim aside under a name only it
+has, so a second taker's rename fails. Subclass
 `Sessions` and `aclaim` and `arelease` run them on kingfisher's pool; override them
 where your lock is a round trip you can await. Two turns in one session share a
 conversation and the last write wins, so this is what refuses the second. The backend
@@ -527,7 +533,8 @@ Run all six. The automatic pair costs nothing twice, and your own suite is a bet
 place to read a failure than a turn is. And hold the object that makes them to
 `tests/checks/sessions.py`: that two
 sessions are kept apart, that a session is there on the next turn, that the claim
-is exclusive, that what is listed and deleted is what exists, that where you say
+is exclusive and released only by its token, a late one included, that what is listed
+and deleted is what exists, that where you say
 a file is on this host it is that session's file, that a session serves under
 `/skills/` the skills kingfisher read, and that every async twin —
 `aopen`, `asessions`, `adelete`, `aclaim`, `arelease`, `asize` and `amark_used` —

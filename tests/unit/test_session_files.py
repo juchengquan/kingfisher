@@ -87,11 +87,14 @@ class Elsewhere(Sessions):
         try:
             lock.mkdir()
         except FileExistsError:
-            return False
-        return True
+            return None
+        (lock / "token").write_text(session_id, encoding="utf-8")
+        return session_id
 
-    def release(self, cfg, session_id, /):
-        shutil.rmtree(self.root / session_id / HARNESS / "claim", ignore_errors=True)
+    def release(self, cfg, session_id, token, /):
+        lock = self.root / session_id / HARNESS / "claim"
+        if (lock / "token").is_file() and (lock / "token").read_text(encoding="utf-8") == token:
+            shutil.rmtree(lock, ignore_errors=True)
 
     def held(self, cfg, session_id, /, *, stale_after, now=None):
         return (self.root / session_id / HARNESS / "claim").is_dir()

@@ -18,7 +18,8 @@ from kingfisher.cli.__main__ import main
 from kingfisher.core.definitions.catalogue import bundled_skills_route
 from kingfisher.core.layout import DEFAULT_LAYOUT, SKILLS_ROUTE, Layout
 from kingfisher.plugins import LocalSessions
-from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
+from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, _claim_at
+from kingfisher.plugins.sessions.folders import LocalSessionDirs
 from tests.checks.sessions import CONTRACT_SESSIONS, SESSIONS_CHECKS
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere
@@ -94,7 +95,14 @@ class Overwriting(LocalSessions):
     """A claim written the obvious way, with a write, which never fails."""
 
     def claim(self, cfg, session_id, /, *, stale_after, now=None):
-        return True
+        return "written"
+
+
+class GivesBackAnyClaim(LocalSessions):
+    """A release that never reads the token, as `release(cfg, session_id)` was."""
+
+    def release(self, cfg, session_id, token, /):
+        LocalSessionDirs().remove_tree(_claim_at(cfg, session_id))
 
 
 class OneLockForAll(LocalSessions):
@@ -103,8 +111,8 @@ class OneLockForAll(LocalSessions):
     def claim(self, cfg, session_id, /, *, stale_after, now=None):
         return super().claim(cfg, CONTRACT_SESSIONS[0], stale_after=stale_after, now=now)
 
-    def release(self, cfg, session_id, /):
-        super().release(cfg, CONTRACT_SESSIONS[0])
+    def release(self, cfg, session_id, token, /):
+        super().release(cfg, CONTRACT_SESSIONS[0], token)
 
 
 def _check(name):
@@ -139,13 +147,13 @@ class ClaimsBesideClaim(LocalSessions):
     """An `aclaim` that keeps its own book rather than the one `claim` writes."""
 
     async def aclaim(self, cfg, session_id, /, *, stale_after, now=None):
-        return True
+        return "beside"
 
 
 class KeepsTheClaimAsync(LocalSessions):
     """An `arelease` that gives nothing back."""
 
-    async def arelease(self, cfg, session_id, /):
+    async def arelease(self, cfg, session_id, token, /):
         return None
 
 
@@ -210,6 +218,168 @@ def test_the_kit_catches_two_sessions_on_one_filesystem(cfg):
 def test_the_kit_catches_a_claim_that_is_not_exclusive(cfg):
     with pytest.raises(AssertionError, match="still holds"):
         _check("a_claim_is_exclusive")(lambda: (cfg, Overwriting()))
+
+
+@pytest.mark.parametrize(
+    "check",
+    ["a_claim_is_released_only_by_its_token", "a_late_release_leaves_the_claim_that_took_over"],
+)
+def test_the_kit_catches_a_release_that_ignores_its_token(cfg, check):
+    with pytest.raises(AssertionError, match="gave back"):
+        _check(check)(lambda: (cfg, GivesBackAnyClaim()))
+
+
+def test_two_callers_judging_one_claim_stale_take_it_over_once(cfg, monkeypatch):
+    """Both saw a dead turn's claim, and the takeover was check, delete, create: the
+    second deleted the claim the first had just taken and created its own, and both ran
+    a turn in one session. Forced rather than raced: the second caller's verdict is
+    reached, then the first takes over whole, then the second goes on.
+    """
+    session = CONTRACT_SESSIONS[0]
+    sessions = LocalSessions()
+    sessions.open(cfg, session)
+    assert sessions.claim(cfg, session, stale_after=3600) is not None
+    later = time.time() + 7200
+    first: list[str | None] = []
+    judging = LocalSessions.held
+
+    def held_then_overtaken(self, cfg, session_id, /, *, stale_after, now=None):
+        verdict = judging(self, cfg, session_id, stale_after=stale_after, now=now)
+        if self is sessions and not first:
+            first.append(LocalSessions().claim(cfg, session_id, stale_after=3600, now=later))
+        return verdict
+
+    with monkeypatch.context() as patched:
+        patched.setattr(LocalSessions, "held", held_then_overtaken)
+        second = sessions.claim(cfg, session, stale_after=3600, now=later)
+
+    assert first[0] is not None, "the first caller did not take the stale claim over"
+    assert second is None, "both callers took the claim over"
+    # And the first one's claim is the one left standing.
+    assert sessions.claim(cfg, session, stale_after=3600) is None
+    sessions.release(cfg, session, first[0])
+    assert sessions.claim(cfg, session, stale_after=3600) is not None
+
+
+@pytest.mark.parametrize("racing", [False, True], ids=["alone", "two takers"])
+def test_a_stale_claim_with_no_token_is_taken_over_once(cfg, monkeypatch, racing):
+    """A claim an older kingfisher left, or a taker that died before naming itself, has
+    no token and was named by its directory's mtime -- which marking it taken changes,
+    so the taker's own re-check refused it and left it looking fresh for another
+    `stale_after`.
+    """
+    session = CONTRACT_SESSIONS[0]
+    sessions = LocalSessions()
+    sessions.open(cfg, session)
+    _claim_at(cfg, session).mkdir()
+    later = time.time() + 7200
+    first: list[str | None] = []
+    judging = LocalSessions.held
+
+    def held_then_overtaken(self, cfg, session_id, /, *, stale_after, now=None):
+        verdict = judging(self, cfg, session_id, stale_after=stale_after, now=now)
+        if self is sessions and not first:
+            first.append(LocalSessions().claim(cfg, session_id, stale_after=3600, now=later))
+        return verdict
+
+    with monkeypatch.context() as patched:
+        if racing:
+            patched.setattr(LocalSessions, "held", held_then_overtaken)
+        taken = sessions.claim(cfg, session, stale_after=3600, now=later)
+
+    winners = [one for one in (*first, taken) if one is not None]
+    assert len(winners) == 1, f"{len(winners)} callers took the claim over"
+    assert sessions.claim(cfg, session, stale_after=3600) is None
+
+
+def test_a_takeover_leaves_a_claim_taken_after_it_judged(cfg, monkeypatch):
+    """The other order: the turn judged dead ends after all, and a new one claims the
+    session, between a taker's verdict and its rename. Moving aside whatever was there
+    would take the new turn's claim and let the taker in beside it.
+    """
+    session = CONTRACT_SESSIONS[0]
+    sessions = LocalSessions()
+    sessions.open(cfg, session)
+    late = sessions.claim(cfg, session, stale_after=3600)
+    assert late is not None
+    newer: list[str | None] = []
+    judging = LocalSessions.held
+
+    def held_then_replaced(self, cfg, session_id, /, *, stale_after, now=None):
+        verdict = judging(self, cfg, session_id, stale_after=stale_after, now=now)
+        if self is sessions and not newer:
+            LocalSessions().release(cfg, session_id, late)
+            newer.append(LocalSessions().claim(cfg, session_id, stale_after=3600))
+        return verdict
+
+    with monkeypatch.context() as patched:
+        patched.setattr(LocalSessions, "held", held_then_replaced)
+        taker = sessions.claim(cfg, session, stale_after=3600, now=time.time() + 7200)
+
+    assert newer[0] is not None
+    assert taker is None, "the taker moved a fresh claim aside and took the session"
+    assert sessions.claim(cfg, session, stale_after=3600) is None, "the new claim is gone"
+    sessions.release(cfg, session, newer[0])
+
+
+def test_a_release_not_its_own_never_frees_the_slot(cfg, monkeypatch):
+    """A release that moved the claim aside before reading whose it was left the slot
+    empty while it looked: a turn claiming in that instant held the session, and the
+    claim could not go back. Forced: a claim is taken the moment anything is renamed.
+    """
+    session = CONTRACT_SESSIONS[0]
+    sessions = LocalSessions()
+    sessions.open(cfg, session)
+    held = sessions.claim(cfg, session, stale_after=3600)
+    assert held is not None
+    renaming = Path.rename
+    slipped_in: list[str | None] = []
+
+    def rename_then_claimed(self, target):
+        moved = renaming(self, target)
+        if self.name == "claim" and not slipped_in:
+            slipped_in.append(LocalSessions().claim(cfg, session, stale_after=3600))
+        return moved
+
+    with monkeypatch.context() as patched:
+        patched.setattr(Path, "rename", rename_then_claimed)
+        sessions.release(cfg, session, "a-token-this-claim-was-never-given")
+
+    assert not slipped_in, "a release that was not this claim's moved it"
+    sessions.release(cfg, session, held)
+    assert sessions.claim(cfg, session, stale_after=3600) is not None
+
+
+def test_a_release_leaves_a_claim_taken_over_while_it_looked(cfg, monkeypatch):
+    """The turn read its own token, and before it moved the claim a taker judged it dead
+    and replaced it: moving whatever was there then would end the taker's claim.
+    """
+    from kingfisher.plugins.sessions import backend
+
+    session = CONTRACT_SESSIONS[0]
+    sessions = LocalSessions()
+    sessions.open(cfg, session)
+    late = sessions.claim(cfg, session, stale_after=3600)
+    assert late is not None
+    identity = backend._identity
+    taker: list[str | None] = []
+
+    def read_then_overtaken(path):
+        seen = identity(path)
+        if path.name == "claim" and seen == late and not taker:
+            taker.append("")
+            taker[0] = LocalSessions().claim(
+                cfg, session, stale_after=3600, now=time.time() + 7200
+            )
+        return seen
+
+    with monkeypatch.context() as patched:
+        patched.setattr(backend, "_identity", read_then_overtaken)
+        sessions.release(cfg, session, late)
+
+    assert taker[0] is not None, "the taker did not take the claim over"
+    assert sessions.claim(cfg, session, stale_after=3600) is None, "the taker's claim is gone"
+    sessions.release(cfg, session, taker[0])
 
 
 def test_the_kit_catches_one_lock_for_every_session(cfg):

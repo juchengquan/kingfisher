@@ -62,6 +62,9 @@ class Prepared:
     discarded: tuple[str, ...] = ()
     #: Paths `protect_inputs` could not harden, reported to the caller rather than raised.
     unprotected: tuple[str, ...] = ()
+    #: The token the session's claim answered, which the turn's ending gives back: a
+    #: claim is released only by the token that took it.
+    claim: str = ""
     #: What this request's `inputs` placed in `/inputs`, and what that replaced.
     placement: Any = None
     #: `(what, names)` for each tool, skill or subagent offered that the request did

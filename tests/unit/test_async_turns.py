@@ -738,7 +738,7 @@ def test_an_ending_whose_claim_release_fails_still_lets_go_of_the_interpreter(
     """
     released = _released(monkeypatch)
 
-    def unreachable(self, cfg, session_id, /):
+    def unreachable(self, cfg, session_id, token, /):
         msg = "the store is unreachable"
         raise OSError(msg)
 

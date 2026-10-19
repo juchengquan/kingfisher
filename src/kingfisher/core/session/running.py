@@ -320,7 +320,9 @@ class Running:
         finally:
             try:
                 # However the turn ended, and even if the store was unreachable.
-                yield changing(self._sessions, "release", self.cfg, prepared.session.id)
+                yield changing(
+                    self._sessions, "release", self.cfg, prepared.session.id, prepared.claim
+                )
             finally:
                 # Left open, the QuickJS runtime hangs the process rather than leaking a
                 # handle.
