@@ -9,8 +9,6 @@ word, which is how a feature comes to silently not exist.
 
 from __future__ import annotations
 
-import ast
-import inspect
 from dataclasses import fields
 
 from kingfisher.core.access.capabilities import Capabilities
@@ -90,10 +88,6 @@ def test_the_first_read_makes_no_folder(cfg, tmp_path):
 #: Why a kind is not read from the catalogue directories.
 NOT_ON_DISK = {
     "builtin_tools": "deepagents brings them",
-    # `middlewares` left this table on 2026-09-07. It was here for as long as the
-    # workspace was writable by the agent's shell; once the definition roots were
-    # denied, a `middlewares/` directory became an ordinary kind and this entry
-    # became a claim the catalogue contradicts.
     "endpoints": "settings, not assets",
     "models": "settings, not assets",
     "memory": "a switch, not names",
@@ -106,11 +100,6 @@ NOT_ON_DISK = {
 NOT_BUNDLED = {
     "builtin_tools": "deepagents brings them; there is no folder to put one in",
     "subagents": "a bundle is one subagent's own, so nesting makes 'whose' unanswerable",
-    # Still not bundled, and the reason had to be rewritten rather than kept: it
-    # said "registered in the process, not staged as files", which stopped being
-    # true when `middlewares/` became a kind. What holds now is narrower and is
-    # about audience -- a bundle is a subagent's own tools and skills, and
-    # middleware is granted by the deployment rather than carried by a subagent.
     "middlewares": "granted by the deployment, so a subagent cannot bring its own",
     "endpoints": "settings, not assets",
     "models": "settings, not assets",
@@ -119,7 +108,8 @@ NOT_BUNDLED = {
 
 
 def test_what_a_subagent_may_bring_privately_is_accounted_for():
-    """`ASSET_DIRECTORIES` is two names."""
+    """A kind a bundle neither holds nor is written off for is one nobody decided a
+    subagent may or may not keep privately."""
     covered = set(ASSET_DIRECTORIES)
 
     assert covered | set(NOT_BUNDLED) == set(AXES)
@@ -218,34 +208,40 @@ def test_a_folder_that_is_not_a_kind_is_not_seeded_either(shipped, cfg):
     assert any((cfg.definitions / "agents").iterdir())
 
 
-def _kinds_the_seeder_can_report() -> set[str]:
-    """Every `wants` value `_deployment_specific` can return, read off its source."""
+#: One definition per shape a skipped file can take, which `Skipped.asked_of` keys
+#: both message tables by.
+SKIPPED_SHAPES = {
+    "middleware.yaml": "middlewares: [audit]\n",
+    "source_ids.yaml": "source_ids: [A]\n",
+    "datazone.yaml": "datazone: emea\n",
+    "both.yaml": "source_ids: [A]\ndatazone: emea\n",
+}
+
+
+def test_every_reason_a_definition_is_skipped_has_a_remedy(cfg, tmp_path):
+    """A reason `seed` reports and either table lacks would raise `KeyError` in the
+    middle of the report; reading only `_deployment_specific`'s literal returns checked
+    one of the four.
+
+    Driven rather than parsed: the reasons are the ones `seed` actually reports, so a
+    reason built from parts, as the audience ones are, is checked like a literal one.
+    """
     from kingfisher.core.definitions import seeding
-
-    body = ast.parse(inspect.getsource(seeding))
-    fn = next(
-        node
-        for node in ast.walk(body)
-        if isinstance(node, ast.FunctionDef) and node.name == "_deployment_specific"
-    )
-    return {
-        node.value.elts[0].value
-        for node in ast.walk(fn)
-        if isinstance(node, ast.Return)
-        and isinstance(node.value, ast.Tuple)
-        and node.value.elts
-        and isinstance(node.value.elts[0], ast.Constant)
-        and isinstance(node.value.elts[0].value, str)
-    }
-
-
-def test_every_reason_a_definition_is_skipped_has_a_remedy():
-    """A skipped definition is reported in two halves, and both are lookups."""
     from kingfisher.core.definitions.seeding import REMEDY, UNCONSULTED
 
-    reported = _kinds_the_seeder_can_report()
+    source = tmp_path / "presets"
+    (source / "agents").mkdir(parents=True)
+    for name, body in SKIPPED_SHAPES.items():
+        (source / "agents" / name).write_text(
+            f"name: {name.removesuffix('.yaml')}\ndescription: d\n{body}", encoding="utf-8"
+        )
 
-    assert reported, "nothing was parsed, so this asserts nothing"
+    done = seeding.seed(cfg, source)
+    reported = {left.asked_of for left in done.skipped}
+
+    assert len(done.skipped) == len(SKIPPED_SHAPES), (
+        f"seed copied {sorted(done.written)}, so not every shape was checked"
+    )
     assert reported <= set(UNCONSULTED), (
         f"{sorted(reported - set(UNCONSULTED))} can be reported and UNCONSULTED "
         "does not name it"
