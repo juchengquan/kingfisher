@@ -545,24 +545,7 @@ def test_a_model_names_where_it_runs_by_naming_what_it_runs():
     assert spec.wanted == "cheap-one"
 
 
-# -- naming several models, and saying one must differ ----------------------
-#
-# `model:` and `alias:` each take a scalar or a list. The list is not a file
-# hedging: a candidate is only ever passed over for a reason the deployment
-# caused -- an alias nobody bound, or a model that turns out to be the one this
-# subagent exists not to be -- so a second entry says which other deployments
-# this definition can still be useful in.
-
-
-def _runs(*lines: str) -> str:
-    return _definition(*lines)
-
-
-def test_one_model_reads_as_a_list_of_one():
-    """The shape every definition written so far has, and it does not change."""
-    spec = a_subagent(_runs("model: gpt-5"), "r.yaml")
-
-    assert spec.wanted == "gpt-5"
+# -- naming several models -------------------------------------------------
 
 
 def test_naming_several_models_is_refused_rather_than_stringified():
