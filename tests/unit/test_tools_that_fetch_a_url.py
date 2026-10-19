@@ -133,7 +133,8 @@ class _Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
 def serving():
     """A server on the loopback, and the base URL to reach it at."""
     server = _Server(("127.0.0.1", 0), _Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    # `shutdown` waits out a poll, half a second by default, in every test that serves.
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{server.server_address[1]}"
     server.shutdown()

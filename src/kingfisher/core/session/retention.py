@@ -1,4 +1,4 @@
-"""Which sessions to drop, and the order in which a session comes apart."""
+"""Which sessions to drop, and dropping them one at a time."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ class SweepResult:
 
 @dataclass(frozen=True)
 class SweepPlan:
-    """Sessions to remove, newest-first survivors already excluded."""
+    """Sessions to remove, those a running turn holds already excluded."""
 
     doomed: tuple[str, ...]
     kept: int

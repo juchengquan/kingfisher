@@ -41,8 +41,8 @@ class GuardedCallsMiddleware(AgentMiddleware):
     running any call raised into a failed result: a host path refused on any tool, and a
     subagent's model refusing its `task`.
 
-    `GuardedTool` does the same two things on a compiled subagent's tools, which no
-    middleware reaches, and the two must answer alike.
+    `GuardedTool` does the same two things where no middleware reaches, on a compiled
+    subagent's tools and a call from `eval`'s code, and the two must answer alike.
 
     The translation is a leak closed as well as a convenience: a tool wanting host paths
     sends the agent looking for them, and from there it can name any session's files. The
@@ -118,7 +118,7 @@ class GuardedCallsMiddleware(AgentMiddleware):
 
 class WorkspaceToolFailureMiddleware(AgentMiddleware):
     """What a workspace tool itself raised, as a failed tool result, so the turn goes on.
-    `GuardedTool` answers a compiled subagent's the same way, and so must this.
+    `GuardedTool` answers a compiled subagent's and `eval`'s the same way, and so must this.
 
     Innermost of every graph, under whatever a deployment's definitions add, because it
     cannot tell a workspace tool's exception from one raised above it.

@@ -1,4 +1,4 @@
-"""The guards a compiled subagent's workspace tools carry on themselves."""
+"""The guards a workspace tool carries on itself, where no middleware reaches it."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ from .session_paths import SessionPaths, refusal_text
 
 
 class GuardedTool(BaseTool):
-    """One workspace tool, carrying the guards a compiled subagent cannot be given.
+    """One workspace tool, carrying the guards no middleware can give it.
 
-    deepagents runs a compiled subagent as given, so no middleware of kingfisher's is in
-    front of its tools; the guards travel on the tools instead.
+    deepagents runs a compiled subagent as given, and `eval` calls a tool from code, so
+    no middleware of kingfisher's is in front of either; the guards travel on the tools.
 
     A refusal is returned, never raised: nothing in a graph kingfisher did not build
     catches an exception, so the run would end. `handle_tool_error` makes it a failed
@@ -76,7 +76,7 @@ class GuardedTool(BaseTool):
 
 
 def guarded_tools(tools: Sequence[Any], paths: SessionPaths | None) -> list[Any]:
-    """The workspace tools a compiled subagent is handed, each one wrapped."""
+    """The workspace tools a compiled subagent or `eval` is handed, each one wrapped."""
     return [_guarded(one, paths) for one in tools]
 
 

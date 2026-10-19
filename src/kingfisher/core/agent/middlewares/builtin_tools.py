@@ -203,7 +203,7 @@ def _offered(tool: Any) -> Any:
     if tool.name != READ_FILE or not hasattr(tool.args_schema, "model_json_schema"):
         return tool
     # Only what the model is shown: the call is run by deepagents' own tool, whose
-    # default `_called` fills in.
+    # default `_limited` fills in.
     described = _replaced(tool.description, PAGE, WHOLE, f"By default it {WHOLE}")
     return tool.model_copy(
         update={"description": described, "args_schema": _shown(tool.args_schema)}

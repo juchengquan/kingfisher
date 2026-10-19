@@ -569,11 +569,10 @@ def test_a_subagent_is_handed_its_own_model_rather_than_the_agents(cfg, session_
     """The bug this would have shipped with: a subagent's middleware running the
     agent's model.
 
-    The subagent's model is not built until `as_subagent`'s last line, so the only
-    thing in scope where its middleware is made is the *agent's* -- and handing that
-    over is wrong in the one direction that costs money, since a subagent pinned to
-    a cheap model would be compacted by the expensive one. The same mistake was made
-    once already for a helper's inherited model and is recorded beside `_with_helpers`.
+    Handing over the agent's model is wrong in the one direction that costs money,
+    since a subagent pinned to a cheap model would be compacted by the expensive one.
+    The same mistake was made once already for a helper's inherited model and is
+    recorded beside `_with_helpers`.
     """
     injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 

@@ -1,4 +1,4 @@
-"""Thread persistence: the conversation behind a session."""
+"""The saver a turn runs on, and the bytes a paused turn keeps of it."""
 
 from __future__ import annotations
 

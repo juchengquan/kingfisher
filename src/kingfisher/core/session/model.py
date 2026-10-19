@@ -1,5 +1,5 @@
-"""What a session is inside kingfisher: its conversation and turns, the refusals that
-name one, and where kingfisher's own sessions keep their folders."""
+"""What a session is inside kingfisher: its conversation and turns, and the refusals
+that name one."""
 
 from __future__ import annotations
 
