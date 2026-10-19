@@ -12,6 +12,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Request, ToolSpec, UnknownSessionError
 from kingfisher.cli.__main__ import main
+from kingfisher.core.access.checks import caller_holds
 from kingfisher.core.access.policy import parse
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
@@ -100,9 +101,9 @@ def built(kf: Kingfisher, source_ids, datazone: str | None) -> tuple[set[str], s
     assembled = build_agent(
         kf.cfg,
         agent=kf._agent_named("surveyor", source_ids=caller),
-        held=kf._held_for(caller),
+        held=caller_holds(kf.access, caller),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
-        capabilities=kf._effective_grants(caller),
+        capabilities=kf.grants,
         catalogue=kf.catalogue,
         checkpointer=None,
     )
@@ -140,7 +141,7 @@ def test_a_source_id_spelled_like_a_held_datazone_is_refused():
 def test_a_caller_in_a_datazone_holds_it_beside_their_source_ids(zoned):
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
-    assert kf._held_for(with_datazone(("A",), "finance")) == {"A", zone_name("finance")}
+    assert caller_holds(kf.access, with_datazone(("A",), "finance")) == {"A", zone_name("finance")}
 
 
 @pytest.mark.parametrize(
@@ -154,7 +155,7 @@ def test_a_datazone_that_cannot_be_honoured_is_refused(zoned, source_ids, datazo
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
     with pytest.raises(AccessError, match=said):
-        kf._held_for(with_datazone(source_ids, datazone))
+        caller_holds(kf.access, with_datazone(source_ids, datazone))
 
 
 def test_a_datazone_where_none_are_declared_is_refused(cfg):
@@ -162,7 +163,7 @@ def test_a_datazone_where_none_are_declared_is_refused(cfg):
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(AccessError, match="declares no datazones"):
-        kf._held_for(with_datazone((), "finance"))
+        caller_holds(kf.access, with_datazone((), "finance"))
 
 
 def test_every_turn_door_takes_the_datazone(zoned):

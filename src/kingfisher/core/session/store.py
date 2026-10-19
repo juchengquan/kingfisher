@@ -104,15 +104,6 @@ def remember_agent(harness: Any, document: str) -> Steps[None]:
     yield from harness.store(PINNED_AGENT, document.encode("utf-8"))
 
 
-def agent_started_with(harness: Any) -> Steps[DefinitionText | None]:
-    """The agent document this session opened with, or `None` if it kept none.
-
-    `None` covers two ordinary cases: a session that named no agent, and a
-    deployment whose repository cannot hand over the document it parsed.
-    """
-    return _agent_text((yield from harness.fetch(PINNED_AGENT)))
-
-
 def _agent_text(held: bytes | None) -> DefinitionText | None:
     return None if held is None else DefinitionText(held.decode("utf-8"), Path(AGENT_SNAPSHOT))
 

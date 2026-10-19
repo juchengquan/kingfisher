@@ -19,7 +19,6 @@ from kingfisher.core.access import (
     SourceIds,
     audit,
     caller_holds,
-    held_by,
     reaches,
     refuse_undeclared,
 )
@@ -51,7 +50,6 @@ from kingfisher.core.session.steps import (
 )
 from kingfisher.core.session.store import (
     HarnessFiles,
-    agent_started_with,
     remember_agent,
 )
 from kingfisher.core.session.threads import thread_pool
@@ -66,16 +64,13 @@ from .workspace import ensure_layout
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from kingfisher.core.definitions.documents import DefinitionText
+
     from .interfaces import RunEvents
 
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.
 logger = logging.getLogger("kingfisher.origins")
-
-
-#: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
-#: run without a checkpointer at all.
-_UNSET: Any = object()
 
 
 class Kingfisher(SessionMethods, Disposal, Preparation, Running):
@@ -183,19 +178,6 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
             sessions=self._sessions,
         )
 
-    def _held_for(self, source_ids: Held | None) -> frozenset[str] | None:
-        """The caller's expanded source ids, or `None` where nothing narrows."""
-        return held_by(self.access, source_ids)
-
-    def _effective_grants(self, source_ids: Held | None) -> Capabilities:
-        """The ceiling for one call: this deployment's, narrowed by the caller's."""
-        # For its refusals: an undeclared source id is refused here rather than quietly
-        # reaching nothing. Source ids narrow per definition, in `AgentSpec.declares`.
-        # No branch on `source_ids is not None`: `UNSCOPED` is not `None`, and must run
-        # where there is no policy.
-        caller_holds(self.access, source_ids)
-        return self.grants
-
     def _graph_for(  # noqa: PLR0913 -- setup holds each; deriving one here derives it twice
         self,
         request: Request | Resume,
@@ -272,19 +254,15 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         harness: HarnessFiles,
         *,
         source_ids: Held | None = None,
-        pinned: Any = _UNSET,
+        pinned: DefinitionText | None,
     ) -> Steps[AgentSpec | None]:
-        """The agent this turn runs, which is the one its session opened with.
-
-        `pinned` is the session's pin where the caller has read it already, as setup has.
-        """
-        kept = (yield from agent_started_with(harness)) if pinned is _UNSET else pinned
-        if kept is None:
+        """The agent this turn runs, which is the one its session opened with, `pinned`."""
+        if pinned is None:
             spec = self._agent_named(request.agent, source_ids=source_ids)
             yield from self._pin_agent_in(harness, request.agent)
             return spec
 
-        started = read(kept)
+        started = read(pinned)
         if request.agent is not None and request.agent != started.name:
             msg = (
                 f"this session is running {started.name!r}; it was fixed when the "

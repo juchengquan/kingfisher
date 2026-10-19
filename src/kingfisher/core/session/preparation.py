@@ -7,7 +7,7 @@ from dataclasses import replace
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import Capabilities, Held, zone_held
+from kingfisher.core.access import Capabilities, Held, SourceIds, caller_holds, zone_held
 from kingfisher.core.agent.activation import (
     for_the_caller,
     indistinct_subagents,
@@ -76,6 +76,8 @@ class Preparation:
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
     cfg: Config
     catalogue: Definitions
+    access: SourceIds | None
+    grants: Capabilities
     run_events: RunEvents
     _sessions: Any
     _graph: Any
@@ -83,8 +85,6 @@ class Preparation:
     _reaches_pin: Callable[..., bool]
     _refuse_if_over_budget: Callable[..., Steps[None]]
     _files_for: Callable[..., Steps[Any]]
-    _effective_grants: Callable[..., Capabilities]
-    _held_for: Callable[..., frozenset[str] | None]
     _agent_for: Callable[..., Steps[AgentSpec | None]]
     _graph_for: Callable[..., Any]
 
@@ -104,8 +104,8 @@ class Preparation:
         session = yield from self._session_for(request)
         # Who is calling, before the session is marked, claimed or written to: later, a
         # refused caller's files would be in its `/inputs`, and a session out of reach
-        # would answer "busy" rather than "no session". Asked here only for its refusals.
-        self._effective_grants(source_ids)
+        # would answer "busy" rather than "no session".
+        held = caller_holds(self.access, source_ids)
         # Opened before anything else reads the session: who may touch it is decided by
         # its pinned agent, and that is read through the backend too.
         if files is None:
@@ -113,7 +113,6 @@ class Preparation:
         else:
             refuse_files_of_another(files, session.id)
         harness = HarnessFiles(files)
-        held = self._held_for(source_ids)
         # Read once, for reach here and for the agent the turn runs; neither asks for a
         # supplied graph under no policy.
         pinned, zone = (
@@ -145,6 +144,7 @@ class Preparation:
                 harness=harness,
                 pinned=pinned,
                 zone=zone,
+                held=held,
                 source_ids=source_ids,
             )
         except BaseException:
@@ -162,6 +162,7 @@ class Preparation:
         harness: HarnessFiles,
         pinned: Any,
         zone: str | None,
+        held: frozenset[str] | None,
         source_ids: Held | None = None,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
@@ -176,9 +177,7 @@ class Preparation:
             getattr(request, "inputs", ()), files, self.cfg.layout
         )
 
-        granted = self._effective_grants(source_ids)
-        allowed = granted.intersect(request.capabilities)
-        held = self._held_for(source_ids)
+        allowed = self.grants.intersect(request.capabilities)
         # Before the build: a resume runs on a saver that already holds the pause.
         paused, resume, discarded, superseded = yield from self._take_pause(
             request, session, harness
@@ -200,7 +199,7 @@ class Preparation:
             allowed = settled_request(
                 self.cfg,
                 allowed,
-                ceiling=for_the_caller(agent, granted, held=held).subagents,
+                ceiling=for_the_caller(agent, self.grants, held=held).subagents,
                 held=held,
                 catalogue=self.catalogue,
             )
@@ -357,7 +356,7 @@ class Preparation:
                 agent=agent if held is not None else None,
                 held=held,
             )
-            shared = subagent_only(allowed, cfg, catalogue=self.catalogue)
+            shared = subagent_only(allowed, catalogue=self.catalogue)
             # The agent and the caller as well as the grant: the grant alone may be
             # `"*"`, naming subagents the build never activated.
             indistinct = indistinct_subagents(

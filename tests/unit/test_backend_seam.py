@@ -15,7 +15,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.run import run, stream
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins.sessions.backend import LocalSessions, WorkspaceScopedBackend, backend_at
-from tests.conftest import an_agent, harness_in
+from tests.conftest import agent_for, an_agent, harness_in
 from tests.unit.test_run import StubAgent
 from tests.unit.test_session_files import Elsewhere as KeptElsewhere
 
@@ -204,7 +204,7 @@ def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
     built = service._graph_for(
         asked,
         service.grants,
-        agent=drive(service._agent_for(asked, harness_in(cfg, session_dir))),
+        agent=agent_for(service, asked, harness_in(cfg, session_dir)),
         held=None,
         files=drive(service._files_for(session_dir.name)),
     )

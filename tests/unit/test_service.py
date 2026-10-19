@@ -25,6 +25,7 @@ from tests.conftest import (
     FAKE_ENDPOINT,
     OTHER_ENDPOINT,
     FakeGraph,
+    agent_for,
     an_agent,
     harness_in,
     start,
@@ -94,7 +95,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     service = Kingfisher(cfg, sessions=LocalSessions())
     asked = Request("go", agent="only")
 
-    built = drive(service._agent_for(asked, harness_in(cfg, session_dir)))
+    built = agent_for(service, asked, harness_in(cfg, session_dir))
     files = drive(service._files_for(session_dir.name))
 
     def once():
@@ -686,7 +687,6 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
 
 def _snapshot_reads(monkeypatch) -> list[Path]:
     """Every read of a session's pinned agent, as they happen."""
-    from kingfisher.core import service as service_module
     from kingfisher.core.session import preparation
 
     seen: list[Path] = []
@@ -698,11 +698,6 @@ def _snapshot_reads(monkeypatch) -> list[Path]:
 
         return read
 
-    # Both readers: `_agent_for` on `Kingfisher`, and `_prepare_steps` on `Preparation`,
-    # which reads the agent with the datazone beside it.
-    monkeypatch.setattr(
-        service_module, "agent_started_with", counting(service_module.agent_started_with)
-    )
     monkeypatch.setattr(preparation, "pinned_in", counting(preparation.pinned_in))
     return seen
 
@@ -801,7 +796,7 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
 def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     """The pin goes wherever the session's own files are, never to a path re-derived
     from its id. It was once written to `<workspace>/sessions/<id>` whatever held the
-    session, so `agent_started_with` found none on the next turn and a session fixed to
+    session, so the next turn found none and a session fixed to
     the agent it opened with silently was not.
 
     Driven through `_agent_for` rather than `run`, because that is what resolves a
@@ -813,7 +808,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session", DEFAULT_LAYOUT)
     service = Kingfisher(cfg, sessions=LocalSessions())
 
-    drive(service._agent_for(Request("go", agent="only"), harness_in(cfg, elsewhere)))
+    agent_for(service, Request("go", agent="only"), harness_in(cfg, elsewhere))
 
     assert agent_snapshot(elsewhere).is_file(), "the pin is not where the turn ran"
     assert not (cfg.workspace / "sessions" / elsewhere.name).exists(), (
@@ -821,4 +816,4 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
     )
 
     with pytest.raises(CapabilityError, match="cannot be changed"):
-        drive(service._agent_for(Request("again", agent="other"), harness_in(cfg, elsewhere)))
+        agent_for(service, Request("again", agent="other"), harness_in(cfg, elsewhere))

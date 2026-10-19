@@ -332,6 +332,14 @@ def harness_in(cfg, session_dir: Path):
     return HarnessFiles(_backend_in(cfg, session_dir))
 
 
+def agent_for(service, request, harness, *, source_ids=None):
+    """The agent a turn on this session runs, with its pin read first as setup reads it."""
+    from kingfisher.core.session.store import pinned_in
+
+    pinned, _zone = drive(pinned_in(harness))
+    return drive(service._agent_for(request, harness, source_ids=source_ids, pinned=pinned))
+
+
 def paths_in(cfg, session_dir: Path, *, sessions: Path | None = None):
     """What a tool's paths mean in a session kept in this directory, under the rules
     every turn starts from -- the `SessionPaths` a build hands its tool guards. Its

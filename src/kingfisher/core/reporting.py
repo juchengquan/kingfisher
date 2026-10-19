@@ -109,9 +109,9 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
     return tuple(found)
 
 
-def subagent_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tuple[str, ...]:
+def subagent_only(allowed: Capabilities, *, catalogue: Definitions) -> tuple[str, ...]:
     """Names this run was granted that only a subagent can actually ask for."""
-    found = (catalogue or Definitions.from_config(cfg)).tools.found
+    found = catalogue.tools.found
     return Offering.of(found).ambiguous(allowed.tools, found)
 
 
