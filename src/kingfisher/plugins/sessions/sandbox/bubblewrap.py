@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kingfisher.core.layout import Layout
-from kingfisher.plugins.sessions.sandbox.linux import MAX_OUTPUT_BYTES, outcome, present
+
+from .linux import MAX_OUTPUT_BYTES, outcome, present
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence

@@ -24,22 +24,6 @@ from kingfisher.core.access.capabilities import (
     refuse_ungranted_models,
 )
 from kingfisher.core.access.reach import offers
-from kingfisher.core.agent.activation import (
-    _activated_subagents,
-    _private_skills,
-    _skill_denials,
-    activatable_skills,
-    agents_to_ask,
-    for_the_caller,
-    offered_to,
-    refuse_misnamed_by,
-)
-from kingfisher.core.agent.backend import (
-    memory_sources,
-    shell_prompt_of,
-    skills_sources,
-)
-from kingfisher.core.agent.interpreter import _interpreter
 from kingfisher.core.agent.kinds.declared_middleware import (
     ByName,
     MiddlewareFactory,
@@ -62,19 +46,36 @@ from kingfisher.core.agent.kinds.tools import (
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware, high_mark
 from kingfisher.core.agent.middlewares.recorder import Audiences, RecorderMiddleware
 from kingfisher.core.agent.middlewares.standing import standing_middleware
-from kingfisher.core.agent.models import build_model, model_named, summarizer_trigger
-from kingfisher.core.agent.permitted_backend import PermittedBackend
-from kingfisher.core.agent.prompting import memory_guidelines, system_prompt
-from kingfisher.core.agent.session_paths import SessionPaths
-from kingfisher.core.agent.tool_context import ToolContext
-from kingfisher.core.agent.tool_guards import guarded_tools
-from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import RunOn, opens_skills
 from kingfisher.core.definitions.tools.spec import FoundTool, own_audiences
 from kingfisher.core.layout import Layout
+
+from .activation import (
+    _activated_subagents,
+    _private_skills,
+    _skill_denials,
+    activatable_skills,
+    agents_to_ask,
+    for_the_caller,
+    offered_to,
+    refuse_misnamed_by,
+)
+from .backend import (
+    memory_sources,
+    shell_prompt_of,
+    skills_sources,
+)
+from .interpreter import _interpreter
+from .models import build_model, model_named, summarizer_trigger
+from .permitted_backend import PermittedBackend
+from .prompting import memory_guidelines, system_prompt
+from .session_paths import SessionPaths
+from .tool_context import ToolContext
+from .tool_guards import guarded_tools
+from .usable_backend import refuse_unusable_backend
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

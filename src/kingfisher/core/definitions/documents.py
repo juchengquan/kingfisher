@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.core.definitions.importing import skipped
+from .importing import skipped
 
 if TYPE_CHECKING:
     from pathlib import Path

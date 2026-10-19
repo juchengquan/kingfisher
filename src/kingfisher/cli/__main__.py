@@ -39,14 +39,15 @@ from kingfisher import (
     paths_from_env,
     seed,
 )
-from kingfisher.cli.health import _retired, examine, worst
-from kingfisher.cli.listing import as_json, failed, origins_document, render
-from kingfisher.cli.progress import show
 from kingfisher.core.access.source_ids import with_datazone
 
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.config import MissingCredentialsWarning
 from kingfisher.core.definitions.agents.spec import AgentError
+
+from .health import _retired, examine, worst
+from .listing import as_json, failed, origins_document, render
+from .progress import show
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -468,7 +469,8 @@ def _configured(cfg: Config, *, log: Path | None = None) -> Kingfisher:
     # Here, not at module scope: `Kingfisher` loads deepagents, and `seed`, `list` and
     # `doctor` never build one.
     from kingfisher import Kingfisher  # noqa: PLC0415
-    from kingfisher.cli.configured import (  # noqa: PLC0415
+
+    from .configured import (  # noqa: PLC0415
         configured_plugins,
         configured_sessions,
     )
@@ -675,7 +677,7 @@ def _list(*, as_document: bool = False, held: Held | None = None) -> int:
     # `UNSCOPED` and no `--as` are the same view: a listing is read-only, run on the host
     # with the policy in front of its reader, so it is exempt from a turn's refusal.
     source_ids = held if isinstance(held, tuple) else None
-    from kingfisher.cli.configured import configured_sessions  # noqa: PLC0415
+    from .configured import configured_sessions  # noqa: PLC0415
 
     found = inventory(cfg, source_ids=source_ids, sessions=configured_sessions())
     if as_document:
@@ -864,7 +866,7 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
         raise
     # Built once and handed to `examine`: one it built from `cfg` would agree with `cfg`
     # by construction, and could never say the configuration is being ignored.
-    from kingfisher.cli.configured import configured_sessions  # noqa: PLC0415
+    from .configured import configured_sessions  # noqa: PLC0415
 
     sessions = configured_sessions()
     found = inventory(cfg, sessions=sessions)

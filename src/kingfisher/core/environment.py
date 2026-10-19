@@ -7,9 +7,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from kingfisher.core import model_catalogue
 from kingfisher.core.access import policy as access_policy
-from kingfisher.core.config import (
+
+from . import model_catalogue
+from .config import (
     DEFAULT_THREAD_POOL_SIZE,
     FOLDED_SETTINGS,
     REMOVED_SETTINGS,

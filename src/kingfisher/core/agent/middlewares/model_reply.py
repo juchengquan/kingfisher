@@ -10,8 +10,6 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from kingfisher.core.agent.middlewares.replies import last_reply, replaced, text_of
-from kingfisher.core.agent.middlewares.results import failed
 from kingfisher.core.session.runtime import (
     ModelUnavailableError,
     call_block_id,
@@ -21,6 +19,9 @@ from kingfisher.core.session.runtime import (
     unavailable,
     with_call_args,
 )
+
+from .replies import last_reply, replaced, text_of
+from .results import failed
 
 #: Cut replies in a row after which an agent is stopped: each spends the whole output
 #: reservation, and a model retrying one oversized write would otherwise reach the step limit.

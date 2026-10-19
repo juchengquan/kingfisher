@@ -26,26 +26,27 @@ from kingfisher.core.reporting import (
     withheld_by_kind,
 )
 from kingfisher.core.request import DecisionError, Request, Resume
-from kingfisher.core.session import runtime
-from kingfisher.core.session.checkpointing import (
+
+from . import runtime
+from .checkpointing import (
     build_session_checkpointer,
     harness_mark,
     resumed_saver,
 )
-from kingfisher.core.session.files import place_inputs, planned_inputs
-from kingfisher.core.session.ledger import Ledger
-from kingfisher.core.session.model import (
+from .files import place_inputs, planned_inputs
+from .ledger import Ledger
+from .model import (
     Conversation,
     SessionBusyError,
     unknown_session,
 )
-from kingfisher.core.session.runlog import RunLogger
-from kingfisher.core.session.steps import (
+from .runlog import RunLogger
+from .steps import (
     Steps,
     changing,
     on_host,
 )
-from kingfisher.core.session.store import (
+from .store import (
     AGENT_MARK,
     HarnessFiles,
     KeptLedger,
@@ -57,7 +58,7 @@ from kingfisher.core.session.store import (
     read_transcript,
     remember_zone,
 )
-from kingfisher.core.session.turn import (
+from .turn import (
     Prepared,
     decision_discarded,
     turn_message,

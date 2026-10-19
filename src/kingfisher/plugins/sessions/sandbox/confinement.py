@@ -19,7 +19,8 @@ from pathlib import Path
 
 from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.layout import Layout
-from kingfisher.plugins.sessions.sandbox.sandbox_exec import (
+
+from .sandbox_exec import (
     SANDBOX_PROFILE,
     fenced_sessions,
     profile,
@@ -145,7 +146,7 @@ def landlock_ready() -> bool:
 
 def _bubblewrap() -> Confinement:
     """The bubblewrap mode, probed rather than trusted."""
-    from kingfisher.plugins.sessions.sandbox.bubblewrap import bubblewrap_available  # noqa: PLC0415
+    from .bubblewrap import bubblewrap_available  # noqa: PLC0415
 
     if bubblewrap_available():
         return Confinement(wrap=_unwrapped, mechanism=BUBBLEWRAP)
@@ -321,7 +322,7 @@ def shell_readable(cfg: Config, shell: ShellSettings, mechanism: str) -> tuple[P
     if mechanism in LINUX_FENCES:
         # Each fence's own list, not one shared: bubblewrap binds no `/proc` or `/dev`,
         # and one list serving both is how a mechanism gains a path it meant to deny.
-        from kingfisher.plugins.sessions.sandbox import bubblewrap, fence  # noqa: PLC0415
+        from . import bubblewrap, fence  # noqa: PLC0415
 
         system = fence.SYSTEM_PATHS if mechanism == LANDLOCK else bubblewrap.SYSTEM_PATHS
         granted = [*map(Path, system), *toolchain_roots(shell.path_extra), *map(Path, skills)]

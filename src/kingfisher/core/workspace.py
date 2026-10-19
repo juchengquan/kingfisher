@@ -5,8 +5,8 @@ from __future__ import annotations
 from importlib import resources
 from pathlib import Path
 
-from kingfisher.core.config import definition_roots_for
-from kingfisher.core.layout import LAYOUT_DIRS, MARKER, MARKER_TEXT
+from .config import definition_roots_for
+from .layout import LAYOUT_DIRS, MARKER, MARKER_TEXT
 
 #: An import path rather than a filesystem one: an installed package is not in this
 #: repository's tree.

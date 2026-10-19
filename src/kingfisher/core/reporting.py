@@ -18,11 +18,13 @@ from kingfisher.core.agent.kinds.tools import (
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import opens_skills
 from kingfisher.core.definitions.tools.spec import Offering, admitted, out_of_reach, placed
-from kingfisher.core.result import RunEvent
+
+from .result import RunEvent
 
 if TYPE_CHECKING:
-    from kingfisher.core.config import Config
     from kingfisher.core.definitions.agents.spec import AgentSpec
+
+    from .config import Config
 
 
 def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is offered

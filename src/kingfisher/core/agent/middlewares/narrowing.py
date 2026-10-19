@@ -10,9 +10,10 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from kingfisher.core.agent.middlewares.results import failed
 from kingfisher.core.definitions.skills.registry import KEY, alist_skills, list_skills, qualified
 from kingfisher.core.definitions.subagents import TASK_TOOL
+
+from .results import failed
 
 
 def _tool_name(tool: Any) -> str | None:

@@ -14,7 +14,8 @@ from langgraph.types import Command, StreamMode
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.request import Decision, DecisionError
 from kingfisher.core.result import DECISIONS, PendingDecision, RunEvent
-from kingfisher.core.session.transcript import Message, Role, ToolCall
+
+from .transcript import Message, Role, ToolCall
 
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
 OutOfSteps = GraphRecursionError

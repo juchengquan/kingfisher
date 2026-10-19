@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
-from kingfisher.core.session.threads import finished, off_loop, thread_pool
+from .threads import finished, off_loop, thread_pool
 
 _NO_KEYWORDS: Mapping[str, Any] = MappingProxyType({})
 

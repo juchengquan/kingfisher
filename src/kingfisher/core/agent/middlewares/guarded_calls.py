@@ -11,11 +11,12 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import ToolException
 
 from kingfisher.core.agent.host_paths import HostPathError
-from kingfisher.core.agent.middlewares.results import failed
 from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.agent.session_paths import SessionPaths, refusal_text
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.session.runtime import unavailable
+
+from .results import failed
 
 
 def _handed_back(call: Any, exc: Exception) -> ToolMessage | None:

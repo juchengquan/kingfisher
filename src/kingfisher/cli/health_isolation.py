@@ -6,7 +6,6 @@ import platform
 from collections.abc import Iterator
 
 from kingfisher import Config, ConfigError
-from kingfisher.cli.check import Check
 from kingfisher.plugins import ShellSettings
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.bubblewrap import bubblewrap_available
@@ -18,6 +17,8 @@ from kingfisher.plugins.sessions.sandbox.confinement import (
     shell_confinement,
 )
 from kingfisher.plugins.sessions.sandbox.sandbox_exec import fenced_sessions
+
+from .check import Check
 
 #: Appended to every answer this check gives, because it qualifies all of them.
 FROM_CONFIG = " (from configuration; an injected runner is not visible here)"

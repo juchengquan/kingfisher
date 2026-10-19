@@ -17,8 +17,9 @@ from kingfisher.core.access.capabilities import ALL, Selection, bare_name
 from kingfisher.core.definitions import fields
 from kingfisher.core.definitions.definition import SpecBase
 from kingfisher.core.definitions.skills import READ_FILE
-from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.definitions.tools.spec import claimed_sources
+
+from . import INTERPRETER_TOOL, TASK_TOOL
 
 
 class SubagentError(ValueError):

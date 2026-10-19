@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.session import retention
-from kingfisher.core.session.retention import SweepResult
-from kingfisher.core.session.steps import Steps, changing, drive
+from . import retention
+from .retention import SweepResult
+from .steps import Steps, changing, drive
 
 if TYPE_CHECKING:
     from collections.abc import Callable

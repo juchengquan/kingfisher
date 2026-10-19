@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from kingfisher.core.definitions import documents
-from kingfisher.core.definitions.subagents import spec as subagent
-from kingfisher.core.definitions.subagents.spec import SubagentError, SubagentSpec
+
+from . import spec as subagent
+from .spec import SubagentError, SubagentSpec
 
 if TYPE_CHECKING:
     from kingfisher.core.definitions.documents import DefinitionText

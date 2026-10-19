@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from kingfisher import Config, ConfigError, Inventory, inventory, kinds_at
-from kingfisher.cli import health_definitions, health_isolation
-from kingfisher.cli.check import Check, Verdict
 from kingfisher.core.backing import MemoryBacking, memory_backing
 
 # Past the front door on purpose: a probe only `doctor` wants is no public promise, and
@@ -23,6 +21,9 @@ from kingfisher.plugins.sessions.sandbox.confinement import (
     SANDBOX_EXEC,
     Confinement,
 )
+
+from . import health_definitions, health_isolation
+from .check import Check, Verdict
 
 #: Settings nothing reads any more, and what to write instead. A renamed variable fails
 #: in silence, falling back to its default, and this is the only place that names one to
@@ -374,7 +375,7 @@ def examine(
     """
     if sessions is None:
         # Here, not at the top: importing it loads deepagents.
-        from kingfisher.cli.configured import configured_sessions  # noqa: PLC0415
+        from .configured import configured_sessions  # noqa: PLC0415
 
         sessions = configured_sessions()
     checks: list[Check] = []

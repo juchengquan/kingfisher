@@ -7,8 +7,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final, Literal
 
-from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.result import Listed
+
+from .capabilities import ALL
 
 #: The selection fields a definition's own `source_ids:` narrows for a caller, since what it
 #: holds is reached only through it. Not `builtin_tools`: deepagents registers those, so

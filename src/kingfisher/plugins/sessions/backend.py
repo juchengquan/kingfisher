@@ -24,15 +24,16 @@ from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import CommandRunner, Sessions
 from kingfisher.core.layout import Layout
-from kingfisher.plugins.sessions.folders import (
+from kingfisher.plugins.sessions.sandbox import confinement
+
+from .folders import (
     LocalSessionDirs,
     ensure_session_layout,
     session_bytes,
     session_dir,
 )
-from kingfisher.plugins.sessions.permissions import protect_inputs, writable_inputs
-from kingfisher.plugins.sessions.sandbox import confinement
-from kingfisher.plugins.sessions.shell import (
+from .permissions import protect_inputs, writable_inputs
+from .shell import (
     ConfinedLocalShellBackend,
     fence_for,
     kingfishers_shell,

@@ -14,9 +14,10 @@ from typing import Protocol, runtime_checkable
 import yaml
 
 from kingfisher.core.config import ConfigError, definition_roots_for
-from kingfisher.core.definitions import importing
-from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.workspace import ensure_definitions
+
+from . import importing
+from .catalogue import DEFINITION_KINDS
 
 #: How the "this workspace is empty" messages tell a reader to fill it.
 SEED_HINT = "`kingfisher seed --from DIR`"

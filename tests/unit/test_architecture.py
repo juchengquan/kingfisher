@@ -67,9 +67,20 @@ def _imported_modules(path: Path) -> set[str]:
             if node.module:
                 modules.add(".".join((*base, node.module)))
             else:
-                # `from . import x` imports modules, so each name is one.
-                modules.update(".".join((*base, alias.name)) for alias in node.names)
+                held = _held_by_the_package(path, node)
+                modules.update(
+                    ".".join(base if alias.name in held else (*base, alias.name))
+                    for alias in node.names
+                )
     return modules
+
+
+def _held_by_the_package(path: Path, node: ast.ImportFrom) -> set[str]:
+    """What `from . import ...` takes from the package's own `__init__` rather than as a
+    module: `TASK_TOOL`, which no module is called."""
+    init = path.parents[node.level - 1] / "__init__.py"
+    taken = {alias.name for alias in node.names}
+    return _defined_names(init) & taken if init.is_file() else set()
 
 
 def _imported_names(path: Path) -> dict[str, frozenset[str]]:
@@ -91,8 +102,11 @@ def _imported_names(path: Path) -> dict[str, frozenset[str]]:
             if node.module:
                 taken.setdefault(".".join((*base, node.module)), set()).update(names)
             else:
-                for alias in node.names:
-                    taken.setdefault(".".join((*base, alias.name)), set())
+                held = _held_by_the_package(path, node)
+                if held:
+                    taken.setdefault(".".join(base), set()).update(held)
+                for name in names - held:
+                    taken.setdefault(".".join((*base, name)), set())
     return {module: frozenset(names) for module, names in taken.items()}
 
 
@@ -173,11 +187,12 @@ def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
     package = tmp_path / "kingfisher"
     (package / "domain").mkdir(parents=True)
     (package / "__init__.py").touch()
-    (package / "domain" / "__init__.py").touch()
+    (package / "domain" / "__init__.py").write_text("TASK_TOOL = 'task'\n", encoding="utf-8")
     (package / "config.py").touch()
     module = package / "domain" / "subagent.py"
     module.write_text(
-        "from . import fields\nfrom .. import config\nfrom .capabilities import ALL\n",
+        "from . import fields\nfrom .. import config\nfrom .capabilities import ALL\n"
+        "from . import TASK_TOOL\n",
         encoding="utf-8",
     )
 
@@ -187,7 +202,118 @@ def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
         "kingfisher.domain.fields",  # `.` is this package
         "kingfisher.config",  # `..` is its parent -- the one that was invisible
         "kingfisher.domain.capabilities",  # and a dotted form resolves too
+        "kingfisher.domain",  # a name the package's `__init__` holds is not a module
     }
+    assert _imported_names(module)["kingfisher.domain"] == {"TASK_TOOL"}
+
+
+def _source_module(node: ast.ImportFrom, package: tuple[str, ...]) -> str:
+    """The module a `from` import reads, a relative one resolved against `package`."""
+    if not node.level:
+        return node.module or ""
+    base = package[: max(len(package) - (node.level - 1), 0)]
+    return ".".join((*base, *([node.module] if node.module else [])))
+
+
+def _misfiled_imports(path: Path) -> list[tuple[int, str, bool]]:
+    """`(line, module reached, written with a dot)` for each import on the wrong side of
+    the folder line: this folder spelled in full, or another folder reached with a dot."""
+    package = _package_of(path)
+    holder = path.parents[len(package)]
+
+    def is_package(dotted: str) -> bool:
+        return (holder.joinpath(*dotted.split(".")) / "__init__.py").is_file()
+
+    def is_module(dotted: str) -> bool:
+        file = holder.joinpath(*dotted.split(".")).with_suffix(".py")
+        return is_package(dotted) or file.is_file()
+
+    def folder(dotted: str) -> tuple[str, ...]:
+        parts = tuple(dotted.split("."))
+        return parts if is_package(dotted) else parts[:-1]
+
+    found = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            reached = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            source = _source_module(node, package)
+            # Per name: `from pkg import child` reaches a folder that `pkg` is not.
+            reached = [
+                f"{source}.{alias.name}" if is_module(f"{source}.{alias.name}") else source
+                for alias in node.names
+            ]
+        else:
+            continue
+        dotted = isinstance(node, ast.ImportFrom) and node.level > 0
+        found += [
+            (node.lineno, module, dotted)
+            for module in reached
+            if module.split(".")[0] == package[0] and (folder(module) == package) != dotted
+        ]
+    return found
+
+
+def test_a_dot_means_this_folder_and_a_full_path_another():
+    """A module in this folder imported by its full path, or another folder reached with a
+    dot, which ruff refuses only as `..` and so lets the tree grow two spellings of one import."""
+    # The public tables spell each stub as its `_EXPORTS` string does, so the two read alike.
+    exempt = set(LAZY_TABLES.values())
+    found = [
+        f"{_module_id(path)}:{line} reaches `{module}` with a dot -- another folder, so "
+        "spell it from `kingfisher.`"
+        if dotted
+        else f"{_module_id(path)}:{line} names `{module}` in full -- this folder, so "
+        "write it with a dot"
+        for path in _every(_package_modules(), "the package")
+        if path not in exempt
+        for line, module, dotted in _misfiled_imports(path)
+    ]
+
+    assert not found, found
+
+
+def test_the_folder_line_is_drawn_both_ways(tmp_path):
+    """Driven both ways and in every scope, so a predicate passing everything or nothing,
+    or reading only the module's own statements, fails here."""
+    package = tmp_path / "kingfisher"
+    for folder in ("", "a", "a/inner"):
+        (package / folder).mkdir(parents=True, exist_ok=True)
+        (package / folder / "__init__.py").touch()
+    for module in ("b.py", "a/one.py", "a/inner/deep.py"):
+        (package / module).touch()
+    probe = package / "a" / "two.py"
+    probe.write_text(
+        "import yaml\n"
+        "import kingfisher.a.one\n"
+        "from kingfisher.a.one import X\n"
+        "from kingfisher.a import one, NAME\n"
+        "from kingfisher.a import inner\n"
+        "from kingfisher.a.inner.deep import Y\n"
+        "from kingfisher.b import Z\n"
+        "from .one import X\n"
+        "from . import one, NAME\n"
+        "from .inner.deep import Y\n"
+        "from . import inner\n"
+        "from .. import b\n"
+        "def deferred():\n"
+        "    from kingfisher.a.one import X\n"
+        "if TYPE_CHECKING:\n"
+        "    from kingfisher.a.one import X\n",
+        encoding="utf-8",
+    )
+
+    assert sorted(_misfiled_imports(probe)) == [
+        (2, "kingfisher.a.one", False),
+        (3, "kingfisher.a.one", False),
+        (4, "kingfisher.a", False),  # a name the folder's own `__init__` holds
+        (4, "kingfisher.a.one", False),
+        (10, "kingfisher.a.inner.deep", True),
+        (11, "kingfisher.a.inner", True),
+        (12, "kingfisher.b", True),
+        (14, "kingfisher.a.one", False),
+        (16, "kingfisher.a.one", False),
+    ]
 
 
 def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
@@ -1924,8 +2050,7 @@ def _dotted(node: ast.Import | ast.ImportFrom, package: tuple[str, ...]) -> list
 
     `from x import y` is `x.y` rather than `x`, because whether that loads a module is
     the question every rule below it asks. Relative imports are resolved the way
-    `_imported_modules` resolves them; there are none in `src/` today and a scanner that
-    quietly returned nothing for the first one would be the wrong kind of ready.
+    `_imported_modules` resolves them, since every import within a folder of `src/` is one.
     """
     if isinstance(node, ast.Import):
         return [alias.name for alias in node.names]
@@ -3624,15 +3749,26 @@ def _top_level(tree: ast.Module) -> list[ast.stmt]:
     return found
 
 
-def _bound_by(imports: Sequence[ast.stmt], modules: set[str]) -> dict[str, tuple[str, ...]]:
+def _package_named(module: str, modules: set[str]) -> tuple[str, ...]:
+    """The package a relative import in `module` starts from.
+
+    A name is a package when another sits under it, since the sources carry names, not paths.
+    """
+    is_package = any(other.startswith(f"{module}.") for other in modules)
+    return tuple((module if is_package else module.rpartition(".")[0]).split("."))
+
+
+def _bound_by(
+    imports: Sequence[ast.stmt], modules: set[str], package: tuple[str, ...]
+) -> dict[str, tuple[str, ...]]:
     """What each imported local name stands for: `("module", m)` or `("name", m, n)`."""
     bound: dict[str, tuple[str, ...]] = {}
     for node in imports:
-        if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+        if isinstance(node, ast.ImportFrom) and (source := _source_module(node, package)):
             for alias in node.names:
-                whole = f"{node.module}.{alias.name}"
+                whole = f"{source}.{alias.name}"
                 bound[alias.asname or alias.name] = (
-                    ("module", whole) if whole in modules else ("name", node.module, alias.name)
+                    ("module", whole) if whole in modules else ("name", source, alias.name)
                 )
         elif isinstance(node, ast.Import):
             for alias in node.names:
@@ -3650,7 +3786,7 @@ def _reads_of(
 ) -> set[Named]:
     """The module-level names these statements read, each resolved to where it is defined."""
     nested = [n for o in owner for n in ast.walk(o) if isinstance(n, ast.Import | ast.ImportFrom)]
-    names = {**bound, **_bound_by(nested, modules)}
+    names = {**bound, **_bound_by(nested, modules, _package_named(module, modules))}
     found: set[Named] = set()
     for node in (n for o in owner for n in ast.walk(o)):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
@@ -3698,7 +3834,7 @@ def _live(
     defined: dict[Named, str] = {}
     for module, tree in trees.items():
         local = {} if module in whole else _module_definitions(tree)
-        bound = _bound_by(_top_level(tree), modules)
+        bound = _bound_by(_top_level(tree), modules, _package_named(module, modules))
         owned = {id(node) for _, nodes in local.values() for node in nodes}
         for name, (kind, nodes) in local.items():
             defined[(module, name)] = kind
@@ -4595,13 +4731,15 @@ def _layout_values(tree: ast.Module, path: Path) -> set[str]:
     name computed from either: a matcher built from the default folders is the default
     as surely as the folders are.
     """
+    package = _package_of(path)
     names = {
         alias.asname or alias.name
         for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("kingfisher")
+        if isinstance(node, ast.ImportFrom)
+        and (source := _source_module(node, package)).startswith("kingfisher")
         for alias in node.names
         if alias.name == "DEFAULT_LAYOUT"
-        or (node.module == "kingfisher.core.layout" and alias.name not in LAYOUT_TYPES)
+        or (source == "kingfisher.core.layout" and alias.name not in LAYOUT_TYPES)
     }
     if path == SRC / "core" / "layout.py":
         names |= {
@@ -4664,15 +4802,22 @@ def test_no_parameter_defaults_to_the_shipped_layout():
 
 def test_the_layout_default_rule_sees_each_way_a_default_names_it(tmp_path):
     """Direct, through a route, and through a value built from one -- the shape
-    `missed`'s matcher had -- and not a parameter merely typed `Layout`."""
-    module = tmp_path / "shapes.py"
+    `missed`'s matcher had -- from a neighbour of `core.layout` with a dot too, and not
+    a parameter merely typed `Layout`."""
+    core = tmp_path / "kingfisher" / "core"
+    core.mkdir(parents=True)
+    (core.parent / "__init__.py").touch()
+    (core / "__init__.py").touch()
+    module = core / "shapes.py"
     module.write_text(
         "from kingfisher.core.config import DEFAULT_LAYOUT\n"
         "from kingfisher.core.layout import TOOL_RESULTS_ROUTE, Layout\n"
+        "from .layout import SESSIONS\n"
         "MATCHER = compile(TOOL_RESULTS_ROUTE)\n"
         "def direct(layout=DEFAULT_LAYOUT): ...\n"
         "def routed(*, route=TOOL_RESULTS_ROUTE): ...\n"
         "def built(matcher=MATCHER): ...\n"
+        "def neighbour(folder=SESSIONS): ...\n"
         "def typed(layout: Layout, other=None): ...\n",
         encoding="utf-8",
     )
@@ -4681,4 +4826,5 @@ def test_the_layout_default_rule_sees_each_way_a_default_names_it(tmp_path):
         "direct(layout)",
         "routed(route)",
         "built(matcher)",
+        "neighbour(folder)",
     }

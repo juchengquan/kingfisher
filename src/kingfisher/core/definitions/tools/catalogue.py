@@ -16,7 +16,8 @@ from kingfisher.core.definitions.importing import (
     exported_from,
     modules_in,
 )
-from kingfisher.core.definitions.tools.spec import FoundTool, ToolSpec, named, tool_name
+
+from .spec import FoundTool, ToolSpec, named, tool_name
 
 if TYPE_CHECKING:
     pass

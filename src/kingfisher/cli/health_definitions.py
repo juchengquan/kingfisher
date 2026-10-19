@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from kingfisher import Config, Inventory
-from kingfisher.cli.check import Check
+
+from .check import Check
 
 
 def _catalogues(found: Inventory) -> Iterator[Check]:

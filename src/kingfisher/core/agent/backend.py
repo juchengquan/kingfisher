@@ -7,7 +7,6 @@ from typing import Any
 
 from deepagents.backends import CompositeBackend
 
-from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import ConfigError
 from kingfisher.core.layout import (
     BUNDLED_SKILLS_ROUTE,
@@ -15,6 +14,8 @@ from kingfisher.core.layout import (
     SKILLS_ROUTE,
     Layout,
 )
+
+from .prompting import ShellPrompt
 
 
 def _shell_of(backend: Any) -> Any:
