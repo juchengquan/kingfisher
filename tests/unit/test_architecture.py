@@ -795,11 +795,14 @@ PROSE_GONE: dict[str, frozenset[str]] = {
 
 
 def _module_file(name: str) -> Path | None:
-    """The file a dotted name refers to, or `None`."""
+    """The file a dotted name refers to, or `None`.
+
+    Through `_is_a_module_under`, never `exists()`: on macOS `core.access.Capabilities`
+    found `capabilities.py`, so the rule passed there and failed on Linux CI."""
+    if not _is_a_module_under(SRC, name):
+        return None
     base = SRC.joinpath(*name.split("."))
-    if base.with_suffix(".py").exists():
-        return base.with_suffix(".py")
-    return base / "__init__.py" if (base / "__init__.py").exists() else None
+    return base.with_suffix(".py") if base.with_suffix(".py").is_file() else base / "__init__.py"
 
 
 def _defined_names(path: Path) -> set[str]:
@@ -823,9 +826,9 @@ def _defined_names(path: Path) -> set[str]:
         if isinstance(node, ast.ClassDef):
             names |= declared(node.body)
         # A lazy package defines its exports only through `__getattr__`, which serves
-        # exactly what `__all__` lists.
+        # what `__all__` lists, or `_EXPORTS` where, as in `core.access`, there is none.
         elif isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets
+            isinstance(t, ast.Name) and t.id in {"__all__", "_EXPORTS"} for t in node.targets
         ):
             names |= {
                 item.value for item in ast.walk(node.value)
@@ -1192,6 +1195,8 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
         assert _prose_unresolved(f"`{absent}`") == [absent], absent
     # And a lazy package's exports exist though only `__getattr__` makes them.
     assert _prose_unresolved("`kingfisher.plugins.Plugins`, `core.access.Capabilities`") == []
+    # A class is not its module's file, though a case-insensitive disk finds one for it.
+    assert _module_file("core.access.Capabilities") is None
 
 
 def test_the_prose_roots_are_read_off_the_tree_and_not_written_down(tmp_path):

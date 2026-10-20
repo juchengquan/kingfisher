@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -511,8 +512,14 @@ def test_a_result_the_shell_could_not_have_returned_is_handed_back_untouched(way
 # -- how long a command may ask to run -------------------------------------
 
 
+def _ran(cfg: Any) -> Path:
+    return cfg.sessions_root / "s" / cfg.layout.scratchpad / "ran"
+
+
 def _asking(seconds: int) -> AIMessage:
-    return _calls(("execute", {"command": "touch ran", "timeout": seconds}, "x1"))
+    # The scratchpad, not the working directory: Landlock grants the session's folders
+    # and never the session itself, so `touch ran` failed on Linux whatever the timeout.
+    return _calls(("execute", {"command": "touch scratchpad/ran", "timeout": seconds}, "x1"))
 
 
 @pytest.mark.parametrize("graph", ["agent", "checker", "general-purpose"])
@@ -538,7 +545,7 @@ def test_no_graph_runs_a_command_asking_for_longer_than_the_setting(shelled, way
     (said,) = [m for m in Scripted.heard[held] if isinstance(m, ToolMessage)][-1:]
     assert said.status == "error"
     assert "exceeds maximum allowed (1s)" in said.text
-    assert not (bounded.sessions_root / "s" / "ran").exists()
+    assert not _ran(bounded).exists()
 
 
 def test_a_command_asking_for_the_setting_itself_runs(shelled):
@@ -548,7 +555,7 @@ def test_a_command_asking_for_the_setting_itself_runs(shelled):
 
     Kingfisher(cfg, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
 
-    assert (cfg.sessions_root / "s" / "ran").exists()
+    assert _ran(cfg).exists()
 
 
 def test_execute_is_told_the_setting_as_its_longest(shelled):
