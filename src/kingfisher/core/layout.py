@@ -144,15 +144,16 @@ class Layout:
             "scratchpad": self.scratchpad, "tool_results": self.tool_results,
         }
         for field_name, value in named.items():
-            if not _LEAF.match(value):
+            if not _LEAF.fullmatch(value):
                 msg = (f"layout {field_name}={value!r} is not a bare folder name; it must "
                        f"match {_LEAF.pattern} -- no slash, no leading dot, not empty")
                 raise ValueError(msg)
-            if value in _RESERVED_LEAF_NAMES:
+            # Folded, here and below: macOS's default filesystem takes `DATA` for `data`.
+            if value.casefold() in {name.casefold() for name in _RESERVED_LEAF_NAMES}:
                 msg = (f"layout {field_name}={value!r} is a name kingfisher or deepagents "
                        f"already uses for a session folder; choose another")
                 raise ValueError(msg)
-        if len(set(named.values())) != len(named):
+        if len({value.casefold() for value in named.values()}) != len(named):
             msg = f"layout names collide: {named}; each session folder needs its own name"
             raise ValueError(msg)
 

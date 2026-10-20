@@ -8,10 +8,11 @@ vanishes, a param that looks set and is not.
 from __future__ import annotations
 
 import os
+import warnings
 
 import pytest
 
-from kingfisher.core.agent.models import WIRE_FORMATS
+from kingfisher.core.agent.models import BUILT_WITH, WIRE_FORMATS
 from kingfisher.core.config import (
     Config,
     ConfigError,
@@ -224,11 +225,68 @@ def test_a_key_this_format_does_not_define_is_refused(tmp_path):
 
 
 def test_extra_cannot_overrule_a_param_the_format_defines(tmp_path):
-    """`WireFormat.extra` already carries this rule: additive only."""
+    """A `max_tokens` under `extra` would discard the one written beside it, or the default."""
     body = GOOD.replace("      reasoning_effort: high", "      max_tokens: 1")
 
     with pytest.raises(ConfigError, match="already defines"):
         loaded(tmp_path, body)
+
+
+@pytest.mark.parametrize("keyword", sorted(BUILT_WITH))
+def test_extra_cannot_name_a_keyword_the_build_passes_itself(tmp_path, keyword):
+    """`extra: {timeout: 5}` loaded and then raised a bare `TypeError: got multiple values`
+    from every build -- `doctor`, `list`, every turn -- and `api_key` there slipped a key
+    into `models.yaml` past the refusal of one written inline."""
+    body = GOOD.replace("      reasoning_effort: high", f"      {keyword}: x")
+
+    with pytest.raises(ConfigError, match=f"model 'tuned' names {keyword} under 'extra'"):
+        loaded(tmp_path, body)
+
+
+OPENAI_TUNED = """
+endpoints:
+  openai:
+    api: openai_responses
+    base_url: https://example.invalid/v1
+    key_env: OPENAI_API_KEY
+
+default: gpt-5
+
+models:
+  gpt-5:
+    endpoint: openai
+    extra:
+      reasoning_effort: high
+"""
+
+
+def test_a_default_with_nothing_runnable_says_so_in_words(tmp_path):
+    """It ended "it can run ()", which reads as a formatting slip rather than an answer."""
+    with (
+        warnings.catch_warnings(),
+        pytest.raises(ConfigError, match=r"no credentials for; it can run none$"),
+    ):
+        warnings.simplefilter("ignore", MissingCredentialsWarning)
+        loaded(tmp_path, OPENAI_TUNED, environ={})
+
+
+@pytest.mark.parametrize("environ", [{"OPENAI_API_KEY": "sk-x"}, {}], ids=["keyed", "unkeyed"])
+def test_extra_cannot_name_a_keyword_its_wire_format_sets(tmp_path, environ):
+    """`openai_responses` sets `use_responses_api`, so naming it under `extra` failed every
+    build the same way; refused on a machine without the endpoint's key too, or the file
+    would load there and not where it runs."""
+    body = OPENAI_TUNED.replace("reasoning_effort: high", "use_responses_api: false")
+
+    with (
+        warnings.catch_warnings(),
+        pytest.raises(ConfigError, match="names use_responses_api under 'extra'"),
+    ):
+        warnings.simplefilter("ignore", MissingCredentialsWarning)
+        loaded(tmp_path, body, environ)
+    # The control: a keyword the row does not set is still the caller's to add.
+    assert loaded(tmp_path, OPENAI_TUNED, environ={"OPENAI_API_KEY": "sk-x"}).models[
+        "gpt-5"
+    ].extra == {"reasoning_effort": "high"}
 
 
 # -- endpoints that are not there ------------------------------------------
@@ -561,6 +619,21 @@ def test_no_keys_file_named_drops_the_endpoint_and_says_which_setting(tmp_path):
     assert set(models.endpoints) == {"other"}
     assert models.dropped == {"gateway": "KINGFISHER_MODEL_KEYS_FILE"}
     assert "KINGFISHER_MODEL_KEYS_FILE is not set" in models.unreachable["main-model"]
+
+
+def test_a_keys_file_entry_is_read_without_the_whitespace_around_it(tmp_path):
+    """A key quoted with a trailing space was sent with it, and one of spaces alone was
+    sent as a key rather than dropped as absent."""
+    padded = load(
+        written(tmp_path, TWO_WAYS), OTHER, keys_file=keys_at(tmp_path, 'gateway: " sk-x "\n')
+    )
+    assert padded.endpoints["gateway"].api_key == "sk-x"
+
+    with pytest.warns(MissingCredentialsWarning, match="entry 'gateway' in"):
+        blank = load(
+            written(tmp_path, TWO_WAYS), OTHER, keys_file=keys_at(tmp_path, 'gateway: "  "\n')
+        )
+    assert "gateway" not in blank.endpoints
 
 
 def test_an_entry_the_keys_file_lacks_drops_the_endpoint_naming_both(tmp_path):

@@ -112,6 +112,21 @@ def test_two_leaves_that_collide_are_refused():
         Layout(inputs="same", outputs="same")
 
 
+def test_a_name_with_a_trailing_newline_is_refused():
+    """`$` matches before a final newline, so `data\n` passed as a bare folder name."""
+    with pytest.raises(ValueError, match="bare folder name"):
+        Layout(inputs="data\n")
+
+
+def test_two_leaves_differing_only_in_case_collide():
+    """On macOS `inputs="data"` and `outputs="DATA"` are one folder, so whatever the agent
+    was handed and whatever it wrote shared it."""
+    with pytest.raises(ValueError, match="collide"):
+        Layout(inputs="data", outputs="DATA")
+    with pytest.raises(ValueError, match="already uses"):
+        Layout(inputs="Skills")
+
+
 # -- the permission and memory helpers follow the layout -----------------------
 
 

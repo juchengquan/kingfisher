@@ -55,16 +55,22 @@ class Environment:
             return default
         return raw in {"1", "true", "yes", "on"}
 
-    def optional_number(self, key: str) -> int | None:
-        """An integer, or `None` when the deployment did not set one."""
+    def optional_number(self, key: str, *, least: int) -> int | None:
+        """An integer of `least` or more, or `None` when the deployment did not set one."""
         raw = (self.values.get(key) or "").strip()
         if not raw:
             return None
         try:
-            return int(raw)
+            number = int(raw)
         except ValueError as exc:
             msg = f"{key} must be an integer, got {raw!r}"
             raise ConfigError(msg) from exc
+        # Refused here, where `doctor` reports it, rather than passed to whatever uses it,
+        # which raises from inside every session it opens.
+        if number < least:
+            msg = f"{key} must be at least {least}, got {number}"
+            raise ConfigError(msg)
+        return number
 
     def optional_path(self, key: str) -> Path | None:
         """A path this deployment may or may not have relocated."""
@@ -149,14 +155,14 @@ class Environment:
         # copy here would let the command and a library caller run on different limits.
         limits: dict[str, Any] = {
             name: value
-            for name, key in (
-                ("execution_timeout_s", "KINGFISHER_EXECUTION_TIMEOUT_S"),
-                ("turn_timeout_s", "KINGFISHER_TURN_TIMEOUT_S"),
-                ("session_ttl_s", "KINGFISHER_SESSION_TTL_S"),
-                ("recursion_limit", "KINGFISHER_RECURSION_LIMIT"),
-                ("thread_pool_size", "KINGFISHER_THREAD_POOL_SIZE"),
+            for name, key, least in (
+                ("execution_timeout_s", "KINGFISHER_EXECUTION_TIMEOUT_S", 1),
+                ("turn_timeout_s", "KINGFISHER_TURN_TIMEOUT_S", 1),
+                ("session_ttl_s", "KINGFISHER_SESSION_TTL_S", 0),
+                ("recursion_limit", "KINGFISHER_RECURSION_LIMIT", 1),
+                ("thread_pool_size", "KINGFISHER_THREAD_POOL_SIZE", 1),
             )
-            if (value := self.optional_number(key)) is not None
+            if (value := self.optional_number(key, least=least)) is not None
         }
 
         return Config(
@@ -174,7 +180,7 @@ class Environment:
             # The path too: `load_access_policy` answers `None` for a missing file, and a
             # deployment that meant to have a policy needs to hear where it was looked for.
             access_source=access_file,
-            session_max_bytes=self.optional_number("KINGFISHER_SESSION_MAX_BYTES"),
+            session_max_bytes=self.optional_number("KINGFISHER_SESSION_MAX_BYTES", least=0),
             skills_mounts=paths.skills_mounts,
             assets=paths.assets,
             skills_enabled=self.flag("KINGFISHER_SKILLS_ENABLED"),

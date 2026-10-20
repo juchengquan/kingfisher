@@ -1978,6 +1978,14 @@ WITNESSES: dict[str, dict[str, str]] = {
         # `Config`, `run` returns a `RunResult`, `stream` yields `RunEvent`s. The
         # type of a documented call's answer cannot be private.
         "Config": "embedder",
+        # What a `Config` built in code is made of. `configuration.md` writes
+        # `Endpoint(api_key=...)` for a key no file holds, `middleware.md` names `Models`,
+        # and `upgrading.md` writes `Config(access=SourceIds(...))`; a `Models` holds
+        # `ModelProfile`s, so a caller who can name it must name them.
+        "Endpoint": "document",
+        "Models": "document",
+        "SourceIds": "document",
+        "ModelProfile": "embedder",
         # `configuration.md` writes a `KINGFISHER_WIRE_FORMATS` out, and the factory it
         # shows returns a landing per format.
         "Landing": "document",
@@ -5191,7 +5199,8 @@ PROSE_ATTR_GONE: dict[str, frozenset[str]] = {
     "docs/upgrading.md": frozenset({
         "Config.backend_factory", "Config.deployment_prompt", "Config.plugins_factory",
         "Config.session_backends_factory", "Config.session_id", "Config.sessions_factory",
-        "Config.shell_path_extra", "Config.shell_sandbox", "Kingfisher.agent_named",
+        "Config.shell_path_extra", "Config.shell_sandbox", "Endpoint.adapter",
+        "Kingfisher.agent_named",
         "Kingfisher.artifact", "Kingfisher.held_for", "Kingfisher.pending",
         "Kingfisher.session_size", "Plugins.threads", "Request.data",
         "RunResult.log_path", "RunResult.session_dir",

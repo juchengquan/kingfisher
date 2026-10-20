@@ -31,6 +31,11 @@ _EXPORTS = {
     "ToolContext": "kingfisher.core.agent.tool_context",
     "UnknownSessionError": "kingfisher.core.session.model",
     "Config": "kingfisher.core.config",
+    # What a `Config` built in code is made of: its catalogue, and its vocabulary.
+    "Models": "kingfisher.core.config",
+    "ModelProfile": "kingfisher.core.config",
+    "Endpoint": "kingfisher.core.config",
+    "SourceIds": "kingfisher.core.access.source_ids",
     "WorkspacePaths": "kingfisher.core.config",
     "Landing": "kingfisher.core.config",
     "Kingfisher": "kingfisher.core.service",
@@ -83,12 +88,15 @@ __all__ = [
     "ConfigError",
     "Decision",
     "DecisionError",
+    "Endpoint",
     "Held",
     "InputsError",
     "Inventory",
     "Kingfisher",
     "Landing",
     "LedgerEntry",
+    "ModelProfile",
+    "Models",
     "Origin",
     "Origins",
     "PendingDecision",
@@ -102,6 +110,7 @@ __all__ = [
     "Seeded",
     "Session",
     "SessionBusyError",
+    "SourceIds",
     "SubagentError",
     "ToolContext",
     "ToolSpec",
@@ -127,10 +136,14 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import AccessError as AccessError
     from kingfisher.core.access.source_ids import CallerError as CallerError
     from kingfisher.core.access.source_ids import Held as Held
+    from kingfisher.core.access.source_ids import SourceIds as SourceIds
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.config import Config as Config
     from kingfisher.core.config import ConfigError as ConfigError
+    from kingfisher.core.config import Endpoint as Endpoint
     from kingfisher.core.config import Landing as Landing
+    from kingfisher.core.config import ModelProfile as ModelProfile
+    from kingfisher.core.config import Models as Models
     from kingfisher.core.config import WorkspacePaths as WorkspacePaths
     from kingfisher.core.definitions.seeding import Seeded as Seeded
     from kingfisher.core.definitions.seeding import definitions_source as definitions_source

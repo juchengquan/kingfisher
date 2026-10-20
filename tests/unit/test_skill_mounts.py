@@ -201,6 +201,18 @@ def test_a_label_that_means_something_else_is_refused(mounted, label):
         _ = Definitions.from_config(cfg).registry
 
 
+@pytest.mark.parametrize("label", [".", ".."])
+def test_a_label_naming_a_relative_folder_is_refused(mounted, session_dir, label):
+    """`KINGFISHER_SKILLS_MOUNTS=..=/dir` loaded, and then every session open crashed and
+    left its skills view staged behind."""
+    cfg = replace(mounted, skills_mounts={label: mounted.skills_mounts["vendor"]})
+
+    with pytest.raises(ConfigError, match=r"nor be '\.' or '\.\.'"):
+        _ = Definitions.from_config(cfg).registry
+    with pytest.raises(ConfigError, match=r"nor be '\.' or '\.\.'"):
+        backend_at(cfg, session_dir)
+
+
 def test_a_label_the_catalogue_already_has_is_refused(mounted):
     """The mount's route is longer, so it would hide the catalogue's `local` without a word."""
     cfg = replace(mounted, skills_mounts={"local": mounted.skills_mounts["vendor"]})

@@ -211,6 +211,30 @@ def test_a_limit_that_is_set_is_passed_on(env, name, key):
     assert getattr(config_from_env({**env, key: "7"}), name) == 7
 
 
+#: The least each limit takes. A timeout, a recursion limit or a pool of nothing cannot
+#: run a turn; a TTL or a byte cap of nothing is a deployment keeping nothing.
+FLOORS = {
+    "KINGFISHER_EXECUTION_TIMEOUT_S": 1,
+    "KINGFISHER_TURN_TIMEOUT_S": 1,
+    "KINGFISHER_RECURSION_LIMIT": 1,
+    "KINGFISHER_THREAD_POOL_SIZE": 1,
+    "KINGFISHER_SESSION_TTL_S": 0,
+    "KINGFISHER_SESSION_MAX_BYTES": 0,
+}
+
+
+@pytest.mark.parametrize(("key", "floor"), sorted(FLOORS.items()))
+def test_a_limit_below_its_floor_is_refused_naming_the_setting(env, key, floor):
+    """`KINGFISHER_EXECUTION_TIMEOUT_S=0` passed `doctor`, and then every session open
+    raised deepagents' `ValueError`; a negative TTL or byte cap was taken as written."""
+    assert set(FLOORS) == set(LIMITS.values())
+
+    with pytest.raises(ConfigError, match=f"{key} must be at least {floor}, got {floor - 1}"):
+        config_from_env({**env, key: str(floor - 1)})
+    # The control: the floor itself is a value, so a check one too strict is red too.
+    config_from_env({**env, key: str(floor)})
+
+
 def test_the_keys_file_resolves_like_the_other_path_settings(env, tmp_path, monkeypatch):
     """`~` expanded and a relative path taken from where kingfisher started, where `.env`
     is read -- not from the workspace, which the macOS fence lets the shell read.
@@ -587,7 +611,7 @@ def test_a_reader_answers_from_the_mapping_it_was_given(monkeypatch):
     monkeypatch.setenv("KINGFISHER_RECURSION_LIMIT", "9999")
     reading = Environment({"KINGFISHER_RECURSION_LIMIT": "7"})
 
-    assert reading.optional_number("KINGFISHER_RECURSION_LIMIT") == 7
+    assert reading.optional_number("KINGFISHER_RECURSION_LIMIT", least=1) == 7
 
 
 def test_one_path_reading_now_rather_than_two(tmp_path):

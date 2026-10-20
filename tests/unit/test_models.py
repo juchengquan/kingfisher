@@ -11,6 +11,7 @@ import pytest
 from deepagents.middleware.summarization import compute_summarization_defaults
 
 from kingfisher.core.agent.models import (
+    BUILT_WITH,
     FILLABLE,
     WIRE_FORMATS,
     build_model,
@@ -56,6 +57,32 @@ def test_a_model_entrys_extra_cannot_overrule_its_own_params(cfg):
 
     with pytest.raises(TypeError, match="multiple values for keyword argument"):
         build_model(profile, OPENAI)
+
+
+class _BuiltError(Exception):
+    """What `_Records` raises with the keywords it was handed, before anything is built."""
+
+
+@dataclass(frozen=True)
+class _Records(WireFormat):
+    def resolve(self) -> Any:
+        def build(**kwargs: Any) -> Any:
+            raise _BuiltError(kwargs)
+
+        return build
+
+
+def test_built_with_is_every_keyword_the_build_passes(cfg):
+    """`models.yaml` refuses an `extra` naming one of `BUILT_WITH`, so a keyword the build
+    began passing without joining it would be a `TypeError` from every build again."""
+    every = replace(
+        cfg.models.models["fake-model"], max_retries=1, temperature=0.1, top_p=0.5, extra={}
+    )
+    row = _Records("unused:Unused", WIRE_FORMATS["openai_responses"].lands)
+
+    with pytest.raises(_BuiltError) as built:
+        _build_with(row, every)
+    assert set(built.value.args[0]) == BUILT_WITH
 
 
 def test_the_model_comes_from_the_profile_it_is_handed(cfg):

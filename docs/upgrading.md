@@ -43,6 +43,32 @@ replaced the four layers began.
   slipping past the refusal of nobody named under a policy. A source id that is not a
   string, `[1]` or `[None]`, raises `CallerError` too, where it raised `TypeError`.
 
+## A `Config`'s parts are on `kingfisher`, and wrong settings are refused as read, after #990
+
+- **`from kingfisher import Endpoint, ModelProfile, Models, SourceIds`** names what a
+  `Config` built in code is made of. `configuration.md` tells you to write
+  `Endpoint(api_key=...)` for a key no file holds, and this page writes
+  `Config(access=SourceIds(...))`, but the four were only in `kingfisher.core.config`
+  and `kingfisher.core.access`, which are private and may move. Import them from
+  `kingfisher` instead.
+- **An `extra:` in `models.yaml` naming a keyword kingfisher passes itself is refused at
+  startup**: `model`, `base_url`, `api_key`, `timeout`, `max_tokens`, `max_retries`,
+  `temperature`, `top_p`, and any the endpoint's wire format sets, such as
+  `use_responses_api` on `openai_responses`. Such a file loaded, and then every build
+  raised `TypeError: got multiple values for keyword argument`, in `doctor`, `list` and
+  every turn. Write `timeout_s` and the others as the entry's own keys, and a key in the
+  keys file or under `key_env`.
+- **The limit settings refuse a value below their floor**, naming the setting, and
+  `doctor` reports it as a configuration error: `KINGFISHER_EXECUTION_TIMEOUT_S`,
+  `KINGFISHER_TURN_TIMEOUT_S`, `KINGFISHER_RECURSION_LIMIT` and
+  `KINGFISHER_THREAD_POOL_SIZE` take 1 or more, `KINGFISHER_SESSION_TTL_S` and
+  `KINGFISHER_SESSION_MAX_BYTES` 0 or more. An execution timeout of 0 passed `doctor`
+  and then failed every session open.
+- **A skills mount labelled `.` or `..` is refused**, as one containing `/` already was.
+- **`Layout` refuses two names differing only in case**, such as `inputs="data"` and
+  `outputs="DATA"`, which on macOS are one folder; a name that differs from a reserved
+  one only in case, such as `Skills`; and a name ending in a newline.
+
 ## A caller named wrong raises `CallerError`, after #980
 
 - **`from kingfisher import CallerError`** names what a call raises when it says who

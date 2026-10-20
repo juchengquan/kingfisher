@@ -555,6 +555,18 @@ def test_the_json_form_stays_a_document_when_the_config_will_not_load(
     assert "KINGFISHER_API_STYLE" in captured.err
 
 
+def test_a_limit_below_its_floor_is_a_configuration_error(at_the_command_line, monkeypatch, capsys):
+    """`KINGFISHER_EXECUTION_TIMEOUT_S=0` reported every row ok, and then every session
+    open raised from inside deepagents."""
+    monkeypatch.setenv("KINGFISHER_EXECUTION_TIMEOUT_S", "0")
+
+    assert main(["doctor"]) == 2
+
+    assert "configuration error: KINGFISHER_EXECUTION_TIMEOUT_S must be at least 1" in (
+        capsys.readouterr().err
+    )
+
+
 def test_an_unknown_shell_sandbox_is_a_configuration_error_not_a_traceback(
     at_the_command_line, monkeypatch, capsys
 ):

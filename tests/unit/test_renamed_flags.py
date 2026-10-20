@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import warnings
 
+import pytest
+
 from kingfisher.cli.health import RETIRED
 from kingfisher.core.environment import Environment
 
@@ -80,3 +82,10 @@ def test_a_default_survives_a_name_nobody_set() -> None:
         )
         is False
     )
+
+
+@pytest.mark.parametrize("written", ["1", "true", "yes", "on", " ON "])
+def test_every_spelling_the_guide_documents_turns_a_flag_on(written):
+    """`configuration.md` promises `1`, `true`, `yes` or `on`; a reader that dropped one
+    would turn a capability off for whoever wrote it, with nothing said."""
+    assert Environment({"KINGFISHER_SKILLS_ENABLED": written}).flag("KINGFISHER_SKILLS_ENABLED")

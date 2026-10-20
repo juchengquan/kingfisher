@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from kingfisher.core.agent.models import WIRE_FORMATS
+from kingfisher.core.agent.models import BUILT_WITH, WIRE_FORMATS
 from kingfisher.core.definitions import fields
 
 from .config import (
@@ -256,9 +256,11 @@ def _models(
     endpoints: Mapping[str, Endpoint],
     dropped: Mapping[str, str],
     source: Path,
+    buildable: Mapping[str, WireFormat],
 ) -> tuple[dict[str, ModelProfile], dict[str, str]]:
     """Every model whose endpoint survived, and why each of the others did not."""
     profiles: dict[str, ModelProfile] = {}
+    declared_endpoints = _mapping(document.get("endpoints"), f"{source}: endpoints")
     for name, raw in _mapping(document.get("models"), f"{source}: models").items():
         entry = _mapping(raw, f"{source}: model {name!r}")
         _refuse_unknown(entry, KNOWN_MODEL, f"{source}: model {name!r}")
@@ -273,6 +275,19 @@ def _models(
             msg = (
                 f"{source}: model {name!r} names {', '.join(collision)} under 'extra', "
                 f"which this format already defines; write it directly instead"
+            )
+            raise ConfigError(msg)
+        # Off the file, not `endpoints`, which holds only what this machine has a key for:
+        # the same file would load on one machine and be refused on the next.
+        its_endpoint = declared_endpoints.get(endpoint_name)
+        api = str(its_endpoint["api"]).strip() if isinstance(its_endpoint, Mapping) else ""
+        row = buildable.get(api)
+        sets_itself = BUILT_WITH | set(row.extra if row is not None else ())
+        if collision := tuple(sorted(set(extra) & sets_itself)):
+            msg = (
+                f"{source}: model {name!r} names {', '.join(collision)} under 'extra', "
+                f"which kingfisher passes the chat class itself, from the endpoint, this "
+                f"entry's own keys or its wire format; 'extra' may only add keywords"
             )
             raise ConfigError(msg)
         subject = f"{source}: model {name!r}"
@@ -383,7 +398,7 @@ def load(
             MissingCredentialsWarning,
             stacklevel=2,
         )
-    models, unreachable = _models(document, endpoints, dropped, path)
+    models, unreachable = _models(document, endpoints, dropped, path, buildable)
 
     default = str(document.get("default") or "").strip()
     if not default:
@@ -396,7 +411,7 @@ def load(
         if default in set(_mapping(document.get("models"), str(path))):
             msg = (
                 f"{path}: default model {default!r} runs on an endpoint this machine has "
-                f"no credentials for; it can run {known}"
+                f"no credentials for; it can run {known or 'none'}"
             )
         else:
             msg = f"{path}: default model {default!r} is not defined here; it defines {known}"
