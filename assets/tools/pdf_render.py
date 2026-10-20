@@ -10,6 +10,7 @@ the session's fenced shell through `runtime.context.run`, never in kingfisher's 
 
 from __future__ import annotations
 
+import sys
 from pathlib import PurePosixPath
 
 from langchain.tools import ToolRuntime
@@ -29,7 +30,10 @@ MAX_SCALE = 2.0
 
 KB = 1024
 
-#: Run in the fence as `python -I -c`, against the copy of the PDF in its folder: `count`
+#: What a shell says when the program it was asked to start is not there.
+NOT_FOUND = 127
+
+#: Run in the fence as `<python> -I -c`, against the copy of the PDF in its folder: `count`
 #: prints the pages, and any other word draws the pages named after the scale.
 DRAW = """
 import sys
@@ -103,11 +107,16 @@ def _ran(
     outputs: list[str] | None = None,
 ) -> ScratchRun:
     """One run of `DRAW` over the PDF, or the reason it failed, raised."""
+    # This process's own interpreter, which has pypdfium2: `python` on the shell's `PATH`
+    # need not exist, and was missing on a CI runner.
     ran = runtime.context.run(
-        ["python", "-I", "-c", DRAW, *args], {"doc.pdf": data}, outputs=outputs or []
+        [sys.executable, "-I", "-c", DRAW, *args], {"doc.pdf": data}, outputs=outputs or []
     )
     if ran.error:
         raise PermissionError(ran.error)
+    if ran.exit_code == NOT_FOUND:
+        msg = f"the session's shell could not start Python: {ran.output.strip()[-300:]}"
+        raise OSError(msg)
     if ran.exit_code != 0:
         msg = f"{file_path}: not a PDF this tool can draw ({ran.output.strip()[-300:]})"
         raise ValueError(msg)
