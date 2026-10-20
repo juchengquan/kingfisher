@@ -1205,6 +1205,9 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
         assert _prose_unresolved(f"`{absent}`") == [absent], absent
     # And a lazy package's exports exist though only `__getattr__` makes them.
     assert _prose_unresolved("`kingfisher.plugins.Plugins`, `core.access.Capabilities`") == []
+    # A class is not its module's file, though a case-insensitive disk finds one for it:
+    # without this the rule above passed on macOS in exactly the state Linux failed.
+    assert _module_file("core.access.Capabilities") is None
 
 
 def test_the_prose_roots_are_read_off_the_tree_and_not_written_down(tmp_path):
