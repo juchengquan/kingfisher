@@ -13,6 +13,7 @@ import tokenize
 from pathlib import Path
 
 from tests.conftest import repository_root
+from tests.unit.test_architecture import _prose_run_together
 
 ROOT = repository_root()
 
@@ -83,15 +84,33 @@ def test_no_name_calls_a_subagent_by_the_other_word():
     assert not named, f"named for the noun rather than `subagent`: {named}"
 
 
+def _prose(path: Path) -> str:
+    """A file's words, with a comment wrapped across lines joined back up."""
+    return _prose_run_together(path) if path.suffix == ".py" else path.read_text(encoding="utf-8")
+
+
 def test_no_prose_calls_a_subagent_by_the_other_word():
     """Docs, comments, messages and the shipped examples' prompts, which is where the
     word lived: most of its uses were prose rather than code.
     """
     said = [
-        f"{path.relative_to(ROOT)}:{text.count(chr(10), 0, m.start()) + 1}: {m.group(0)}"
+        f"{path.relative_to(ROOT)}: {m.group(0)!r}"
         for path in _files()
-        for text in [path.read_text(encoding="utf-8")]
-        for m in NOUN_IN_PROSE.finditer(text)
+        for m in NOUN_IN_PROSE.finditer(_prose(path))
     ]
 
     assert not said, f"the noun is `subagent`: {said}"
+
+
+def test_the_prose_rule_reads_a_comment_that_wraps(tmp_path):
+    """A `#` line ending on "the" and the next opening on the noun read as no noun at all.
+
+    Both directions, as for the mode rule: the tree has nothing for it to find.
+    """
+    wrapped = tmp_path / "wrapped.py"
+    wrapped.write_text("# The turn hands the work to the\n# delegate, which answers.\nX = 1\n")
+    verb = tmp_path / "verb.py"
+    verb.write_text("# An agent that may\n# delegate hands the work on.\nX = 1\n")
+
+    assert NOUN_IN_PROSE.search(_prose(wrapped))
+    assert not NOUN_IN_PROSE.search(_prose(verb)), "the verb is the right word"
