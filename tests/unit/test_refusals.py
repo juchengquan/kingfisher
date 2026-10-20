@@ -206,6 +206,11 @@ def a_tool_module_declaring_nothing(cfg):
     _write(_root(cfg, "tools") / "x.py", "X = 1\n")
 
 
+def a_subagent_module_declaring_a_name_twice(cfg):
+    entry = "{'name': 'x', 'description': 'd', 'system_prompt': 'Go.'}"
+    _write(_root(cfg, "subagents") / "twice.py", f"SUBAGENTS = [{entry}, {entry}]\n")
+
+
 def a_tool_module_defining_a_name_twice(cfg):
     _write(
         _root(cfg, "tools") / "twice.py",
@@ -288,11 +293,13 @@ REFUSALS: dict[str, Refusal] = {
         2, defect=a_tool_module_declaring_nothing
     ),
     "core/definitions/middlewares/catalogue.py::LocalMiddlewareRepository.found": Refusal(
-        1, defect=two_files_defining_a_middleware_of_a_name),
+        2, defect=two_files_defining_a_middleware_of_a_name),
     "core/definitions/middlewares/catalogue.py::_refuse_unless_buildable": Refusal(
         2, defect=a_middleware_that_is_not_one),
     "core/definitions/subagents/catalogue.py::LocalSubagentRepository.bundles": Refusal(
         1, defect=a_bundle_holding_two_definitions),
+    "core/definitions/subagents/catalogue.py::_declared_in": Refusal(
+        1, defect=a_subagent_module_declaring_a_name_twice),
     "core/definitions/subagents/spec.py::_carried": Refusal(
         2, defect=a_portable_subagent_carrying_tools_that_are_not_a_list),
     "core/definitions/subagents/spec.py::_portable": Refusal(

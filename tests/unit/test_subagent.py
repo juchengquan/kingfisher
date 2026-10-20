@@ -87,6 +87,23 @@ def test_specs_key_on_the_declared_name_not_the_filename(tmp_path):
     assert set(specs) == {"reviewer"}
 
 
+def test_one_module_declaring_a_name_twice_is_refused(tmp_path):
+    """Keyed by name, the second replaced the first, so a subagent restricted to A
+    could come back open to everyone."""
+    directory = tmp_path / "subagents"
+    directory.mkdir()
+    (directory / "pack.py").write_text(
+        "SUBAGENTS = [\n"
+        "    {'name': 'x', 'description': 'd', 'system_prompt': 'one', 'source_ids': ['A']},\n"
+        "    {'name': 'x', 'description': 'd', 'system_prompt': 'two'},\n"
+        "]\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SubagentError, match=r"pack\.py: subagent 'x' is defined twice in"):
+        _ = LocalSubagentRepository(directory).specs
+
+
 def test_two_files_claiming_one_name_are_told_apart_by_file(tmp_path):
     """One used to shadow the other by sort order, so the loader refused the pair."""
     directory = tmp_path / "subagents"

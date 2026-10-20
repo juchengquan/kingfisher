@@ -764,7 +764,11 @@ def test_every_field_fragment_in_the_readme_parses_too(formats_doc):
     from kingfisher.core.definitions.agents.reading import read
     from kingfisher.core.definitions.documents import DefinitionText
 
-    required = "name: probe\ndescription: A probe.\nsystem_prompt: |\n  Do the task.\n"
+    required = {
+        "name": "name: probe\n",
+        "description": "description: A probe.\n",
+        "system_prompt": "system_prompt: |\n  Do the task.\n",
+    }
     fragments = [
         (section.startswith("Agents"), body)
         for section in re.split(r"\n## ", formats_doc.read_text(encoding="utf-8"))
@@ -774,10 +778,14 @@ def test_every_field_fragment_in_the_readme_parses_too(formats_doc):
 
     assert fragments, "no field fragments found -- this asserts nothing"
     for is_agent, fragment in fragments:
+        # Only what it leaves out: a whole definition shown under its path writes its own,
+        # and a key written twice is refused.
+        written = set(re.findall(r"^(\w+):", fragment, re.MULTILINE))
+        whole = "".join(line for key, line in required.items() if key not in written) + fragment
         if is_agent:
-            read(DefinitionText(required + fragment, _Path("readme.yaml")))
+            read(DefinitionText(whole, _Path("readme.yaml")))
         else:
-            a_subagent(required + fragment, "readme.yaml")
+            a_subagent(whole, "readme.yaml")
 
 
 # -- the one preset that consults another ---------------------------------

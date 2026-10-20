@@ -11,6 +11,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import SEPARATOR, CapabilityError
+from kingfisher.core.config import ConfigError
 
 from . import spec as skill
 from .catalogue import DEEPEST, MOUNT_DEEPEST, reachable
@@ -58,6 +59,14 @@ def sources(root: Path) -> tuple[tuple[str, str], ...]:
         if (entry / skill.FILENAME).is_file():
             continue
         if any((child / skill.FILENAME).is_file() for child in entry.iterdir() if child.is_dir()):
+            # Refused, not skipped: listed under the root's label, its skills would be
+            # described here while the run mounted the root's namesakes in their place.
+            if entry.name == CATALOGUE:
+                msg = (
+                    f"the skills catalogue has a folder called {CATALOGUE!r}, which is "
+                    "what the skills directly in it are called -- rename the folder"
+                )
+                raise ConfigError(msg)
             found.append((entry.name, f"/{entry.name}/"))
     return tuple(found)
 

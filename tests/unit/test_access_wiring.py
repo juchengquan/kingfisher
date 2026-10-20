@@ -205,6 +205,14 @@ CALLERS_NAMED_WRONG = {
     "two datazones": lambda zoned: held_by(zoned, ("A", Datazone("hr"), Datazone("finance"))),
     "an unknown datazone": lambda zoned: held_by(zoned, ("A", Datazone("fiance"))),
     "a datazone with UNSCOPED": lambda _: with_datazone(UNSCOPED, "hr"),
+    "a datazone with nobody named": lambda zoned: caller_holds(zoned, with_datazone(None, "hr")),
+    "a bare string with a datazone": lambda zoned: caller_holds(zoned, with_datazone("AB", "hr")),
+    "a source id that is a number": lambda zoned: caller_holds(
+        zoned, [1]  # ty: ignore[invalid-argument-type]
+    ),
+    "a source id that is None": lambda zoned: caller_holds(
+        zoned, [None]  # ty: ignore[invalid-argument-type]
+    ),
 }
 
 ZONED = "source_ids: [A, B]\ndatazones: [finance, hr]\n"
@@ -266,7 +274,7 @@ def test_meaning_no_caller_is_still_how_you_say_it(cfg):
     assert caller_holds(kf.access, []) is None
 
 
-def test_a_declared_caller_is_still_expanded(cfg):
+def test_a_declared_caller_is_still_answered(cfg):
     """The other direction: a rule refusing on the names rather than on the absence of
     a vocabulary would pass every test above and break every policied deployment.
     """
@@ -380,6 +388,21 @@ def test_a_subagent_with_no_source_ids_line_is_named_too(cfg):
 
     assert ("subagent", "auditor") in kf.access_report.unrestricted
     assert "auditor" in "\n".join(kf.access_report.lines())
+
+
+def test_a_subagent_restricted_only_by_datazone_is_not_named(cfg):
+    """A `datazone:` line alone restricts, so reading only `source_ids:` would report a
+    subagent only finance can reach as reachable by everyone."""
+    subagents = cfg.catalogue_roots["subagents"]
+    subagents.mkdir(parents=True, exist_ok=True)
+    (subagents / "ledger.yaml").write_text(
+        "name: ledger\ndescription: A subagent.\ndatazone: finance\nsystem_prompt: |\n  Do it.\n",
+        encoding="utf-8",
+    )
+
+    kf = Kingfisher(replace(cfg, access=vocabulary(ZONED)), sessions=LocalSessions())
+
+    assert ("subagent", "ledger") not in kf.access_report.unrestricted
 
 
 def test_a_definition_that_restricts_is_not_named(policied):

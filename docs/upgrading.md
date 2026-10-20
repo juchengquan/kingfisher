@@ -18,6 +18,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Definitions refuse what would have loaded wrong, after #994
+
+- **A key written twice in one YAML mapping is refused**, at any depth, in an agent or
+  subagent file and in `source_ids.yaml`. YAML kept the last, so a second
+  `source_ids:` replaced the first without a word. Delete the line you did not mean.
+- **A module listing one subagent or middleware twice is refused** with "defined twice
+  in this file", as a tool already was; the subagent's second entry used to replace
+  the first.
+- **A skills folder called `catalogue` is refused**: it is the label of the skills
+  directly in the root, so its skills were described while the root's ran. Rename it.
+- **`name`, `description` and `system_prompt` are refused as a list or a mapping**,
+  which were stringified -- a list prompt reached the model as a Python repr.
+- **`with_datazone(None, zone)` raises `CallerError`**, and so does a run, session or
+  listing given a datazone and no source ids: the zone alone was read as a caller,
+  slipping past the refusal of nobody named under a policy. A source id that is not a
+  string, `[1]` or `[None]`, raises `CallerError` too, where it raised `TypeError`.
+
 ## A caller named wrong raises `CallerError`, after #980
 
 - **`from kingfisher import CallerError`** names what a call raises when it says who

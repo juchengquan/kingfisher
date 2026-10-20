@@ -784,6 +784,11 @@ add one to later; a changed constructor is not easy to take back.
 
 ```yaml
 tools: [sql_query, http_fetch]
+```
+
+or
+
+```yaml
 tools:
   - sql_query
   - http_fetch
