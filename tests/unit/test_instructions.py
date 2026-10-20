@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
@@ -89,6 +90,42 @@ def test_a_build_hands_the_instructions_to_every_subagent(cfg, session_dir):
 
     told = subagent_of(built, "helper")["system_prompt"]
     assert told.index("House rule: cite every figure.") < told.index("You check figures.")
+
+
+@pytest.mark.parametrize("rule", ["House rule: cite every figure.", ""], ids=["rule", "none"])
+def test_general_purpose_is_told_the_house_rules_as_a_declared_subagent_is(scripted, rule):
+    """kingfisher supplied `general-purpose` with deepagents' bare prompt, so a turn
+    delegated to it escaped every house rule a declared subagent was held to.
+
+    Driven, and the subagent's own model call read: the spec kingfisher hands over is only
+    what deepagents is asked to run.
+    """
+    an_agent(scripted, builtin_tools="[read_file, task]")
+    scripted.authored_files[INSTRUCTIONS_FILE].write_text(rule, encoding="utf-8")
+    Scripted.script.extend(
+        [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "task",
+                        "args": {"description": "check", "subagent_type": "general-purpose"},
+                        "id": "t",
+                    }
+                ],
+            ),
+            AIMessage("checked"),
+            AIMessage("done"),
+        ]
+    )
+    Kingfisher(scripted, sessions=LocalSessions()).run(Request("go", agent="only"))
+    systems = [heard[0].text for heard in Scripted.heard]
+
+    assert len(systems) == 3, "the subagent was never called, so the rest is vacuous"
+    told = systems[1]
+    deepagents_own = GENERAL_PURPOSE_SUBAGENT["system_prompt"]
+    assert told.startswith(f"{rule}\n\n---\n\n{deepagents_own}" if rule else deepagents_own)
+    assert "You are kingfisher" not in told
 
 
 def test_a_prompt_left_in_the_workspace_is_refused(cfg):
