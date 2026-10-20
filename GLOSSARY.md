@@ -91,8 +91,7 @@ offers: any one of several, each either a single source id or a set that must be
 _Avoid_: required sources, permissions, ACL
 
 **Vocabulary**:
-The source ids a deployment declares, and which of them cover or require others. It holds no
-audiences.
+The source ids a deployment declares, each standing only for itself. It holds no audiences.
 _Avoid_: access file, access policy
 
 **Datazone**:

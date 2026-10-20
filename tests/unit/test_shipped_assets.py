@@ -1056,7 +1056,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
         ),
         "subagents/sweeper.yaml": ("middlewares", ("call-cap-generous", "tool-note"), ()),
         "agents/analyst.yaml": ("source_ids", ("sales_db", "audit_log"), ()),
-        "subagents/auditor.yaml": ("source_ids", ("sales_db", "audit_log", "warehouse"), ()),
+        "subagents/auditor.yaml": ("source_ids", ("sales_db", "audit_log"), ()),
         # The datazone beside the source id, from one file that names both: the two go on
         # separate lines of `source_ids.yaml`, so a record holding them together could not
         # tell a reader what to write.
@@ -1465,23 +1465,8 @@ def test_the_vocabulary_ships_and_reads(shipped):
     source_ids = _vocabulary(shipped)
 
     assert source_ids is not None
-    assert set(source_ids.names) == {
-        "sales_db",
-        "audit_log",
-        "warehouse",
-        "pii",
-        "sales_db_pii",
-    }
-    assert source_ids.compounds == {"sales_db_pii": ("sales_db", "pii")}
-
-
-def test_the_containing_source_id_reaches_what_it_contains(shipped):
-    """`warehouse` appears on no definition in this set, which is the point of shipping
-    it: a source id that reaches things without being written on them.
-    """
-    source_ids = _vocabulary(shipped)
-
-    assert source_ids.expand(["warehouse"]) == frozenset({"warehouse", "sales_db", "audit_log"})
+    assert source_ids.names == {"sales_db", "audit_log", "pii"}
+    assert source_ids.datazones == {"emea", "apac"}
 
 
 def test_every_source_id_the_presets_name_is_declared(shipped):
@@ -1501,7 +1486,7 @@ def test_every_source_id_the_presets_name_is_declared(shipped):
 
 
 def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
-    """The compounding case, asserted against the files rather than described: one
+    """The narrowing case, asserted against the files rather than described: one
     subagent, and an auditor holds fewer tools than an analyst.
     """
     specs = LocalSubagentRepository(shipped / "subagents").specs
@@ -1513,7 +1498,7 @@ def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
         """Both halves, as the build takes them: what the definition grants, less the
         tools whose own audience shuts this caller out.
         """
-        held = source_ids.expand(names)
+        held = source_ids.known(names)
         shut = out_of_reach(tools, held)
         return tuple(one for one in auditor.declares(held).tools or () if one not in shut)
 
@@ -1521,9 +1506,6 @@ def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
     # Degraded, not empty: it still verifies what it can, and its prompt says so.
     # `sql_query` goes by its own line now -- the auditor's entry for it is bare.
     assert holds("audit_log") == ("line_count",)
-    # And covering reaches a tool's own audience as it reaches an entry's:
-    # `warehouse` is written on nothing here, covers `sales_db`, and so gets it.
-    assert holds("warehouse") == ("sql_query", "line_count")
 
 
 def test_the_shipped_quarters_is_for_sales_db_callers_in_emea(shipped):
@@ -1543,7 +1525,6 @@ def test_the_shipped_quarters_is_for_sales_db_callers_in_emea(shipped):
         return "quarters" in handed_work_by([agents["analyst"]], subagents, held)
 
     assert reached(["sales_db"], "emea")
-    assert reached(["warehouse"], "emea"), "covering `sales_db` is enough"
     assert not reached(["sales_db"], "apac")
     assert not reached(["sales_db"], None), "no datazone reaches nothing zoned"
     assert not reached(["audit_log"], "emea")
@@ -1558,14 +1539,14 @@ def test_an_entry_that_states_nothing_inherits(shipped):
     analyst = specs["analyst"]
 
     assert analyst.skill_audiences == {"tabular-qa": ("sales_db",)}
-    assert analyst.declares(source_ids.expand(["audit_log"])).skills == ("code-review",)
-    assert analyst.declares(source_ids.expand(["sales_db"])).skills == (
+    assert analyst.declares(source_ids.known(["audit_log"])).skills == ("code-review",)
+    assert analyst.declares(source_ids.known(["sales_db"])).skills == (
         "tabular-qa",
         "code-review",
     )
     # Every tools entry is a name: `sql_query` says `sales_db` itself, which is asserted
     # by `test_the_shipped_database_tool_says_who_it_is_for`.
-    assert analyst.declares(source_ids.expand(["audit_log"])).tools == (
+    assert analyst.declares(source_ids.known(["audit_log"])).tools == (
         "sql_query",
         "csv_profile::csv_profile",
         "line_count",
@@ -1580,30 +1561,6 @@ def test_the_shipped_database_tool_says_who_it_is_for(shipped):
 
     assert found["sql_query"].source_ids == ("sales_db",)
     assert found["sql_tables"].source_ids == "*", "the schema listing is not the database"
-
-
-def test_a_shipped_requirement_takes_both_source_ids_at_once(shipped):
-    """The example file's claim that a `warehouse` holding `pii` derives the compound, and
-    one alone does not, said the opposite for as long as the prose existed with every
-    test still green.
-    """
-    source_ids = _vocabulary(shipped)
-
-    assert "sales_db_pii" in source_ids.expand(["sales_db", "pii"])
-    assert "sales_db_pii" not in source_ids.expand(["sales_db"])
-    assert "sales_db_pii" not in source_ids.expand(["pii"])
-    # Covering `sales_db` is not being classified for it, but expansion runs first, so a
-    # `warehouse` holding `pii` derives the compound without holding `sales_db` by name.
-    assert "sales_db_pii" in source_ids.expand(["warehouse", "pii"])
-    assert "sales_db_pii" not in source_ids.expand(["warehouse"])
-
-
-def test_a_shipped_compound_cannot_be_presented_by_a_caller(shipped):
-    """It is derived, so claiming it would be claiming the conclusion."""
-    from kingfisher.core.access.source_ids import AccessError
-
-    with pytest.raises(AccessError, match=r"all of \[pii, sales_db\]"):
-        _vocabulary(shipped).expand(["sales_db_pii"])
 
 
 def test_the_set_shows_an_audience_on_a_skills_entry(shipped):

@@ -17,19 +17,9 @@ from kingfisher.core.access.source_ids import (
 )
 
 
-def vocabulary(**covers: tuple[str, ...]) -> SourceIds:
-    """A flat A/B/C vocabulary, plus any covering source ids the test names."""
-    names = {one: (one,) for one in ("A", "B", "C")}
-    for name, holds in covers.items():
-        names[name] = (name, *holds)
-    return SourceIds(names=names)
-
-
-def requiring(**requires: tuple[str, ...]) -> SourceIds:
-    """The same vocabulary, plus compounds a caller must hold the parts of."""
-    names = {one: (one,) for one in ("A", "B", "C")}
-    names.update({name: (name,) for name in requires})
-    return SourceIds(names=names, compounds=dict(requires))
+def vocabulary() -> SourceIds:
+    """A flat A/B/C vocabulary."""
+    return SourceIds(names=frozenset({"A", "B", "C"}))
 
 
 # -- who reaches what -------------------------------------------------------
@@ -113,24 +103,19 @@ def test_a_star_entry_never_narrows():
     assert narrowing(ALL, source_ids=("A",)) == ()
 
 
-def test_a_contained_entry_does_not_narrow():
-    """Judged on meaning, not spelling."""
-    assert narrowing(("A",), source_ids=("wide",), vocab=vocabulary(wide=("A",))) == ()
-
-
-def test_a_compound_does_not_narrow_beside_either_part():
-    """Either part, in either direction: the definition names the compound and the entry
+def test_an_inline_set_does_not_narrow_beside_either_part():
+    """Either part, in either direction: the definition writes the set and the entry
     names a part, or the other way about.
     """
-    vocab = vocabulary(**{"A+B": ()})
-    both = SourceIds(names=vocab.names, compounds={"A+B": ("A", "B")})
-    assert narrowing(("A",), source_ids=("A+B",), vocab=both) == ()
-    assert narrowing(("A+B",), source_ids=("A",), vocab=both) == ()
+    both = (frozenset({"A", "B"}),)
+    assert narrowing(("A",), source_ids=both) == ()
+    assert narrowing(both, source_ids=("A",)) == ()
 
 
-def test_a_compound_sharing_no_part_narrows():
-    both = SourceIds(names={n: (n,) for n in ("A", "B", "C", "A+B")}, compounds={"A+B": ("A", "B")})
-    assert narrowing(("C",), source_ids=("A+B",), vocab=both) == (("x.yaml: skill audit", "C"),)
+def test_an_inline_set_sharing_no_part_narrows():
+    assert narrowing(("C",), source_ids=(frozenset({"A", "B"}),)) == (
+        ("x.yaml: skill audit", "C"),
+    )
 
 
 def test_the_second_requirement_a_narrowing_states_actually_works():
@@ -148,17 +133,13 @@ def test_the_second_requirement_a_narrowing_states_actually_works():
 # -- the vocabulary ---------------------------------------------------------
 
 
-def test_a_source_id_expands_to_itself():
-    assert vocabulary().expand(["A"]) == frozenset({"A"})
+def test_a_source_id_is_held_as_itself_and_nothing_more():
+    """A name covers nothing: a caller sending `A` holds `A`, whatever else is declared."""
+    assert vocabulary().known(["A"]) == frozenset({"A"})
 
 
-def test_a_containing_source_id_reaches_what_it_contains():
-    """The reason `contains` exists: `admin` need not appear on a single line."""
-    assert vocabulary(admin=("A", "B")).expand(["admin"]) == frozenset({"admin", "A", "B"})
-
-
-def test_no_source_ids_at_all_expands_to_nothing():
-    assert vocabulary().expand([]) == frozenset()
+def test_no_source_ids_at_all_holds_nothing():
+    assert vocabulary().known([]) == frozenset()
 
 
 def test_an_unknown_source_id_is_refused_rather_than_ignored():
@@ -166,7 +147,7 @@ def test_an_unknown_source_id_is_refused_rather_than_ignored():
     denied.
     """
     with pytest.raises(AccessError, match="unknown source id"):
-        vocabulary().expand(["Q"])
+        vocabulary().known(["Q"])
 
 
 def test_a_definition_naming_an_undeclared_source_id_is_refused():
@@ -210,49 +191,6 @@ def test_a_conjunction_is_one_entry_of_an_or():
     assert not reaches(audience, frozenset({"A"}))
 
 
-def test_holding_every_part_earns_the_named_compound():
-    assert requiring(both=("A", "B")).expand(["A", "B"]) == frozenset({"A", "B", "both"})
-
-
-def test_holding_one_part_earns_nothing():
-    assert requiring(both=("A", "B")).expand(["A"]) == frozenset({"A"})
-
-
-def test_contains_satisfies_a_requirement():
-    """Expansion first, then requirements against what is held afterwards."""
-    vocab = SourceIds(
-        names={"A": ("A",), "B": ("B",), "both": ("both",), "admin": ("admin", "A", "B")},
-        compounds={"both": ("A", "B")},
-    )
-
-    assert vocab.expand(["admin"]) == frozenset({"admin", "A", "B", "both"})
-
-
-def test_a_compound_a_source_id_contains_comes_with_it():
-    """Earning a compound earns whatever contains it, or a name written into a
-    `contains` chain would reach less than the same name written by hand.
-    """
-    vocab = SourceIds(
-        names={"A": ("A",), "B": ("B",), "both": ("both", "C"), "C": ("C",)},
-        compounds={"both": ("A", "B")},
-    )
-
-    assert vocab.expand(["A", "B"]) == frozenset({"A", "B", "both", "C"})
-
-
-def test_a_caller_may_not_present_a_compound():
-    """It is what holding the parts adds up to, not something to claim -- otherwise one
-    assertion stands in for the two the requirement exists to demand.
-    """
-    with pytest.raises(AccessError, match="derived"):
-        requiring(both=("A", "B")).expand(["both"])
-
-
-def test_the_refusal_names_the_parts_to_present_instead():
-    with pytest.raises(AccessError, match=r"all of \[A, B\]"):
-        requiring(both=("A", "B")).expand(["both"])
-
-
 def test_an_undeclared_name_inside_a_conjunction_is_refused():
     """A name typed from memory is no likelier to be right for having been written next
     to another one.
@@ -281,7 +219,7 @@ def test_reaching_one_audience_is_that_audience():
     assert jointly([("A",)]) == ("A",)
 
 
-def test_a_compound_stays_compound():
+def test_a_set_stays_a_set():
     assert jointly([(frozenset({"A", "B"}),)]) == (frozenset({"A", "B"}),)
 
 
@@ -312,7 +250,7 @@ def test_two_ways_that_need_different_things_are_both_kept():
 # -- and the row it is written to ------------------------------------------------
 
 
-def test_a_compound_survives_a_row_and_comes_back_able_to_be_joined():
+def test_a_set_survives_a_row_and_comes_back_able_to_be_joined():
     """`unlisted` has to give back the frozenset `listed` flattened, not the tuple it
     wrote: `jointly` reads anything that is not a frozenset as one source id's name, so
     handed a tuple it compares a tuple with a string and the turn dies where no
@@ -325,21 +263,3 @@ def test_a_compound_survives_a_row_and_comes_back_able_to_be_joined():
     assert row == ("A", ("B", "C")), "a row has to be JSON, so the set is a sorted list"
     assert unlisted(list(row)) == audience
     assert jointly([unlisted(list(row)), ("A",)]) == ("A",)
-
-
-
-def test_an_unknown_source_id_is_offered_only_the_names_a_caller_may_present():
-    """The refusal above lists what this deployment defines, and a compound is not
-    something a caller can hold -- `expand` refuses one in as many words. Listed, it
-    sent whoever mistyped a name straight into that second refusal.
-
-    `refuse_undeclared` still lists them, and should: there a *definition* is asking,
-    and a definition may name one.
-    """
-    ids = requiring(both=("A", "B"))
-
-    with pytest.raises(AccessError) as refused:
-        ids.expand(["Q"])
-
-    assert "this deployment defines A, B, C" in str(refused.value)
-    assert "both" not in str(refused.value)
