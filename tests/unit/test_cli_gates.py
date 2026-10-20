@@ -444,16 +444,13 @@ def _a_paused_session_only_a_reaches(cfg):
     """A deployment with source ids, and a paused session pinned to an agent that only
     `A` reaches -- with a pending call whose arguments are worth not leaking.
     """
-    from dataclasses import replace
 
-    import yaml
 
-    from kingfisher.core.access.policy import parse
     from kingfisher.core.session.store import pending_as_mark, write_pause_mark
     from tests.conftest import an_agent, harness_of, pin, start
 
     an_agent(cfg, "only_a", source_ids="[A]")
-    policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
+    policied = cfg
     kf = kingfisher.Kingfisher(policied, sessions=kingfisher.plugins.LocalSessions())
     start(policied, "s-1")
     pin(kf, "s-1", "only_a")
@@ -582,14 +579,10 @@ def _ran_as_printed(monkeypatch, cfg, said: str, result: RunResult) -> None:
     one `decide` refuses.
 
     Through the real `_drive`, against a session only `A` reaches: with
-    `_drive` stubbed, a line naming no caller passed here and was refused under a policy.
+    `_drive` stubbed, a line naming no caller passed here and was refused where a
+    definition carries a lock.
     """
-    from dataclasses import replace
-
-    import yaml
-
     from kingfisher.cli.progress import show
-    from kingfisher.core.access.policy import parse
     from kingfisher.core.layout import PAUSED_STATE
     from kingfisher.core.service import Kingfisher
     from kingfisher.core.session import runtime
@@ -600,13 +593,14 @@ def _ran_as_printed(monkeypatch, cfg, said: str, result: RunResult) -> None:
     argv = shlex.split(line.removeprefix("answer with: "))
     assert argv[0] == "kingfisher"
 
+    # The agent's own `source_ids:` is the lock, so this workspace already refuses a
+    # line naming nobody; the datazone the run names is one no definition requires,
+    # which is held and opens nothing.
     an_agent(cfg, "only_a", source_ids="[A]")
-    vocabulary = "source_ids: [A, B]\ndatazones: [finance, hr]\n"
-    policied = replace(cfg, access=parse(yaml.safe_load(vocabulary), source="t"))
-    kf = Kingfisher(policied, sessions=LocalSessions())
-    start(policied, result.session_id)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    start(cfg, result.session_id)
     pin(kf, result.session_id, "only_a")
-    harness = harness_of(policied, result.session_id)
+    harness = harness_of(cfg, result.session_id)
     drive(write_pause_mark(harness, {"pending": pending_as_mark(list(result.pending))}))
     drive(harness.store(PAUSED_STATE, b"held"))
 
@@ -617,7 +611,7 @@ def _ran_as_printed(monkeypatch, cfg, said: str, result: RunResult) -> None:
         raise _JudgedError
 
     monkeypatch.setattr(runtime, "resume_payload", judged)
-    monkeypatch.setattr(cli, "config_from_env", lambda: policied)
+    monkeypatch.setattr(cli, "config_from_env", lambda: cfg)
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: kf)
     monkeypatch.setattr(cli, "show", show)
 

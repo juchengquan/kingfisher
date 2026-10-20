@@ -49,22 +49,6 @@ def test_a_supplied_catalogue_matching_the_configuration_is_not_an_override(cfg)
     assert found.skills.kind == "default"
 
 
-def test_an_absent_source_ids_file_still_says_where_it_looked(cfg):
-    """The line this whole record was worth building for."""
-    looked = cfg.authored_files["source_ids.yaml"]
-
-    found = Origins.of(replace(cfg, access=None, access_source=looked))
-
-    assert found.source_ids == Origin("unset", looked)
-
-
-def test_a_config_assembled_in_code_reports_no_source_ids_file(cfg):
-    """Distinct from the above, and the distinction is actionable: one means "go and
-    look at that path", the other means "there was never a file".
-    """
-    assert Origins.of(cfg).source_ids == Origin("unset", None)
-
-
 def test_the_models_file_is_named(cfg, tmp_path):
     """`doctor` counts models and endpoints and has never said which file they came
     from, which is the question somebody sharing a catalogue across a fleet actually
@@ -123,7 +107,7 @@ def test_entries_are_derived_from_the_record_not_listed_beside_it(cfg):
 
     assert names == [
         "agents", "middlewares", "skills", "subagents", "tools",
-        "models", "source_ids", "seed", "sessions",
+        "models", "seed", "sessions",
     ]
 
 
@@ -220,14 +204,12 @@ def test_no_value_on_the_line_contains_a_space(cfg, tmp_path):
         Definitions.from_roots(cfg.catalogue_roots),
         tools=Definitions.from_roots({**cfg.catalogue_roots, "tools": tmp_path}).tools,
     )
-    line = Origins.of(replace(cfg, access=None, access_source=tmp_path / "source_ids.yaml"),
-                      catalogue=catalogue, sessions=object()).line()
+    line = Origins.of(cfg, catalogue=catalogue, sessions=object()).line()
 
     pairs = line.split(" ")
     assert all("=" in pair for pair in pairs), line
     assert "sessions=<supplied>" in pairs
     assert f"tools={tmp_path}(overridden)" in pairs
-    assert f"source_ids=unset({tmp_path / 'source_ids.yaml'})" in pairs
 
 
 def test_starting_a_kingfisher_says_where_it_reads_from_once(cfg, caplog):

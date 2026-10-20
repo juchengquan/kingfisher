@@ -132,16 +132,11 @@ def test_a_portable_subagent_is_built_only_for_a_caller_it_admits(cfg, session_d
     """Driven through the real builder, and the dict deepagents receives is checked
     for the key as well: kingfisher reads the audience, and nothing below it should.
     """
-    from dataclasses import replace
 
-    import yaml
 
-    from kingfisher.core.access.policy import parse
 
     write_portable(cfg, extra='    "source_ids": ["A"],')
-    policied = replace(
-        cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="source_ids.yaml")
-    )
+    policied = cfg
 
     def handed(held: str) -> list:
         assembled = build_agent(

@@ -8,8 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from kingfisher.core.access import load_access_policy
-
 from . import model_catalogue
 from .config import (
     FOLDED_SETTINGS,
@@ -149,8 +147,6 @@ class Environment:
         # One file, unlike the definition roots: endpoints and models cross-reference,
         # and a split would let half a catalogue load.
         models_file = paths.authored_files["models.yaml"]
-        # The source-id vocabulary only: who reaches what is in the definitions.
-        access_file = paths.authored_files["source_ids.yaml"]
         # Passed only when set, so the field on `Config` is the one default: a second
         # copy here would let the command and a library caller run on different limits.
         limits: dict[str, Any] = {
@@ -176,10 +172,6 @@ class Environment:
                 model_catalogue.wire_formats(self.optional_text("KINGFISHER_WIRE_FORMATS")),
                 keys_file=self.optional_path("KINGFISHER_MODEL_KEYS_FILE"),
             ),
-            access=load_access_policy(access_file),
-            # The path too: `load_access_policy` answers `None` for a missing file, and a
-            # deployment that meant to have a policy needs to hear where it was looked for.
-            access_source=access_file,
             session_max_bytes=self.optional_number("KINGFISHER_SESSION_MAX_BYTES", least=0),
             skills_mounts=paths.skills_mounts,
             assets=paths.assets,

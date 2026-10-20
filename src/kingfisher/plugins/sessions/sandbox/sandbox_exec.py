@@ -66,8 +66,8 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name
     # carve-outs inside a writable workspace, such as the skills catalogue.
     lines += [f"(deny file-write* (subpath {_sb(p)}))" for p in protected]
     # By `path`: rename-over and unlink are `file-write*` against the name.
-    # `source_ids.yaml` is who may reach what, so a shell editing it could grant itself
-    # or the next caller anything at the next start.
+    # `models.yaml` says where a model call goes, so a shell editing it could send the next
+    # start's calls, and the caller's data with them, anywhere.
     lines += [f"(deny file-write* (path {_sb(p)}))" for p in protected_files]
     # Before the `itself` and folder denies, so those stay the last match for their
     # paths. Without the node denies the shell could rename a folder above `.harness`,

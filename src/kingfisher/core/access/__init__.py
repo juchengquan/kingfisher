@@ -5,8 +5,9 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 #: What other folders of the package take from this one, and the module defining each.
-#: Lazy, never an eager import: `core.definitions` imports this folder and is imported by
-#: it, so a re-export run on import would be an import cycle.
+#: Lazy, never an eager import: every module here loads this file first, so an eager
+#: re-export would have each of them load all the others, the shape
+#: `test_no_module_in_the_package_can_reach_itself` refuses.
 _EXPORTS = {
     "ALL": "kingfisher.core.access.capabilities",
     "Capabilities": "kingfisher.core.access.capabilities",
@@ -29,11 +30,9 @@ _EXPORTS = {
     "withheld": "kingfisher.core.access.capabilities",
     "audit": "kingfisher.core.access.checks",
     "caller_holds": "kingfisher.core.access.checks",
+    "collected": "kingfisher.core.access.checks",
     "held_by": "kingfisher.core.access.checks",
-    "refuse_undeclared": "kingfisher.core.access.checks",
-    "undeclared_in": "kingfisher.core.access.checks",
     "walked": "kingfisher.core.access.checks",
-    "load_access_policy": "kingfisher.core.access.policy",
     "activated": "kingfisher.core.access.reach",
     "handed_work_by": "kingfisher.core.access.reach",
     "narrowed_for": "kingfisher.core.access.reach",
@@ -43,10 +42,11 @@ _EXPORTS = {
     "within_reach": "kingfisher.core.access.reach",
     "AccessReport": "kingfisher.core.access.source_ids",
     "Audience": "kingfisher.core.access.source_ids",
+    "DATAZONE_PREFIX": "kingfisher.core.access.source_ids",
     "Datazone": "kingfisher.core.access.source_ids",
     "Held": "kingfisher.core.access.source_ids",
-    "SourceIds": "kingfisher.core.access.source_ids",
     "Stated": "kingfisher.core.access.source_ids",
+    "Vocabulary": "kingfisher.core.access.source_ids",
     "jointly": "kingfisher.core.access.source_ids",
     "listed": "kingfisher.core.access.source_ids",
     "spell": "kingfisher.core.access.source_ids",
@@ -84,11 +84,9 @@ if TYPE_CHECKING:
     from kingfisher.core.access.capabilities import withheld as withheld
     from kingfisher.core.access.checks import audit as audit
     from kingfisher.core.access.checks import caller_holds as caller_holds
+    from kingfisher.core.access.checks import collected as collected
     from kingfisher.core.access.checks import held_by as held_by
-    from kingfisher.core.access.checks import refuse_undeclared as refuse_undeclared
-    from kingfisher.core.access.checks import undeclared_in as undeclared_in
     from kingfisher.core.access.checks import walked as walked
-    from kingfisher.core.access.policy import load_access_policy as load_access_policy
     from kingfisher.core.access.reach import activated as activated
     from kingfisher.core.access.reach import handed_work_by as handed_work_by
     from kingfisher.core.access.reach import narrowed_for as narrowed_for
@@ -96,12 +94,13 @@ if TYPE_CHECKING:
     from kingfisher.core.access.reach import reaches as reaches
     from kingfisher.core.access.reach import stated as stated
     from kingfisher.core.access.reach import within_reach as within_reach
+    from kingfisher.core.access.source_ids import DATAZONE_PREFIX as DATAZONE_PREFIX
     from kingfisher.core.access.source_ids import AccessReport as AccessReport
     from kingfisher.core.access.source_ids import Audience as Audience
     from kingfisher.core.access.source_ids import Datazone as Datazone
     from kingfisher.core.access.source_ids import Held as Held
-    from kingfisher.core.access.source_ids import SourceIds as SourceIds
     from kingfisher.core.access.source_ids import Stated as Stated
+    from kingfisher.core.access.source_ids import Vocabulary as Vocabulary
     from kingfisher.core.access.source_ids import jointly as jointly
     from kingfisher.core.access.source_ids import listed as listed
     from kingfisher.core.access.source_ids import spell as spell

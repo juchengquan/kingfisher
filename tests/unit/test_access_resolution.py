@@ -1,25 +1,38 @@
-"""The source-id vocabulary, and the rule the definitions apply to it."""
+"""What a caller holds, the vocabulary the definitions add up to, and the rule they
+apply to both."""
 
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import pytest
 
 from kingfisher.core.access.capabilities import ALL
+from kingfisher.core.access.checks import collected, held_by
 from kingfisher.core.access.reach import reaches, reaching
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
     AccessError,
-    SourceIds,
+    Datazone,
+    Vocabulary,
     jointly,
     listed,
+    narrowing_in,
     spell,
     unlisted,
 )
 
 
-def vocabulary() -> SourceIds:
-    """A flat A/B/C vocabulary."""
-    return SourceIds(names=frozenset({"A", "B", "C"}))
+def vocabulary() -> Vocabulary:
+    """What an A/B/C deployment's locks add up to."""
+    return Vocabulary(source_ids={"A": ("agent a",), "B": ("agent b",), "C": ("agent c",)})
+
+
+def spec(source_ids=ALL, skill_audiences=None, datazone=None) -> SimpleNamespace:
+    """A definition by the fields every kind carrying a lock has."""
+    return SimpleNamespace(
+        source_ids=source_ids, skill_audiences=skill_audiences or {}, datazone=datazone
+    )
 
 
 # -- who reaches what -------------------------------------------------------
@@ -79,11 +92,9 @@ def test_none_passes_through_untouched():
 # -- narrowing past the definition ------------------------------------------------------------
 
 
-def narrowing(entry, *, source_ids, vocab=None):
-    """What the vocabulary says one skills entry asks beyond its definition."""
-    return (vocab or vocabulary()).narrowing_in(
-        {"audit": entry}, source_ids=source_ids, where="x.yaml"
-    )
+def narrowing(entry, *, source_ids):
+    """What one skills entry asks beyond its definition."""
+    return narrowing_in({"audit": entry}, source_ids=source_ids, where="x.yaml")
 
 
 def test_an_entry_outside_the_definitions_own_audience_is_reported():
@@ -130,39 +141,62 @@ def test_the_second_requirement_a_narrowing_states_actually_works():
     assert one == ("line_count",)
 
 
-# -- the vocabulary ---------------------------------------------------------
+# -- what a caller holds -----------------------------------------------------
 
 
 def test_a_source_id_is_held_as_itself_and_nothing_more():
-    """A name covers nothing: a caller sending `A` holds `A`, whatever else is declared."""
-    assert vocabulary().known(["A"]) == frozenset({"A"})
+    """A name covers nothing: a caller sending `A` holds `A`, whatever else is locked."""
+    assert held_by(vocabulary(), ["A"]) == frozenset({"A"})
 
 
 def test_no_source_ids_at_all_holds_nothing():
-    assert vocabulary().known([]) == frozenset()
+    assert held_by(vocabulary(), []) == frozenset()
 
 
-def test_an_unknown_source_id_is_refused_rather_than_ignored():
-    """A typo would otherwise reach nothing, which looks exactly like a caller who was
-    denied.
-    """
-    with pytest.raises(AccessError, match="unknown source id"):
-        vocabulary().known(["Q"])
+def test_a_name_no_definition_uses_is_held_and_opens_nothing():
+    """Refused, it made a call pass or fail on which locks existed that week; held, it
+    reaches only what is unlocked."""
+    held = held_by(vocabulary(), ["Q"])
+
+    assert held is not None
+    assert held == frozenset({"Q"})
+    assert not reaches(("A", "B", "C"), held)
+    assert reaches(ALL, held)
 
 
-def test_a_definition_naming_an_undeclared_source_id_is_refused():
-    """The other end of the closed vocabulary: a mistyped audience would otherwise
-    invent a source id nobody holds, and the only symptom would be something quietly
-    reachable by no one.
-    """
-    complaint = vocabulary().undeclared(("Q",), where="x.yaml: tools")
+def test_a_datazone_no_definition_requires_is_held_and_opens_nothing():
+    """The datazone half of the same: an unused zone reaches only what names none."""
+    held = held_by(vocabulary(), ["A", Datazone("nowhere")])
 
-    assert complaint is not None
-    assert "undeclared source id" in complaint
+    assert held is not None
+    assert held == frozenset({"A", "datazone=nowhere"})
+    assert not reaches(("datazone=emea",), held)
 
 
-def test_a_star_names_no_source_id_so_is_never_undeclared():
-    assert vocabulary().undeclared(ALL, where="x.yaml: tools") is None
+def test_a_source_id_spelt_as_a_datazone_is_refused():
+    """Held among the names it would put a caller in a datazone nobody passed, past the
+    rule that a caller is in one -- the control beside it is the zone passed as one."""
+    with pytest.raises(AccessError, match="how a datazone is held"):
+        held_by(vocabulary(), ["A", "datazone=finance"])
+    assert held_by(vocabulary(), ["A", Datazone("finance")]) == frozenset(
+        {"A", "datazone=finance"}
+    )
+
+
+@pytest.mark.parametrize(
+    "named", [["A"], [Datazone("emea")]], ids=["a source id", "a datazone"]
+)
+def test_naming_a_caller_where_nothing_is_locked_is_refused(named):
+    """Nothing narrows, so the answer would be the unrestricted one read as the caller's."""
+    with pytest.raises(AccessError, match="no definition here carries a lock"):
+        held_by(None, named)
+
+
+def test_naming_nobody_where_nothing_is_locked_is_no_caller():
+    """The control beside the refusal: an empty sequence and `UNSCOPED` are no caller to
+    be wrong about."""
+    assert held_by(None, []) is None
+    assert held_by(None, UNSCOPED) is None
 
 
 def test_unscoped_is_a_sentinel_and_not_a_source_id_name():
@@ -191,14 +225,44 @@ def test_a_conjunction_is_one_entry_of_an_or():
     assert not reaches(audience, frozenset({"A"}))
 
 
-def test_an_undeclared_name_inside_a_conjunction_is_refused():
-    """A name typed from memory is no likelier to be right for having been written next
-    to another one.
-    """
-    complaint = vocabulary().undeclared((frozenset({"A", "Q"}),), where="x.yaml: tools")
+# -- the vocabulary the definitions add up to -----------------------------------------
 
-    assert complaint is not None
-    assert "'Q'" in complaint
+
+def test_definitions_that_lock_nothing_add_up_to_no_vocabulary():
+    """`None` is what turns checking off, so a walk returning an empty record instead
+    would switch it on for a workspace with no lock in it."""
+    assert collected(("agent", {"open": spec()}), ("tool", {})) is None
+
+
+def test_every_name_a_lock_writes_is_collected_with_who_writes_it():
+    """Inside a set and on a skills entry too, each definition named once however many of
+    its lines use a name, so the listing's row for a name is the files to open."""
+    found = collected(
+        ("agent", {"analyst": spec(source_ids=("A", frozenset({"B", "C"})))}),
+        ("subagent", {"auditor": spec(skill_audiences={"audit": ("A", "D")}, datazone="emea")}),
+        ("tool", {"sql_query": spec(source_ids=("A",))}),
+    )
+
+    assert found == Vocabulary(
+        source_ids={
+            "A": ("agent analyst", "subagent auditor", "tool sql_query"),
+            "B": ("agent analyst",),
+            "C": ("agent analyst",),
+            "D": ("subagent auditor",),
+        },
+        datazones={"emea": ("subagent auditor",)},
+    )
+
+
+@pytest.mark.parametrize(
+    "said",
+    [spec(skill_audiences={"audit": ("A",)}), spec(datazone="emea")],
+    ids=["a skills entry", "a datazone"],
+)
+def test_one_lock_anywhere_is_enough_to_switch_checking_on(said):
+    """A skills entry's audience and a datazone are locks as surely as a definition's
+    own line: collected as nothing, a deployment using only those would run unchecked."""
+    assert collected(("subagent", {"only": said})) is not None
 
 
 def test_an_audience_is_written_the_way_the_listing_writes_it():

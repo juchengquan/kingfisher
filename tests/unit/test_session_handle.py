@@ -4,25 +4,20 @@ once, and refusing what it cannot do once the session has gone."""
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 
 import pytest
-import yaml
 
 from kingfisher import Kingfisher, UnknownSessionError
-from kingfisher.core.access.policy import parse
 from kingfisher.plugins import LocalSessions
 from tests.conftest import Through, an_agent, pin, start
 from tests.unit.test_session_files import Counting
 
-VOCABULARY = "source_ids: [A, B]\n"
-
 
 @pytest.fixture
 def policied(cfg):
-    """`assistant` for source id A only, under a vocabulary naming A and B."""
+    """`assistant` for source id A only, which switches checking on."""
     an_agent(cfg, "assistant", source_ids="[A]")
-    return replace(cfg, access=parse(yaml.safe_load(VOCABULARY), source="source_ids.yaml"))
+    return cfg
 
 
 def _pinned_to_a(kf, session_id: str = "mine") -> str:

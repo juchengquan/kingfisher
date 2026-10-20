@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any
 
 import pytest
-import yaml
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.tools import tool
 
 from kingfisher import ToolSpec
 from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.access.checks import caller_holds
-from kingfisher.core.access.policy import parse
 from kingfisher.core.access.source_ids import AccessError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorder import Audiences
@@ -102,8 +99,7 @@ def policied(cfg):
     agents = cfg.catalogue_roots["agents"]
     agents.mkdir(parents=True, exist_ok=True)
     (agents / "surveyor.yaml").write_text(AGENT, encoding="utf-8")
-    vocabulary = parse(yaml.safe_load("source_ids: [A, B, Q]\n"), source="source_ids.yaml")
-    return replace(cfg, access=vocabulary)
+    return cfg
 
 
 def built(kf: Kingfisher, held: tuple[str, ...]) -> list[str]:
@@ -114,7 +110,7 @@ def built(kf: Kingfisher, held: tuple[str, ...]) -> list[str]:
     assembled = build_agent(
         kf.cfg,
         agent=agent_named(kf, "surveyor", source_ids=held),
-        held=caller_holds(kf.access, held),
+        held=caller_holds(kf.vocabulary, held),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf.grants,
         catalogue=kf.catalogue,
@@ -165,7 +161,7 @@ def test_the_audience_never_reaches_a_callback():
                          ids=["plain", "decorated", "star"])
 def test_a_bare_tool_admits_whoever_its_agent_admits(entry):
     """A bare entry read as shut to someone would close every tool written before
-    `ToolSpec` existed the moment `source_ids.yaml` appeared.
+    `ToolSpec` existed the moment the first lock was written anywhere.
     """
     one = found(entry)
 
@@ -263,14 +259,35 @@ def test_the_listing_agrees_with_the_build(policied):
     assert "line_count" not in inventory(policied, source_ids=["B"]).tools
 
 
-def test_a_tool_naming_an_undeclared_source_id_stops_the_deployment(policied):
-    """The closed vocabulary, for the one kind that never had a line to check."""
+def test_a_lock_only_a_tool_carries_switches_checking_on(cfg):
+    """The one kind with no definition file of its own: collected as nothing, a
+    deployment locking only its tools would run every call unchecked."""
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "line_count.py").write_text(TOOL, encoding="utf-8")
+    agents = cfg.catalogue_roots["agents"]
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "surveyor.yaml").write_text(
+        AGENT.replace("source_ids: [A, B]\n", ""), encoding="utf-8"
+    )
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+
+    assert kf.vocabulary is not None
+    assert kf.vocabulary.source_ids == {"A": ("tool line_count",)}
+    with pytest.raises(AccessError, match="must say who is calling"):
+        agent_named(kf, "surveyor")
+
+
+def test_a_misspelt_tool_lock_starts_and_shuts_the_tool(policied):
+    """Nothing refuses it now, so it must fail shut: `sales_bd` admits nobody holding
+    `A`, and the listing shows it as a name of its own."""
     (tools_dir(policied) / "line_count.py").write_text(
         TOOL.replace('source_ids=["A"]', 'source_ids=["sales_bd"]'), encoding="utf-8"
     )
+    kf = Kingfisher(policied, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match=r"line_count\.py::line_count.*'sales_bd'"):
-        Kingfisher(policied, sessions=LocalSessions())
+    assert "line_count" not in built(kf, ("A",))
+    assert kf.vocabulary is not None
+    assert kf.vocabulary.source_ids["sales_bd"] == ("tool line_count",)
 
 
 def test_a_saved_result_is_stamped_no_wider_than_its_tool():
@@ -422,7 +439,7 @@ def test_the_run_report_agrees_with_the_build(policied):
         session = kf.workspace / "sessions" / f"report-{'-'.join(held_names)}"
         session.mkdir(parents=True, exist_ok=True)
         ensure_session_layout(session, DEFAULT_LAYOUT)
-        held = caller_holds(kf.access, held_names)
+        held = caller_holds(kf.vocabulary, held_names)
         request = Request(task="t", agent="surveyor")
         agent = agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held_names)
         graph = kf._graph_for(

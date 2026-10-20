@@ -52,7 +52,7 @@ from kingfisher.core.config import Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import RunOn, opens_skills
-from kingfisher.core.definitions.tools.spec import FoundTool, own_audiences
+from kingfisher.core.definitions.tools.spec import FoundTool, audienced, own_audiences
 from kingfisher.core.layout import Layout
 
 from .activation import (
@@ -361,11 +361,11 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     bundled = bundled_tools_in(roots)
     # A bundle's tools too: a subagent's calls are recorded, and a bundled tool may say
     # who it admits.
-    own = (
-        own_audiences((*walked, *(found for found, _, _ in bundled)))
-        if cfg.access is not None
-        else {}
-    )
+    in_hand = (*walked, *(found for found, _, _ in bundled))
+    # Only where something is locked: with no lock, every stamp would say everyone. The
+    # tools in hand, so a catalogue a caller has already walked is not walked again.
+    locked = roots.vocabulary_with(audienced(in_hand)) is not None
+    own = own_audiences(in_hand) if locked else {}
 
     def recording(definition: object | None) -> RecorderMiddleware | None:
         """A recorder for one graph, reading access off `definition`'s audiences.
@@ -376,7 +376,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         """
         if ledger is None:
             return None
-        audiences = Audiences.of(definition, own=own) if cfg.access is not None else None
+        audiences = Audiences.of(definition, own=own) if locked else None
         return RecorderMiddleware(ledger, backend, audiences, cfg.layout.tool_results_route)
 
     running, mark = _running(agent, cfg, capabilities.endpoints, model)

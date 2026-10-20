@@ -9,7 +9,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from kingfisher.core.access import Capabilities, SourceIds
+from kingfisher.core.access import Capabilities
 
 from .layout import DEFAULT_LAYOUT, HARNESS_OWNED, SESSIONS, Layout
 
@@ -120,7 +120,6 @@ def authored_files_for(definitions: Path) -> dict[str, Path]:
     """The files a deployment writes itself, beside its definitions."""
     return {
         "models.yaml": definitions / "models.yaml",
-        "source_ids.yaml": definitions / "source_ids.yaml",
         "INSTRUCTIONS.md": definitions / "INSTRUCTIONS.md",
     }
 
@@ -217,7 +216,6 @@ FOLDED_SETTINGS: Mapping[str, str] = MappingProxyType({
     "KINGFISHER_SUBAGENTS_DIR": "subagents",
     "KINGFISHER_TOOLS_DIR": "tools",
     "KINGFISHER_MODELS_FILE": "models.yaml",
-    "KINGFISHER_SOURCE_IDS_FILE": "source_ids.yaml",
 })
 
 class MissingCredentialsWarning(UserWarning):
@@ -299,11 +297,6 @@ class Config:
     workspace: Path
     #: What this deployment can run, where, and under which names.
     models: Models
-    #: Which source ids reach which agents, subagents and tools, or `None` where this
-    #: deployment writes no policy.
-    access: SourceIds | None = None
-    #: Where the policy above was looked for, whether or not one was found.
-    access_source: Path | None = None
     #: What bounds one shell command or one interpreter run.
     execution_timeout_s: int = 120
     # What one session may consume, not one caller: kingfisher is tenant-blind by
@@ -329,7 +322,7 @@ class Config:
     # Where definitions are copied *from*. Here as well as on `WorkspacePaths` because
     # `doctor` reports on a whole `Config`, and a bad source is the likeliest fault.
     assets: Path | None = None
-    # What people write: every definition kind, `models.yaml` and `source_ids.yaml`. No
+    # What people write: every definition kind and `models.yaml`. No
     # default, so a hand-built `Config` cannot inherit a folder inside the workspace.
     # One folder, not one per kind: several deployments point at it.
     definitions: Path = field(kw_only=True)
@@ -409,5 +402,4 @@ class Config:
         return {
             **beside,
             "models.yaml": self.models.source or beside["models.yaml"],
-            "source_ids.yaml": self.access_source or beside["source_ids.yaml"],
         }

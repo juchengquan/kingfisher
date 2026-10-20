@@ -1,5 +1,4 @@
-"""The source-id vocabulary: what a caller may hold, and what a definition may say about
-who reaches it."""
+"""Source ids: what a caller may hold, and what a definition may say about who reaches it."""
 
 from __future__ import annotations
 
@@ -27,7 +26,8 @@ Audience = Literal["*"] | tuple[str | Requires, ...]
 
 
 #: What a datazone becomes among held names and requirements: one more name, which every
-#: reach check already asks about. Refused as a source id, so nobody declares or presents one.
+#: reach check already asks about. Refused as a source id, so no definition writes one and
+#: no caller presents one.
 DATAZONE_PREFIX = "datazone="
 
 
@@ -65,12 +65,13 @@ class Stated:
 
 
 class AccessError(ValueError):
-    """The vocabulary is malformed, or a definition names a source id it does not declare."""
+    """Who may reach what was asked in a way kingfisher refuses; raised as `CallerError`."""
 
 
 class CallerError(AccessError):
-    """A call said who is calling in a way this deployment cannot take: a source id or
-    datazone it does not define, or nobody where a policy is in force.
+    """A call said who is calling in a way this deployment cannot take: a bare string, two
+    datazones, a source id spelt as a datazone, a caller named where nothing is locked, or
+    nobody named where something is.
 
     An `AccessError` too, so a handler written against that still catches it.
     """
@@ -186,7 +187,7 @@ def spell(audience: Audience) -> str:
 
 @dataclass(frozen=True)
 class AccessReport:
-    """What a deployment's policy leaves open, as `kingfisher list` prints it."""
+    """What this deployment's locks leave open, as `kingfisher list` prints it."""
 
     #: Definitions carrying no `source_ids:` line, and so reachable by everyone, as `(kind,
     #: name)`.
@@ -216,64 +217,43 @@ class AccessReport:
 
 
 @dataclass(frozen=True)
-class SourceIds:
-    """One deployment's source-id vocabulary: the names a caller may hold."""
+class Vocabulary:
+    """The source ids and datazones this deployment's definitions use, and which use each.
 
-    #: The declared source ids. Each stands only for itself.
-    names: frozenset[str]
-    #: The datazones a caller may be in and a definition may require.
-    datazones: frozenset[str] = frozenset()
+    Collected from the definitions, never written down: a name is real because a lock
+    names it, so there is no second list to fall out of step with the locks.
+    """
 
-    def mentions(self, audience: Audience) -> frozenset[str]:
-        """Every source id an audience names, inside a set or not."""
-        if audience == ALL:
-            return frozenset()
-        return frozenset(n for one in audience for n in ((one,) if isinstance(one, str) else one))
+    #: Each source id a lock names, and the definitions naming it, as `kind name`.
+    source_ids: Mapping[str, tuple[str, ...]]
+    #: Each datazone a definition requires, and the definitions requiring it.
+    datazones: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
-    def known(self, held: Iterable[str]) -> frozenset[str]:
-        """The source ids a caller sent, refused unless every one is declared."""
-        wanted = frozenset(held)
-        if unknown := sorted(wanted - self.names):
-            msg = (
-                f"unknown source id(s): {', '.join(unknown)}; "
-                f"this deployment defines {', '.join(sorted(self.names)) or 'none'}"
-            )
-            raise CallerError(msg)
-        return wanted
 
-    def undeclared(self, audience: Audience, *, where: str) -> str | None:
-        """The complaint about an audience naming a source id this deployment does not declare."""
-        if audience == ALL:
-            return None
-        named = tuple(
-            n for one in audience for n in ((one,) if isinstance(one, str) else sorted(one))
-        )
-        if unknown := tuple(name for name in named if name not in self.names):
-            listed = ", ".join(repr(u) for u in sorted(set(unknown)))
-            return (
-                f"{where}: names undeclared source id(s) {listed}; "
-                f"this deployment defines {', '.join(sorted(self.names)) or 'none'}"
-            )
-        return None
+def mentioned(audience: Audience) -> frozenset[str]:
+    """Every source id an audience names, inside a set or not."""
+    if audience == ALL:
+        return frozenset()
+    return frozenset(n for one in audience for n in ((one,) if isinstance(one, str) else one))
 
-    def narrowing_in(
-        self,
-        skills: Mapping[str, Audience],
-        *,
-        source_ids: Audience,
-        where: str,
-    ) -> tuple[tuple[str, str], ...]:
-        """Skills entries naming none of the source ids this definition's own audience mentions.
 
-        An entry's audience is already an and with the definition's, since an entry is reached
-        only through its definition: `[pii]` under `[sales_db, audit_log]` means "whoever
-        opens this agent and holds `pii`", a good second requirement.
-        """
-        if source_ids == ALL:
-            return ()
-        admitted = self.mentions(source_ids)
-        return tuple(
-            (f"{where}: skill {entry}", spell(audience))
-            for entry, audience in skills.items()
-            if audience != ALL and not (self.mentions(audience) & admitted)
-        )
+def narrowing_in(
+    skills: Mapping[str, Audience],
+    *,
+    source_ids: Audience,
+    where: str,
+) -> tuple[tuple[str, str], ...]:
+    """Skills entries naming a source id this definition's own audience never mentions.
+
+    An entry's audience is already an and with the definition's, since an entry is reached
+    only through its definition: `[pii]` under `[sales_db, audit_log]` means "whoever
+    opens this agent and holds `pii`", a good second requirement.
+    """
+    if source_ids == ALL:
+        return ()
+    admitted = mentioned(source_ids)
+    return tuple(
+        (f"{where}: skill {entry}", spell(audience))
+        for entry, audience in skills.items()
+        if audience != ALL and not (mentioned(audience) & admitted)
+    )

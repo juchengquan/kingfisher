@@ -142,8 +142,9 @@ is, so a class named without its `()` is refused here too.
 `source_ids` is written the way a definition writes its own line — any one of the
 names is enough, and a set is a requirement: `["admin", {"sales_db", "pii"}]`. Left
 out, it is `["*"]`, everyone. `[]` is refused rather than read as nobody, as it is in
-a definition. Every name has to be declared in `source_ids.yaml`, or the deployment
-does not start. With no `source_ids.yaml` at all, the line has no effect.
+a definition. A lock is in force wherever it is written: one here switches on access
+control for the whole deployment, and a name your callers never hold shuts the tool
+to everyone rather than opening it.
 
 It holds **whichever agent grants the tool**, and it is the tool's only lock: a
 `tools:` entry is the tool's name and nothing more, and one writing `source_ids` is

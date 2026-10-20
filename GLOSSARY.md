@@ -81,8 +81,8 @@ _Avoid_: deployment prompt, house rules, user prompt, PROMPT.md
 ### Access
 
 **Source id**:
-A name a caller holds and an audience asks for, declared in the deployment's vocabulary. It
-names nothing else: not a path, a file or a database.
+A name a caller holds and an audience asks for. It names nothing else: not a path, a file or
+a database.
 _Avoid_: source, sources, group
 
 **Audience**:
@@ -91,8 +91,9 @@ offers: any one of several, each either a single source id or a set that must be
 _Avoid_: required sources, permissions, ACL
 
 **Vocabulary**:
-The source ids a deployment declares, each standing only for itself. It holds no audiences.
-_Avoid_: access file, access policy
+The source ids and datazones a deployment's definitions use. Collected from the definitions;
+nobody writes it down.
+_Avoid_: access file, access policy, source_ids.yaml
 
 **Datazone**:
 A label a caller is in at most one of, and a definition may require. Checked beside source ids,

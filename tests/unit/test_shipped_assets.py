@@ -1057,9 +1057,8 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
         "subagents/sweeper.yaml": ("middlewares", ("call-cap-generous", "tool-note"), ()),
         "agents/analyst.yaml": ("source_ids", ("sales_db", "audit_log"), ()),
         "subagents/auditor.yaml": ("source_ids", ("sales_db", "audit_log"), ()),
-        # The datazone beside the source id, from one file that names both: the two go on
-        # separate lines of `source_ids.yaml`, so a record holding them together could not
-        # tell a reader what to write.
+        # The datazone beside the source id, from one file that names both, each in the
+        # field it was written in.
         "subagents/quarters.py": ("source_ids", ("sales_db",), ("emea",)),
         "tools/sql_query.py": ("source_ids", ("sales_db",), ()),
     }
@@ -1077,22 +1076,21 @@ def test_a_seeded_workspace_still_loads_once_a_policy_exists(
     that has adopted source ids at all has to be able to run what `seed` left it.
 
     Driven rather than asserted over the skip list, because that list is what was wrong:
-    `subagents/quarters.py` was copied, and `kingfisher list` then exited 1 with `subagent
-    'quarters': names undeclared datazone 'emea'` -- the whole seed report mentioning
-    neither quarters nor datazones, so the operator had done exactly what they were told.
+    `subagents/quarters.py` was copied, and `kingfisher list` then exited 1 over its
+    datazone -- the whole seed report mentioning neither quarters nor datazones, so the
+    operator had done exactly what they were told.
 
-    A vocabulary declaring one unrelated name, not the one the report prints: what was
-    copied must need nothing, and declaring the names of the files seed *left behind*
-    would pass against a tree that copied them all.
+    A lock on one unrelated name, not the ones the report prints: what was copied must
+    need nothing, and locking with the names of the files seed *left behind* would pass
+    against a tree that copied them all.
     """
     from kingfisher.cli.__main__ import main
+    from tests.conftest import an_agent
 
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
     assert main(["seed"]) == 0
     capsys.readouterr()
-    (cfg.definitions / "source_ids.yaml").write_text(
-        "source_ids: [unrelated]\n", encoding="utf-8"
-    )
+    an_agent(cfg, "gatekeeper", source_ids="[unrelated]")
 
     assert main(["list"]) == 0, "a seeded workspace refused to load under a policy"
 
@@ -1452,37 +1450,24 @@ def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):
 
 
 def _vocabulary(shipped):
-    """The shipped `source_ids.yaml`, read the way a deployment would."""
-    from kingfisher.core.access.policy import load_access_policy
+    """What the shipped presets add up to, collected the way a deployment's are."""
+    from kingfisher.core.config import definition_roots_for
+    from kingfisher.core.definitions.catalogue import Definitions
 
-    return load_access_policy(shipped / "source_ids.yaml")
-
-
-def test_the_vocabulary_ships_and_reads(shipped):
-    """It is not seeded -- `seed` copies definitions and this is not one -- so nothing
-    else here would notice if it stopped parsing.
-    """
-    source_ids = _vocabulary(shipped)
-
-    assert source_ids is not None
-    assert source_ids.names == {"sales_db", "audit_log", "pii"}
-    assert source_ids.datazones == {"emea", "apac"}
+    return Definitions.from_roots(definition_roots_for(shipped)).vocabulary
 
 
-def test_every_source_id_the_presets_name_is_declared(shipped):
-    """The assertion that keeps this set honest."""
-    from kingfisher.core.definitions.seeding import source_ids_named
+def test_the_presets_add_up_to_the_vocabulary_their_guide_teaches(shipped):
+    """Nothing declares it any more, so a preset losing its lock, or a lock losing its
+    preset, would change what the examples teach with nothing else noticing."""
+    vocabulary = _vocabulary(shipped)
 
-    declared = set(_vocabulary(shipped).names)
-    named = {
-        name
-        for kind in ("agents", "subagents")
-        for path in sorted((shipped / kind).rglob("*.yaml"))
-        for name in source_ids_named(yaml.safe_load(path.read_text(encoding="utf-8")))
+    assert vocabulary is not None
+    assert vocabulary.source_ids == {
+        "audit_log": ("agent analyst", "subagent auditor"),
+        "sales_db": ("agent analyst", "subagent auditor", "subagent quarters", "tool sql_query"),
     }
-
-    assert named, "no preset names a source id, so this rule is checking nothing"
-    assert named <= declared, f"{sorted(named - declared)} are named but not declared"
+    assert vocabulary.datazones == {"emea": ("subagent quarters",)}
 
 
 def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
@@ -1491,14 +1476,13 @@ def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
     """
     specs = LocalSubagentRepository(shipped / "subagents").specs
     tools = LocalToolRepository(shipped / "tools").found
-    source_ids = _vocabulary(shipped)
     auditor = specs["auditor"]
 
     def holds(*names: str) -> tuple[str, ...]:
         """Both halves, as the build takes them: what the definition grants, less the
         tools whose own audience shuts this caller out.
         """
-        held = source_ids.known(names)
+        held = frozenset(names)
         shut = out_of_reach(tools, held)
         return tuple(one for one in auditor.declares(held).tools or () if one not in shut)
 
@@ -1535,18 +1519,17 @@ def test_an_entry_that_states_nothing_inherits(shipped):
     likely to be got wrong, so it is asserted rather than only commented.
     """
     specs = LocalAgentRepository(shipped / "agents").specs
-    source_ids = _vocabulary(shipped)
     analyst = specs["analyst"]
 
     assert analyst.skill_audiences == {"tabular-qa": ("sales_db",)}
-    assert analyst.declares(source_ids.known(["audit_log"])).skills == ("code-review",)
-    assert analyst.declares(source_ids.known(["sales_db"])).skills == (
+    assert analyst.declares(frozenset({"audit_log"})).skills == ("code-review",)
+    assert analyst.declares(frozenset({"sales_db"})).skills == (
         "tabular-qa",
         "code-review",
     )
     # Every tools entry is a name: `sql_query` says `sales_db` itself, which is asserted
     # by `test_the_shipped_database_tool_says_who_it_is_for`.
-    assert analyst.declares(source_ids.known(["audit_log"])).tools == (
+    assert analyst.declares(frozenset({"audit_log"})).tools == (
         "sql_query",
         "csv_profile::csv_profile",
         "line_count",

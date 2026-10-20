@@ -208,26 +208,26 @@ def test_a_folder_that_is_not_a_kind_is_not_seeded_either(shipped, cfg):
     assert any((cfg.definitions / "agents").iterdir())
 
 
-#: One definition per shape a skipped file can take, which `Skipped.asked_of` keys
-#: both message tables by.
+#: One definition per shape a skipped file can take, which `Skipped.wants` keys the
+#: message table by.
 SKIPPED_SHAPES = {
     "middleware.yaml": "middlewares: [audit]\n",
-    "source_ids.yaml": "source_ids: [A]\n",
+    "audienced.yaml": "source_ids: [A]\n",
     "datazone.yaml": "datazone: emea\n",
     "both.yaml": "source_ids: [A]\ndatazone: emea\n",
 }
 
 
 def test_every_reason_a_definition_is_skipped_has_a_remedy(cfg, tmp_path):
-    """A reason `seed` reports and either table lacks would raise `KeyError` in the
-    middle of the report; reading only `_deployment_specific`'s literal returns checked
-    one of the four.
+    """A reason `seed` reports and the table lacks would raise `KeyError` in the middle
+    of the report; reading only `_deployment_specific`'s literal returns checked one of
+    the four.
 
-    Driven rather than parsed: the reasons are the ones `seed` actually reports, so a
-    reason built from parts, as the audience ones are, is checked like a literal one.
+    Driven rather than parsed: the reasons are the ones `seed` actually reports, however
+    each is built.
     """
     from kingfisher.core.definitions import seeding
-    from kingfisher.core.definitions.seeding import REMEDY, UNCONSULTED
+    from kingfisher.core.definitions.seeding import HELD_BACK
 
     source = tmp_path / "presets"
     (source / "agents").mkdir(parents=True)
@@ -237,19 +237,11 @@ def test_every_reason_a_definition_is_skipped_has_a_remedy(cfg, tmp_path):
         )
 
     done = seeding.seed(cfg, source)
-    reported = {left.asked_of for left in done.skipped}
+    reported = {left.wants for left in done.skipped}
 
     assert len(done.skipped) == len(SKIPPED_SHAPES), (
         f"seed copied {sorted(done.written)}, so not every shape was checked"
     )
-    assert reported <= set(UNCONSULTED), (
-        f"{sorted(reported - set(UNCONSULTED))} can be reported and UNCONSULTED "
-        "does not name it"
-    )
-    assert reported <= set(REMEDY), (
-        f"{sorted(reported - set(REMEDY))} can be reported and REMEDY does not name it"
-    )
-    assert set(UNCONSULTED) == set(REMEDY), (
-        f"the two tables disagree: {sorted(set(UNCONSULTED) ^ set(REMEDY))} is in one "
-        "and not the other"
+    assert reported <= set(HELD_BACK), (
+        f"{sorted(reported - set(HELD_BACK))} can be reported and HELD_BACK does not name it"
     )

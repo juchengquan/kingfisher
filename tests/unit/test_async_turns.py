@@ -483,16 +483,13 @@ def test_cancelling_at_any_step_of_setup_leaves_the_session_free(cfg, monkeypatc
 
     Counted rather than listed, so a step added to setup is cancelled at too.
     """
-    import yaml
 
-    from kingfisher.core.access.policy import parse
     from kingfisher.core.session import steps as steps_module
     from tests.conftest import an_agent
 
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(
         cfg,
-        access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"),
         session_max_bytes=10**9,
     )
     supplied = tmp_path / "in.csv"

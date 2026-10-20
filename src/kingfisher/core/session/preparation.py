@@ -7,7 +7,7 @@ from dataclasses import replace
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import Capabilities, Held, SourceIds, caller_holds, zone_held
+from kingfisher.core.access import Capabilities, Held, Vocabulary, caller_holds, zone_held
 from kingfisher.core.agent.activation import (
     for_the_caller,
     indistinct_subagents,
@@ -76,7 +76,7 @@ class Preparation:
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
     cfg: Config
     catalogue: Definitions
-    access: SourceIds | None
+    vocabulary: Vocabulary | None
     grants: Capabilities
     run_events: RunEvents
     _sessions: Any
@@ -107,7 +107,7 @@ class Preparation:
         # Who is calling, before the session is marked, claimed or written to: later, a
         # refused caller's files would be in its `/inputs`, and a session out of reach
         # would answer "busy" rather than "no session".
-        held = caller_holds(self.access, source_ids)
+        held = caller_holds(self.vocabulary, source_ids)
         # Opened before anything else reads the session: who may touch it is decided by
         # its pinned agent, and that is read through the backend too.
         if files is None:
@@ -120,7 +120,7 @@ class Preparation:
             refuse_files_of_another(files, session.id)
         harness = HarnessFiles(files)
         # Read once, for reach here and for the agent the turn runs; neither asks for a
-        # supplied graph under no policy.
+        # supplied graph where nothing is locked.
         pinned, zone = (
             (yield from pinned_in(harness))
             if held is not None or self._graph is None
@@ -190,7 +190,7 @@ class Preparation:
         paused, resume, discarded, superseded = yield from self._take_pause(
             request, session, harness
         )
-        # Not resolved for a supplied graph with no policy: that would refuse a
+        # Not resolved for a supplied graph where nothing is locked: that would refuse a
         # request naming another agent.
         agent = (
             (yield from self._agent_for(request, harness, held=held, pinned=pinned))
@@ -281,8 +281,8 @@ class Preparation:
         failed deserialise is a traceback about a node nobody has heard of.
         """
         was = held.get(AGENT_MARK) or None
-        # `None` is no mismatch: nothing was resolved, for an injected graph under no
-        # policy, where a request naming any agent is not refused either.
+        # `None` is no mismatch: nothing was resolved, for an injected graph where nothing
+        # is locked, where a request naming any agent is not refused either.
         if was is not None and request.agent is not None and was != request.agent:
             msg = (
                 f"session {session.id} paused under agent {was!r}, "
@@ -359,7 +359,7 @@ class Preparation:
                 cfg,
                 graph,
                 self.catalogue,
-                # Only under a vocabulary: without one the filter is a no-op, and an
+                # Only for a caller: without one the filter is a no-op, and an
                 # injected graph has no spec to give.
                 agent=agent if held is not None else None,
                 held=held,

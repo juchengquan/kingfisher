@@ -331,7 +331,7 @@ def test_the_driver_says_what_to_do_about_what_it_left(cfg, tmp_path, capsys, mo
 
     printed = capsys.readouterr().out
     assert "skipped " in printed, "nothing was left behind, so this asserts nothing"
-    assert "Declare the source ids in source_ids.yaml" in printed
+    assert "switches on access control" in printed
     assert "register those" not in printed
 
 

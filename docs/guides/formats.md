@@ -160,7 +160,7 @@ true of every agent in the workspace.
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `interrupt_on` | optional | Tools whose every call stops for a person before it runs — see [Approval gates](#approval-gates) |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
-| `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `skills` entries, the one entry that may say who it is for — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
+| `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `skills` entries, the one entry that may say who it is for — see [Access](#access--source_ids-in-the-definitions) |
 
 One rule covers every field that grants, and a subagent file follows it too:
 **leave a field out and you get none of it; write `["*"]` for everything
@@ -611,7 +611,7 @@ on the spot, so every entry after the first would be unreachable.
 | `subagents` | optional | Subagents this one may consult mid-job. Unset grants **none**. Any depth, no loops — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the subagent runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
-| `source_ids` | optional | Who may reach this subagent, wherever it is used, and the only place that is said: a `subagents:` entry naming it takes no audience. Unset means everyone. Also the default audience, and the ceiling, for its `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
+| `source_ids` | optional | Who may reach this subagent, wherever it is used, and the only place that is said: a `subagents:` entry naming it takes no audience. Unset means everyone. Also the default audience, and the ceiling, for its `skills` entries — see [Access](#access--source_ids-in-the-definitions) |
 | `datazone` | optional | The one datazone a caller must be in to reach this subagent. Unset means any — see [Datazones](#datazones--a-second-field-beside-source-ids) |
 
 ### A subagent that consults another
@@ -977,10 +977,9 @@ something only one deployment knows — `subagents` names *your* subagents,
 `models.yaml`. A definition written somewhere else cannot mean anything by them, so
 each is refused with that reason rather than a generic "unknown key".
 
-`source_ids` names ids in *your* `source_ids.yaml` too, and is taken anyway, because
-it fails the safe way: a name your vocabulary does not declare stops the deployment
-at startup, naming it, and with no `source_ids.yaml` the line has no effect. It is
-who may reach this subagent, an **and** with the audience of the agent granting it,
+`source_ids` names ids only *your* deployment hands out too, and is taken anyway,
+because it fails the safe way: a name your callers never hold locks the subagent
+shut, never open. It is who may reach this subagent, an **and** with the audience of the agent granting it,
 and it is read by kingfisher and never handed to deepagents. A request pins any
 subagent's model by name with `run_on`, so `model` stays with the deployment too.
 
@@ -1103,9 +1102,8 @@ its shape takes, `source_ids` and `datazone` included, which `SubAgent` has no w
 for. Imported under `TYPE_CHECKING`, the package still pins no kingfisher version and
 runs without it installed: the entry is a plain dict either way.
 
-A type cannot say everything the reader checks. A name in a portable entry's `tools`,
-a relative `skills` path and a source id your vocabulary does not declare all pass a
-checker and are refused at load. The shipped `timestamps/`, `quarters.py` and
+A type cannot say everything the reader checks. A name in a portable entry's `tools`
+and a relative `skills` path both pass a checker and are refused at load. The shipped `timestamps/`, `quarters.py` and
 `show_your_work.py` are annotated this way.
 
 #### When it wants a helper of its own
@@ -1386,36 +1384,32 @@ it, not loading it is the mechanism working.
 
 ---
 
-## Access — `source_ids:` in the definitions, `source_ids.yaml` for the vocabulary
+## Access — `source_ids:` in the definitions
 
 Which source ids may reach which agents, subagents, tools and skills. Optional:
-with no `source_ids.yaml`, kingfisher controls nothing by source id. A tool says who
-it admits in its own file, through a `ToolSpec` — see
+with no `source_ids:` line anywhere, kingfisher controls nothing by source id, and
+with one, every call says who is calling. A tool says who it admits in its own file,
+through a `ToolSpec` — see
 [`tools.md`](tools.md#or-a-toolspec-when-the-tool-says-who-may-use-it).
 
-A source id is a name in this deployment's vocabulary and nothing else — not a
+A source id is a name a lock writes and a caller holds, and nothing else — not a
 path a definition was read from, and not a data file a run is handed. Nothing
 resolves it to either.
 
-Three files to read alongside this section: `assets/source_ids.yaml`,
-`agents/analyst.yaml` and `subagents/auditor.yaml`. `seed` leaves them behind by
-default, because a workspace that has not declared `sales_db` cannot read a
-definition that names it — copy `source_ids.yaml` first, then
-`kingfisher seed --all`. `subagents/quarters.py` and `tools/sql_query.py` are
-left behind for the same reason: an audience written in Python counts as one, and
-a tool's only place to write it is there.
+Two files to read alongside this section: `assets/agents/analyst.yaml` and
+`assets/subagents/auditor.yaml`. `seed` leaves them behind by default, because a lock
+switches on access control in the workspace it is copied into — `kingfisher seed
+--all` copies them when that is what you want. `subagents/quarters.py` and
+`tools/sql_query.py` are left behind for the same reason: a lock written in Python
+counts as one, and a tool's only place to write it is there.
 
 **Audiences live in the definitions.** Each thing says who may reach *it*, in its
 own file: an agent or a subagent on its `source_ids:` line, a tool in its
 `ToolSpec`. A skill's own file is `SKILL.md`, which the model reads whole and a
 vendor's pack does not let you edit, so the definition offering it says it on the
-skill's entry. What is central is only the vocabulary — which names
-exist — and that file holds no policy at all.
-
-```yaml
-# source_ids.yaml  — the whole file
-source_ids: [A, B, C]
-```
+skill's entry. Nothing is central: the vocabulary — which names exist — is every
+name these lines write, collected at startup, so there is no second list to keep in
+step with them.
 
 ```yaml
 # agents/assistant.yaml
@@ -1438,15 +1432,11 @@ system_prompt: |
 TOOLS = [ToolSpec(sql_query, source_ids=["A"])]
 ```
 
-`source_ids.yaml` in `KINGFISHER_DEFINITIONS_DIR`, beside the definitions it governs,
-so every deployment sharing that folder shares one vocabulary. Read once at startup, so a
-revocation lands on restart. A file that is present and will not parse stops the
-deployment: a vocabulary that cannot be honoured must never come up as *no*
-vocabulary, because then no audience can be checked at all.
+Read once at startup, so a revocation lands on restart.
 
 ### Who is calling
 
-Once a vocabulary exists, every call has to say:
+Once one definition carries a lock, every call has to say:
 
 ```python
 kf = Kingfisher(config_from_env(), sessions=LocalSessions())
@@ -1638,7 +1628,7 @@ is theirs to see, and the policy is not.
 
 An absent optional field means no restriction, which is what it means everywhere
 else in these formats — and reading it as "nobody" would stop every unannotated
-definition working the moment `source_ids.yaml` appeared. So adoption is
+definition working the moment the first lock was written. So adoption is
 incremental: annotate the sensitive definitions first.
 
 That must not also be silent, so `kingfisher list` names what carries no line:
@@ -1752,16 +1742,24 @@ may not open, and a caller who lost a source id would keep running what they had
   intended, not a bug — it is the same answer as "you may not run this agent",
   arriving at the first moment it became true.
 
-### The vocabulary is closed
+### A name nothing locks opens nothing
 
-A source id named in a definition, or by a caller, that `source_ids.yaml` does not
-declare is **refused**. Both directions matter and they fail differently:
+A source id a caller names that no definition uses is held all the same, and opens
+nothing a lock shuts: refused, a call would pass or fail on which locks exist that
+week. A misspelt lock is not refused either. `source_ids: [sales_bd]` locks its
+definition to a name nobody holds, so it fails shut rather than open, and
+`kingfisher list` is where it shows — every name in use beside the definitions
+using it, so `sales_bd` written once sits beside `sales_db` written five times:
 
-- A caller naming an undeclared source id would otherwise reach nothing, which looks
-  exactly like a caller who was denied.
-- A definition naming one would otherwise invent a source id nobody holds, and the
-  only symptom would be a tool quietly reachable by no one — found weeks later
-  by whoever needed it.
+```
+access — names in use
+  sales_bd  agent reporter
+  sales_db  agent analyst, subagent auditor, subagent quarters, tool sql_query
+```
+
+`--json` carries the same under `vocabulary`, and a scoped listing none of it. A name
+beginning `datazone=` is refused, in a definition and from a caller: that is how a
+datazone is held, and it is passed as one.
 
 **A name stands only for itself.** A role that should reach what `A`, `B` and `C`
 reach is the caller's to spell out: the deployment sends `["A", "B", "C"]` for it,
@@ -1803,12 +1801,6 @@ tool may say which datazone it is for, and a caller reaches it only from that on
 grants it.
 
 ```yaml
-# source_ids.yaml
-source_ids: [sales_db, audit_log]
-datazones: [finance, hr]
-```
-
-```yaml
 # subagents/ledger.yaml
 name: ledger
 description: Reads the ledger.
@@ -1838,11 +1830,10 @@ and a tool file writes `ToolSpec(tool, datazone="finance")`.
   that datazone -- `kf.session(id, source_ids=["sales_db"], datazone="finance")`, and
   `--datazone` on `artifact` and `decide`. Any other caller is told there is no such
   session. One no zoned turn ran in is reached from every datazone.
-- **A datazone the vocabulary does not declare stops the deployment**, as an
-  undeclared source id does. With no `source_ids.yaml`, `datazone:` lines have no
-  effect, and a caller naming a datazone is refused. `seed` leaves a definition
-  naming one behind, as it does one naming a source id, and prints the
-  `datazones:` line to declare — they are separate lines of that file, and the
-  one it printed is the one you need.
+- **A datazone nothing requires opens nothing**, as an unused source id does, and a
+  misspelt one locks its subagent or tool shut; the listing shows each datazone in
+  use beside what requires it, as `datazone finance  subagent ledger`. With no lock
+  anywhere, a caller naming a datazone is refused. `seed` leaves a definition naming
+  one behind, as it does one naming a source id.
 - **Nothing is refused for being unreachable.** An agent that names a finance tool is
   not wrong for an hr caller — the tool is left out of that caller's build.
