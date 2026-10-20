@@ -65,7 +65,15 @@ class Stated:
 
 
 class AccessError(ValueError):
-    """The vocabulary is malformed, or a caller named a source id it does not define."""
+    """The vocabulary is malformed, or a definition names a source id it does not declare."""
+
+
+class CallerError(AccessError):
+    """A call said who is calling in a way this deployment cannot take: a source id or
+    datazone it does not define, or nobody where a policy is in force.
+
+    An `AccessError` too, so a handler written against that still catches it.
+    """
 
 
 class _Unscoped:
@@ -115,7 +123,7 @@ def with_datazone[Caller: Iterable[str] | _Unscoped | None](
             "UNSCOPED runs with no caller, so it has no datazone -- pass the caller's "
             "source ids with their datazone, or UNSCOPED alone"
         )
-        raise AccessError(msg)
+        raise CallerError(msg)
     return (*(source_ids or ()), Datazone(datazone))
 
 
@@ -223,7 +231,7 @@ class SourceIds:
                 f"unknown source id(s): {', '.join(unknown)}; "
                 f"this deployment defines {', '.join(sorted(self.names)) or 'none'}"
             )
-            raise AccessError(msg)
+            raise CallerError(msg)
         return wanted
 
     def undeclared(self, audience: Audience, *, where: str) -> str | None:

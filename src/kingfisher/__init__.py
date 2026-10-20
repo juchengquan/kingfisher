@@ -15,6 +15,7 @@ __version__ = "0.1.0"
 _EXPORTS = {
     "Held": "kingfisher.core.access.source_ids",
     "AccessError": "kingfisher.core.access.source_ids",
+    "CallerError": "kingfisher.core.access.source_ids",
     "ArtifactError": "kingfisher.core.result",
     "UNSCOPED": "kingfisher.core.access.source_ids",
     # How a tool file says who may use its tool, or gives it another name.
@@ -74,6 +75,7 @@ __all__ = [
     "UNSCOPED",
     "AccessError",
     "ArtifactError",
+    "CallerError",
     "Capabilities",
     "CapabilityError",
     "CompiledSubagent",
@@ -123,6 +125,7 @@ if TYPE_CHECKING:
     from kingfisher.core.access.capabilities import CapabilityError as CapabilityError
     from kingfisher.core.access.source_ids import UNSCOPED as UNSCOPED
     from kingfisher.core.access.source_ids import AccessError as AccessError
+    from kingfisher.core.access.source_ids import CallerError as CallerError
     from kingfisher.core.access.source_ids import Held as Held
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.config import Config as Config

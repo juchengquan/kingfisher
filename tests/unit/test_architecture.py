@@ -1945,6 +1945,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         # What they raise. A caller has to be able to catch, by name, what the
         # library raises at it without reaching past the door.
         "AccessError": "embedder",
+        "CallerError": "embedder",
         "CapabilityError": "embedder",
         "ConfigError": "embedder",
         "InputsError": "embedder",
@@ -3421,7 +3422,7 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
-    "ArtifactError", "CapabilityError", "DecisionError", "InputsError",
+    "ArtifactError", "CallerError", "CapabilityError", "DecisionError", "InputsError",
     "QuotaExceededError", "SessionBusyError", "SubagentError", "UnknownSessionError",
 })
 
@@ -3434,7 +3435,8 @@ DEPLOYMENT_ERRORS = frozenset({
     # `MiddlewareError` joins `ToolError` here for the reason `AgentError` sits here
     # while `SubagentError` sits above: a caller may upload a subagent and cannot
     # upload middleware, so a `middlewares/` file that will not load is always the
-    # deployment's own.
+    # deployment's own. `AccessError` is a broken `source_ids.yaml` or a definition
+    # naming an undeclared source id; a call naming its caller wrong raises `CallerError`.
     "AccessError", "AgentError", "ConfigError", "HostPathError", "LoadError",
     "MiddlewareError", "ToolError", "UnsafeReferenceError",
 })

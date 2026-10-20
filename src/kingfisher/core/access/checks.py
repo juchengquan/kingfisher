@@ -11,6 +11,7 @@ from .reach import stated
 from .source_ids import (
     AccessError,
     AccessReport,
+    CallerError,
     Datazone,
     _Unscoped,
     zone_name,
@@ -38,7 +39,7 @@ def held_by(
         return None
     if isinstance(source_ids, str):
         msg = f"source ids is a sequence of names, not a string -- write [{source_ids!r}]"
-        raise AccessError(msg)
+        raise CallerError(msg)
     named = tuple(one for one in source_ids if not isinstance(one, Datazone))
     zones = tuple(one for one in source_ids if isinstance(one, Datazone))
     if zones:
@@ -53,7 +54,7 @@ def held_by(
                 f"narrows nothing and the answer would be the unrestricted one. Declare "
                 f"them in source_ids.yaml, or pass UNSCOPED to mean no caller"
             )
-            raise AccessError(msg)
+            raise CallerError(msg)
         return None
     return vocabulary.known(named)
 
@@ -67,17 +68,17 @@ def _zoned(
             f"this deployment declares no datazones, so {zones[0]!r} narrows nothing. "
             f"Declare it under 'datazones:' in source_ids.yaml, or pass no datazone"
         )
-        raise AccessError(msg)
+        raise CallerError(msg)
     if len(zones) > 1:
         msg = f"a caller is in one datazone, and this one named {', '.join(map(repr, zones))}"
-        raise AccessError(msg)
+        raise CallerError(msg)
     (zone,) = zones
     if zone not in vocabulary.datazones:
         msg = (
             f"unknown datazone {str(zone)!r}; this deployment defines "
             f"{', '.join(sorted(vocabulary.datazones)) or 'none'}"
         )
-        raise AccessError(msg)
+        raise CallerError(msg)
     return vocabulary.known(named) | {zone_name(zone)}
 
 
@@ -97,7 +98,7 @@ def caller_holds(
             "source_ids=UNSCOPED to run without one -- from the command line, "
             "--as A,B or --as UNSCOPED"
         )
-        raise AccessError(msg)
+        raise CallerError(msg)
     return held_by(vocabulary, source_ids)
 
 
