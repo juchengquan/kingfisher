@@ -2141,6 +2141,15 @@ same history once more. The fix designed writes the summary and the messages aft
 cut as the transcript. Clearing makes the trigger rare on a large window; on a small one
 it is the next thing to fix.
 
+**Whether the model may cite a result is a deployment's switch, on by default.**
+`KINGFISHER_CITE_RESULTS`, read into `Config.cite_results`. Citing is the provenance the
+ledger exists for, so it is on unless turned off; off suits an answer read by people who
+never see the ids. Off drops only the sentence of permission, and the id stays explained:
+`<ledger_delta>` and finding a result by its id lean on it. Per deployment and never per
+request, because the sentence is in the cached system prompt. It is spliced in at a
+marker from `prompting.py`, as the other optional parts of `system.md` are, rather than
+cut out of the markdown's text. *(2026-10-20.)*
+
 **Not built, and still open.**
 
 - **A handle in place of a large result's stub.** A handle in place of *every* result,
