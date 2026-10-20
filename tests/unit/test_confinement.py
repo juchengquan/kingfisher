@@ -16,9 +16,9 @@ import shutil
 import tempfile
 import warnings
 from concurrent import futures
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import pytest
 
@@ -31,6 +31,7 @@ from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.sandbox import confinement, sandbox_exec
 from kingfisher.plugins.sessions.sandbox.bubblewrap import BubblewrapRunner
 from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner
+from tests.checks.runner import RUNNER_CHECKS
 from tests.conftest import macos, repository_root
 
 #: Two tests need the agent's shell to start *this* interpreter, with this project's
@@ -502,6 +503,45 @@ def test_off_really_does_leave_the_shell_open(cfg, session_dir):
         assert "token" in str(backend.execute(f"cat {secret}").output)
     finally:
         secret.unlink(missing_ok=True)
+
+
+@dataclass(frozen=True)
+class _ThroughExecute:
+    """A backend's `execute`, in the shape the runner kit drives."""
+
+    backend: Any
+    local: bool = True
+
+    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+        done = self.backend.execute(command, timeout=timeout)
+        return CommandResult(
+            output=done.output,
+            exit_code=1 if done.exit_code is None else done.exit_code,
+            truncated=done.truncated,
+        )
+
+
+@macos
+def test_the_sandboxed_shell_keeps_the_runner_contract(cfg, session_dir):
+    """A command's leftovers die with it under `sandbox-exec` too.
+
+    Driven through the backend a turn gets rather than the reference runner the kit
+    otherwise runs on: a reference that kills its group says nothing about this one.
+    """
+    backend = backend_at(cfg, session_dir)
+
+    for check in RUNNER_CHECKS:
+        check(lambda: _ThroughExecute(backend))
+
+
+def test_the_unfenced_shell_keeps_the_runner_contract(cfg, session_dir):
+    """The same with no fence, which is the launcher alone, and so runs on Linux too."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        backend = backend_at(cfg, session_dir, shell=UNFENCED)
+
+    for check in RUNNER_CHECKS:
+        check(lambda: _ThroughExecute(backend))
 
 
 # -- writes: the rules system.md only asked for ---------------------------

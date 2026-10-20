@@ -38,7 +38,8 @@ class CommandRunner(Protocol):
 
     Held by `tests/checks/runner.py`: it says whether it runs here; a command that
     works says so; one that fails or runs out of time is a result, not an exception;
-    and the result is shaped the way a caller reads it.
+    the result is shaped the way a caller reads it; and nothing a command starts
+    outlives it.
     """
 
     @property

@@ -277,3 +277,26 @@ def test_the_shell_can_still_list_the_directory_it_starts_in(two_sessions):
 
     assert outcome.exit_code == 0, outcome.output
     assert "outputs" in outcome.output
+
+
+@needs_landlock
+def test_the_fenced_shell_keeps_the_runner_contract(two_sessions):
+    """A command's leftovers die with it behind Landlock, which confines between fork
+    and exec and so shares the launcher's process group handling with no fence at all."""
+    from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner, policy_for
+    from tests.checks.runner import RUNNER_CHECKS
+
+    _, theirs = two_sessions
+
+    def fenced_runner() -> LandlockRunner:
+        return LandlockRunner(
+            policy_for(theirs, DEFAULT_LAYOUT, readable=toolchain_roots()),
+            cwd=theirs,
+            env={
+                "PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin",
+                "TMPDIR": str(theirs / DEFAULT_LAYOUT.scratchpad),
+            },
+        )
+
+    for check in RUNNER_CHECKS:
+        check(fenced_runner)

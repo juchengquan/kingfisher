@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
-
 import pytest
 
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS, Layout
@@ -172,134 +170,81 @@ def test_the_command_starts_in_the_session(session):
 # -- what the runner does ----------------------------------------------------
 
 
-def test_the_runner_puts_the_command_after_the_sandbox(session):
+#: Stands in for `bwrap`, which is absent here: it runs the rest of the argv as given, so
+#: the runner's own half -- the launch and what comes back -- is driven for real. What
+#: the sandbox *does* is asserted against a real one in `tests/linux/test_bubblewrap_escapes.py`.
+PASS_THROUGH = ["/usr/bin/env"]
+
+
+def test_the_runner_puts_the_command_after_the_sandbox():
     """Everything before `/bin/sh` is policy; the command is the last word."""
-    runner = BubblewrapRunner(["bwrap", "--unshare-all", "--chdir", str(session)])
-    seen: list[list[str]] = []
+    result = BubblewrapRunner(["/bin/echo"]).run("echo hi")
 
-    class Done:
-        stdout, stderr, returncode = "ok", "", 0
-
-    def fake_run(argv, **kwargs):
-        seen.append(argv)
-        return Done()
-
-    import kingfisher.plugins.sessions.sandbox.bubblewrap as module
-
-    original, module.subprocess.run = module.subprocess.run, fake_run
-    try:
-        runner.run("echo hi")
-    finally:
-        module.subprocess.run = original
-
-    assert seen[0][-3:] == ["/bin/sh", "-c", "echo hi"]
+    assert result.output.strip() == "/bin/sh -c echo hi"
 
 
-def test_the_environment_is_given_rather_than_inherited(session, monkeypatch):
+def test_the_environment_is_given_rather_than_inherited(monkeypatch):
     """This process's credentials must not reach the agent's shell -- the one thing a
     filesystem fence would not catch, and the reason the runner keeps an `env` at all.
 
-    Asserted at the `subprocess` boundary rather than by running `env`, because `bwrap`
-    is absent on this host; `tests/linux/test_bubblewrap_escapes.py` would be the place
-    to drive it, and no CI job runs that file. The Landlock runner has had
-    `test_the_environment_is_given_rather_than_inherited` since it was written, and
-    making this one inherit `os.environ` left the whole suite green.
+    The empty case too, and it is the one that matters: `dict(env or ...)` returns what
+    it was given whenever that is truthy, so a runner built with no `env` is the only
+    call that can fall back to this process's. Written the other way first, and a
+    mutation inheriting `os.environ` passed it.
     """
     monkeypatch.setenv("A_SERVICE_CREDENTIAL", "sk-do-not-leak")
-    handed: list[object] = []
 
-    def fake_run(argv, **kwargs):
-        handed.append(kwargs.get("env"))
-        return Done(stdout="ok")
+    given = BubblewrapRunner(PASS_THROUGH, env={"PATH": "/usr/bin:/bin"}).run("env")
+    empty = BubblewrapRunner(PASS_THROUGH).run("env")
 
-    import kingfisher.plugins.sessions.sandbox.linux as module
-
-    monkeypatch.setattr(module.subprocess, "run", fake_run)
-    BubblewrapRunner(argv_for(session, DEFAULT_LAYOUT), env={"PATH": "/usr/bin"}).run("env")
-    # The empty case too, and it is the one that matters: `dict(env or ...)` returns
-    # what it was given whenever that is truthy, so a runner built with no `env` is
-    # the only call that can fall back to this process's. Written the other way
-    # first, and a mutation inheriting `os.environ` passed it.
-    BubblewrapRunner(argv_for(session, DEFAULT_LAYOUT)).run("env")
-
-    assert handed == [{"PATH": "/usr/bin"}, {}]
+    assert "PATH=/usr/bin:/bin" in given.output
+    assert "sk-do-not-leak" not in given.output
+    assert "sk-do-not-leak" not in empty.output
 
 
-def _launching(monkeypatch, outcome):
-    """A `subprocess.run` that answers `outcome`, whatever it is handed.
-
-    The runner's own half -- what a command comes back as -- is what these drive, and
-    it is reachable on any host: `bwrap` never runs. What the sandbox *does* is
-    asserted against a real one in `tests/linux/test_bubblewrap_escapes.py`.
-    """
-    import kingfisher.plugins.sessions.sandbox.linux as module
-
-    def fake_run(*args, **kwargs):
-        if isinstance(outcome, BaseException):
-            raise outcome
-        return outcome
-
-    monkeypatch.setattr(module.subprocess, "run", fake_run)
-
-
-class Done:
-    """`CompletedProcess`, as the runner reads it."""
-
-    def __init__(self, stdout="", stderr="", returncode=0):
-        self.stdout, self.stderr, self.returncode = stdout, stderr, returncode
-
-
-def test_long_output_truncates_where_an_unfenced_command_would(session, monkeypatch):
+def test_long_output_truncates_where_an_unfenced_command_would():
     """Untested until the shaping moved: this runner had its own copy of it, identical
     to the Landlock one to the byte, and only that one was ever driven.
     """
-    _launching(monkeypatch, Done(stdout="x" * 200))
-
-    result = BubblewrapRunner(["bwrap"], max_output_bytes=50).run("anything")
+    result = BubblewrapRunner(PASS_THROUGH, max_output_bytes=50).run(
+        "printf 'x%.0s' $(seq 200)"
+    )
 
     assert result.truncated is True
     assert "truncated at 50 bytes" in result.output
 
 
-def test_both_streams_reach_the_model(session, monkeypatch):
+def test_both_streams_reach_the_model():
     """`stderr` is where a denied path is reported, so a sandbox whose refusals were
     invisible would look like a broken command.
     """
-    _launching(monkeypatch, Done(stdout="out", stderr="denied", returncode=1))
+    result = BubblewrapRunner(PASS_THROUGH).run("printf out; printf denied >&2; exit 1")
 
-    result = BubblewrapRunner(["bwrap"]).run("anything")
-
-    assert result.output == "outdenied"
+    assert result.output == "out\n[stderr] denied\n\nExit code: 1"
     assert result.exit_code == 1
 
 
-def test_a_timeout_is_a_result_rather_than_an_exception(session, monkeypatch):
+def test_a_timeout_is_a_result_rather_than_an_exception():
     """The shell's own exit code, so a caller cannot tell a sandboxed timeout from an
     unsandboxed one.
     """
-    _launching(monkeypatch, subprocess.TimeoutExpired(cmd="bwrap", timeout=1))
-
-    result = BubblewrapRunner(["bwrap"]).run("sleep 5", timeout=1)
+    result = BubblewrapRunner(PASS_THROUGH).run("sleep 5", timeout=1)
 
     assert result.exit_code == 124
     assert "timed out" in result.output
 
 
-def test_a_sandbox_that_will_not_start_says_so_rather_than_looking_empty(
-    session, monkeypatch
-):
+def test_a_sandbox_that_will_not_start_says_so_rather_than_looking_empty(tmp_path):
     """`bwrap` failing to build a namespace used to arrive as an exit code with no
     output, which is what a command with no output looks like -- so a sandbox that
     never applied read as a broken image.
     """
-    _launching(monkeypatch, OSError("no user namespaces"))
-
-    result = BubblewrapRunner(["bwrap"]).run("anything")
+    result = BubblewrapRunner([str(tmp_path / "no-bwrap-here")]).run("anything")
 
     assert result.exit_code == 1
     assert "[fence] the command did not run" in result.output
     assert "bubblewrap failed" in result.output
-    assert "no user namespaces" in result.output
+    assert "no-bwrap-here" in result.output
 
 
 def test_the_runner_says_it_is_local(session):
