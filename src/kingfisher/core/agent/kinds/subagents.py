@@ -246,8 +246,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     recorder: RecorderMiddleware | None = None,
     #: The deployment's instructions, which every subagent is given ahead of its own.
     instructions: str = "",
-    #: What the agent stops on. Read only for a compiled subagent, which is the one kind
-    #: no gate reaches: deepagents installs the pause on every graph it builds itself.
+    #: What the agent stops on, which every subagent it reaches stops on too.
     gated: Collection[str] = (),
     #: The build's, which the agent's compiled graph measures; `None` assumes the default
     #: stack's cost.
@@ -265,7 +264,9 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
             private=private,
             paths=paths,
             run_on=run_on,
-            default_model=default_model,
+            # `runs`, not `default_model`: deepagents hands a graph no model, so one naming
+            # none would otherwise run the deployment's default rather than its summoner's.
+            default_model=runs,
             held=held,
             gated=gated,
         )
@@ -351,4 +352,8 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     )
     if built is not None:
         subagent["model"] = built
+    # On the spec, not left to deepagents: it copies the agent's gates only into the specs
+    # `create_deep_agent` builds, and a helper's `SubAgentMiddleware` above gets none.
+    if gated:
+        subagent["interrupt_on"] = dict.fromkeys(gated, True)
     return subagent

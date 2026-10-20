@@ -88,6 +88,8 @@ def ensure_session_layout(session_dir: Path, layout: Layout) -> Path:
     renamed deployment's sessions out under the names kingfisher ships.
     """
     session_dir = Path(session_dir).expanduser().resolve()
+    # Before anything is made or written: `mkdir` and the scaffold would go through a link.
+    refuse_linked_folders(session_dir, layout)
     # The saved results before the first result: bubblewrap binds them read-only only where
     # they exist when its fence is built, so one made mid-turn would be the shell's to write.
     for name in layout.made_dirs:
@@ -98,6 +100,23 @@ def ensure_session_layout(session_dir: Path, layout: Layout) -> Path:
     # Last, so a session's own memory beats the scaffold.
     scaffold_memory(session_dir, layout)
     return session_dir
+
+
+def refuse_linked_folders(session_dir: Path, layout: Layout) -> None:
+    """Refuse a session whose folders are not where they are named, as a link makes them.
+
+    A route's backend is rooted where its folder resolves, so a `memory` the shell
+    replaced with a link would hand the file tools, which no fence holds, the host.
+    Refused rather than replaced: what the link points at may be someone's data.
+    """
+    real = Path(session_dir).resolve()
+    moved = [name for name in layout.made_dirs if (real / name).resolve() != real / name]
+    if moved:
+        msg = (
+            f"session directory {real}: {', '.join(moved)} is a link or reached through "
+            "one, which no session folder may be; remove the link to use this session"
+        )
+        raise ValueError(msg)
 
 
 def scaffold_memory(session_dir: Path, layout: Layout) -> None:

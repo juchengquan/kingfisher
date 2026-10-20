@@ -73,7 +73,7 @@ from .backend import (
 from .interpreter import interpreter
 from .models import build_model, model_named, summarizer_trigger
 from .permitted_backend import PermittedBackend
-from .prompting import memory_guidelines, system_prompt
+from .prompting import behind_instructions, memory_guidelines, system_prompt
 from .session_paths import SessionPaths
 from .tool_context import ToolContext
 from .tool_guards import guarded_tools
@@ -440,7 +440,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         if capabilities.skills == ALL:
             extras["skills"] = sources
         elif capabilities.skills is None:
-            pass  # none: no index, and no deny rules to write for one
+            # None granted is every skill denied, or each is a `read_file` away unnamed.
+            permissions.extend(skill_denials((), registry))
         else:
             # A bare name two sources both offer is refused, not resolved: resolving
             # it is the silent pick this exists to stop.
@@ -723,6 +724,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     supplied.append(
         {
             **GENERAL_PURPOSE_SUBAGENT,
+            "system_prompt": behind_instructions(
+                GENERAL_PURPOSE_SUBAGENT["system_prompt"], instructions
+            ),
             # deepagents hands it the agent's own tool objects, so it needs the same guards.
             "middleware": (
                 # The agent's recorder: these are the agent's tools, under its audiences.

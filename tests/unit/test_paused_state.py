@@ -13,8 +13,10 @@ from __future__ import annotations
 import pickle
 from typing import Any
 
+import ormsgpack
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import START, StateGraph
 from langgraph.types import Command, interrupt
 from typing_extensions import TypedDict
@@ -137,6 +139,60 @@ def test_a_checkpoint_is_msgpack_and_a_pickle_is_refused_on_the_way_back():
     # happily unpickle whatever it was handed.
     with pytest.raises(NotImplementedError):
         resumed_saver(b"pickle\n" + pickle.dumps({"storage": [], "writes": [], "blobs": []}))
+
+
+_CALLED: list[str] = []
+
+
+def _marker(argument: str) -> None:
+    """What a tampered paused state names in place of `os.system`."""
+    _CALLED.append(argument)
+
+
+def _calling_marker() -> ormsgpack.Ext:
+    """The msgpack extension langgraph reads as `import module; module.name(arg)`."""
+    return ormsgpack.Ext(0, ormsgpack.packb([__name__, _marker.__name__, "ran"]))
+
+
+def test_a_paused_state_that_names_a_function_does_not_call_it():
+    """langgraph's default serde imports and calls any `module.name` an extension
+    names, so a paused state rewritten through the shell ran `os.system` at resume.
+    """
+    _CALLED.clear()
+    document = {"storage": [], "writes": [], "blobs": [], "planted": _calling_marker()}
+    payload = ormsgpack.packb(document)
+
+    # The control beside the claim: the same bytes do call it under the default, so
+    # the assertion below is about the reader rather than a blob that never worked.
+    JsonPlusSerializer().loads_typed(("msgpack", payload))
+    assert _CALLED == ["ran"], "the planted blob calls nothing, so it proves nothing"
+    _CALLED.clear()
+
+    resumed_saver(b"msgpack\n" + payload)
+
+    assert _CALLED == [], "resuming a paused state called the function it named"
+
+
+def test_a_checkpoint_inside_a_paused_state_does_not_call_what_it_names():
+    """The entries are decoded by the rebuilt saver when the graph resumes, not by the
+    read of the file, so a reader locked down on the outside alone still ran them.
+    """
+    _CALLED.clear()
+    holding = InMemorySaver()
+    _gated_graph(holding).invoke({"asked": "x"}, config=_thread("s1"))
+    planted = ("msgpack", ormsgpack.packb(_calling_marker()))
+    for key in holding.blobs:
+        holding.blobs[key] = planted
+    state = paused_state(holding)
+
+    # The control: the saver that wrote it, on langgraph's default serde, does call it.
+    _gated_graph(holding).invoke(Command(resume="approve"), config=_thread("s1"))
+    assert _CALLED, "the planted checkpoint calls nothing, so it proves nothing"
+    _CALLED.clear()
+
+    _gated_graph(resumed_saver(state)).invoke(Command(resume="approve"), config=_thread("s1"))
+
+    assert _CALLED == [], "resuming a paused turn called the function a checkpoint named"
 
 
 def test_no_part_of_a_checkpoint_resumes():

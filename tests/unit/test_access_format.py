@@ -102,6 +102,15 @@ def test_a_malformed_file_refuses_rather_than_starting_open(tmp_path):
         load_access_policy(written)
 
 
+def test_a_section_written_twice_is_refused_rather_than_the_last_kept(tmp_path):
+    """`safe_load` kept the second `source_ids:`, so the names in the first were dropped
+    from the vocabulary without a word."""
+    written = tmp_path / "source_ids.yaml"
+    written.write_text("source_ids: [A, B]\nsource_ids: [C]\n", encoding="utf-8")
+    with pytest.raises(AccessError, match=r"source_ids\.yaml.*'source_ids' is written twice"):
+        load_access_policy(written)
+
+
 def test_a_document_that_is_not_a_mapping_is_refused(tmp_path):
     written = tmp_path / "source_ids.yaml"
     written.write_text("- A\n- B\n", encoding="utf-8")

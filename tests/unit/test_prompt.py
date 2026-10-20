@@ -148,6 +148,20 @@ def test_the_prompt_lets_the_model_cite_a_result_and_does_not_tell_it_to():
     assert "Cite it" not in text
 
 
+def test_a_deployment_that_does_not_cite_is_not_told_it_may(cfg):
+    """Read off the `Config` and not passed on, the switch would leave every deployment
+    told it may cite; dropped with its paragraph, the id would go unexplained.
+    """
+    citing = " ".join(system_prompt(cfg).split())
+    silent = " ".join(system_prompt(replace(cfg, cite_results=False)).split())
+
+    sentence = "You can cite it by that id when you rely on that result."
+    assert sentence in citing
+    assert sentence not in silent
+    assert silent == citing.replace(f" {sentence}", "")
+    assert "is recorded under that id, which stays the same for the rest of the session." in silent
+
+
 def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
     """The run directory went when a turn stopped being a place, and the prompt and the
     smoke task went on sending files there for days: a place the agent cannot find is
@@ -522,6 +536,43 @@ def test_a_subagent_is_not_told_of_a_shell_it_does_not_hold(scripted, subagent, 
     assert len(systems) == 3
     assert "You are kingfisher" not in systems[1]
     assert MAPPINGS not in systems[1]
+
+
+class _HouseRules:
+    """A deployment's instructions, handed in as `Kingfisher(instructions=)` takes them."""
+
+    def text(self, cfg) -> str:
+        return "House rule: never delete anything."
+
+
+@pytest.mark.parametrize(
+    ("subagent", "agent"),
+    [
+        ("reader", {"subagents": "[reader]", "builtin_tools": '["*"]'}),
+        ("general-purpose", {"builtin_tools": "[read_file, task]"}),
+    ],
+)
+def test_every_subagent_is_given_the_deployments_instructions(scripted, subagent, agent):
+    """`general-purpose` was handed deepagents' prompt bare, so a house rule held for every
+    subagent but the one the agent delegates to when it names none.
+    """
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "reader.yaml").write_text(READER, encoding="utf-8")
+    an_agent(scripted, **agent)
+    asks = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "task", "args": {"description": "read", "subagent_type": subagent}, "id": "t"}
+        ],
+    )
+    Scripted.script.extend([asks, AIMessage("read"), AIMessage("done")])
+    Kingfisher(scripted, sessions=LocalSessions(), instructions=_HouseRules()).run(
+        Request("go", agent="only", session_id=start(scripted, "s"))
+    )
+    systems = [m.text for heard in Scripted.heard for m in heard if isinstance(m, SystemMessage)]
+
+    assert len(systems) == 3
+    assert "House rule: never delete anything." in systems[1]
 
 
 # -- told to read back and save only with the tools it holds ------------------------

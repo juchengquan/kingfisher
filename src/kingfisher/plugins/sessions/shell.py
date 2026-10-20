@@ -23,6 +23,8 @@ from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import CommandRunner
 from kingfisher.plugins.sessions.sandbox import confinement
 
+from .links import UnlinkedBackend
+
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 
 
@@ -121,7 +123,7 @@ def shell_skills(cfg: Config, catalogue: Definitions | None = None) -> tuple[Pat
     return (skills.root, *skills.mounts.values(), *((view,) if view else ()))
 
 
-class ConfinedLocalShellBackend(LocalShellBackend):
+class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
     """`LocalShellBackend` with every command run through a confinement.
 
     `runner=None` runs it here through upstream, rather than a default runner copying

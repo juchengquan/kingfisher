@@ -69,6 +69,11 @@ FILE_TOOLS = (LS, READ_FILE, WRITE_FILE, EDIT_FILE, DELETE, GLOB, GREP)
 #: so nothing else goes in `render_system_prompt`'s cache key.
 _DESCRIBED = frozenset((*FILE_TOOLS, EXECUTE))
 
+#: Where a deployment that wants results cited says the model may. Permission, not an
+#: instruction: told to, the model hangs an id on every claim whether the reader wants one.
+CITING_MARKER = "<!-- citing -->"
+_CITING = "You can cite it by that id when you rely on that result."
+
 #: Where the paragraphs on seeing a saved result again are spliced in.
 TOOL_RESULTS_MARKER = "<!-- tool results -->"
 TOOL_RESULTS_FILE = "tool_results.md"
@@ -280,6 +285,7 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     *,
     skills_enabled: bool = False,
     memory_enabled: bool = False,
+    cite_results: bool = True,
     extra: str = "",
     layout: Layout,
     shell: ShellPrompt | None = None,
@@ -292,7 +298,9 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     tool it does not hold is not described, since a model told of one calls it.
     """
     base = _filled(BASE_PROMPT, layout)
-    for marker in (CAPABILITY_MARKER, FILE_TOOLS_MARKER, SHELL_MARKER, TOOL_RESULTS_MARKER):
+    for marker in (
+        CAPABILITY_MARKER, FILE_TOOLS_MARKER, SHELL_MARKER, CITING_MARKER, TOOL_RESULTS_MARKER
+    ):
         if marker not in base:  # pragma: no cover -- guards a silent edit
             msg = f"{BASE_PROMPT} is missing the {marker} marker"
             raise ValueError(msg)
@@ -313,6 +321,7 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     assembled = _joined(
         base.replace(FILE_TOOLS_MARKER, _file_tools(held, layout))
         .replace(SHELL_MARKER, _said(shell, "prompt", layout) if shelled else "")
+        .replace(CITING_MARKER, _CITING if cite_results else "")
         .replace(TOOL_RESULTS_MARKER, _tool_results(held, layout, shelled=shelled))
         .replace(CAPABILITY_MARKER, sections),
         extra,
@@ -382,6 +391,7 @@ def system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describe
     return render_system_prompt(
         skills_enabled=bool(cfg and cfg.skills_enabled) and skills,
         memory_enabled=bool(cfg and cfg.memory_enabled),
+        cite_results=cfg.cite_results if cfg else True,
         extra=behind_instructions(agent, instructions),
         layout=cfg.layout if cfg else DEFAULT_LAYOUT,
         shell=shell,

@@ -11,6 +11,7 @@ import pytest
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.activation import available_skills
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
@@ -57,6 +58,16 @@ def test_a_header_naming_something_else_is_offered_under_the_header_name(cfg):
 
     assert registry.names == ("header",)
     assert registry.unloadable == (), "it loaded; it is only under another name"
+
+
+def test_a_folder_called_catalogue_is_refused(cfg):
+    """Listed under the root's own label, its `review` was the one described while the
+    run mounted the root's `review` in its place."""
+    _skill(cfg.skills_dir, "review", GOOD.format(name="review", desc="The root one."))
+    _skill(cfg.skills_dir, "catalogue/review", GOOD.format(name="review", desc="The folder one."))
+
+    with pytest.raises(ConfigError, match="a folder called 'catalogue'"):
+        _read(cfg.skills_dir)
 
 
 def test_a_description_comes_back_for_a_listing(cfg):

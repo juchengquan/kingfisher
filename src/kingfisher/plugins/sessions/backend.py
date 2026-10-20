@@ -29,6 +29,7 @@ from kingfisher.plugins.sessions.sandbox import confinement
 from .folders import (
     LocalSessionDirs,
     ensure_session_layout,
+    refuse_linked_folders,
     session_bytes,
     session_dir,
 )
@@ -207,7 +208,8 @@ class InputsBackend(FilesystemBackend):
 
 
 def _require_layout(session_dir: Path, layout: Layout) -> None:
-    """Refuse a session directory that has not been made yet."""
+    """Refuse a session directory that has not been made yet, or whose folders are links."""
+    refuse_linked_folders(session_dir, layout)
     missing = [name for name in layout.made_dirs if not (session_dir / name).is_dir()]
     if missing:
         msg = (

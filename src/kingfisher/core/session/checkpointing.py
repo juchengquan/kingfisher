@@ -18,10 +18,13 @@ def build_session_checkpointer() -> BaseCheckpointSaver:
     return InMemorySaver()
 
 
-#: msgpack, never pickle: the shell can reach `.harness` wherever a deployment turns the
-#: sandbox off, and a tampered pickle is arbitrary code at resume. Hence not
-#: `InMemorySaver(factory=PersistentDict)`, which always pickles.
-_SERDE = JsonPlusSerializer()
+#: The shell can reach `.harness` wherever a deployment turns the sandbox off, so a
+#: paused state is read as hostile. msgpack, never pickle, which is code at resume --
+#: hence not `InMemorySaver(factory=PersistentDict)`, which always pickles. And
+#: `allowed_msgpack_modules=None`, never the default, under which msgpack imports and
+#: calls whatever `module.name` an extension names: `None` is langgraph's own safe set,
+#: which holds every type a deep agent's paused turn writes.
+_SERDE = JsonPlusSerializer(allowed_msgpack_modules=None)
 
 
 #: What a checkpoint's shape depends on: all three build the node names it refers to,
@@ -70,7 +73,9 @@ def resumed_saver(state: bytes) -> Any:
     """The saver `paused_state` was taken from, rebuilt from its bytes."""
     kind, _, payload = state.partition(b"\n")
     document = _SERDE.loads_typed((kind.decode("utf-8"), payload))
-    saver = InMemorySaver()
+    # The entries are still bytes, decoded only when the graph reads them, and by this
+    # saver's serde rather than the one above.
+    saver = InMemorySaver(serde=_SERDE)
     # Assigned *through* the mappings, so the saver's defaultdicts survive: `get_tuple`
     # indexes a thread and namespace that may not exist yet. msgpack reads every tuple
     # back as a list, and only the keys are hashed, so only they are converted.

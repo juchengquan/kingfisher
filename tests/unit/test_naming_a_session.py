@@ -428,8 +428,8 @@ def test_the_shell_cannot_fabricate_a_sibling_session(cfg, session_dir):
 
 @macos
 def test_a_link_from_a_writable_folder_does_not_reach_the_harness(cfg):
-    """Measured closed, and pinned so it stays closed: a hard or soft link made in a
-    writable folder is not a way to write the pin the `.harness` rule guards.
+    """Pinned so it stays closed: a hard or soft link the shell makes in a writable folder
+    is not a way for the shell to write the pin the `.harness` rule guards.
     """
     backend = LocalSessions().open(cfg, DEFAULT)
     pinned = _pin(cfg.workspace, "sessions", DEFAULT)
@@ -440,6 +440,104 @@ def test_a_link_from_a_writable_folder_does_not_reach_the_harness(cfg):
     backend.execute(soft)
 
     assert pinned.read_text(encoding="utf-8") == "name: pinned\n"
+
+
+def _planted(cfg, at: str, points_to: str):
+    """The default session's backend, with a link at `at` pointing to `points_to`, both
+    paths inside the session -- what a shell may make on every fence."""
+    backend = LocalSessions().open(cfg, DEFAULT)
+    session = cfg.workspace / "sessions" / DEFAULT
+    (session / at).symlink_to(session / points_to)
+    return backend, session
+
+
+#: Each file tool that opens a path, by name.
+FILE_TOOLS = {
+    "write": lambda b, p: b.write(p, "name: forged\n"),
+    "edit": lambda b, p: b.edit(p, "name: pinned", "name: forged"),
+    "read": lambda b, p: b.read(p),
+    "download": lambda b, p: b.download_files([p])[0],
+    "upload": lambda b, p: b.upload_files([(p, b"name: forged\n")])[0],
+}
+
+
+@pytest.mark.parametrize("tool", FILE_TOOLS)
+@pytest.mark.parametrize("folder", ["scratchpad", "outputs"])
+def test_the_file_tools_follow_no_link_into_the_harness(cfg, folder, tool):
+    """The file tools run outside every fence, and the `/.harness` rule judged the path
+    typed: `edit("/scratchpad/link")` rewrote the pinned agent the link pointed at.
+    """
+    backend, _ = _planted(cfg, f"{folder}/link", f"{HARNESS}/{PINNED_AGENT}")
+    pinned = _pin(cfg.workspace, "sessions", DEFAULT)
+
+    answer = FILE_TOOLS[tool](backend, f"/{folder}/link")
+
+    assert answer.error, f"{tool} went through the link"
+    assert getattr(answer, "content", None) is None
+    assert pinned.read_text(encoding="utf-8") == "name: pinned\n"
+
+
+def test_the_file_tools_follow_no_link_into_the_saved_results(cfg):
+    """A link to a saved result let `edit` forge what a later turn reads back as a tool's
+    answer, under a write rule that judged only `/scratchpad/...`."""
+    backend, session = _planted(cfg, "scratchpad/link", "scratchpad/tool_results/r1.txt")
+    result = session / "scratchpad" / "tool_results" / "r1.txt"
+    result.write_text("TRUE RESULT", encoding="utf-8")
+
+    assert backend.edit("/scratchpad/link", "TRUE RESULT", "FORGED").error
+    assert result.read_text(encoding="utf-8") == "TRUE RESULT"
+
+
+def test_a_walk_names_no_link_and_reads_through_none(cfg):
+    """`ls` named a link by its target's path, and grep's own walk read through one. The
+    ordinary file beside it is the control: a walk that found nothing would pass."""
+    backend, session = _planted(cfg, "scratchpad/link", f"{HARNESS}/{PINNED_AGENT}")
+    _pin(cfg.workspace, "sessions", DEFAULT)
+    (session / "scratchpad" / "own.txt").write_text("name: pinned\n", encoding="utf-8")
+    shell = backend.default
+
+    listed = {e["path"] for e in backend.ls("/scratchpad").entries or [] if not e["is_dir"]}
+    globbed = {m["path"] for m in backend.glob("*", "/scratchpad").matches or []}
+    # The walk ripgrep stands in for where it is missing, which follows a file link.
+    found, _, _ = shell._python_search("name: pinned", shell._resolve_path("/scratchpad"), None)
+
+    assert listed == globbed == set(found) == {"/scratchpad/own.txt"}
+
+
+@pytest.mark.parametrize("folder", DEFAULT_LAYOUT.made_dirs)
+def test_a_session_whose_folder_is_a_link_is_refused_at_open(cfg, tmp_path, folder):
+    """A `memory` replaced by a link rooted the `/memory/` route wherever it pointed, so
+    the file tools read and wrote the host and the scaffold wrote `AGENTS.md` there."""
+    LocalSessions().open(cfg, DEFAULT)
+    session = cfg.workspace / "sessions" / DEFAULT
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    moved = session / folder
+    # `inputs` is read-only, and moving a folder to another parent rewrites its `..`.
+    moved.chmod(0o755)
+    moved.rename(tmp_path / "aside")
+    moved.symlink_to(outside)
+
+    with pytest.raises(ValueError, match="link"):
+        LocalSessions().open(cfg, DEFAULT)
+    with pytest.raises(ValueError, match="link"):
+        backend_at(cfg, session)
+    assert list(outside.iterdir()) == []
+
+
+@macos
+def test_the_shell_cannot_replace_memory_with_a_link(cfg, tmp_path):
+    """`rm -rf memory && ln -s <outside> memory` was the shell's to run, and rooted the
+    next turn's `/memory/` route outside the session; the write beside it is the control."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    backend = LocalSessions().open(cfg, DEFAULT)
+
+    swapped = backend.execute(f'rm -rf memory; ln -s "{outside}" memory; ls -ld memory')
+    kept = backend.execute("echo fine > memory/note.md && cat memory/note.md")
+
+    assert not (cfg.workspace / "sessions" / DEFAULT / "memory").is_symlink(), swapped.output
+    assert kept.exit_code == 0 and "fine" in kept.output
 
 
 @macos

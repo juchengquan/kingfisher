@@ -110,7 +110,7 @@ def test_an_empty_entry_audience_is_refused():
     """`source_ids: []` would mean nobody, and the way to say "no restriction" is to leave
     the line out -- so an empty one is an unfinished edit.
     """
-    with pytest.raises(AgentError, match="Leave the line out"):
+    with pytest.raises(AgentError, match="Leave the line out to inherit the audience around it"):
         audienced([{"name": "audit", "source_ids": []}], absent=ALL, key="skills")
 
 

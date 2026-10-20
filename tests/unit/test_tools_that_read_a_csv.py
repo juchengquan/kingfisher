@@ -218,12 +218,12 @@ def test_the_answer_does_not_grow_with_the_file(which, profile):
 
 @pytest.mark.parametrize("which", ["csv_profile", "csv_columns"])
 def test_a_cell_the_csv_reader_will_not_parse_is_said_rather_than_raised(which, profile):
-    """`csv.field_size_limit()` is 131,072 and this tool reads 32 MB, so it died on a
-    cell 0.6% of its own cap -- and through the failure guard the model was handed
-    `Error: Error: field larger than field limit (131072)`: no file, no column, no
-    remedy, and a type name reading `Error`. Raised deliberately rather than by
-    widening the limit, which is process-wide state an example tool has no business
-    setting.
+    """`csv.field_size_limit()` is 131,072 and this tool reads 32 MB, so it died on a cell
+    of 128 KB -- here one of 200,000 characters -- and through the failure guard the
+    model was handed `Error: Error: field larger than field limit (131072)`: no
+    file, no column, no remedy, and a type name reading `Error`. Raised deliberately
+    rather than by widening the limit, which is process-wide state an example tool
+    has no business setting.
     """
     with pytest.raises(ValueError, match="longer than the 131072 characters") as refused:
         profile('a,b\n1,"' + "y" * 200_000 + '"\n', which=which)

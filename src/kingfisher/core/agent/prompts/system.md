@@ -38,8 +38,9 @@ said so below, where it is given.
 ## What your tools returned
 
 A tool result that ends in a line such as `[A-0042]` is recorded under that id, which
-stays the same for the rest of the session. You can cite it by that id when you rely on
-that result.
+stays the same for the rest of the session.
+
+<!-- citing -->
 
 A new message lists, in `<ledger_delta>`, the results recorded since the message before
 it: one line each, giving the id, the tool and its arguments, the result's size and the
