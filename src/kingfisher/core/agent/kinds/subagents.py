@@ -15,7 +15,7 @@ from langchain_core.runnables import Runnable
 from kingfisher.core.access import ALL, Selection, ceiling, narrowed, refuse_unoffered
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
-from kingfisher.core.agent.models import build_model, model_named, summarizer_trigger
+from kingfisher.core.agent.models import deployment_default, model_named, summarizer_trigger
 from kingfisher.core.agent.prompting import behind_instructions
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.agent.tool_guards import guarded_tools
@@ -129,12 +129,14 @@ def indistinct(
     cfg: Config,
     *,
     model: str | None,
+    main: str | None = None,
 ) -> str | None:
-    """Why this subagent is not running anywhere different, or `None`."""
+    """Why this subagent is not running anywhere different from the main agent, which
+    names `main`, or `None`."""
     if not spec.wanted:
         return None  # it never asked to be anywhere in particular
 
-    against = cfg.models.default
+    against = main or cfg.models.default
     if model == against:
         return f"runs {model!r}, the same model as the main agent"
     profile, endpoint = cfg.models.resolve(model)
@@ -142,7 +144,7 @@ def indistinct(
     if _host(endpoint.base_url) == summoner:
         return (
             f"runs {model!r} on endpoint {profile.endpoint!r}, which points at the "
-            f"same host as the default ({summoner})"
+            f"same host as the main agent's ({summoner})"
         )
     return None
 
@@ -171,7 +173,7 @@ def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfi
     if model is None:
         # Built here, not left to the graph: it would reach for `init_chat_model` and read
         # credentials around the catalogue.
-        model = build_model(*cfg.models.resolve())
+        model = deployment_default(cfg, endpoints=endpoints)
 
     # `narrowed`, not `ceiling`: `builtin_tools` is refused for a compiled subagent, so there
     # is no second axis to merge. `spelt` first, or `narrowed` silently drops a `where::what`

@@ -71,7 +71,8 @@ class Capabilities:
     #: Middleware a definition may name, out of what the deployment registered.
     middlewares: Selection = ALL
     #: Endpoints a definition may reach, which decides the credentials used and who receives
-    #: the run's prompts and files. Checked against where a named model resolves to.
+    #: the run's prompts and files. Checked against where a model resolves to, the default
+    #: a definition naming none runs included.
     endpoints: Selection = ALL
     #: Models a request may put a subagent on, overriding what its file says.
     models: Selection = None

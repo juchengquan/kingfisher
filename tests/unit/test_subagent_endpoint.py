@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from functools import partial
 
 import pytest
 from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableLambda
 
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.kinds.subagents import compiled
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.definitions.subagents.spec import SubagentSpec
 from kingfisher.core.environment import config_from_env
 from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, subagent_of, subagents_dir
@@ -247,6 +251,45 @@ def test_the_grant_is_checked_against_where_the_model_resolves(cfg, session_dir)
 
     with pytest.raises(CapabilityError, match="openai"):
         build(elsewhere(cfg), session_dir, endpoints=("fake",))
+
+
+@pytest.mark.parametrize(("endpoints", "refused"), [(("elsewhere",), True), (("fake",), False)])
+def test_an_agent_naming_no_model_is_held_to_the_endpoints_too(
+    cfg, session_dir, endpoints, refused
+):
+    """Only a named model was checked, so naming none ran the default on an endpoint the
+    request refused, while naming the same model was refused."""
+    build = partial(
+        build_agent,
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        capabilities=Capabilities(endpoints=endpoints),
+    )
+
+    if refused:
+        with pytest.raises(CapabilityError, match="the default model 'fake-model'"):
+            build()
+    else:
+        assert build().model.model == "fake-model"
+
+
+@pytest.mark.parametrize(("endpoints", "refused"), [(("elsewhere",), True), (("fake",), False)])
+def test_a_built_subagent_naming_no_model_is_held_to_the_endpoints_too(
+    cfg, endpoints, refused
+):
+    """A built subagent naming no model is handed the default, which went unchecked."""
+    spec = SubagentSpec(
+        name="researcher",
+        description="d",
+        system_prompt="",
+        build=lambda model, tools: RunnableLambda(lambda state: state),
+    )
+
+    if refused:
+        with pytest.raises(CapabilityError, match="the default model 'fake-model'"):
+            compiled(spec, cfg, endpoints=endpoints)
+    else:
+        assert compiled(spec, cfg, endpoints=endpoints)["name"] == "researcher"
 
 
 def test_grants_clamp_endpoints_like_everything_else():
