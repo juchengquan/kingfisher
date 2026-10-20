@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any
 
 import pytest
@@ -133,6 +134,39 @@ def test_every_graph_is_told_to_read_a_file_whole_and_shown_the_default(reading,
         (grep,) = [tool for tool in tools if getattr(tool, "name", None) == "grep"]
         assert JOINED in grep.description
         assert "run a separate grep for each" not in grep.description, "deepagents reworded it"
+
+
+@pytest.mark.parametrize(
+    ("name", "said"),
+    [
+        ("call.mp3", ("audio", "audio")),
+        ("clip.mp4", ("video", "video")),
+        ("clip.mkv", ("video", "video")),
+        ("deck.pptx", ("a .pptx file", ".pptx files")),
+    ],
+)
+def test_read_file_is_not_run_on_a_file_no_model_here_takes(reading, way, name, said):
+    """Read, audio and video reach the model as one string of base64 millions of
+    characters long, and a `.pptx` as a block the summarizer counts and the request drops.
+    """
+    cfg, _ = reading
+    what, reads = said
+    outputs = cfg.workspace / "sessions" / "s" / "outputs"
+    (outputs / name).write_bytes(os.urandom(64 * 1024))
+
+    _turn(cfg, _read("r1", file_path=f"/outputs/{name}"), AIMessage("done"), way=way)
+
+    (answer,) = [
+        one
+        for one in Scripted.heard[-1]
+        if isinstance(one, ToolMessage) and one.tool_call_id == "r1"
+    ]
+    assert answer.text == (
+        f"Error: /outputs/{name} is {what}, which can't be handed to the model here. If you "
+        f"hold a tool that can read {reads}, call it on /outputs/{name}; otherwise say that "
+        "this part could not be done."
+    )
+    assert answer.status == "error"
 
 
 def _grep(at: str, pattern: str) -> AIMessage:

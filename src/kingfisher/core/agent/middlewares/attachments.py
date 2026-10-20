@@ -1,23 +1,18 @@
-"""What a tool's result may hand the model besides text, and the files `read_file` is not
-run on at all."""
+"""What a tool's result may hand the model besides text."""
 
 from __future__ import annotations
 
 import threading
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import PurePosixPath
 from typing import Any, Literal
 
-from deepagents.backends.utils import _get_backend_read_file_type
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
-from kingfisher.core.definitions.skills import READ_FILE
-
 from .narrowing import tool_name
 from .recorded import readable_size
-from .results import answer_in, answered, failed
+from .results import answer_in, answered
 
 KB = 1024
 MB = KB * KB
@@ -144,36 +139,8 @@ def _image(where: str, chars: int, beside: int) -> str | None:
     )
 
 
-def _unreadable(call: Mapping[str, Any]) -> str | None:
-    """Why `read_file` is not run on this call's file, or `None` to run it.
-
-    Audio and video become one JSON string of base64 before any middleware sees the
-    result, so only refusing the call stops them; a `.pptx` is counted by the summarizer
-    whichever model then drops it.
-    """
-    if call.get("name") != READ_FILE:
-        return None
-    path = (call.get("args") or {}).get("file_path")
-    if not isinstance(path, str):
-        return None
-    kind = _get_backend_read_file_type(path)
-    suffix = PurePosixPath(path).suffix.lower()
-    if kind in ("audio", "video"):
-        what, reads = kind, kind
-    elif kind == "file" and suffix != ".pdf":
-        what, reads = f"a {suffix} file", f"{suffix} files"
-    else:
-        return None
-    return (
-        f"Error: {path} is {what}, which can't be handed to the model here. If you hold a "
-        f"tool that can read {reads}, call it on {path}; otherwise say that this part "
-        "could not be done."
-    )
-
-
 class AttachmentsMiddleware(AgentMiddleware):
-    """Replace a file a tool's result may not hand the model with advice, and refuse to run
-    `read_file` on one no model here takes as it is."""
+    """Replace a file a tool's result may not hand the model with advice."""
 
     def __init__(self, trigger: int) -> None:
         """`trigger` is where this graph's model is summarised, which sizes the PDFs its
@@ -289,13 +256,9 @@ class AttachmentsMiddleware(AgentMiddleware):
         return await handler(self._seen(request))
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        if (why := _unreadable(request.tool_call)) is not None:
-            return failed(request.tool_call, why)
         return self._guarded(request, handler(request))
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        if (why := _unreadable(request.tool_call)) is not None:
-            return failed(request.tool_call, why)
         return self._guarded(request, await handler(request))

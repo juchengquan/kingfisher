@@ -8,8 +8,10 @@ import inspect
 import re
 from collections.abc import Awaitable, Callable, Collection
 from functools import cache
+from pathlib import PurePosixPath
 from typing import Any
 
+from deepagents.backends.utils import _get_backend_read_file_type
 from deepagents.middleware.filesystem import DEFAULT_READ_LIMIT, FilesystemMiddleware
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.todo import WRITE_TODOS_SYSTEM_PROMPT
@@ -31,6 +33,7 @@ from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import Layout
 
 from .narrowing import tool_name
+from .results import failed
 
 #: deepagents' advice in `execute`'s description, wrong on kingfisher's own shell: the
 #: only absolute paths a model knows are the file tools', and that shell reads `/inputs`
@@ -149,6 +152,36 @@ def _overlong(request: Any, longest: int) -> ToolMessage | None:
         name=EXECUTE,
         tool_call_id=call["id"],
         status="error",
+    )
+
+
+def _unreadable(request: Any) -> ToolMessage | None:
+    """The refusal of a `read_file` call on a file no model here takes as it is; `None` for
+    any other call.
+
+    Audio and video become one JSON string of base64 before any middleware sees the
+    result, so only refusing the call stops them; a `.pptx` is counted by the summarizer
+    whichever model then drops it.
+    """
+    call = request.tool_call
+    if call.get("name") != READ_FILE:
+        return None
+    path = (call.get("args") or {}).get("file_path")
+    if not isinstance(path, str):
+        return None
+    kind = _get_backend_read_file_type(path)
+    suffix = PurePosixPath(path).suffix.lower()
+    if kind in ("audio", "video"):
+        what, reads = kind, kind
+    elif kind == "file" and suffix != ".pdf":
+        what, reads = f"a {suffix} file", f"{suffix} files"
+    else:
+        return None
+    return failed(
+        call,
+        f"Error: {path} is {what}, which can't be handed to the model here. If you hold a "
+        f"tool that can read {reads}, call it on {path}; otherwise say that this part "
+        "could not be done.",
     )
 
 
@@ -390,7 +423,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     is not on this host; have `read_file` read 1,000 lines unless told otherwise, and
     `grep` search each string of `a|b`, and say so; say nothing of the shell or of
     `write_todos` to a graph not holding it; have each built-in's description name only
-    the tools the graph holds; and refuse a command asked to run longer than `longest`.
+    the tools the graph holds; and refuse a command asked to run longer than `longest`,
+    and a `read_file` of audio, video or slides, which no model here is handed as they are.
 
     The shell's line goes in the description, not the system prompt: a subagent gets none
     of `system.md`, and the description reaches every graph holding the shell. At
@@ -461,6 +495,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         if (refused := _overlong(request, self._longest)) is not None:
             return refused
+        if (refused := _unreadable(request)) is not None:
+            return refused
         if (parts := _split(request)) is None:
             return self._corrected(request, handler(_limited(request)))
         call = request.tool_call
@@ -474,6 +510,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
         if (refused := _overlong(request, self._longest)) is not None:
+            return refused
+        if (refused := _unreadable(request)) is not None:
             return refused
         if (parts := _split(request)) is None:
             return self._corrected(request, await handler(_limited(request)))
