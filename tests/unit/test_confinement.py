@@ -1094,7 +1094,7 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
     )
 
     read = [_as_sbpl_reads_it(line) for line in text.splitlines() if "(regex " in line]
-    assert len(read) == 6, f"six rules are written as patterns; this found {len(read)}"
+    assert len(read) == 7, f"seven rules are written as patterns; this found {len(read)}"
     for _, after in read:
         assert after == "))", f"the literal ends early, and sbpl reads {after!r} as code"
     denied = [re.compile(pattern) for pattern, _ in read]
@@ -1104,6 +1104,7 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
         one / "inputs" / "given.txt",
         one / HARNESS,
         one / "scratchpad",
+        one / "memory",
         one / "scratchpad" / "tool_results" / "A-0001-execute.txt",
         one / "scratchpad" / "large_tool_results" / "c1",
     ):

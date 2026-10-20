@@ -2367,11 +2367,31 @@ move.** Measured with a real `sandbox-exec` through the agent's backend, renamin
 put it back. `_sessions_denial` denies writes to the nodes `sessions/` and each
 `sessions/<id>`, `$` ending the pattern so a session's own folders stay writable --
 measured, it still makes, renames and removes them. A hard or soft link from a writable
-folder was measured closed the same day, pinned by
+folder was measured closed to the shell the same day, pinned by
 `test_a_link_from_a_writable_folder_does_not_reach_the_harness`, so no rule names
 `file-link`. `doctor` stays `ok`; that a location-based deny is only as good as the paths
 it enumerates lives here, not in a check crying wolf every run. bubblewrap's read-only
 mount cannot be renamed away, and Landlock never grants `sessions/`. *(2026-10-12.)*
+
+**Corrected: the file tools followed the link the shell could not.** They run in this
+process, outside every fence, and the deny rules judge the path typed; deepagents resolves
+a link and checks only that its target stays in the session, which `.harness` does.
+Measured: `edit("/scratchpad/link")` rewrote the pinned agent, and the same through a link
+to a saved result forged it. The session root's backend, `UnlinkedBackend`, now refuses a
+path whose resolved location is not its spelling, and `ls`, `glob` and grep's own walk skip
+a link rather than name or read through one -- refused, not resolved and judged again,
+which would be a second copy of the rules. Routes need none of it: upstream refuses a
+link out of a route's root, and every rule on a route covers the whole of it. A check, not
+a lock: a command run beside a file-tool call could race it.
+
+**A session folder that is a link is refused at open, not replaced.** `rm -rf memory &&
+ln -s <anywhere> memory` rooted the next turn's `/memory/` route wherever it pointed, and
+the scaffold wrote `AGENTS.md` there. `refuse_linked_folders` runs before anything is made
+or written, and again in `backend_at`; what the link points at may be someone's data, so
+nothing deletes it. The macOS profile also denies the `memory` node, as it does the
+scratchpad's. Linux was not measured: by the policy below Landlock grants no write to the
+session folder, which removing `memory` needs, and bubblewrap's writable session does; the
+refusal at open covers either. *(2026-10-20.)*
 
 **Landlock cannot take back what it has granted, and the Linux job is what
 established that.** The first policy granted the session writable and its `.harness`
