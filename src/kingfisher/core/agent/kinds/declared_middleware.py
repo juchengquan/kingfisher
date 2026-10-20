@@ -150,7 +150,7 @@ def _wanted(
     refuse_unprovided_wants(
         wants, provided=tuple(provisions), subject=subject, registered_as=registered_as
     )
-    # Decided here, not in the domain: it is a fact about the objects this build holds.
+    # Decided here, not in `core.access`: it is a fact about the objects this build holds.
     whole = tuple(name for name in wants if not isinstance(provisions[name], ByName))
     refuse_written_wants(
         whole,

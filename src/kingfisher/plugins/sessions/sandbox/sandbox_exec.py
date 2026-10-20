@@ -76,6 +76,9 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name
     lines += [
         _enclosing_denial(sessions_root, folder) for folder in _enclosing(layout.saved_results)
     ]
+    # The one routed folder the shell may write in: replaced by a link, its route would be
+    # rooted wherever the link points.
+    lines.append(_enclosing_denial(sessions_root, layout.memory))
     # The rule that keeps the rest enforceable: append, unlink and rename-over are all
     # `file-write*` against this name.
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
@@ -119,8 +122,8 @@ def _enclosing(saved_results: tuple[str, ...]) -> tuple[str, ...]:
 def _enclosing_denial(sessions_root: Path, folder: str) -> str:
     """Deny writes to every session's `folder` node, not to what it holds.
 
-    `folder` encloses the saved results, which are guarded by their position under it,
-    so renaming it would let the shell write through the new name and rename it back.
+    For a folder enclosing the saved results, which are guarded by their position under
+    it: renaming it would let the shell write through the new name and rename it back.
     """
     root = re.escape(f"{fenced_sessions(sessions_root)}/")
     written = f"^{root}[^/]+/{re.escape(folder)}$"

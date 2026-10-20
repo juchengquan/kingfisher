@@ -40,8 +40,17 @@ def held_by(
     if isinstance(source_ids, str):
         msg = f"source ids is a sequence of names, not a string -- write [{source_ids!r}]"
         raise CallerError(msg)
-    named = tuple(one for one in source_ids if not isinstance(one, Datazone))
-    zones = tuple(one for one in source_ids if isinstance(one, Datazone))
+    try:
+        given: tuple[object, ...] = tuple(source_ids)
+    except TypeError:
+        given = (source_ids,)
+    names = tuple(one for one in given if isinstance(one, str))
+    if len(names) != len(given):
+        stray = next(one for one in given if not isinstance(one, str))
+        msg = f"source ids are names, and {stray!r} is not one -- write each as a string"
+        raise CallerError(msg)
+    named = tuple(one for one in names if not isinstance(one, Datazone))
+    zones = tuple(one for one in names if isinstance(one, Datazone))
     if zones:
         return _zoned(vocabulary, named, zones)
     if vocabulary is None:

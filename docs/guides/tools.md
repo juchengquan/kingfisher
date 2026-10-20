@@ -774,10 +774,11 @@ three-digit status, so its accumulator cannot exceed a thousand entries however 
 the file. The bytes do not tell you which of those two you wrote.
 
 **And the library you parse with has limits of its own.** `csv.field_size_limit()` is
-131,072, so four tools that read 32 MB died on a single cell 0.6% of their own cap --
-and the model was handed `Error: Error: field larger than field limit (131072)`, naming
-no file, no column and no remedy. Catch it and say the three; widening the limit is
-process-wide state a tool has no business setting.
+131,072, so a tool that reads 32 MB dies on a cell of 128 KB -- measured, every shipped
+tool that parses a CSV did, on one cell of 200,000 characters -- and the model was
+handed `Error: Error: field larger than field limit (131072)`, naming no file, no column
+and no remedy. Catch it and say the three; widening the limit is process-wide state a
+tool has no business setting.
 
 Whatever your tool talks to, the shape is the same: find what it actually spends, and
 then ask whether the library it spends it in gives you a way to stop.

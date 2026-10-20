@@ -39,8 +39,15 @@ def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
         if ASSET_DIRECTORIES & set(relative.parts):
             continue
         where = str(relative) + ("/" if path.is_dir() else "")
-        exported = exported_from(path, where=where, declares=DECLARES)
-        found.extend((declared(entry, where), where) for entry in exported)
+        named: set[str] = set()
+        for entry in exported_from(path, where=where, declares=DECLARES):
+            spec = declared(entry, where)
+            # Keyed by name, a second would replace the first, whatever audience either had.
+            if spec.name in named:
+                msg = f"{where}: subagent {spec.name!r} is defined twice in this file"
+                raise SubagentError(msg)
+            named.add(spec.name)
+            found.append((spec, where))
     return found
 
 

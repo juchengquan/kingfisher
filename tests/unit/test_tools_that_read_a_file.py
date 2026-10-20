@@ -7,6 +7,7 @@ stream chunks. So whatever a tool is going to spend has to be bounded by the too
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 from typing import Any
 
@@ -126,6 +127,115 @@ def test_every_shipped_file_that_reads_one_is_named_here(shipped):
     walked = set(_fetches_a_file(shipped))
 
     assert walked == FETCHES_A_FILE
+
+
+#: Every shipped file that parses a CSV, by its path under the assets. Named rather than
+#: counted, and that is the whole reason this set exists: the comment in all three of
+#: them, the guide and `decisions.md` each said *four* shipped CSV tools from the day it
+#: was written, when there were three -- so the count was never a fact about the tree,
+#: and nothing could tell it from one.
+PARSES_A_CSV = frozenset({
+    "tools/bar_chart.py",
+    "tools/csv_filter.py",
+    "tools/csv_profile/profile.py",
+})
+
+
+def _parses_a_csv(shipped) -> dict[str, str]:
+    """Every shipped `.py` whose source parses a CSV, by path and source.
+
+    `csv.reader` rather than `import csv`: `sql_query` writes its answer as CSV and
+    parses none, so the reader's field limit cannot reach it.
+    """
+    return {
+        path.relative_to(shipped).as_posix(): body
+        for path in sorted(shipped.rglob("*.py"))
+        if "csv.reader" in (body := path.read_text(encoding="utf-8"))
+    }
+
+
+def test_every_shipped_file_that_parses_a_csv_is_named_here(shipped):
+    """Both directions, so neither a new parser nor a deleted one passes quietly."""
+    walked = set(_parses_a_csv(shipped))
+
+    assert walked == PARSES_A_CSV
+
+
+def _guards_the_field_limit(body: str) -> bool:
+    """Whether this source both takes the reader's field limit and converts its failure.
+
+    Read off the syntax rather than searched for as text, because the words survive the
+    thing going away: `MAX_FIELD_BYTES` is named again in the refusal message, and the
+    comment above it writes `_csv.Error`, which holds `csv.Error` inside it. Measured --
+    as substrings, renaming the assignment and retyping the handler both left this
+    green.
+    """
+    tree = ast.parse(body)
+    takes = any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "field_size_limit"
+        for node in ast.walk(tree)
+    )
+    converts = any(
+        isinstance(node, ast.ExceptHandler)
+        and isinstance(node.type, ast.Attribute)
+        and node.type.attr == "Error"
+        and isinstance(node.type.value, ast.Name)
+        and node.type.value.id == "csv"
+        for node in ast.walk(tree)
+    )
+    return takes and converts
+
+
+def test_every_csv_parser_answers_the_cell_it_cannot_read(shipped):
+    """`csv` raises on a field past `csv.field_size_limit()`, which is 131,072 against
+    the 32 MB these admit -- a cell of 128 KB. Unconverted it reaches the model as
+    `Error: Error: field larger than field limit (131072)`, naming no file, no column
+    and no remedy.
+
+    Over the walk rather than the three names, so a fourth parser is held the day it
+    ships: these are examples copied one file at a time, and the behavioural rules for
+    this are written per tool, so a new one arrives with nothing asking whether it
+    converts anything.
+    """
+    parsers = _parses_a_csv(shipped)
+    assert parsers, "no shipped file parses a CSV -- this rule is about nothing"
+
+    unguarded = [
+        where for where, body in sorted(parsers.items()) if not _guards_the_field_limit(body)
+    ]
+    assert not unguarded, (
+        f"{unguarded} parse a CSV without taking the reader's limit and turning its "
+        "one failure into an answer -- name the file and the limit, as the others do"
+    )
+
+
+def test_the_field_limit_rule_reads_the_syntax_and_not_the_words():
+    """The half the shipped tools cannot drive, all three of them being guarded: with
+    nothing to refuse there, accepting every parser left this rule green.
+    """
+    guarded = (
+        "import csv\n"
+        "MAX_FIELD_BYTES = csv.field_size_limit()\n"
+        "def parse(rows):\n"
+        "    try:\n"
+        "        return list(rows)\n"
+        "    except csv.Error as exc:\n"
+        "        raise ValueError(f'past {MAX_FIELD_BYTES} characters') from exc\n"
+    )
+    assert _guards_the_field_limit(guarded)
+
+    # The limit written out instead of asked for: its name still in the message below,
+    # which is what a text search finds.
+    assert not _guards_the_field_limit(
+        guarded.replace("csv.field_size_limit()", "131_072")
+    )
+    # And the one failure no longer converted, with `csv.Error` still in the source.
+    assert not _guards_the_field_limit(
+        guarded.replace("except csv.Error as exc", "except KeyError as exc")
+        + "#: said of `csv.Error` in a comment\n"
+    )
 
 
 def _helper_in(body: str) -> str:

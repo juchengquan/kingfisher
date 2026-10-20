@@ -77,7 +77,7 @@ hardest. *(2026-08-17, `skills-from-several-parties.md`, `two-tools-called-fetch
 resolves to one tool, and where a name is unique the path is still checked: a
 subagent naming a tool at a path it has moved from stops startup and a subagent's
 build, while an agent naming one is reported by `doctor` and `kingfisher list` and
-runs without the tool. The model never sees a reference -- it is given a flat
+runs with the tool, found by its name. The model never sees a reference -- it is given a flat
 `fetch` -- because tool names go to the provider as identifiers and `::` is not
 something to put in one. A bare name two folders offer is refused, naming both.
 *(2026-08-17, `qualified-tool-references.md`, `two-tools-called-fetch.md`.)*
@@ -1810,10 +1810,11 @@ one-line-per-column answer, so a header cell holding a newline and a plausible l
 reported a column nobody wrote, and `csv_columns` returned an extra name. Escaped rather
 than stripped, so the name still says what the file holds.
 
-**Four tools died on a cell 0.6% of their own cap.** `csv.field_size_limit()` is 131,072
-against a 32 MB read, and the model got `Error: Error: field larger than field limit
-(131072)` -- no file, column or remedy. Each says the three now, in its own file. Not
-fixed by widening the limit, process-wide state an example tool has no business setting.
+**Every shipped tool that parses a CSV died on a cell of 128 KB.**
+`csv.field_size_limit()` is 131,072 against a 32 MB read, and the model got `Error:
+Error: field larger than field limit (131072)` -- no file, column or remedy. Each says
+the three now, in its own file. Not fixed by widening the limit, process-wide state an
+example tool has no business setting.
 
 **`sql_explain` bounded rows and not characters**: a two-million-character alias came
 back whole. It carries `sql_query`'s number and marked `--` line.
@@ -2149,6 +2150,15 @@ same history once more. The fix designed writes the summary and the messages aft
 cut as the transcript. Clearing makes the trigger rare on a large window; on a small one
 it is the next thing to fix.
 
+**Whether the model may cite a result is a deployment's switch, on by default.**
+`KINGFISHER_CITE_RESULTS`, read into `Config.cite_results`. Citing is the provenance the
+ledger exists for, so it is on unless turned off; off suits an answer read by people who
+never see the ids. Off drops only the sentence of permission, and the id stays explained:
+`<ledger_delta>` and finding a result by its id lean on it. Per deployment and never per
+request, because the sentence is in the cached system prompt. It is spliced in at a
+marker from `prompting.py`, as the other optional parts of `system.md` are, rather than
+cut out of the markdown's text. *(2026-10-20.)*
+
 **Not built, and still open.**
 
 - **A handle in place of a large result's stub.** A handle in place of *every* result,
@@ -2365,11 +2375,31 @@ move.** Measured with a real `sandbox-exec` through the agent's backend, renamin
 put it back. `_sessions_denial` denies writes to the nodes `sessions/` and each
 `sessions/<id>`, `$` ending the pattern so a session's own folders stay writable --
 measured, it still makes, renames and removes them. A hard or soft link from a writable
-folder was measured closed the same day, pinned by
+folder was measured closed to the shell the same day, pinned by
 `test_a_link_from_a_writable_folder_does_not_reach_the_harness`, so no rule names
 `file-link`. `doctor` stays `ok`; that a location-based deny is only as good as the paths
 it enumerates lives here, not in a check crying wolf every run. bubblewrap's read-only
 mount cannot be renamed away, and Landlock never grants `sessions/`. *(2026-10-12.)*
+
+**Corrected: the file tools followed the link the shell could not.** They run in this
+process, outside every fence, and the deny rules judge the path typed; deepagents resolves
+a link and checks only that its target stays in the session, which `.harness` does.
+Measured: `edit("/scratchpad/link")` rewrote the pinned agent, and the same through a link
+to a saved result forged it. The session root's backend, `UnlinkedBackend`, now refuses a
+path whose resolved location is not its spelling, and `ls`, `glob` and grep's own walk skip
+a link rather than name or read through one -- refused, not resolved and judged again,
+which would be a second copy of the rules. Routes need none of it: upstream refuses a
+link out of a route's root, and every rule on a route covers the whole of it. A check, not
+a lock: a command run beside a file-tool call could race it.
+
+**A session folder that is a link is refused at open, not replaced.** `rm -rf memory &&
+ln -s <anywhere> memory` rooted the next turn's `/memory/` route wherever it pointed, and
+the scaffold wrote `AGENTS.md` there. `refuse_linked_folders` runs before anything is made
+or written, and again in `backend_at`; what the link points at may be someone's data, so
+nothing deletes it. The macOS profile also denies the `memory` node, as it does the
+scratchpad's. Linux was not measured: by the policy below Landlock grants no write to the
+session folder, which removing `memory` needs, and bubblewrap's writable session does; the
+refusal at open covers either. *(2026-10-20.)*
 
 **Landlock cannot take back what it has granted, and the Linux job is what
 established that.** The first policy granted the session writable and its `.harness`
@@ -2700,6 +2730,13 @@ deployment can switch off. So the checkpoint is msgpack through langgraph's seri
 and not `InMemorySaver(factory=PersistentDict)`, the persistence seam langgraph ships and
 the obvious thing to reach for: it is unconditionally pickle, and a tampered pickle read
 back is arbitrary code at resume time where tampered msgpack is only bad graph state.
+That last holds only under an allowlist: langgraph's serialiser by default imports and
+calls any `module.name` a msgpack extension names, and a hand-built `paused.state` ran
+`os.system` on resume. Both the read of the file and the saver it rebuilds therefore
+take `allowed_msgpack_modules=None`, langgraph's built-in safe types, which a deep
+agent's paused turn was measured to stay inside (messages, `Interrupt`, `Send`); a test
+fails if a gated turn ever writes a type outside them, where the reader would otherwise
+hand back its raw fields. *(2026-10-20.)*
 
 The pending writes go with the checkpoint. A turn can stop on one gated call while a
 sibling in the same superstep has already run; drop those writes and the sibling runs
@@ -3549,6 +3586,13 @@ for rather than by the field that said so: told to declare source ids, a reader 
 line of the two that file needs. The tolerant-reader limit is unchanged and still
 stated -- a name computed rather than written out is invisible, as a value the YAML reader
 cannot walk is. *(2026-10-19, from an architecture review.)*
+
+**Only a package or a bundle is decided whole, and by everything in it.** Every folder was,
+by its `.py` alone: a bundle whose definition named a source id was reported seeded with
+the definition held back and its tool copied, which `doctor` then called an orphaned folder;
+and one module in a grouping folder held back an unrelated subagent beside it. A folder is
+one definition when it holds `__init__.py` or the definition named for it, the loader's own
+rules; any other folder is judged file by file. *(2026-10-20, from a code review.)*
 
 **`Seeded` says what it left behind, because three callers said it and two were wrong.**
 `seed` leaves a definition alone for one of two reasons with opposite remedies -- middleware
@@ -4529,6 +4573,24 @@ number out of each `## ` heading and refuses a pair that climbs -- non-strictly,
 #617, #694 and #699 each name two sections. It is the only file in the tree using the
 convention, measured rather than assumed, so the rule names that one path. *(2026-10-20,
 from an architecture review.)*
+
+**A count of the tree's own files was wrong from the day it was written, in five
+places.** "All four shipped CSV tools" stood in the comment above `MAX_FIELD_BYTES` in
+each of the three tools that carry it, in `guides/tools.md` and in the entry above --
+and there were three, at the commit that wrote it and at its parent. `csv_profile`'s
+copy named its two siblings three lines below the word *four*. Not drift, and so not
+something a freshness rule would have caught: a count is a claim about the tree that
+reads exactly like one that was measured. Corrected to name the set instead of counting
+it, and `PARSES_A_CSV` pins that set both ways beside `FETCHES_A_FILE`, whose own
+docstring already recorded this failure -- *wrong twice: once as a count*. The rule
+beside it asks whether each parser takes the limit from the reader and converts its one
+failure, which the behavioural rules ask per tool and so would not ask of a fourth; it
+reads the syntax rather than searching for the words, because `MAX_FIELD_BYTES` is named
+again in the refusal message and the comment above it writes `_csv.Error` -- as
+substrings, both halves stayed green through a rename and a retype. The measurement in
+that sentence was right and nearly got corrected along with the count: 0.6% is the
+200,000-character cell the tests feed, not the 131,072 threshold, which is a 256th of
+the cap. Both are said now. *(2026-10-20, from an architecture review.)*
 
 ## How much a comment says
 

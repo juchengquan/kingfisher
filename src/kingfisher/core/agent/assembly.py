@@ -436,7 +436,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         if capabilities.skills == ALL:
             extras["skills"] = sources
         elif capabilities.skills is None:
-            pass  # none: no index, and no deny rules to write for one
+            # None granted is every skill denied, or each is a `read_file` away unnamed.
+            permissions.extend(skill_denials((), registry))
         else:
             # A bare name two sources both offer is refused, not resolved: resolving
             # it is the silent pick this exists to stop.
@@ -720,7 +721,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     supplied.append(
         {
             **GENERAL_PURPOSE_SUBAGENT,
-            # As a declared subagent's: delegating to it must not escape a house rule.
             "system_prompt": behind_instructions(
                 GENERAL_PURPOSE_SUBAGENT["system_prompt"], instructions
             ),

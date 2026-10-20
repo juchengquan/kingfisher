@@ -389,6 +389,11 @@ for the next reader who reaches for one.*
   docstring says. Measured: a compiled subagent ran a gated tool of its own with no
   pause, and so did a gated catalogue tool it had been handed. *(2026-10-19, deepagents
   0.7.22.)*
+  The passing down is `create_deep_agent`'s alone: a `SubAgentMiddleware` constructed
+  directly, which is how a helper one subagent consults is built, hands its specs no
+  gate, so a helper ran a gated `write_file` unpaused until each spec carried its own.
+  A pause raised two levels down resumes from the agent's checkpoint, approved or
+  rejected. *(2026-10-20, deepagents 0.7.22.)*
 
 - **deepagents reads a skills source one level deep.** One root source finds nothing in a
   nested layout; three folder sources find all nine. Four directories each holding a skill of

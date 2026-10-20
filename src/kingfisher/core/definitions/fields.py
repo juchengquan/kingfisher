@@ -132,6 +132,11 @@ class Reader:
             if required not in document:
                 msg = f"{self.source}: missing required field {required!r}"
                 raise self.error(msg)
+            # `text` would stringify it, and the model be handed a Python repr.
+            if isinstance(document[required], (Mapping, list)):
+                kind = "mapping" if isinstance(document[required], Mapping) else "list"
+                msg = f"{self.source}: {required!r} is one piece of text, not a {kind}"
+                raise self.error(msg)
             if not text(document[required]):
                 msg = f"{self.source}: {required!r} is present but empty"
                 raise self.error(msg)
@@ -348,9 +353,16 @@ class Reader:
         """A definition's own audience: who may reach it at all."""
         if value is None:
             return ALL
-        return self.audience_list(value, where=f"{self.source}: source_ids", lone_name=True)
+        return self.audience_list(
+            value,
+            where=f"{self.source}: source_ids",
+            lone_name=True,
+            left_out="open it to everyone",
+        )
 
-    def audience_list(self, listed: object, *, where: str, lone_name: bool) -> Audience:
+    def audience_list(
+        self, listed: object, *, where: str, lone_name: bool, left_out: str
+    ) -> Audience:
         """A list of source ids, any entry of which may be a set `{a, b}`."""
         if isinstance(listed, str) and lone_name and listed.strip() and listed.strip() != ALL:
             return (listed.strip(),)
@@ -395,7 +407,7 @@ class Reader:
         if not written:
             msg = (
                 f"{where} is empty, which would mean nobody. Leave the line out "
-                f"to inherit the audience around it, or name the source ids it is for"
+                f"to {left_out}, or name the source ids it is for"
             )
             raise self.error(msg)
         if ALL in written and len(written) > 1:
@@ -474,7 +486,12 @@ class Reader:
             raise self.error(msg)
         if "source_ids" not in raw:
             return None
-        return self.audience_list(raw["source_ids"], where=f"{where}: source_ids", lone_name=False)
+        return self.audience_list(
+            raw["source_ids"],
+            where=f"{where}: source_ids",
+            lone_name=False,
+            left_out="inherit the audience around it",
+        )
 
     def _refuse_mapping(
         self, value: Mapping[object, object], *, key: str, locked: str | None

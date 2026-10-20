@@ -176,6 +176,14 @@ def test_the_thread_pool_size_is_read_from_its_setting(env):
     assert config_from_env({**env, "KINGFISHER_THREAD_POOL_SIZE": "8"}).thread_pool_size == 8
 
 
+def test_citing_results_is_on_unless_turned_off(env):
+    """Read with the wrong default, every deployment that never set it would stop
+    telling the model it may cite a result, which is the provenance the ledger is for.
+    """
+    assert config_from_env(env).cite_results is True
+    assert config_from_env({**env, "KINGFISHER_CITE_RESULTS": "false"}).cite_results is False
+
+
 LIMITS = {
     "execution_timeout_s": "KINGFISHER_EXECUTION_TIMEOUT_S",
     "turn_timeout_s": "KINGFISHER_TURN_TIMEOUT_S",

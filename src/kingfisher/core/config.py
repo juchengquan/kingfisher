@@ -338,6 +338,8 @@ class Config:
     # measured ~90% cache hit.
     skills_enabled: bool = False
     memory_enabled: bool = False
+    # On, because a cited id is what lets a reader trace a claim to the result behind it.
+    cite_results: bool = True
     # A JavaScript sandbox to compute in: no filesystem or network, capped memory and
     # time, and only the tools the request granted.
     interpreter_enabled: bool = False

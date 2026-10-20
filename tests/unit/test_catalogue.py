@@ -234,6 +234,20 @@ def test_a_broken_middleware_module_fails_at_startup_too(cfg):
         Definitions.from_config(cfg).warm()
 
 
+def test_one_file_listing_a_middleware_twice_says_so(cfg):
+    """It was told "two files define" it, sending the reader looking for a second file."""
+    middlewares_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (middlewares_dir(cfg) / "cap.py").write_text(
+        "from langchain.agents.middleware import AgentMiddleware\n\n\n"
+        "class Cap(AgentMiddleware):\n    pass\n\n\n"
+        "MIDDLEWARES = [Cap, Cap]\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(MiddlewareError, match=r"cap\.py: middleware 'Cap' is defined twice in"):
+        Definitions.from_config(cfg).warm()
+
+
 def test_a_workspace_with_no_middleware_still_warms(cfg):
     """The control beside it: a definitions folder with no `middlewares/` answers an
     empty mapping rather than raising, so the read above must not turn "none offered"

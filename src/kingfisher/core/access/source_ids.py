@@ -124,7 +124,14 @@ def with_datazone[Caller: Iterable[str] | _Unscoped | None](
             "source ids with their datazone, or UNSCOPED alone"
         )
         raise CallerError(msg)
-    return (*(source_ids or ()), Datazone(datazone))
+    # Carried on, the zone would be a caller, and `caller_holds` never see nobody named.
+    if source_ids is None:
+        msg = (
+            f"datazone {datazone!r} is a caller's, and this call names no caller -- pass "
+            "the caller's source ids with it, from the command line --as A,B"
+        )
+        raise CallerError(msg)
+    return (*source_ids, Datazone(datazone))
 
 
 def jointly(audiences: Iterable[Audience]) -> Audience:
@@ -179,14 +186,14 @@ def spell(audience: Audience) -> str:
 
 @dataclass(frozen=True)
 class AccessReport:
-    """What a deployment's policy leaves open, said once at startup."""
+    """What a deployment's policy leaves open, as `kingfisher list` prints it."""
 
     #: Definitions carrying no `source_ids:` line, and so reachable by everyone, as `(kind,
     #: name)`.
     unrestricted: tuple[tuple[str, str], ...] = ()
 
-    #: Skills entries naming a source id their definition's own audience never mentions,
-    #: as `(where, audience)`. Reached only by a caller holding one of each.
+    #: Skills entries naming none of the source ids their definition's own audience
+    #: mentions, as `(where, audience)`. Reached only by a caller holding one of each.
     narrowed: tuple[tuple[str, str], ...] = ()
 
     @property
@@ -256,7 +263,7 @@ class SourceIds:
         source_ids: Audience,
         where: str,
     ) -> tuple[tuple[str, str], ...]:
-        """Skills entries naming a source id this definition's own audience never mentions.
+        """Skills entries naming none of the source ids this definition's own audience mentions.
 
         An entry's audience is already an and with the definition's, since an entry is reached
         only through its definition: `[pii]` under `[sales_db, audit_log]` means "whoever

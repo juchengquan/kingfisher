@@ -181,6 +181,7 @@ class Environment:
             memory_enabled=self.flag("KINGFISHER_MEMORY_ENABLED"),
             interpreter_enabled=self.flag("KINGFISHER_INTERPRETER_ENABLED"),
             conversation_enabled=self.flag("KINGFISHER_CONVERSATION_ENABLED", default=True),
+            cite_results=self.flag("KINGFISHER_CITE_RESULTS", default=True),
             **limits,
         )
 

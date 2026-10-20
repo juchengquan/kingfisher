@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Final
 
 import yaml
 
+from kingfisher.core.definitions import documents
 from kingfisher.core.definitions.fields import text, unrecognised
 
 from .source_ids import DATAZONE_PREFIX, AccessError, SourceIds
@@ -38,7 +39,7 @@ def load_access_policy(path: Path) -> SourceIds | None:
     if not path.is_file():
         return None
     try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        document = documents.load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         msg = f"{path}: is not valid YAML -- {exc}"
         raise AccessError(msg) from exc

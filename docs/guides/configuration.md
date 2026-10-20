@@ -105,6 +105,19 @@ capabilities instead, and leave the prefix alone. A request may decline memory
 this deployment wired, and when it does the *reads* are denied rather than the
 prompt rewritten, for the same reason.
 
+### Citing a result
+
+| Variable | What it does | Default |
+| --- | --- | --- |
+| `KINGFISHER_CITE_RESULTS` | Whether the prompt tells the agent it may cite a tool result by its id, such as `[A-0042]`, when it relies on that result. | `true` |
+
+Off leaves out that one sentence and nothing else: results are still recorded and
+numbered, and the prompt still explains the id. Turn it off where the answer reaches
+people who never see the ids, for whom an `[A-0042]` in the prose is noise. It is per
+deployment for the same reason as the switches above, since the sentence is in the
+cached prefix, and it carries no `_ENABLED` because it switches a sentence rather
+than a capability.
+
 ## Keeping the shell in its place
 
 | Variable | What it does | Default |
