@@ -241,7 +241,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
 
     settings = shell if shell is not None else confinement.ShellSettings.from_env()
     confined = confinement.shell_confinement(cfg, settings, skills=every_skills_dir)
-    env = shell_env(cfg, session_dir, path_extra=settings.path_extra, catalogue=catalogue)
+    env = shell_env(cfg, session_dir, path_extra=settings.path_extra, catalogue=definitions)
     if runner is None:
         chosen = fence_for(
             cfg, session_dir, confined, every_skills_dir, env, path_extra=settings.path_extra

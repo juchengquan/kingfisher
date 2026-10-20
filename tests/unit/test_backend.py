@@ -450,6 +450,28 @@ def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
     assert Path(shell_env(cfg, session_dir)["HOME"]).is_dir()
 
 
+def test_a_session_opened_without_a_catalogue_reads_the_definitions_once(cfg, monkeypatch):
+    """`backend_at` handed `shell_env` the catalogue it was given rather than the one it
+    had read, so an opening with none read the definitions a second time for the shell."""
+    from kingfisher.core.definitions.catalogue import Definitions
+    from kingfisher.plugins.sessions.backend import LocalSessions
+
+    reads = []
+    from_roots = Definitions.from_roots.__func__
+
+    def counted(cls, *args, **kwargs):
+        reads.append(args)
+        return from_roots(cls, *args, **kwargs)
+
+    # Counted at `from_roots`, which every reading of a definitions folder goes through,
+    # and driven through `open`: a count taken at `backend_at` would miss a read moved
+    # up into the opening.
+    monkeypatch.setattr(Definitions, "from_roots", classmethod(counted))
+    LocalSessions().open(cfg, "one")
+
+    assert len(reads) == 1
+
+
 # -- one file, listed once ------------------------------------------------
 #
 # Two of the readable routes point *inside* the default backend's own root:
