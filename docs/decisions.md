@@ -1802,10 +1802,11 @@ one-line-per-column answer, so a header cell holding a newline and a plausible l
 reported a column nobody wrote, and `csv_columns` returned an extra name. Escaped rather
 than stripped, so the name still says what the file holds.
 
-**Four tools died on a cell 0.6% of their own cap.** `csv.field_size_limit()` is 131,072
-against a 32 MB read, and the model got `Error: Error: field larger than field limit
-(131072)` -- no file, column or remedy. Each says the three now, in its own file. Not
-fixed by widening the limit, process-wide state an example tool has no business setting.
+**Every shipped tool that parses a CSV died on a cell of 128 KB.**
+`csv.field_size_limit()` is 131,072 against a 32 MB read, and the model got `Error:
+Error: field larger than field limit (131072)` -- no file, column or remedy. Each says
+the three now, in its own file. Not fixed by widening the limit, process-wide state an
+example tool has no business setting.
 
 **`sql_explain` bounded rows and not characters**: a two-million-character alias came
 back whole. It carries `sql_query`'s number and marked `--` line.
@@ -4521,6 +4522,24 @@ number out of each `## ` heading and refuses a pair that climbs -- non-strictly,
 #617, #694 and #699 each name two sections. It is the only file in the tree using the
 convention, measured rather than assumed, so the rule names that one path. *(2026-10-20,
 from an architecture review.)*
+
+**A count of the tree's own files was wrong from the day it was written, in five
+places.** "All four shipped CSV tools" stood in the comment above `MAX_FIELD_BYTES` in
+each of the three tools that carry it, in `guides/tools.md` and in the entry above --
+and there were three, at the commit that wrote it and at its parent. `csv_profile`'s
+copy named its two siblings three lines below the word *four*. Not drift, and so not
+something a freshness rule would have caught: a count is a claim about the tree that
+reads exactly like one that was measured. Corrected to name the set instead of counting
+it, and `PARSES_A_CSV` pins that set both ways beside `FETCHES_A_FILE`, whose own
+docstring already recorded this failure -- *wrong twice: once as a count*. The rule
+beside it asks whether each parser takes the limit from the reader and converts its one
+failure, which the behavioural rules ask per tool and so would not ask of a fourth; it
+reads the syntax rather than searching for the words, because `MAX_FIELD_BYTES` is named
+again in the refusal message and the comment above it writes `_csv.Error` -- as
+substrings, both halves stayed green through a rename and a retype. The measurement in
+that sentence was right and nearly got corrected along with the count: 0.6% is the
+200,000-character cell the tests feed, not the 131,072 threshold, which is a 256th of
+the cap. Both are said now. *(2026-10-20, from an architecture review.)*
 
 ## How much a comment says
 
