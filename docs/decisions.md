@@ -2530,6 +2530,34 @@ still refused. Not allowed: nothing shipped needs a browser, and the model asked
 the workspace wrote `/tmp/preview.pdf` and twice tried `pip install`. *(Recorded in the
 code until 2026-10-17.)*
 
+**What a command starts dies with it, and kingfisher launches every command to make that
+so.** Every path killed only the shell. deepagents' `execute` gave the shell a session of
+its own and then killed the one process; both Linux runners ran `subprocess.run`. So a
+`sleep 30 &` outlived a timeout, and anything put in the background outlived its command,
+writing into the session after the turn had let go of it -- which `claim_stale_after`
+counts on nothing doing. `process.run_command` now launches the unfenced, `sandbox-exec`,
+Landlock and bubblewrap shells alike, in a process group of their own, killed when the
+shell exits and when time runs out. **At the shell's exit too, not only at a timeout:**
+the cost is a server left running for the next command, and a process outliving its
+command is the thing the claim cannot bound. **The shell is watched, not collected, until
+its group is killed**, through kqueue on macOS and a pidfd on Linux, macOS having no
+`os.waitid`: collected first, its id could pass to a stranger the kill would then reach.
+**Output is read as it arrives and kept to the cap.** `yes` for three seconds held 2.87 GB
+in the process before the old cut, beside every other session's turn. **Upstream's
+shaping is copied to the character** -- `[stderr]` on each line, `<no output>`, `Exit
+code: N`, its timeout sentence -- and held to upstream itself by
+`test_a_finished_command_reads_as_upstream_reads_it`, so macOS turns see what they saw
+and Linux ones moved to match. `a_command_leaves_nothing_running` asks it of every runner,
+a deployment's included, driven against `sandbox-exec`, the unfenced shell and Landlock.
+
+**Not reached: a process that calls `setsid()`**, which leaves the group. Measured on
+macOS under the profile, `setsid` from Perl, from Python, and a fork-setsid-fork all
+outlived the kill. bubblewrap's process namespace should end them with its first
+process; on macOS and under Landlock they remain, recorded rather than closed. Closing
+them on Linux means a launcher that outlives the command as a subreaper and kills what
+comes back to it, a process per command, and is to be measured on the Linux job before
+it is built. macOS has no equivalent. *(2026-10-20.)*
+
 ## Sessions: what persists and where
 
 These began as decisions in *Nothing at rest on this machine* and were built
@@ -4709,6 +4737,8 @@ more than about three lines goes here.
 - `plugins/sessions/shell.py`: before `shell_env`, the shell read `~/.aws` and
   `~/.config/gh` straight through the fence; a runner of kingfisher's own would be 110
   lines of upstream's truncation, timeout and exit-code shaping, copied and kept in step.
+  Paid since 2026-10-20, when upstream's kill was found to leave the shell's children
+  running: *Confining the shell* says why, and a test holds the copy to upstream.
 - `plugins/sessions/sandbox/confinement.py`: before `with_supplied_runner`, a runner
   declaring `local = False` ran its command with no wrap, while `Confinement` still
   reported `mechanism='sandbox-exec'` and `confined=True`.

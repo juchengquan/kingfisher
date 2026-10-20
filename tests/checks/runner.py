@@ -6,6 +6,8 @@ copies them. Plain functions raising `AssertionError` and no pytest.
 
 from __future__ import annotations
 
+import time
+import uuid
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -127,12 +129,55 @@ def a_timeout_is_a_result_and_not_an_exception(make: Callable[[], CommandRunner]
     _equal(result.exit_code, 124, doing=f"run({SLEEPS!r}, timeout=1).exit_code")
 
 
-#: Every check a `CommandRunner` must pass. These run commands, and one waits
-#: for a timeout.
+def a_command_leaves_nothing_running(make: Callable[[], CommandRunner]) -> None:
+    """What a command starts goes with it, when it ends and when its time runs out.
+
+    A process left behind goes on writing into the session after the turn that started
+    it has let go of it, which `claim_stale_after` counts on no command doing. It is seen
+    by the mark it would make, and the mark is first made where nothing stops it: a shell
+    that cannot write there would pass this having proved nothing. In `TMPDIR`, because
+    under Landlock the shell cannot write the directory it starts in.
+    """
+    runner = make()
+    mark = f'"${{TMPDIR:-/tmp}}/kingfisher-contract-{uuid.uuid4().hex}"'
+    look = f"test -e {mark} && echo present || echo absent"
+    try:
+        seen = runner.run(f"touch {mark} && {look}; rm -f {mark}").output
+        if "present" not in seen:
+            msg = (
+                f"the command could not leave a mark in $TMPDIR ({seen!r}), so this check "
+                f"cannot see a process left behind; give the shell a writable TMPDIR"
+            )
+            raise AssertionError(msg)
+
+        runner.run(f"(sleep 1; touch {mark}) >/dev/null 2>&1 &")
+        time.sleep(1.5)
+        if "absent" not in runner.run(look).output:
+            msg = (
+                "a process the command started in the background was still running after "
+                "the command ended; kill the command's process group when it exits"
+            )
+            raise AssertionError(msg)
+
+        runner.run(f"(sleep 1.5; touch {mark}) >/dev/null 2>&1 & sleep 30", timeout=1)
+        time.sleep(1)
+        if "absent" not in runner.run(look).output:
+            msg = (
+                "a process the command started was still running after the command timed "
+                "out; kill the command's process group, not only the shell"
+            )
+            raise AssertionError(msg)
+    finally:
+        runner.run(f"rm -f {mark}")
+
+
+#: Every check a `CommandRunner` must pass. These run commands, and two wait for a
+#: timeout.
 RUNNER_CHECKS: tuple[Callable[[Callable[[], CommandRunner]], None], ...] = (
     a_runner_says_where_it_runs,
     a_command_that_works_reports_that_it_worked,
     a_command_that_fails_is_a_result_and_not_an_exception,
     a_result_is_shaped_the_way_a_caller_reads_it,
     a_timeout_is_a_result_and_not_an_exception,
+    a_command_leaves_nothing_running,
 )

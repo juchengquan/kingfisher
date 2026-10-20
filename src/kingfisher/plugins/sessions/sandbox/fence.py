@@ -7,14 +7,14 @@ the network stays open, and registered tools run in kingfisher's own process, un
 
 from __future__ import annotations
 
-import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.layout import Layout
 
-from .linux import MAX_OUTPUT_BYTES, outcome, present
+from .linux import present
+from .process import MAX_OUTPUT_BYTES, run_command
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -106,22 +106,12 @@ class LandlockRunner:
         def fence() -> None:
             confine(self.policy)
 
-        def launch() -> subprocess.CompletedProcess[str]:
-            return subprocess.run(  # noqa: S602 -- `execute` is a shell by definition
-                command,
-                shell=True,
-                cwd=self.cwd,
-                env=self.env,
-                preexec_fn=fence,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=False,
-            )
-
-        return outcome(
-            launch,
+        return run_command(
+            command,
+            env=self.env,
             timeout=timeout,
+            cwd=self.cwd,
             max_output_bytes=self.max_output_bytes,
+            preexec_fn=fence,
             unstartable="the Landlock fence could not be applied",
         )

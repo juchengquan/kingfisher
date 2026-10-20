@@ -23,6 +23,7 @@ from kingfisher.core.config import Config
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import CommandRunner
 from kingfisher.plugins.sessions.sandbox import confinement
+from kingfisher.plugins.sessions.sandbox.process import run_command
 
 from .links import UnlinkedBackend
 
@@ -127,9 +128,9 @@ def shell_skills(cfg: Config, catalogue: Definitions | None = None) -> tuple[Pat
 class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
     """`LocalShellBackend` with every command run through a confinement.
 
-    `runner=None` runs it here through upstream, rather than a default runner copying
-    upstream's truncation, timeout and exit-code shaping. The confinement is applied
-    before any runner sees the command, so a runner cannot forget to.
+    `runner=None` runs it here through `run_command`, as the Linux fences do, rather than
+    through upstream, which kills only the shell when time runs out. The confinement is
+    applied before any runner sees the command, so a runner cannot forget to.
     """
 
     def __init__(
@@ -157,16 +158,30 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         return self.runner is None or runs_locally(self.runner)
 
     def execute(self, command: str, *, timeout: int | None = None) -> Any:
+        if not command or not isinstance(command, str):
+            return ExecuteResponse(
+                output="Error: Command must be a non-empty string.", exit_code=1, truncated=False
+            )
         # Filled in for a runner too, which `None` would leave running for good.
         bounded = self.timeout if timeout is None else min(timeout, self.timeout)
+        if bounded <= 0:
+            msg = f"timeout must be positive, got {bounded}"
+            raise ValueError(msg)
         if self.runner is None:
-            return super().execute(self.confinement.wrap(command), timeout=bounded)
-        # A confinement is a prefix naming paths on *this* host: shipped elsewhere, it
-        # fails looking like a broken remote shell rather than a wrong prefix.
-        outcome = self.runner.run(
-            self.confinement.wrap(command) if runs_locally(self.runner) else command,
-            timeout=bounded,
-        )
+            outcome = run_command(
+                self.confinement.wrap(command),
+                env=self._env,
+                timeout=bounded,
+                cwd=str(self.cwd),
+                max_output_bytes=self._max_output_bytes,
+            )
+        else:
+            # A confinement is a prefix naming paths on *this* host: shipped elsewhere, it
+            # fails looking like a broken remote shell rather than a wrong prefix.
+            outcome = self.runner.run(
+                self.confinement.wrap(command) if runs_locally(self.runner) else command,
+                timeout=bounded,
+            )
         return ExecuteResponse(
             output=outcome.output,
             exit_code=outcome.exit_code,

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import inspect
+import os
+import signal
 import subprocess
 import sys
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 
 import pytest
@@ -19,11 +22,10 @@ from tests.checks.runner import RUNNER_CHECKS
 class ReferenceRunner:
     """A `CommandRunner` written the way the port asks, for the kit to run on.
 
-    Not shipped, and not a suggestion that it should be: `runner=None` already means
-    "run it here", and its own comment explains why a default runner would be *"110
-    lines of upstream's truncation, timeout and exit-code shaping, copied to be kept
-    in step"*. What this is for is proving the contract is satisfiable, and showing
-    the one thing every implementer gets to decide wrongly.
+    Not shipped: `runner=None` already means "run it here", through kingfisher's own
+    launcher. What this is for is proving the contract is satisfiable, and showing the
+    two things every implementer gets to decide wrongly: a timeout that raises, and a
+    kill that reaches the shell and nothing it started.
     """
 
     #: Declared, though `True` is what kingfisher assumes of a runner that says
@@ -31,24 +33,29 @@ class ReferenceRunner:
     local: bool = True
 
     def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
-        try:
-            done = subprocess.run(  # noqa: S602 -- a shell command is the whole job
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return CommandResult(
-                output=f"timed out after {timeout}s",
-                exit_code=124,
-            )
-        return CommandResult(
-            output=done.stdout + done.stderr,
-            exit_code=done.returncode,
+        process = subprocess.Popen(  # noqa: S602 -- a shell command is the whole job
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            # A group of its own, so the kill below reaches what the command started.
+            start_new_session=True,
         )
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_group(process)
+            process.communicate()
+            return CommandResult(output=f"timed out after {timeout}s", exit_code=124)
+        _kill_group(process)
+        return CommandResult(output=stdout + stderr, exit_code=process.returncode)
+
+
+def _kill_group(process: subprocess.Popen[str]) -> None:
+    """Everything the command started, not only the shell."""
+    with suppress(ProcessLookupError, PermissionError):
+        os.killpg(process.pid, signal.SIGKILL)
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the checks run POSIX shell commands")
@@ -128,6 +135,33 @@ class RaisingRunner:
         return CommandResult(output=done.stdout, exit_code=done.returncode)
 
 
+@dataclass(frozen=True)
+class ShellOnlyRunner:
+    """A runner whose timeout kills the shell and leaves what it started -- the obvious
+    implementation, and what every runner here did until the kit asked."""
+
+    local: bool = True
+
+    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+        try:
+            done = subprocess.run(  # noqa: S602
+                command, shell=True, capture_output=True, text=True, timeout=timeout, check=False
+            )
+        except subprocess.TimeoutExpired:
+            return CommandResult(output="timed out", exit_code=124)
+        return CommandResult(output=done.stdout + done.stderr, exit_code=done.returncode)
+
+
+@dataclass(frozen=True)
+class BlindRunner:
+    """A runner whose shell cannot leave a mark, so no leftover could ever be seen."""
+
+    local: bool = True
+
+    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+        return CommandResult(output="absent", exit_code=0)
+
+
 def _run(contract, name, subject):
     """One named check from a contract, against one subject."""
     (check,) = [c for c in contract if c.__name__ == name]
@@ -145,3 +179,18 @@ def test_a_timeout_that_raises_is_caught():
             "a_timeout_is_a_result_and_not_an_exception",
             RaisingRunner,
         )
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the check runs POSIX shell commands")
+def test_a_runner_that_kills_only_the_shell_is_caught():
+    """Every runner kingfisher had did this: deepagents' and both Linux fences killed the
+    shell on a timeout and left whatever it had started running."""
+    with pytest.raises(AssertionError, match="process group"):
+        _run(RUNNER_CHECKS, "a_command_leaves_nothing_running", ShellOnlyRunner)
+
+
+def test_a_runner_that_cannot_leave_a_mark_is_not_passed():
+    """Without the control the check passes against a shell that could not show a
+    leftover, which is what Landlock's working directory would have been."""
+    with pytest.raises(AssertionError, match="cannot see a process left behind"):
+        _run(RUNNER_CHECKS, "a_command_leaves_nothing_running", BlindRunner)

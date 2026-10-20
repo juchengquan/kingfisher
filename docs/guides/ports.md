@@ -84,8 +84,8 @@ the sessions rather than on `Kingfisher` because only they know where a
 session is on this host; sessions of your own run their commands however
 their `open` builds the backend.
 
-Held by `tests/checks/runner.py` — five checks, which run commands.
-Things to know:
+Held by `tests/checks/runner.py`, whose checks run commands, two of them through a
+timeout. Things to know:
 
 - **`local` decides whether the fence is applied.** The command arrives already
   confined when `local` is True, which is the default and what you get by not
@@ -96,6 +96,11 @@ Things to know:
 - **Setting `local = False` when you are local loses the fence**, silently. The
   default is True so that forgetting the flag yields more confinement than
   needed, never less.
+- **What a command starts goes with it**, when it exits and when its time runs out.
+  Start it in a process group of its own and kill the group, not only the shell: a
+  process left behind writes into the session after the turn has let go of it.
+  `a_command_leaves_nothing_running` looks for the mark such a process would leave in
+  `$TMPDIR`, and refuses to pass a shell that cannot write there.
 - **A runner is handed the command and nothing else** — no working directory and no
   environment, local or not. Its shell starts wherever the runner starts it, and
   `$TMPDIR` and `$KINGFISHER_SKILLS` are whatever they are there. So the agent is not

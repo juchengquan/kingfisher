@@ -180,3 +180,24 @@ def test_the_agent_reaches_its_own_interpreter(fenced):
     assert sys.prefix in result.output, (
         f"the fenced shell reached a different interpreter: {result.output.strip()}"
     )
+
+
+@needs_bubblewrap
+def test_the_sandbox_keeps_the_runner_contract(two_sessions):
+    """A command's leftovers die with it inside bubblewrap, whose own process namespace
+    is a second reason they would; this asks of the launcher's kill all the same."""
+    from tests.checks.runner import RUNNER_CHECKS
+
+    _, theirs = two_sessions
+
+    def sandboxed() -> BubblewrapRunner:
+        return BubblewrapRunner(
+            argv_for(theirs, DEFAULT_LAYOUT, readable=toolchain_roots()),
+            env={
+                "PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin",
+                "TMPDIR": str(theirs / "outputs"),
+            },
+        )
+
+    for check in RUNNER_CHECKS:
+        check(sandboxed)

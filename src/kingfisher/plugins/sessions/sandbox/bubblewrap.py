@@ -18,7 +18,8 @@ from typing import TYPE_CHECKING
 
 from kingfisher.core.layout import Layout
 
-from .linux import MAX_OUTPUT_BYTES, outcome, present
+from .linux import present
+from .process import MAX_OUTPUT_BYTES, run_command
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -105,19 +106,9 @@ class BubblewrapRunner:
 
     def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
         """Run `command` through a shell, inside the sandbox."""
-
-        def launch() -> subprocess.CompletedProcess[str]:
-            return subprocess.run(  # noqa: S603 -- generated argv, and the shell is the point
-                [*self.argv, "/bin/sh", "-c", command],
-                env=self.env,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=False,
-            )
-
-        return outcome(
-            launch,
+        return run_command(
+            [*self.argv, "/bin/sh", "-c", command],
+            env=self.env,
             timeout=timeout,
             max_output_bytes=self.max_output_bytes,
             unstartable="bubblewrap failed",
