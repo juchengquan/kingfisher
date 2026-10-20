@@ -30,7 +30,7 @@ from .checkpointing import (
     paused_state,
 )
 from .files import collect_artifacts
-from .ledger import keep_ledger
+from .ledger import keep_ledger, sweep_results
 from .steps import (
     Steps,
     adrive,
@@ -205,8 +205,18 @@ class Running:
                 prepared.harness,
                 prepared.ledger,
                 summarised=runtime.summarised_in(snapshot),
-                tool_results_route=self.cfg.layout.tool_results_route,
             )
+        )
+
+    def _sweep_results(self, prepared: Prepared, recorded: tuple[LedgerEntry, ...]) -> Steps[None]:
+        """Remove the result files no row names, once nothing this turn writes can name one."""
+        if prepared.ledger is None:
+            return
+        yield from sweep_results(
+            prepared.files,
+            prepared.ledger,
+            recorded,
+            tool_results_route=self.cfg.layout.tool_results_route,
         )
 
     def _record_transcript(self, prepared: Prepared, snapshot: Any) -> Steps[None]:
@@ -332,6 +342,7 @@ class Running:
                 turn.stop_reason = "max_tokens"
                 turn.pending.append(out_of_tokens(cut))
             turn.kept = yield from self._keep(prepared, snapshot)
+            yield from self._sweep_results(prepared, turn.recorded)
         finally:
             try:
                 # However the turn ended, and even if the store was unreachable.

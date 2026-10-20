@@ -18,6 +18,12 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Result files are swept after the transcript, after #1011
+
+- **`keep_ledger` no longer sweeps and no longer takes `tool_results_route=`.** The sweep
+  is `sweep_results(files, ledger, entries, tool_results_route=...)`, beside it in
+  `kingfisher.core.session.ledger`, and runs once the turn's transcript is written.
+
 ## The shipped middleware is one summarizer, after #1009
 
 - **`call-cap-strict`, `call-cap-generous` and `tool-note` are gone**, with the
