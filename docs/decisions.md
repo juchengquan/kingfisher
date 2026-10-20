@@ -4511,6 +4511,17 @@ fixture could not tell the fix from the bug.**
 suspect, not the rule.** Every one of these had a sibling that bit, which is what made
 them look covered. *(2026-10-15, from an architecture review.)*
 
+**`docs/upgrading.md` runs newest pull request first, and that is now enforced.** Every
+section is inserted at the top, so two pull requests landing together conflict there:
+#936, #970, #972 and #977 each did, and each was resolved by hand. The existing rule
+catches the markers of a conflict left *unresolved*, which is the loud failure; a
+resolution that put the older section above the newer one read as ordinary prose and
+nothing noticed. `test_the_upgrading_notes_run_newest_pull_request_first` reads the
+number out of each `## ` heading and refuses a pair that climbs -- non-strictly, because
+#617, #694 and #699 each name two sections. It is the only file in the tree using the
+convention, measured rather than assumed, so the rule names that one path. *(2026-10-20,
+from an architecture review.)*
+
 ## How much a comment says
 
 **Reversed: "match the surrounding density".** The convention asked every comment

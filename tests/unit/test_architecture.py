@@ -8,6 +8,7 @@ import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from functools import cache
+from itertools import pairwise
 from pathlib import Path
 from types import MappingProxyType
 
@@ -4470,6 +4471,101 @@ def test_the_conflict_rule_spares_a_setext_underline(tmp_path):
     titled = tmp_path / "titled.md"
     titled.write_text(f"Upgrading\n{'=' * 7}\n\nText.\n", encoding="utf-8")
     assert _conflict_markers(titled) == []
+
+
+#: The pull request a `docs/upgrading.md` section is written for. Anywhere in the
+#: heading, not just the end of it: most read `..., after #977` and two read
+#: `Renamed after #617`.
+UPGRADE_SECTION = re.compile(r"^## .*\bafter #(\d+)", re.MULTILINE)
+
+
+def _upgrade_sections(path: Path) -> list[int]:
+    """The pull request each section of `path` names, in the order they are written.
+
+    Numbers rather than positions: a reader greps `after #970` for the section, and
+    `test_no_prose_cites_a_line_number` holds the rest of this file to the same.
+    """
+    return [
+        int(hit.group(1))
+        for hit in UPGRADE_SECTION.finditer(path.read_text(encoding="utf-8"))
+    ]
+
+
+def _climbing(sections: Sequence[int]) -> list[str]:
+    """The neighbouring sections where a newer pull request sits below an older one.
+
+    A function rather than a comprehension inside the rule: the shipped file is in
+    order, so there the comparison never has a pair to refuse and could be deleted
+    without reddening anything. Driven out of order by
+    `test_the_order_rule_names_the_pair_a_bad_resolution_leaves`.
+    """
+    return [
+        f"#{newer} is written below #{older}"
+        for older, newer in pairwise(sections)
+        if newer > older
+    ]
+
+
+def test_the_upgrading_notes_run_newest_pull_request_first():
+    """A conflict resolved the wrong way round reads as prose and goes unnoticed.
+
+    Every section of this file is inserted at the top, so two pull requests landing
+    together conflict there -- four times over #936, #970, #972 and #977, each resolved
+    by hand. Nothing checked the order, so putting the older section above the newer one
+    would have been silent: the companion rule beside this one catches the markers of an
+    *unresolved* conflict, which is the loud failure, not this one.
+
+    Not strictly descending: #617, #694 and #699 each name two sections, because one
+    pull request can need two notes.
+    """
+    sections = _upgrade_sections(REPO / "docs" / "upgrading.md")
+    assert len(sections) > 50, f"only {len(sections)} sections name a pull request here"
+
+    climbed = _climbing(sections)
+    assert not climbed, (
+        f"{climbed} are out of order -- this file runs newest pull request first, so "
+        "each section goes above the ones already there, never below"
+    )
+
+
+def test_the_order_rule_reads_a_number_wherever_the_heading_puts_it(tmp_path):
+    """Both headings this file uses, and a section naming no pull request at all.
+
+    Driven against a file built here: reading only the shipped one would pass with the
+    pattern anchored to `, after #N` at the end of a line, which the two `Renamed after
+    #617` headings are not written in -- and the tail of that file, every section of the
+    original note, names no pull request and must not be read as `#0`.
+    """
+    note = tmp_path / "upgrading.md"
+    note.write_text(
+        "# Upgrading\n\n"
+        "## A thing happened, after #977\n\nProse.\n\n"
+        "## Renamed after #617\n\nProse.\n\n"
+        "## Checklist\n\nProse about no pull request.\n"
+        "### A heading too deep, after #1\n",
+        encoding="utf-8",
+    )
+
+    assert _upgrade_sections(note) == [977, 617]
+    # The control beside it: these two are in order, so the comparison must find nothing.
+    assert _climbing(_upgrade_sections(note)) == []
+
+
+def test_the_order_rule_names_the_pair_a_bad_resolution_leaves(tmp_path):
+    """The half the shipped file cannot drive, being in order: the pair is named.
+
+    Measured -- with this missing, accepting every pair left the suite green, because
+    the only file the rule reads has no pair to refuse.
+    """
+    note = tmp_path / "upgrading.md"
+    note.write_text(
+        "# Upgrading\n\n"
+        "## The older one went on top, after #970\n\nProse.\n\n"
+        "## And the newer one below it, after #977\n\nProse.\n",
+        encoding="utf-8",
+    )
+
+    assert _climbing(_upgrade_sections(note)) == ["#977 is written below #970"]
 
 
 def _ty() -> dict:
