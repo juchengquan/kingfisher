@@ -127,7 +127,8 @@ it. An agent's is the last of three parts:
     prompts/system.md    what the harness is — /inputs is read-only, /skills is
                          loadable, where memory lives. Ships with kingfisher
     INSTRUCTIONS.md      what this deployment asks of every agent. Yours, optional,
-                         beside the definitions, and it reaches your subagents too
+                         beside the definitions, and it reaches every subagent,
+                         general-purpose too, but one you compile with `build`
     system_prompt        what this agent is. Yours, and required
 
 The middle part can come from code instead: `instructions=` on `Kingfisher` takes any

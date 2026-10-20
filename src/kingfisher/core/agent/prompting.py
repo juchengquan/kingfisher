@@ -120,8 +120,8 @@ _SAVERS = (EDIT_FILE, WRITE_FILE)
 #: shell runs. No `execute` line: deepagents' own stands.
 _ELSEWHERE = ("shell_elsewhere.md", "shell_elsewhere_skills.md")
 
-#: A deployment's standing instructions for every agent and subagent, written by
-#: people; `/memory/AGENTS.md` is the agent's own.
+#: A deployment's standing instructions for every agent and subagent but a compiled one,
+#: written by people; `/memory/AGENTS.md` is the agent's own.
 INSTRUCTIONS_FILE = "INSTRUCTIONS.md"
 
 #: deepagents' `MEMORY_SYSTEM_PROMPT` with its lifetime claims corrected, so not to be

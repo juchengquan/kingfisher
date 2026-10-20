@@ -436,6 +436,14 @@ guarantee reaches it only on its tools, through `GuardedTool`, and at the `task`
 boundary, where its answer is recorded. Closing it would mean wrapping a graph
 kingfisher did not build. *(2026-10-17.)*
 
+**`general-purpose` is told the deployment's instructions, as a declared subagent is.**
+kingfisher supplies it, to carry the standing middleware, and supplied it with deepagents'
+bare prompt, so a turn delegated to it escaped every house rule a declared subagent was
+held to while the `Instructions` contract promised every subagent. It now gets the
+instructions ahead of deepagents' text, joined as a declared subagent's are, and still
+nothing of the harness's prompt. A compiled subagent stays outside: its `build` writes its
+prompt, and that is said in the contract. *(2026-10-20.)*
+
 **`TodoListMiddleware` stays standing, for now.** `build_agent` reads which tools are
 built in off the middleware its probe holds, so an offered checklist would leave the
 probe and `builtin_tools: [write_todos]` would name a tool that is not there. Moving it
