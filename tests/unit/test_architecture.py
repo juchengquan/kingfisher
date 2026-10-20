@@ -2038,6 +2038,8 @@ WITNESSES: dict[str, dict[str, str]] = {
         # hands a tool the turn's backend. A tool file is in a deployment's workspace,
         # so nothing in this repository imports the name and nothing ever will.
         "ToolContext": "document",
+        # What `ToolContext.run` returns, which `tools.md` reads `.error` and `.files` off.
+        "ScratchRun": "embedder",
         # `tools.md` writes `ToolSpec(...)` for a tool that says who may use it or what it
         # is called, in a tool file of the deployment's own, as `ToolContext` above is.
         "ToolSpec": "document",
@@ -2080,6 +2082,8 @@ WITNESSES: dict[str, dict[str, str]] = {
         # The type a runner returns. Nothing *imports* it in a snippet -- a runner's
         # `run` returns one, so a deployment cannot write the interface without it.
         "CommandResult": "interface",
+        # What a backend's `run_in_scratch` returns, on the same reasoning.
+        "ScratchRun": "interface",
         # What `Sessions.open` is handed as `catalogue`. `ports.md` tells a plugin to
         # take it, and where its skills must be served.
         "Definitions": "document",

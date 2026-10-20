@@ -334,6 +334,8 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         if allowed == ALL
         else tuple(split_reference(one)[1] for one in (allowed or ()))
         + tuple(one.name for one in private),
+        # The agent's: a subagent's own `interrupt_on` is copied from them below.
+        gated=gated,
         tools_subject=f"the {spec.name!r} subagent",
         # The parent's sources, passed in rather than rebuilt: two walks could disagree
         # and offer the subagent a different skill than the one named.

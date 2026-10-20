@@ -29,6 +29,8 @@ _EXPORTS = {
     # For an offered tool file, outside the wheel by construction, to annotate
     # `runtime: ToolRuntime[ToolContext]`: a bare `ToolRuntime` has pydantic warn per call.
     "ToolContext": "kingfisher.core.agent.tool_context",
+    # What `ToolContext.run` hands a tool back.
+    "ScratchRun": "kingfisher.core.interfaces",
     "UnknownSessionError": "kingfisher.core.session.model",
     "Config": "kingfisher.core.config",
     # What a `Config` built in code is made of: its catalogue, and its vocabulary.
@@ -106,6 +108,7 @@ __all__ = [
     "RunEvent",
     "RunOn",
     "RunResult",
+    "ScratchRun",
     "Seeded",
     "Session",
     "SessionBusyError",
@@ -153,6 +156,7 @@ if TYPE_CHECKING:
     from kingfisher.core.definitions.tools.spec import ToolSpec as ToolSpec
     from kingfisher.core.environment import config_from_env as config_from_env
     from kingfisher.core.environment import paths_from_env as paths_from_env
+    from kingfisher.core.interfaces import ScratchRun as ScratchRun
     from kingfisher.core.inventory import Inventory as Inventory
     from kingfisher.core.inventory import inventory as inventory
     from kingfisher.core.origins import Origin as Origin

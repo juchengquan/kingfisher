@@ -22,6 +22,7 @@ from .linux import present
 from .process import MAX_OUTPUT_BYTES, run_command
 
 if TYPE_CHECKING:
+    import threading
     from collections.abc import Iterable, Mapping, Sequence
 
     from kingfisher.core.interfaces import CommandResult
@@ -104,7 +105,13 @@ class BubblewrapRunner:
         self.env = dict(env or {})
         self.max_output_bytes = max_output_bytes
 
-    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+    def run(
+        self,
+        command: str,
+        *,
+        timeout: int | None = None,
+        stop: threading.Event | None = None,
+    ) -> CommandResult:
         """Run `command` through a shell, inside the sandbox."""
         return run_command(
             [*self.argv, "/bin/sh", "-c", command],
@@ -112,4 +119,5 @@ class BubblewrapRunner:
             timeout=timeout,
             max_output_bytes=self.max_output_bytes,
             unstartable="bubblewrap failed",
+            stop=stop,
         )

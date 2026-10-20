@@ -343,6 +343,20 @@ def _in_order[Response: (FileUploadResponse, FileDownloadResponse)](
     ]
 
 
+def scratch_runs_of(backend: Any, method: str = "run_in_scratch") -> Any:
+    """The backend's own `run_in_scratch` (or `method`), else its composite default's.
+
+    Followed as `host_path` is: a composite forwards no method of its own, so a backend
+    asked alone would refuse kingfisher's own. `None` where neither has it.
+    """
+    own = getattr(backend, method, None)
+    if callable(own):
+        return own
+    if isinstance(backend, CompositeBackend):
+        return scratch_runs_of(backend.default, method)
+    return None
+
+
 def host_path(backend: Any, where: str) -> tuple[Path | None, Path] | None:
     """Where `where` lives on this host, as `(root it must stay in, path)`, or `None`.
 

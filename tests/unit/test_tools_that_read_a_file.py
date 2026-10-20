@@ -102,6 +102,7 @@ FETCHES_A_FILE = frozenset({
     "tools/logs/access/status_codes.py",
     "tools/logs/log_levels.py",
     "tools/pdf_pages.py",
+    "tools/pdf_render.py",
     "tools/pdf_text.py",
 })
 

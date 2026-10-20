@@ -216,6 +216,7 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
         # Ahead of the entries below: it rewrites the arguments before they decide
         # anything about them.
         "GuardedCallsMiddleware",
+        "ScratchRunsMiddleware",
         "AttachmentsMiddleware",
         "BuiltinToolsMiddleware",
         "NarrowedSkillsMiddleware",
@@ -241,6 +242,7 @@ def test_a_bare_definition_carries_only_the_guards_and_its_allowlist(cfg, sessio
         "ModelReplyMiddleware",
         "GrantedOnlyMiddleware",
         "GuardedCallsMiddleware",
+        "ScratchRunsMiddleware",
         "AttachmentsMiddleware",
         "BuiltinToolsMiddleware",
         "OfferedToolFailureMiddleware",

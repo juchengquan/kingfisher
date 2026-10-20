@@ -2327,6 +2327,25 @@ each. `ToolContext` is on the front door apart from the wrapper, so naming it do
 load deepagents. **Not a sandbox for the tool:** a tool's own `open()` meets nothing.
 *(2026-09-30.)*
 
+**A tool may run a command, under its caller's grant.** Still no `execute` on the
+wrapper: what a tool is handed instead is `ToolContext.run`, a command over files in a
+throwaway folder, bound per call by `ScratchRunsMiddleware` only where the agent or
+subagent making the call holds `execute`, ungated -- so a request refused the shell is
+refused through its tools too, which is what the bullet above closed. Wanted for
+`pdf_render`: drawing a page is PDFium, native code, and *Copied, not drawn* kept it out
+of kingfisher's process; in the fence it is the shell's to contain. **By name, never
+`eval`:** a tool its code calls inherits `eval`'s context, and with it anything bound
+there. **Gated is refused**, as `interrupt` is above. **One deadline per call**,
+`execution_timeout_s`, each run handed what is left, and the runner closed when the call
+returns: ten runs of the longest command would hold a session past its claim, and a
+runner a tool kept would go on running in other calls, other agents' and other
+sessions'. **On the backend, as an optional method**, `run_in_scratch`, found as
+`host_path` is, so a remote sandbox supplies its own; with none it is refused rather than
+assembled from `upload_files`, `execute` and `download_files`, which can promise neither
+the environment nor the kill. **Refused where a deployment supplied a runner**, which may
+run as another user or under limits a launch of kingfisher's own would go round. Not
+taken: a generic fallback, or a tool gated by name. *(2026-10-20.)*
+
 ## Confining the shell
 
 **The two fences share a toolchain and not a workspace**, and the asymmetry is the
@@ -2559,6 +2578,19 @@ process; on macOS and under Landlock they remain, recorded rather than closed. C
 them on Linux means a launcher that outlives the command as a subreaper and kills what
 comes back to it, a process per command, and is to be measured on the Linux job before
 it is built. macOS has no equivalent. *(2026-10-20.)*
+
+**A scratch run's folder is held by descriptor, from the session down.** Kingfisher's own
+process writes a run's inputs and reads its outputs, outside every fence, in a folder the
+shell can write. Measured under the macOS profile, a folder renamed aside and replaced by
+a link had every input written where the link pointed, 200 times in 200, and an output
+read from a folder the shell may not read. So the scratchpad is opened from the session
+refusing links, the run's folder made and opened relative to it, inputs created
+exclusively, outputs opened refusing links and not blocking -- a FIFO opened blocking held
+the read past three seconds, and a sync tool's thread cannot be interrupted -- checked on
+the open file as regular and under the cap, and the folder removed through the same
+descriptor. A swap now costs the outputs and leaves the swapped thing in place, logged.
+The command is `cd` into the folder and `env -i` with its own environment, so one line
+serves every fence. *(2026-10-20.)*
 
 ## Sessions: what persists and where
 

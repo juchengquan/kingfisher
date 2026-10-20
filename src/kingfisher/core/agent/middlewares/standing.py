@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from typing import Any, Literal
 
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
@@ -24,6 +24,7 @@ from .narrowing import (
     NarrowedSkillsMiddleware,
 )
 from .recorder import RecorderMiddleware
+from .scratch_runs import ScratchRunsMiddleware
 from .step_budget import StepBudget, StepBudgetMiddleware
 
 #: The graphs kingfisher builds itself: the agent, a subagent a definition declares, and
@@ -45,6 +46,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     recorder: RecorderMiddleware | None = None,
     clearing: Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None = None,
     tools: Sequence[str] | None = None,
+    gated: Collection[str] = (),
     tools_subject: str = "this request",
     skills: Sequence[str] | None = None,
     skill_sources: Sequence[Any] = (),
@@ -55,8 +57,9 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
 
     Built here and nowhere else, so what kingfisher guarantees on a graph is read in one
     place. `names` are the offered tools the graph holds; `tools` narrows what it is
-    offered and `skills` its skills index, each `None` where nothing narrows; `clearing`,
-    which builds the result clearing for that grant, and `reachable` are the agent's alone.
+    offered and `skills` its skills index, each `None` where nothing narrows, and `gated`
+    what it stops on for a person; `clearing`, which builds the result clearing for that
+    grant, and `reachable` are the agent's alone.
     `budget` is the turn's, whose step limit reaches only the agent's own run, so a subagent
     is held to it in model calls; one per build, shared by all three kinds. `trigger` is
     where this graph's own model is summarised, which sizes the PDFs its turn may hold open.
@@ -111,6 +114,17 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # as the call the model made, when its path is refused. Its translation rewrites the
     # arguments before anything after it judges them.
     standing.append(GuardedCallsMiddleware(names, paths))
+    # Only where the graph holds offered tools: theirs are the only calls it binds.
+    if names:
+        standing.append(
+            ScratchRunsMiddleware(
+                names,
+                backend=backend,
+                tools=granted,
+                gated=gated,
+                seconds=execution_timeout_s,
+            )
+        )
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.
     standing.append(AttachmentsMiddleware(trigger))
     standing.append(

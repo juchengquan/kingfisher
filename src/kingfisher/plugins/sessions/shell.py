@@ -7,12 +7,13 @@ import hashlib
 import os
 import shutil
 import sys
+import threading
 import uuid
 from collections.abc import Mapping
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from deepagents.backends import LocalShellBackend
 from deepagents.backends.local_shell import DEFAULT_EXECUTE_TIMEOUT
@@ -21,11 +22,18 @@ from deepagents.backends.protocol import ExecuteResponse
 from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.interfaces import CommandRunner
+from kingfisher.core.interfaces import CommandRunner, ScratchRun
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.process import run_command
 
 from .links import UnlinkedBackend
+from .scratch import ScratchFolder, plain, scratch_command
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from kingfisher.plugins.sessions.sandbox.bubblewrap import BubblewrapRunner
+    from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner
 
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 
@@ -133,17 +141,24 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
     applied before any runner sees the command, so a runner cannot forget to.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 -- one keyword per thing a session's shell is built from
         self,
         confined: confinement.Confinement,
         *,
         runner: CommandRunner | None = None,
+        fence: LandlockRunner | BubblewrapRunner | None = None,
+        scratchpad: str | None = None,
         shell_prompt: ShellPrompt | None = None,
         timeout: int = DEFAULT_EXECUTE_TIMEOUT,
         **kwargs: Any,
     ) -> None:
         self.confinement = confined
         self.runner = runner
+        #: The runner when it is kingfisher's own Linux fence; any other is a deployment's,
+        #: whose user or limits a scratch run would go round, so it refuses one.
+        self.fence = fence
+        #: The session folder scratch runs make their folder in; `None` refuses them.
+        self.scratchpad = scratchpad
         #: What this shell says of itself, which `shell_prompt_of` reads. Set by
         #: `backend_at`, which knows whether the runner is kingfisher's own.
         self.shell_prompt = shell_prompt
@@ -188,6 +203,62 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
             truncated=outcome.truncated,
         )
 
+    def run_in_scratch(
+        self,
+        argv: Sequence[str],
+        files: Mapping[str, bytes],
+        *,
+        outputs: Sequence[str],
+        timeout: int | None = None,
+        stop: threading.Event | None = None,
+    ) -> ScratchRun:
+        """Run `argv` in a new folder holding `files`, through this shell's fence, and bring
+        back `outputs`; the folder is gone afterwards. `stop`, once set, ends the command."""
+        scratchpad = self.scratchpad
+        if scratchpad is None:
+            return ScratchRun(error="refused: this shell was given no scratchpad to run in")
+        if refused := self._scratch_refused(argv, [*files, *outputs]):
+            return ScratchRun(error=refused)
+        bounded = self.timeout if timeout is None else min(timeout, self.timeout)
+        with ScratchFolder(Path(self.cwd), scratchpad) as folder:
+            folder.write(files)
+            env = {key: self._env[key] for key in ("PATH", "LANG", "LC_ALL") if key in self._env}
+            # Its own home and temporary folder, so nothing it caches outlives it.
+            env |= {"HOME": str(folder.path), "TMPDIR": str(folder.path)}
+            command = self.confinement.wrap(scratch_command(argv, folder.path, env))
+            if self.fence is not None:
+                outcome = self.fence.run(command, timeout=bounded, stop=stop)
+            else:
+                outcome = run_command(
+                    command,
+                    env=env,
+                    timeout=bounded,
+                    cwd=str(self.cwd),
+                    max_output_bytes=self._max_output_bytes,
+                    stop=stop,
+                )
+            got, missing = folder.read(outputs)
+        return ScratchRun(
+            output=outcome.output,
+            exit_code=outcome.exit_code,
+            truncated=outcome.truncated,
+            files=got,
+            missing=missing,
+        )
+
+    def _scratch_refused(self, argv: Sequence[str], names: Sequence[str]) -> str | None:
+        if self.runner is not None and self.runner is not self.fence:
+            return (
+                "refused: this deployment runs commands through a runner of its own, which "
+                "a scratch run would go round"
+            )
+        if not argv or argv[0].startswith("-") or "=" in argv[0]:
+            # `env` would read either as its own: an option, or a variable to set.
+            return f"refused: {argv[:1]!r} is not a program to run"
+        if bad := [name for name in names if not plain(name)]:
+            return f"refused: {bad!r} -- a file here is one plain name"
+        return None
+
 
 def runs_locally(runner: Any) -> bool:
     """Whether a supplied runner runs the command on this machine.
@@ -208,7 +279,7 @@ def fence_for(  # noqa: PLR0913 -- one argument per thing a fence is built from
     env: Mapping[str, str],
     *,
     path_extra: tuple[str, ...] = (),
-) -> CommandRunner | None:
+) -> LandlockRunner | BubblewrapRunner | None:
     """The Linux fence, when the confinement says there is one."""
     if confined.mechanism not in confinement.LINUX_FENCES:
         return None
