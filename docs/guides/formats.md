@@ -37,7 +37,7 @@ run(Request(
     task="Review the diff in /inputs/change.patch",
     agent="assistant",
     capabilities=Capabilities(
-        tools=("read_file", "ls", "glob", "grep", "execute", "task"),
+        builtin_tools=("read_file", "ls", "glob", "grep", "execute", "task"),
         skills=("code-review",),
         subagents=("reviewer",),
     ),
@@ -1538,7 +1538,7 @@ skills:
     source_ids: [pii]        # anyone who opens this agent, and holds pii
 ```
 
-Startup reports it, because the same line is what somebody trying to *widen*
+`kingfisher list` reports it, because the same line is what somebody trying to *widen*
 would write by accident:
 
 ```
@@ -1634,7 +1634,7 @@ else in these formats — and reading it as "nobody" would stop every unannotate
 definition working the moment `source_ids.yaml` appeared. So adoption is
 incremental: annotate the sensitive definitions first.
 
-That must not also be silent, so startup names what carries no line:
+That must not also be silent, so `kingfisher list` names what carries no line:
 
 ```
 access:

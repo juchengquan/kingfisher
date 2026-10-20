@@ -77,7 +77,7 @@ hardest. *(2026-08-17, `skills-from-several-parties.md`, `two-tools-called-fetch
 resolves to one tool, and where a name is unique the path is still checked: a
 subagent naming a tool at a path it has moved from stops startup and a subagent's
 build, while an agent naming one is reported by `doctor` and `kingfisher list` and
-runs without the tool. The model never sees a reference -- it is given a flat
+runs with the tool, found by its name. The model never sees a reference -- it is given a flat
 `fetch` -- because tool names go to the provider as identifiers and `::` is not
 something to put in one. A bare name two folders offer is refused, naming both.
 *(2026-08-17, `qualified-tool-references.md`, `two-tools-called-fetch.md`.)*

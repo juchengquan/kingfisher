@@ -420,11 +420,8 @@ def test_the_description_may_still_be_folded():
 
 # -- where a subagent runs ------------------------------------------------
 #
-# The rule used to sit in `core.agent.kinds.subagents` and take a whole
-# `Config` to read two values out of. It takes the two values now, so it is reachable
-# without a deployment -- which is the same "a domain rule that needs a value
-# takes the value" that `test_domain_imports_only_the_standard_library_and_itself`
-# already enforces for the record itself.
+# The rule takes the values it reads rather than a `Config`, so it is reachable without
+# a deployment.
 
 
 def _spec(model: str | None = None) -> SubagentSpec:
