@@ -2129,6 +2129,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         "unrouted_denials": "document",
         "why_no_shell": "document",
         "host_path": "document",
+        # Where a backend's `run_in_scratch` is found, which `ports.md` offers for
+        # finding it as kingfisher will, and the backend kit finds it by.
+        "scratch_runs_of": "document",
         # How deepagents will list one skills source, which `ports.md` offers for
         # comparing what a backend serves with what kingfisher read.
         "list_skills": "document",
@@ -2591,7 +2594,7 @@ PUBLIC = ("kingfisher", "kingfisher.plugins")
 RUNS_AN_AGENT = frozenset({
     "Kingfisher", "run", "stream",
     "LocalSessions", "backend_at",
-    "why_no_shell", "unrouted_denials", "host_path",
+    "why_no_shell", "unrouted_denials", "host_path", "scratch_runs_of",
 })
 
 #: What the command may load before it knows which verb it is running: it reads `.env`

@@ -513,7 +513,8 @@ did not. `await runtime.context.arun(...)` is the same for an `async` tool.
 - **Capped.** At most 32 MB of files in and 32 MB back, 64 outputs named, and the
   command's output cut where `execute`'s is.
 - **On kingfisher's own sessions only**, unless a deployment's backend offers
-  `run_in_scratch` itself; one whose commands go through a runner of its own refuses it.
+  `run_in_scratch` itself — [`ports.md`](ports.md) says how; one whose commands go
+  through a runner of its own refuses it.
 
 `pdf_render` among the shipped tools is written this way.
 
