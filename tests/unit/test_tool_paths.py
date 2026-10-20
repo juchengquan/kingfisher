@@ -14,10 +14,10 @@ from kingfisher.core.agent.host_paths import HOST_ROOTS
 from kingfisher.core.agent.middlewares.guarded_calls import GuardedCallsMiddleware
 from kingfisher.core.agent.session_paths import NOT_FOR_TOOLS
 from kingfisher.core.agent.tool_guards import guarded_tools
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
 from kingfisher.plugins import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
-from tests.conftest import paths_in
+from tests.conftest import macos, paths_in
 
 
 @dataclass
@@ -432,18 +432,59 @@ def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
 
     assert "TENANT-A-PRIVATE" not in transcript
-    assert "resolves outside this session" in transcript
+    assert "runs through a link" in transcript
 
 
-def test_a_link_that_stays_inside_still_works(session, bridge):
-    """The other half, so the check refuses escapes rather than symlinks."""
-    (session / "outputs").mkdir(parents=True, exist_ok=True)
-    (session / "inputs" / "real.csv").write_text("a\n", encoding="utf-8")
-    (session / "outputs" / "near.csv").symlink_to(session / "inputs" / "real.csv")
+#: A link the shell can plant, by where it sits and what it points at, both inside the
+#: session: each target is a file a workspace tool writing to its `path` must not reach.
+PLANTED = {
+    "the pinned agent": ("scratchpad/link", f"{HARNESS}/{PINNED_AGENT}"),
+    "a saved result": ("outputs/link", "scratchpad/tool_results/r1.txt"),
+    "through a linked folder": ("scratchpad/dir", HARNESS),
+    "inside a route": ("memory/link", "memory/AGENTS.md"),
+}
 
-    args = handed(bridge, a_call(path="/outputs/near.csv"))
 
-    assert args["path"] == str((session / "inputs" / "real.csv").resolve())
+def _through(at: str) -> str:
+    return f"/{at}/{PINNED_AGENT}" if at.endswith("dir") else f"/{at}"
+
+
+@pytest.mark.parametrize("planted", PLANTED)
+def test_a_link_inside_the_session_is_refused_not_followed(session, bridge, way, planted):
+    """A tool was handed a link's target once it stayed in the session, so a path rule
+    judging `/scratchpad/link` let a tool rewrite `.harness/agent.yaml` behind it."""
+    at, target = PLANTED[planted]
+    (session / target).parent.mkdir(parents=True, exist_ok=True)
+    (session / target).touch()
+    (session / at).symlink_to(session / target)
+
+    answer = _refused(bridge, way, a_call(path=_through(at)))
+
+    assert answer is not None and answer.status == "error"
+    assert "runs through a link" in answer.content
+    assert "/inputs/<name>" in answer.content
+
+
+def test_an_ordinary_path_beside_a_refused_link_still_resolves(session, bridge):
+    """The control: a check refusing every path would pass the refusal above."""
+    (session / "scratchpad" / "link").symlink_to(session / HARNESS)
+
+    args = handed(bridge, a_call(path="/scratchpad/own.csv"))
+
+    assert args == {"path": str((session / "scratchpad" / "own.csv").resolve())}
+
+
+@macos
+def test_a_link_the_shell_plants_is_refused_to_a_workspace_tool(cfg, session, bridge):
+    """Measured: `ln -s ../.harness/agent.yaml scratchpad/link` run by the confined shell
+    handed a tool the real pin, which it runs outside every fence to write."""
+    planted = backend_at(cfg, session).execute(
+        f"ln -s ../{HARNESS}/{PINNED_AGENT} scratchpad/link && ls -l scratchpad/link"
+    )
+    assert (session / "scratchpad" / "link").is_symlink(), planted.output
+
+    assert handed(bridge, a_call(path="/scratchpad/link")) is None
+    assert handed(bridge, a_call(path="/scratchpad/own.csv")) is not None
 
 
 # -- the tools a compiled subagent is handed ---------------------------------

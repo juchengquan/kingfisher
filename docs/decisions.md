@@ -2270,9 +2270,9 @@ changed. *(2026-10-19.)*
 system, and nothing gives it the backend the file tools close over. It closed a leak too:
 without it the model learned the host layout from the shell, and from there
 `line_count('/workspace/sessions/<other>/secret.txt')` answered. Now that argument
-resolves under *this* session and finds nothing. Links are resolved on both sides, since
-a link the shell made to another session was measured returning `TENANT-A-PRIVATE`
-through a tool while `read_file` refused it. The call is rewritten rather than each tool
+resolves under *this* session and finds nothing. A link the shell made to another session
+was measured returning `TENANT-A-PRIVATE` through a tool while `read_file` refused it, so
+a tool is handed no path that runs through a link. The call is rewritten rather than each tool
 wrapped, because `@tool` objects and plain functions share only the call.
 `PATH_ARGUMENTS` is `{"path"}`, the convention shipped tools follow.
 
@@ -3442,8 +3442,8 @@ nothing.
 
 **In order, per path:** the turn's rules as `read_file` applies them; where the backend
 keeps the path on this host -- a composite's routes, a `FilesystemBackend`'s root, or the
-backend's own `host_path`; then containment against the root that answered, links
-resolved. A path not kept here is refused naming `ToolContext`. `SessionPaths` holds the
+backend's own `host_path`; then a path whose resolved location under the root that
+answered is not its spelling is refused. A path not kept here is refused naming `ToolContext`. `SessionPaths` holds the
 turn's `PermittedBackend`, which reads its rules when it checks, because `build_agent`
 builds the guards before it finishes adding rules.
 
@@ -3469,6 +3469,18 @@ is what the check is for. **The shipped path tools read through `ToolContext`** 
 `kingfisher decide` asks the sessions whether a session exists rather than looking for a
 folder, and nothing in a result is a host path, so a result serialises whole.
 *(2026-10-01, built in four slices.)*
+
+**Corrected: a tool was handed a link's target while it stayed in the session.** The
+containment check resolved the link and asked only that the target stay under the root,
+as upstream's backend did for the file tools until `UnlinkedBackend`. The shell can plant
+a link, and the rules judged the path typed: `scratchpad/link -> ../.harness/agent.yaml`
+handed a tool the pin for `/scratchpad/link`, and a tool runs outside every fence to write
+it, as it could a saved result or `paused.state`. A link is now refused, as the file
+tools refuse one, rather than followed and judged again, which would be a second copy of
+the rules. On every route, not only the session root, so one rule reads the same
+everywhere: kingfisher makes no link a tool must reach, the skills view being the shell's
+and outside the session, and a link an operator placed in the catalogue is named by its
+target instead. A backend's own `host_path` is still taken at its word. *(2026-10-20.)*
 
 **`reject_host_path` is scoped to the workspace, and was scoped to one session.**
 `WorkspaceScopedBackend` stored a `workspace` and was handed the session directory --
