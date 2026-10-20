@@ -18,6 +18,22 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The shipped middleware is one summarizer, after #1009
+
+- **`call-cap-strict`, `call-cap-generous` and `tool-note` are gone**, with the
+  subagent `sweeper` that named two of them. `docs/guides/middleware.md` keeps the
+  argument the caps made, under *A limit a definition can set is no limit*.
+- **`compact` is `summarize-by-count`**: the class `SummarizeByCount`, in
+  `assets/middlewares/summarize_by_count.py`. It now takes `messages`, the count it
+  summarizes at, which defaults to sixty and which a definition may set under
+  `settings:`.
+- **A workspace that seeded them keeps its copies, and they still load.** Seeding
+  again brings the new file and removes nothing, so delete `middlewares/call_cap.py`,
+  `middlewares/tool_note.py`, `middlewares/compaction.py` and `subagents/sweeper.yaml`
+  yourself, and change any definition naming `compact` to name `summarize-by-count`.
+  A registry in your own program importing `CallCap`, `CallCapGenerous`, `ToolNote` or
+  `Compact` from `assets.middlewares` needs the same change.
+
 ## A workspace tool is an offered tool, after #1006
 
 A tool a deployment supplies itself is now called an *offered tool*, beside the offered

@@ -19,10 +19,10 @@ from typing import Any
 
 import pytest
 from deepagents.backends.protocol import FileUploadResponse
+from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 
-from assets.middlewares.tool_note import ToolNote
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorded import summary
@@ -428,12 +428,27 @@ def test_the_arguments_recorded_are_the_ones_the_model_wrote(ledgered):
     assert entry.args == "path='/inputs/notes.txt'"
 
 
+class _Reminder(AgentMiddleware):
+    """A deployment's middleware that appends a line to every tool result."""
+
+    name = "reminder"
+
+    def _annotate(self, result: Any) -> Any:
+        return result.model_copy(update={"content": f"{result.content}\n\nMind the source."})
+
+    def wrap_tool_call(self, request: Any, handler: Any) -> Any:
+        return self._annotate(handler(request))
+
+    async def awrap_tool_call(self, request: Any, handler: Any) -> Any:
+        return self._annotate(await handler(request))
+
+
 def test_what_a_deployments_middleware_left_is_recorded(ledgered):
     """The model reads the result with a deployment's reminder on it, and a row of
     anything else would be a record of a result nobody was shown.
     """
-    an_agent(ledgered, subagents="[researcher]", middlewares="[tool-note]", **EVERY_TOOL)
-    kf = Kingfisher(ledgered, sessions=LocalSessions(), middlewares={"tool-note": ToolNote})
+    an_agent(ledgered, subagents="[researcher]", middlewares="[reminder]", **EVERY_TOOL)
+    kf = Kingfisher(ledgered, sessions=LocalSessions(), middlewares={"reminder": _Reminder})
 
     result = _run(
         ledgered,
@@ -443,9 +458,7 @@ def test_what_a_deployments_middleware_left_is_recorded(ledgered):
     )
 
     (entry,) = result.ledger
-    assert _read(ledgered, entry.path).endswith(
-        "\n\nSay where this came from before you rely on it."
-    )
+    assert _read(ledgered, entry.path).endswith("\n\nMind the source.")
 
 
 def test_a_result_too_long_to_show_is_recorded_whole(ledgered):

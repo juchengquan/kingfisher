@@ -376,26 +376,22 @@ def test_a_line_narrowing_past_its_definition_is_reported_not_refused(cfg):
 def test_a_subagent_cannot_reach_a_looser_middleware_than_its_agent_granted():
     """Middleware is not additive in effect, which is why an agent narrows it.
 
-    `call-cap-generous` is a *looser* ceiling than `call-cap-strict`. If
-    `declares` left `middleware` at `ALL` -- as it does for `endpoints` and
-    `models`, on the argument that an agent narrowing those would be a definition
-    authorising itself -- a subagent could name whichever registered cap it
-    liked and leave the bound its parent runs under.
-
-    So the narrowing is the feature, and this is what says so. The cost shows up
-    in `assets/agents/researcher.yaml`, which grants a cap it does not
-    want because `sweeper` needs it, and says as much in a comment.
+    A deployment may register a strict cap and a looser one beside it. If `declares`
+    left `middleware` at `ALL` -- as it does for `endpoints` and `models`, on the
+    argument that an agent narrowing those would be a definition authorising itself --
+    a subagent could name whichever registered cap it liked and leave the bound its
+    parent runs under.
     """
     from kingfisher.core.definitions.agents.spec import AgentSpec
 
     spec = AgentSpec(
-        name="researcher",
+        name="capped",
         description="an agent that caps itself",
         system_prompt="You work.",
-        middlewares=("call-cap-strict",),
+        middlewares=("strict-cap",),
     )
 
-    assert spec.declares().middlewares == ("call-cap-strict",), (
+    assert spec.declares().middlewares == ("strict-cap",), (
         "an agent's middleware is the ceiling its subagents are clamped by; at "
         "`ALL` a subagent could pick any registered entry, including a looser cap"
     )

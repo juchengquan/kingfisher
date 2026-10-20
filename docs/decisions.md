@@ -186,9 +186,10 @@ agent runtime for names that never reach it.
 `call-cap-strict` and `tool-note` while its subagent `sweeper` named
 `call-cap-generous`, and an agent's `middlewares:` is the ceiling its subagents are
 clamped by. Every test touching the pair had replaced the spec or supplied a registry.
-`assistant` grants all three now and runs under both caps, the stricter deciding;
-`test_the_middleware_pairing_builds_from_the_workspace_alone` builds it with no
-registry. *(2026-09-07.)*
+`assistant` granted all three and ran under both caps, the stricter deciding, until
+the pair was removed (*The shipped middleware is one summarizer*, below);
+`test_assistant_builds_from_the_workspace_alone` still builds it with no registry.
+*(2026-09-07.)*
 
 **The kind is `middlewares`, in the plural its four siblings were already in.** The
 name was never free to differ: `seeding` walks `DEFINITION_KINDS`, so the folder spells
@@ -267,6 +268,16 @@ price: a plain `kingfisher seed` leaves `assistant` behind, and `--all` brings i
 taken: seeding `middlewares/` only under `--all`, which undoes half of *Middleware is a
 definition kind* for one line, and a star skipping workspace files, which makes one
 registry's two sources mean different things. *(2026-09-16.)*
+
+**The shipped middleware is one summarizer.** `tool-note` repeated what a
+deployment's instructions already say, and wrote its line into every result file the
+ledger saves. The caps and `sweeper` taught one lesson, that a limit a definition can
+set is no limit, which a section of `guides/middleware.md` carries as well as three
+files did. What ships is `summarize-by-count`, the only example of `wants`, and now
+of a setting a class opens: `messages`, since no count is a failure mode beside
+deepagents' size trigger. `compact` was renamed for it: the 2026-10-01 entry's reason
+for keeping the name, that dropping it breaks every workspace naming it, does not hold
+where nothing keeps backward compatibility. *(2026-10-20.)*
 
 **The definition repositories are internal, and each declares what is read from
 it.** `ports.md` listed four as ports to replace, though neither `Definitions` nor the
@@ -1936,11 +1947,11 @@ arguments the model wrote**, not the host paths `GuardedCallsMiddleware` makes o
 them; moved last, `test_the_arguments_recorded_are_the_ones_the_model_wrote` goes red.
 Its other two properties are not that position's: it sees a long result whole, inside
 deepagents' eviction, because deepagents lands every custom middleware after its own;
-and it records what the model was shown, a `ToolNote` included, because `build_agent`
-appends a deployment's middleware after everything else. One collector serves every
-graph a turn builds, locked because calls made together run on threads, and a context
-variable names the `task` call a subagent runs inside; `findings.md` has it reaching
-both loops.
+and it records what the model was shown, whatever a deployment's middleware added
+included, because `build_agent` appends a deployment's middleware after everything
+else. One collector serves every graph a turn builds, locked because calls made
+together run on threads, and a context variable names the `task` call a subagent runs
+inside; `findings.md` has it reaching both loops.
 
 **Ids run for the session, `A-` and at least four digits.** Not per turn, as the plan
 had them: regeneration would reuse turn numbers, and a running number never repeats.

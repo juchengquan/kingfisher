@@ -10,14 +10,13 @@ middleware wraps the agent that would be doing the writing. So a `middlewares/`
 directory is one the agent's shell is denied, `seed` leaves behind any definition
 naming middleware this deployment cannot build, and nothing a request carries
 widens the axis — *Capabilities* in [`decisions.md`](../decisions.md) has the
-rule, and `assets/middlewares/call_cap.py` has the long version.
+rule.
 
 This page is the deployment's half. What a definition may then write — the field,
 the long form with `settings`, what is granted rather than inherited — is
-[`formats.md`](formats.md). The three shipped middlewares are
-`assets/middlewares/call_cap.py`, `tool_note.py` and `compaction.py`, in
-that order; the suite loads and runs all three, so they cannot rot quietly, and
-nothing here repeats them.
+[`formats.md`](formats.md). The shipped middleware is
+`assets/middlewares/summarize_by_count.py`; the suite loads and runs it, so it
+cannot rot quietly, and nothing here repeats it.
 
 **A kingfisher middleware is a LangChain middleware.** The base class is
 `langchain.agents.middleware.AgentMiddleware`, the hooks are LangChain's to
@@ -31,20 +30,19 @@ here wraps either.
 ```python
 from kingfisher import Kingfisher
 
-from assets.middlewares.call_cap import CallCap, CallCapGenerous
+from assets.middlewares.summarize_by_count import SummarizeByCount
 
 kingfisher = Kingfisher(
     cfg,
     middlewares={
-        "call-cap-strict": CallCap,
-        "call-cap-generous": CallCapGenerous,
+        "summarize-by-count": SummarizeByCount,
     },
 )
 ```
 
 The key is the name a definition writes. It is not the class name and does not
-have to resemble it — two keys over one class is a normal thing to register, and
-`call_cap.py` argues for when that is the right shape.
+have to resemble it. Two keys over one class are two labels for one
+configuration, because `defaults` lives on the class: a variant is a second class.
 
 **A value is a class, or a callable taking no arguments.** A class is the shape
 that can be configured: it is constructed per graph with its own `defaults` plus
@@ -106,11 +104,11 @@ Three things are not the deployment's to make once: **the model this graph runs*
 for**. A class asks for them by name:
 
 ```python
-class Compact(SummarizationMiddleware):  # deepagents', not langchain's
-    name = "compact"
+class SummarizeByCount(SummarizationMiddleware):  # deepagents', not langchain's
+    name = "summarize-by-count"
     wants = frozenset({"model", "backend"})
 
-    def __init__(self, model, backend) -> None:
+    def __init__(self, model, backend, messages: int) -> None:
         ...
 ```
 
@@ -153,9 +151,8 @@ could carry for them. A class naming one in `defaults` or `yaml_settable` is
 refused, whether or not any definition ever writes it.
 
 **A middleware still imports nothing from kingfisher.** What it receives is a
-LangChain chat model, a deepagents backend and a frozen spec. The other two
-examples import `langchain` and nothing else, and `compaction.py` imports
-deepagents' summarizer -- neither imports kingfisher.
+LangChain chat model, a deepagents backend and a frozen spec.
+`summarize_by_count.py` imports deepagents' summarizer and nothing from kingfisher.
 
 ## Or put it in the definitions folder
 
@@ -166,14 +163,12 @@ anything in Python can write a file instead and `kingfisher seed` will copy it:
 from langchain.agents.middleware import AgentMiddleware
 
 
-class CallCap(AgentMiddleware):
-    name = "call-cap-strict"
-    defaults = {"limit": 20}
-    yaml_settable = ()
+class Audit(AgentMiddleware):
+    name = "audit"
     ...
 
 
-MIDDLEWARES = [CallCap]
+MIDDLEWARES = [Audit]
 ```
 
 `MIDDLEWARES` is declared rather than inferred, exactly as `TOOLS` is, so a class
@@ -181,9 +176,8 @@ imported to build a variant is not offered as a second entry nobody meant to
 expose.
 
 **The name comes from the class.** `AgentMiddleware.name` is a property that
-answers the class's own name, so `CallCap` is selected as `CallCap` unless the
-class overrides it with a string — which the shipped examples do, because
-`call-cap-strict` is the name they have always taught.
+answers the class's own name, so `Audit` is selected as `Audit` unless the
+class overrides it with a string, as this one does.
 
 **Classes only, here.** A registry may hold a zero-argument factory; a file may
 not, and the difference is not tidiness. A file is imported once, so an object
@@ -209,31 +203,63 @@ Two class attributes, and neither is required — `wants` above is the third and
 the harness's half rather than a definition's:
 
 ```python
-class ToolNote(AgentMiddleware):
-    defaults: ClassVar[dict[str, object]] = {"text": "", "max_length": 500}
-    yaml_settable: ClassVar[frozenset[str]] = frozenset({"text"})
+class SummarizeByCount(SummarizationMiddleware):
+    defaults: ClassVar[dict[str, Any]] = {"messages": 60}
+    yaml_settable: ClassVar[frozenset[str]] = frozenset({"messages"})
 ```
 
 `defaults` is the deployment's half and applies whole when a definition writes no
-settings at all, so `middlewares: [tool-note]` is a working line rather than a
-no-op. `yaml_settable` is the whitelist of keys a definition may override. The
-merge is per key and deployment first: a definition that writes `text` leaves
-`max_length` at the default. A class naming no `yaml_settable` is a class no
-definition may configure, which is the default and is `CallCap` deliberately.
+settings at all, so a bare `middlewares: [summarize-by-count]` is a working line
+rather than a no-op. `yaml_settable` is the whitelist of keys a definition may
+override. The merge is per key and deployment first: a definition that writes one
+key leaves every other at its default. A class naming no `yaml_settable` is a
+class no definition may configure, which is the default.
 
-Which keys belong in that whitelist is a judgment with a test behind it, and
-`tool_note.py` is the page for it: the question is not whether a key looks
-harmless but whether *more* or *different* is a failure mode. A ceiling the
-ceilinged thing can raise is not a ceiling.
+Which keys belong in that whitelist is a judgment with a test behind it: not
+whether a key looks harmless but whether *more* or *different* is a failure mode.
+`messages` passes. deepagents' own trigger still summarizes by size whatever
+count is written, so a definition choosing a lower one chooses more summaries, for
+its own agent and nobody else's.
 
 **A definition that writes `["*"]` gets everything registered and granted.** That
 is worth knowing before adding an entry to the dict: registering a new middleware
 attaches it to every definition holding a star, and no file mentions it. A file
 in the definitions folder's `middlewares/` counts as registered, and `kingfisher
-seed` copies the examples there — so on a seeded deployment a star takes every one of
-them, which is why no shipped definition writes one. A star also resolves quietly
-smaller when a request narrows the axis, where a *named* entry refuses — so a
-definition that must have its audit hook should name it.
+seed` copies the shipped one there — so on a seeded deployment a star takes it and
+whatever is added later, which is why no shipped definition writes one. A star also
+resolves quietly smaller when a request narrows the axis, where a *named* entry
+refuses — so a definition that must have its audit hook should name it.
+
+### A limit a definition can set is no limit
+
+A key that bounds what a definition may spend fails the whitelist's test: more of it
+is the failure. It goes in `defaults` and stays out of `yaml_settable`:
+
+```python
+class CallCap(AgentMiddleware):
+    name = "call-cap"
+    defaults: ClassVar[dict[str, Any]] = {"limit": 20}
+    yaml_settable: ClassVar[frozenset[str]] = frozenset()  # `limit` is the deployment's
+
+
+class LooseCallCap(CallCap):
+    name = "call-cap-loose"
+    defaults: ClassVar[dict[str, Any]] = {"limit": 100}
+```
+
+Opened, the first definition wanting more than twenty calls would write
+`{limit: 1000000}` and be within its rights, because the format let it. A
+sampling rate that can be set to zero, a log destination that can be pointed off
+the machine and a retention window that can be shortened are the same shape, and
+none reads as dangerous in a single file: what the setting costs is paid by
+whoever runs the definition, not whoever wrote it. A definition writing a shut key
+is refused, told what the entry does accept.
+
+A second ceiling is a second class, a subclass overriding `defaults` under its own
+`name`, and a definition chooses between them by name. That keeps the decision in
+code, and it narrows like every capability: a request may withhold
+`call-cap-loose` and leave `call-cap` in reach, which a number in a mapping could
+not say.
 
 ## Write the sync hook
 
@@ -248,7 +274,7 @@ and the sync one never does. A middleware with only `wrap_model_call` raises the
 first time an `astream` turn reaches it — loudly, with a message naming the fix.
 
 So which hook runs depends on which entry point the caller used, and the remedy
-is the same either way: **write both halves.** The examples do. A middleware that
+is the same either way: **write both halves.** A middleware that
 implements only one works under one of the two entry points and refuses the
 other, which is a deployment-shaped surprise rather than a bug you can find by
 reading the class.
@@ -258,8 +284,7 @@ A subclass fails quietly. A LangChain middleware that implements both halves —
 overrides only `abefore_model`: the subclass is installed, the turn runs, and none
 of the subclass's code does. That is the failure worth guarding hardest against
 here, because what it produces is not an error. Override the sync hook whatever
-else you override. The examples override both halves, which also keeps them right
-in a graph somebody runs on an event loop.
+else you override.
 
 ## Names deepagents already uses
 
@@ -281,12 +306,12 @@ Kingfisher warns rather than refuses, once, at build time. If you meant it there
 is nothing to do; if you did not, rename the class and leave the registry key
 alone.
 
-`compaction.py` means it. deepagents' summarizer records what it summarized as an
-index into the conversation, so a second summarizer beside it -- one that rewrites
-the conversation, or another deepagents one keeping its own index -- leaves the
-model looking at the wrong messages. `Compact` takes that summarizer's place
-instead: the class keeps `compact` for definitions to write, and the instance
-answers to `SummarizationMiddleware`, which is the name deepagents merges by.
+`summarize_by_count.py` means it. deepagents' summarizer records what it summarized
+as an index into the conversation, so a second summarizer beside it -- one that
+rewrites the conversation, or another deepagents one keeping its own index -- leaves
+the model looking at the wrong messages. `SummarizeByCount` takes that summarizer's
+place instead: the class keeps `summarize-by-count` for definitions to write, and the
+instance answers to `SummarizationMiddleware`, which is the name deepagents merges by.
 
 ## What your middleware sees
 

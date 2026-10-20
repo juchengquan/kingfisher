@@ -41,6 +41,7 @@ that collide are reported.
 ## Middleware
 
 `middlewares/` is a definition kind like the rest, and `seed` copies it. What a
-definition *names* is still only a name: `call-cap-strict` selects code the
+definition *names* is still only a name: `summarize-by-count` selects code the
 deployment wrote, and nothing a request carries can widen that.
-`middlewares/call_cap.py` carries the argument in place.
+`docs/guides/middleware.md` carries the argument, and
+`middlewares/summarize_by_count.py` is the example it points at.
