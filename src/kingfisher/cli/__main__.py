@@ -116,8 +116,9 @@ def build_parser() -> argparse.ArgumentParser:
             "there is nowhere else to put it:\n"
             "\n"
             "  0  finished\n"
-            "  1  stopped at a bound -- the answer is what was reached, and what\n"
-            "     it wrote is still there\n"
+            "  1  stopped at a bound, the answer being what was reached and what\n"
+            "     it wrote still there; or at an approval gate, waiting on\n"
+            "     `kingfisher decide`\n"
             "  2  never ran"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -149,8 +150,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "delete the session once the turn finishes, so a one-off run leaves "
-            "nothing behind. A turn stopped at a bound keeps its session, and "
-            "says so"
+            "nothing behind. A turn stopped at a bound or an approval gate keeps "
+            "its session, and says so"
         ),
     )
     doing.add_argument(
@@ -240,7 +241,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "The configuration, the credentials it names, every catalogue,\n"
             "whether every definition can actually run, and what is confining the\n"
-            "shell. Exits non-zero only on something that will stop a run.\n"
+            "shell. Exits non-zero only on something that will break a run, or\n"
+            "make it not do what its definitions say.\n"
             "\n"
             "Nothing here calls a model. That is what makes it cheap enough to run\n"
             "before a deployment rather than after its first failure, and it is\n"

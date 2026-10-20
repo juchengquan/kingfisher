@@ -1096,6 +1096,112 @@ def test_a_session_that_will_not_delete_does_not_fail_the_turn(cfg, monkeypatch,
     assert "not deleted" in capsys.readouterr().err
 
 
+def test_a_policied_workspace_still_deletes_the_session_its_run_used(
+    cfg, monkeypatch, capsys
+):
+    """`_discard` opens the session `UNSCOPED`: asked as nobody, a workspace declaring
+    source ids refuses it, and a finished `--delete-session` run would end on an access
+    error with its session still there.
+
+    Against a real `Kingfisher` under a policy, because the stub above never asks who
+    is calling.
+    """
+    from dataclasses import replace
+
+    import yaml
+
+    from kingfisher.cli import __main__ as entry
+    from kingfisher.core.access.policy import parse
+    from tests.unit.test_run import StubAgent
+
+    agent = an_agent(cfg, source_ids="[A]")
+    policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
+    service = Kingfisher(policied, graph=StubAgent("done"), sessions=LocalSessions())
+    monkeypatch.setattr(entry, "config_from_env", lambda: policied)
+    monkeypatch.setattr("kingfisher.Kingfisher", lambda *a, **k: service)
+    argv = ["run", "t", "--agent", agent, "--session", "s1", "--as", "A"]
+
+    assert main([*argv, "--delete-session"]) == 0, capsys.readouterr().err
+    assert not (cfg.workspace / "sessions" / "s1").exists()
+    # The control: the same run without the flag leaves the session, so the one above
+    # was deleted by the flag and not by never having been made.
+    assert main(argv) == 0
+    assert (cfg.workspace / "sessions" / "s1").is_dir()
+
+
+# -- what the command refuses rather than raises -------------------------------
+
+
+def _said_and_not_raised() -> tuple[type[Exception], ...]:
+    """What the command answers with exit 2, written out rather than read off `REFUSALS`:
+    parametrized over the tuple, an entry dropped from it would take its case along."""
+    from kingfisher import (
+        ArtifactError,
+        CapabilityError,
+        DecisionError,
+        InputsError,
+        QuotaExceededError,
+        SubagentError,
+        UnknownSessionError,
+    )
+    from kingfisher.core.definitions.agents.spec import AgentError
+
+    return (
+        AgentError,
+        ArtifactError,
+        CapabilityError,
+        DecisionError,
+        InputsError,
+        QuotaExceededError,
+        SubagentError,
+        UnknownSessionError,
+    )
+
+
+def test_every_refusal_the_command_makes_is_one_driven_below():
+    """A class added to `REFUSALS` and not here would be caught by nothing that runs it."""
+    from kingfisher.cli.__main__ import REFUSALS
+
+    assert set(REFUSALS) <= set(_said_and_not_raised())
+
+
+@pytest.mark.parametrize("refusal", _said_and_not_raised(), ids=lambda cls: cls.__name__)
+def test_every_refusal_reaches_the_terminal_as_one_line_and_exit_2(
+    refusal, monkeypatch, capsys
+):
+    """Only `DecisionError` and `AgentError` were ever driven through `main`; the rest of
+    `REFUSALS` -- `QuotaExceededError` and `SubagentError` among them -- could leave the
+    tuple and turn back into a traceback with exit 1, a turn that stopped at a bound.
+    """
+    from kingfisher.cli import __main__ as entry
+
+    def refuses(_args):
+        msg = "the one line worth reading"
+        raise refusal(msg)
+
+    monkeypatch.setitem(entry.HANDLERS, "sessions", refuses)
+
+    assert main(["sessions"]) == 2
+
+    said = capsys.readouterr().err
+    assert f"{refusal.__name__}: the one line worth reading" in said
+    assert "Traceback" not in said
+
+
+def test_an_error_that_is_not_a_refusal_keeps_its_traceback(monkeypatch):
+    """The control beside it: a bug caught here would read as the caller's mistake."""
+    from kingfisher.cli import __main__ as entry
+
+    def broken(_args):
+        msg = "limit"
+        raise KeyError(msg)
+
+    monkeypatch.setitem(entry.HANDLERS, "sessions", broken)
+
+    with pytest.raises(KeyError):
+        main(["sessions"])
+
+
 # -- the flags the command names ----------------------------------------------
 
 #: Flags the command's own words name and it does not take, each with why: another

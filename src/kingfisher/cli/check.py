@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-#: `fail` means this deployment will not run. `warn` means it will, and
-#: something about it is worth knowing -- an unconfined shell runs fine.
+#: `fail` means a run will break, or will not do what its definitions say -- an agent
+#: naming a moved tool runs without it. `warn` means it will, and something about it is
+#: worth knowing -- an unconfined shell runs fine.
 Verdict = Literal["ok", "warn", "fail"]
 
 
