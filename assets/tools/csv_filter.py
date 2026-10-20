@@ -45,12 +45,13 @@ def _fetched(runtime: ToolRuntime[ToolContext], file_path: str) -> bytes:
 
 
 #: What the `csv` module refuses to parse: one field longer than this raises
-#: `_csv.Error`, and `csv.field_size_limit()` is 131,072 by default. A tool that reads
-#: 32 MB therefore dies on a cell that is 0.6% of its own cap -- measured, all four
-#: shipped CSV tools did, and through the failure guard the model was handed `Error:
-#: Error: field larger than field limit (131072)`: no file, no column, no remedy, and
-#: a type name reading `Error`. Raised deliberately rather than by widening the limit,
-#: which is process-wide state an example tool has no business setting.
+#: `_csv.Error`, and `csv.field_size_limit()` is 131,072 by default. A tool that
+#: reads 32 MB therefore dies on a cell of 128 KB -- measured, every shipped tool
+#: that parses a CSV did, on one cell of 200,000 characters, and through the failure
+#: guard the model was handed `Error: Error: field larger than field limit (131072)`:
+#: no file, no column, no remedy, and a type name reading `Error`. Raised
+#: deliberately rather than by widening the limit, which is process-wide state an
+#: example tool has no business setting.
 MAX_FIELD_BYTES = csv.field_size_limit()
 
 
