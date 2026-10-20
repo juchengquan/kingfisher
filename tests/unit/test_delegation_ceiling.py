@@ -76,13 +76,13 @@ def _model():
     return FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
 
-def tool_ceiling(spec, *, builtin, workspace):
+def tool_ceiling(spec, *, builtin, offered):
     """The rule as `as_subagent` calls it, with the spec's two axes unpacked."""
     return ceiling(
         spec.builtin_tools,
         spec.tools,
         granted_builtin=builtin,
-        granted_tools=workspace,
+        granted_tools=offered,
         subject=f"subagent {spec.name!r}",
     )
 
@@ -380,7 +380,7 @@ def test_a_subagent_is_narrowed_by_it(cfg):
 # -- the two axes are resolved apart --------------------------------------
 
 
-def test_naming_a_workspace_tool_costs_a_subagent_no_builtin():
+def test_naming_an_offered_tool_costs_a_subagent_no_builtin():
     """The whole reason the definition's list was split.
 
     One flat list meant a subagent could not ask for `http_fetch` without giving up
@@ -391,19 +391,19 @@ def test_naming_a_workspace_tool_costs_a_subagent_no_builtin():
         a_subagent(HELPER, "helper.md"), tools=("http_fetch",), builtin_tools=ALL
     )
 
-    ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), workspace=("http_fetch", "sql_query"))
+    ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), offered=("http_fetch", "sql_query"))
 
     assert isinstance(ceiling, tuple)  # concrete, never `ALL`
     assert set(ceiling) == {"read_file", "ls", "http_fetch"}
 
 
-def test_naming_a_builtin_costs_a_subagent_no_workspace_tool():
+def test_naming_a_builtin_costs_a_subagent_no_offered_tool():
     """And the mirror, which is the direction the presets go."""
     spec = replace(
         a_subagent(HELPER, "helper.md"), builtin_tools=("read_file",), tools=ALL
     )
 
-    ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), workspace=("http_fetch",))
+    ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), offered=("http_fetch",))
 
     assert isinstance(ceiling, tuple)  # concrete, never `ALL`
     assert set(ceiling) == {"read_file", "http_fetch"}
@@ -413,7 +413,7 @@ def test_an_empty_list_is_how_a_subagent_says_none_of_them():
     """`tools: []` is none; omitting the line is all."""
     spec = replace(a_subagent(HELPER, "helper.md"), builtin_tools=("read_file",), tools=())
 
-    ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), workspace=("http_fetch",))
+    ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), offered=("http_fetch",))
 
     assert isinstance(ceiling, tuple)  # concrete, never `ALL`
     assert set(ceiling) == {"read_file"}
@@ -424,7 +424,7 @@ def test_one_axis_unresolved_is_refused_rather_than_guessed():
     spec = replace(a_subagent(HELPER, "helper.md"), builtin_tools=ALL, tools=("a",))
 
     with pytest.raises(ValueError, match="one tool axis resolved"):
-        tool_ceiling(spec, builtin=ALL, workspace=("a",))
+        tool_ceiling(spec, builtin=ALL, offered=("a",))
 
 
 #: The rows where the definition declared something. `skills` cannot use the
@@ -547,7 +547,7 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
     kinds = [type(m).__name__ for m in supplied[0]["middleware"]]
     (theirs,) = [m for m in supplied[0]["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
     assert theirs._allowed is None, "nothing was narrowed, so nothing to narrow it by"
-    # It still carries the guards every graph holding workspace tools carries. This
+    # It still carries the guards every graph holding offered tools carries. This
     # asserted an empty list, which was the defect: deepagents hands this subagent the
     # agent's own tools, and it held them with nothing wrapped around them.
     assert kinds == [
@@ -763,7 +763,7 @@ def _audited_build(cfg, session_dir, **caps):
     )
 
 
-A_WORKSPACE_TOOL = '''
+AN_OFFERED_TOOL = '''
 def peek(path: str) -> str:
     """Read a file. `path` is the same virtual path the file tools take."""
     from pathlib import Path
@@ -779,13 +779,13 @@ def _with_a_tool(cfg):
     from tests.conftest import tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
-    (tools_dir(cfg) / "peek.py").write_text(A_WORKSPACE_TOOL, encoding="utf-8")
+    (tools_dir(cfg) / "peek.py").write_text(AN_OFFERED_TOOL, encoding="utf-8")
     return cfg
 
 
-#: Reads, and is granted none of the workspace's tools.
-NO_WORKSPACE_TOOL = """name: helper
-description: Reads, and holds no workspace tool.
+#: Reads, and is granted no offered tool.
+NO_OFFERED_TOOL = """name: helper
+description: Reads, and holds no offered tool.
 builtin_tools: [read_file]
 system_prompt: |
   You help.
@@ -797,13 +797,13 @@ def _tool_node(graph) -> set[str]:
     return set(graph.nodes["tools"].bound.tools_by_name)
 
 
-def test_a_subagent_granted_no_workspace_tool_is_built_without_its_callers(cfg, session_dir):
+def test_a_subagent_granted_no_offered_tool_is_built_without_its_callers(cfg, session_dir):
     """deepagents reads a subagent spec with no `tools` key as "the parent's tools", so a
     subagent granted none was built holding the agent's `peek`, kept from the model only
     by its allowlist. Read off the subagent's own tool node rather than that allowlist,
     which said "none" either way.
     """
-    wired = _with_helper(_with_a_tool(cfg), NO_WORKSPACE_TOOL)
+    wired = _with_helper(_with_a_tool(cfg), NO_OFFERED_TOOL)
     graph = build_agent(
         wired,
         backend=backend_at(wired, session_dir),
@@ -818,7 +818,7 @@ def test_a_subagent_granted_no_workspace_tool_is_built_without_its_callers(cfg, 
     assert "peek" not in held
 
 
-def test_every_graph_holding_the_workspace_tools_carries_the_same_guards(
+def test_every_graph_holding_the_offered_tools_carries_the_same_guards(
     cfg, session_dir
 ):
     """deepagents fills a subagent spec that names no tools from the parent, so the

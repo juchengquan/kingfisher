@@ -18,6 +18,29 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A workspace tool is an offered tool, after #1006
+
+A tool a deployment supplies itself is now called an *offered tool*, beside the offered
+middleware a deployment makes available. Nothing behaves differently; these names moved.
+
+- **`WorkspaceToolFailureMiddleware` is `OfferedToolFailureMiddleware`**, in
+  `kingfisher.core.agent.middlewares.guarded_calls`.
+- **`build_agent` and `builtin_tool_names` take `offered_tools=`** in place of
+  `workspace_tools=`, both in `kingfisher.core.agent.assembly`.
+- **`workspace_tool_names` is `offered_tool_names`**, in `kingfisher.core.agent.kinds.tools`,
+  and `ToolSurface.granted_workspace` there is `ToolSurface.offered_grant`.
+- **`Offering.workspace` is `Offering.offered`**, as a field and as a keyword, in
+  `kingfisher.core.definitions.tools.spec`.
+- **`interpreter` takes `offered=`** in place of `workspace=`, in
+  `kingfisher.core.agent.interpreter`.
+- **`kingfisher list` heads the section `offered tools — grant with tools: in an agent
+  file`**, where it said `workspace tools`. A script reading the listing's text for that
+  heading must look for the new one; `--json` is unchanged.
+- **The refusal of a tool wearing a built-in's name reads `offered tool(s) … would replace
+  a built-in`**, and `kingfisher doctor`'s warning reads `the offered tool catalogue did
+  not load`.
+- **The glossary's term is *Offered tool***, and the guides use it throughout.
+
 ## A workspace tool is handed no link, after #1003
 
 - **A workspace tool's `path` that is or runs through a link is refused**, as a failed

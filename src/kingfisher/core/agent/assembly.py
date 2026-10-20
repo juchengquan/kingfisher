@@ -291,15 +291,15 @@ def _probe_backend(cfg: Config, scratch: Path) -> CompositeBackend:
 
 
 def builtin_tool_names(
-    cfg: Config, catalogue: Definitions, workspace_tools: Sequence[FoundTool] | None = None
+    cfg: Config, catalogue: Definitions, offered_tools: Sequence[FoundTool] | None = None
 ) -> tuple[str, ...] | None:
     """The built-in set, which is only knowable from an assembled graph.
 
     Not in `kinds/tools.py`: that module is imported by this one, so calling
     `build_agent` from there would close a cycle.
 
-    Also a check: assembling refuses a workspace tool wearing a built-in's name.
-    `workspace_tools` does not decide that; it spares a caller that has walked them.
+    Also a check: assembling refuses an offered tool wearing a built-in's name.
+    `offered_tools` does not decide that; it spares a caller that has walked them.
     """
     import tempfile  # noqa: PLC0415 -- one caller, and only on the branch that probes
 
@@ -309,7 +309,7 @@ def builtin_tool_names(
                 cfg,
                 backend=_probe_backend(cfg, Path(scratch)),
                 catalogue=catalogue,
-                workspace_tools=workspace_tools,
+                offered_tools=offered_tools,
                 # No subagents: wiring a roster would make a listing refuse what it
                 # reports -- two definitions of a name are printed, not raised.
                 capabilities=Capabilities(subagents=None),
@@ -327,7 +327,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     checkpointer: Any | None = None,
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
-    workspace_tools: Sequence[FoundTool] | None = None,
+    offered_tools: Sequence[FoundTool] | None = None,
     agent: AgentSpec | None = None,
     held: frozenset[str] | None = None,
     ledger: Ledger | None = None,
@@ -347,7 +347,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     shell = shell_prompt_of(backend)
     # Before the middleware stack, because `standing_middleware` needs the names. A caller that
     # has walked them itself -- `--list` -- wins over the catalogue.
-    walked = tuple(roots.tools.found if workspace_tools is None else workspace_tools)
+    walked = tuple(roots.tools.found if offered_tools is None else offered_tools)
     # Every walked tool, not the granted ones: the grant is computed after the guards,
     # and a tool outside it cannot be reached anyway.
     guarded = frozenset(entry.name for entry in walked)
@@ -567,7 +567,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             permitted,
             gated=gated,
             # Wrapped: a call from code meets none of the guards on this graph's stack.
-            workspace=guarded_tools(surface.carried, paths),
+            offered=guarded_tools(surface.carried, paths),
         )
 
     if memory_at is not None and permitted is not None:
@@ -616,7 +616,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 gated=gated,
                 endpoints=capabilities.endpoints,
                 builtin_tools=surface.granted_builtin,
-                tools=surface.granted_workspace,
+                tools=surface.offered_grant,
                 # Behind the deployment's switch too, like the agent's own index.
                 skills=(
                     subagent_skills(defined[name], offered, capabilities.skills, held=held)

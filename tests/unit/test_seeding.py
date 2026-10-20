@@ -164,7 +164,7 @@ def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
     assert LocalSkillRepository(tmp_path).misplaced == ()
 
 
-def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
+def test_an_offered_tool_reaches_the_assembled_agent(cfg, fixture_pack):
     """The whole point: a file in the workspace becomes a tool the agent has."""
     from tests.conftest import dispatched
 
@@ -177,7 +177,7 @@ def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
     assert "read_file" in tools  # and the built-ins are still there
 
 
-def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
+def test_an_offered_tool_may_not_shadow_a_builtin(cfg):
     """`tools_by_name` is a dict, so the real `read_file` would just stop existing --
     quietly, which is the failure this refuses everywhere else.
     """

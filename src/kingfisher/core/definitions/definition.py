@@ -23,7 +23,7 @@ class SpecBase:
     #: Each kind checks blankness itself.
     system_prompt: str
     #: The two tool axes, granted apart because they are offered apart: built-ins come with
-    #: deepagents, `tools` is what the workspace wrote. In one list, asking for a workspace
+    #: deepagents, `tools` is what the workspace wrote. In one list, asking for an offered
     #: tool would give up every built-in. `None` grants none, as on every grant field here: a
     #: forgotten line must fail closed, not hand over the shell and every tool added later.
     builtin_tools: Selection = None

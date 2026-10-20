@@ -59,7 +59,7 @@ def test_a_definition_gets_the_middleware_it_names(cfg, session_dir):
 
     # The deployment's own, which is what this file is about. A subagent also
     # carries guards nothing in its definition mentions -- the host-path
-    # correction, and the workspace tools' own failures -- and asserting the
+    # correction, and the offered tools' own failures -- and asserting the
     # whole list would make this fail every time one is added.
     assert [
         type(m).__name__
@@ -120,7 +120,7 @@ def test_a_granted_name_goes_through(cfg, session_dir):
 
     # The deployment's own, which is what this file is about. A subagent also
     # carries guards nothing in its definition mentions -- the host-path
-    # correction, and the workspace tools' own failures -- and asserting the
+    # correction, and the offered tools' own failures -- and asserting the
     # whole list would make this fail every time one is added.
     assert [
         type(m).__name__
@@ -222,7 +222,7 @@ def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
         "SubAgentMiddleware",
         "Audited",
         # Under the deployment's own, so what it raises is not answered for the tool.
-        "WorkspaceToolFailureMiddleware",
+        "OfferedToolFailureMiddleware",
     ]
 
 
@@ -243,5 +243,5 @@ def test_a_bare_definition_carries_only_the_guards_and_its_allowlist(cfg, sessio
         "GuardedCallsMiddleware",
         "AttachmentsMiddleware",
         "BuiltinToolsMiddleware",
-        "WorkspaceToolFailureMiddleware",
+        "OfferedToolFailureMiddleware",
     ]

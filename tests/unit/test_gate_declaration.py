@@ -199,7 +199,7 @@ def test_an_agent_that_gates_nothing_passes_no_gate_argument(cfg, session_dir):
 
 
 def test_a_gate_on_a_tool_this_caller_was_not_granted_is_allowed(cfg, session_dir):
-    """A grant narrows per request, so an agent gating a workspace tool that this
+    """A grant narrows per request, so an agent gating an offered tool that this
     caller did not ask for has a gate with nothing to fire on -- which is fine.
     Refusing it would break a legitimately narrow run for a danger that is not there.
     """
@@ -392,7 +392,7 @@ def test_a_gate_on_a_tool_only_a_compiled_subagent_holds_is_refused(cfg, session
 
 
 def test_the_same_workspace_still_gates_a_built_in(cfg, session_dir):
-    """The control: a compiled subagent is handed workspace tools and no built-in, so
+    """The control: a compiled subagent is handed offered tools and no built-in, so
     its presence must not cost the deployment the gates it can have.
     """
     compiled_bundle(cfg)

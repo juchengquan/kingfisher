@@ -15,7 +15,7 @@ Three things it needs, and none of them is obvious until it fails:
     so a delegate no agent declares cannot be dispatched from inside the sandbox
     any more than from a tool call.
   * `eval` and `task` named on the *builtin* axis. Both are deepagents' own, so
-    naming them under `tools:` grants neither and withholds every workspace tool
+    naming them under `tools:` grants neither and withholds every offered tool
     besides.
 
 Streamed rather than drained, because the fan-out happens inside a single

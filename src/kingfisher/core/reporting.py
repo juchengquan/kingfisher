@@ -11,8 +11,8 @@ from kingfisher.core.agent.activation import (
     defined_subagents,
 )
 from kingfisher.core.agent.kinds.tools import (
+    offered_tool_names,
     registered_tools,
-    workspace_tool_names,
 )
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import opens_skills
@@ -43,7 +43,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
     this is measured against the directories the agent was built from.
     """
     default = Capabilities()
-    workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
+    offered_tools = tuple(offered_tool_names(cfg, catalogue=catalogue))
     # A skill may be written bare or as `source::name`, and the agent file and registry
     # may differ: compared as written, an audience `catalogue::audit` hides no `audit`.
     identity = activatable_skills(cfg, catalogue=catalogue).identity
@@ -64,7 +64,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
     # what reached it, so one declaring an ungranted tool names one reached by no path.
     reached_agents = [] if agent is None else [agent]
     # Spelt on tools as on skills: a grant may write the long form a catalogue spells short.
-    spelt = set(workspace)
+    spelt = set(offered_tools)
     offers_tool = admitted(
         offers("tools", held, reached_agents, same=lambda one: placed(one, spelt)),
         shut=out_of_reach(catalogue.tools.found, held),
@@ -72,14 +72,14 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
     offers_skill = offers("skills", held, reached_agents, same=identity)
 
     offered = (
-        # Built-ins and workspace tools are granted apart, so reported apart. `or ()`: a
+        # Built-ins and offered tools are granted apart, so reported apart. `or ()`: a
         # graph that cannot be read lists no built-ins rather than failing the turn.
         ("builtin tool", "builtin_tools", lambda: tuple(
-            n for n in registered_tools(graph) or () if n not in set(workspace)
+            n for n in registered_tools(graph) or () if n not in set(offered_tools)
         )),
         # Measured against what a definition in reach offers, not the whole catalogue:
         # else a caller who narrowed their grant is told every name nothing in reach offers.
-        ("tool", "tools", lambda: tuple(n for n in workspace if offers_tool(n))),
+        ("tool", "tools", lambda: tuple(n for n in offered_tools if offers_tool(n))),
         # `cfg` and `read_file` as well as the request: with skills switched off, or no
         # way to open one, the agent is told of none, and one "not granted" says others were.
         (

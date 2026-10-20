@@ -76,7 +76,7 @@ def test_a_prewalked_catalogue_is_not_walked_again(cfg, capfd):
         cfg,
         backend=backend_at(cfg, ensure_session_layout(cfg.workspace / "s", DEFAULT_LAYOUT)),
         model=FakeToolCallingModel(responses=[]),
-        workspace_tools=found,
+        offered_tools=found,
     )
 
     assert capfd.readouterr().err.count("EXECUTED") == 0, "the build walked again"
@@ -116,7 +116,7 @@ def test_a_subagent_naming_an_unknown_tool_is_told_the_same_thing(cfg):
     with pytest.raises(CapabilityError) as raised:
         Offering(
             builtin=("read_file",),
-            workspace=("find_company",),
+            offered=("find_company",),
             sources={"find_company": "research/find_company.py"},
         ).refuse_unknown(
             spec.builtin_tools, spec.tools, subject=f"subagent {spec.name!r}"

@@ -1,4 +1,4 @@
-"""What a workspace tool's return value becomes, and why this pins somebody else's
+"""What an offered tool's return value becomes, and why this pins somebody else's
 behaviour.
 """
 

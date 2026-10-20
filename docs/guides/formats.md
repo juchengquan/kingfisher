@@ -184,7 +184,7 @@ analyst — Answers questions from the data, with the database behind a source i
     subagents: auditor, quarters
 ```
 
-A tool is spelt the way the workspace tools section spells it, however the file
+A tool is spelt the way the offered tools section spells it, however the file
 wrote it, so `csv_profile::csv_profile` reads `csv_profile`. A field written `["*"]`
 shows the star and what it covers today, `tools: * — today csv_profile, http_fetch,
 line_count, sql_query`, because tomorrow it also covers whatever is added. A field
@@ -359,7 +359,7 @@ rename it to reviewer.yaml
 ## Tools — `/tools/<module>.py`, at any depth
 
 Two kinds. The **built-in set** comes with the agent and you select from it by
-name. **Workspace tools** are Python you write, imported from the `tools/`
+name. **Offered tools** are Python you write, imported from the `tools/`
 directory in `KINGFISHER_DEFINITIONS_DIR` and added to that set.
 
 ### The built-in set
@@ -409,7 +409,7 @@ Four things worth knowing before you restrict this list:
   `glob` and read with `read_file`, `grep`'s pointer to the shell, and `ls`'s and
   `write_file`'s to `read_file` and `edit_file` name only the tools held.
 
-### Workspace tools
+### Offered tools
 
 Python you write, imported from the `tools/` directory in the definitions folder
 and added to the built-in set. A module declares `TOOLS`, the list it contributes, and a tool
@@ -532,7 +532,7 @@ needed.
 lists them. `tools` is whatever *your* workspace defines in `tools/`.
 
 They are separate because they are granted separately: on one list, a subagent
-could not ask for a workspace tool without giving up every built-in.
+could not ask for an offered tool without giving up every built-in.
 
 ```yaml
 builtin_tools: [read_file, glob]   # named, so only these two
@@ -1206,7 +1206,7 @@ applies. Refused where a catalogue tool of that name is refused, and for the sam
 reason:
 
 ```
-workspace tool(s) read_file would replace a built-in of the same name; rename
+offered tool(s) read_file would replace a built-in of the same name; rename
 them in subagents/redactor/tools
 ```
 

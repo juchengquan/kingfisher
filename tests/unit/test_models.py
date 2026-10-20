@@ -413,7 +413,7 @@ TOOLS = [shout]
 
 
 def _dead_row(cfg) -> None:
-    """A deployment whose one model row cannot start a turn, with a workspace tool --
+    """A deployment whose one model row cannot start a turn, with an offered tool --
     which is what brings the startup probe into it, and is the ordinary shape.
     """
     from tests.conftest import an_agent, tools_dir
@@ -510,7 +510,7 @@ TOOLS = [read_file]
 
 
 def test_the_startup_probe_still_refuses_the_question_it_exists_to_ask(cfg, monkeypatch):
-    """The load-bearing half of deferring. The probe asks one thing -- does a workspace
+    """The load-bearing half of deferring. The probe asks one thing -- does an offered
     tool wear a built-in's name -- and answers it with `CapabilityError`. Only
     `ConfigError` is suppressed, so the answer it exists for still stops the service.
     """

@@ -191,7 +191,7 @@ class Offering:
     """What tools exist to be granted, on which axis, and where each is defined."""
 
     builtin: tuple[str, ...] = ()
-    workspace: tuple[str, ...] = ()
+    offered: tuple[str, ...] = ()
     sources: Mapping[str, str] = field(default_factory=dict)
 
     @classmethod
@@ -200,7 +200,7 @@ class Offering:
         among = _by_name(found)
         return cls(
             builtin=builtin,
-            workspace=tuple(written_form(one, among=among) for one in found),
+            offered=tuple(written_form(one, among=among) for one in found),
             sources={one.name: one.source for one in found if among[one.name] == 1},
         )
 
@@ -218,7 +218,7 @@ class Offering:
         """A written grant in the spelling this offering uses."""
         if selection in (ALL, None):
             return selection
-        offered = set(self.workspace)
+        offered = set(self.offered)
         return tuple(placed(one, offered) for one in selection)
 
     def refuse_unknown(
@@ -236,8 +236,8 @@ class Offering:
         """
         for asked, own, other, here, there in (
             # Spelt first: a definition may write either form, and the offering holds one.
-            (self.spelt(tools), self.workspace, self.builtin, "tools", "builtin_tools"),
-            (builtin, self.builtin, self.workspace, "builtin_tools", "tools"),
+            (self.spelt(tools), self.offered, self.builtin, "tools", "builtin_tools"),
+            (builtin, self.builtin, self.offered, "builtin_tools", "tools"),
         ):
             if asked in (ALL, None):
                 continue
@@ -295,7 +295,7 @@ class Offering:
         tools = self.spelt(tools)
         # Bare names, which the allowlist compares with `tool.name`. Safe because `carried`
         # has dropped every clashing pair, so within one agent two spellings cannot meet.
-        granted = narrowed(tools, by=self.workspace) or ()
+        granted = narrowed(tools, by=self.offered) or ()
         return (
             *(narrowed(builtin, by=self.builtin) or ()),
             *(split_reference(one)[1] for one in granted),

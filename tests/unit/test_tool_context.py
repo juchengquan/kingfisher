@@ -538,7 +538,7 @@ def _a_tool(
     argument: str = "file_path",
     source: str = FIRST_LINE,
 ) -> None:
-    """Write the one workspace tool these tests run."""
+    """Write the one offered tool these tests run."""
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "first_line.py").write_text(
         source.format(annotation=annotation, argument=argument), encoding="utf-8"
@@ -585,7 +585,7 @@ def _pydantic_complaints(caught: list[warnings.WarningMessage]) -> list[str]:
     return [str(one.message) for one in caught if "Pydantic serializer" in str(one.message)]
 
 
-def test_a_workspace_tool_reads_a_session_file_through_the_backend(cfg, session_dir):
+def test_an_offered_tool_reads_a_session_file_through_the_backend(cfg, session_dir):
     """The whole change: `/inputs/notes.txt` means to a caller's tool what it means to
     `read_file`, with no host path anywhere in the tool.
     """

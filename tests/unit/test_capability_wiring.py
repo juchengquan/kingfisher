@@ -496,7 +496,7 @@ def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, session_dir):
     # Its built-ins arrive by middleware; a name here would raise inside ToolNode.
     assert subagent["tools"] == []
     # By type rather than by position. A subagent carries guards it did not ask
-    # for -- the host-path correction, and the workspace tools' own failures --
+    # for -- the host-path correction, and the offered tools' own failures --
     # and this test is about the allowlist its definition produced.
     (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, GrantedOnlyMiddleware)]
     assert allowlist._allowed == {"read_file", "glob"}

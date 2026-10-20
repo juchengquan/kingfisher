@@ -197,7 +197,7 @@ def http_fetch(url: str) -> str:
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         # Returned rather than raised, so the message names the URL -- a
         # `URLError` alone does not say which fetch failed. Raising would not
-        # have ended the turn: the failure guard turns a workspace tool's
+        # have ended the turn: the failure guard turns an offered tool's
         # exception into a failed result. What returning costs is that status,
         # so a record such as `show-your-work`'s counts this call as succeeded.
         return f"could not fetch {url}: {type(exc).__name__}: {exc}"

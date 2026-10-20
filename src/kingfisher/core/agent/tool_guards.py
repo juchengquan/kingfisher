@@ -1,4 +1,4 @@
-"""The guards a workspace tool carries on itself, where no middleware reaches it."""
+"""The guards an offered tool carries on itself, where no middleware reaches it."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .session_paths import SessionPaths, refusal_text
 
 
 class GuardedTool(BaseTool):
-    """One workspace tool, carrying the guards no middleware can give it.
+    """One offered tool, carrying the guards no middleware can give it.
 
     deepagents runs a compiled subagent as given, and `eval` calls a tool from code, so
     no middleware of kingfisher's is in front of either; the guards travel on the tools.
@@ -76,7 +76,7 @@ class GuardedTool(BaseTool):
 
 
 def guarded_tools(tools: Sequence[Any], paths: SessionPaths | None) -> list[Any]:
-    """The workspace tools a compiled subagent or `eval` is handed, each one wrapped."""
+    """The offered tools a compiled subagent or `eval` is handed, each one wrapped."""
     return [_guarded(one, paths) for one in tools]
 
 

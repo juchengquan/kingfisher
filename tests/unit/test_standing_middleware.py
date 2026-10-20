@@ -38,7 +38,7 @@ TOOLS = [lookup]
 
 def _everything(cfg, session_dir):
     """A build with every branch on: a ledger, memory, the interpreter, a narrowed
-    request, skills, a workspace tool, a declared subagent and a middleware named."""
+    request, skills, an offered tool, a declared subagent and a middleware named."""
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "lookup.py").write_text(A_TOOL, encoding="utf-8")
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -92,13 +92,13 @@ def test_the_agent_is_wrapped_in_standing_then_switched_then_offered(cfg, sessio
         "MemoryMiddleware",
         "CodeInterpreterMiddleware",
         "_Offered",
-        "WorkspaceToolFailureMiddleware",
+        "OfferedToolFailureMiddleware",
     ]
 
 
 def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
     """`general-purpose` built apart from the agent and missing a guard the agent has,
-    which is how it once reached a workspace tool with the paths the model wrote."""
+    which is how it once reached an offered tool with the paths the model wrote."""
     built = _everything(cfg, session_dir)
 
     assert [type(m).__name__ for m in subagent_of(built, "general-purpose")["middleware"]] == [
@@ -110,7 +110,7 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
         "AttachmentsMiddleware",
         "BuiltinToolsMiddleware",
         "_Offered",
-        "WorkspaceToolFailureMiddleware",
+        "OfferedToolFailureMiddleware",
     ]
 
 
@@ -146,7 +146,7 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
     two first and the model read a refusal under a heading for each part."""
     from langchain_core.tools import tool
 
-    from tests.unit.test_workspace_tool_errors import _through
+    from tests.unit.test_offered_tool_errors import _through
 
     stack = standing_middleware(
         "agent",

@@ -26,7 +26,7 @@ _EXPORTS = {
     "QuotaExceededError": "kingfisher.core.session.model",
     "SessionBusyError": "kingfisher.core.session.model",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
-    # For a workspace tool file, outside the wheel by construction, to annotate
+    # For an offered tool file, outside the wheel by construction, to annotate
     # `runtime: ToolRuntime[ToolContext]`: a bare `ToolRuntime` has pydantic warn per call.
     "ToolContext": "kingfisher.core.agent.tool_context",
     "UnknownSessionError": "kingfisher.core.session.model",

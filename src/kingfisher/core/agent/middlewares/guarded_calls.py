@@ -1,4 +1,4 @@
-"""A workspace tool call's paths made real, and a failed call handed back so the turn goes on."""
+"""An offered tool call's paths made real, and a failed call handed back so the turn goes on."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def _handed_back(call: Any, exc: Exception) -> ToolMessage | None:
 
 # The other half of `reject_host_path`.
 class GuardedCallsMiddleware(AgentMiddleware):
-    """Translate a workspace tool call's paths into the session's real ones, and turn what
+    """Translate an offered tool call's paths into the session's real ones, and turn what
     running any call raised into a failed result: a host path refused on any tool, and a
     subagent's model refusing its `task`.
 
@@ -54,7 +54,7 @@ class GuardedCallsMiddleware(AgentMiddleware):
     already and the model carries on; without this, upstream re-raises anything but bad
     arguments, and one wrong path ends the run.
 
-    A workspace tool's own exception is `WorkspaceToolFailureMiddleware`'s, which must sit
+    An offered tool's own exception is `OfferedToolFailureMiddleware`'s, which must sit
     innermost.
     """
 
@@ -116,12 +116,12 @@ class GuardedCallsMiddleware(AgentMiddleware):
             return result
 
 
-class WorkspaceToolFailureMiddleware(AgentMiddleware):
-    """What a workspace tool itself raised, as a failed tool result, so the turn goes on.
+class OfferedToolFailureMiddleware(AgentMiddleware):
+    """What an offered tool itself raised, as a failed tool result, so the turn goes on.
     `GuardedTool` answers a compiled subagent's and `eval`'s the same way, and so must this.
 
     Innermost of every graph, under whatever a deployment's definitions add, because it
-    cannot tell a workspace tool's exception from one raised above it.
+    cannot tell an offered tool's exception from one raised above it.
     """
 
     def __init__(self, names: frozenset[str]) -> None:
@@ -133,7 +133,7 @@ class WorkspaceToolFailureMiddleware(AgentMiddleware):
         if call.get("name") not in self.names:
             return None
         # The type as well as the message, and ahead of the host-path wording a built-in
-        # gets: a workspace tool's exceptions were not written for a model, and
+        # gets: an offered tool's exceptions were not written for a model, and
         # `FileNotFoundError: /inputs/x.csv` reads better than the path alone.
         if isinstance(exc, ToolException):
             # The one exception a tool writes for the model.

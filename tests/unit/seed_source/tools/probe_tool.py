@@ -1,4 +1,4 @@
-"""A workspace tool that exists so seeding has Python to copy."""
+"""An offered tool that exists so seeding has Python to copy."""
 
 from __future__ import annotations
 

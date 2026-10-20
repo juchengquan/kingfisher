@@ -521,8 +521,8 @@ def _tools_seen(cfg, session_dir, capabilities):
     return [one.name for one in _tools_given(cfg, session_dir, capabilities)]
 
 
-def test_a_compiled_subagent_is_granted_the_workspace_tools_it_named(cfg, session_dir):
-    """The one narrowing kingfisher can still apply: it hands the graph the workspace
+def test_a_compiled_subagent_is_granted_the_offered_tools_it_named(cfg, session_dir):
+    """The one narrowing kingfisher can still apply: it hands the graph the offered
     tools this request granted, chosen by name.
     """
     _with_probe(cfg)

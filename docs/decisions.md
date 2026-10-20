@@ -402,7 +402,7 @@ model and tools rather than choosing them. A `.yml` file, in any case, is refuse
 a fixture or a prompt. Refusing every unfamiliar suffix was reversed the day it was
 written. *(2026-08-18, `compiled-subagents.md`.)*
 
-**One stack for every graph that holds the workspace tools.** The agent, a subagent and
+**One stack for every graph that holds the offered tools.** The agent, a subagent and
 deepagents' `general-purpose` each composed their own middleware, and the last got none:
 deepagents fills a spec naming no tools from the parent, so `general-purpose` held the
 agent's tool objects with no host-path guard, no error guard and no path translation.
@@ -450,9 +450,9 @@ probe and `builtin_tools: [write_todos]` would name a tool that is not there. Mo
 waits on the built-ins being read some other way. *(2026-10-17.)*
 
 **Two pairs of standing middleware are one each now.** `GuardedCallsMiddleware` turned
-both kinds of exception into a failed result, a workspace tool's first so it keeps its
+both kinds of exception into a failed result, an offered tool's first so it keeps its
 type, from the outer place, so a `grep` that `BuiltinToolsMiddleware` runs as several
-searches fails once. *(Its workspace-tool half is `WorkspaceToolFailureMiddleware` since
+searches fails once. *(Its offered-tool half is `OfferedToolFailureMiddleware` since
 2026-10-19; see* What a deployment's own middleware raises *under* Tool failure.*)* `GrantedOnlyMiddleware` refuses both what a request was not granted
 and an undeclared subagent, granting everything where nothing was narrowed.
 `core.agent.middlewares.results.failed` builds every failed result kingfisher's own
@@ -473,7 +473,7 @@ directly: a tool returned another session's `inputs/` file and the host's `/etc/
 `/inputs/x` reached a tool untranslated; the shipped `csv_profile` on a missing file
 ended a `Kingfisher.run` turn; and gated `write_file` and `task` ran with no pause. Only
 the backend's host-path refusal and the allowlist the sandbox is built from held. So
-**the granted workspace tools go in as `GuardedTool`s, built-ins as names** -- the
+**the granted offered tools go in as `GuardedTool`s, built-ins as names** -- the
 compiled-subagent exception again, for the same reason, and errors come back to the
 program as text; **a gated tool is left out of `tools.*`, and a gate on `task` turns
 `task()` off**, since gating `eval` itself would put a person in front of arithmetic;
@@ -575,7 +575,7 @@ already settled it -- `interpreter.py` leaves a gated tool out of `tools.*`, "si
 here it would run with nobody asked" -- and a compiled graph is the only other surface a
 call reaches without meeting a gate, so it gets the same answer. Refusing the build
 instead was not taken: a compiled subagent inheriting `["*"]` would stop every deployment
-whose agent gates any workspace tool, over a tool that subagent may never call. The cost
+whose agent gates any offered tool, over a tool that subagent may never call. The cost
 is real and stated rather than hidden -- the subagent loses a capability it inherited, and
 `kingfisher list` grew an `interrupt_on` line so a reader can see which. The exception
 above stands: where **only** a compiled subagent's folder holds the name, withholding
@@ -968,7 +968,7 @@ what decided everything the turn could reach. *(2026-10-19.)*
 `tools:` and `builtin tools:` lines beside an agent's `subagents:`, so which agents list
 `http_fetch` needs no file opened. Under the holder, not as a roll-up by tool: listing is
 the one way to hold a tool, and a roll-up would print that list again sorted the other
-way. A tool is spelt as the workspace tools section spells it, so it reads the same under
+way. A tool is spelt as the offered tools section spells it, so it reads the same under
 every agent.
 
 A star prints beside what it covers today, `* — today csv_profile, ...`, since the names
@@ -1591,7 +1591,7 @@ window.
 
 ## What a tool returns
 
-**A workspace tool's return type is langchain's rule, and kingfisher adds none.**
+**An offered tool's return type is langchain's rule, and kingfisher adds none.**
 Nothing reads a return annotation, and `GuardedCallsMiddleware` catches exceptions and
 passes values through: a dict reaches the model as `json.dumps`, and a `Command` is
 applied by the graph, not wrapped.
@@ -1643,7 +1643,7 @@ line per page, for the agent to read in ranges and `grep`.
 
 **A tool, because a shell is not always there.** A request has a shell only where the
 backend executes and it was granted one, and a remote sandbox has whatever its image
-holds; a workspace tool runs in kingfisher's process and reads through `download_files`,
+holds; an offered tool runs in kingfisher's process and reads through `download_files`,
 which every backend answers. It imports pdfplumber in its body, so without the `agent`
 group only this tool fails -- a tool file that fails to import refuses the whole folder.
 
@@ -1685,8 +1685,8 @@ database, which "does it import" had covered, and holds connections closed:
 
 **A file in a tool's result the model may not take is replaced by a line saying what it
 was.** `AttachmentsMiddleware`, in `standing_middleware`, reads every block carrying a
-file in every tool's result -- a guard on `read_file`'s name is stepped around by a
-workspace tool -- and in the message a `Command` carries. The rest of the result is kept,
+file in every tool's result -- a guard on `read_file`'s name is stepped around by an
+offered tool -- and in the message a `Command` carries. The rest of the result is kept,
 and the call is an error only when nothing else came back. It sits inside the recorder:
 outside, the recorder saved a 0-byte row for a replaced PDF and its stamp left the call
 reading as a success. *(2026-10-13; images, other files, `read_file` and the turn's
@@ -2199,7 +2199,7 @@ cut out of the markdown's text. *(2026-10-20.)*
 
 ## Tool failure
 
-**A workspace tool's exception is a failed tool result, not a dead run.**
+**An offered tool's exception is a failed tool result, not a dead run.**
 `GuardedCallsMiddleware` converts it to a `ToolMessage` with `status="error"`, text whole.
 Built-in tools are untouched but for a refused host path, the one failure they do not
 report themselves; converting the rest would put a second opinion between deepagents and
@@ -2207,12 +2207,12 @@ its own error handling. `BaseException` is not caught: an interrupt is not a too
 the model something. Measured first: the same wrong path cost nothing through
 `read_file` and killed a sixteen-call run through `csv_profile`, depending on which tool
 the model reached for. Subagents and their helpers get the guard too, since they can hold
-the workspace's tools. `on_tool_error` still writes a `tool_error` event for a converted
+offered tools. `on_tool_error` still writes a `tool_error` event for a converted
 exception, which is asserted. *(2026-08-18, `a-tool-failure-is-not-a-crash.md`.)*
 
 **What a deployment's own middleware raises is not this guard's to convert, and it
 cannot tell.** That middleware is appended last, below the guard: driven with one whose
-`wrap_tool_call` raises, a workspace tool's call came back `status="error"` under the
+`wrap_tool_call` raises, an offered tool's call came back `status="error"` under the
 tool's name, while on `read_file` the turn ended with the raw `RuntimeError`. **Left as
 it is.** Telling them apart needs a tag below the deployment block, which means
 interleaving `standing_middleware` with the deployment's in each of the three graphs
@@ -2227,7 +2227,7 @@ architecture review.)*
     about a fault of its own, so the quiet answer blamed the tool for it; and a rule that
     did not run is not a rule, so carrying on is the worse of the two. The conversion was
     the half that could not tell, so it moved rather than gaining a tag:
-    `WorkspaceToolFailureMiddleware` answers for what a workspace tool itself raised and
+    `OfferedToolFailureMiddleware` answers for what an offered tool itself raised and
     goes under the deployment's block, while `GuardedCallsMiddleware` keeps the
     translation and the host-path and `task` conversions in the outer place, where a
     `grep` run as several searches still fails once. Both are in `guarded_calls.py`, so
@@ -2242,31 +2242,31 @@ architecture review.)*
 **A call refused before it runs is answered by the middleware that refused it; what
 running it raised is the guards' that convert.** Its translation is caught around
 itself alone, as `GuardedTool`'s is. Catching everything below it, the translator
-answered a built-in's host-path refusal first on any graph holding a workspace tool,
-appending its rule after a doubled full stop, and gave a workspace tool's own refusal
+answered a built-in's host-path refusal first on any graph holding an offered tool,
+appending its rule after a doubled full stop, and gave an offered tool's own refusal
 that rule in place of its type. Each guard's tests passed alone; only the stack showed
 it. A `ToolException` goes back as written on both routes, being the one exception a
 tool writes for the model.
-`test_a_workspace_tool_fails_alike_through_the_stack_and_on_a_compiled_subagent` holds
+`test_an_offered_tool_fails_alike_through_the_stack_and_on_a_compiled_subagent` holds
 the stack to `GuardedTool`'s answers, which `SessionPaths` says must be the same. The
 `task` hand-back of a subagent's refused model call is here by the same rule, and
 `ModelReplyMiddleware` keeps refusing a cut call. *(2026-10-18.)*
 
-**One middleware rewrites a workspace tool's paths and converts what any call raised,
+**One middleware rewrites an offered tool's paths and converts what any call raised,
 as `GuardedTool` does on a compiled subagent's tools.** The middleware and the tool must
 answer identically, and as two classes the middleware's two catches had already
 disagreed, in the entry above. `GuardedCallsMiddleware` keeps both, the translation's
 around itself alone, and sits where the conversion sat, outside
 `BuiltinToolsMiddleware`, so a split `grep` whose path is refused fails once
 (`test_a_split_grep_whose_path_is_refused_fails_once`). That moved the translation out
-past `AttachmentsMiddleware` and `BuiltinToolsMiddleware`, which read no workspace tool's
+past `AttachmentsMiddleware` and `BuiltinToolsMiddleware`, which read no offered tool's
 arguments: the guards' tests passed with only the class's name and the pinned stacks
 changed. *(2026-10-19.)*
 
-**A workspace tool is handed real paths, resolved against its own session.**
+**An offered tool is handed real paths, resolved against its own session.**
 `GuardedCallsMiddleware` rewrites a `path` argument before the tool sees it, so
-`/inputs/config.ini` means to a workspace tool what it means to `read_file`; how is under
-*A tool's path is the backend's path*. A workspace tool opens files with the operating
+`/inputs/config.ini` means to an offered tool what it means to `read_file`; how is under
+*A tool's path is the backend's path*. An offered tool opens files with the operating
 system, and nothing gives it the backend the file tools close over. It closed a leak too:
 without it the model learned the host layout from the shell, and from there
 `line_count('/workspace/sessions/<other>/secret.txt')` answered. Now that argument
@@ -2278,7 +2278,7 @@ wrapped, because `@tool` objects and plain functions share only the call.
 
 **Corrected: an argument with another name could reach outside the session.** A tool
 taking `input_file`, handed another session's real path, returned `TENANT-A-PRIVATE`.
-Every other string argument of a workspace tool call is refused when it names a host
+Every other string argument of an offered tool call is refused when it names a host
 path -- the file tools' refused roots, `/root/`, `/proc/`, `/sys/`, `/dev/`, or the
 sessions directory, which catches `/workspace/sessions/...` in a container. Defence, not
 a boundary: a relative path, or text a tool turns into a path, still reaches it.
@@ -2750,7 +2750,7 @@ are asked of the same shell. *(2026-10-15.)*
 
 **`HOME` is `scratch` too, and `.home` is gone.** `HOME` had a directory of its own so
 that whatever a tool caches under `~` would land in the session, be swept by `reap` and be
-counted by `session_bytes`. Nothing wrote there: workspace tools run in the kingfisher
+counted by `session_bytes`. Nothing wrote there: offered tools run in the kingfisher
 process and resolve `~` against the operator's home, no shipped asset caches, and the one
 `.home` on disk was empty. The scratchpad already has every property the job needs -- per
 session, swept, counted, writable under all three fences, and `TMPDIR` besides -- so
@@ -3460,7 +3460,7 @@ from one list, `skill_mounts`**, which `backend_at` mounts and the check reads.
 
 ## A tool's path is the backend's path
 
-**A workspace tool's `path` is resolved by the session's backend, under the turn's rules,
+**An offered tool's `path` is resolved by the session's backend, under the turn's rules,
 one path at a time.** Joining the virtual path onto the session directory was a second copy
 of the backend's mapping, drifted three ways, each measured on 2026-09-30: it handed a tool
 `<session>/skills/...`, which does not exist; the real `/.harness` pin and conversation,
@@ -3485,7 +3485,7 @@ path at the call. A startup rule would refuse a deployment over a tool it never 
 default backend, the directory read-only on disk; under `/skills` it is not, the catalogue
 being writable and shared. Decided for a `fill_template(path="/skills/report/template.md")`
 that reads, against a `tidy_whitespace(path=...)` that would rewrite for every session:
-workspace tools are the operator's reviewed code, every shipped one only reads, and
+offered tools are the operator's reviewed code, every shipped one only reads, and
 refusing would leave a path tool unable to read a skill's file.
 
 **`host_path` is part of the documented backend contract**, optional, and checked by
@@ -3672,7 +3672,7 @@ example and `evals/` too. *(2026-09-23.)*
 
 **`kingfisher doctor` exiting zero means nothing in the catalogue will break** -- at startup
 or on a later request. Five refusals escaped it at once: an agent file it never read; a
-middleware directory nothing read; a workspace tool wearing a built-in's name, which made
+middleware directory nothing read; an offered tool wearing a built-in's name, which made
 `doctor` itself crash over a deployment that starts fine; and two definitions naming a moved
 tool, the agent half refused *nowhere* -- it ran without the tool its author granted.
 *(2026-09-14.)*
@@ -3754,11 +3754,11 @@ review.)*
 
 **The inventory's `try` blocks each keep their own catch-set**: exactly the kinds the block
 reads, each extra type carrying its incident -- `CapabilityError` in `_tools`, because the
-tool probe refuses a workspace tool shadowing a built-in; `SubagentError` in the agents
+tool probe refuses an offered tool shadowing a built-in; `SubagentError` in the agents
 walk, because resolving delegation reads the subagent catalogue. One catch-set would say
 each block might fail any way. The agents walk could be narrowed to `AgentError` with all
 2,104 tests green, turning a broken subagent into a traceback over fine agents;
-`test_a_broken_subagent_does_not_take_the_agents_half_down` holds it. The workspace tool
+`test_a_broken_subagent_does_not_take_the_agents_half_down` holds it. The offered tool
 catalogue's read has its own block, since inside the one feeding `bundles_error` a broken
 `tools/` module showed as both `FAIL tools` and `FAIL subagent tools` with no subagents.
 `shadowed` answers `None` where that read failed, and `shadowed_checked` says so: an empty

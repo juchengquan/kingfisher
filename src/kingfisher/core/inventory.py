@@ -587,7 +587,7 @@ def _tools(
     whether the built-in set was read at all, and why no graph could be built.
     """
     builtin: tuple[str, ...] = ()
-    workspace_tools: tuple[str, ...] = ()
+    offered_tools: tuple[str, ...] = ()
     sources: Mapping[str, str] = _NOTHING
     tools_error: str | None = None
     checked = True
@@ -596,7 +596,7 @@ def _tools(
         # one tool name or a module that will not import.
         found = resolved.tools.found
         on_offer = Offering.of(found)
-        workspace_tools = tuple(sorted(on_offer.workspace))
+        offered_tools = tuple(sorted(on_offer.offered))
         sources = MappingProxyType(dict(on_offer.sources))
         # Walked once and handed to the build: a tool module is Python, and a second walk
         # runs every one twice.
@@ -605,7 +605,7 @@ def _tools(
         except ConfigError as exc:
             # The probe builds the default model and its backend, either of which may refuse
             # the deployment: not a fact about `tools/`, so not `tools_error`.
-            return (), workspace_tools, sources, tools_error, False, str(exc)
+            return (), offered_tools, sources, tools_error, False, str(exc)
         if introspected is None:
             # Compiled and then unreadable: the built-in set is unknown, not empty.
             tools_error = (
@@ -616,7 +616,7 @@ def _tools(
             defined = {entry.name for entry in found}
             builtin = tuple(name for name in introspected if name not in defined)
     except (ToolError, CapabilityError) as exc:
-        # `CapabilityError` too: the probe refuses a workspace tool replacing a built-in of
+        # `CapabilityError` too: the probe refuses an offered tool replacing a built-in of
         # the same name, a fact about this deployment's tools.
         tools_error = str(exc)
     except MiddlewareError:
@@ -624,7 +624,7 @@ def _tools(
         # walked fine and `middlewares_error` names the file. Unchecked, not silently empty.
         checked = False
     # `None` for the build: only the early return above has a build error.
-    return builtin, workspace_tools, sources, tools_error, checked, None
+    return builtin, offered_tools, sources, tools_error, checked, None
 
 
 def _agents(
@@ -687,7 +687,7 @@ def inventory(
     unresolved_subagents = _unresolved_subagents(resolved, held)
     miscounted_bundles = _miscounted_bundles(resolved)
 
-    builtin, workspace_tools, sources, tools_error, builtin_checked, build_error = _tools(
+    builtin, offered_tools, sources, tools_error, builtin_checked, build_error = _tools(
         cfg, resolved
     )
 
@@ -767,14 +767,14 @@ def inventory(
     reached_agents = [spec for name, spec in defined_agents.items() if name in for_caller]
     # `same` on both axes: a grant may spell a tool or a skill the long way, `where::what`,
     # where the catalogue has its own name for it.
-    spell = partial(placed, offered=set(workspace_tools))
+    spell = partial(placed, offered=set(offered_tools))
     offers_tool = admitted(
         offers("tools", held, reached_agents, same=spell), shut=_shut_out(resolved, held)
     )
     offers_skill = offers("skills", held, reached_agents, same=registry.identity)
     # Each definition's lines through the answers above rather than a walk of their own: a
     # tool kept out of `tools` for this caller must not come back under whoever grants it.
-    offered_tools = tuple(name for name in workspace_tools if offers_tool(name))
+    for_caller_tools = tuple(name for name in offered_tools if offers_tool(name))
     own_tools = _kept(_without(bundled_tools, held_back), for_caller_subagents)
 
     return Inventory(
@@ -798,7 +798,7 @@ def inventory(
         agent_tools=MappingProxyType(
             {
                 name: _grant(
-                    declared[name].tools, today=offered_tools, spell=spell, keep=offers_tool
+                    declared[name].tools, today=for_caller_tools, spell=spell, keep=offers_tool
                 )
                 for name in for_caller
             }
@@ -825,7 +825,7 @@ def inventory(
         agents_error=agents_error,
         builtin_tools=builtin,
         builtin_tools_checked=builtin_checked,
-        tools=offered_tools,
+        tools=for_caller_tools,
         tool_sources=MappingProxyType(
             {name: where for name, where in sources.items() if offers_tool(name)}
         ),

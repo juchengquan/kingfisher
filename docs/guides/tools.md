@@ -1,4 +1,4 @@
-# Writing a workspace tool
+# Writing an offered tool
 
 A `.py` file in `$KINGFISHER_DEFINITIONS_DIR/tools/` defining `TOOLS` — the list of
 tools it contributes. Nothing is inferred: a helper in the same file stays a
@@ -277,7 +277,7 @@ Error: FileNotFoundError: /inputs/x.csv
 
 Write the exception for that reader. Measured on one deployment before this
 existed: the same wrong path cost nothing through `read_file` and killed a
-sixteen-call run through `csv_profile`, because a workspace tool's exception was
+sixteen-call run through `csv_profile`, because an offered tool's exception was
 the one kind nothing converted. Which of the two happened depended on the tool
 the model reached for, which a deployment cannot predict.
 

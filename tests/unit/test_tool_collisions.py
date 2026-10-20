@@ -159,7 +159,7 @@ def test_a_subagent_can_actually_call_the_one_it_named(cfg, session_dir):
     """The registry says a subagent *holds* it; only a call says it can use it.
 
     Written because a mutation proved the gap: leaving the allowlist keyed on the
-    reference rather than the bare name filters every workspace tool out of the model
+    reference rather than the bare name filters every offered tool out of the model
     request, and every other test here still passed. The subagent would have held its
     `fetch` and never been offered it.
     """
@@ -323,7 +323,7 @@ def test_one_file_defining_a_name_twice_is_still_refused(cfg):
         _ = LocalToolRepository(tools_dir(cfg)).found
 
 
-def test_a_workspace_tool_shadowing_a_builtin_is_still_refused(cfg, session_dir):
+def test_an_offered_tool_shadowing_a_builtin_is_still_refused(cfg, session_dir):
     """The other collapse, which is not fixed by references: a workspace `read_file`
     would take a built-in's name, and the built-in has no file to be told apart by.
     """

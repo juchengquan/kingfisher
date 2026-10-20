@@ -1,4 +1,4 @@
-"""A workspace tool's `path`, resolved where the session's backend keeps it."""
+"""An offered tool's `path`, resolved where the session's backend keeps it."""
 
 from __future__ import annotations
 

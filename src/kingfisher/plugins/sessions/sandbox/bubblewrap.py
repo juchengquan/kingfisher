@@ -2,7 +2,7 @@
 
 Landlock stays first. This one needs only user namespaces, so it works below Landlock's
 ABI 6 (Linux 6.12; EKS nodes commonly run 6.1), and `--unshare-all` closes the shell's
-network -- for a script the agent writes, not for a workspace tool that fetches a URL,
+network -- for a script the agent writes, not for an offered tool that fetches a URL,
 which runs in this process. The price is one seccomp rule, since Docker's default denies
 `clone` with `CLONE_NEWUSER`.
 """

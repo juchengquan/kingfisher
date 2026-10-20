@@ -153,7 +153,7 @@ def a_deleted_session_is_gone(make: Callable[[], Any]) -> None:
 def a_host_path_stays_in_its_session(make: Callable[[], Any]) -> None:
     """Where a backend says a file is on this host, it is that session's file.
 
-    Asked the way a workspace tool's `path` is resolved -- a backend's own `host_path`,
+    Asked the way an offered tool's `path` is resolved -- a backend's own `host_path`,
     or its routes -- because that answer is handed to a tool as a real file to open,
     in kingfisher's own process and outside every fence. An answer pointing into
     another session hands a tool that session's files. `None`, "not on this host", is

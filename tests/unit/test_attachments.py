@@ -411,7 +411,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
     from kingfisher.core.agent.middlewares.step_budget import StepBudget
     from kingfisher.core.session.ledger import Ledger
     from kingfisher.core.session.store import KeptLedger
-    from tests.unit.test_workspace_tool_errors import _through
+    from tests.unit.test_offered_tool_errors import _through
 
     data = "A" * (400 * KB)
 

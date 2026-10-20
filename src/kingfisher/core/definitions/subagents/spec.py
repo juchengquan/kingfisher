@@ -343,7 +343,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         # Empty: a compiled subagent's instruction is inside the graph it brings.
         system_prompt="",
         build=build,
-        # Not `ALL`: a compiled graph is handed only workspace tools, so every built-in
+        # Not `ALL`: a compiled graph is handed only offered tools, so every built-in
         # would be a ceiling nothing fills, and `--run` would report tools withheld.
         builtin_tools=None,
         tools=written_tools,

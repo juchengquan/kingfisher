@@ -309,7 +309,7 @@ def _from_code(cfg, session_dir, code, *, capabilities=NARROWED, agent=None):
         ("tools.peek({path: OTHER})", "FileNotFoundError"),
     ],
 )
-def test_a_workspace_tool_called_from_code_cannot_read_outside_the_session(
+def test_an_offered_tool_called_from_code_cannot_read_outside_the_session(
     cfg, session_dir, call, refused_with
 ):
     """From `eval` a tool reading its own argument returned another session's file and
@@ -340,7 +340,7 @@ def test_a_path_handed_to_a_tool_from_code_is_this_sessions(cfg, session_dir):
 
 
 def test_a_tool_that_raises_under_code_fails_the_call_and_not_the_turn(cfg, session_dir):
-    """Uncaught in the program, a workspace tool's `FileNotFoundError` ended the turn:
+    """Uncaught in the program, an offered tool's `FileNotFoundError` ended the turn:
     `GuardedCallsMiddleware` wraps a tool call, and a call from code is not one.
     """
     wired = replace(cfg, interpreter_enabled=True)
@@ -372,7 +372,7 @@ def test_a_tool_taking_the_turns_backend_still_gets_it_from_code(cfg, session_di
 
 @pytest.mark.parametrize(
     ("gated", "spelled"),
-    # A built-in, which reaches the sandbox by name, and a workspace tool, which
+    # A built-in, which reaches the sandbox by name, and an offered tool, which
     # reaches it as an object: two lists, and a gate has to empty both.
     [("write_file", "writeFile"), ("peek", "peek")],
 )
