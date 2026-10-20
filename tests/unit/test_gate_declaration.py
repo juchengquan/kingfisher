@@ -26,8 +26,8 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.documents import DefinitionText
-from kingfisher.core.request import Request
-from kingfisher.core.result import AWAITING
+from kingfisher.core.request import Decision, Request, Resume
+from kingfisher.core.result import AWAITING, END_TURN
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
     EVERY_TOOL,
@@ -39,6 +39,7 @@ from tests.conftest import (
 )
 from tests.unit.scripted import Scripted
 from tests.unit.test_bundles import compiled_bundle
+from tests.unit.test_subagent_helpers import HELPER, REVIEWER
 
 WRITES = [
     AIMessage(
@@ -159,11 +160,9 @@ def test_the_gates_reach_deepagents_as_the_argument_a_subagent_inherits(
     subagent format -- so what it stops on has to arrive from its parent, or a
     workspace could gate the shell and lose the gate the moment work was delegated.
 
-    What this checks is the half kingfisher owns: the top-level argument is set, and
-    nothing per-subagent is, so deepagents' own inheritance is the only route there is.
-    The pause itself is driven at the end of this file, where a turn runs through the
-    service: a change in how deepagents propagates the argument passes here and fails
-    there.
+    What this checks is the agent's own argument. The pause itself is driven at the end
+    of this file, where a turn runs through the service, a helper two levels down
+    included: a change in how the mapping reaches a subagent passes here and fails there.
     """
     directory = cfg.definitions / "subagents"
     directory.mkdir(exist_ok=True)
@@ -465,3 +464,62 @@ def test_the_same_compiled_subagent_without_the_gate_is_handed_it(
     _surveyed(scripted, gate=None)
 
     assert marker.exists(), "the compiled subagent never called the catalogue's tool"
+
+
+def _consulted(cfg) -> Any:
+    """The agent delegates to `reviewer`, which consults `second-opinion`, which writes."""
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    for body in (REVIEWER, HELPER):
+        name = body.split("\n")[0].removeprefix("name: ")
+        (subagents_dir(cfg) / f"{name}.yaml").write_text(body, encoding="utf-8")
+    an_agent(cfg, subagents="[reviewer, second-opinion]", interrupt_on="[write_file]", **EVERY_TOOL)
+    Scripted.script.extend(
+        [
+            *(
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "task",
+                            "args": {"description": "check it", "subagent_type": who},
+                            "id": f"t-{who}",
+                        }
+                    ],
+                )
+                for who in ("reviewer", "second-opinion")
+            ),
+            WRITES[0],
+            AIMessage(content="helper done"),
+            AIMessage(content="reviewer done"),
+            AIMessage(content="parent done"),
+        ]
+    )
+    start(cfg, "s")
+    return Kingfisher(cfg, sessions=LocalSessions())
+
+
+@pytest.mark.parametrize(("action", "written"), [("approve", True), ("reject", False)])
+def test_a_helper_two_levels_down_stops_at_the_agents_gate(scripted, action, written):
+    """A helper is built by a `SubAgentMiddleware` kingfisher constructs, which deepagents
+    hands none of the agent's gates, so `second-opinion` wrote the gated file unpaused.
+    Answered as well as raised: a pause nobody can resume is no better than none.
+    """
+    service = _consulted(scripted)
+    written_to = scripted.workspace / "sessions" / "s" / "outputs" / "a.txt"
+
+    paused = service.run(Request("go", agent="only", session_id="s"))
+
+    assert paused.stop_reason == AWAITING, "the helper's gated write ran unapproved"
+    assert [call.tool for call in paused.pending] == ["write_file"]
+    assert not written_to.exists()
+
+    answered = service.run(
+        Resume(
+            session_id="s",
+            decisions=(Decision(call_id=paused.pending[0].call_id, action=action),),
+        )
+    )
+
+    assert answered.stop_reason == END_TURN
+    assert answered.answer == "parent done"
+    assert written_to.exists() is written
