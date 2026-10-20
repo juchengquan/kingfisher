@@ -92,14 +92,12 @@ class PermittedBackend(BackendProtocol):
             )
             raise UnsafeReferenceError(msg)
         root, candidate = mapped
-        # Resolved before comparing, against the root that answered: the agent can make a
-        # link, and one pointing out of its route must not widen what a tool is handed.
         real = candidate.resolve()
-        if root is not None and not real.is_relative_to(root.resolve()):
-            msg = (
-                f"reference {path!r} resolves outside this session; a link inside it "
-                "does not widen it"
-            )
+        # Refused, not resolved and judged again: the rules judged the path typed, and a
+        # link the shell planted at `/scratchpad/x` reaches `.harness` without leaving
+        # the session. A root that answered is already resolved, as upstream roots one.
+        if root is not None and real != candidate:
+            msg = f"{where} is or runs through a link, and a tool is handed none"
             raise UnsafeReferenceError(msg)
         return real
 

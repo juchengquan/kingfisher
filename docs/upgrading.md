@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A workspace tool is handed no link, after #1003
+
+- **A workspace tool's `path` that is or runs through a link is refused**, as a failed
+  tool result reading "… is or runs through a link, and a tool is handed none", where
+  it was handed the link's target whenever that stayed in the session. The shell can
+  make a link, so `/scratchpad/link` pointing at `.harness/agent.yaml` handed a tool the
+  pinned agent. The same holds on every route, `/skills/` included: name the file the
+  link points to. A backend with its own `host_path` is not affected.
+
 ## A model call's cost in steps is counted off the agent's graph, after #1000
 
 - **A subagent may make `KINGFISHER_RECURSION_LIMIT` ÷ the steps one of the agent's model
