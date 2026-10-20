@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## An overload inside a stream stops the turn, after #999
+
+- **A turn can end with `stop_reason: model_unavailable` on an error Anthropic sends
+  after a response has begun**: an `overloaded_error`, `api_error` or
+  `rate_limit_error` that escaped `run` and `stream` as the SDK's `APIStatusError`
+  with status 200. The `cut_short` event names the type and the provider's message.
+  Any other type sent that way still raises.
+
 ## Definitions refuse what would have loaded wrong, after #994
 
 - **A key written twice in one YAML mapping is refused**, at any depth, in an agent or
