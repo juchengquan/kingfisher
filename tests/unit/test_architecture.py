@@ -93,7 +93,7 @@ def _submodules_taken(path: Path, node: ast.ImportFrom, source: str) -> set[str]
 
 def _is_a_module_under(root: Path, dotted: str) -> bool:
     """Matched against the folder's own entries, never `exists()`: a case-insensitive
-    filesystem finds `access/capabilities.py` for the class `access.Capabilities`."""
+    filesystem finds `access/capabilities.py` for the class `core.access.Capabilities`."""
     *packages, last = dotted.split(".")
     folder = root.joinpath(*packages)
     entries = {entry.name for entry in folder.iterdir()} if folder.is_dir() else set()
@@ -681,13 +681,18 @@ def test_the_decorator_rule_reads_a_stack_the_way_python_applies_it(shape):
 def _documents() -> list[Path]:
     """The prose that is only prose, and names modules for a living."""
     found = [*(REPO / "docs").rglob("*.md")] if (REPO / "docs").is_dir() else []
-    found += [REPO / name for name in ("README.md", "CLAUDE.md")]
+    found += [REPO / name for name in ("README.md", "CLAUDE.md", "GLOSSARY.md")]
     return sorted(p for p in found if p.is_file())
 
 
 def _prose_bearing_files() -> list[Path]:
     """Everything the prose rule reads, named once so a companion can check it."""
-    return [*_everything_that_imports_kingfisher(), *_documents()]
+    shipped = sorted(
+        path
+        for path in (REPO / ASSETS_AREA).rglob("*")
+        if path.suffix in {".py", ".md"} and "__pycache__" not in path.parts
+    )
+    return [*_everything_that_imports_kingfisher(), *_documents(), *shipped]
 
 
 def _names_a_real_module(module: str) -> bool:
@@ -761,8 +766,10 @@ def _prose_roots(root: Path = SRC) -> tuple[str, ...]:
 
 
 PROSE_ROOTS = _prose_roots()
+#: A segment is any identifier: a class or a constant named under a module is as much a
+#: claim as a function, and a lowercase-only pattern let one nobody defines through.
 PROSE_REF = re.compile(
-    r"`((?:kingfisher\.)?(?:" + "|".join(PROSE_ROOTS) + r")(?:\.[a-z_]+)+)`"
+    r"`((?:kingfisher\.)?(?:" + "|".join(PROSE_ROOTS) + r")(?:\.[A-Za-z_][A-Za-z0-9_]*)+)`"
 )
 
 #: Tails that make a reference a filename rather than a module path. Not needed
@@ -782,7 +789,14 @@ NOT_A_MODULE = frozenset({
 #: in `domain/subagent.py` as a live pointer at where a spec is translated. One
 #: is the rule doing its job and the other is the defect it exists to catch, and
 #: a table keyed by name alone would have to excuse both.
-PROSE_GONE: dict[str, frozenset[str]] = {}
+PROSE_GONE: dict[str, frozenset[str]] = {
+    "docs/decisions.md": frozenset({"subagents.spec.DIRECTORY"}),
+    "docs/upgrading.md": frozenset({"core.interfaces.ThreadStore"}),
+    # The dead names the liveness rules were written against, quoted as such.
+    "tests/unit/test_architecture.py": frozenset({
+        "core.access.capabilities.AXES", "subagents.spec.DIRECTORY",
+    }),
+}
 
 
 def _module_file(name: str) -> Path | None:
@@ -813,6 +827,15 @@ def _defined_names(path: Path) -> set[str]:
     for node in tree.body:
         if isinstance(node, ast.ClassDef):
             names |= declared(node.body)
+        # A lazy package defines its exports only through `__getattr__`, which serves
+        # exactly what `__all__` lists.
+        elif isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets
+        ):
+            names |= {
+                item.value for item in ast.walk(node.value)
+                if isinstance(item, ast.Constant) and isinstance(item.value, str)
+            }
     return names
 
 
@@ -845,6 +868,21 @@ def test_prose_naming_a_module_names_one_that_exists():
         f"{stale} name kingfisher modules that do not exist — something moved "
         "and the comment about it did not"
     )
+
+
+def test_every_excused_module_reference_is_named_and_gone():
+    """An excusal for prose since edited away, or a name since restored, excuses nothing."""
+    dead = []
+    for relative, excused in PROSE_GONE.items():
+        text = (REPO / relative).read_text(encoding="utf-8")
+        named = {ref.removeprefix("kingfisher.") for ref in PROSE_REF.findall(text)}
+        dead += [
+            f"{relative}: `{reference}`"
+            for reference in sorted(excused)
+            if reference not in named or not _prose_unresolved(f"`{reference}`")
+        ]
+
+    assert not dead, f"{dead} are excused in PROSE_GONE and need not be"
 
 
 #: A docstring's last line, when it has promised something that is not there.
@@ -1154,6 +1192,12 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     # that make the unrestricted version unusable.
     assert _prose_unresolved("`models.yaml`, `run.py`, `importlib.resources`") == []
 
+    # A class or a constant is a segment like any other, and was read as none.
+    for absent in ("core.access.NoSuchClass", "core.definitions.skills.spec.NO_SUCH"):
+        assert _prose_unresolved(f"`{absent}`") == [absent], absent
+    # And a lazy package's exports exist though only `__getattr__` makes them.
+    assert _prose_unresolved("`kingfisher.plugins.Plugins`, `core.access.Capabilities`") == []
+
 
 def test_the_prose_roots_are_read_off_the_tree_and_not_written_down(tmp_path):
     """The list was corrected once; this is what stops it needing correcting again."""
@@ -1257,6 +1301,9 @@ def test_the_documents_are_read_by_the_prose_rule():
 
     assert "docs/decisions.md" in scanned, "the file the rule most needs to read"
     assert "CLAUDE.md" in scanned
+    assert "GLOSSARY.md" in scanned, "the file that says what each word means"
+    # What a deployment copies into its own workspace, read by everyone who copies it.
+    assert {"assets/README.md", "assets/tools/line_count.py"} <= scanned
     # Asserted through what the rule reads rather than through `_documents()`,
     # so dropping the documents from the scan fails here instead of passing.
     assert "src/kingfisher/core/service.py" in scanned, (
@@ -2876,7 +2923,8 @@ def test_the_world_rule_sees_a_bare_open_and_not_a_name_that_shadows_it(tmp_path
 #: Calls that *change* the filesystem, as opposed to reading it or the
 #: environment. `open`, `replace` and `copy` are left out because `Sessions.open`,
 #: `dataclasses.replace` and a compiled graph's `copy` are named the same, and all three
-#: are legitimate where this rule runs; `shutil.copy` is refused by its import instead.
+#: are legitimate where this rule runs; `shutil.copy` is refused by its import instead,
+#: in either spelling, since `from shutil import copy2` calls a bare name.
 MUTATING_CALLS = frozenset({
     "mkdir", "rmdir", "rmtree", "copytree", "copyfile", "move",
     "write_text", "write_bytes", "unlink", "touch", "chmod", "rename",
@@ -2892,7 +2940,9 @@ def _disk_writes(path: Path) -> list[str]:
     """Each `shutil` import and filesystem-changing call in one module, by line."""
     found = []
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.Import) and any(a.name == "shutil" for a in node.names):
+        if (isinstance(node, ast.Import) and any(a.name == "shutil" for a in node.names)) or (
+            isinstance(node, ast.ImportFrom) and node.module == "shutil"
+        ):
             found.append(f"{node.lineno} imports shutil")
         elif (
             isinstance(node, ast.Call)
@@ -2933,6 +2983,23 @@ def test_the_flat_core_does_not_write_to_disk_itself():
         f"{offenders} write to disk from the flat core — put it beside the write it "
         "belongs with, as `core/session/files.py` holds placing a request's inputs"
     )
+
+
+def test_the_disk_write_rule_reads_shutil_however_it_is_imported(tmp_path):
+    """A `from shutil import copy2` in the flat core copied a file and the rule read neither line.
+
+    Both directions, as for the mode rule: it runs over a tree with no offenders.
+    """
+    guilty = tmp_path / "service.py"
+    guilty.write_text("def place(a, b):\n    from shutil import copy2\n    copy2(a, b)\n")
+    innocent = tmp_path / "records.py"
+    innocent.write_text(
+        "from dataclasses import replace\n\n"
+        "def place(a, sessions):\n    sessions.open(a)\n    return replace(a, b=1)\n"
+    )
+
+    assert _disk_writes(guilty) == ["2 imports shutil"], "the spelling that went unread"
+    assert _disk_writes(innocent) == [], "the same-named calls this rule leaves alone"
 
 
 def _mode_changes(path: Path) -> list[int]:
@@ -2998,8 +3065,23 @@ def test_the_mode_rule_can_tell_a_chmod_from_the_calls_around_it(tmp_path):
     assert _mode_changes(innocent) == [], "the neighbouring filesystem calls are not modes"
 
 
+def _replaces_an_attribute(func: ast.expr) -> bool:
+    """Whether a call through `func` swaps something out: a setattr, or `mock.patch` in
+    any of its forms -- `patch(...)`, `patch.object(...)`, `patch.dict(...)`."""
+    if isinstance(func, ast.Name):
+        # a substring, so `object.__setattr__` is a setattr too
+        return "setattr" in func.id or func.id == "patch"
+    if isinstance(func, ast.Attribute):
+        return "setattr" in func.attr or func.attr == "patch" or _replaces_an_attribute(func.value)
+    return False
+
+
+def _test_modules() -> list[Path]:
+    return sorted(p for p in (REPO / "tests").rglob("*.py") if "__pycache__" not in p.parts)
+
+
 def _agent_construction_stubs(path: Path) -> list[int]:
-    """The lines on which a module's `setattr` call names `create_deep_agent`.
+    """The lines on which a module's setattr or patch call names `create_deep_agent`.
 
     The whole call rather than the line it starts on, or a stub whose arguments wrap
     onto the next line goes unseen.
@@ -3009,18 +3091,18 @@ def _agent_construction_stubs(path: Path) -> list[int]:
         node.lineno
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute | ast.Name)
-        # a substring, so `object.__setattr__` is a setattr too
-        and "setattr" in (node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id)
+        and _replaces_an_attribute(node.func)
         and "create_deep_agent" in ast.unparse(node)
     )
 
 
 def test_no_test_stubs_out_agent_construction():
     """The blind spot, closed and kept closed."""
+    # Every module under tests/, since a fixture in `conftest.py` or a helper stubs for
+    # every test that uses it.
     offenders = [
-        f"{path.name}:{line}"
-        for path in sorted(Path(__file__).resolve().parent.glob("test_*.py"))
+        f"{path.relative_to(REPO).as_posix()}:{line}"
+        for path in _every(_test_modules(), "the tests")
         for line in _agent_construction_stubs(path)
     ]
 
@@ -3068,6 +3150,41 @@ def test_the_stub_rule_reads_a_call_that_wraps(tmp_path):
     assert _agent_construction_stubs(one_line) == [2], "the one-line form was caught before"
     assert _agent_construction_stubs(bare) == [2, 4], "the builtins stub as much as the fixture"
     assert _agent_construction_stubs(innocent) == [], "naming it outside a setattr is not a stub"
+
+
+def test_the_stub_rule_reads_mock_patch_and_the_whole_test_tree(tmp_path):
+    """A `mock.patch` of `create_deep_agent`, or a stub in `conftest.py`, went unread.
+
+    Both directions, as for the mode rule: it runs over a tree with no offenders.
+    """
+    patched = tmp_path / "test_patched.py"
+    patched.write_text(
+        "from unittest import mock\n"
+        "from unittest.mock import patch\n\n"
+        '@mock.patch("kingfisher.core.agent.assembly.create_deep_agent")\n'
+        "def test(fake):\n"
+        '    with patch("assembly.create_deep_agent", fake):\n'
+        "        pass\n"
+        '    with mock.patch.object(assembly, "create_deep_agent", fake):\n'
+        "        pass\n"
+        '    with patch.dict(vars(assembly), {"create_deep_agent": fake}):\n'
+        "        pass\n"
+    )
+    innocent = tmp_path / "test_innocent.py"
+    innocent.write_text(
+        "from unittest import mock\n\n"
+        "def test():\n"
+        '    with mock.patch("assembly.other", fake):\n'
+        "        assert built(create_deep_agent)\n"
+    )
+
+    assert _agent_construction_stubs(patched) == [4, 6, 8, 10]
+    assert _agent_construction_stubs(innocent) == [], "patching something else is not a stub"
+
+    walked = {path.relative_to(REPO).as_posix() for path in _test_modules()}
+    assert {"tests/conftest.py", "tests/unit/scripted.py"} <= walked, (
+        "a fixture or a helper stubs for every test that uses it"
+    )
 
 
 def test_only_one_module_decides_what_a_skill_is():
@@ -3713,7 +3830,18 @@ def test_the_stop_reasons_are_what_the_package_assigns():
     )
 
 
-def _decides_from_a_stop_reason(node: ast.Compare) -> bool:
+def _reason_constants() -> frozenset[str]:
+    """The names `core/result.py` gives a stop reason, which spell one as surely as its text."""
+    from kingfisher.core import result as result_module
+    from kingfisher.core.result import STOP_REASONS
+
+    return frozenset(
+        name for name, value in vars(result_module).items()
+        if isinstance(value, str) and value in set(STOP_REASONS)
+    )
+
+
+def _decides_from_a_stop_reason(node: ast.Compare, constants: frozenset[str]) -> bool:
     """One comparison that reads a decision out of a stop reason's spelling."""
     operands = [node.left, *node.comparators]
     reads = any(
@@ -3721,11 +3849,45 @@ def _decides_from_a_stop_reason(node: ast.Compare) -> bool:
         or (isinstance(operand, ast.Name) and operand.id == "stop_reason")
         for operand in operands
     )
-    literal = any(
-        isinstance(operand, ast.Constant) and isinstance(operand.value, str)
-        for operand in operands
-    )
-    return reads and literal
+
+    def spells_one(operand: ast.expr) -> bool:
+        if isinstance(operand, ast.Tuple | ast.List | ast.Set):
+            return any(spells_one(item) for item in operand.elts)
+        return (isinstance(operand, ast.Constant) and isinstance(operand.value, str)) or (
+            (isinstance(operand, ast.Name) and operand.id in constants)
+            or (isinstance(operand, ast.Attribute) and operand.attr in constants)
+        )
+
+    return reads and any(spells_one(operand) for operand in operands)
+
+
+def _stop_reason_decisions(tree: ast.Module, constants: frozenset[str]) -> list[int]:
+    """The lines deciding something from a stop reason, short of choosing the next one.
+
+    `if turn.stop_reason == END_TURN: turn.stop_reason = AWAITING` is the runner refining
+    the reason it produces, not a surface reading one, so a test guarding an assignment
+    to `stop_reason` is left alone.
+    """
+    refining = {
+        id(compare)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.If)
+        and any(
+            isinstance(target, ast.Attribute | ast.Name)
+            and getattr(target, "attr", getattr(target, "id", None)) == "stop_reason"
+            for statement in node.body
+            if isinstance(statement, ast.Assign)
+            for target in statement.targets
+        )
+        for compare in ast.walk(node.test)
+    }
+    return [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Compare)
+        and id(node) not in refining
+        and _decides_from_a_stop_reason(node, constants)
+    ]
 
 
 def test_no_surface_decides_for_itself_what_a_finished_turn_is():
@@ -3741,18 +3903,49 @@ def test_no_surface_decides_for_itself_what_a_finished_turn_is():
     `RunResult.completed`, and the only place a new one can be written is the place
     that already has it.
     """
+    constants = _reason_constants()
     decided = []
     trees = [path for path in SRC.rglob("*.py") if path != SRC / "core" / "result.py"]
     for path in sorted(trees):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Compare) and _decides_from_a_stop_reason(node):
-                decided.append(f"{path.relative_to(REPO)}:{node.lineno}")
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        decided += [
+            f"{path.relative_to(REPO)}:{line}" for line in _stop_reason_decisions(tree, constants)
+        ]
 
     assert not decided, (
-        f"a stop reason compared against a literal outside core/result.py: {decided} "
+        f"a stop reason compared against its spelling outside core/result.py: {decided} "
         "— ask `RunResult.completed` instead, or the surfaces that ask will disagree "
         "about a reason added later and nothing will go red"
     )
+
+
+def test_the_finished_turn_rule_reads_every_spelling_of_a_reason():
+    """`stop_reason in ("end_turn", "max_steps")` decided a finished turn, and passed.
+
+    Both directions, as for the mode rule: it runs over a tree with no offenders.
+    """
+    constants = _reason_constants()
+    assert {"END_TURN", "AWAITING"} <= constants, "the names the runner assigns by"
+    deciding = {
+        "a literal": 'done = result.stop_reason == "end_turn"\n',
+        "a tuple of literals": 'done = stop_reason in ("end_turn", "max_steps")\n',
+        "a constant": "done = result.stop_reason == END_TURN\n",
+        "a constant off the module": "done = stop_reason in {result.END_TURN, result.AWAITING}\n",
+        "an if that only reads": "if turn.stop_reason == END_TURN:\n    delete(turn)\n",
+    }
+    leaving = {
+        "the runner refining its reason": (
+            "if turn.stop_reason == END_TURN:\n    turn.stop_reason = AWAITING\n"
+        ),
+        "a reason checked against the list": "known = stop_reason in STOP_REASONS\n",
+        "some other field": 'done = turn.kind == "end_turn"\n',
+    }
+
+    def read(source: str) -> list[int]:
+        return _stop_reason_decisions(ast.parse(source), constants)
+
+    assert [name for name, source in deciding.items() if not read(source)] == []
+    assert [name for name, source in leaving.items() if read(source)] == []
 
 
 def _kinds_branched_on(source: str) -> set[str]:
@@ -3919,10 +4112,10 @@ def _referenced_in_code() -> set[str]:
 #
 # A bare name cannot say whose it is. `layout.denied_scopes` outlived every caller for as
 # long as `Layout.denied_scopes` was called, and `subagents.spec.DIRECTORY` for as long as
-# `agents.spec.DIRECTORY` was imported: a dead name passed by sharing a live one's
-# spelling. So a module-level name is resolved to the module defining it, and is live
-# only if something live reaches it -- which also catches a table read only by the dead
-# functions beside it, as `layout.ROUTES` was.
+# `core.definitions.agents.spec.DIRECTORY` was imported: a dead name passed by sharing a
+# live one's spelling. So a module-level name is resolved to the module defining it, and
+# is live only if something live reaches it -- which also catches a table read only by
+# the dead functions beside it, as `layout.ROUTES` was.
 
 #: The two addresses whose `__init__` publishes what it imports.
 PUBLIC_ADDRESSES = ("kingfisher", "kingfisher.plugins")
@@ -3934,13 +4127,15 @@ Named = tuple[str, str]
 def _module_definitions(tree: ast.Module) -> dict[str, tuple[str, list[ast.stmt]]]:
     """What a module defines at its top level that a rule here asks about, by kind.
 
-    A decorated function is registered by its decorator and a dunder by Python, so both
-    are left to the module's own reads rather than asked whether anything calls them.
+    A dunder is called by Python, so it is left to the module's own reads rather than
+    asked whether anything calls it.
     """
     found: dict[str, tuple[str, list[ast.stmt]]] = {}
     for node in tree.body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-            if not node.decorator_list and not node.name.startswith("__"):
+            # Decorated too: every decorator in the package wraps (`cache`,
+            # `contextmanager`) rather than registers, so nothing calls the function for it.
+            if not node.name.startswith("__"):
                 found.setdefault(node.name, ("definition", []))[1].append(node)
         elif isinstance(node, ast.ClassDef):
             found.setdefault(node.name, ("definition", []))[1].append(node)
@@ -3950,6 +4145,22 @@ def _module_definitions(tree: ast.Module) -> dict[str, tuple[str, list[ast.stmt]
                 if isinstance(target, ast.Name) and target.id.isupper():
                     found.setdefault(target.id, ("constant", []))[1].append(node)
     return found
+
+
+def test_a_decorated_function_is_a_definition_like_any_other():
+    """A `@cache` function nothing calls was never asked whether anything did.
+
+    Both directions, as for the mode rule: the tree has no dead decorated function.
+    """
+    source = (
+        "from functools import cache\n\n"
+        "@cache\ndef cached():\n    return 1\n\n"
+        "def plain():\n    return 2\n\n"
+        "def __getattr__(name):\n    return name\n"
+    )
+
+    defined = _module_definitions(ast.parse(source))
+    assert set(defined) == {"cached", "plain"}, "the dunder is Python's to call"
 
 
 def _top_level(tree: ast.Module) -> list[ast.stmt]:
@@ -4958,7 +5169,8 @@ def test_the_provider_lookup_is_not_fooled_by_a_shared_root_name():
 #:
 #: -- while the unrestricted form, matching any capitalised head, cannot tell a
 #: class this package owns from one it is describing in someone else's library.
-PROSE_ATTR = re.compile(r"`([A-Z][A-Za-z0-9]*)\.([a-z_][a-z0-9_]*)`")
+#: The attribute is any identifier, called or not: a constant on a class is as much a claim.
+PROSE_ATTR = re.compile(r"`([A-Z][A-Za-z0-9]*)\.([A-Za-z_][A-Za-z0-9_]*)(?:\(\))?`")
 
 #: Prose naming a class attribute *because* it is gone, excused per file for the
 #: reason `PROSE_GONE` is: one name was a removal in `upgrading.md` and a wrong
@@ -4970,13 +5182,14 @@ PROSE_ATTR_GONE: dict[str, frozenset[str]] = {
         "Config.session_backends_factory", "Config.session_id", "Config.sessions_factory",
         "Config.shell_path_extra", "Config.shell_sandbox", "Kingfisher.agent_named",
         "Kingfisher.artifact", "Kingfisher.held_for", "Kingfisher.pending",
-        "Kingfisher.session_size", "Request.data", "RunResult.log_path",
-        "RunResult.session_dir",
+        "Kingfisher.session_size", "Plugins.threads", "Request.data",
+        "RunResult.log_path", "RunResult.session_dir",
     }),
     # What a decision removed, or declined to build.
     "docs/decisions.md": frozenset({
         "Capabilities.including", "Config.paths", "Config.shell",
-        "Kingfisher.remember_agent", "Request.input_refs", "Request.skill_refs",
+        "Kingfisher.remember_agent", "Plugins.threads", "Request.input_refs",
+        "Request.skill_refs",
     }),
     # The wrong citations this rule was written against, quoted as such.
     "tests/unit/test_architecture.py": frozenset({
@@ -4993,14 +5206,16 @@ def _has_attribute(cls: type, attr: str) -> bool:
 
 
 def _exported_classes() -> dict[str, type]:
-    """The public names that are classes, resolved through the lazy front door."""
-    import kingfisher
+    """The public names that are classes, resolved through both lazy front doors."""
+    import importlib
 
-    found = {}
-    for name in kingfisher.__all__:
-        value = getattr(kingfisher, name)
-        if isinstance(value, type):
-            found[name] = value
+    found: dict[str, type] = {}
+    for address in PUBLIC_ADDRESSES:
+        door = importlib.import_module(address)
+        for name in door.__all__:
+            value = getattr(door, name)
+            if isinstance(value, type):
+                found.setdefault(name, value)
     return found
 
 
@@ -5044,12 +5259,17 @@ def test_the_class_attribute_rule_is_looking_at_something():
     """A rule that resolves no classes passes every module it is pointed at."""
     classes = _exported_classes()
     assert len(classes) >= 10, f"only {len(classes)} exported classes resolved"
-    for name in ("Config", "Capabilities", "Kingfisher", "Request"):
+    for name in ("Config", "Capabilities", "Kingfisher", "Request", "LocalSessions", "Layout"):
         assert name in classes, f"{name} is exported and is a class, but was not collected"
 
     # And the matcher has to find the shape it is about.
     assert PROSE_ATTR.findall("see `Config.resolve_model` for this") == [
         ("Config", "resolve_model")
+    ]
+    # Built rather than written, or this file would be prose citing a constant nobody has.
+    tick = "`"
+    assert PROSE_ATTR.findall(f"{tick}Layout.MARKER{tick} and `RunResult.completed()`") == [
+        ("Layout", "MARKER"), ("RunResult", "completed"),
     ]
     assert PROSE_ATTR.findall("`models.yaml` and `core.session`") == []
 

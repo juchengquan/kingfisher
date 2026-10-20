@@ -406,7 +406,7 @@ def _raised_by(exc: BaseException) -> str:
     return f"{deepest[0]}::{deepest[1]}"
 
 
-def _errors_that_can_occur() -> set[str]:
+def _errors_that_can_occur(paths: list[Path] | None = None) -> set[str]:
     """Every error class something in the package actually produces.
 
     A `raise` of it, or it handed to somebody who raises what they are given --
@@ -415,9 +415,20 @@ def _errors_that_can_occur() -> set[str]:
     """
     import ast
 
+    trees = [ast.parse(p.read_text(encoding="utf-8")) for p in paths or sorted(SRC.rglob("*.py"))]
+    # Where each function that takes the class it raises takes it positionally. Any
+    # other call is not one: `suppress(ToolError)` names an error and produces none.
+    raises_its = {
+        node.name: [a.arg for a in [*node.args.posonlyargs, *node.args.args]].index("error")
+        for tree in trees
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        and "error" in [a.arg for a in [*node.args.posonlyargs, *node.args.args]]
+    }
+
     found: set[str] = set()
-    for path in sorted(SRC.rglob("*.py")):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+    for tree in trees:
+        for node in ast.walk(tree):
             if isinstance(node, ast.Raise):
                 name = getattr(getattr(node.exc, "func", None), "id", None)
                 if name:
@@ -426,9 +437,10 @@ def _errors_that_can_occur() -> set[str]:
                 for word in node.keywords:
                     if word.arg == "error" and isinstance(word.value, ast.Name):
                         found.add(word.value.id)
-                for argument in node.args:
-                    if isinstance(argument, ast.Name) and argument.id.endswith("Error"):
-                        found.add(argument.id)
+                callee = getattr(node.func, "id", getattr(node.func, "attr", None))
+                at = raises_its.get(callee)
+                if at is not None and at < len(node.args) and isinstance(node.args[at], ast.Name):
+                    found.add(node.args[at].id)
     return found
 
 
@@ -449,6 +461,26 @@ def test_every_error_this_table_names_can_actually_happen():
         f"{impossible} are named here and raised by nothing -- delete the class, or "
         "the table is describing a refusal that cannot happen"
     )
+
+
+def test_an_error_only_suppressed_is_not_one_that_happens(tmp_path):
+    """`suppress(ToolError, ...)` counted as producing `ToolError`, so it outlived its raises.
+
+    Both directions: the package raises every error the table names, so the rule above
+    passes whether or not it can tell.
+    """
+    module = tmp_path / "reading.py"
+    module.write_text(
+        "def fields_of(definition, error):\n    raise error(definition)\n\n"
+        "def read(definition):\n"
+        "    with suppress(SuppressedError, OSError):\n"
+        "        return fields_of(definition, HandedError)\n"
+        "    raise RaisedError()\n",
+        encoding="utf-8",
+    )
+
+    named = {"SuppressedError", "HandedError", "RaisedError"}
+    assert _errors_that_can_occur([module]) & named == {"HandedError", "RaisedError"}
 
 
 def test_every_refusal_in_the_catalogue_is_named():

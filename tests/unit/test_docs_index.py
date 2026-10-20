@@ -168,11 +168,9 @@ CITATION = re.compile(r"docs/[A-Za-z0-9_./-]+\.md")
 #: `docs/README.md` names removed documents on purpose -- its recovery commands
 #: are `git show <commit>^:docs/design/...`, which are supposed to be paths that
 #: no longer resolve.
-#: `assets` joined the four when `call_cap.py` started naming
-#: `guides/middleware.md`. It was outside the rule for no reason anybody had
-#: stated -- it is tracked text and it is not under `docs/`, which is the whole
-#: of what the sentence above asks for.
-CITED_FROM = ("src", "tests", "service", ".github", "assets")
+#: `test_the_citation_walk_is_what_git_tracks` holds this, and the root files below,
+#: to the tree: a folder named here and gone checks nothing, and says nothing either.
+CITED_FROM = ("src", "tests", "evals", "spikes", ".github", "assets")
 
 #: The root files, named rather than globbed: the repository root also holds a
 #: `.venv`, a `.git` and whatever a developer left there, and a rule that reads
@@ -191,6 +189,7 @@ CITED_FROM_FILES = (
     "fence-check.sh",
     "pyproject.toml",
     "CLAUDE.md",
+    "GLOSSARY.md",
     "README.md",
 )
 
@@ -240,6 +239,32 @@ def test_no_code_cites_a_document_that_is_not_there() -> None:
         + "\nPoint them at what replaced it, or say the argument in place -- "
         "`decisions.md` is where a removed document's reasoning went"
     )
+
+
+def test_the_citation_walk_is_what_git_tracks() -> None:
+    """The walk named a `service` folder that did not exist and skipped `evals/`,
+    `spikes/` and `GLOSSARY.md`, which did.
+
+    Both directions: a name that tracks nothing, and a tracked place nothing names.
+    """
+    import subprocess
+
+    listed = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True, check=False
+    )
+    assert listed.returncode == 0, f"git could not list the tracked files: {listed.stderr}"
+    tracked = [name.split("/") for name in filter(None, listed.stdout.split("\0"))]
+    folders = {parts[0] for parts in tracked if len(parts) > 1} - {"docs"}
+    root_text = {
+        parts[0] for parts in tracked
+        if len(parts) == 1 and parts[0].rpartition(".")[2] in {s[1:] for s in TEXT}
+    }
+
+    assert set(CITED_FROM) == folders, f"named {sorted(CITED_FROM)}, tracked {sorted(folders)}"
+    unnamed = sorted(root_text - set(CITED_FROM_FILES))
+    assert not unnamed, f"{unnamed} are tracked text at the root and nothing reads them"
+    gone = sorted(name for name in CITED_FROM_FILES if not (ROOT / name).is_file())
+    assert not gone, f"{gone} are named here and not in the tree"
 
 
 #: ```python fences, with the line the fence opens on so a failure is clickable.

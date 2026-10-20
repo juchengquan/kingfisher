@@ -3160,7 +3160,8 @@ rules now resolve a module-level name to the module defining it, and count it li
 something live reaches it, so a table read only by dead functions is dead too. A method is
 still matched by spelling, since an attribute read cannot say which class it means. The
 first walk found the table, its three functions, three route constants only it read, and
-`subagents.spec.DIRECTORY`, alive on `agents.spec.DIRECTORY`'s import. *(2026-10-19.)*
+`subagents.spec.DIRECTORY`, alive on `core.definitions.agents.spec.DIRECTORY`'s import.
+*(2026-10-19.)*
 
 **The rename reached everything the agent addresses and neither edge the caller does.**
 `Layout` threaded the leaves through the routes, fences, prompt, ledger, sweep and
