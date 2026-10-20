@@ -319,34 +319,6 @@ def test_another_file_a_tool_returns_is_replaced_with_advice(cfg, session_dir):
     assert answer.status == "error"
 
 
-@pytest.mark.parametrize(
-    ("name", "said"),
-    [
-        ("call.mp3", ("audio", "audio")),
-        ("clip.mp4", ("video", "video")),
-        ("clip.mkv", ("video", "video")),
-        ("deck.pptx", ("a .pptx file", ".pptx files")),
-    ],
-)
-def test_read_file_is_not_run_on_a_file_no_model_here_takes(cfg, session_dir, way, name, said):
-    """Read, audio and video reach the model as one string of base64 millions of
-    characters long, and a `.pptx` as a block the summarizer counts and the request drops.
-    """
-    what, reads = said
-    (session_dir / "inputs" / name).write_bytes(os.urandom(64 * 1024))
-    model = _calls(("read_file", {"file_path": f"/inputs/{name}"}))
-
-    _run(cfg, session_dir, model, wait=way == "async")
-
-    answer = _answer(model)
-    assert answer.text == (
-        f"Error: /inputs/{name} is {what}, which can't be handed to the model here. If you "
-        f"hold a tool that can read {reads}, call it on /inputs/{name}; otherwise say that "
-        "this part could not be done."
-    )
-    assert answer.status == "error"
-
-
 def test_the_async_path_is_guarded_and_reads_what_the_model_was_offered(cfg, session_dir):
     """A turn driven by `astream` goes through `awrap_tool_call` and `awrap_model_call`
     alone, so a guard on the sync pair would hand that turn the PDF whole.

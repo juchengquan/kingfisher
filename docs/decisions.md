@@ -1739,7 +1739,9 @@ deepagents' own reading of the extension, which counts `.mkv` as video. Langgrap
 block list holding audio or video into one JSON string before any middleware sees it, so
 a 4 MB `.mp3` reached the model as 5.6 million characters of text, and only refusing the
 call stops it; a `.pptx` is the block above. The refusal says to call a tool that reads
-that kind of file, if the model holds one.
+that kind of file, if the model holds one. It is `BuiltinToolsMiddleware`'s, which holds
+what kingfisher changes of a built-in, while `AttachmentsMiddleware` reads what any tool
+returns.
 
 **It names `pdf_text` only where the model is offered it.** `standing_middleware` is
 handed every tool the workspace defines, granted or not, so the guard reads the tools off
