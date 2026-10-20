@@ -22,6 +22,7 @@ from typing import TypedDict
 
 import pytest
 
+from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import CommandResult
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS_ROUTE, Layout
 from kingfisher.core.workspace import ensure_layout
@@ -198,6 +199,35 @@ def test_paths_a_deployment_put_on_path_stay_readable(cfg, tmp_path):
     roots = confinement.readable_roots(cfg.workspace, cfg.sessions_root, ("/opt/homebrew/bin",))
 
     assert Path("/opt/homebrew/bin") in roots
+
+
+@pytest.mark.parametrize("entry", ["", ".", "bin"])
+def test_a_path_entry_that_is_not_absolute_is_refused(entry):
+    """`path_extra=("",)` resolved to the server's working directory, which every fence
+    then granted the shell to read: `str(Path(""))` is `"."`, so no filter caught it."""
+    with pytest.raises(ConfigError, match="KINGFISHER_SHELL_PATH_EXTRA"):
+        confinement.ShellSettings(path_extra=(entry,))
+
+
+def test_an_absolute_path_entry_is_still_taken():
+    """The control: a guard refusing every entry would pass the test above."""
+    assert confinement.ShellSettings(path_extra=("/opt/tools/bin",)).path_extra == (
+        "/opt/tools/bin",
+    )
+
+
+def test_the_empty_parts_of_the_variable_are_dropped_rather_than_refused():
+    """`PATH`-style joining leaves stray colons, and refusing one would stop a start the
+    variable meant nothing by."""
+    read = confinement.ShellSettings.from_env({"KINGFISHER_SHELL_PATH_EXTRA": ":/opt/x::"})
+
+    assert read.path_extra == ("/opt/x",)
+
+
+def test_a_relative_part_of_the_variable_refuses_the_start():
+    """Through `from_env` too, so a relative entry in `.env` fails as the sessions are built."""
+    with pytest.raises(ConfigError, match="'bin'"):
+        confinement.ShellSettings.from_env({"KINGFISHER_SHELL_PATH_EXTRA": "/opt/x:bin"})
 
 
 # -- the part that actually has to hold -----------------------------------

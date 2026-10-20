@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `ShellSettings` refuses a `path_extra` entry that is not absolute, after #978
+
+- **`ShellSettings(path_extra=(...))` raises `ConfigError`** for an entry that is not
+  an absolute path, `""` and `"."` among them, and so does `LocalSessions()` reading
+  one from `KINGFISHER_SHELL_PATH_EXTRA`. Such an entry resolved against the server's
+  working directory, which the shell's fence then let it read. Empty parts of the
+  variable, as `a::b` leaves, are still dropped. If you passed a relative directory,
+  pass it absolute.
+
 ## A session stays claimed for a shell command's bound too, after #977
 
 - **`Config.claim_stale_after` grew, and nothing you wrote has to change.** It was the

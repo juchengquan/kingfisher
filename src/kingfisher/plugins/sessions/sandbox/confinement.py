@@ -228,6 +228,17 @@ class ShellSettings:
     #: Directories put on the shell's `PATH` ahead of the system's, and readable to it.
     path_extra: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        # Refused, not dropped: an entry that is not absolute resolves against the
+        # server's working directory, and every fence grants it to the shell to read.
+        relative = [entry for entry in self.path_extra if not Path(entry).is_absolute()]
+        if relative:
+            msg = (
+                "KINGFISHER_SHELL_PATH_EXTRA (ShellSettings.path_extra) takes absolute "
+                f"directories, got {', '.join(map(repr, relative))}"
+            )
+            raise ConfigError(msg)
+
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> ShellSettings:
         """What the two variables say, in `environ` or in this process's environment."""
@@ -295,7 +306,7 @@ def toolchain_roots(extra: tuple[str, ...] = ()) -> tuple[Path, ...]:
     """Where the interpreter the shell was told to run actually lives."""
     roots = [Path(sys.prefix), Path(sys.base_prefix)]
     roots += [Path(e) for e in extra]
-    return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
+    return tuple(dict.fromkeys(p.resolve() for p in roots))
 
 
 def readable_roots(workspace: Path, sessions_root: Path, extra: tuple[str, ...] = (),
@@ -307,7 +318,7 @@ def readable_roots(workspace: Path, sessions_root: Path, extra: tuple[str, ...] 
     """
     roots = [Path(workspace), fenced_sessions(sessions_root), *toolchain_roots(extra),
              *map(Path, skills)]
-    return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
+    return tuple(dict.fromkeys(p.resolve() for p in roots))
 
 
 def shell_readable(cfg: Config, shell: ShellSettings, mechanism: str) -> tuple[Path, ...]:
@@ -326,7 +337,7 @@ def shell_readable(cfg: Config, shell: ShellSettings, mechanism: str) -> tuple[P
 
         system = fence.SYSTEM_PATHS if mechanism == LANDLOCK else bubblewrap.SYSTEM_PATHS
         granted = [*map(Path, system), *toolchain_roots(shell.path_extra), *map(Path, skills)]
-        return tuple(dict.fromkeys(p.resolve() for p in granted if str(p)))
+        return tuple(dict.fromkeys(p.resolve() for p in granted))
     return ()
 
 

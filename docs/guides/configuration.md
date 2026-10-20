@@ -110,7 +110,7 @@ prompt rewritten, for the same reason.
 | Variable | What it does | Default |
 | --- | --- | --- |
 | `KINGFISHER_SHELL_SANDBOX` | `auto` uses whatever the platform offers, `bubblewrap` asks for bubblewrap even where Landlock would run, `external` says the runtime already confines this process, `off` opts out and warns on every start. Anything else refuses the start, `doctor`'s included. | `auto` |
-| `KINGFISHER_SHELL_PATH_EXTRA` | Extra directories on the agent's `PATH`, which is how it reaches something like `/opt/homebrew/bin`. | empty |
+| `KINGFISHER_SHELL_PATH_EXTRA` | Extra directories on the agent's `PATH`, each absolute, which is how it reaches something like `/opt/homebrew/bin`. | empty |
 
 `LocalSessions` reads both as it is built, so they reach every service on kingfisher's
 own sessions, the command's and yours. Code that decides instead passes
