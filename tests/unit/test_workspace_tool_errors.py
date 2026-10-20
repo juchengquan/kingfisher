@@ -454,6 +454,7 @@ def paths(cfg, session_dir):
 def stack(cfg, session_dir, paths):
     """The agent's standing middleware on a graph holding one workspace tool, `probe`."""
     from kingfisher.core.agent.middlewares.standing import standing_middleware
+    from kingfisher.core.agent.middlewares.step_budget import StepBudget
 
     return standing_middleware(
         "agent",
@@ -461,7 +462,7 @@ def stack(cfg, session_dir, paths):
         paths=paths,
         layout=cfg.layout,
         backend=backend_at(cfg, session_dir),
-        step_limit=cfg.recursion_limit,
+        budget=StepBudget(cfg.recursion_limit),
         execution_timeout_s=cfg.execution_timeout_s,
         trigger=170_000,
     )
@@ -508,6 +509,7 @@ class _FallsOver(AgentMiddleware):
 def _stack_around(cfg, session_dir, paths, inner):
     """The agent's standing middleware with `inner` where a deployment's goes."""
     from kingfisher.core.agent.middlewares.standing import standing_middleware
+    from kingfisher.core.agent.middlewares.step_budget import StepBudget
 
     return standing_middleware(
         "agent",
@@ -515,7 +517,7 @@ def _stack_around(cfg, session_dir, paths, inner):
         paths=paths,
         layout=cfg.layout,
         backend=backend_at(cfg, session_dir),
-        step_limit=cfg.recursion_limit,
+        budget=StepBudget(cfg.recursion_limit),
         execution_timeout_s=cfg.execution_timeout_s,
         trigger=170_000,
         inner=inner,

@@ -14,6 +14,7 @@ from langchain_core.runnables import Runnable
 
 from kingfisher.core.access import ALL, Selection, ceiling, narrowed, refuse_unoffered
 from kingfisher.core.agent.middlewares.standing import standing_middleware
+from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import build_model, model_named, summarizer_trigger
 from kingfisher.core.agent.prompting import behind_instructions
 from kingfisher.core.agent.session_paths import SessionPaths
@@ -247,6 +248,9 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     instructions: str = "",
     #: What the agent stops on, which every subagent it reaches stops on too.
     gated: Collection[str] = (),
+    #: The build's, which the agent's compiled graph measures; `None` assumes the default
+    #: stack's cost.
+    budget: StepBudget | None = None,
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`."""
     if spec.build is not None:
@@ -319,7 +323,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         layout=cfg.layout,
         # The parent's, whose shell is the one this subagent's `execute` runs on.
         backend=backend,
-        step_limit=cfg.recursion_limit,
+        budget=StepBudget(cfg.recursion_limit) if budget is None else budget,
         execution_timeout_s=cfg.execution_timeout_s,
         trigger=summarizer_trigger(runs),
         recorder=recorder,

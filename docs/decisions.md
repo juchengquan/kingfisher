@@ -2605,10 +2605,20 @@ subagent is held to the same budget.** Over 71 trial turns, every turn either fi
 38 calls or fewer or ran to the 50-call limit and stopped mid-work, never told it was
 close. `StepBudgetMiddleware` reads langgraph's own step counter and limit, so it follows
 `KINGFISHER_RECURSION_LIMIT`, and from 80% of the steps adds a note as the last thing each
-model call reads: about how many calls remain, at three steps a call, and on the last that
-it is the last. The note is never stored: kept, it would be resent stale on every later
-call, and coming after the cached part it leaves the prompt cache whole. The limit stays
-at 150 steps.
+model call reads: about how many calls remain, and on the last that it is the last. The
+note is never stored: kept, it would be resent stale on every later call, and coming after
+the cached part it leaves the prompt cache whole. The limit stays at 150 steps.
+
+What a call costs is counted off the agent's compiled graph, not assumed. A call is its
+model step and its tools step, and every middleware hook beside the call -- a
+`before_model` or `after_model` -- is a node of its own, so a step more. The default stack
+has one, `TodoListMiddleware`'s, for three steps a call, which was once taken as fixed; an
+approval gate adds `HumanInTheLoopMiddleware`'s, and a deployment's middleware with a
+model hook adds its own, so a real downstream stack spent five. Assumed at three, its
+agent was warned with the wrong counts, and every subagent was given 50 calls where the
+agent had 30. The graph is compiled after its subagents are built, so one `StepBudget` is
+shared by the agent and every subagent, measured by each build -- the last is the one
+served, not a probe -- and read when a call runs.
 
 A subagent does not run under that limit: deepagents binds 9,999 steps to the graph it
 builds, and the turn's limit does not override that. Measured under a 30-step turn, a

@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.standing import standing_middleware
+from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
@@ -133,7 +134,7 @@ def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
             paths=None,
             layout=cfg.layout,
             backend=None,
-            step_limit=cfg.recursion_limit,
+            budget=StepBudget(cfg.recursion_limit),
             execution_timeout_s=cfg.execution_timeout_s,
             trigger=170_000,
             **given,
@@ -153,7 +154,7 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
         paths=None,
         layout=cfg.layout,
         backend=backend_at(cfg, session_dir),
-        step_limit=cfg.recursion_limit,
+        budget=StepBudget(cfg.recursion_limit),
         execution_timeout_s=cfg.execution_timeout_s,
         trigger=170_000,
         tools=("read_file",),

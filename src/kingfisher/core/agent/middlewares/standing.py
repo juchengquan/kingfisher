@@ -24,7 +24,7 @@ from .narrowing import (
     NarrowedSkillsMiddleware,
 )
 from .recorder import RecorderMiddleware
-from .step_budget import STEPS_PER_CALL, StepBudgetMiddleware
+from .step_budget import StepBudget, StepBudgetMiddleware
 
 #: The graphs kingfisher builds itself: the agent, a subagent a definition declares, and
 #: deepagents' `general-purpose`, which is handed the agent's own tools. A compiled
@@ -39,7 +39,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     paths: SessionPaths | None,
     layout: Layout,
     backend: Any,
-    step_limit: int,
+    budget: StepBudget,
     trigger: int,
     execution_timeout_s: int,
     recorder: RecorderMiddleware | None = None,
@@ -57,9 +57,9 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     place. `names` are the workspace tools the graph holds; `tools` narrows what it is
     offered and `skills` its skills index, each `None` where nothing narrows; `clearing`,
     which builds the result clearing for that grant, and `reachable` are the agent's alone.
-    `step_limit` is the turn's, which reaches only the agent's own run, so a subagent is held
-    to it in model calls. `trigger` is where this graph's own model is summarised, which
-    sizes the PDFs its turn may hold open.
+    `budget` is the turn's, whose step limit reaches only the agent's own run, so a subagent
+    is held to it in model calls; one per build, shared by all three kinds. `trigger` is
+    where this graph's own model is summarised, which sizes the PDFs its turn may hold open.
 
     `inner` is what the deployment's settings switch on and what its definitions name, which
     go inside every standing one. Taken here rather than appended by each caller so that the
@@ -92,7 +92,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     if recorder is not None:
         standing.append(recorder)
     standing.append(
-        StepBudgetMiddleware(calls=None if kind == "agent" else step_limit // STEPS_PER_CALL)
+        StepBudgetMiddleware(budget, subagent=kind != "agent")
     )
     # Ahead of the rest, which have nothing to say about a call that is not run.
     standing.append(ModelReplyMiddleware(subagent=kind != "agent", outputs=layout.outputs_route))
