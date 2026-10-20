@@ -7,8 +7,8 @@ description: Answers questions from the data, with the database behind a source 
 # `operator.yaml` beside this one carry none, which means they are reachable by
 # everyone -- and that is what an absent optional field means everywhere else
 # in these formats. Adopting source-id access is annotating the definitions
-# that matter and leaving the rest alone; startup names the ones carrying no
-# line, so default-open is not also silent.
+# that matter and leaving the rest alone; `kingfisher list` names the ones
+# carrying no line, so default-open is not also silent.
 #
 # The names have to be declared in `source_ids.yaml`. A typo here is refused at
 # startup rather than inventing a source id nobody holds -- which would leave
@@ -49,7 +49,7 @@ skills:
     source_ids: [sales_db]
   - code-review
 # Names only, as under `tools:`. A subagent says who reaches it in its own file,
-# and that holds wherever it is used: `subagents/auditor.yaml` is for three
+# and that holds wherever it is used: `subagents/auditor.yaml` is for two
 # source ids, and `subagents/quarters.py` for `sales_db` callers in the `emea`
 # datazone.
 subagents:
