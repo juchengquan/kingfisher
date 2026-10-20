@@ -795,11 +795,15 @@ PROSE_GONE: dict[str, frozenset[str]] = {
 
 
 def _module_file(name: str) -> Path | None:
-    """The file a dotted name refers to, or `None`."""
+    """The file a dotted name refers to, or `None`.
+
+    Through `_is_a_module_under`, never `exists()`: on a case-insensitive filesystem the
+    class `core.access.Capabilities` would resolve as the module `capabilities.py`.
+    """
+    if not _is_a_module_under(SRC, name):
+        return None
     base = SRC.joinpath(*name.split("."))
-    if base.with_suffix(".py").exists():
-        return base.with_suffix(".py")
-    return base / "__init__.py" if (base / "__init__.py").exists() else None
+    return base.with_suffix(".py") if base.with_suffix(".py").is_file() else base / "__init__.py"
 
 
 def _defined_names(path: Path) -> set[str]:
@@ -823,13 +827,22 @@ def _defined_names(path: Path) -> set[str]:
         if isinstance(node, ast.ClassDef):
             names |= declared(node.body)
         # A lazy package defines its exports only through `__getattr__`, which serves
-        # exactly what `__all__` lists.
+        # exactly what `__all__` lists, or the keys of the `_EXPORTS` table it reads.
         elif isinstance(node, ast.Assign) and any(
             isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets
         ):
             names |= {
                 item.value for item in ast.walk(node.value)
                 if isinstance(item, ast.Constant) and isinstance(item.value, str)
+            }
+        if (
+            isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == "_EXPORTS" for t in node.targets)
+            and isinstance(node.value, ast.Dict)
+        ):
+            names |= {
+                key.value for key in node.value.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
             }
     return names
 

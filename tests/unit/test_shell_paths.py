@@ -512,7 +512,7 @@ def test_a_result_the_shell_could_not_have_returned_is_handed_back_untouched(way
 
 
 def _asking(seconds: int) -> AIMessage:
-    return _calls(("execute", {"command": "touch ran", "timeout": seconds}, "x1"))
+    return _calls(("execute", {"command": "touch scratchpad/ran", "timeout": seconds}, "x1"))
 
 
 @pytest.mark.parametrize("graph", ["agent", "checker", "general-purpose"])
@@ -538,7 +538,7 @@ def test_no_graph_runs_a_command_asking_for_longer_than_the_setting(shelled, way
     (said,) = [m for m in Scripted.heard[held] if isinstance(m, ToolMessage)][-1:]
     assert said.status == "error"
     assert "exceeds maximum allowed (1s)" in said.text
-    assert not (bounded.sessions_root / "s" / "ran").exists()
+    assert not (bounded.sessions_root / "s" / "scratchpad" / "ran").exists()
 
 
 def test_a_command_asking_for_the_setting_itself_runs(shelled):
@@ -548,7 +548,7 @@ def test_a_command_asking_for_the_setting_itself_runs(shelled):
 
     Kingfisher(cfg, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
 
-    assert (cfg.sessions_root / "s" / "ran").exists()
+    assert (cfg.sessions_root / "s" / "scratchpad" / "ran").exists()
 
 
 def test_execute_is_told_the_setting_as_its_longest(shelled):
