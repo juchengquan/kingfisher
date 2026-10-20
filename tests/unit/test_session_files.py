@@ -375,6 +375,20 @@ def test_the_command_writes_an_artifact_where_it_is_told(at_the_command_line, tm
     assert out.read_text() == "result"
 
 
+def test_the_command_makes_the_directory_it_is_told_to_write_into(
+    at_the_command_line, tmp_path, capsys
+):
+    """`--out` into a directory not there yet was a `FileNotFoundError` traceback, after
+    the bytes had been fetched; `--log` makes its own."""
+    _produced(at_the_command_line, "outputs/out.txt", "result")
+    out = tmp_path / "not" / "yet" / "copy.txt"
+
+    code = main(["artifact", "--session", "s", "outputs/out.txt", "--out", str(out)])
+
+    assert code == 0
+    assert out.read_text() == "result"
+
+
 def test_the_command_writes_bytes_to_standard_output_untouched(
     at_the_command_line, capsysbinary
 ):

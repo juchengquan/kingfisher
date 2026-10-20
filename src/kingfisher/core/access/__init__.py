@@ -43,6 +43,7 @@ _EXPORTS = {
     "within_reach": "kingfisher.core.access.reach",
     "AccessReport": "kingfisher.core.access.source_ids",
     "Audience": "kingfisher.core.access.source_ids",
+    "Datazone": "kingfisher.core.access.source_ids",
     "Held": "kingfisher.core.access.source_ids",
     "SourceIds": "kingfisher.core.access.source_ids",
     "Stated": "kingfisher.core.access.source_ids",
@@ -97,6 +98,7 @@ if TYPE_CHECKING:
     from kingfisher.core.access.reach import within_reach as within_reach
     from kingfisher.core.access.source_ids import AccessReport as AccessReport
     from kingfisher.core.access.source_ids import Audience as Audience
+    from kingfisher.core.access.source_ids import Datazone as Datazone
     from kingfisher.core.access.source_ids import Held as Held
     from kingfisher.core.access.source_ids import SourceIds as SourceIds
     from kingfisher.core.access.source_ids import Stated as Stated

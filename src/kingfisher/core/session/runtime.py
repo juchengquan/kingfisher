@@ -60,10 +60,10 @@ def unavailable(exc: BaseException) -> str | None:
             return one.why
         status = getattr(one, "status_code", None)
         if isinstance(status, int) and (status == TOO_MANY_REQUESTS or status >= SERVER_ERROR):
-            return f"{status}: {_said(one)}"
+            return f"{status}: {said(one)}"
         kind = _error_type(one)
         if isinstance(status, int) and status < BAD_REQUEST and kind in UNSERVED_TYPES:
-            return f"{kind}: {_said(one)}"
+            return f"{kind}: {said(one)}"
         names = {cls.__name__ for cls in type(one).__mro__}
         # Before the connection check: both SDKs' timeout is a kind of connection error.
         if names & TIMED_OUT or isinstance(one, TimeoutError):
@@ -85,7 +85,7 @@ def _error_type(exc: BaseException) -> str | None:
     return kind if isinstance(kind, str) else None
 
 
-def _said(exc: BaseException) -> str:
+def said(exc: BaseException) -> str:
     """The provider's own words, from the body where it sent one."""
     body = getattr(exc, "body", None)
     if isinstance(body, dict):

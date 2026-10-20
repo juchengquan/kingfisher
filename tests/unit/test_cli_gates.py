@@ -19,11 +19,11 @@ import pytest
 import kingfisher
 import kingfisher.plugins
 from kingfisher.cli import __main__ as cli
+from kingfisher.core.access.source_ids import UNSCOPED, Datazone
 from kingfisher.core.plugins import Plugins
 from kingfisher.core.request import Resume
 from kingfisher.core.result import AWAITING, RunResult
 from kingfisher.core.result import PendingDecision as Pending
-from kingfisher.core.session.runtime import resume_payload
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions
 from tests.conftest import RecordedEvents, Through
@@ -102,7 +102,7 @@ def test_a_gated_ending_prints_the_ids_and_says_it_cannot_answer(monkeypatch, ca
     # The command it hands back is runnable as printed, ids and all. A reader who
     # has to assemble it from the flag reference is a reader who will run the other
     # thing instead.
-    assert "kingfisher decide --session s-1 --approve abc123#0" in said
+    assert "kingfisher decide --session s-1 --approve 'abc123#0'" in said
 
 
 def test_a_gated_ending_warns_that_running_again_discards(monkeypatch, capsys):
@@ -572,37 +572,97 @@ TWO_WAITING = RunResult(
 )
 
 
-def _ran_as_printed(monkeypatch, said: str, result: RunResult) -> None:
+class _JudgedError(Exception):
+    """Raised once the library has judged a resume, before it builds a graph to run it."""
+
+
+def _ran_as_printed(monkeypatch, cfg, said: str, result: RunResult) -> None:
     """The `answer with:` line, parsed by the command's own parser and judged by the
     library: driven rather than matched, because a line that looks right can still be
-    one `decide` refuses."""
+    one `decide` refuses.
+
+    Through the real `_drive`, against a session only `A` reaches: with
+    `_drive` stubbed, a line naming no caller passed here and was refused under a policy.
+    """
+    from dataclasses import replace
+
+    import yaml
+
+    from kingfisher.cli.progress import show
+    from kingfisher.core.access.policy import parse
+    from kingfisher.core.layout import PAUSED_STATE
+    from kingfisher.core.service import Kingfisher
+    from kingfisher.core.session import runtime
+    from kingfisher.core.session.store import pending_as_mark, write_pause_mark
+    from tests.conftest import an_agent, harness_of, pin, start
+
     line = next(one for one in said.splitlines() if one.startswith("answer with: "))
     argv = shlex.split(line.removeprefix("answer with: "))
     assert argv[0] == "kingfisher"
-    resumed: list[Resume] = []
-    monkeypatch.setattr(cli, "_configured", lambda *a, **k: None)
-    monkeypatch.setattr(cli, "_drive", lambda _kf, resume, **_k: resumed.append(resume) or 0)
 
-    assert cli._decide(cli.build_parser().parse_args(argv[1:])) == 0
-    resume_payload(resumed[0].decisions, result.pending)
+    an_agent(cfg, "only_a", source_ids="[A]")
+    vocabulary = "source_ids: [A, B]\ndatazones: [finance, hr]\n"
+    policied = replace(cfg, access=parse(yaml.safe_load(vocabulary), source="t"))
+    kf = Kingfisher(policied, sessions=LocalSessions())
+    start(policied, result.session_id)
+    pin(kf, result.session_id, "only_a")
+    harness = harness_of(policied, result.session_id)
+    drive(write_pause_mark(harness, {"pending": pending_as_mark(list(result.pending))}))
+    drive(harness.store(PAUSED_STATE, b"held"))
+
+    judge = runtime.resume_payload
+
+    def judged(answers, pending):
+        judge(answers, pending)
+        raise _JudgedError
+
+    monkeypatch.setattr(runtime, "resume_payload", judged)
+    monkeypatch.setattr(cli, "config_from_env", lambda: policied)
+    monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: kf)
+    monkeypatch.setattr(cli, "show", show)
+
+    with pytest.raises(_JudgedError):
+        cli._decide(cli.build_parser().parse_args(argv[1:]))
 
 
-def test_the_printed_answer_answers_every_waiting_call(monkeypatch, capsys):
+#: Who the runs below were asked as: the caller the printed line has to name again.
+ASKED_AS = {"held": ("A",), "datazone": "finance"}
+
+
+def test_the_printed_answer_answers_every_waiting_call(cfg, monkeypatch, capsys):
     """The line named only the first call, and `decide` refuses an answer that leaves
     one waiting -- so with two calls pending, running it as printed was refused with
     "still waiting on abc123#1"; and it offered `--approve` to a call that takes none.
     """
     _drive(monkeypatch, TWO_WAITING)
-    cli._run(_args())
-
-    _ran_as_printed(monkeypatch, capsys.readouterr().err, TWO_WAITING)
-
-
-def test_one_waiting_call_is_still_answered_by_approving_it(monkeypatch, capsys):
-    """The control beside it: one call that takes approval is answered as before."""
-    _drive(monkeypatch, PAUSED)
-    cli._run(_args())
+    cli._run(_args(**ASKED_AS))
 
     said = capsys.readouterr().err
-    assert "answer with: kingfisher decide --session s-1 --approve abc123#0\n" in said
-    _ran_as_printed(monkeypatch, said, PAUSED)
+    # Quoted as `--respond` is, so an id the shell would split still arrives whole.
+    assert "--approve 'abc123#0' --reject 'abc123#1'\n" in said
+    _ran_as_printed(monkeypatch, cfg, said, TWO_WAITING)
+
+
+def test_one_waiting_call_is_still_answered_by_approving_it(cfg, monkeypatch, capsys):
+    """The control beside it: one call that takes approval is answered as before."""
+    _drive(monkeypatch, PAUSED)
+    cli._run(_args(**ASKED_AS))
+
+    said = capsys.readouterr().err
+    assert "--approve 'abc123#0'\n" in said
+    _ran_as_printed(monkeypatch, cfg, said, PAUSED)
+
+
+def test_the_printed_answer_names_the_caller_the_run_was_asked_as(capsys):
+    """It named no `--as` or `--datazone`, so under a policy pasting it was refused as
+    a call from nobody."""
+    cli._awaiting(PAUSED, ("A", Datazone("finance")))
+    cli._awaiting(PAUSED, UNSCOPED)
+    cli._awaiting(PAUSED, None)
+
+    lines = [one for one in capsys.readouterr().err.splitlines() if "answer with:" in one]
+    assert [one.split(" --approve")[0] for one in lines] == [
+        "answer with: kingfisher decide --session s-1 --as A --datazone finance",
+        "answer with: kingfisher decide --session s-1 --as UNSCOPED",
+        "answer with: kingfisher decide --session s-1",
+    ]

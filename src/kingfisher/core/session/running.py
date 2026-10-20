@@ -3,6 +3,7 @@ stream, and what a turn leaves once it ends."""
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
@@ -60,6 +61,8 @@ from .turn import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from kingfisher.core.config import Endpoint
+
 
 
 @dataclass
@@ -90,6 +93,7 @@ def _asked(value: str | Request | Resume) -> Request | Resume:
 #: Matched on the exception's `status_code`, not its class: `anthropic` and `openai`
 #: each raise their own `AuthenticationError`, and the command may import neither.
 UNAUTHORIZED = 401
+CLIENT_ERROR = 400
 
 
 def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
@@ -101,12 +105,7 @@ def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
     """
     if getattr(exc, "status_code", None) != UNAUTHORIZED:
         return None
-    url = str(getattr(getattr(getattr(exc, "response", None), "request", None), "url", ""))
-    named = [
-        (name, endpoint)
-        for name, endpoint in cfg.models.endpoints.items()
-        if url.startswith(endpoint.base_url)
-    ]
+    named = _endpoint_of(exc, cfg)
     where = f"endpoint {named[0][0]!r}" if named else "the model endpoint"
     if named and (entry := named[0][1].key_entry):
         return ConfigError(
@@ -118,6 +117,49 @@ def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
         f"{where} rejected the key{supplied} (401). A value exported in the shell "
         f"overrides the one in .env, so check the environment before the file"
     )
+
+
+def refused_request(exc: BaseException, cfg: Config) -> ConfigError | None:
+    """A provider's 4xx as the configuration error it is, or `None` for anything else.
+
+    Not a 429, which may pass and ends a turn as a stop before this is reached. The rest
+    of the range -- a model name the endpoint does not serve, a request it will not
+    take -- fails the same way on every retry, so the fix is in the deployment.
+    """
+    if (refused := refused_credentials(exc, cfg)) is not None:
+        return refused
+    status = getattr(exc, "status_code", None)
+    if not isinstance(status, int) or not CLIENT_ERROR <= status < runtime.SERVER_ERROR:
+        return None
+    if status == runtime.TOO_MANY_REQUESTS:
+        return None
+    named = _endpoint_of(exc, cfg)
+    where = f"endpoint {named[0][0]!r} ({named[0][1].base_url})" if named else "the endpoint"
+    model = _model_of(exc)
+    which = f"model {model!r}" if model else "the model"
+    return ConfigError(f"{where} refused a call to {which} ({status}): {runtime.said(exc)}")
+
+
+def _endpoint_of(exc: BaseException, cfg: Config) -> list[tuple[str, Endpoint]]:
+    """The configured endpoints the failed request was sent to, by its URL."""
+    url = str(getattr(getattr(getattr(exc, "response", None), "request", None), "url", ""))
+    return [
+        (name, endpoint)
+        for name, endpoint in cfg.models.endpoints.items()
+        if url.startswith(endpoint.base_url)
+    ]
+
+
+def _model_of(exc: BaseException) -> str | None:
+    """The model the failed request named, read from the body it sent."""
+    request = getattr(getattr(exc, "response", None), "request", None)
+    try:
+        body = json.loads(getattr(request, "content", b"") or b"{}")
+    # httpx raises `RequestNotRead`, a `RuntimeError`, for a body it streamed.
+    except (ValueError, TypeError, RuntimeError):
+        return None
+    model = body.get("model") if isinstance(body, dict) else None
+    return model if isinstance(model, str) else None
 
 
 class Running:
@@ -246,9 +288,9 @@ class Running:
             turn.ok = True
             turn.pending.append(model_unavailable(exc.why))
         except Exception as exc:
-            # Only a 401, which the person at the terminal can fix, becomes a one-line
-            # error; the rest keep their traceback, so a bug still looks like one.
-            if (refused := refused_credentials(exc, self.cfg)) is None:
+            # Only a provider's 4xx, which the person at the terminal can fix, becomes a
+            # one-line error; the rest keep their traceback, so a bug still looks like one.
+            if (refused := refused_request(exc, self.cfg)) is None:
                 raise
             raise refused from exc
 

@@ -26,6 +26,20 @@ replaced the four layers began.
   with status 200. The `cut_short` event names the type and the provider's message.
   Any other type sent that way still raises.
 
+## A provider's 4xx raises `ConfigError`, after #995
+
+- **`Kingfisher.run` and `stream` raise `ConfigError` for a provider's 4xx**, as they
+  already did for a 401: a 404 for a model name the endpoint does not serve, a 400 for a
+  request it will not take. The message names the endpoint, its URL and the model, and
+  the provider's error is its `__cause__`. These escaped as the SDK's own error, so an
+  `except anthropic.NotFoundError` around a turn no longer fires; catch `ConfigError`,
+  or read `__cause__`. A 429 and the 5xx range still end the turn as a stop, and
+  anything else still raises as itself. `kingfisher run` reports it with exit 2.
+- **`kingfisher run` prints only `RunResult.answer` on stdout**, once, at the end. Every
+  token the agent streams goes to stderr with the rest of what you watch: with a
+  streaming model, stdout had all of its prose, the narration before each tool call
+  included, where the answer is only its last reply.
+
 ## Definitions refuse what would have loaded wrong, after #994
 
 - **A key written twice in one YAML mapping is refused**, at any depth, in an agent or
