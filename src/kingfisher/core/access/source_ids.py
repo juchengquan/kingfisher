@@ -179,14 +179,14 @@ def spell(audience: Audience) -> str:
 
 @dataclass(frozen=True)
 class AccessReport:
-    """What a deployment's policy leaves open, said once at startup."""
+    """What a deployment's policy leaves open, as `kingfisher list` prints it."""
 
     #: Definitions carrying no `source_ids:` line, and so reachable by everyone, as `(kind,
     #: name)`.
     unrestricted: tuple[tuple[str, str], ...] = ()
 
-    #: Skills entries naming a source id their definition's own audience never mentions,
-    #: as `(where, audience)`. Reached only by a caller holding one of each.
+    #: Skills entries naming none of the source ids their definition's own audience
+    #: mentions, as `(where, audience)`. Reached only by a caller holding one of each.
     narrowed: tuple[tuple[str, str], ...] = ()
 
     @property
@@ -256,7 +256,7 @@ class SourceIds:
         source_ids: Audience,
         where: str,
     ) -> tuple[tuple[str, str], ...]:
-        """Skills entries naming a source id this definition's own audience never mentions.
+        """Skills entries naming none of the source ids this definition's own audience mentions.
 
         An entry's audience is already an and with the definition's, since an entry is reached
         only through its definition: `[pii]` under `[sales_db, audit_log]` means "whoever

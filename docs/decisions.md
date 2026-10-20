@@ -77,7 +77,7 @@ hardest. *(2026-08-17, `skills-from-several-parties.md`, `two-tools-called-fetch
 resolves to one tool, and where a name is unique the path is still checked: a
 subagent naming a tool at a path it has moved from stops startup and a subagent's
 build, while an agent naming one is reported by `doctor` and `kingfisher list` and
-runs without the tool. The model never sees a reference -- it is given a flat
+runs with the tool, found by its name. The model never sees a reference -- it is given a flat
 `fetch` -- because tool names go to the provider as identifiers and `::` is not
 something to put in one. A bare name two folders offer is refused, naming both.
 *(2026-08-17, `qualified-tool-references.md`, `two-tools-called-fetch.md`.)*
@@ -3548,6 +3548,13 @@ for rather than by the field that said so: told to declare source ids, a reader 
 line of the two that file needs. The tolerant-reader limit is unchanged and still
 stated -- a name computed rather than written out is invisible, as a value the YAML reader
 cannot walk is. *(2026-10-19, from an architecture review.)*
+
+**Only a package or a bundle is decided whole, and by everything in it.** Every folder was,
+by its `.py` alone: a bundle whose definition named a source id was reported seeded with
+the definition held back and its tool copied, which `doctor` then called an orphaned folder;
+and one module in a grouping folder held back an unrelated subagent beside it. A folder is
+one definition when it holds `__init__.py` or the definition named for it, the loader's own
+rules; any other folder is judged file by file. *(2026-10-20, from a code review.)*
 
 **`Seeded` says what it left behind, because three callers said it and two were wrong.**
 `seed` leaves a definition alone for one of two reasons with opposite remedies -- middleware

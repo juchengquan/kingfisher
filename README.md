@@ -69,7 +69,8 @@ middleware are code rather than documents, so each has its own page:
 [`docs/guides/tools.md`](docs/guides/tools.md) and
 [`docs/guides/middleware.md`](docs/guides/middleware.md). The rest of
 [`docs/`](docs/README.md) says why the code is shaped the way it is and what
-deepagents actually does underneath it.
+deepagents actually does underneath it, and [`GLOSSARY.md`](GLOSSARY.md) names
+the words the code and the docs use for its parts, and the ones they avoid.
 
 `kingfisher list` shows what a workspace offers a request, kind by kind, and
 where each one came from. `kingfisher seed` writes a starting
