@@ -6,11 +6,9 @@ import asyncio
 from dataclasses import replace
 
 import pytest
-import yaml
 from deepagents.backends import CompositeBackend, FilesystemBackend
 
 from kingfisher import Kingfisher
-from kingfisher.core.access.policy import parse
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions
 from tests.conftest import an_agent, pin, start
@@ -65,7 +63,7 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
     round trip, which nothing else in the suite would notice.
     """
     an_agent(cfg, "only_a", source_ids="[A]")
-    policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
+    policied = cfg
     kf = (
         Kingfisher(
             policied, graph=StubAgent("ok"), sessions=LocalSessions()
@@ -104,7 +102,6 @@ def test_an_async_turn_makes_no_sync_port_call_on_the_loop(cfg, sync_calls, tmp_
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = replace(
         cfg,
-        access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"),
         session_max_bytes=10**9,
     )
     supplied = tmp_path / "in.csv"
@@ -151,7 +148,7 @@ def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
     from kingfisher.core.layout import HARNESS_ROUTE, PINNED_AGENT
 
     an_agent(cfg, "only_a", source_ids="[A]")
-    policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
+    policied = cfg
     kf = Kingfisher(
         policied, graph=StubAgent("ok"), sessions=LocalSessions()
     )

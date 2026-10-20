@@ -53,9 +53,7 @@ SUBAGENTS: list[PortableSubagent] = [
         ),
         "builtin_tools": ["read_file", "ls", "glob", "grep"],
         "tools": [fiscal_quarter],
-        # Who reaches it: a caller holding `sales_db` and in the `emea` datazone. Both
-        # are declared in `source_ids.yaml`, and a name it does not declare stops the
-        # deployment.
+        # Who reaches it: a caller holding `sales_db` and in the `emea` datazone.
         "source_ids": ["sales_db"],
         # A caller in no datazone does not reach it either: forgetting to say which
         # datazone a caller is in narrows what they get rather than widening it.

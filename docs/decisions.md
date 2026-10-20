@@ -641,9 +641,8 @@ readers**, with a control; `models.yaml` already refused every blank required ke
 the reason the other three are, leaving the granting agent to carry the audience. That
 made a deployment translating subagents from records that already say who may use each
 write the audience again on every agent naming one -- the line one of them forgets. The
-reason was weaker here, too: a name the vocabulary lacks stops startup, and with no
-vocabulary the line does nothing, so it fails loudly or not at all; the other three have
-no such check. Taken, read as a document's `source_ids:` is, and never handed to
+reason was weaker here, too: a name no caller holds locks the subagent shut, so it
+fails safe; the other three have no such property. Taken, read as a document's `source_ids:` is, and never handed to
 deepagents. Carried tools may say who they admit through a `ToolSpec`. *(2026-09-23.
 Reversed 2026-10-16.)*
 
@@ -763,22 +762,23 @@ where a script reads; the upgrading notes list all four. *(2026-10-11.)*
 parse, because seeding runs before there is a catalogue and must decide about every
 file rather than choke on it. **Measured, and the replacement is what would cause the
 bug**: a definition naming source ids and missing a `description` is left behind today,
-but asked of the format it would read as unreadable and be copied into a workspace where
-its names are not declared. On every definition in `assets/` and every spelling of an
+but asked of the format it would read as unreadable and be copied, switching on access
+control in a workspace that never chose it. On every definition in `assets/` and every spelling of an
 audience the two readers agree. **Two of those four spellings were held by nothing**: a
 requirement set and a bare-string source id could stop being read with the suite green;
 `test_every_way_of_naming_a_source_id_is_left_behind` drives each through `seed`.
 *(2026-09-24, from an architecture review.)*
 
 **Definitions have a folder of their own, apart from the workspace.**
-`KINGFISHER_DEFINITIONS_DIR` is required and holds every kind, with `models.yaml` and
-`source_ids.yaml` beside them, under fixed names. `KINGFISHER_WORKSPACE` holds what
+`KINGFISHER_DEFINITIONS_DIR` is required and holds every kind, with `models.yaml`
+beside them, under fixed names. `KINGFISHER_WORKSPACE` holds what
 sessions make -- `sessions/` and `.kingfisher/` -- and nothing a person writes. As one
 folder, a deployment that set none of the seven per-item settings kept its reviewed
 definitions in the one folder the macOS fence lets every session's shell read.
 
-*One folder, not a setting per kind.* `KINGFISHER_AGENTS_DIR`, its four siblings,
-`KINGFISHER_MODELS_FILE` and `KINGFISHER_SOURCE_IDS_FILE` are refused if still set:
+*One folder, not a setting per kind.* `KINGFISHER_AGENTS_DIR`, its four siblings and
+`KINGFISHER_MODELS_FILE` are refused if still set (`KINGFISHER_SOURCE_IDS_FILE` went with
+the file it named, and is read by nothing):
 ignored, each would serve the definitions folder's copy where a deployment had chosen
 another. Skills somebody else maintains are what `KINGFISHER_SKILLS_MOUNTS` is for.
 
@@ -891,8 +891,8 @@ of the read output, keeps only the indentation there. *(2026-10-18.)*
 `source_ids:` for who may reach it, a tool writes its lock in its own file, and an
 entry of `skills:` may be written long -- `{name: X, source_ids: [...]}` -- for who
 is told about that one, since a skill's own file is `SKILL.md`, which the model reads
-whole and a deployment may not own. One central file, `source_ids.yaml`, holds the vocabulary -- names only, no policy. An
-audience resolves into an ordinary
+whole and a deployment may not own. Nothing is central: the vocabulary is what these
+lines write, collected at startup. An audience resolves into an ordinary
 `Capabilities`, so nothing downstream changed: an ungranted tool is never attached to
 the graph and an ungranted subagent is never compiled. *(2026-08-31.)*
 
@@ -1019,8 +1019,8 @@ can name an asset the workspace no longer offers, and that stale entry had to be
 `Offering.refuse_unknown` and turned every turn into a refusal. A definition *is* the
 asset it is about, so that failure has no shape now, and the reconciliation and its
 reports went with it. What survived: `UNSCOPED`, the refusal of a call that names no
-caller, the per-turn re-check of a session's pinned agent, and the closed vocabulary.
-*(2026-08-31, reversed the same day.)*
+caller, the per-turn re-check of a session's pinned agent, and the closed vocabulary,
+until *Reversed: `source_ids.yaml`*. *(2026-08-31, reversed the same day.)*
 
 **Reversed: `for_groups` and the `Caller` handle.** A caller said who they were once and
 reused the handle; now every call takes `source_ids=`. Counted before removing: zero
@@ -1028,7 +1028,7 @@ production callers, and the one consumer serving several callers passed `source_
 all seven call sites. The stated benefits did not survive checking: the grant it
 resolved once measured **0.81 microseconds**, because what each name covered was worked
 out when `source_ids.yaml` loaded, and refusing an unknown source id "at the boundary"
-gains one call, since the vocabulary refuses one before any agent is built. What was
+gained one call, since the vocabulary refused one before any agent was built. What was
 real was script ergonomics, and one accident: the reader of `source_ids` took anything
 but a tuple as *no opinion*, so the handle's coercion was the only reason `["A"]`
 narrowed. Any sequence now means what it looks like, and a bare string is refused.
@@ -1055,6 +1055,25 @@ name requires, and the scan refusing the retired `contains`/`all_of` keywords li
 -- a body of any shape is now one refusal saying where each moved, with no migration.
 *(2026-10-19.)*
 
+**Reversed: `source_ids.yaml`.** The vocabulary is collected from the definitions -- every
+name a `source_ids:` line, a `ToolSpec` or a `skills:` entry writes, and every datazone a
+subagent or tool requires -- and nobody writes it down. Two reasons. Kingfisher holds no
+model of the deployment's identities, and the file was the last place it kept one: a list
+of the names a deployment hands out. And a missing file switched every lock off in
+silence: a deleted or misnamed file left each `source_ids:` line inert and, since *A
+session keeps the datazone of its first zoned turn*, every session's pin read by nothing.
+So checking is on exactly when one lock exists anywhere, and with none, naming a caller is
+refused as it was with no file. **Traded: refusing a misspelling at startup.**
+`source_ids: [sales_bd]` starts, and locks its definition shut to every `sales_db` caller;
+`kingfisher list` prints each name in use beside the definitions using it, which is where
+the misspelling shows. **A name no definition uses is accepted and opens nothing**, a
+caller's source id or datazone alike: refused, a call would pass or fail on which locks
+exist that week. A name beginning `datazone=` is still refused, in a definition and from a
+caller. Collected *for now*: a declared flat list beside the definitions is the way back
+if misspellings bite, and it would only add a check. `seed` still leaves a locked
+definition behind, since copying one switches on access control where it lands. No
+migration: a file left in a deployment is read by nothing. *(2026-10-19.)*
+
 **In Python, a requirement is a set, and a list inside an audience is refused.** The
 only Python spelling of *all of* was `{"a": None, "b": None}`, which nobody types; a set
 became one source id spelled `"{'a', 'b'}"`. A set now reads as the requirement it looks
@@ -1070,10 +1089,10 @@ definition's.** Measured, it had no true positives left and one class of false o
 entry audience is already an **and** with the definition's, so `[senior]` under
 `[analysts, auditors]` is a good second requirement, and the fault it meant to catch --
 `[auditors]` under `[analysts]` by someone trying to widen -- is the same shape, so no
-rule can separate them. What survived is the looking: `SourceIds.narrowing_in` feeds
-`AccessReport.narrowed`, said once beside `unrestricted`. The typos it really caught are
-`refuse_undeclared`'s, refused by name, and a misspelling is no longer explained as a
-reachability problem. *(2026-09-01, both the same day.)*
+rule can separate them. What survived is the looking: `narrowing_in` feeds
+`AccessReport.narrowed`, said once beside `unrestricted`. The typos it really caught were
+`refuse_undeclared`'s, refused by name until *Reversed: `source_ids.yaml`*.
+*(2026-09-01, both the same day.)*
 
 **`builtin_tools` takes no audience, and that is not an omission.** deepagents registers
 its own tools, so kingfisher can filter them but never leave them out of a graph -- a
@@ -1134,18 +1153,16 @@ is the string `"*"`, so a union would collect the character; an unset `tools:` o
 caller. **Skills are compared by identity, not spelling**: `audit` or
 `catalogue::audit`. *(2026-09-27, from an architecture review.)*
 
-**Nor for the faults, until 2026-10-13.** `broken` -- `undeclared_in`'s complaint about an
-undeclared source id -- went into `agents_error` and `subagents_error` whole: a caller
-holding `B` was handed a subagent out of reach, its source id and every declared one,
-beside the `access: null` that exists to withhold them, and exited 1. Only `list --as`
-and `inventory(source_ids=...)` reach that state; a deployment in it is refused at
-construction. **The faults are not all filtered the same way, and the differences are
-the whole of it.** A misfiled skill is loaded and offered, so it is kept to what reached
+**Nor for the faults, until 2026-10-13.** The complaint about an undeclared source id,
+gone since *Reversed: `source_ids.yaml`*, went into `agents_error` and `subagents_error`
+whole: a caller holding `B` was handed a subagent out of reach, its source id and every
+declared one, beside the `access: null` that exists to withhold them, and exited 1.
+**The faults are not all filtered the same way, and the differences are the whole of
+it.** A misfiled skill is loaded and offered, so it is kept to what reached
 definitions offer, as `skills` is -- emptying it would take away the one skill fault a
 caller can act on, and a rule holds that so the three cannot collapse into one
 `if scoped`. A skill that would not load, or nested too deep, has no name to filter by
-and is the operator's diagnostic. `broken` is policy, so it goes with the policy. The
-fault maps key agents as well as subagents, and a subagents-only fixture left the agent
+and is the operator's diagnostic. The fault maps key agents as well as subagents, and a subagents-only fixture left the agent
 half unheld -- the only survivor of that review's twenty-one mutations -- so each fixture
 holds both kinds. *(2026-10-13, from an architecture review.)*
 
@@ -1192,13 +1209,10 @@ across the package. `with_datazone` is the one other reader, and asks only wheth
 append a datazone, leaving a bare string for `held_by` to refuse.
 *(2026-09-15.)*
 
-**One walk of the definitions, for three questions.** `audit` reports what a policy
-leaves open, `undeclared_in` the first definition naming an undeclared source id, and a
-listing what each says; `core.access.checks.walked` yields `(kind, name, said)` once for
-all three. Shared and not merged: a report that stopped at the first fault would be a
-refusal, and a refusal that carried on would be a report. `Kingfisher.__init__` refuses
-first, because a typo makes a line both undeclared and narrowing, and as a narrowing it
-explains the wrong fault. *(2026-09-16.)*
+**One walk of the definitions, for three questions.** `audit` reports what the locks
+leave open, `collected` gathers the names they use, and a listing what each says;
+`core.access.checks.walked` yields `(kind, name, said)` once for all three. Shared and not
+merged: a report that stopped at the first fault would be a refusal. *(2026-09-16.)*
 
 **One reader of what a definition says, and one narrowing of it.** The narrowing of a
 definition's audienced fields was written out six times while `AUDIENCED` already named
@@ -1215,14 +1229,14 @@ visible only by running it: it ships *one* vocabulary, so seeding this repositor
 said `declare analysts, auditors, senior-analysts` beside a file declaring
 `readers, writers, staff, senior, senior-writers`. So the remedy travels in the message,
 built from the names actually missing -- one line, the union across every skipped
-definition, because per-definition copies are overlapping partial lists.
-`assets/source_ids.yaml` is the only source ids example.
+definition, because per-definition copies are overlapping partial lists. That
+remedy went with *Reversed: `source_ids.yaml`*: there is no file to write.
 
 **`models.yaml.example` stays, and the asymmetry is the point.** `models.yaml` is
 required with no fallback, and its example is a hundred lines of annotation nothing else
-carries; its missing-file error already prints a minimal catalogue inline. `source_ids`
-is still not seeded: it is not a definition kind, and copying a policy would make access
-control something a deployment inherits rather than adopts. *(2026-09-02, reversed
+carries; its missing-file error already prints a minimal catalogue inline. A locked
+definition is still not seeded by default: copying a lock would make access control
+something a deployment inherits rather than adopts. *(2026-09-02, reversed
 2026-09-04.)*
 
 **`groups` is `source_ids`.** The concept did not move; the word changed everywhere it
@@ -1240,8 +1254,8 @@ nothing red -- accepted as the documented meaning of an absent vocabulary.
 *(2026-09-15.)*
 
 **One place asks who is calling.** A call naming nobody under a policy was refused at two
-of three doors; reading a session answered, because `held_by` returns `None` for no
-vocabulary, nobody named and `UNSCOPED`, and every reach check reads `None` as everything
+of three doors; reading a session answered, because `held_by` returns `None` for no lock
+anywhere, nobody named and `UNSCOPED`, and every reach check reads `None` as everything
 -- wrong for the second, and the answer named the agent someone else's session is pinned
 to. `caller_holds` is the refusal and the lookup together, and `_prepare_steps` and
 `Kingfisher.session` go through it. `_agent_named` is not a door: it filters on what
@@ -1301,8 +1315,8 @@ reach, because no true wording hides that it exists: a file naming a bare name t
 definitions share, an agent's file naming both, and a loop through definitions the
 caller cannot reach. *(2026-10-12.)*
 
-**Naming a caller where nothing narrows is refused, at one door.** With no
-`source_ids.yaml` any name narrows nothing and the answer is unrestricted. A turn was
+**Naming a caller where nothing narrows is refused, at one door.** With no lock
+anywhere any name narrows nothing and the answer is unrestricted. A turn was
 refused for it and a listing was not, so `kingfisher list --as marketing` printed the
 whole catalogue and exited zero -- read as what marketing reaches, not as a workspace
 with no policy. It is the state the HTTP surface refused as "a server somebody believes
@@ -2345,8 +2359,8 @@ covered the day it exists, which is what made *Middleware is a definition kind*
 buildable. *(2026-09-07.)*
 
 **Reversed: `models.yaml` and `source_ids.yaml` are protected too.** They were left out
-as read only at construction, but so are the definitions; and `source_ids.yaml` is who may
-reach what, so a shell editing it could grant itself anything from the next start. The
+as read only at construction, but so are the definitions, and a shell editing one chose
+what the next start would do; `source_ids.yaml` has since gone. The
 files a deployment writes, the keys file with them, are denied by exact `path`, being
 beside folders that stay writable, at the place the configuration reads them from, so a
 relocated file is covered and a missing one cannot be created. macOS only: the Linux
@@ -3561,16 +3575,13 @@ is rightly not set -- the catalogue walked, `middlewares_error` carries the faul
 row printed `0 built in` with an `ok` over ten. `builtin_tools_checked` says so, beside
 `shadowed_checked` and `moved_tools_checked`.
 
-**A `source_ids:` line is inert with no vocabulary, and `--json` now agrees.** `as_json`
-published every definition's lines with no `source_ids.yaml`, reporting a policy not in
-force. Answered in `inventory`, because the record is what both forms are handed, and the
-agreement rule compares access fields both ways.
+**With nothing locked, `--json` carries no audiences, as the text form shows none.**
+`as_json` published every definition's lines while the text form said nothing, reporting a
+policy not in force. Answered in `inventory`, because the record is what both forms are
+handed, and the agreement rule compares access fields both ways.
 
-**A refusal offers only the source ids a caller may present.** `expand` listed compounds
-too, beside a clause refusing a compound, sending whoever mistyped a name into a second
-refusal; `refuse_undeclared` still lists them, since a definition may name one. The idle
-column `sessions` prints is floored, since it is read into `reap --older-than`.
-*(2026-10-13, from an architecture review.)*
+**The idle column `sessions` prints is floored**, since it is read into `reap
+--older-than`. *(2026-10-13, from an architecture review.)*
 
 **`help` went, and `--seed`, `--from` and `--all` went off the driver.** `kingfisher help
 seed` was `kingfisher seed --help` byte for byte; the driver's seeding flags duplicated
@@ -3596,9 +3607,8 @@ would run a deployment's code to answer a question about it. By syntax rather th
 text, because `subagents/timestamps/timestamps.py` documents `source_ids` and `datazone`
 in its docstring: a reader matching the words leaves a worked example behind. A tool
 *package* is decided whole, since dropping the module that names the audience and copying
-the rest leaves a folder that is not a tool. And the remedy is keyed by what a file asks
-for rather than by the field that said so: told to declare source ids, a reader writes one
-line of the two that file needs. The tolerant-reader limit is unchanged and still
+the rest leaves a folder that is not a tool. And the line names a datazone beside the source
+ids, each in the field it was written in. The tolerant-reader limit is unchanged and still
 stated -- a name computed rather than written out is invisible, as a value the YAML reader
 cannot walk is. *(2026-10-19, from an architecture review.)*
 
@@ -3611,8 +3621,8 @@ rules; any other folder is judged file by file. *(2026-10-20, from a code review
 
 **`Seeded` says what it left behind, because three callers said it and two were wrong.**
 `seed` leaves a definition alone for one of two reasons with opposite remedies -- middleware
-is registered in code, a source id declared in a file -- hence `UNCONSULTED` and `REMEDY`,
-held total. The integration driver and `seed_example.py`, the script people copy, each told
+is registered in code, and a lock switches on access control -- hence `HELD_BACK`, held
+total. The integration driver and `seed_example.py`, the script people copy, each told
 a reader to *register* a source id. `Seeded.report()` is every line a person is owed, and
 every caller prints it; `test_only_the_record_says_what_a_skipped_definition_needs` finds
 any `skipped …` line composed outside `seeding.py`, searching the README, the driver, the
@@ -3782,10 +3792,11 @@ is read, `supplied` is a repository with no directory, `unset` carries where it 
 `--json` and the line `Kingfisher` logs at construction read it, so "nothing configured"
 and "you handed me one" never arrive as spellings to match on.
 
-**`Config` remembers where it looked for `source_ids.yaml`**, as `access_source`, because
-with no file there is no record to hang a path on, and "not set, and here is where I
-looked" is the one line that makes a policy written one directory off visible -- otherwise
-the deployment comes up reachable by everyone and says nothing.
+**Reversed: `Config` remembering where it looked for `source_ids.yaml`.** It kept
+`access_source` so a policy written one directory off showed as "not set, and here is
+where I looked", rather than the deployment coming up reachable by everyone and saying
+nothing. Collected from the definitions, the vocabulary has no file to be one directory
+off. *(2026-10-19.)*
 
 **The library's first logger is `kingfisher.origins`, and not `kingfisher`.** One INFO
 record per construction. `print` would make the library unusable by a server, and
@@ -4279,10 +4290,10 @@ rather than its importers. The split that made `reach.py` edited an import in te
 outside the folder, where a table would have changed seven of its own entries. It is not
 an address and not an interface: nothing outside the wheel is told to import it, so it
 has no witness, and no `__all__`, since nobody star-imports a private folder; the two
-listings left are held to each other as a door's are. Lazy because the folders loop
-where the modules do not -- `core/access` and `core/definitions` with its kinds import
-each other, as do `core/agent` and `core/session` -- so an eager re-export would turn the
-loop into an import cycle. The public tables keep naming the module defining each name,
+listings left are held to each other as a door's are. Lazy because every module in a
+folder loads its `__init__` first, so an eager re-export would have each load all the
+others -- the shape `test_no_module_in_the_package_can_reach_itself` refuses -- and where
+folders loop, as `core/agent` and `core/session` do, a real import cycle. The public tables keep naming the module defining each name,
 so the startup check finds a public name in one step. `FOLDER_TABLES` and
 `test_a_folder_with_a_table_is_reached_through_it` hold it. A pilot: whether another
 folder gets one waits on what this one cost, and so does how the plugin rule reads a
@@ -4301,12 +4312,10 @@ table, since no plugin takes anything from `core/access`. *(2026-10-19.)*
     `RUNS_AN_AGENT`. `langchain_core` counts as the runtime, since `ToolSpec` names no
     langchain type.
   - **`RECORDS` touch nothing outside the process**, so a record can be built without
-    a workspace behind it. `core/access/policy.py` is held to it outside
-    `load_access_policy`, the one function that opens the file, so a vocabulary parses
-    from a mapping. A method call is
-    caught by its name whatever it is called on, a bare `open` wherever the module has
-    not bound the name itself; a dynamic import or a `getattr` is not, since the rule
-    makes the easy violation loud rather than the determined one impossible.
+    a workspace behind it. A method call is caught by its name whatever it is called
+    on, a bare `open` wherever the module has not bound the name itself; a dynamic
+    import or a `getattr` is not, since the rule makes the easy violation loud rather
+    than the determined one impossible.
   - **The flat core writes nothing to disk** except `core/workspace.py`, asserted to
     write, so a move fails rather than excusing nothing.
   - **`test_only_one_module_changes_a_mode`**, over the whole package: scoped to a

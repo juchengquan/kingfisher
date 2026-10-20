@@ -129,14 +129,6 @@ def test_the_example_lands_beside_the_catalogue_it_describes(tmp_path):
     assert (paths.authored_files["models.yaml"].parent / EXAMPLE).is_file()
 
 
-def test_no_source_ids_example_is_placed_anywhere(tmp_path):
-    """`groups.yaml.example` shipped and was placed for two days, and went."""
-    folder = ensure_definitions(tmp_path / "definitions")
-
-    assert not list(folder.glob("source_ids.yaml*")), "a source ids file or example came back"
-    assert (folder / EXAMPLE).is_file(), "the control: the catalogue's example is there"
-
-
 def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):
     """Kingfisher ran git once -- `pre_run_commit` snapshotted the tracked tier before
     each turn -- and that went with `adapters/workspace_git.py`.

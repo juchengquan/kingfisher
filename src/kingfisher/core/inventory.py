@@ -14,15 +14,14 @@ from kingfisher.core.access import (
     Capabilities,
     CapabilityError,
     Selection,
-    SourceIds,
     Stated,
+    Vocabulary,
     activated,
     audit,
     handed_work_by,
     held_by,
     offers,
     reaches,
-    undeclared_in,
     unoffered,
     walked,
     with_datazone,
@@ -42,7 +41,6 @@ from kingfisher.core.definitions.tools.spec import (
     FoundTool,
     Offering,
     admitted,
-    audienced,
     out_of_reach,
     placed,
     reference,
@@ -221,10 +219,11 @@ class Inventory:
     #: Whether an empty `skills` means "none" or "switched off".
     skills_enabled: bool = True
 
-    #: The reconciled policy, or `None` where there is none. Carried, not looked up by the
-    #: printer: a renderer reaching for `Config` would be a second place deciding what is offered.
-    access: SourceIds | None = None
-    #: What the policy and the catalogue disagree about. Empty when they agree.
+    #: The source ids and datazones the definitions use, and which use each, or `None`
+    #: where nothing is locked. Carried, not looked up by the printer: a renderer asking the
+    #: catalogue would be a second place deciding what is said.
+    vocabulary: Vocabulary | None = None
+    #: What the locks leave open. Empty when nothing is.
     access_report: AccessReport = field(default_factory=AccessReport)
     #: Definition kind -> name -> who reaches it and each skill it narrows, for every
     #: definition saying who reaches what, a tool named as a grant writes it and a
@@ -521,32 +520,23 @@ def _audiences(specs: Mapping[str, object], *, kind: str) -> dict[str, Stated]:
 
 
 def _access(
-    cfg: Config,
+    vocabulary: Vocabulary | None,
     *,
     agents: Mapping[str, object],
     subagents: Mapping[str, object],
-    tools: Mapping[str, object],
     named_tools: Mapping[str, FoundTool],
-) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, dict[str, str]]:
+) -> tuple[dict[str, Mapping[str, Stated]], AccessReport]:
     """What the definitions say, and what restricts nobody."""
     stated = {
         "agents": _audiences(agents, kind="agent"),
         "subagents": _audiences(subagents, kind="subagent"),
         "tools": _audiences(named_tools, kind="tool"),
     }
-    if cfg.access is None:
-        return stated, AccessReport(), {}
-    # The walk `Kingfisher` runs at construction, by the same functions, so a listing
-    # cannot disagree with startup about who reaches what.
-    kinds = (("agent", agents), ("subagent", subagents))
-    report = audit(*kinds, vocabulary=cfg.access)
-    broken = {
-        f"{kind}s": complaint
-        for kind, specs in (*kinds, ("tool", tools))
-        if (complaint := undeclared_in(specs, kind=kind, vocabulary=cfg.access))
-        is not None
-    }
-    return stated, report, broken
+    if vocabulary is None:
+        return stated, AccessReport()
+    # The walk `Kingfisher` runs at construction, by the same function, so a listing
+    # cannot disagree with startup about what is left open.
+    return stated, audit(("agent", agents), ("subagent", subagents))
 
 
 def _reaching(
@@ -568,32 +558,6 @@ def _reaching(
         }
 
     return keep
-
-
-def _audienced_tools(resolved: Definitions) -> Mapping[str, FoundTool]:
-    """The tools that say who they admit, or none where the catalogue would not walk."""
-    try:
-        return resolved.audienced_tools
-    except (ToolError, CapabilityError, SubagentError):
-        return {}
-
-
-def _named_tools(resolved: Definitions) -> dict[str, FoundTool]:
-    """The tools that say who they admit, named as the rest of a listing names them.
-
-    A subagent's own under its subagent's name: `audienced_tools` keys it by a file the
-    key's folder does not name, which sends a reader to `tools/`.
-    """
-    named: dict[str, FoundTool] = {}
-    # Apart, so a bundle that will not load still leaves the catalogue's tools said.
-    with suppress(ToolError, CapabilityError):
-        named.update(audienced(resolved.tools.found))
-    with suppress(ToolError, CapabilityError, SubagentError):
-        for owner, bundle in resolved.bundled_tools.items():
-            named.update(
-                {reference(owner, name): one for name, one in audienced(bundle.found).items()}
-            )
-    return named
 
 
 def _shut_out(resolved: Definitions, held: frozenset[str] | None) -> frozenset[str]:
@@ -716,7 +680,7 @@ def inventory(
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
     # Whose view this is, before the agents are read: each one's chain is what it
     # activates for this caller.
-    held = held_by(cfg.access, with_datazone(source_ids, datazone))
+    held = held_by(resolved.vocabulary, with_datazone(source_ids, datazone))
 
     middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved, held)
@@ -765,12 +729,11 @@ def inventory(
         resolved, held
     )
 
-    stated, report, broken = _access(
-        cfg,
+    stated, report = _access(
+        resolved.vocabulary,
         agents=defined_agents,
         subagents=specs,
-        tools=_audienced_tools(resolved),
-        named_tools=_named_tools(resolved),
+        named_tools=resolved.locked_tools,
     )
     reaching = _reaching(held, stated)
     scoped = held is not None
@@ -857,17 +820,16 @@ def inventory(
                 for name in for_caller
             }
         ),
-        # `or`, not replace: a kind that failed to load has the more fundamental problem.
-        # `broken` is policy, so withheld from a scoped view; a load error stays, since a
-        # kind that will not load is one nobody gets, and an unexplained empty list is worse.
-        agents_error=agents_error or (None if scoped else broken.get("agents")),
+        # Kept for a scoped view: a kind that will not load is one nobody gets, and an
+        # unexplained empty list is worse.
+        agents_error=agents_error,
         builtin_tools=builtin,
         builtin_tools_checked=builtin_checked,
         tools=offered_tools,
         tool_sources=MappingProxyType(
             {name: where for name, where in sources.items() if offers_tool(name)}
         ),
-        tools_error=tools_error or (None if scoped else broken.get("tools")),
+        tools_error=tools_error,
         build_error=build_error,
         skills={
             name: registry.description(name) for name in registry.names if offers_skill(name)
@@ -903,7 +865,7 @@ def inventory(
                 for name in for_caller_subagents
             }
         ),
-        subagents_error=subagents_error or (None if scoped else broken.get("subagents")),
+        subagents_error=subagents_error,
         middlewares=middlewares,
         middlewares_error=middlewares_error,
         moved_tools=_NO_NAMES if moved_tools is None else _kept(moved_tools, reached_subjects),
@@ -945,11 +907,11 @@ def inventory(
             name for name in compiled_subagents if name in for_caller_subagents
         ),
         skills_enabled=cfg.skills_enabled,
-        # The policy, so `None` and empty for a scoped view.
-        access=None if scoped else cfg.access,
+        # What the locks are, so `None` and empty for a scoped view.
+        vocabulary=None if scoped else resolved.vocabulary,
         access_report=AccessReport() if scoped else report,
         held=held,
-        # And empty with no vocabulary: a `source_ids:` line is inert until `source_ids.yaml`
-        # declares the names. Here, not in a renderer, because both forms are handed this.
-        audiences=_NO_AUDIENCES if scoped or cfg.access is None else stated,
+        # And empty where nothing is locked, rather than a kind per empty mapping. Here,
+        # not in a renderer, because both forms are handed this.
+        audiences=_NO_AUDIENCES if scoped or resolved.vocabulary is None else stated,
     )

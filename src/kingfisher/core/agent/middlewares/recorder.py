@@ -98,7 +98,7 @@ class RecorderMiddleware(AgentMiddleware):
         self._ledger = ledger
         #: The turn's backend itself: the file tools' rules deny the folder this writes.
         self._backend = backend
-        #: `None` where no `source_ids.yaml` is in force.
+        #: `None` where no definition carries a lock.
         self._audiences = audiences
         #: Where a result is written: this layout's `/scratchpad/tool_results/`, which the
         #: backend routes under the same name.

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -11,7 +10,6 @@ from langchain_core.messages import AIMessage
 from kingfisher.cli.health import examine, worst
 from kingfisher.cli.listing import failed, render
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.core.access.policy import parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
 from kingfisher.core.agent.middlewares.narrowing import (
@@ -30,7 +28,13 @@ from kingfisher.core.definitions.tools.spec import Offering, tool_name
 from kingfisher.core.inventory import inventory
 from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, DEFAULT_LAYOUT, SKILLS_ROUTE
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import FakeToolCallingModel, a_subagent, subagent_of
+from tests.conftest import (
+    FakeToolCallingModel,
+    a_subagent,
+    agent_named,
+    an_agent,
+    subagent_of,
+)
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
 
@@ -1018,10 +1022,10 @@ def test_doctor_warns_about_an_orphaned_bundle_and_does_not_fail_on_it(cfg):
 
 
 def policied(cfg, under_a_policy):
-    """`cfg`, with a source-id policy when asked: the build reads bundles again for one."""
-    if not under_a_policy:
-        return cfg
-    return replace(cfg, access=parse({"source_ids": ["analysts"]}, source="source_ids.yaml"))
+    """`cfg`, with a lock on another agent when asked: the build reads bundles again for one."""
+    if under_a_policy:
+        an_agent(cfg, "gatekeeper", source_ids="[analysts]")
+    return cfg
 
 
 @pytest.mark.parametrize("under_a_policy", [False, True], ids=["open", "policied"])
@@ -1737,3 +1741,44 @@ def test_the_shipped_bundle_takes_nothing_from_the_catalogue(
         if isinstance(m, GrantedOnlyMiddleware)
     ]
     assert set(allowlist._allowed) == {"ls", "glob", "grep", "mask_secrets"}
+
+
+# -- a lock carried inside a bundle -----------------------------------------------
+
+LOCKED_TOOL = (
+    "from kingfisher import ToolSpec\n\n\n"
+    "def probe() -> str:\n    'A tool.'\n    return 'ok'\n\n\n"
+    "TOOLS = [ToolSpec(probe, source_ids=['A'])]\n"
+)
+
+#: A subagent written in Python, locked by its own entry and by nothing else here.
+PYTHON_SUBAGENT = (
+    "SUBAGENTS = [{'name': 'acme', 'description': 'd', 'system_prompt': 'Go.', "
+    "'source_ids': ['A']}]\n"
+)
+
+
+@pytest.mark.parametrize("carrier", ["its own tool", "a Python subagent"])
+def test_a_lock_only_a_bundle_carries_switches_checking_on(cfg, carrier):
+    """A bundle is read apart from the catalogue, so a vocabulary collected from the
+    catalogue alone would run a deployment whose only lock is in one unchecked."""
+    from kingfisher.core.access.source_ids import AccessError
+    from kingfisher.core.service import Kingfisher
+    from kingfisher.plugins import LocalSessions
+
+    if carrier == "its own tool":
+        workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
+        bundle_tool = cfg.definitions / "subagents" / "surveyor" / "tools" / "probe.py"
+        bundle_tool.write_text(LOCKED_TOOL, encoding="utf-8")
+        where = "tool surveyor::probe"
+    else:
+        (cfg.definitions / "subagents").mkdir(parents=True, exist_ok=True)
+        (cfg.definitions / "subagents" / "acme.py").write_text(PYTHON_SUBAGENT, encoding="utf-8")
+        where = "subagent acme"
+    an_agent(cfg, "open_to_all")
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+
+    assert kf.vocabulary is not None
+    assert kf.vocabulary.source_ids == {"A": (where,)}
+    with pytest.raises(AccessError, match="must say who is calling"):
+        agent_named(kf, "open_to_all")

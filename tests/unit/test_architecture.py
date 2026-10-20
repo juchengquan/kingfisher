@@ -1457,8 +1457,6 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # `test_kinds_holds_exactly_the_kinds` refuses a directory that is not in
     # `DEFINITION_KINDS` -- so the hole needs a deliberate edit before it opens.
     "core/definitions": frozenset({"yaml"}),
-    # `policy` reads the access policy file, which is YAML.
-    "core/access": frozenset({"yaml"}),
     # The command reads a `.env` in the directory it runs in; nothing else here does.
     "cli": frozenset({"dotenv"}),
     # The modules directly in `core/` reach the runtime through the packages beside
@@ -1984,7 +1982,6 @@ WITNESSES: dict[str, dict[str, str]] = {
         # `ModelProfile`s, so a caller who can name it must name them.
         "Endpoint": "document",
         "Models": "document",
-        "SourceIds": "document",
         "ModelProfile": "embedder",
         # `configuration.md` writes a `KINGFISHER_WIRE_FORMATS` out, and the factory it
         # shows returns a landing per format.
@@ -2706,7 +2703,7 @@ def test_the_runtime_check_sees_the_runtime():
 
 
 #: Names the formats define, which the package writes because they are its own words.
-FORMAT_FILES = frozenset({"SKILL.md", "README.md", "__init__.py", "source_ids.yaml"})
+FORMAT_FILES = frozenset({"SKILL.md", "README.md", "__init__.py"})
 
 
 def test_the_package_names_nothing_in_assets():
@@ -2833,18 +2830,6 @@ def _world_contact(path: Path) -> list[str]:
     return _contact(ast.walk(tree), _builtins_left(tree))
 
 
-def _world_contact_beside(path: Path, opener: str) -> tuple[list[str], list[str]]:
-    """What the top-level function `opener` reaches in one module, and what the rest does."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    opening = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == opener]
-    inside = {id(node) for function in opening for node in ast.walk(function)}
-    builtins = _builtins_left(tree)
-    return (
-        _contact((node for node in ast.walk(tree) if id(node) in inside), builtins),
-        _contact((node for node in ast.walk(tree) if id(node) not in inside), builtins),
-    )
-
-
 #: What a request is asked in and answered with, the interfaces a deployment implements,
 #: and the access vocabulary they are written in. Named rather than found by folder:
 #: they sit among modules that do touch the disk, and what they share is a property,
@@ -2859,25 +2844,14 @@ RECORDS = (
     "core/definitions/fields.py",
 )
 
-#: The vocabulary's reader, held to the same rule but for the one function that opens the
-#: file: the rest is handed a decoded document, so a vocabulary parses from a mapping. Named
-#: and asserted to reach, so a rename fails instead of excusing nothing.
-OPENS_THE_POLICY = (SRC / "core" / "access" / "policy.py", "load_access_policy")
-
-
 def test_the_records_touch_nothing_outside_the_process():
-    """A record, or a vocabulary parsed from a mapping, that reads a file or runs a command
-    cannot be built without a workspace to stand behind it, in a test or in a deployment's
-    own code."""
+    """A record that reads a file or runs a command cannot be built without a workspace
+    to stand behind it, in a test or in a deployment's own code."""
     reaching = [
         f"{_module_id(path)}: {contact}"
         for path in _every([SRC / record for record in RECORDS], "the records")
         if (contact := _world_contact(path))
     ]
-    reader, opener = OPENS_THE_POLICY
-    opens, parses = _world_contact_beside(reader, opener)
-    assert opens, f"{_module_id(reader)}: {opener} reads nothing, so it is excused for nothing"
-    reaching += [f"{_module_id(reader)}: {contact}" for contact in parses]
 
     assert not reaching, (
         f"the records reach the world: {reaching} -- have the caller do it and hand the "
@@ -2894,17 +2868,6 @@ def test_the_world_rule_sees_a_read_and_an_import(tmp_path):
 
     assert _world_contact(written) == ["L1 import subprocess", "L4 .read_text()"]
     assert _world_contact(clean) == []
-
-
-def test_excusing_the_opener_excuses_nothing_beside_it(tmp_path):
-    """An excusal that swallowed the whole module would let the parser read a file."""
-    reader = tmp_path / "policy.py"
-    reader.write_text(
-        "def load(p):\n    return parse(p.read_text())\n\n"
-        "def parse(p):\n    return p.read_bytes()\n"
-    )
-
-    assert _world_contact_beside(reader, "load") == (["L2 .read_text()"], ["L5 .read_bytes()"])
 
 
 def test_the_world_rule_sees_a_bare_open_and_not_a_name_that_shadows_it(tmp_path):
@@ -3559,7 +3522,8 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
-    "ArtifactError", "CallerError", "CapabilityError", "DecisionError", "InputsError",
+    "AccessError", "ArtifactError", "CallerError", "CapabilityError", "DecisionError",
+    "InputsError",
     "QuotaExceededError", "SessionBusyError", "SubagentError", "UnknownSessionError",
 })
 
@@ -3572,9 +3536,8 @@ DEPLOYMENT_ERRORS = frozenset({
     # `MiddlewareError` joins `ToolError` here for the reason `AgentError` sits here
     # while `SubagentError` sits above: a caller may upload a subagent and cannot
     # upload middleware, so a `middlewares/` file that will not load is always the
-    # deployment's own. `AccessError` is a broken `source_ids.yaml` or a definition
-    # naming an undeclared source id; a call naming its caller wrong raises `CallerError`.
-    "AccessError", "AgentError", "ConfigError", "HostPathError", "LoadError",
+    # deployment's own.
+    "AgentError", "ConfigError", "HostPathError", "LoadError",
     "MiddlewareError", "ToolError", "UnsafeReferenceError",
 })
 
@@ -4987,7 +4950,7 @@ def test_the_resolve_rule_sees_every_spelling_of_that_reach(source):
     "source",
     [
         "other.resolve(cfg)",
-        "from kingfisher.core.access.policy import parse",
+        "from kingfisher.core.access.checks import held_by",
         "confinement.profile(home=h)",
         'getattr(confinement, "profile")(home=h)',
         "make().resolve(cfg)",
@@ -5197,6 +5160,7 @@ PROSE_ATTR = re.compile(r"`([A-Z][A-Za-z0-9]*)\.([A-Za-z_][A-Za-z0-9_]*)(?:\(\))
 PROSE_ATTR_GONE: dict[str, frozenset[str]] = {
     # What a release took away, and the replacements a later release took away too.
     "docs/upgrading.md": frozenset({
+        "Config.access", "Config.access_source", "Kingfisher.access",
         "Config.backend_factory", "Config.deployment_prompt", "Config.plugins_factory",
         "Config.session_backends_factory", "Config.session_id", "Config.sessions_factory",
         "Config.shell_path_extra", "Config.shell_sandbox", "Endpoint.adapter",

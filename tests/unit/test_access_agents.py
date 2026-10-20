@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import pytest
-import yaml
 
 from kingfisher.core.access.capabilities import CapabilityError
-from kingfisher.core.access.policy import parse
 from kingfisher.core.access.source_ids import UNSCOPED, AccessError
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
@@ -16,15 +12,13 @@ from kingfisher.core.session.model import UnknownSessionError
 from kingfisher.plugins import LocalSessions
 from tests.conftest import Through, agent_named, an_agent, pin, start
 
-VOCABULARY = "source_ids: [A, B]\n"
-
 
 @pytest.fixture
 def two_agents(cfg):
     """`assistant` for source id A only; `surveyor` for everyone."""
     an_agent(cfg, "assistant", source_ids="[A]")
     an_agent(cfg, "surveyor")
-    return replace(cfg, access=parse(yaml.safe_load(VOCABULARY), source="source_ids.yaml"))
+    return cfg
 
 
 def test_a_caller_reaches_an_agent_their_source_id_is_listed_on(two_agents):
@@ -53,8 +47,7 @@ def test_the_listing_in_that_refusal_names_only_reachable_agents(two_agents):
 
 def test_a_caller_who_reaches_no_agent_is_told_the_workspace_offers_none(cfg):
     an_agent(cfg, "assistant", source_ids="[B]")
-    vocabulary = parse({"source_ids": ["A", "B"]}, source="source_ids.yaml")
-    kf = Kingfisher(replace(cfg, access=vocabulary), sessions=LocalSessions())
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     with pytest.raises(CapabilityError, match="offers none"):
         agent_named(kf, "anything", source_ids=("A",))
 
@@ -336,69 +329,34 @@ def test_a_session_with_nothing_pinned_stays_visible(two_agents, way):
     assert Through(kf, way).session(session_id, source_ids=("B",)) is not None
 
 
-# -- a definition naming a source id the vocabulary does not declare ------------
+# -- a lock is in force wherever it is written ---------------------------------
 
 
-def test_a_definition_naming_an_undeclared_source_id_is_refused(cfg):
-    """The closed vocabulary's other end, and the one that was written and never wired."""
+def test_one_lock_is_in_force_with_nothing_else_written(cfg):
+    """No file switches it on any more, so none can be missing: one `source_ids:` line
+    and a call naming nobody is refused, where a missing file left the line inert."""
+    an_agent(cfg, "analyst", source_ids="[analysts]")
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+
+    with pytest.raises(AccessError, match="must say who is calling"):
+        agent_named(kf, "analyst")
+    with pytest.raises(CapabilityError, match="no agent named 'analyst'"):
+        agent_named(kf, "analyst", source_ids=("auditors",))
+    assert agent_named(kf, "analyst", source_ids=("analysts",)) is not None
+
+
+def test_a_misspelt_lock_starts_and_locks_its_definition_shut(cfg):
+    """Nothing refuses a misspelling now, so it must fail shut: `analists` opens to
+    nobody holding `analysts`, which the listing shows beside the spelling meant."""
     an_agent(cfg, "analyst", source_ids="[analists]")
-    policied = replace(cfg, access=parse({"source_ids": ["analysts"]}, source="source_ids.yaml"))
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="analists"):
-        Kingfisher(policied, sessions=LocalSessions())
-
-
-def test_that_refusal_names_the_definition_and_what_is_declared(cfg):
-    """Both halves, because a reader has one file to fix and needs the spelling that
-    would have worked.
-    """
-    an_agent(cfg, "analyst", source_ids="[analists]")
-    policied = replace(cfg, access=parse({"source_ids": ["analysts"]}, source="source_ids.yaml"))
-
-    with pytest.raises(AccessError) as raised:
-        Kingfisher(policied, sessions=LocalSessions())
-
-    assert "analyst" in str(raised.value)
-    assert "analysts" in str(raised.value)
+    with pytest.raises(CapabilityError, match="no agent named 'analyst'"):
+        agent_named(kf, "analyst", source_ids=("analysts",))
 
 
-def test_an_entry_audience_naming_an_undeclared_source_id_is_refused(cfg):
-    """Not only the definition's own line: an entry names source ids too, and a typo there
-    hides one skill rather than the whole agent -- which is quieter.
-    """
-    directory = cfg.catalogue_roots["agents"]
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / "analyst.yaml").write_text(
-        "name: analyst\ndescription: An agent.\nbuiltin_tools: [read_file]\n"
-        "skills:\n  - name: tabular-qa\n    source_ids: [analists]\n"
-        "system_prompt: |\n  Do it.\n",
-        encoding="utf-8",
-    )
-    policied = replace(cfg, access=parse({"source_ids": ["analysts"]}, source="source_ids.yaml"))
-
-    with pytest.raises(AccessError, match="analists"):
-        Kingfisher(policied, sessions=LocalSessions())
-
-
-def test_a_restricted_definition_reports_the_same_typo_the_same_way(cfg):
-    """The neighbouring case, asserted so the ordering is not folklore."""
-    directory = cfg.catalogue_roots["agents"]
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / "analyst.yaml").write_text(
-        "name: analyst\ndescription: An agent.\nsource_ids: [analysts]\n"
-        "builtin_tools: [read_file]\n"
-        "skills:\n  - name: tabular-qa\n    source_ids: [analists]\n"
-        "system_prompt: |\n  Do it.\n",
-        encoding="utf-8",
-    )
-    policied = replace(cfg, access=parse({"source_ids": ["analysts"]}, source="source_ids.yaml"))
-
-    with pytest.raises(AccessError, match="analists"):
-        Kingfisher(policied, sessions=LocalSessions())
-
-
-def test_a_line_narrowing_past_declared_source_ids_is_reported_not_refused(cfg):
-    """Every name is real and the line asks for one the definition never mentions."""
+def test_a_line_narrowing_past_its_definition_is_reported_not_refused(cfg):
+    """The line asks for a source id the definition never mentions."""
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "analyst.yaml").write_text(
@@ -408,45 +366,11 @@ def test_a_line_narrowing_past_declared_source_ids_is_reported_not_refused(cfg):
         "system_prompt: |\n  Do it.\n",
         encoding="utf-8",
     )
-    policied = replace(
-        cfg, access=parse({"source_ids": ["analysts", "auditors"]}, source="source_ids.yaml")
-    )
 
-    kf = Kingfisher(policied, sessions=LocalSessions())
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
     assert kf.access_report.narrowed == (("agent analyst: skill tabular-qa", "auditors"),)
     assert "reaches only callers holding both" in "\n".join(kf.access_report.lines())
-
-
-def test_a_subagent_is_checked_too(cfg):
-    an_agent(cfg, "assistant")
-    subagents = cfg.catalogue_roots["subagents"]
-    subagents.mkdir(parents=True, exist_ok=True)
-    (subagents / "auditor.yaml").write_text(
-        "name: auditor\ndescription: A subagent.\nsource_ids: [analists]\n"
-        "system_prompt: |\n  Do it.\n",
-        encoding="utf-8",
-    )
-    policied = replace(cfg, access=parse({"source_ids": ["analysts"]}, source="source_ids.yaml"))
-
-    with pytest.raises(AccessError, match="analists"):
-        Kingfisher(policied, sessions=LocalSessions())
-
-
-def test_a_declared_source_id_is_fine(cfg):
-    an_agent(cfg, "analyst", source_ids="[analysts]")
-    policied = replace(cfg, access=parse({"source_ids": ["analysts"]}, source="source_ids.yaml"))
-
-    kf = Kingfisher(policied, sessions=LocalSessions())
-    named = agent_named(kf, "analyst", source_ids=("analysts",))
-    assert named is not None
-
-
-def test_nothing_is_checked_where_there_is_no_vocabulary(cfg):
-    """A `source_ids:` line on a deployment that declares none is inert, not wrong."""
-    an_agent(cfg, "analyst", source_ids="[whatever]")
-
-    assert agent_named(Kingfisher(cfg, sessions=LocalSessions()), "analyst") is not None
 
 
 def test_a_subagent_cannot_reach_a_looser_middleware_than_its_agent_granted():

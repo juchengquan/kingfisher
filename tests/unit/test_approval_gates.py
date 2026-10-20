@@ -12,7 +12,6 @@ from dataclasses import replace as replace_cfg
 from typing import Any
 
 import pytest
-import yaml
 from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
@@ -421,25 +420,20 @@ def test_responding_with_nothing_to_respond_is_refused(cfg):
 
 
 def _under_a_policy(cfg):
-    """A workspace with a vocabulary and two agents, which is what makes a session have
-    a *resolved* agent at all.
+    """A workspace with two locked agents, which is what makes a session have a
+    *resolved* agent at all.
 
-    An injected graph under no policy resolves none -- setup says so in as many
+    An injected graph where nothing is locked resolves none -- setup says so in as many
     words -- so a session built that way has no agent for a resume to name a different
     one from, and the rules below would assert on nothing.
     """
-    from kingfisher.core.access.policy import parse
     from tests.conftest import an_agent
 
+    # Locked, because setup resolves an agent only where a graph was not injected *or*
+    # something is locked, and these rules inject one.
     for name in ("analyst", "somebody-else"):
         an_agent(cfg, name, source_ids="[A]")
-    vocabulary = "source_ids: [A]\n"
-    # On the config as well as in the file: setup resolves an agent only where a
-    # graph was not injected *or* a policy is in force, and these rules inject one.
-    (cfg.definitions / "source_ids.yaml").write_text(vocabulary, encoding="utf-8")
-    return replace_cfg(
-        cfg, access=parse(yaml.safe_load(vocabulary), source="source_ids.yaml")
-    )
+    return cfg
 
 
 def _paused_on_a_pinned_session(cfg, call_id: str):

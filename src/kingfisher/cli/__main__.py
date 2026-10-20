@@ -98,8 +98,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "also copy definitions held back by default: the ones naming "
             "middleware, which a workspace that has not registered those names "
-            "cannot build, and the ones naming source ids, which do nothing "
-            "until a source_ids.yaml declares them"
+            "cannot build, and the ones carrying a lock, which switches on access "
+            "control in this workspace"
         ),
     )
     doing = sub.add_parser(
@@ -365,7 +365,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 _TURN_CALLER = (
     "who is calling: comma-separated source ids, or UNSCOPED to run "
-    "with no caller. Required where the workspace declares source ids"
+    "with no caller. Required where a definition carries a lock"
 )
 
 
@@ -382,7 +382,7 @@ def _add_caller(parser: argparse.ArgumentParser, help_text: str) -> None:
         "--datazone",
         default=None,
         metavar="NAME",
-        help="the datazone the caller is in, one of the vocabulary's 'datazones:'",
+        help="the datazone the caller is in, as a subagent's or tool's datazone: names it",
     )
 
 
@@ -1028,7 +1028,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     except AccessError as exc:
-        # A traceback for `--as Q` would bury the line naming the source ids defined here.
+        # A traceback for a caller named wrong would bury the line saying how to name one.
         print(f"access error: {exc}", file=sys.stderr)
         return 2
     except ConfigError as exc:

@@ -10,10 +10,8 @@ description: Answers questions from the data, with the database behind a source 
 # that matter and leaving the rest alone; `kingfisher list` names the ones
 # carrying no line, so default-open is not also silent.
 #
-# The names have to be declared in `source_ids.yaml`. A typo here is refused at
-# startup rather than inventing a source id nobody holds -- which would leave
-# this agent quietly reachable by no one, found weeks later by whoever needed
-# it.
+# A typo here is not refused: it locks this agent to a name nobody holds, so it
+# fails shut, and `kingfisher list` shows it beside the name you meant.
 source_ids: [sales_db, audit_log]
 # `task` is how it reaches `auditor` below. Naming a subagent does not grant the
 # tool that calls one, and a list without it is refused at load.

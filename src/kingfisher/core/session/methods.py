@@ -28,14 +28,14 @@ from .store import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from kingfisher.core.access import Held, SourceIds
+    from kingfisher.core.access import Held, Vocabulary
     from kingfisher.core.config import Config
 
 
 class SessionMethods:
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
     cfg: Config
-    access: SourceIds | None
+    vocabulary: Vocabulary | None
     #: Where the sessions are: which there are, how big, when each was used.
     _sessions: Any
     #: The backend one session's files are reached through, as a sequence.
@@ -63,7 +63,7 @@ class SessionMethods:
 
         The rule reading a session and running a turn in it share: a caller who cannot
         reach the pinned agent, or is not in the session's datazone, cannot touch the
-        session. `None` (no vocabulary, or an `UNSCOPED` call) reaches everything, as does
+        session. `None` (no lock anywhere, or an `UNSCOPED` call) reaches everything, as does
         a session with nothing pinned yet.
         """
         if held is None:
@@ -142,7 +142,7 @@ class SessionMethods:
     def _session_steps(
         self, session_id: str, source_ids: Held | None, *, create: bool
     ) -> Steps[Session | None]:
-        held = caller_holds(self.access, source_ids)
+        held = caller_holds(self.vocabulary, source_ids)
         listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
         if create and session_id not in listing:
             made = yield from self._files_for(session_id)
@@ -155,8 +155,8 @@ class SessionMethods:
         return Session(session_id, listing[session_id], self, opened) if reached else None
 
     def _sessions_steps(self, source_ids: Held | None) -> Steps[tuple[Session, ...]]:
-        # Naming nobody is the operator's view of every session, not a caller under a policy.
-        held = None if source_ids is None else caller_holds(self.access, source_ids)
+        # Naming nobody is the operator's view of every session, not a caller under a lock.
+        held = None if source_ids is None else caller_holds(self.vocabulary, source_ids)
         listing = yield reading(self._sessions, "sessions", self.cfg)
         found = []
         for name, last_used in known(listing):

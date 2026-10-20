@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import dataclass, fields
 from functools import cached_property
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
-from kingfisher.core.access import ALL, SEPARATOR
+from kingfisher.core.access import ALL, SEPARATOR, CapabilityError, collected
 from kingfisher.core.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.agents.spec import DIRECTORY as AGENT_DIRECTORY
+from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
@@ -20,8 +22,11 @@ from kingfisher.core.definitions.subagents.catalogue import LocalSubagentReposit
 from kingfisher.core.definitions.subagents.rules import refuse_miscounted
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
-from kingfisher.core.definitions.tools.spec import FoundTool, Offering
+from kingfisher.core.definitions.tools.spec import FoundTool, Offering, audienced, reference
 from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, RESERVED_SKILL_FOLDER, SKILLS_ROUTE
+
+if TYPE_CHECKING:
+    from kingfisher.core.access import Vocabulary
 
 
 class SkillSource(NamedTuple):
@@ -118,6 +123,44 @@ class Definitions:
             *(one for bundle in self.bundled_tools.values() for one in bundle.found),
         )
         return {one.reference: one for one in found if one.audience != ALL}
+
+    @property
+    def locked_tools(self) -> dict[str, FoundTool]:
+        """The same tools, named as a listing names them: a subagent's own under its
+        subagent's name, since `audienced_tools` keys it by a file whose folder names none.
+
+        A part that will not load leaves its tools out rather than raising: `warm` refuses
+        it, and a listing reports it under its own kind.
+        """
+        named: dict[str, FoundTool] = {}
+        # Apart, so a bundle that will not load still leaves the catalogue's tools said.
+        with suppress(ToolError, CapabilityError):
+            named.update(audienced(self.tools.found))
+        with suppress(ToolError, CapabilityError, SubagentError):
+            for owner, bundle in self.bundled_tools.items():
+                named.update(
+                    {reference(owner, name): one for name, one in audienced(bundle.found).items()}
+                )
+        return named
+
+    @cached_property
+    def vocabulary(self) -> Vocabulary | None:
+        """The source ids and datazones these definitions use, or `None` where none carries
+        a lock -- one walk, so `Kingfisher` and `kingfisher list` cannot disagree on it."""
+        return self.vocabulary_with(self.locked_tools)
+
+    def vocabulary_with(self, tools: Mapping[str, FoundTool]) -> Vocabulary | None:
+        """`vocabulary`, its tools half from tools a caller has already walked.
+
+        Tolerant of a kind that will not load, as `locked_tools` is, so the listing of a
+        broken workspace still says what the rest of it locks.
+        """
+        kinds: list[tuple[str, Mapping[str, object]]] = []
+        with suppress(AgentError, SubagentError, CapabilityError):
+            kinds.append(("agent", self.agents.specs))
+        with suppress(SubagentError, CapabilityError):
+            kinds.append(("subagent", self.subagents.specs))
+        return collected(*kinds, ("tool", tools))
 
     @cached_property
     def bundled_skills(self) -> Mapping[str, SkillRegistry]:

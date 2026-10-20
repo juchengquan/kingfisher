@@ -310,8 +310,8 @@ def test_every_way_of_naming_a_source_id_is_left_behind(spelling, cfg, tmp_path)
 
 def test_a_definition_naming_only_a_datazone_is_left_behind(cfg, tmp_path):
     """`datazone:` was invisible to seeding, in either format: the shipped `quarters.py`
-    was copied for months and left `kingfisher list` and `doctor` failing with `names
-    undeclared datazone 'emea'`, with nothing in seed's report naming it.
+    was copied for months with nothing in seed's report naming it -- and a datazone is a
+    lock, which switches on access control in the workspace it is copied into.
 
     One spelling and not a table: a datazone is one name, never a list, and never on an
     entry -- an agent writing one is refused, so a subagent's own field is the only place
@@ -329,10 +329,9 @@ def test_a_definition_naming_only_a_datazone_is_left_behind(cfg, tmp_path):
     assert "subagents/zoned.yaml" not in done.written
     (left,) = done.skipped
     assert (left.label, left.names, left.datazones) == ("subagents/zoned.yaml", (), ("emea",))
-    # The remedy it is given, which is the half that makes the skip useful: told to
-    # declare source ids, a reader writes the wrong line of the right file.
+    # Named as the field it was written in, so a reader looks for the right line.
     assert "names datazone (emea)" in "\n".join(done.report())
-    assert "Declare the datazone in source_ids.yaml" in "\n".join(done.report())
+    assert "switches on access control" in "\n".join(done.report())
 
 
 #: Every way a definition says who reaches it *in Python*: the only place a tool can say
@@ -611,11 +610,9 @@ def test_a_grouping_folder_is_judged_file_by_file(cfg, tmp_path):
     ]
 
 
-def test_the_declaration_names_both_lines_of_the_file(cfg, tmp_path):
-    """The block a reader copies. One line for the source ids and one for the datazones,
-    each only where something needs it: a deployment told to declare source ids and left
-    to find `datazones:` for itself writes half of what it needs and still cannot load.
-    """
+def test_the_skip_line_names_both_fields_a_definition_wrote(cfg, tmp_path):
+    """Named only by its source ids, a file locked to a datazone as well would be read
+    as open to any zone by whoever copies it with `--all`."""
     source = tmp_path / "presets"
     (source / "subagents").mkdir(parents=True)
     (source / "subagents" / "both.yaml").write_text(
@@ -626,10 +623,8 @@ def test_the_declaration_names_both_lines_of_the_file(cfg, tmp_path):
 
     report = "\n".join(seeding.seed(cfg, source).report())
 
-    assert "    source_ids: [A]" in report
-    assert "    datazones: [emea]" in report
     assert "names source_ids (A) and datazone (emea)" in report
-    assert "Declare them in source_ids.yaml" in report
+    assert "source_ids.yaml" not in report, "a file nothing reads"
 
 
 def test_a_definition_naming_nobody_is_copied(cfg, tmp_path):
@@ -907,7 +902,7 @@ def test_every_complete_definition_in_the_readme_parses(formats_doc):
 
 
 #: What a fenced block has to mention to be a definition fragment rather than a
-#: `source_ids.yaml` or a `models.yaml` example, which the same page also shows.
+#: `models.yaml` example, which the same page also shows.
 DEFINITION_FIELDS = ("tools:", "skills:", "subagents:", "middlewares:", "builtin_tools:")
 
 

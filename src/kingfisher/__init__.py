@@ -35,7 +35,6 @@ _EXPORTS = {
     "Models": "kingfisher.core.config",
     "ModelProfile": "kingfisher.core.config",
     "Endpoint": "kingfisher.core.config",
-    "SourceIds": "kingfisher.core.access.source_ids",
     "WorkspacePaths": "kingfisher.core.config",
     "Landing": "kingfisher.core.config",
     "Kingfisher": "kingfisher.core.service",
@@ -110,7 +109,6 @@ __all__ = [
     "Seeded",
     "Session",
     "SessionBusyError",
-    "SourceIds",
     "SubagentError",
     "ToolContext",
     "ToolSpec",
@@ -136,7 +134,6 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import AccessError as AccessError
     from kingfisher.core.access.source_ids import CallerError as CallerError
     from kingfisher.core.access.source_ids import Held as Held
-    from kingfisher.core.access.source_ids import SourceIds as SourceIds
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.config import Config as Config
     from kingfisher.core.config import ConfigError as ConfigError

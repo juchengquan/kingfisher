@@ -15,10 +15,9 @@ from kingfisher.core.access import (
     AccessReport,
     Capabilities,
     CapabilityError,
-    SourceIds,
+    Vocabulary,
     audit,
     reaches,
-    refuse_undeclared,
 )
 from kingfisher.core.agent.activation import defined_subagents
 from kingfisher.core.agent.assembly import (
@@ -144,23 +143,17 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         refuse_unbuildable_middleware(self.middlewares)
         self._sessions: Sessions = sessions
         self._graph = graph
-        # Nothing to reconcile against the catalogue: audiences live in the definitions,
-        # and one naming a tool that does not exist was refused by `Offering.refuse_unknown`.
-        self.access: SourceIds | None = self.cfg.access
+        # Collected rather than read from a file: a lock written anywhere is in force, so no
+        # missing file can leave one inert.
+        self.vocabulary: Vocabulary | None = self.catalogue.vocabulary
         self.access_report: AccessReport = AccessReport()
-        if self.access is not None:
-            # Walked once for both calls: `defined_subagents` reads a directory.
-            kinds = (
+        if self.vocabulary is not None:
+            # Tools are not audited: one stating no audience is open to whoever opens an
+            # agent granting it.
+            self.access_report = audit(
                 ("agent", self.catalogue.agents.specs),
                 ("subagent", defined_subagents(self.cfg, catalogue=self.catalogue)),
             )
-            # Refusals first: a typo makes a line both undeclared and narrowing, and as a
-            # narrowing it would explain the wrong fault. Tools are checked, not audited:
-            # one stating no audience is open to whoever opens an agent granting it.
-            refuse_undeclared(
-                *kinds, ("tool", self.catalogue.audienced_tools), vocabulary=self.access
-            )
-            self.access_report = audit(*kinds, vocabulary=self.access)
 
         # Last, so the line reports what was resolved, and a wiring failure raises
         # instead of announcing a deployment that never came up.

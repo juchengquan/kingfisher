@@ -8,13 +8,11 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-import yaml
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 from langchain_core.messages import AIMessage
 
 from kingfisher import ArtifactError, Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
-from kingfisher.core.access.policy import parse
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import Sessions
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS, SKILLS_ROUTE, Layout
@@ -217,7 +215,7 @@ def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg, way):
     agent you cannot reach buys nothing, including its outputs.
     """
     an_agent(cfg, "only_a", source_ids="[A]", **EVERY_TOOL)
-    policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
+    policied = cfg
     kf = _produced(policied)
     pin(kf, "s", "only_a")
 
@@ -275,7 +273,7 @@ def test_a_session_is_opened_once_where_its_pinned_agent_decides(cfg, way):
     takes the session's backend -- once.
     """
     an_agent(cfg, "only_a", source_ids="[A]", **EVERY_TOOL)
-    policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
+    policied = cfg
     counting = Counting()
     kf = _produced(policied, backends=counting)
     pin(kf, "s", "only_a")

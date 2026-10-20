@@ -215,11 +215,9 @@ PORTABLE: frozenset[str] = frozenset(
         "tools",
         "skills",
         "metadata",
-        # Names what only a deployment knows without depending on it: an id the
-        # vocabulary lacks stops startup, and with no vocabulary the line is inert --
-        # loud or nothing, never a subagent quietly open.
+        # Names what only a deployment knows without depending on it: a name the deployment
+        # never hands out locks the subagent shut, never open.
         "source_ids",
-        # Likewise: a datazone the vocabulary does not declare stops the deployment.
         "datazone",
     }
 )

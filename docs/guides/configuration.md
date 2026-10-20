@@ -10,8 +10,8 @@ value belongs. This page is the list, for when you want to know what exists
 rather than why.
 
 **Two variables are required**, and they name two folders kept apart.
-`KINGFISHER_DEFINITIONS_DIR` is what people write: the definitions, `models.yaml`
-and `source_ids.yaml`. `KINGFISHER_WORKSPACE` is what sessions make. Neither has a
+`KINGFISHER_DEFINITIONS_DIR` is what people write: the definitions and
+`models.yaml`. `KINGFISHER_WORKSPACE` is what sessions make. Neither has a
 default, each raises `ConfigError` when it is missing, and everything else is off
 or defaults inside one of them. That is deliberate: these are the two things
 kingfisher cannot invent, and a default would put a deployment's sessions, or the
@@ -23,7 +23,7 @@ the definitions folder, since that is all it writes.
 | Variable | What it does | Default |
 | --- | --- | --- |
 | `KINGFISHER_WORKSPACE` | What sessions make: `sessions/`, and kingfisher's own `.kingfisher/` beside it. | **required** |
-| `KINGFISHER_DEFINITIONS_DIR` | What people write, under fixed names: `agents/`, `middlewares/`, `skills/`, `subagents/` and `tools/`; `models.yaml`, the model catalogue — which models exist, where each runs, which key it uses; and `source_ids.yaml`, the source-id vocabulary, whose absence turns access control off entirely. A missing kind folder means none of that kind. A start reads it and never writes it: a folder that is not there is refused rather than made. Neither it nor the workspace may be inside the other. | **required** |
+| `KINGFISHER_DEFINITIONS_DIR` | What people write, under fixed names: `agents/`, `middlewares/`, `skills/`, `subagents/` and `tools/`; and `models.yaml`, the model catalogue — which models exist, where each runs, which key it uses. A missing kind folder means none of that kind. A start reads it and never writes it: a folder that is not there is refused rather than made. Neither it nor the workspace may be inside the other. | **required** |
 | `KINGFISHER_ASSETS` | Where `kingfisher seed` copies definitions from — the assets. This repository ships its own in `assets/`; definitions from another project belong outside the checkout, seeded with a second `--from`. Without it seeding lays the definitions folder out, writes `models.yaml.example`, and then refuses — in that order, so a deployment with nothing to seed still gets somewhere to start. | none |
 | `KINGFISHER_MODEL_KEYS_FILE` | The file an endpoint's `key:` names an entry in, one `name: key` line each. Read only once this names it; named and missing, unreadable or not such a list, it refuses startup. Keep it out of the workspace, and on macOS under the home folder — see *What each fence hides*. `seed` places a `keys.yaml.example` to copy out; `doctor` says where each key came from, and warns when the shell or another user can read the file. | none |
 | `KINGFISHER_WIRE_FORMATS` | `module:name` naming something callable with no arguments that returns wire formats of your own, for an endpoint's `api` to name. See [below](#a-wire-format-kingfisher-does-not-ship). `KINGFISHER_ADAPTERS_FACTORY`, its old name, is refused if still set. | none — `anthropic` and `openai_responses` only |
@@ -46,8 +46,8 @@ several deployments. Keeping it elsewhere is safe for the reason it is worth doi
 the agent reaches a catalogue through a route, and the shell has no business there
 — on macOS a definitions folder under your home folder is hidden from the shell but
 for `skills/`, whose scripts it runs. One folder rather than a setting per kind:
-`KINGFISHER_AGENTS_DIR`, its four siblings, `KINGFISHER_MODELS_FILE` and
-`KINGFISHER_SOURCE_IDS_FILE` moved one thing each, and are refused if still set. A
+`KINGFISHER_AGENTS_DIR`, its four siblings and `KINGFISHER_MODELS_FILE` moved one
+thing each, and are refused if still set. A
 definition left in a workspace from before is read by nothing; delete it, or move it
 into the definitions folder.
 

@@ -18,14 +18,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-import yaml
 from deepagents.backends.protocol import FileUploadResponse
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 
 from assets.middlewares.tool_note import ToolNote
 from kingfisher import Kingfisher, Request
-from kingfisher.core.access.policy import parse
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorded import summary
 from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
@@ -197,7 +195,7 @@ def test_a_result_is_recorded_kept_and_handed_to_the_caller(ledgered):
     assert entry.path == "/scratchpad/tool_results/A-0001-web_search.txt"
     assert _read(ledgered, entry.path) == "Ten results for EV price war\n1. one\n2. two"
     assert entry.size == len(_read(ledgered, entry.path).encode("utf-8"))
-    assert entry.access is None, "no source_ids.yaml is in force"
+    assert entry.access is None, "no definition carries a lock"
     # What the caller holds is the row, through the JSON a service would send.
     sent = json.loads(json.dumps(asdict(result)))
     assert sent["ledger"] == _rows(ledgered)[:1]
@@ -986,8 +984,6 @@ def test_calls_made_together_get_numbers_of_their_own(ledgered):
 
 # -- access ---------------------------------------------------------------------
 
-VOCABULARY = "source_ids: [public, finance]\n"
-
 AUDIENCED_AGENT = """name: only
 description: An agent.
 source_ids: [public, finance]
@@ -1013,20 +1009,20 @@ LOCKED_TOOLS = TOOLS.replace(
 )
 
 
-#: Who the caller in these tests is: everyone the vocabulary names, so nothing is
-#: narrowed away and every audience is recorded as written.
+#: Who the caller in these tests is: every name the locks use, so nothing is narrowed
+#: away and every audience is recorded as written.
 HOLDING = ["public", "finance"]
 
 
 def _audienced(cfg, *, gated: str | None = None):
-    """`cfg` under `VOCABULARY`, with the agent and `researcher` written with audiences."""
+    """`cfg` with the agent and `researcher` written with audiences."""
     agent = AUDIENCED_AGENT
     if gated is not None:
         agent = agent.replace("system_prompt:", f"interrupt_on: [{gated}]\nsystem_prompt:")
     (tools_dir(cfg) / "probe.py").write_text(LOCKED_TOOLS, encoding="utf-8")
     (cfg.catalogue_roots["agents"] / "only.yaml").write_text(agent, encoding="utf-8")
     (subagents_dir(cfg) / "researcher.yaml").write_text(AUDIENCED_RESEARCHER, encoding="utf-8")
-    return replace(cfg, access=parse(yaml.safe_load(VOCABULARY), source="source_ids.yaml"))
+    return cfg
 
 
 def test_access_is_the_audience_each_result_was_offered_under(ledgered):

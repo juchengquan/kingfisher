@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from kingfisher.core import environment as config_module
-from kingfisher.core.access.source_ids import AccessError
 from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, Config, ConfigError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.environment import Environment, config_from_env
@@ -350,7 +349,6 @@ def test_every_kind_is_read_from_its_own_name_in_the_definitions_folder(env, tmp
     assert subagents_dir(cfg) == definitions / "subagents"
     assert cfg.authored_files == {
         "models.yaml": definitions / "models.yaml",
-        "source_ids.yaml": definitions / "source_ids.yaml",
         "INSTRUCTIONS.md": definitions / "INSTRUCTIONS.md",
     }
 
@@ -574,29 +572,16 @@ def test_a_config_is_a_seeding_destination(tmp_path, cfg):
 # -- the source-id vocabulary ------------------------------------------------------
 
 
-def test_a_workspace_without_a_vocabulary_file_has_none(env):
-    """Absent is the whole of what "this deployment controls nothing by source id" means,
-    and it is what every deployment that predates the field has.
-    """
-    assert config_from_env(env).access is None
-
-
-def test_a_vocabulary_in_the_definitions_folder_is_read(env, tmp_path):
-    (tmp_path / "definitions" / "source_ids.yaml").write_text(
-        "source_ids: [A, B]\n", encoding="utf-8"
-    )
-    access = config_from_env(env).access
-    assert access is not None
-    assert set(access.names) == {"A", "B"}
-
-
-def test_a_vocabulary_that_will_not_parse_stops_the_deployment(env, tmp_path):
-    """Fail closed."""
+def test_a_leftover_source_ids_file_is_read_by_nothing(env, tmp_path):
+    """The vocabulary is collected from the definitions, with no migration: a reader put
+    back would stop deployments over a file nobody maintains, a broken one first."""
     (tmp_path / "definitions" / "source_ids.yaml").write_text(
         "source_ids: [A\n", encoding="utf-8"
     )
-    with pytest.raises(AccessError):
-        config_from_env(env)
+
+    cfg = config_from_env(env)
+
+    assert "source_ids.yaml" not in cfg.authored_files
 
 
 # -- the environment, bound once -------------------------------------------

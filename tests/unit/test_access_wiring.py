@@ -8,19 +8,18 @@ import re
 from dataclasses import replace
 
 import pytest
-import yaml
 from deepagents.middleware import SubAgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.access.checks import caller_holds, held_by
-from kingfisher.core.access.policy import parse
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
     AccessError,
-    CallerError,
     Datazone,
+    Held,
+    Vocabulary,
     with_datazone,
 )
 from kingfisher.core.agent.assembly import build_agent
@@ -57,8 +56,6 @@ def line_count(path: str) -> str:
 TOOLS = [ToolSpec(line_count, source_ids=["A"])]
 '''
 
-VOCABULARY = "source_ids: [A, B]\n"
-
 #: `surveyor` is for A and B; its one tool, in its own file, is for A alone. So a caller
 #: holding B reaches the agent and runs it with nothing -- the compounding case.
 AGENT = """name: surveyor
@@ -71,10 +68,6 @@ system_prompt: |
 """
 
 
-def vocabulary(text: str = VOCABULARY):
-    return parse(yaml.safe_load(text), source="source_ids.yaml")
-
-
 @pytest.fixture
 def policied(cfg):
     """A deployment where source id A reaches `line_count` through `surveyor`."""
@@ -83,7 +76,7 @@ def policied(cfg):
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "surveyor.yaml").write_text(AGENT, encoding="utf-8")
-    return replace(cfg, access=vocabulary())
+    return cfg
 
 
 def session_at(kf, name: str):
@@ -107,7 +100,7 @@ def built(kf, source_ids, name: str):
     assembled = build_agent(
         kf.cfg,
         agent=agent_named(kf, "surveyor", source_ids=held),
-        held=caller_holds(kf.access, held),
+        held=caller_holds(kf.vocabulary, held),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf.grants,
         catalogue=kf.catalogue,
@@ -131,20 +124,21 @@ def test_a_call_that_does_not_say_who_is_calling_is_refused(policied):
 def test_unscoped_runs_without_a_caller_and_says_so_at_the_call(policied):
     """The opt-out is a value someone typed, so a review can find it."""
     kf = Kingfisher(policied, sessions=LocalSessions())
-    assert caller_holds(kf.access, UNSCOPED) is None
+    assert caller_holds(kf.vocabulary, UNSCOPED) is None
 
 
-def test_an_unknown_source_id_is_refused(policied):
-    """The closed vocabulary, from the caller's end: a typo would otherwise reach
-    nothing, which looks exactly like a caller who was denied.
-    """
+def test_a_source_id_no_definition_uses_is_held_and_opens_nothing(policied):
+    """Refused, a call passed or failed on which locks existed that week. Held, `Q`
+    opens no locked agent -- read exactly as one never written, so it learns nothing."""
     kf = Kingfisher(policied, sessions=LocalSessions())
-    with pytest.raises(AccessError, match="unknown source id"):
-        caller_holds(kf.access, ("Q",))
+
+    assert caller_holds(kf.vocabulary, ("Q",)) == frozenset({"Q"})
+    with pytest.raises(CapabilityError, match="no agent named 'surveyor'"):
+        agent_named(kf, "surveyor", source_ids=("Q",))
 
 
-def test_naming_source_ids_where_there_is_no_vocabulary_is_refused(cfg):
-    """A caller naming source ids against a deployment that declares none is confused, and
+def test_naming_source_ids_where_nothing_is_locked_is_refused(cfg):
+    """A caller naming source ids against a deployment that locks nothing is confused, and
     silently ignoring them is how they stay confused.
 
     Asked of the lookup as well as of a turn, because the refusal moved into the door
@@ -155,10 +149,10 @@ def test_naming_source_ids_where_there_is_no_vocabulary_is_refused(cfg):
     at startup since 2026-09-01.
     """
     kf = Kingfisher(cfg, sessions=LocalSessions())
-    with pytest.raises(AccessError, match="declares no source ids"):
-        held_by(kf.access, ("A",))
+    with pytest.raises(AccessError, match="no definition here carries a lock"):
+        held_by(kf.vocabulary, ("A",))
     # And still refused at the door a turn comes through, which is what moved.
-    with pytest.raises(AccessError, match="declares no source ids"):
+    with pytest.raises(AccessError, match="no definition here carries a lock"):
         kf.run("anything", source_ids=("A",))
 
 
@@ -166,8 +160,8 @@ def test_a_list_of_source_ids_narrows_exactly_as_a_tuple_does(policied):
     """The trap that folding `for_groups` in had to disarm."""
     kf = Kingfisher(policied, sessions=LocalSessions())
 
-    assert caller_holds(kf.access, ["A"]) == caller_holds(kf.access, ("A",))
-    assert caller_holds(kf.access, ["A"]) is not None, "a list read as no opinion at all"
+    assert caller_holds(kf.vocabulary, ["A"]) == caller_holds(kf.vocabulary, ("A",))
+    assert caller_holds(kf.vocabulary, ["A"]) is not None, "a list read as no opinion at all"
 
 
 def test_a_bare_string_of_source_ids_is_refused_rather_than_spelled_out(policied):
@@ -177,33 +171,31 @@ def test_a_bare_string_of_source_ids_is_refused_rather_than_spelled_out(policied
     kf = Kingfisher(policied, sessions=LocalSessions())
 
     with pytest.raises(AccessError, match="not a string"):
-        caller_holds(kf.access, "A")
+        caller_holds(kf.vocabulary, "A")
 
 
 def test_the_refusal_names_what_was_asked_for_and_what_to_do(cfg):
     """A refusal somebody has to go and research is one this file keeps refusing to
-    ship: it names the ids that narrow nothing, the file that would declare them, and
-    the value that means no caller.
+    ship: it names the ids that narrow nothing, why, and the value that means no caller.
     """
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(AccessError) as caught:
-        caller_holds(kf.access, ["marketing", "sales"])
+        caller_holds(kf.vocabulary, ["marketing", "sales"])
 
     said = str(caught.value)
     assert "marketing, sales" in said
-    assert "source_ids.yaml" in said and "UNSCOPED" in said
+    assert "carries a lock" in said and "UNSCOPED" in said
 
 
 #: One call per refusal of a caller named wrong, against `ZONED`.
 CALLERS_NAMED_WRONG = {
     "a bare string": lambda zoned: caller_holds(zoned, "A"),
-    "an unknown source id": lambda zoned: caller_holds(zoned, ("Q",)),
-    "nobody, under a policy": lambda zoned: caller_holds(zoned, None),
-    "a source id where none is declared": lambda _: held_by(None, ("A",)),
-    "a datazone where none is declared": lambda _: held_by(None, (Datazone("hr"),)),
+    "nobody, where something is locked": lambda zoned: caller_holds(zoned, None),
+    "a source id spelt as a datazone": lambda zoned: held_by(zoned, ("datazone=hr",)),
+    "a source id where nothing is locked": lambda _: held_by(None, ("A",)),
+    "a datazone where nothing is locked": lambda _: held_by(None, (Datazone("hr"),)),
     "two datazones": lambda zoned: held_by(zoned, ("A", Datazone("hr"), Datazone("finance"))),
-    "an unknown datazone": lambda zoned: held_by(zoned, ("A", Datazone("fiance"))),
     "a datazone with UNSCOPED": lambda _: with_datazone(UNSCOPED, "hr"),
     "a datazone with nobody named": lambda zoned: caller_holds(zoned, with_datazone(None, "hr")),
     "a bare string with a datazone": lambda zoned: caller_holds(zoned, with_datazone("AB", "hr")),
@@ -215,72 +207,57 @@ CALLERS_NAMED_WRONG = {
     ),
 }
 
-ZONED = "source_ids: [A, B]\ndatazones: [finance, hr]\n"
+ZONED = Vocabulary(
+    source_ids={"A": ("agent surveyor",), "B": ("agent surveyor",)},
+    datazones={"finance": ("subagent ledger",), "hr": ("subagent payroll",)},
+)
 
 
 @pytest.mark.parametrize("call", CALLERS_NAMED_WRONG.values(), ids=CALLERS_NAMED_WRONG.keys())
 def test_a_caller_named_wrong_is_caught_as_the_caller_s_mistake(call):
-    """Each raised the `AccessError` a broken `source_ids.yaml` raises, so a caller could
-    not catch its own mistake without catching the deployment's as well."""
+    """A caller's mistake raised as anything but `CallerError`, the one class a caller
+    catches to answer its own mistake."""
     import kingfisher
 
     with pytest.raises(kingfisher.CallerError):
-        call(vocabulary(ZONED))
+        call(ZONED)
 
 
-def test_a_deployment_s_own_access_fault_is_not_the_caller_s(policied):
-    """The control: were every `AccessError` a `CallerError`, a caller would catch a broken
-    policy as its own mistake."""
-    for fault in (
-        lambda: vocabulary("source_ids:\n  A: {}\n"),
-        # `surveyor` is for A and B, and this declares only A.
-        lambda: Kingfisher(
-            replace(policied, access=vocabulary("source_ids: [A]\n")), sessions=LocalSessions()
-        ),
-    ):
-        with pytest.raises(AccessError) as raised:
-            fault()
-        assert not isinstance(raised.value, CallerError)
-
-
-def test_the_command_refuses_a_source_id_it_does_not_define(
-    policied, at_the_command_line, capsys
-):
-    """Nothing drove `run --as` with a source id the deployment does not define, so a
-    traceback and exit 1 -- a turn stopped at a bound -- would have passed."""
-    (policied.definitions / "source_ids.yaml").write_text(VOCABULARY, encoding="utf-8")
-
-    code = main(["run", "hi", "--agent", "surveyor", "--as", "Q"])
+def test_the_command_refuses_a_caller_named_wrong(policied, at_the_command_line, capsys):
+    """Nothing drove `run --as` with a caller named wrong, so a traceback and exit 1 -- a
+    turn stopped at a bound -- would have passed."""
+    code = main(["run", "hi", "--agent", "surveyor", "--as", "datazone=hr"])
 
     assert code == 2
-    assert "unknown source id(s): Q; this deployment defines A, B" in capsys.readouterr().err
+    assert "'datazone=hr' begins 'datazone='" in capsys.readouterr().err
 
 
 def test_meaning_no_caller_is_still_how_you_say_it(cfg):
     """`UNSCOPED` is the one value that says the absence is meant, and a deployment with
-    no policy is where saying it is most ordinary -- so it was the one that refused it.
+    no lock is where saying it is most ordinary -- so it was the one that refused it.
 
     `_effective_grants` refused on `source_ids is not None`, and `UNSCOPED` is not
-    `None`: `kingfisher run --as UNSCOPED` could not run a workspace with no
-    `source_ids.yaml`, which is every workspace that has not adopted a policy. Asked of
-    `caller_holds`, the turn's own door, because that is the one that refused.
+    `None`: `kingfisher run --as UNSCOPED` could not run a workspace with no policy,
+    which is every workspace that has not adopted one. Asked of `caller_holds`, the
+    turn's own door, because that is the one that refused.
     """
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
-    assert caller_holds(kf.access, UNSCOPED) is None
-    assert caller_holds(kf.access, None) is None
+    assert caller_holds(kf.vocabulary, UNSCOPED) is None
+    assert caller_holds(kf.vocabulary, None) is None
     # An empty sequence too: it names no caller to be wrong about, which is a
     # different thing from naming one the deployment cannot honour.
-    assert caller_holds(kf.access, []) is None
+    assert caller_holds(kf.vocabulary, []) is None
 
 
-def test_a_declared_caller_is_still_answered(cfg):
+def test_a_caller_is_still_read_where_something_is_locked(cfg):
     """The other direction: a rule refusing on the names rather than on the absence of
-    a vocabulary would pass every test above and break every policied deployment.
+    a lock would pass every test above and break every locked deployment.
     """
-    kf = Kingfisher(replace(cfg, access=vocabulary()), sessions=LocalSessions())
+    an_agent(cfg, "locked", source_ids="[A]")
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
-    assert caller_holds(kf.access, ["A"]) is not None
+    assert caller_holds(kf.vocabulary, ["A"]) is not None
 
 
 def test_one_function_reads_what_shape_a_caller_s_source_ids_are_in():
@@ -324,8 +301,8 @@ def test_a_deployment_without_a_vocabulary_is_unchanged(cfg):
     `run` without saying anything about source ids.
     """
     kf = Kingfisher(cfg, sessions=LocalSessions())
-    assert kf.access is None
-    assert caller_holds(kf.access, None) is None
+    assert kf.vocabulary is None
+    assert caller_holds(kf.vocabulary, None) is None
 
 
 def test_the_deployments_own_grants_still_bound_a_caller(policied):
@@ -363,7 +340,8 @@ def policied_kf(cfg):
 def test_a_definition_with_no_source_ids_line_is_named(cfg):
     """Default-open must not also be silent."""
     an_agent(cfg, "assistant")
-    kf = Kingfisher(replace(cfg, access=vocabulary()), sessions=LocalSessions())
+    an_agent(cfg, "locked", source_ids="[A]")
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     assert ("agent", "assistant") in kf.access_report.unrestricted
 
 
@@ -376,7 +354,7 @@ def test_a_subagent_with_no_source_ids_line_is_named_too(cfg):
     that default-open is not silent, and it was silent for half the definitions it
     covers.
     """
-    an_agent(cfg, "assistant")
+    an_agent(cfg, "assistant", source_ids="[A]")
     subagents = cfg.catalogue_roots["subagents"]
     subagents.mkdir(parents=True, exist_ok=True)
     (subagents / "auditor.yaml").write_text(
@@ -384,7 +362,7 @@ def test_a_subagent_with_no_source_ids_line_is_named_too(cfg):
         encoding="utf-8",
     )
 
-    kf = Kingfisher(replace(cfg, access=vocabulary()), sessions=LocalSessions())
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
     assert ("subagent", "auditor") in kf.access_report.unrestricted
     assert "auditor" in "\n".join(kf.access_report.lines())
@@ -400,7 +378,7 @@ def test_a_subagent_restricted_only_by_datazone_is_not_named(cfg):
         encoding="utf-8",
     )
 
-    kf = Kingfisher(replace(cfg, access=vocabulary(ZONED)), sessions=LocalSessions())
+    kf = Kingfisher(cfg, sessions=LocalSessions())
 
     assert ("subagent", "ledger") not in kf.access_report.unrestricted
 
@@ -412,7 +390,8 @@ def test_a_definition_that_restricts_is_not_named(policied):
 
 def test_the_report_reads_as_a_sentence(cfg):
     an_agent(cfg, "assistant")
-    kf = Kingfisher(replace(cfg, access=vocabulary()), sessions=LocalSessions())
+    an_agent(cfg, "locked", source_ids="[A]")
+    kf = Kingfisher(cfg, sessions=LocalSessions())
     rendered = "\n".join(kf.access_report.lines())
     assert "reachable by everyone" in rendered
     assert "assistant" in rendered
@@ -433,7 +412,7 @@ def reported(kf, source_ids, name: str, *, asked_for: Capabilities | None = None
 
     session = session_at(kf, name)
     held_names = tuple(source_ids) if source_ids is not UNSCOPED else source_ids
-    held = caller_holds(kf.access, held_names)
+    held = caller_holds(kf.vocabulary, held_names)
     request = Request(task="t", agent="surveyor")
     allowed = kf.grants
     if asked_for is not None:
@@ -601,7 +580,7 @@ def _refused_listing(cfg, source_ids):
         build_agent(
             kf.cfg,
             agent=agent_named(kf, "surveyor", source_ids=source_ids),
-            held=caller_holds(kf.access, source_ids),
+            held=caller_holds(kf.vocabulary, source_ids),
             backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
             capabilities=kf.grants,
             catalogue=kf.catalogue,
@@ -660,7 +639,7 @@ def _subagents_offered(cfg, source_ids) -> set[str]:
         build_agent(
             kf.cfg,
             agent=agent_named(kf, "surveyor", source_ids=source_ids),
-            held=caller_holds(kf.access, source_ids),
+            held=caller_holds(kf.vocabulary, source_ids),
             backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
             capabilities=kf.grants,
             catalogue=kf.catalogue,
@@ -765,7 +744,7 @@ def test_a_definition_naming_a_real_tool_out_of_reach_is_not_refused(
     built = build_agent(
         kf.cfg,
         agent=agent_named(kf, "surveyor", source_ids=("A",)),
-        held=caller_holds(kf.access, ("A",)),
+        held=caller_holds(kf.vocabulary, ("A",)),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf.grants,
         catalogue=kf.catalogue,
@@ -807,7 +786,7 @@ def test_the_report_reads_a_grant_written_the_long_way(policied):
     """
     directory = policied.catalogue_roots["agents"]
     (directory / "surveyor.yaml").write_text(LONGHAND, encoding="utf-8")
-    kf = Kingfisher(replace(policied, access=vocabulary()), sessions=LocalSessions())
+    kf = Kingfisher(policied, sessions=LocalSessions())
 
     told = dict(reported(kf, ["A"], "longhand", asked_for=Capabilities(tools=())))
 
@@ -865,7 +844,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         capabilities=grants,
         checkpointer=None,
         agent=agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held),
-        held=caller_holds(kf.access, held),
+        held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name)),
     ).graph
     from kingfisher.core.reporting import withheld_by_kind
@@ -877,7 +856,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
             graph,
             kf.catalogue,
             agent=agent_named(kf, "surveyor", source_ids=held),
-            held=caller_holds(kf.access, held),
+            held=caller_holds(kf.vocabulary, held),
         )
     )
     assert "execute" in kinds.get("builtin tool", ())
@@ -918,17 +897,17 @@ def with_skills(cfg):
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "skilled.yaml").write_text(SKILLED, encoding="utf-8")
-    return replace(cfg, access=vocabulary(), skills_enabled=True)
+    return replace(cfg, skills_enabled=True)
 
 
 def test_a_skill_audience_narrows_the_selection(with_skills):
     kf = Kingfisher(with_skills, sessions=LocalSessions())
 
     assert agent_named(kf, "skilled", source_ids=UNSCOPED).declares(
-        caller_holds(kf.access, ("A",))
+        caller_holds(kf.vocabulary, ("A",))
     ).skills == ("audit", "review")
     assert agent_named(kf, "skilled", source_ids=UNSCOPED).declares(
-        caller_holds(kf.access, ("B",))
+        caller_holds(kf.vocabulary, ("B",))
     ).skills == ("review",)
 
 
@@ -943,7 +922,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
         capabilities=kf.grants,
         checkpointer=None,
         agent=agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held),
-        held=caller_holds(kf.access, held),
+        held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name)),
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkillsMiddleware"]
@@ -966,7 +945,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
         capabilities=grants,
         checkpointer=None,
         agent=agent,
-        held=caller_holds(kf.access, held),
+        held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name)),
     ).graph
     report = withheld_by_kind(
@@ -975,7 +954,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
         graph,
         kf.catalogue,
         agent=agent,
-        held=caller_holds(kf.access, held),
+        held=caller_holds(kf.vocabulary, held),
     )
     return dict(report).get("skill", ())
 
@@ -1075,7 +1054,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
         capabilities=kf.grants,
         checkpointer=None,
         agent=agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held),
-        held=caller_holds(kf.access, held),
+        held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name)),
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkillsMiddleware"]
@@ -1201,9 +1180,7 @@ def delegating(cfg):
     agents = cfg.catalogue_roots["agents"]
     agents.mkdir(parents=True, exist_ok=True)
     (agents / "boss.yaml").write_text(BOSS, encoding="utf-8")
-    # In the workspace too, for `kingfisher list`, which reads it from there.
-    (cfg.definitions / "source_ids.yaml").write_text(ABC, encoding="utf-8")
-    return replace(cfg, access=vocabulary(ABC), skills_enabled=True)
+    return replace(cfg, skills_enabled=True)
 
 
 def delegated(cfg, source_ids: tuple[str, ...]):
@@ -1213,7 +1190,7 @@ def delegated(cfg, source_ids: tuple[str, ...]):
     return build_agent(
         kf.cfg,
         agent=agent_named(kf, "boss", source_ids=source_ids),
-        held=caller_holds(kf.access, source_ids),
+        held=caller_holds(kf.vocabulary, source_ids),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf.grants,
         catalogue=kf.catalogue,
@@ -1484,7 +1461,7 @@ def naming_a_ghost(cfg, where: str) -> tuple[str, Capabilities]:
     return "asker", Capabilities()
 
 
-def offered_instead(cfg, source_ids: tuple[str, ...] | None, where: str) -> set[str]:
+def offered_instead(cfg, source_ids: Held, where: str) -> set[str]:
     """The subagents one real turn's refusal of `ghost` lists to this caller."""
     agent, asked = naming_a_ghost(cfg, where)
     kf = Kingfisher(cfg, sessions=LocalSessions())
@@ -1515,23 +1492,22 @@ def test_refusing_an_unknown_subagent_lists_none_out_of_the_callers_reach(delega
 
 
 @pytest.mark.parametrize("where", WHERE)
-@pytest.mark.parametrize("source_ids", [("A",), None], ids=["A", "no-policy"])
+@pytest.mark.parametrize("source_ids", [("A",), UNSCOPED], ids=["A", "unscoped"])
 def test_refusing_an_unknown_subagent_lists_every_one_a_caller_reaches(
     delegating, where, source_ids
 ):
     """The control: a refusal listing nothing out of reach to anybody, a caller in `A` or
-    a run with no `source_ids.yaml`, would pass the test above.
+    a run with no caller, would pass the test above.
     """
-    cfg = delegating if source_ids is not None else replace(delegating, access=None)
     expected = REACHED_BY_C | {"insider", "ledger"} | ({"helpless"} if where == "helper" else set())
 
-    assert offered_instead(cfg, source_ids, where) == expected
+    assert offered_instead(delegating, source_ids, where) == expected
 
 
 # -- a name a caller writes, out of reach or never written ------------------
 
 
-def refusal(cfg, source_ids: tuple[str, ...] | None, agent: str, asked: Capabilities) -> str:
+def refusal(cfg, source_ids: Held, agent: str, asked: Capabilities) -> str:
     """What one real turn refuses this caller with, or `""` when it reaches the model."""
     kf = Kingfisher(cfg, sessions=LocalSessions())
     try:
@@ -1638,14 +1614,13 @@ def test_a_typo_and_a_subagent_out_of_reach_are_refused_together(delegating):
     assert message.startswith("this request names unknown subagent(s): ghost, insider;")
 
 
-@pytest.mark.parametrize("source_ids", [("A",), None], ids=["A", "no-policy"])
+@pytest.mark.parametrize("source_ids", [("A",), UNSCOPED], ids=["A", "unscoped"])
 def test_a_caller_who_reaches_the_subagent_named_still_runs_with_it(delegating, source_ids):
     """The control: refusing `insider` to everybody would pass the tests above."""
-    cfg = delegating if source_ids is not None else replace(delegating, access=None)
-    agent = opening(cfg)
+    agent = opening(delegating)
 
-    assert refusal(cfg, source_ids, agent, Capabilities(subagents=("insider",))) == ""
-    assert refusal(cfg, source_ids, agent, Capabilities(subagents=("ghost",))).startswith(
+    assert refusal(delegating, source_ids, agent, Capabilities(subagents=("insider",))) == ""
+    assert refusal(delegating, source_ids, agent, Capabilities(subagents=("ghost",))).startswith(
         "this request names unknown subagent(s): ghost;"
     )
 

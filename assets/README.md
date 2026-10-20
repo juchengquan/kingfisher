@@ -1,15 +1,14 @@
 # assets
 
 The definitions this repository ships -- agents, middlewares, skills, subagents and
-tools -- and the `source_ids.yaml` several of them name. `KINGFISHER_ASSETS` points
-here, and `seed` copies the definitions into a deployment's definitions folder:
+tools. `KINGFISHER_ASSETS` points here, and `seed` copies them into a deployment's
+definitions folder:
 
     kingfisher seed --all --from ./assets
 
-`--all` because several definitions here name middleware or source ids,
+`--all` because several definitions here name middleware or carry a lock,
 `assistant` among them, and a plain `seed` leaves those behind. The middleware
-they name is in `middlewares/` and arrives in the same run. `source_ids.yaml` does
-not: it is not a definition, so copy it beside them by hand.
+they name is in `middlewares/` and arrives in the same run.
 
 Everything here is committed, and it is held to working. The tests parse every
 file here, load every tool, build an agent from what `assistant` declares, and

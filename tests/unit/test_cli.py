@@ -82,9 +82,9 @@ def test_seeding_refuses_a_setting_that_named_where_it_wrote(
 
 
 def test_the_skip_line_says_which_of_the_two_reasons_it_was(cfg, monkeypatch, capsys, shipped):
-    """The word that tells a reader which file to open. Both halves of the sentence
-    are per-kind -- what seed did not consult, and what to do -- and the remedy alone
-    reads as advice about nothing in particular until the line says what was named.
+    """The word that tells a reader which of the two it was. The sentence is per-kind --
+    why it was held back and what to do -- and the reason alone reads as advice about
+    nothing in particular until the line says what was named.
     """
     monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
@@ -93,39 +93,32 @@ def test_the_skip_line_says_which_of_the_two_reasons_it_was(cfg, monkeypatch, ca
 
     printed = capsys.readouterr().out
     assert "names source_ids (" in printed
-    assert "seed does not check your source_ids.yaml" in printed
+    assert "a lock switches on access control in this workspace" in printed
 
 
-def test_the_skip_message_carries_the_line_to_write(cfg, monkeypatch, capsys, shipped):
-    """A remedy is only actionable if it is about the source ids you are missing."""
+def test_the_skip_message_names_no_file_to_write(cfg, monkeypatch, capsys, shipped):
+    """There is no vocabulary file any more, so a remedy telling a reader to write one
+    sends them to produce a file nothing reads."""
     monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
 
     printed = capsys.readouterr().out
-    assert "groups.yaml.example" not in printed, "still naming a file that is gone"
-    assert "source_ids: [audit_log, sales_db]" in printed, (
-        "the remedy does not carry the line to write, so the reader is told to "
-        "produce a format they have not been shown"
-    )
+    assert "source_ids.yaml" not in printed
+    assert "seed again with --all" in printed.lower()
 
 
-def test_the_line_is_printed_once_for_every_definition_skipped(
-    cfg, monkeypatch, capsys, shipped
-):
-    """Two definitions are skipped for source ids and they want overlapping but different
-    sets.
-    """
+def test_the_reason_is_printed_on_every_definition_skipped(cfg, monkeypatch, capsys, shipped):
+    """Each skipped line gives its own, so a reader skimming to one file still reads why."""
     monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(cfg.definitions))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
 
     printed = capsys.readouterr().out
-    assert printed.count("the source_ids.yaml that unblocks") == 1
-    unchecked = [ln for ln in printed.splitlines() if "does not check your source_ids.yaml" in ln]
-    assert len(unchecked) > 1
+    locked = [ln for ln in printed.splitlines() if "switches on access control" in ln]
+    assert len(locked) > 1
 
 
 def test_no_line_is_printed_when_nothing_wanted_a_source_id(cfg, monkeypatch, capsys, tmp_path):
@@ -141,7 +134,7 @@ def test_no_line_is_printed_when_nothing_wanted_a_source_id(cfg, monkeypatch, ca
 
     assert main(["seed"]) == 0
 
-    assert "source_ids.yaml" not in capsys.readouterr().out
+    assert "access control" not in capsys.readouterr().out
 
 
 def test_seeding_a_definitions_folder_that_does_not_exist_yet_creates_it(
@@ -178,7 +171,7 @@ def test_seeding_nothing_never_gives_one_definitions_reason_as_every_ones(
 ):
     """The command closed on `skipped[0].wants`: one agent held back for middleware and
     one for source ids read "every definition … names middlewares", and told a reader
-    to seed middleware for the agent that needs a `source_ids.yaml`.
+    to seed middleware for the agent that carries a lock.
     """
     tree = tmp_path / "tree"
     agents = tree / "agents"
@@ -1185,21 +1178,17 @@ def test_a_policied_workspace_still_deletes_the_session_its_run_used(
     source ids refuses it, and a finished `--delete-session` run would end on an access
     error with its session still there.
 
-    Against a real `Kingfisher` under a policy, because the stub above never asks who
-    is calling.
+    Against a real `Kingfisher` where a definition carries a lock, because the stub
+    above never asks who is calling.
     """
-    from dataclasses import replace
-
-    import yaml
-
     from kingfisher.cli import __main__ as entry
-    from kingfisher.core.access.policy import parse
     from tests.unit.test_run import StubAgent
 
+    # The agent's own `source_ids:` is the lock, so this workspace already refuses a
+    # call that says nobody -- there is no policy to hand in beside it.
     agent = an_agent(cfg, source_ids="[A]")
-    policied = replace(cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="t"))
-    service = Kingfisher(policied, graph=StubAgent("done"), sessions=LocalSessions())
-    monkeypatch.setattr(entry, "config_from_env", lambda: policied)
+    service = Kingfisher(cfg, graph=StubAgent("done"), sessions=LocalSessions())
+    monkeypatch.setattr(entry, "config_from_env", lambda: cfg)
     monkeypatch.setattr("kingfisher.Kingfisher", lambda *a, **k: service)
     argv = ["run", "t", "--agent", agent, "--session", "s1", "--as", "A"]
 

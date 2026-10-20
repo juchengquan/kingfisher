@@ -146,11 +146,11 @@ def test_the_header_names_every_catalogue_including_tools(cfg):
     from kingfisher import inventory
     from kingfisher.cli.listing import render
 
-    header = list(render(inventory(cfg)))[:11]
+    header = list(render(inventory(cfg)))[:10]
 
     assert [line.split(" :")[0].strip() for line in header] == [
         "workspace", "definitions", "agents", "middlewares", "skills", "subagents", "tools",
-        "models", "source_ids", "seed", "sessions",
+        "models", "seed", "sessions",
     ]
 
 
@@ -167,7 +167,6 @@ def test_the_json_carries_the_kind_and_a_path_a_script_can_open(cfg, tmp_path):
 
     assert origins["skills"]["path"].startswith("/"), "not the ./name the header prints"
     assert origins["seed"] == {"kind": "relocated", "path": str(tmp_path)}
-    assert origins["source_ids"]["kind"] == "unset"
 
 
 def test_json_and_the_human_form_describe_the_same_workspace(cfg, at_the_command_line, capsys):
@@ -191,13 +190,11 @@ def test_json_and_the_human_form_describe_the_same_workspace(cfg, at_the_command
     for name in document["skills"]:
         assert name in printed
 
-    # And the access section, which is where the two came apart. This workspace has no
-    # `source_ids.yaml`, so the human form prints none of it -- while `--json` carried
-    # every definition's `source_ids:` line, a policy the guide and the shipped example
-    # both call inert. Asserted in both directions, so that either form going silent
-    # does not pass it.
+    # And the access section, which is where the two came apart: the human form printed
+    # none of it while `--json` carried every definition's `source_ids:` line. Asserted in
+    # both directions, so that either form going silent does not pass it.
     says_so = "access —" in printed
-    assert (document["access"] is not None) == says_so
+    assert (document["vocabulary"] is not None) == says_so
     assert bool(document["audiences"]) == says_so
 
 
@@ -547,9 +544,7 @@ system_prompt: |
 """
 
 
-def _workspace(
-    cfg, *agents: str, vocabulary: str = "source_ids: [A, B]\n", skills: tuple[str, ...] = ()
-):
+def _workspace(cfg, *agents: str, skills: tuple[str, ...] = ()):
     """A workspace with two tools, whichever agents the test names, and no skills
     unless it asks for some.
 
@@ -577,7 +572,6 @@ def _workspace(
     for document in agents:
         name = document.split("name: ", 1)[1].split("\n", 1)[0]
         (directory / f"{name}.yaml").write_text(document, encoding="utf-8")
-    (cfg.definitions / "source_ids.yaml").write_text(vocabulary, encoding="utf-8")
     return cfg
 
 
@@ -779,21 +773,14 @@ def test_a_scoped_listing_reports_no_fault_of_a_definition_out_of_reach(
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
-def test_a_scoped_listing_carries_no_undeclared_source_id_out_of_reach(
-    form, cfg, at_the_command_line, capsys
-):
-    """The complaint names the definition, the source id that definition wrote, and
-    every source id the deployment declares -- so a caller was handed the whole
-    vocabulary beside the `access: null` that exists to withhold it, and their listing
-    failed over a file out of their reach.
+def test_a_scoped_listing_names_no_lock_out_of_reach(form, cfg, at_the_command_line, capsys):
+    """The names in use list every definition a lock is on and every name it writes, so
+    a scoped view carrying them would hand a caller the definitions out of their reach
+    and the names that lock them.
 
-    The operator's view is the control: it names them all and fails, which is what the
-    scoped silence is measured against. Only `list --as` and `inventory(source_ids=...)`
-    reach this state; a deployment in it is refused at construction.
-
-    One of each kind, because the complaint is built per kind and carried in a field per
-    kind: with a subagent alone, putting the agents' complaint back into a scoped view
-    changed nothing here.
+    The operator's view is the control: it names them all, which is what the scoped
+    silence is measured against. One of each kind, because a kind left out of the walk
+    would pass with the other one alone.
     """
     _workspace(cfg, NARROW, A_ONLY)
     agents = cfg.catalogue_roots["agents"]
@@ -819,7 +806,7 @@ def test_a_scoped_listing_carries_no_undeclared_source_id_out_of_reach(
 
     named = [one for one in told if one in scoped]
     assert (scoped_code, named) == (0, []), f"the {form} form named {named}"
-    assert (whole_code, [one for one in told if one not in whole]) == (1, [])
+    assert (whole_code, [one for one in told if one not in whole]) == (0, [])
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
@@ -1755,31 +1742,20 @@ def test_a_scoped_view_carries_no_policy(cfg, at_the_command_line):
     checking it, and the record is where that is decided now -- the text renderer used
     to decide it a second time and `as_json` not at all.
     """
-    from dataclasses import replace
-
-    import yaml
-
-    from kingfisher.core.access.policy import parse
     from kingfisher.core.inventory import inventory
 
     # A definition restricting nobody, so the operator's report has something in it
     # and the scoped view emptying it is a difference rather than two empty tuples.
     wide_open = "name: open\ndescription: An agent.\nsystem_prompt: |\n  Go.\n"
     _workspace(cfg, NARROW, A_ONLY, wide_open)
-    # The vocabulary on the `Config`, not only in the file: read directly, `inventory`
-    # takes the policy from `cfg.access`, and a config without one is not a scoped view
-    # at all -- which is how the first version of this test passed against the defect.
-    policied = replace(
-        cfg, access=parse(yaml.safe_load("source_ids: [A, B]\n"), source="source_ids.yaml")
-    )
-    scoped = inventory(policied, source_ids=("B",))
-    operator = inventory(policied)
+    scoped = inventory(cfg, source_ids=("B",))
+    operator = inventory(cfg)
 
-    assert scoped.access is None
+    assert scoped.vocabulary is None
     assert scoped.audiences == {}
     assert scoped.access_report.is_clean
     # Not vacuous: the operator's view carries all three.
-    assert operator.access is not None
+    assert operator.vocabulary is not None
     assert operator.audiences
     assert not operator.access_report.is_clean
 
@@ -1909,19 +1885,20 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
     """
     import json
 
-    from kingfisher import config_from_env, inventory
+    from kingfisher import inventory
     from kingfisher.cli.listing import as_json
 
     _workspace(cfg, BOTH, skills=("routine",))
 
-    # From the environment, not the fixture: the vocabulary is a file the
-    # helper just wrote, and the fixture config predates it.
-    document = json.loads(json.dumps(as_json(inventory(config_from_env()))))
+    document = json.loads(json.dumps(as_json(inventory(cfg))))
 
     # Nested, not the braces the file writes: a script should not have to parse a
     # set out of a string.
     assert document["audiences"]["agents"]["both"]["source_ids"] == [["A", "B"]]
-    assert document["access"] == {"names": ["A", "B"]}
+    assert document["vocabulary"]["source_ids"] == {
+        "A": ["agent both", "tool line_count"],
+        "B": ["agent both"],
+    }
 
 
 NARROWED = """name: narrowed
@@ -1938,7 +1915,7 @@ system_prompt: |
 
 def test_an_entry_narrowing_past_its_definition_is_reported(cfg, at_the_command_line, capsys):
     """It used to be refused."""
-    _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n", skills=("routine",))
+    _workspace(cfg, NARROWED, skills=("routine",))
 
     assert main(["list"]) == 0
 
@@ -1949,20 +1926,17 @@ def test_an_entry_narrowing_past_its_definition_is_reported(cfg, at_the_command_
 
 def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, at_the_command_line):
     """The report is not the point -- this is."""
-    from kingfisher import config_from_env
     from kingfisher.core.access.reach import reaches
     from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 
-    _workspace(cfg, NARROWED, vocabulary="source_ids: [A, B, C]\n", skills=("routine",))
-    reach = config_from_env().access
-    assert reach is not None
+    _workspace(cfg, NARROWED, skills=("routine",))
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["narrowed"]
 
-    assert spec.declares(reach.known(["A", "C"])).skills == ("routine",)
-    assert spec.declares(reach.known(["A"])).skills == ()
+    assert spec.declares(frozenset({"A", "C"})).skills == ("routine",)
+    assert spec.declares(frozenset({"A"})).skills == ()
     # And the definition's own line still gates the agent itself: C alone opens
     # nothing, so there is no way to reach the skill by holding only C.
-    assert not reaches(spec.source_ids, reach.known(["C"]))
+    assert not reaches(spec.source_ids, frozenset({"C"}))
 
 
 def test_a_callers_view_carries_no_audiences(policied, capsys):
@@ -1974,7 +1948,7 @@ def test_a_callers_view_carries_no_audiences(policied, capsys):
 
 
 def test_a_callers_view_drops_an_agent_they_cannot_open(cfg, at_the_command_line, capsys):
-    _workspace(cfg, NARROW, vocabulary="source_ids: [A, B, C]\n")
+    _workspace(cfg, NARROW)
 
     assert main(["list", "--as", "C"]) == 0
 
@@ -1983,7 +1957,7 @@ def test_a_callers_view_drops_an_agent_they_cannot_open(cfg, at_the_command_line
 
 def test_the_operator_still_sees_it(cfg, at_the_command_line, capsys):
     """So the assertion above is not passing because the agent vanished."""
-    _workspace(cfg, NARROW, vocabulary="source_ids: [A, B, C]\n")
+    _workspace(cfg, NARROW)
 
     assert main(["list"]) == 0
 
@@ -2004,13 +1978,15 @@ def test_listing_names_a_definition_that_restricts_nobody(cfg, at_the_command_li
     assert "open_to_all" in printed
 
 
-def test_naming_a_source_id_that_does_not_exist_is_refused(policied, capsys):
-    assert main(["list", "--as", "Q"]) != 0
+def test_naming_a_source_id_no_lock_uses_lists_only_what_is_unlocked(policied, capsys):
+    """Refused, a caller's listing failed on which locks existed that week; accepted, it
+    is the truth about `Q`: the locked agent is not theirs to see."""
+    assert main(["list", "--as", "Q"]) == 0
 
-    assert "unknown source id" in capsys.readouterr().err
+    assert "narrow" not in capsys.readouterr().out
 
 
-def test_naming_a_caller_on_a_workspace_with_no_vocabulary_is_refused(
+def test_naming_a_caller_on_a_workspace_with_no_lock_is_refused(
     cfg, at_the_command_line, capsys
 ):
     """The listing accepted any name where nothing narrows and printed the unscoped
@@ -2027,7 +2003,7 @@ def test_naming_a_caller_on_a_workspace_with_no_vocabulary_is_refused(
     assert main(["list", "--as", "marketing"]) != 0
 
     said = capsys.readouterr().err
-    assert "declares no source ids" in said
+    assert "no definition here carries a lock" in said
     assert "marketing" in said, "and which name narrowed nothing"
 
 
@@ -2055,36 +2031,41 @@ def test_no_vocabulary_means_no_access_section(cfg, at_the_command_line, capsys)
     assert "access —" not in capsys.readouterr().out
 
 
-def test_the_listing_reports_a_definition_naming_an_undeclared_source_id(
-    cfg,
-    at_the_command_line,
-    capsys,
+def test_the_listing_names_each_source_id_in_use_beside_who_uses_it(
+    cfg, at_the_command_line, capsys
 ):
-    """The listing is where somebody diagnosing this looks, and it goes through
-    `inventory` rather than `Kingfisher` -- so the check has to be in both or the one
-    place a reader would check shows a broken definition as ordinary.
-    """
+    """What replaced refusing a misspelling at startup, so it is the one place a reader
+    sees `analists` at all: a row of its own, under the spelling the others use."""
     from tests.conftest import an_agent
 
     an_agent(cfg, "analyst", source_ids="[analists]")
-    (cfg.definitions / "source_ids.yaml").write_text("source_ids: [analysts]\n", encoding="utf-8")
+    an_agent(cfg, "auditor", source_ids="[analysts]")
+    an_agent(cfg, "reviewer", source_ids="[analysts]")
 
-    assert main(["list"]) == 1, "a workspace that will not build is a non-zero listing"
+    assert main(["list"]) == 0, "a misspelling is no fault: nothing refuses it"
 
-    printed = capsys.readouterr().out
-    assert "analists" in printed
-    assert "analysts" in printed, "and the spelling that would have worked"
+    in_use = capsys.readouterr().out.split("names in use", 1)[1]
+    assert "  analists  agent analyst\n" in in_use
+    assert "  analysts  agent auditor, agent reviewer\n" in in_use
 
 
-def test_the_listing_is_clean_when_every_source_id_is_declared(cfg, at_the_command_line, capsys):
-    """So the rule above is not passing because every listing says that."""
+def test_the_json_names_each_source_id_in_use_beside_who_uses_it(cfg, at_the_command_line):
+    """The same answer for a script, which should not parse it out of the text."""
+    import json
+
+    from kingfisher import inventory
+    from kingfisher.cli.listing import as_json
     from tests.conftest import an_agent
 
-    an_agent(cfg, "analyst", source_ids="[analysts]")
-    (cfg.definitions / "source_ids.yaml").write_text("source_ids: [analysts]\n", encoding="utf-8")
+    an_agent(cfg, "analyst", source_ids="[analists]")
+    an_agent(cfg, "auditor", source_ids="[analysts]")
 
-    assert main(["list"]) == 0
-    assert "cannot load" not in capsys.readouterr().out
+    document = json.loads(json.dumps(as_json(inventory(cfg))))
+
+    assert document["vocabulary"] == {
+        "source_ids": {"analists": ["agent analyst"], "analysts": ["agent auditor"]},
+        "datazones": {},
+    }
 
 
 # -- every kind, rather than the ones somebody listed ------------------------

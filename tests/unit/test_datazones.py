@@ -1,4 +1,4 @@
-"""A datazone: declared in the vocabulary, named by a caller, required by a subagent or tool."""
+"""A datazone: required by a subagent or tool, and named by a caller."""
 
 from __future__ import annotations
 
@@ -7,13 +7,11 @@ import json
 from dataclasses import replace
 
 import pytest
-import yaml
 from langchain_core.messages import AIMessage
 
 from kingfisher import Request, ToolSpec, UnknownSessionError
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.checks import caller_holds
-from kingfisher.core.access.policy import parse
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
     AccessError,
@@ -33,8 +31,6 @@ from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import Through, agent_named, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted
-
-VOCABULARY = "source_ids: [A, B]\ndatazones: [finance, hr]\n"
 
 #: `payroll` is for the finance datazone; `line_count` is for any.
 TOOLS = '''
@@ -74,13 +70,9 @@ system_prompt: |
 """
 
 
-def vocabulary(text: str = VOCABULARY):
-    return parse(yaml.safe_load(text), source="source_ids.yaml")
-
-
 @pytest.fixture
 def zoned(cfg):
-    """A deployment declaring two datazones, a finance tool and a finance subagent."""
+    """A deployment with a finance tool and a finance subagent, and nothing naming `hr`."""
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "pay.py").write_text(TOOLS, encoding="utf-8")
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -88,8 +80,7 @@ def zoned(cfg):
     agents = cfg.catalogue_roots["agents"]
     agents.mkdir(parents=True, exist_ok=True)
     (agents / "surveyor.yaml").write_text(AGENT, encoding="utf-8")
-    (cfg.definitions / "source_ids.yaml").write_text(VOCABULARY, encoding="utf-8")
-    return replace(cfg, access=vocabulary())
+    return cfg
 
 
 def built(kf: Kingfisher, source_ids, datazone: str | None) -> tuple[set[str], set[str]]:
@@ -101,7 +92,7 @@ def built(kf: Kingfisher, source_ids, datazone: str | None) -> tuple[set[str], s
     assembled = build_agent(
         kf.cfg,
         agent=agent_named(kf, "surveyor", source_ids=caller),
-        held=caller_holds(kf.access, caller),
+        held=caller_holds(kf.vocabulary, caller),
         backend=backend_at(kf.cfg, session, catalogue=kf.catalogue),
         capabilities=kf.grants,
         catalogue=kf.catalogue,
@@ -115,24 +106,25 @@ def built(kf: Kingfisher, source_ids, datazone: str | None) -> tuple[set[str], s
 # -- the vocabulary -----------------------------------------------------------------
 
 
-def test_the_vocabulary_declares_its_datazones():
-    assert vocabulary().datazones == {"finance", "hr"}
-    assert vocabulary("source_ids: [A]\n").datazones == frozenset(), "none is a legal answer"
+def test_the_datazones_are_the_ones_the_definitions_require(zoned):
+    """Collected with who requires each, a subagent's and a tool's alike."""
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    assert kf.vocabulary is not None
+    assert kf.vocabulary.datazones == {"finance": ("subagent ledger", "tool payroll")}
 
 
-@pytest.mark.parametrize(
-    ("written", "said"),
-    [("finance", "a list of names"), ("[finance, finance]", "twice"), ("['']", "empty")],
-)
-def test_a_datazones_line_that_cannot_be_read_is_refused(written, said):
-    with pytest.raises(AccessError, match=said):
-        vocabulary(f"source_ids: [A]\ndatazones: {written}\n")
+def test_a_source_id_spelled_like_a_held_datazone_is_refused_where_written(zoned):
+    """A lock naming `datazone=finance` would require a zone through the line that cannot
+    say one -- on an agent, which may not require a datazone at all."""
+    agents = zoned.catalogue_roots["agents"]
+    (agents / "surveyor.yaml").write_text(
+        AGENT.replace("source_ids: [A, B]", "source_ids: [A, 'datazone=finance']"),
+        encoding="utf-8",
+    )
 
-
-def test_a_source_id_spelled_like_a_held_datazone_is_refused():
-    """Declared, it could be handed out as a source id and stand in for a datazone."""
-    with pytest.raises(AccessError, match="declare datazones under"):
-        vocabulary("source_ids: [A, 'datazone=finance']\n")
+    with pytest.raises(AgentError, match="how a datazone is held"):
+        Kingfisher(zoned, sessions=LocalSessions())
 
 
 # -- the caller ---------------------------------------------------------------------
@@ -141,41 +133,49 @@ def test_a_source_id_spelled_like_a_held_datazone_is_refused():
 def test_a_caller_in_a_datazone_holds_it_beside_their_source_ids(zoned):
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
-    assert caller_holds(kf.access, with_datazone(("A",), "finance")) == {"A", zone_name("finance")}
+    held = caller_holds(kf.vocabulary, with_datazone(("A",), "finance"))
+
+    assert held == {"A", zone_name("finance")}
 
 
-@pytest.mark.parametrize(
-    ("source_ids", "datazone", "said"),
-    [
-        (("A",), "payroll", "unknown datazone 'payroll'"),
-        (UNSCOPED, "finance", "UNSCOPED runs with no caller"),
-    ],
-)
-def test_a_datazone_that_cannot_be_honoured_is_refused(zoned, source_ids, datazone, said):
+def test_a_datazone_with_no_caller_is_refused(zoned):
+    """`UNSCOPED` has no caller to be in a zone, so the pair says two things at once."""
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match=said):
-        caller_holds(kf.access, with_datazone(source_ids, datazone))
+    with pytest.raises(AccessError, match="UNSCOPED runs with no caller"):
+        caller_holds(kf.vocabulary, with_datazone(UNSCOPED, "finance"))
 
 
-def test_a_datazone_where_none_are_declared_is_refused(cfg):
+def test_a_datazone_nothing_requires_opens_nothing_in_a_build(zoned):
+    """Refused, a call would pass or fail on which datazones were required that week."""
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    tools, subagents = built(kf, ("A",), "payroll")
+
+    assert "line_count" in tools, "the control: a tool for any datazone stays"
+    assert "payroll" not in tools
+    assert subagents == set()
+
+
+def test_a_datazone_where_nothing_is_locked_is_refused(cfg):
     """Ignored, the caller would believe the zone narrowed what they were handed."""
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="declares no datazones"):
-        caller_holds(kf.access, with_datazone((), "finance"))
+    with pytest.raises(AccessError, match="no definition here carries a lock"):
+        caller_holds(kf.vocabulary, with_datazone((), "finance"))
 
 
 def test_every_turn_door_takes_the_datazone(zoned):
-    """A door that dropped it would run the turn as a caller in no datazone."""
+    """A door that dropped it would run the turn as a caller in no datazone -- and would
+    not see that `UNSCOPED` cannot be in one."""
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="unknown datazone"):
-        kf.run("t", source_ids=("A",), datazone="payroll")
-    with pytest.raises(AccessError, match="unknown datazone"):
-        next(iter(kf.stream("t", source_ids=("A",), datazone="payroll")))
-    with pytest.raises(AccessError, match="unknown datazone"):
-        asyncio.run(kf.arun("t", source_ids=("A",), datazone="payroll"))
+    with pytest.raises(AccessError, match="UNSCOPED runs with no caller"):
+        kf.run("t", source_ids=UNSCOPED, datazone="finance")
+    with pytest.raises(AccessError, match="UNSCOPED runs with no caller"):
+        next(iter(kf.stream("t", source_ids=UNSCOPED, datazone="finance")))
+    with pytest.raises(AccessError, match="UNSCOPED runs with no caller"):
+        asyncio.run(kf.arun("t", source_ids=UNSCOPED, datazone="finance"))
 
 
 # -- where a datazone may be written --------------------------------------------------
@@ -243,7 +243,9 @@ def test_a_tool_datazone_that_is_not_one_name_is_refused():
 
 
 @pytest.mark.parametrize("where", ["subagent", "tool"])
-def test_a_datazone_the_vocabulary_lacks_stops_the_deployment(zoned, where):
+def test_a_misspelt_datazone_starts_and_locks_its_holder_shut(zoned, where):
+    """Nothing refuses a misspelling now, so it must fail shut: `fiance` is reached by no
+    finance caller, and the listing shows it beside `finance`."""
     if where == "subagent":
         (subagents_dir(zoned) / "ledger.yaml").write_text(
             LEDGER.replace("finance", "fiance"), encoding="utf-8"
@@ -252,9 +254,16 @@ def test_a_datazone_the_vocabulary_lacks_stops_the_deployment(zoned, where):
         (tools_dir(zoned) / "pay.py").write_text(
             TOOLS.replace('datazone="finance"', 'datazone="fiance"'), encoding="utf-8"
         )
+    kf = Kingfisher(zoned, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="undeclared datazone 'fiance'"):
-        Kingfisher(zoned, sessions=LocalSessions())
+    tools, subagents = built(kf, ("A",), "finance")
+
+    if where == "subagent":
+        assert subagents == set()
+        assert "payroll" in tools, "the control: the tool still spelt right is reached"
+    else:
+        assert "payroll" not in tools
+        assert subagents == {"ledger"}, "the control: the subagent still spelt right"
 
 
 # -- honoured wherever a reach is decided ----------------------------------------------
@@ -332,6 +341,16 @@ def test_the_operator_listing_says_each_datazone(zoned, at_the_command_line, cap
     audiences = json.loads(capsys.readouterr().out)["audiences"]
     assert audiences["subagents"]["ledger"] == {"source_ids": ["*"], "datazone": "finance"}
     assert audiences["tools"]["payroll"] == {"source_ids": ["*"], "datazone": "finance"}
+
+
+def test_the_listing_names_each_datazone_with_what_requires_it(zoned, at_the_command_line, capsys):
+    """The one place a misspelt zone shows, since nothing refuses it: beside the others."""
+    assert main(["list"]) == 0
+    assert "datazone finance  subagent ledger, tool payroll" in capsys.readouterr().out
+
+    assert main(["list", "--json"]) == 0
+    vocabulary = json.loads(capsys.readouterr().out)["vocabulary"]
+    assert vocabulary["datazones"] == {"finance": ["subagent ledger", "tool payroll"]}
 
 
 def test_a_saved_result_is_stamped_with_its_datazone():

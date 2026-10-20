@@ -72,11 +72,10 @@ replaced the four layers began.
 
 ## A `Config`'s parts are on `kingfisher`, and wrong settings are refused as read, after #990
 
-- **`from kingfisher import Endpoint, ModelProfile, Models, SourceIds`** names what a
-  `Config` built in code is made of. `configuration.md` tells you to write
-  `Endpoint(api_key=...)` for a key no file holds, and this page writes
-  `Config(access=SourceIds(...))`, but the four were only in `kingfisher.core.config`
-  and `kingfisher.core.access`, which are private and may move. Import them from
+- **`from kingfisher import Endpoint, ModelProfile, Models`** names what a `Config`
+  built in code is made of. `configuration.md` tells you to write
+  `Endpoint(api_key=...)` for a key no file holds, but the three were only in
+  `kingfisher.core.config`, which is private and may move. Import them from
   `kingfisher` instead.
 - **An `extra:` in `models.yaml` naming a keyword kingfisher passes itself is refused at
   startup**: `model`, `base_url`, `api_key`, `timeout`, `max_tokens`, `max_retries`,
@@ -108,6 +107,34 @@ replaced the four layers began.
   the deployment's default, and says "the same host as the main agent's" where it said
   "the same host as the default". Only an agent naming a model of its own reports
   differently.
+
+## The vocabulary is collected from the definitions, after #983
+
+- **`source_ids.yaml` is read by nothing.** Delete it. The names a deployment uses are
+  the ones its `source_ids:` lines, `ToolSpec`s and `skills:` entries write, and its
+  datazones the ones its subagents and tools require. `KINGFISHER_SOURCE_IDS_FILE` is
+  read by nothing either.
+- **`from kingfisher import SourceIds` is gone**, with `Config(access=...)` and
+  `Config.access_source`. The vocabulary is read off the definitions, so there is
+  nothing for a deployment to build or hand in; `Kingfisher.vocabulary` holds what the
+  walk found. #990 put the name on the front door for the field this removes.
+- **One lock anywhere switches checking on.** A deployment that wrote `source_ids:`
+  lines and no file ran them inert; now every call must pass `source_ids=` -- or
+  `UNSCOPED`, to mean no caller -- and `--as` on the command line. With no lock anywhere
+  nothing changes, and naming a caller is refused as before.
+- **A misspelling is not refused.** `source_ids: [sales_bd]` starts, and locks its
+  definition shut to `sales_db` callers. `kingfisher list` prints every name in use beside
+  the definitions using it: read it after editing a lock.
+- **A caller name or datazone no definition uses is accepted**, and opens nothing a lock
+  shuts, where it used to be refused as unknown.
+- **`AccessError` is raised only as `CallerError`.** With no file to break and no
+  undeclared name to refuse, nothing of the deployment's own raises it; an
+  `except AccessError` still catches every refusal of a caller named wrong.
+- **`Config.access` and `Config.access_source` are gone**, and `Kingfisher.access` is
+  `Kingfisher.vocabulary`, collected at construction.
+- **`kingfisher list --json`** carries `"vocabulary": {"source_ids": {name: [who]},
+  "datazones": {name: [who]}}` in place of `"access"`, and the origins no longer have a
+  `source_ids` entry.
 
 ## A caller named wrong raises `CallerError`, after #980
 

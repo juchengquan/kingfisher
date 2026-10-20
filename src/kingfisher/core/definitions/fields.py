@@ -8,7 +8,7 @@ from difflib import get_close_matches
 from types import MappingProxyType
 from typing import TYPE_CHECKING, NoReturn
 
-from kingfisher.core.access import ALL, SEPARATOR, Selection
+from kingfisher.core.access import ALL, DATAZONE_PREFIX, SEPARATOR, Selection
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
@@ -413,6 +413,16 @@ class Reader:
         if ALL in written and len(written) > 1:
             rest = ", ".join(str(n) for n in written if n != ALL)
             msg = f'{where}: ["{ALL}"] is everyone, so it cannot mean both that and {rest}'
+            raise self.error(msg)
+        # Read as a source id it would require a datazone through the line that cannot say
+        # one, and on an agent, which may not require a datazone at all.
+        named = (n for one in written for n in ((one,) if isinstance(one, str) else one))
+        if prefixed := sorted({n for n in named if n.startswith(DATAZONE_PREFIX)}):
+            msg = (
+                f"{where}: {', '.join(map(repr, prefixed))} begins {DATAZONE_PREFIX!r}, "
+                f"which is how a datazone is held, not a source id -- a subagent or tool "
+                f"requires one with datazone:"
+            )
             raise self.error(msg)
         return ALL if written == [ALL] else tuple(written)
 

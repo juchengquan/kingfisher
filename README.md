@@ -21,8 +21,8 @@ if (closing := done.nothing_seeded()) is not None:
 ```
 
 A deployment keeps two folders apart. `KINGFISHER_DEFINITIONS_DIR` is what people
-write — agents, middlewares, skills, subagents, tools, and `models.yaml` and
-`source_ids.yaml` beside them — and several deployments can point at one.
+write — agents, middlewares, skills, subagents, tools, and `models.yaml` beside
+them — and several deployments can point at one.
 `KINGFISHER_WORKSPACE` is what sessions make. Seeding writes into the first and
 needs nothing else; a start only reads it, and never creates it.
 
@@ -47,14 +47,12 @@ same two:
     kingfisher seed --from ./my-definitions  # from here instead
 
 **Read `skipped`, or your deployment will quietly be missing agents.** A
-definition naming middleware, source ids or a datazone this deployment has not
-registered is refused when it is built, so seeding one produces a file that
-cannot run — and under a source-id policy it stops the whole catalogue loading,
-not only itself. `seed` leaves those behind and says which names each would have
-needed, source ids and datazones on their own lines because that is how
-`source_ids.yaml` takes them;
+definition naming middleware this deployment has not registered is refused when it
+is built, so seeding one produces a file that cannot run; one carrying a lock -- a
+source id or a datazone -- switches on access control in the workspace it lands in.
+`seed` leaves both behind and says which names each carries;
 `seed(..., everything=True)` and `kingfisher seed --all` take them once you have
-registered the names. The shipped `assets/` has several, `assistant`
+registered the middleware, or want the locks. The shipped `assets/` has several, `assistant`
 among them, and ships the middleware they name beside them -- so seed that set
 with `--all`.
 

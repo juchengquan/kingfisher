@@ -8,7 +8,7 @@ from pathlib import PurePath
 from kingfisher import Inventory, Origins
 
 # Taken where they live, not from the front door: nobody outside this wheel asks for them.
-from kingfisher.core.access import ALL, Audience, Stated, spell
+from kingfisher.core.access import ALL, Audience, Stated, Vocabulary, spell
 from kingfisher.core.definitions.seeding import SEED_HINT
 from kingfisher.core.definitions.skills.catalogue import SKILL_LAYOUT
 from kingfisher.core.definitions.tools.spec import offered, split_reference
@@ -186,8 +186,8 @@ def _said(stated: Stated) -> str:
 
 def _access(found: Inventory) -> Iterator[str]:
     """Who reaches what, twice: as the files say it, and rolled up by skill."""
-    # `access` alone decides, as in `as_json`, so a scoped caller's text and JSON agree.
-    if found.access is None:
+    # `vocabulary` alone decides, as in `as_json`, so a scoped caller's text and JSON agree.
+    if found.vocabulary is None:
         return
     yield "\naccess — by definition"
     said = False
@@ -200,8 +200,25 @@ def _access(found: Inventory) -> Iterator[str]:
     if not said:
         yield "  (nothing says who reaches it, so everyone reaches everything)"
 
+    yield from _in_use(found.vocabulary)
     yield from _rollup(found)
     yield from found.access_report.lines()
+
+
+def _in_use(vocabulary: Vocabulary) -> Iterator[str]:
+    """Each name a lock uses, beside the definitions using it.
+
+    What catches a misspelt lock, since nothing refuses one: `sales_bd` written once sits
+    under `sales_db` written five times.
+    """
+    rows = [
+        *((name, who) for name, who in vocabulary.source_ids.items()),
+        *((f"datazone {zone}", who) for zone, who in vocabulary.datazones.items()),
+    ]
+    width = max(len(name) for name, _ in rows)
+    yield "\naccess — names in use"
+    for name, who in rows:
+        yield f"  {name.ljust(width)}  {', '.join(who)}"
 
 
 def _rollup(found: Inventory) -> Iterator[str]:
@@ -382,8 +399,14 @@ def as_json(found: Inventory) -> dict[str, object]:
         "orphaned_assets": list(found.orphaned_assets),
         "miscounted_bundles": dict(found.miscounted_bundles),
         "miscounted_bundles_checked": found.miscounted_bundles_checked,
-        # The vocabulary, or `null` where none is declared; who reaches what is `audiences`.
-        "access": None if found.access is None else {"names": sorted(found.access.names)},
+        # Each name a lock uses and the definitions using it, or `null` where nothing is
+        # locked; who reaches what is `audiences`.
+        "vocabulary": None
+        if found.vocabulary is None
+        else {
+            "source_ids": {name: list(who) for name, who in found.vocabulary.source_ids.items()},
+            "datazones": {zone: list(who) for zone, who in found.vocabulary.datazones.items()},
+        },
         "audiences": {
             kind: {
                 name: {

@@ -92,8 +92,8 @@ class LedgerEntry:
     tool: str
     #: Each argument as the model wrote it, `name=value`, a long value cut.
     args: str
-    #: The audience the result was produced under, or `None` with no `source_ids.yaml`
-    #: in force. Kingfisher acts on none of it: who may read a session is the caller's to decide.
+    #: The audience the result was produced under, or `None` where no definition carries a
+    #: lock. Kingfisher acts on none of it: who may read a session is the caller's to decide.
     access: Listed | None
     #: The length in bytes of the result's text, as the tool returned it.
     size: int

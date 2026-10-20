@@ -82,29 +82,12 @@ class Skipped:
 
     label: str
     names: tuple[str, ...]
-    #: What those names are, `middlewares` or `source_ids`, since the remedy differs: one
-    #: is registered in code, the other declared in `source_ids.yaml`.
+    #: What those names are, `middlewares` or `source_ids`, since the reason differs: one
+    #: must be registered in code, the other switches on access control.
     wants: str = "middlewares"
-    #: Datazones the same file names, which go on a line of their own in that file. Kept
-    #: apart from `names` rather than pooled with it: `source_ids: [emea]` declares the
-    #: wrong thing, and a deployment copying the remedy would still not load.
+    #: Datazones the same file names, kept apart from `names` so the line says each in the
+    #: field it was written in.
     datazones: tuple[str, ...] = ()
-
-    @property
-    def asked_of(self) -> str:
-        """What this file asks of the deployment, which both message tables answer for.
-
-        Not `wants`, which says which field spoke: one file may name source ids *and* a
-        datazone, and a sentence naming only the source ids sends a reader to write one
-        line of the two.
-        """
-        if self.wants != "source_ids":
-            return self.wants
-        return " and ".join(
-            part
-            for part, written in (("source_ids", self.names), ("datazone", self.datazones))
-            if written
-        )
 
     @property
     def asked_for(self) -> str:
@@ -115,25 +98,18 @@ class Skipped:
         return " and ".join(named)
 
 
-#: What `seed` did *not* look at before leaving a definition behind, per kind. Keyed by
-#: what a definition asks of the deployment, `Skipped.asked_of`, not by the field that
-#: said so: a file naming source ids and a datazone asks for two lines of one file.
-UNCONSULTED = {
-    "middlewares": "what this deployment registered",
-    "source_ids": "your source_ids.yaml",
-    "datazone": "your source_ids.yaml",
-    "source_ids and datazone": "your source_ids.yaml",
-}
-
-#: And what to do about it, per kind: one sentence could not be right for all of them. A
-#: file may name source ids, a datazone, or both, and those are two lines of one file:
-#: told only about the source ids, a reader writes one of the two and still cannot load.
-REMEDY = {
-    "middlewares": "Seed or write the middlewares first",
-    # No example file named: `Seeded.report` prints one from the names actually missing.
-    "source_ids": "Declare the source ids in source_ids.yaml",
-    "datazone": "Declare the datazone in source_ids.yaml",
-    "source_ids and datazone": "Declare them in source_ids.yaml",
+#: Why `seed` left a definition behind and what to do, by `Skipped.wants`: one sentence
+#: could not be right for both.
+HELD_BACK = {
+    "middlewares": (
+        "and seed does not check what this deployment registered. Seed or write the "
+        "middlewares first, then seed again with --all"
+    ),
+    # A lock is in force wherever it is written, so copying one is choosing access control.
+    "source_ids": (
+        "and a lock switches on access control in this workspace: every call must then "
+        "say who is calling. Seed again with --all to copy it"
+    ),
 }
 
 
@@ -155,12 +131,9 @@ class Seeded:
         lines = [f"seeded {name}" for name in self.written]
         lines += [
             # With the remedy, because "skipped" alone reads as a failure and this is a choice.
-            f"skipped {left.label} — names {left.asked_for}, "
-            f"and seed does not check {UNCONSULTED[left.asked_of]}. "
-            f"{REMEDY[left.asked_of]}, then seed again with --all"
+            f"skipped {left.label} — names {left.asked_for}, {HELD_BACK[left.wants]}"
             for left in self.skipped
         ]
-        lines += self._declaration()
         # Last, where it survives skimming: losing an edited copy is what matters most.
         lines += [f"warning: overwrote your edited {name}" for name in self.overwritten]
         return tuple(lines)
@@ -178,27 +151,6 @@ class Seeded:
                 "each line above says what to do first"
             )
         return f"nothing to seed — {self.source} holds none of {', '.join(DEFINITION_KINDS)}"
-
-    def _declaration(self) -> tuple[str, ...]:
-        """The `source_ids.yaml` to write, or nothing when no audience was missing."""
-        audienced = [left for left in self.skipped if left.wants == "source_ids"]
-        wanted = sorted({name for left in audienced for name in left.names})
-        zones = sorted({name for left in audienced for name in left.datazones})
-        if not wanted and not zones:
-            return ()
-        return (
-            "",
-            # The file itself: each skipped line already gives the instruction, and none
-            # can give the one list covering all of them.
-            # Not "every one of them": a definition held back for middleware is above too.
-            "the source_ids.yaml that unblocks every source id and datazone above:",
-            "",
-            # Both lines, each only where something needs it: a deployment told to declare
-            # source ids and left to find `datazones:` for itself copies this and still
-            # cannot load, which is how a datazone came to stop a seeded workspace.
-            *([f"    source_ids: [{', '.join(wanted)}]"] if wanted else []),
-            *([f"    datazones: [{', '.join(zones)}]"] if zones else []),
-        )
 
 
 def source_ids_named(fields: Mapping[str, object]) -> tuple[str, ...]:
