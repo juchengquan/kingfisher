@@ -190,7 +190,8 @@ class Seeded:
             "",
             # The file itself: each skipped line already gives the instruction, and none
             # can give the one list covering all of them.
-            "the source_ids.yaml that unblocks every one of them:",
+            # Not "every one of them": a definition held back for middleware is above too.
+            "the source_ids.yaml that unblocks every source id and datazone above:",
             "",
             # Both lines, each only where something needs it: a deployment told to declare
             # source ids and left to find `datazones:` for itself copies this and still
@@ -334,9 +335,10 @@ def _deployment_specific(
 ) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
     """What this file needs that a workspace may not have, or `None` for nothing."""
     if path.is_dir():
-        # A tool package is one definition, so it is decided as one: dropping the module
-        # that names an audience and copying the rest leaves a folder that is not a tool.
-        return _in_a_package(path) if kind in AUDIENCED_KINDS else None
+        # A package or a bundle is one definition, so it is decided as one: dropping the
+        # file that names an audience and copying the rest leaves a folder that is neither.
+        # Any other folder only groups, and the copy judges what is in it file by file.
+        return _as_one(path, kind=kind) if _one_definition(path, kind=kind) else None
     if not path.is_file() or (text := _read(path)) is None:
         return None
     if path.suffix in (".yaml", ".yml") and kind in DOCUMENT_KINDS:
@@ -351,16 +353,59 @@ def _deployment_specific(
     return None
 
 
-def _in_a_package(folder: Path) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
-    """What a folder of modules needs, read as the one definition it is."""
-    source_ids: list[str] = []
-    datazones: list[str] = []
-    for path in sorted(folder.rglob("*.py")):
-        if importing.skipped(path.name) or (text := _read(path)) is None:
-            continue
-        named, zones = audiences_in_code(text)
-        source_ids.extend(named)
-        datazones.extend(zones)
+def _one_definition(folder: Path, *, kind: str) -> bool:
+    """Whether a folder is a package or a bundle, rather than a folder of definitions."""
+    if kind not in AUDIENCED_KINDS:
+        return False
+    if (folder / importing.PACKAGE_MARKER).is_file():
+        return True
+    # By the loader's rule: a bundle holds the definition named for it.
+    return kind == "subagents" and any(
+        folder.name in _names_declared(path) for path in folder.iterdir() if path.is_file()
+    )
+
+
+def _names_declared(path: Path) -> tuple[str, ...]:
+    """The `name` a definition file gives itself, as the tolerant readers above see it."""
+    if (text := _read(path)) is None:
+        return ()
+    if path.suffix in (".yaml", ".yml"):
+        decoded = decode(text)
+        written = None if isinstance(decoded, str) else decoded.get("name")
+        return (written,) if isinstance(written, str) else ()
+    if path.suffix != ".py":
+        return ()
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return ()
+    return tuple(
+        value.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Dict)
+        for key, value in zip(node.keys, node.values, strict=True)
+        if isinstance(key, ast.Constant)
+        and key.value == "name"
+        and isinstance(value, ast.Constant)
+        and isinstance(value.value, str)
+    )
+
+
+def _as_one(folder: Path, *, kind: str) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
+    """What a package or bundle needs, read as the one definition it is."""
+    answers = [
+        wanted
+        for path in sorted(folder.rglob("*"))
+        if path.is_file()
+        # Every file the copy would judge on its own, so none is left out of a copied folder.
+        and not any(map(importing.skipped, path.relative_to(folder).parts))
+        and (wanted := _deployment_specific(path, kind=kind)) is not None
+    ]
+    middlewares = [name for wants, names, _ in answers if wants == "middlewares" for name in names]
+    if middlewares:
+        return "middlewares", tuple(dict.fromkeys(middlewares)), ()
+    source_ids = [name for wants, names, _ in answers if wants == "source_ids" for name in names]
+    datazones = [zone for _, _, zones in answers for zone in zones]
     return _audienced(tuple(dict.fromkeys(source_ids)), tuple(dict.fromkeys(datazones)))
 
 

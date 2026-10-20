@@ -361,6 +361,13 @@ CODE_SPELLINGS = {
         ("A", "B"),
         (),
     ),
+    "a subagent entry's requirement written as a dict": (
+        "subagents",
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+        '             "source_ids": [{"A": None, "B": None}]}]\n',
+        ("A", "B"),
+        (),
+    ),
     "a subagent entry's datazone": (
         "subagents",
         'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
@@ -448,6 +455,160 @@ def test_a_tool_package_is_left_behind_whole(cfg, tmp_path):
 
     assert [(one.label, one.names) for one in done.skipped] == [("tools/profiler", ("A",))]
     assert not (tools_dir(cfg) / "profiler").exists(), "half a package is not a tool"
+
+
+def test_a_bundle_is_left_behind_whole(cfg, tmp_path):
+    """A bundle whose definition named a source id was half-seeded: reported as seeded,
+    its `ledger.yaml` held back and its `tools/count.py` copied, which `doctor` then
+    called an orphaned folder and told the reader to rename.
+    """
+    source = tmp_path / "presets"
+    bundle = source / "subagents" / "ledger"
+    (bundle / "tools").mkdir(parents=True)
+    (bundle / "ledger.yaml").write_text(
+        "name: ledger\ndescription: d\nsource_ids: [A]\nbuiltin_tools: [read_file]\n"
+        "tools:\n  - {name: count, source: bundled}\nsystem_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+    (bundle / "tools" / "count.py").write_text(
+        "def count(x: str) -> str:\n    'Count.'\n    return x\n\n\nTOOLS = [count]\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert "subagents/ledger" not in done.written
+    assert [(one.label, one.names) for one in done.skipped] == [("subagents/ledger", ("A",))]
+    assert not (subagents_dir(cfg) / "ledger").exists(), "half a bundle is not a subagent"
+
+
+def test_a_bundle_naming_middleware_is_left_behind_whole(cfg, tmp_path):
+    """The other reason a bundle is held back, whose remedy differs: pooled as an
+    audience, the middleware it names would read as nothing and the bundle be copied.
+    """
+    source = tmp_path / "presets"
+    bundle = source / "subagents" / "ledger"
+    (bundle / "tools").mkdir(parents=True)
+    (bundle / "ledger.yaml").write_text(
+        "name: ledger\ndescription: d\nmiddlewares: [audit]\nbuiltin_tools: [read_file]\n"
+        "tools:\n  - {name: count, source: bundled}\nsystem_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+    (bundle / "tools" / "count.py").write_text(
+        "def count(x: str) -> str:\n    'Count.'\n    return x\n\n\nTOOLS = [count]\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert [(one.label, one.wants, one.names) for one in done.skipped] == [
+        ("subagents/ledger", "middlewares", ("audit",))
+    ]
+    assert not (subagents_dir(cfg) / "ledger").exists()
+
+
+def test_a_bundle_naming_nobody_is_copied_whole(cfg, tmp_path):
+    """The control for the bundle above: deciding a folder as one must not hold back a
+    bundle over a file the copy itself never writes.
+    """
+    source = tmp_path / "presets"
+    bundle = source / "subagents" / "ledger"
+    (bundle / "tools").mkdir(parents=True)
+    (bundle / ".scratch").mkdir()
+    (bundle / "ledger.yaml").write_text(
+        "name: ledger\ndescription: d\nbuiltin_tools: [read_file]\n"
+        "tools:\n  - {name: count, source: bundled}\nsystem_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+    (bundle / "tools" / "count.py").write_text(
+        "def count(x: str) -> str:\n    'Count.'\n    return x\n\n\nTOOLS = [count]\n",
+        encoding="utf-8",
+    )
+    (bundle / ".scratch" / "draft.py").write_text(
+        'SUBAGENTS = [{"name": "d", "source_ids": ["A"]}]\n', encoding="utf-8"
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert "subagents/ledger" in done.written
+    assert not done.skipped
+    assert (subagents_dir(cfg) / "ledger" / "tools" / "count.py").is_file()
+
+
+def test_a_bundle_is_left_behind_for_what_its_own_tool_names(cfg, tmp_path):
+    """A bundled tool's audience is only in its Python, so a bundle read for its YAML
+    alone would copy a tool into a workspace that has not declared who reaches it.
+    """
+    source = tmp_path / "presets"
+    bundle = source / "subagents" / "ledger"
+    (bundle / "tools").mkdir(parents=True)
+    (bundle / "ledger.yaml").write_text(
+        "name: ledger\ndescription: d\nbuiltin_tools: [read_file]\n"
+        "tools:\n  - {name: count, source: bundled}\nsystem_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+    (bundle / "tools" / "count.py").write_text(
+        "from kingfisher import ToolSpec\n\n\ndef count() -> str:\n    'Count.'\n"
+        "    return ''\n\n\nTOOLS = [ToolSpec(count, datazone='emea')]\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert [(one.label, one.datazones) for one in done.skipped] == [
+        ("subagents/ledger", ("emea",))
+    ]
+    assert not (subagents_dir(cfg) / "ledger").exists()
+
+
+def test_a_compiled_subagents_bundle_is_left_behind_whole(cfg, tmp_path):
+    """A bundle is named for by a module as well as a document, and read as a folder of
+    definitions it would copy `surveyor.py` and hold back the tool it lists.
+    """
+    source = tmp_path / "presets"
+    bundle = source / "subagents" / "surveyor"
+    (bundle / "tools").mkdir(parents=True)
+    (bundle / "surveyor.py").write_text(
+        'SUBAGENTS = [{"name": "surveyor", "description": "d", "build": None,\n'
+        '              "tools": [{"name": "count", "source": "bundled"}]}]\n',
+        encoding="utf-8",
+    )
+    (bundle / "tools" / "count.py").write_text(
+        "from kingfisher import ToolSpec\n\n\ndef count() -> str:\n    'Count.'\n"
+        "    return ''\n\n\nTOOLS = [ToolSpec(count, source_ids=['A'])]\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert [(one.label, one.names) for one in done.skipped] == [("subagents/surveyor", ("A",))]
+    assert not (subagents_dir(cfg) / "surveyor").exists()
+
+
+def test_a_grouping_folder_is_judged_file_by_file(cfg, tmp_path):
+    """One module naming a source id in `subagents/analysis/` held back an unrelated
+    `profiler.yaml` beside it, which names nobody: a folder named for no definition is
+    only organisation, and was decided as if it were one.
+    """
+    source = tmp_path / "presets"
+    group = source / "subagents" / "analysis"
+    group.mkdir(parents=True)
+    (group / "profiler.yaml").write_text(
+        "name: profiler\ndescription: d\nsystem_prompt: |\n  Hi.\n", encoding="utf-8"
+    )
+    (group / "zoned.py").write_text(
+        'SUBAGENTS = [{"name": "z", "description": "d", "system_prompt": "Hi.",\n'
+        '             "source_ids": ["A"]}]\n',
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert (subagents_dir(cfg) / "analysis" / "profiler.yaml").is_file()
+    assert not (subagents_dir(cfg) / "analysis" / "zoned.py").exists()
+    assert [(one.label, one.names) for one in done.skipped] == [
+        ("subagents/analysis/zoned.py", ("A",))
+    ]
 
 
 def test_the_declaration_names_both_lines_of_the_file(cfg, tmp_path):
