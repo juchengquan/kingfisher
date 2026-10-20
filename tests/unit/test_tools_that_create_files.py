@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import csv
 import io
+import os
+import platform
 import re
 from xml.etree import ElementTree
 
@@ -648,6 +650,15 @@ def test_the_guides_recipe_says_saved_only_for_a_file_that_was(handed):
 
 # -- a file drawn in the fence -------------------------------------------------
 
+#: Drawing starts this interpreter inside the fence. The GitHub macOS runner's
+#: `sandbox-exec` refuses it -- "Operation not permitted", exit 126 -- as it refuses the
+#: Python `test_confinement` skips there; the Linux job's Landlock and a developer's Mac
+#: start it, so only that runner is left out.
+draws_in_the_fence = pytest.mark.skipif(
+    os.environ.get("CI") == "true" and platform.system() == "Darwin",
+    reason="the macOS runner's sandbox refuses to start the venv's interpreter",
+)
+
 
 @pytest.fixture
 def drawing(tools, handed, cfg, session_dir):
@@ -674,6 +685,7 @@ def drawing(tools, handed, cfg, session_dir):
     return call
 
 
+@draws_in_the_fence
 def test_each_page_drawn_is_saved_and_said_in_a_line_of_its_own(drawing, handed):
     """Drawn by PDFium in the session's fenced shell, never in kingfisher's process."""
     said = drawing(file_path="/inputs/report.pdf", pages="1,3")
@@ -692,11 +704,13 @@ def test_each_page_drawn_is_saved_and_said_in_a_line_of_its_own(drawing, handed)
     ({"pages": "1", "scale": 3.0}, "scale 3.0: draw pages at more than 0 and at most 2.0"),
     ({"pages": "seven"}, "pages 'seven': write page numbers and ranges"),
 ])
+@draws_in_the_fence
 def test_pages_or_a_scale_it_cannot_draw_are_refused(drawing, args, says):
     with pytest.raises(ValueError, match=re.escape(says)):
         drawing(file_path="/inputs/report.pdf", **args)
 
 
+@draws_in_the_fence
 def test_more_pages_than_one_call_draws_are_refused(drawing, session_dir):
     """Clipped to the document first, so `1-999` of a twelve-page file is twelve."""
     (session_dir / "inputs" / "long.pdf").write_bytes(a_pdf(*(f"page {n}" for n in range(12))))
@@ -705,12 +719,16 @@ def test_more_pages_than_one_call_draws_are_refused(drawing, session_dir):
         drawing(file_path="/inputs/long.pdf", pages="1-999")
 
 
+@draws_in_the_fence
 def test_a_file_pdfium_cannot_read_is_a_failure_naming_it(drawing, session_dir):
+    """PDFium's own words, so an interpreter that never started cannot pass for a bad
+    file, as it did on the macOS runner."""
     (session_dir / "inputs" / "fake.pdf").write_bytes(b"not a pdf at all")
 
     says = "/inputs/fake.pdf: not a PDF this tool can draw"
-    with pytest.raises(ValueError, match=re.escape(says)):
+    with pytest.raises(ValueError, match=re.escape(says)) as refused:
         drawing(file_path="/inputs/fake.pdf", pages="1")
+    assert "PDFium" in str(refused.value)
 
 
 def test_drawing_is_refused_for_an_agent_that_may_not_use_the_shell(tools, handed):
