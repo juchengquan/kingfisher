@@ -148,6 +148,20 @@ def test_the_prompt_lets_the_model_cite_a_result_and_does_not_tell_it_to():
     assert "Cite it" not in text
 
 
+def test_a_deployment_that_does_not_cite_is_not_told_it_may(cfg):
+    """Read off the `Config` and not passed on, the switch would leave every deployment
+    told it may cite; dropped with its paragraph, the id would go unexplained.
+    """
+    citing = " ".join(system_prompt(cfg).split())
+    silent = " ".join(system_prompt(replace(cfg, cite_results=False)).split())
+
+    sentence = "You can cite it by that id when you rely on that result."
+    assert sentence in citing
+    assert sentence not in silent
+    assert silent == citing.replace(f" {sentence}", "")
+    assert "is recorded under that id, which stays the same for the rest of the session." in silent
+
+
 def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
     """The run directory went when a turn stopped being a place, and the prompt and the
     smoke task went on sending files there for days: a place the agent cannot find is
