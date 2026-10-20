@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A caller named wrong raises `CallerError`, after #980
+
+- **`from kingfisher import CallerError`** names what a call raises when it says who
+  is calling in a way the deployment cannot take: a source id or datazone
+  `source_ids.yaml` does not define, a bare string, or nobody where a policy is in
+  force. These raised `AccessError`, which is also what a broken
+  `source_ids.yaml`, or a definition naming an undeclared source id, raises at
+  startup, so a caller could not catch its own mistake alone.
+- **`CallerError` is an `AccessError`**, so an `except AccessError` still catches
+  both. To answer a caller's mistake differently from the deployment's, catch
+  `CallerError` first. `kingfisher run --as` still reports either with exit 2.
+
 ## `ShellSettings` refuses a `path_extra` entry that is not absolute, after #978
 
 - **`ShellSettings(path_extra=(...))` raises `ConfigError`** for an entry that is not

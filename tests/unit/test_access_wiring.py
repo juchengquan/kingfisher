@@ -16,7 +16,13 @@ from kingfisher.cli.__main__ import main
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.access.checks import caller_holds, held_by
 from kingfisher.core.access.policy import parse
-from kingfisher.core.access.source_ids import UNSCOPED, AccessError
+from kingfisher.core.access.source_ids import (
+    UNSCOPED,
+    AccessError,
+    CallerError,
+    Datazone,
+    with_datazone,
+)
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
 from kingfisher.core.layout import DEFAULT_LAYOUT
@@ -187,6 +193,59 @@ def test_the_refusal_names_what_was_asked_for_and_what_to_do(cfg):
     said = str(caught.value)
     assert "marketing, sales" in said
     assert "source_ids.yaml" in said and "UNSCOPED" in said
+
+
+#: One call per refusal of a caller named wrong, against `ZONED`.
+CALLERS_NAMED_WRONG = {
+    "a bare string": lambda zoned: caller_holds(zoned, "A"),
+    "an unknown source id": lambda zoned: caller_holds(zoned, ("Q",)),
+    "nobody, under a policy": lambda zoned: caller_holds(zoned, None),
+    "a source id where none is declared": lambda _: held_by(None, ("A",)),
+    "a datazone where none is declared": lambda _: held_by(None, (Datazone("hr"),)),
+    "two datazones": lambda zoned: held_by(zoned, ("A", Datazone("hr"), Datazone("finance"))),
+    "an unknown datazone": lambda zoned: held_by(zoned, ("A", Datazone("fiance"))),
+    "a datazone with UNSCOPED": lambda _: with_datazone(UNSCOPED, "hr"),
+}
+
+ZONED = "source_ids: [A, B]\ndatazones: [finance, hr]\n"
+
+
+@pytest.mark.parametrize("call", CALLERS_NAMED_WRONG.values(), ids=CALLERS_NAMED_WRONG.keys())
+def test_a_caller_named_wrong_is_caught_as_the_caller_s_mistake(call):
+    """Each raised the `AccessError` a broken `source_ids.yaml` raises, so a caller could
+    not catch its own mistake without catching the deployment's as well."""
+    import kingfisher
+
+    with pytest.raises(kingfisher.CallerError):
+        call(vocabulary(ZONED))
+
+
+def test_a_deployment_s_own_access_fault_is_not_the_caller_s(policied):
+    """The control: were every `AccessError` a `CallerError`, a caller would catch a broken
+    policy as its own mistake."""
+    for fault in (
+        lambda: vocabulary("source_ids:\n  A: {}\n"),
+        # `surveyor` is for A and B, and this declares only A.
+        lambda: Kingfisher(
+            replace(policied, access=vocabulary("source_ids: [A]\n")), sessions=LocalSessions()
+        ),
+    ):
+        with pytest.raises(AccessError) as raised:
+            fault()
+        assert not isinstance(raised.value, CallerError)
+
+
+def test_the_command_refuses_a_source_id_it_does_not_define(
+    policied, at_the_command_line, capsys
+):
+    """Nothing drove `run --as` with a source id the deployment does not define, so a
+    traceback and exit 1 -- a turn stopped at a bound -- would have passed."""
+    (policied.definitions / "source_ids.yaml").write_text(VOCABULARY, encoding="utf-8")
+
+    code = main(["run", "hi", "--agent", "surveyor", "--as", "Q"])
+
+    assert code == 2
+    assert "unknown source id(s): Q; this deployment defines A, B" in capsys.readouterr().err
 
 
 def test_meaning_no_caller_is_still_how_you_say_it(cfg):
