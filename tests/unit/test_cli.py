@@ -105,7 +105,7 @@ def test_the_skip_message_carries_the_line_to_write(cfg, monkeypatch, capsys, sh
 
     printed = capsys.readouterr().out
     assert "groups.yaml.example" not in printed, "still naming a file that is gone"
-    assert "source_ids: [audit_log, sales_db, warehouse]" in printed, (
+    assert "source_ids: [audit_log, sales_db]" in printed, (
         "the remedy does not carry the line to write, so the reader is told to "
         "produce a format they have not been shown"
     )

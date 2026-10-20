@@ -202,65 +202,29 @@ class AccessReport:
 
 @dataclass(frozen=True)
 class SourceIds:
-    """One deployment's source-id vocabulary: the names, and what each covers."""
+    """One deployment's source-id vocabulary: the names a caller may hold."""
 
-    #: Declared name -> that name plus everything it covers, transitively.
-    names: Mapping[str, tuple[str, ...]]
-    #: Declared name -> the source ids a caller must hold for it to apply, for the
-    #: names written as a set. Absent for every ordinary source id.
-    compounds: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    #: The declared source ids. Each stands only for itself.
+    names: frozenset[str]
     #: The datazones a caller may be in and a definition may require.
     datazones: frozenset[str] = frozenset()
 
     def mentions(self, audience: Audience) -> frozenset[str]:
-        """Every source id an audience touches, following what names cover and require."""
+        """Every source id an audience names, inside a set or not."""
         if audience == ALL:
             return frozenset()
-        seen: set[str] = set()
-        queue = [n for one in audience for n in ((one,) if isinstance(one, str) else one)]
-        while queue:
-            name = queue.pop()
-            if name in seen:
-                continue
-            seen.add(name)
-            queue.extend(self.names.get(name, ()))
-            queue.extend(self.compounds.get(name, ()))
-        return frozenset(seen)
+        return frozenset(n for one in audience for n in ((one,) if isinstance(one, str) else one))
 
-    def expand(self, held: Iterable[str]) -> frozenset[str]:
-        """Every source id a caller effectively holds: what they cover, then what derives."""
-        wanted = tuple(held)
-        if derived := sorted({name for name in wanted if name in self.compounds}):
-            listed = "; ".join(
-                f"{name!r} means all of [{', '.join(sorted(self.compounds[name]))}]"
-                for name in derived
-            )
+    def known(self, held: Iterable[str]) -> frozenset[str]:
+        """The source ids a caller sent, refused unless every one is declared."""
+        wanted = frozenset(held)
+        if unknown := sorted(wanted - self.names):
             msg = (
-                f"derived source id(s) cannot be held: {listed}. A name written as a "
-                f"set is what holding its parts adds up to, not something to "
-                f"present -- name the parts instead"
+                f"unknown source id(s): {', '.join(unknown)}; "
+                f"this deployment defines {', '.join(sorted(self.names)) or 'none'}"
             )
             raise AccessError(msg)
-        if unknown := tuple(name for name in wanted if name not in self.names):
-            # Without the compounds, which a caller may not present; `undeclared`
-            # lists them, since a definition may name one.
-            known = ", ".join(sorted(set(self.names) - set(self.compounds))) or "none"
-            msg = (
-                f"unknown source id(s): {', '.join(sorted(set(unknown)))}; "
-                f"this deployment defines {known}"
-            )
-            raise AccessError(msg)
-
-        reached = {one for name in wanted for one in self.names[name]}
-        while gained := {
-            name
-            for name, parts in self.compounds.items()
-            if name not in reached and all(part in reached for part in parts)
-        }:
-            # `names[name]`, not `name`: what a compound covers is earned with it.
-            for name in gained:
-                reached.update(self.names[name])
-        return frozenset(reached)
+        return wanted
 
     def undeclared(self, audience: Audience, *, where: str) -> str | None:
         """The complaint about an audience naming a source id this deployment does not declare."""

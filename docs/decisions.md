@@ -883,8 +883,8 @@ of the read output, keeps only the indentation there. *(2026-10-18.)*
 `source_ids:` for who may reach it, a tool writes its lock in its own file, and an
 entry of `skills:` may be written long -- `{name: X, source_ids: [...]}` -- for who
 is told about that one, since a skill's own file is `SKILL.md`, which the model reads
-whole and a deployment may not own. One central file, `source_ids.yaml`, holds the vocabulary -- names only, no policy; `contains` is a
-retired spelling there and refused. An audience resolves into an ordinary
+whole and a deployment may not own. One central file, `source_ids.yaml`, holds the vocabulary -- names only, no policy. An
+audience resolves into an ordinary
 `Capabilities`, so nothing downstream changed: an ungranted tool is never attached to
 the graph and an ungranted subagent is never compiled. *(2026-08-31.)*
 
@@ -924,8 +924,8 @@ whichever datazone its caller names. A prefixed source id -- `datazone:finance` 
 caller has exactly one datazone and any number of source ids, and folding one into the
 other would leave "exactly one" to whoever builds the caller's list.
 
-Inside, it is one more name, deliberately. A caller's datazone joins their expanded
-source ids as `datazone=finance` in `held_by`, and a definition's becomes one more name
+Inside, it is one more name, deliberately. A caller's datazone joins their source ids
+as `datazone=finance` in `held_by`, and a definition's becomes one more name
 its audience requires -- so every reach check asks it too, and the ledger stamps a zoned
 result with no new column. The prefix is refused as a source id. On its way in it rides
 among the caller's source ids as a `Datazone`, a `str`: the dozen doors before `held_by`
@@ -1018,60 +1018,34 @@ caller, the per-turn re-check of a session's pinned agent, and the closed vocabu
 reused the handle; now every call takes `source_ids=`. Counted before removing: zero
 production callers, and the one consumer serving several callers passed `source_ids=` at
 all seven call sites. The stated benefits did not survive checking: the grant it
-resolved once measures **0.81 microseconds**, because the transitive closure is computed
-when `source_ids.yaml` loads, and refusing an unknown source id "at the boundary" gains
-one call, since `expand` refuses before any agent is built. What was real was script
-ergonomics, and one accident: the reader of `source_ids` took anything but a tuple as
-*no opinion*, so the handle's coercion was the only reason `["A"]` narrowed. Any sequence
-now means what it looks like, and a bare string is refused. *(2026-09-03.)*
+resolved once measured **0.81 microseconds**, because what each name covered was worked
+out when `source_ids.yaml` loaded, and refusing an unknown source id "at the boundary"
+gains one call, since the vocabulary refuses one before any agent is built. What was
+real was script ergonomics, and one accident: the reader of `source_ids` took anything
+but a tuple as *no opinion*, so the handle's coercion was the only reason `["A"]`
+narrowed. Any sequence now means what it looks like, and a bare string is refused.
+*(2026-09-03.)*
 
 **An audience list is an `or`, and an entry of it may be an `and`.** A requirement --
-several source ids held at once -- is written two ways deliberately: named in
-`source_ids.yaml` for anything reused, inline as one entry of a list for a one-off. The
-same shape both places, so the named form is literally a *name for* the inline one: the
-argument against two spellings was drift, and one form with one evaluation answers it.
-The result is or-of-ands, the shape access rules take, out of one field. `expand` does
-the work -- covering closes first, then a compound joins the held set once its parts are
-held -- so two consequences follow rather than being chosen. **Covering satisfies a
-requirement**; the alternative is an `admin` who covers both parts yet is weaker than
-the sum of what they reach. And **nesting works for free**. *(2026-09-01.)*
+several source ids held at once -- is a set written as one entry of the list,
+`[audit_log, {sales_db, pii}]`: or-of-ands, the shape access rules take, out of one field.
+*(2026-09-01.)*
 
-**A compound is derived, and nothing may hand it over directly.** A caller may not
-present one: accepting it would let one assertion stand in for the two the requirement
-exists to demand, and the refusal names the parts. A covers list may not either, by the
-same rule: `admin: [finance-senior]` gave an admin the compound while they held neither
-part -- the requirement defeated by the file declaring it. Naming the parts reaches the
-same people and is visible, since the listing prints what a compound requires and never
-a covers list.
-
-**The two operations are told apart by shape, not by a keyword.** `contains` and
-`all_of` were the spelling until the format was asked why YAML needed English words for
-two things it has brackets for. A list body is what a name covers, a set body what it
-requires:
-
-```yaml
-source_ids:
-  sales_db:
-  warehouse: [sales_db, audit_log]      # covers
-  sales_db_pii: {sales_db, pii}         # requires
-```
-
-A name writing both operations stopped being expressible, so no refusal for it is
-maintained. The listing stopped inventing `finance_db+pii`, which no file could write
-and `+` made ambiguous; it prints `{finance_db, pii}`, and `--json` nests, since a script
-should not parse a set out of a string. The cost was one new refusal: a set inside a
-covers list -- `warehouse: [{sales_db, pii}, audit_log]` -- is the covers-list bypass with
-no name to look up, so it is refused where it is written. Both retired words are refused
-rather than ignored, or an upgrading deployment's policy would be read and dropped in
-silence; `A: {}` is refused with them, since an empty set admits everyone.
-
-**The refusal is for the file, not the name**, which makes it a migration rather than a
-wall. One message per source id costs a restart per line and says nothing of the
-`contains` further down; the scan reads the whole document first and prints each line
-beside the line that replaces it, built from what the file says -- the argument of the
-seeding message under *Reversed: `groups.yaml.example`* below. A set whose names happen
-to be `contains` and `all_of` stays legal: the value is what marks a keyword.
-*(2026-09-15.)*
+**Reversed: covering and named requirements.** `source_ids.yaml` once said what a name
+stood for: `warehouse: [sales_db, audit_log]` covered both, and `sales_db_pii: {sales_db,
+pii}` named a requirement no caller could present. Both went. **Covering is identity**,
+and who a caller is has been the deployment's since *Who may continue a session is the
+caller's to decide*: kingfisher has no users, only the source ids a call names, so a
+deployment expands its own roles before calling, in the code that already decides who its
+callers are. **A named requirement was only a name for the inline one**, kept so a
+requirement two files share changed in one place; each file writes the set now. And the
+shipped example's own case for covering -- "`warehouse` appears on no definition in this
+set" -- was false, since `auditor.yaml` listed it beside the two names it covered. What
+went with them: the transitive closure, the refusals of a covers loop, a requirement loop,
+a covers list handing out a requirement and a caller presenting one, the listing of what a
+name requires, and the scan refusing the retired `contains`/`all_of` keywords line by line
+-- a body of any shape is now one refusal saying where each moved, with no migration.
+*(2026-10-19.)*
 
 **In Python, a requirement is a set, and a list inside an audience is refused.** The
 only Python spelling of *all of* was `{"a": None, "b": None}`, which nobody types; a set
@@ -1092,13 +1066,6 @@ rule can separate them. What survived is the looking: `SourceIds.narrowing_in` f
 `AccessReport.narrowed`, said once beside `unrestricted`. The typos it really caught are
 `refuse_undeclared`'s, refused by name, and a misspelling is no longer explained as a
 reachability problem. *(2026-09-01, both the same day.)*
-
-**`source_ids.yaml` now holds vocabulary with a rule in it**, against its pitch of "a
-dictionary, not a policy". A compound still answers "what does this name mean", with a
-condition; judged to stay on the right side, because what it cannot do is say who
-reaches what, the property that sank the central design. Recorded because it is cheap
-to disagree with now and expensive later. The `--json` `access` key became
-`{names, requires}`, since a compound has no honest place in a name-to-closure mapping.
 
 **`builtin_tools` takes no audience, and that is not an omission.** deepagents registers
 its own tools, so kingfisher can filter them but never leave them out of a graph -- a
@@ -1183,9 +1150,8 @@ HTTP: it is a value a person types at a call site they can see, and from a reque
 one a bug can produce. **The caller gets a code, the log gets the reason**: a session out
 of reach answered as a wrong id does, and an undeclared source id got a body naming no
 source id while the logger got the list. What the
-library still does: every call names its caller with `source_ids=`; a presented
-compound is refused with an `AccessError` naming the parts; `kingfisher run --as
-UNSCOPED` passes `UNSCOPED` on purpose; a turn in a session whose agent the caller
+library still does: every call names its caller with `source_ids=`; `kingfisher run
+--as UNSCOPED` passes `UNSCOPED` on purpose; a turn in a session whose agent the caller
 cannot reach raises the `UnknownSessionError` a wrong id does, and `session` answers
 `None` for it. *(2026-09-01.)*
 
@@ -1241,9 +1207,8 @@ visible only by running it: it ships *one* vocabulary, so seeding this repositor
 said `declare analysts, auditors, senior-analysts` beside a file declaring
 `readers, writers, staff, senior, senior-writers`. So the remedy travels in the message,
 built from the names actually missing -- one line, the union across every skipped
-definition, because per-definition copies are overlapping partial lists. The flat form
-only: whether a name covers or requires is the deployment's choice, and nothing can infer
-it. `assets/source_ids.yaml` is the only source ids example.
+definition, because per-definition copies are overlapping partial lists.
+`assets/source_ids.yaml` is the only source ids example.
 
 **`models.yaml.example` stays, and the asymmetry is the point.** `models.yaml` is
 required with no fallback, and its example is a hundred lines of annotation nothing else
@@ -1258,8 +1223,8 @@ leaves a reader two words for one thing. **The prose noun is "source id", never 
 "source"**: that word means *where a definition was read from* here --
 `definitions_source`, `access_source`, `skill_sources`, `models.source`, and 197 bare
 uses. **The shipped example's vocabulary moved with the key**, from job titles to
-`sales_db`, `audit_log`, `warehouse`, `pii` and `sales_db_pii`, because job titles teach
-the wrong reading of the key. No compatibility window, on the precedent the export table
+names of sources such as `sales_db` and `audit_log`, because job titles teach the wrong
+reading of the key. No compatibility window, on the precedent the export table
 set at 0.1.0: `run(groups=)` is a `TypeError` and `groups:` an unknown field. One
 spelling fails silently, stated rather than discovered: a file still named `groups.yaml`
 is no file, which means *no policy*, so the workspace is reachable by everyone with
@@ -1329,7 +1294,7 @@ definitions share, an agent's file naming both, and a loop through definitions t
 caller cannot reach. *(2026-10-12.)*
 
 **Naming a caller where nothing narrows is refused, at one door.** With no
-`source_ids.yaml` any name expands to nobody and the answer is unrestricted. A turn was
+`source_ids.yaml` any name narrows nothing and the answer is unrestricted. A turn was
 refused for it and a listing was not, so `kingfisher list --as marketing` printed the
 whole catalogue and exited zero -- read as what marketing reaches, not as a workspace
 with no policy. It is the state the HTTP surface refused as "a server somebody believes

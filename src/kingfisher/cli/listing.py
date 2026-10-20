@@ -189,11 +189,6 @@ def _access(found: Inventory) -> Iterator[str]:
     # `access` alone decides, as in `as_json`, so a scoped caller's text and JSON agree.
     if found.access is None:
         return
-    if compounds := found.access.compounds:
-        # Before the audiences: a name requiring others means nothing without it.
-        yield "\naccess — source ids that require others"
-        for name, parts in sorted(compounds.items()):
-            yield f"  {name} = {{{', '.join(sorted(parts))}}}"
     yield "\naccess — by definition"
     said = False
     for kind, definitions in found.audiences.items():
@@ -388,16 +383,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "miscounted_bundles": dict(found.miscounted_bundles),
         "miscounted_bundles_checked": found.miscounted_bundles_checked,
         # The vocabulary, or `null` where none is declared; who reaches what is `audiences`.
-        "access": (
-            None
-            if found.access is None
-            else {
-                "names": {name: list(holds) for name, holds in found.access.names.items()},
-                "requires": {
-                    name: list(parts) for name, parts in found.access.compounds.items()
-                },
-            }
-        ),
+        "access": None if found.access is None else {"names": sorted(found.access.names)},
         "audiences": {
             kind: {
                 name: {
