@@ -797,8 +797,9 @@ PROSE_GONE: dict[str, frozenset[str]] = {
 def _module_file(name: str) -> Path | None:
     """The file a dotted name refers to, or `None`.
 
-    Through `_is_a_module_under`, never `exists()`: on macOS `core.access.Capabilities`
-    found `capabilities.py`, so the rule passed there and failed on Linux CI."""
+    Through `_is_a_module_under`, never `exists()`: on a case-insensitive filesystem the
+    class `core.access.Capabilities` would resolve as the module `capabilities.py`.
+    """
     if not _is_a_module_under(SRC, name):
         return None
     base = SRC.joinpath(*name.split("."))
@@ -826,13 +827,22 @@ def _defined_names(path: Path) -> set[str]:
         if isinstance(node, ast.ClassDef):
             names |= declared(node.body)
         # A lazy package defines its exports only through `__getattr__`, which serves
-        # what `__all__` lists, or `_EXPORTS` where, as in `core.access`, there is none.
+        # exactly what `__all__` lists, or the keys of the `_EXPORTS` table it reads.
         elif isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id in {"__all__", "_EXPORTS"} for t in node.targets
+            isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets
         ):
             names |= {
                 item.value for item in ast.walk(node.value)
                 if isinstance(item, ast.Constant) and isinstance(item.value, str)
+            }
+        if (
+            isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == "_EXPORTS" for t in node.targets)
+            and isinstance(node.value, ast.Dict)
+        ):
+            names |= {
+                key.value for key in node.value.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
             }
     return names
 
@@ -1195,7 +1205,8 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
         assert _prose_unresolved(f"`{absent}`") == [absent], absent
     # And a lazy package's exports exist though only `__getattr__` makes them.
     assert _prose_unresolved("`kingfisher.plugins.Plugins`, `core.access.Capabilities`") == []
-    # A class is not its module's file, though a case-insensitive disk finds one for it.
+    # A class is not its module's file, though a case-insensitive disk finds one for it:
+    # without this the rule above passed on macOS in exactly the state Linux failed.
     assert _module_file("core.access.Capabilities") is None
 
 
