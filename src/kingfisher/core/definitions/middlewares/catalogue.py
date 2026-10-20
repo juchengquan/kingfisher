@@ -15,7 +15,7 @@ from kingfisher.core.definitions.importing import (
 )
 
 #: Declared rather than inferred, like `TOOLS`: searching for subclasses would
-#: offer an imported one -- `from .base import CallCap` -- as a second entry.
+#: offer an imported one -- `from .base import Audit` -- as a second entry.
 EXPORT = "MIDDLEWARES"
 
 

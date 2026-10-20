@@ -48,7 +48,6 @@ def test_every_preset_subagent_parses(shipped):
         "versions",
         "redactor",
         "show-your-work",
-        "sweeper",
         "quarters",
     }
     for spec in specs.values():
@@ -508,8 +507,7 @@ def test_the_shipped_subagent_consults_its_helper_under_the_agent_that_ships_it(
                 AIMessage(content="done"),
             ]
         ),
-        # The pair alone: `sweeper`, also named there, needs a middleware registry
-        # this deployment never wired, and has nothing to do with consulting.
+        # The pair alone: the others named there have nothing to do with consulting.
         capabilities=Capabilities(subagents=("reviewer", "profiler")),
     ).graph
 
@@ -804,27 +802,18 @@ def test_every_shipped_tool_naming_a_file_reads_it_through_the_backend(shipped):
 # -- the example nothing seeds ---------------------------------------------
 
 
-def _call_cap(shipped):
-    """`CallCap`, loaded the way a deployment would import it."""
-    return _call_cap_module(shipped).CallCap
+def _summarizer(shipped):
+    """`SummarizeByCount`, loaded the way a deployment would import it."""
+    return _summarizer_module(shipped).SummarizeByCount
 
 
-def _call_cap_module(shipped):
-    """The whole example module, for the tests that want more than one name."""
-    return load(shipped / "middlewares" / "call_cap.py", declares="CallCap")
+def _summarizer_module(shipped):
+    return load(shipped / "middlewares" / "summarize_by_count.py", declares="SummarizeByCount")
 
 
 def _documented_registry(shipped):
-    """The wiring block the examples tell you to paste, pasted."""
-    cap = _call_cap_module(shipped)
-    note = load(shipped / "middlewares" / "tool_note.py", declares="ToolNote")
-    compaction = load(shipped / "middlewares" / "compaction.py", declares="Compact")
-    return {
-        "call-cap-strict": cap.CallCap,
-        "call-cap-generous": cap.CallCapGenerous,
-        "tool-note": note.ToolNote,
-        "compact": compaction.Compact,
-    }
+    """The wiring block the example tells you to paste, pasted."""
+    return {"summarize-by-count": _summarizer(shipped)}
 
 
 def _shipped_provisions(definition):
@@ -850,108 +839,45 @@ def _shipped_provisions(definition):
 WIRING = re.compile(r'"([a-z0-9-]+)":\s+(\w+),')
 
 
-def _wiring_per_example(shipped) -> dict[str, dict[str, str]]:
-    """`filename -> {name: class name}`, read out of each wiring block separately.
-
-    Kept per file rather than merged, and that is not tidiness. The first draft
-    merged with `dict.update`, and `tool_note.py` prints the cap's two entries as
-    well as its own -- so renaming a class in `call_cap.py`'s block was silently
-    overwritten by the correct copy in the other, and the mutation that should have
-    caught it passed. Two blocks that repeat entries have to be checked against each
-    other, not folded together.
-    """
-    return {
-        filename: dict(
-            WIRING.findall(
-                load(shipped / "middlewares" / filename, declares=declares).__doc__ or ""
-            )
-        )
-        for filename, declares in (
-            ("call_cap.py", "CallCap"),
-            ("tool_note.py", "ToolNote"),
-            ("compaction.py", "Compact"),
-        )
-    }
-
-
 def _documented_wiring(shipped) -> dict[str, str]:
-    """Every `name -> class` the wiring blocks register between them."""
-    merged: dict[str, str] = {}
-    for pairs in _wiring_per_example(shipped).values():
-        merged.update(pairs)
-    return merged
+    """`name -> class name`, read out of the example's wiring block."""
+    return dict(WIRING.findall(_summarizer_module(shipped).__doc__ or ""))
 
 
-def test_the_wiring_blocks_do_not_contradict_each_other(shipped):
-    """`tool_note.py` and `compaction.py` print earlier blocks' entries too, so they can
-    disagree.
-
-    One block is what a deployment pastes; every block being right matters more than any one.
-    This is also what makes the class-name check below bite: merged naively, a rename
-    in one block is papered over by the correct copy in the other, which is exactly
-    how the first version of these tests passed a mutation it was written to catch.
-    """
-    blocks = _wiring_per_example(shipped)
-
-    conflicts = {
-        name: {file: pairs[name] for file, pairs in blocks.items() if name in pairs}
-        for name in set().union(*(set(pairs) for pairs in blocks.values()))
-        if len({pairs[name] for pairs in blocks.values() if name in pairs}) > 1
-    }
-
-    assert not conflicts, f"the wiring blocks register different classes for {conflicts}"
-
-
-def test_the_wiring_block_names_classes_the_examples_actually_define(shipped):
+def test_the_wiring_block_names_classes_the_example_actually_defines(shipped):
     """The block a deployment pastes has to name code that is there."""
-    modules = {
-        name: load(shipped / "middlewares" / filename, declares=name)
-        for filename, name in (
-            ("call_cap.py", "CallCap"),
-            ("tool_note.py", "ToolNote"),
-            ("compaction.py", "Compact"),
-        )
-    }
-    defined = {
-        attribute
-        for module in modules.values()
-        for attribute in dir(module)
-        if isinstance(getattr(module, attribute), type)
-    }
+    module = _summarizer_module(shipped)
+    wiring = _documented_wiring(shipped)
 
-    blocks = _wiring_per_example(shipped)
-
-    assert all(blocks.values()), (
-        "a wiring block yielded no `\"name\": Class,` pairs -- it moved out of the "
+    assert wiring, (
+        "the wiring block yielded no `\"name\": Class,` pairs -- it moved out of the "
         "docstring or changed shape"
     )
     missing = {
-        f"{file}:{name}": cls
-        for file, pairs in blocks.items()
-        for name, cls in pairs.items()
-        if cls not in defined
+        name: cls
+        for name, cls in wiring.items()
+        if not isinstance(getattr(module, cls, None), type)
     }
     assert not missing, (
-        f"a wiring block registers {missing}, and those classes are not defined "
-        f"by the examples that print it"
+        f"the wiring block registers {missing}, and those classes are not defined "
+        f"by the example that prints it"
     )
 
 
 def test_the_block_the_agent_file_prints_registers_what_the_agent_names(shipped):
     """`assistant.yaml` prints its own copy of the wiring block, and nothing read it.
 
-    There are four copies of one registry: three module docstrings, held equal to
-    each other and to what the directory offers, and this header, held to nothing.
-    It drifted the moment a fourth middleware was added -- seeding the agent and
-    pasting its block would have left `compact` unregistered, with the refusal
-    naming a name the block never mentions.
+    There are two copies of one registry: the example's docstring, held equal to what
+    the directory offers, and this header, held to nothing. It drifted the moment a
+    middleware was added -- seeding the agent and pasting its block would have left the
+    summarizer unregistered, with the refusal naming a name the block never mentions.
     """
     printed = dict(WIRING.findall((shipped / "agents" / "assistant.yaml").read_text("utf-8")))
 
     assert printed, "the block moved out of the header or changed shape"
     assert set(printed) == set(_documented_registry(shipped)), (
         "the block the agent file prints registers different names from the one the "
-        "examples print, so one of the two leaves a reader with a broken deployment"
+        "example prints, so one of the two leaves a reader with a broken deployment"
     )
 
 
@@ -963,7 +889,7 @@ def test_the_wiring_block_and_the_registry_the_tests_paste_are_one_fact(shipped)
     that still passes while the documentation drifts.
     """
     assert set(_documented_wiring(shipped)) == set(_documented_registry(shipped)), (
-        "the block the examples print and the registry these tests build from it "
+        "the block the example prints and the registry these tests build from it "
         "no longer register the same names"
     )
 
@@ -1032,15 +958,13 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
 
     assert {left.label for left in done.skipped} == {
         "agents/assistant.yaml",
-        "subagents/sweeper.yaml",
         "agents/analyst.yaml",
         "subagents/auditor.yaml",
         "subagents/quarters.py",
         "tools/sql_query.py",
     }
-    for left in ("agents/assistant.yaml", "subagents/sweeper.yaml"):
-        assert left not in done.written
-        assert not (tmp_path / left).exists()
+    assert "agents/assistant.yaml" not in done.written
+    assert not (tmp_path / "agents" / "assistant.yaml").exists()
 
     # The names are the actionable half of the message, and `wants` is what
     # makes them actionable: "names middleware" sends a reader to a registry
@@ -1049,12 +973,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     assert {
         left.label: (left.wants, left.names, left.datazones) for left in done.skipped
     } == {
-        "agents/assistant.yaml": (
-            "middlewares",
-            ("call-cap-strict", "call-cap-generous", "tool-note", "compact"),
-            (),
-        ),
-        "subagents/sweeper.yaml": ("middlewares", ("call-cap-generous", "tool-note"), ()),
+        "agents/assistant.yaml": ("middlewares", ("summarize-by-count",), ()),
         "agents/analyst.yaml": ("source_ids", ("sales_db", "audit_log"), ()),
         "subagents/auditor.yaml": ("source_ids", ("sales_db", "audit_log"), ()),
         # The datazone beside the source id, from one file that names both, each in the
@@ -1110,10 +1029,8 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
     done = seed(Destination(), shipped, everything=True)
 
     assert not done.skipped
-    assert "subagents/sweeper.yaml" in done.written
     assert "agents/assistant.yaml" in done.written, "the agent a reader runs first"
     assert (tmp_path / "agents" / "assistant.yaml").is_file()
-    assert (tmp_path / "subagents" / "sweeper.yaml").is_file()
 
 
 def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, tmp_path):
@@ -1134,9 +1051,8 @@ def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, 
 
     done = seed(Destination(), shipped)
 
-    assert "middlewares/call_cap.py" in done.written
-    assert "middlewares/tool_note.py" in done.written
-    assert (tmp_path / "middlewares" / "call_cap.py").is_file()
+    assert "middlewares/summarize_by_count.py" in done.written
+    assert (tmp_path / "middlewares" / "summarize_by_count.py").is_file()
     # Left behind for naming middleware, which is a different rule and still
     # holds: a workspace that can *offer* one has not thereby registered it.
     assert "agents/assistant.yaml" not in done.written
@@ -1190,260 +1106,62 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
 
     # By name, not by class: a `middlewares/` file is imported afresh each time the
     # catalogue is read, so the classes loaded here are not the ones built there.
-    # The class's name rather than the instance's, which `compact` points at the
-    # deepagents slot it fills.
+    # The class's name rather than the instance's, which `summarize-by-count` points at
+    # the deepagents slot it fills.
     worn = {name_of(type(m)) for m in built.middleware} & offered
     assert spec.middlewares, "assistant names no middleware"
     assert spec.middlewares != ALL, "assistant takes whatever is offered again"
     assert worn == set(spec.middlewares), f"assistant runs under {sorted(worn)}"
 
 
-def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
-    """It is code, so "does it parse" means "does it run" -- the same bar
-    `test_every_preset_tool_loads` sets for `tools/`.
-
-    Driven rather than inspected: a scripted model asks for three tool calls against a
-    cap of two, and the third has to come back refused while the turn keeps going -- a
-    cap that ended the turn would be a worse thing wearing the same name.
+@pytest.mark.parametrize(
+    ("messages", "refusal"),
+    [(0, "omit the middleware instead"), ("60", "a count of messages")],
+)
+def test_the_summarizer_refuses_a_count_it_cannot_use(shipped, messages, refusal):
+    """A count below one summarizes before every call, and a string reached langchain
+    and was reported as `defaults` missing an argument; each is refused naming its fix.
     """
-    cap = _call_cap(shipped)
-    spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
-    responses = [
-        AIMessage(
-            content="",
-            tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": f"c{i}"}],
-        )
-        for i in range(3)
-    ] + [AIMessage(content="done")]
+    model = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
-    graph = build_agent(
-        cfg,
-        agent=replace(spec, middlewares=("call-cap-strict",), subagents=None, skills=None),
-        backend=backend_at(cfg, session_dir),
-        model=FakeToolCallingModel(responses=responses),
-        middleware_registry={"call-cap-strict": lambda: cap(2)},
-    ).graph
-    out = graph.invoke(
-        {"messages": [{"role": "user", "content": "go"}]},
-        config={"configurable": {"thread_id": "cap"}, "recursion_limit": 30},
-    )
-
-    transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
-    assert "limit of 2 tool calls is used up" in transcript
-    assert out["messages"][-1].content == "done", "the cap ended the turn instead of the call"
+    with pytest.raises(ValueError, match=refusal):
+        _summarizer(shipped)(model, object(), messages)
 
 
-def test_the_note_example_reaches_a_real_tool_result(shipped, cfg, session_dir):
-    """It is code, so "does it parse" means "does it run" -- the same bar
-    `test_the_middleware_example_caps_a_turn` sets for the cap two tests up.
+def _assistant(shipped):
+    return LocalAgentRepository(shipped / "agents").specs["assistant"]
+
+
+def test_the_shipped_assistant_writes_the_key_its_middleware_opens(shipped):
+    """Unseeded is not unchecked: the long form, with the one setting the class opens."""
+    agent = _assistant(shipped)
+
+    assert agent.middlewares == ("summarize-by-count",)
+    assert dict(agent.middleware_settings) == {"summarize-by-count": {"messages": 80}}
+
+
+def test_the_shipped_assistant_is_why_it_is_not_seeded(shipped):
+    """The reason a plain `seed` leaves it behind: unregistered, its middleware is refused."""
+    with pytest.raises(CapabilityError, match="names unregistered middleware"):
+        declared_middleware(_assistant(shipped), {}, ALL, kind="agent")
+
+
+def test_the_shipped_assistant_builds_against_the_registry_it_documents(shipped):
+    """The wiring block is copy-pasteable, checked by pasting it, and what it builds
+    takes deepagents' summarizer's place rather than running beside it.
     """
-    note = load(shipped / "middlewares" / "tool_note.py", declares="ToolNote")
-    spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
-    responses = [
-        AIMessage(content="", tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": "c1"}]),
-        AIMessage(content="done"),
-    ]
-
-    graph = build_agent(
-        cfg,
-        agent=replace(
-            spec,
-            middlewares=("tool-note",),
-            middleware_settings={"tool-note": {"text": "Mind the source."}},
-            subagents=None,
-            skills=None,
-        ),
-        backend=backend_at(cfg, session_dir),
-        model=FakeToolCallingModel(responses=responses),
-        middleware_registry={"tool-note": note.ToolNote},
-    ).graph
-    out = graph.invoke(
-        {"messages": [{"role": "user", "content": "go"}]},
-        config={"configurable": {"thread_id": "note"}, "recursion_limit": 30},
-    )
-
-    results = [m for m in out["messages"] if isinstance(m, ToolMessage)]
-    assert results, "the scripted call never produced a tool result"
-    assert all(m.content.endswith("Mind the source.") for m in results), (
-        "the definition's wording did not reach the result the model reads"
-    )
-
-
-def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
-    """`CallCap(0)` would refuse the first call and every one after it, which is not a
-    narrower cap but a broken agent.
-    """
-    with pytest.raises(ValueError, match="omit the middleware instead"):
-        _call_cap(shipped)(0)
-
-
-def _example_definitions(shipped):
-    """The agent-and-subagent pair that name middleware, from the kinds they belong to."""
-    return (
-        LocalAgentRepository(shipped / "agents").specs["assistant"],
-        LocalSubagentRepository(shipped / "subagents").specs["sweeper"],
-    )
-
-
-def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
-    """Unseeded is not unchecked."""
-    agent, subagent = _example_definitions(shipped)
-
-    assert agent.name == "assistant"
-    # `call-cap-generous` is granted here so `sweeper` may name it, since an
-    # agent's `middlewares:` is the ceiling its subagents are clamped by. The
-    # agent runs under both caps and the stricter one decides.
-    assert agent.middlewares == (
-        "call-cap-strict",
-        "call-cap-generous",
-        "tool-note",
-        "compact",
-    )
-    assert subagent.name == "sweeper"
-    assert subagent.middlewares == ("call-cap-generous", "tool-note")
-    assert "sweeper" in agent.subagents, "the agent half has to name the subagent half"
-
-    # Both spellings in one list, which is what these two files are now for.
-    # The cap is bare because `CallCap` opens nothing; the note is written long
-    # because `ToolNote` opens `text`.
-    assert dict(agent.middleware_settings) == {
-        "tool-note": {"text": "Cite the path and line for anything you assert."}
-    }
-    assert dict(subagent.middleware_settings) == {
-        "tool-note": {"text": "Return the path and line, not the file."}
-    }
-    assert (
-        agent.middleware_settings["tool-note"] != subagent.middleware_settings["tool-note"]
-    ), "one registry entry configured two ways is the thing this pair demonstrates"
-
-
-def test_the_middleware_examples_are_why_they_are_not_seeded(shipped):
-    """The reason they sit here rather than under `agents/` and `subagents/`."""
-    agent, subagent = _example_definitions(shipped)
-
-    for spec, kind in ((agent, "agent"), (subagent, "subagent")):
-        with pytest.raises(CapabilityError, match="names unregistered middleware"):
-            declared_middleware(spec, {}, ALL, kind=kind)
-
-
-def test_the_middleware_examples_build_against_the_registry_they_document(shipped):
-    """The wiring block in `call_cap.py` is copy-pasteable, checked by pasting it."""
-    registry = _documented_registry(shipped)
-    agent, subagent = _example_definitions(shipped)
-
-    built = declared_middleware(
-        agent, registry, ALL, kind="agent", provisions=_shipped_provisions(agent)
-    )
-    subagent_middleware = declared_middleware(
-        subagent, registry, ALL, kind="subagent", provisions=_shipped_provisions(subagent)
-    )
-
-    # `CallCapGenerous` is in the agent's list because `sweeper` names it and an
-    # agent grants what its subagents may reach. It is built for the agent too,
-    # which the file says out loud -- the stricter cap beside it still decides.
-    assert [type(m).__name__ for m in built] == [
-        "CallCap",
-        "CallCapGenerous",
-        "ToolNote",
-        "Compact",
-    ]
-    assert [type(m).__name__ for m in subagent_middleware] == ["CallCapGenerous", "ToolNote"]
-    assert built[0] is not subagent_middleware[0], "one instance for both would share a budget"
-    assert built[1] is not subagent_middleware[0], (
-        "the same class named by both is still built twice, or the budget the "
-        "agent spends would come out of the subagent's"
-    )
-    # The ceilings the two classes document, read off the objects rather than
-    # off `defaults`: the point of registering a class is that the build path
-    # applies its defaults, so asserting the attribute would assert nothing.
-    assert built[0]._limit == 20
-    assert subagent_middleware[0]._limit == 100
-
-
-def test_the_note_example_is_one_class_configured_two_ways(shipped):
-    """The half of the axis `call_cap.py` cannot show, driven end to end."""
-    registry = _documented_registry(shipped)
-    agent, subagent = _example_definitions(shipped)
-
-    # Selected by type rather than by position, which is what this read before.
-    # A third entry on the agent moved `[1]` from the note to a cap and the
-    # failure was an `AttributeError` about `_text` -- a test that indexes a list
-    # asserts the order as much as the thing, and only one of those is the point.
-    def _note(built):
-        return next(m for m in built if type(m).__name__ == "ToolNote")
-
-    note = _note(
-        declared_middleware(
-            agent, registry, ALL, kind="agent", provisions=_shipped_provisions(agent)
-        )
-    )
-    subagent_middleware = _note(
-        declared_middleware(
-            subagent, registry, ALL, kind="subagent", provisions=_shipped_provisions(subagent)
-        )
-    )
-
-    assert note._text == "Cite the path and line for anything you assert."
-    assert subagent_middleware._text == "Return the path and line, not the file."
-    assert note._text != subagent_middleware._text
-    # The key neither file wrote, which both take from the deployment. The
-    # merge is per key rather than all-or-nothing, and this is where that shows.
-    assert note._max_length == subagent_middleware._max_length == 200
-
-
-def test_the_note_example_refuses_the_key_it_did_not_open(shipped):
-    """`max_length` is a ceiling on what a definition may inject into every tool result,
-    so it is shut for the same reason `limit` is.
-
-    Driven against the real class, because what could regress is
-    `ToolNote.yaml_settable` -- someone adding `max_length` to it to make a long note
-    fit would pass every other test in this file.
-    """
-    from dataclasses import replace
-
-    registry = _documented_registry(shipped)
-    agent, _ = _example_definitions(shipped)
-    greedy = replace(
-        agent,
-        middleware_settings={"tool-note": {"text": "hi", "max_length": 100_000}},
-    )
-
-    with pytest.raises(CapabilityError, match="does not accept"):
-        declared_middleware(
-            greedy, registry, ALL, kind="agent", provisions=_shipped_provisions(greedy)
-        )
-
-
-def test_the_note_example_falls_back_to_the_deployments_wording(shipped):
-    """`middlewares: [tool-note]` with no settings is a working line, not a no-op.
-
-    An empty default would make the bare form silently do nothing, which is the shape of
-    a feature nobody notices is broken.
-    """
-    from dataclasses import replace
-
-    registry = _documented_registry(shipped)
-    agent, _ = _example_definitions(shipped)
-    quiet = replace(agent, middlewares=("tool-note",), middleware_settings={})
+    agent = _assistant(shipped)
 
     (built,) = declared_middleware(
-        quiet, registry, ALL, kind="agent", provisions=_shipped_provisions(quiet)
+        agent,
+        _documented_registry(shipped),
+        ALL,
+        kind="agent",
+        provisions=_shipped_provisions(agent),
     )
 
-    assert built._text == registry["tool-note"].defaults["text"]
-    assert built._text, "the bare form has to do something"
-
-
-def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):
-    """The shape the whole argument rests on, pinned where it can rot."""
-    module = _call_cap_module(shipped)
-
-    assert module.CallCap.yaml_settable == frozenset(), (
-        "a cap a definition can set is not a cap; `limit` stays out of yaml_settable"
-    )
-    assert issubclass(module.CallCapGenerous, module.CallCap)
-    assert module.CallCap.defaults["limit"] == 20
-    assert module.CallCapGenerous.defaults["limit"] == 100
+    assert type(built).__name__ == "SummarizeByCount"
+    assert built.name == "SummarizationMiddleware"
 
 
 # -- the shipped set for source-id access ---------------------------------------
@@ -1617,8 +1335,8 @@ def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
     """The shipped set, run rather than read -- the rule this file is built on.
 
     Parsing the definition shows the line is *written*; only driving it shows the
-    line is *wired*. Both were true of the middleware pairing below, and it was
-    broken for as long as it existed.
+    line is *wired*. Both were true of a middleware pairing that once shipped here, and
+    it was broken for as long as it existed.
     """
     from langchain_core.messages import AIMessage
     from langgraph.checkpoint.memory import InMemorySaver
@@ -1654,24 +1372,13 @@ def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
     assert "__interrupt__" in out, "the example ran a shell command without stopping"
 
 
-def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir, shipped):
-    """The shipped set, run rather than read.
+def test_assistant_builds_from_the_workspace_alone(cfg, session_dir, shipped):
+    """A shipped definition naming middleware has to build with no
+    `middleware_registry=` at all, from `middlewares/` alone.
 
-    `assistant` and `sweeper` are the shipped pair that show two ceilings over one
-    behaviour.
-    Nothing had ever built them together. With no registry wired anywhere they
-    failed for want of one, and every test that touched them either replaced the
-    spec or supplied a registry of its own -- so the mismatch underneath was
-    invisible for as long as the example existed.
-
-    It was real: the agent granted `call-cap-strict` and `tool-note`, and
-    `sweeper` named `call-cap-generous`, which its parent therefore refused. An
-    agent's `middlewares:` is the ceiling its subagents are clamped by, so a
-    subagent can only name what the agent granted.
-
-    Built from the workspace with no `middleware_registry=` at all, which is the
-    thing that could not be done before `middlewares/` was a kind: the whole
-    example now runs from a `kingfisher seed`.
+    The agent-and-subagent pair that shipped here first was broken for as long as it
+    existed and nothing noticed, because every test touching it replaced the spec or
+    supplied a registry of its own.
     """
     from dataclasses import replace
 
@@ -1691,11 +1398,6 @@ def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir
     )
 
     assert graph is not None
-
-
-def _compaction(shipped):
-    """`Compact`, loaded the way a deployment would import it."""
-    return load(shipped / "middlewares" / "compaction.py", declares="Compact").Compact
 
 
 class _Reader(BaseChatModel):
@@ -1756,8 +1458,13 @@ def _reply(message: AIMessage) -> ChatResult:
     return ChatResult(generations=[ChatGeneration(message=message)])
 
 
-def _read_under_compact(shipped, cfg, session_dir, model: _Reader) -> list[str]:
-    """One turn of `model` on an agent naming `compact`, and what its build warned."""
+def _read_under_summarizer(
+    shipped, cfg, session_dir, model: _Reader, messages: int | None = None
+) -> list[str]:
+    """One turn of `model` on an agent naming `summarize-by-count`, and what its build
+    warned. `messages` is written as the definition's setting when given, on a thread of
+    its own so a second turn in one session does not continue the first.
+    """
     from kingfisher.core.definitions.agents.spec import AgentSpec
     from kingfisher.plugins.sessions.backend import backend_at
 
@@ -1776,15 +1483,18 @@ def _read_under_compact(shipped, cfg, session_dir, model: _Reader) -> list[str]:
                 description="an agent that reads files",
                 system_prompt="You read.",
                 builtin_tools=ALL,
-                middlewares=("compact",),
+                middlewares=("summarize-by-count",),
+                middleware_settings=(
+                    {} if messages is None else {"summarize-by-count": {"messages": messages}}
+                ),
             ),
             model=model,
             backend=backend,
-            middleware_registry={"compact": _compaction(shipped)},
+            middleware_registry=_documented_registry(shipped),
         ).graph
     graph.invoke(
         {"messages": [{"role": "user", "content": "read them"}]},
-        {"recursion_limit": 500, "configurable": {"thread_id": "t"}},
+        {"recursion_limit": 500, "configurable": {"thread_id": f"t{messages or ''}"}},
     )
     return [str(warning.message) for warning in caught]
 
@@ -1797,14 +1507,14 @@ def test_a_compacted_agent_still_sees_what_it_just_read(shipped, cfg, session_di
     the model was shown an old summary and nothing it had just read.
     """
     model = _Reader(reads=34, big_reads=26)
-    _read_under_compact(shipped, cfg, session_dir, model)
+    _read_under_summarizer(shipped, cfg, session_dir, model)
 
     assert model.summarised, "nothing was summarized, so this proves nothing"
     missed = [n + 2 for n, saw in enumerate(model.saw_last_read) if not saw]
     assert not missed, f"calls not shown the read just before them: {missed}"
 
 
-def test_compaction_fires_at_sixty_messages_however_small(shipped, cfg, session_dir):
+def test_summarize_by_count_fires_at_sixty_messages_however_small(shipped, cfg, session_dir):
     """Small reads never reach deepagents' token threshold; the message clause does.
 
     And the summary names where what it replaced went, which `assistant`'s prompt
@@ -1814,7 +1524,7 @@ def test_compaction_fires_at_sixty_messages_however_small(shipped, cfg, session_
     names, until the backend gave deepagents the scratchpad.
     """
     model = _Reader(reads=40, follow_history=True)
-    warned = _read_under_compact(shipped, cfg, session_dir, model)
+    warned = _read_under_summarizer(shipped, cfg, session_dir, model)
 
     assert model.summarised, "sixty small messages were never summarized"
     assert "Summarized at" in model.history, f"the history did not read back: {model.history!r}"
@@ -1824,6 +1534,28 @@ def test_compaction_fires_at_sixty_messages_however_small(shipped, cfg, session_
     # places. Here it is the design: without it, this runs beside deepagents'
     # summarizer instead of in its place.
     assert any("replaces its SummarizationMiddleware in place" in w for w in warned), warned
+
+
+def test_a_count_the_definition_writes_is_the_count_it_summarizes_at(
+    shipped, cfg, session_dir
+):
+    """A `messages` the definition wrote that never reached the trigger would be a key
+    the class opened and then ignored.
+
+    Driven both ways on one script, because without the control a summary fired for
+    some other reason would pass: twelve small reads summarize at ten and not at the
+    default.
+    """
+    written = _Reader(reads=12)
+    warned = _read_under_summarizer(shipped, cfg, session_dir, written, messages=10)
+    unwritten = _Reader(reads=12)
+    _read_under_summarizer(shipped, cfg, session_dir, unwritten)
+
+    assert written.summarised, "the count the definition wrote never fired"
+    assert not unwritten.summarised, "twelve reads summarized at the default; proves nothing"
+    assert any("replaces its SummarizationMiddleware in place" in w for w in warned), (
+        "a written setting built a summarizer beside deepagents' own"
+    )
 
 
 # -- an agent in a folder, and the subagents it reaches -----------------------

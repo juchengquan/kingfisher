@@ -431,10 +431,10 @@ def test_the_middlewares_section_names_what_is_registered(cfg, at_the_command_li
     """
     middlewares = cfg.catalogue_roots["middlewares"]
     middlewares.mkdir(parents=True, exist_ok=True)
-    (middlewares / "cap.py").write_text(
+    (middlewares / "audit.py").write_text(
         "from langchain.agents.middleware import AgentMiddleware\n\n\n"
-        "class CallCap(AgentMiddleware):\n    name = 'call-cap'\n\n\n"
-        "MIDDLEWARES = [CallCap]\n",
+        "class Audit(AgentMiddleware):\n    name = 'audit'\n\n\n"
+        "MIDDLEWARES = [Audit]\n",
         encoding="utf-8",
     )
 
@@ -442,7 +442,7 @@ def test_the_middlewares_section_names_what_is_registered(cfg, at_the_command_li
 
     printed = capsys.readouterr().out
     assert "\nmiddlewares\n" in printed
-    assert "  call-cap\n" in printed, "the name a definition writes, and nothing else"
+    assert "  audit\n" in printed, "the name a definition writes, and nothing else"
     assert "kingfisher_workspace" not in printed, "never the dynamic module name"
 
 

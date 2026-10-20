@@ -235,12 +235,12 @@ for the next reader who reaches for one.*
 - **A subclass of deepagents' summarizer runs beside the original unless it says
   otherwise.** Its `name` answers `SummarizationMiddleware` only for the exact
   class and the subclass's own class name otherwise, so replacing it is something
-  a subclass opts into. `compaction.py` does. *(2026-10-01.)*
+  a subclass opts into. `summarize_by_count.py` does. *(2026-10-01.)*
 - **What it summarizes away is kept, and the summary says where.** One file per
   session, `conversation_history/<session_id>.md` under the root the next entry
   describes, a timestamped section appended each time; through kingfisher's backend
   that is `/scratchpad/conversation_history/`, and the agent reads it back with
-  `read_file`. `test_compaction_fires_at_sixty_messages_however_small` reads it back
+  `read_file`. `test_summarize_by_count_fires_at_sixty_messages_however_small` reads it back
   that way. *(2026-10-01; the root 2026-10-11.)*
 - **It writes two kinds of file on its own, under one root it reads with
   `isinstance`.** A tool result over 20,000 tokens, counted at four characters each,
