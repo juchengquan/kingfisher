@@ -189,6 +189,34 @@ def test_approving_runs_the_call_and_finishes_the_turn(cfg, session_dir):
     assert (_session_dir(cfg, paused.session_id) / "outputs" / "a.txt").read_text() == "approved"
 
 
+def test_a_paused_turn_writes_nothing_its_resume_will_not_rebuild(cfg, session_dir):
+    """A paused state is read with langgraph's safe types only, and a type outside them
+    comes back as its raw fields with a warning on stderr, not as the object it was.
+    """
+    from langgraph.checkpoint.serde.event_hooks import register_serde_event_listener
+
+    events: list[Any] = []
+    unregister = register_serde_event_listener(events.append)
+    try:
+        kf = Kingfisher(
+            cfg,
+            graph=_gated_on_disk(cfg, session_dir, calls=[_write("/outputs/a.txt", "ok", "c1")]),
+            sessions=LocalSessions(),
+        )
+        paused = kf.run(Request("write it", session_id=session_dir.name))
+        answered = kf.run(
+            Resume(
+                session_id=paused.session_id,
+                decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+            )
+        )
+    finally:
+        unregister()
+
+    assert answered.stop_reason == END_TURN, "the paused turn did not resume"
+    assert events == [], "a paused turn holds a type its resume refuses to rebuild"
+
+
 def test_a_paused_pre_built_graph_resumes_in_a_graph_built_after_a_restart(cfg, session_dir):
     """A supplied graph paused into the saver it was compiled with, which lives as long
     as the process; the pause file beside it held kingfisher's saver, which that graph
