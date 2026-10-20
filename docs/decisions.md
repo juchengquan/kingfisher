@@ -2826,6 +2826,33 @@ the `claim` seam rather than raced, and the rule asserts the two numbers *differ
 were once the same, and a rule comparing against either would have passed then.
 *(2026-10-11, from an architecture review.)*
 
+**The grace period has to cover a shell command, not a model call alone.** It added the
+longest model timeout, and `execution_timeout_s` bounds a superstep exactly as a model's
+`timeout_s` does: the deadline is read between stream chunks, so a turn out of time runs
+on to the end of whichever chunk straddles it, whether a model or a command produced it.
+With both at their 120s default the sum was right by coincidence -- raised for a build
+or a test suite, the reason anyone touches it, the overlap came back. Measured on
+2026-10-20: a 6s command under a 1s turn and a 1s model timeout let a second caller take
+the session 3.0s into a turn that ran to 6.0s. The constant now takes the longest of
+every bound on a superstep, and the fixture's own numbers hold neither half of that
+`max` -- its longest model timeout is the `ModelProfile` default it falls back to, so
+the rule builds a config per case and keeps the other bound beside it as the control.
+*(2026-10-20, from an architecture review.)*
+
+**The tail past the stop needs no term of its own, and that is now measured rather than
+assumed.** What a turn does once its graph loop ends -- emit the result, write the
+transcript and the ledger, walk the session for artifacts, let the claim go -- was
+accepted in the docstring as milliseconds against a bound in minutes, with nothing
+driving it. Measured on 2026-10-20: 0.6ms for a turn that left nothing, 764ms for one
+that left 5,000 artifacts and said 20,000 things, and between 0.2ms and 76ms of setup
+between the claim being taken and the deadline being set. The window does therefore
+close that much -- setup plus the tail, under a second -- before the last moment a turn
+can still be releasing, since the claim is timed from when it was taken and the deadline
+from the end of setup. Left rather than padded: any term for it would be a guessed
+constant where the rest are derived, and what would make it matter is a longer tail
+rather than a longer turn. A design that flushed session state to disk at turn end would
+put a copy in that window and would have to measure again. *(2026-10-20.)*
+
 **A sweep that removes nothing says which reason spared each session.** `expired` folds a
 busy session into `kept`, so `reap` blamed the age for a session `kingfisher sessions`
 printed as hours idle, and sent the reader to a shorter `--older-than`, which no age can

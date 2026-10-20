@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from time import monotonic, sleep
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -31,6 +32,24 @@ class SlowAgent(FakeGraph):
         yield ((), "values", {"messages": [AIMessage(content="done")]})
 
 
+class Holding(FakeGraph):
+    """A turn whose supersteps have work to do before they have a chunk to yield, as
+    one running a shell command does."""
+
+    def __init__(self, held: float) -> None:
+        self.held = held
+        self.ran: list[float] = []
+
+    def stream(self, state, config, stream_mode=None, subgraphs=False):
+        for said in ("working", "done"):
+            began = monotonic()
+            # No chunk arrives while the command runs, so no deadline is read during it.
+            sleep(self.held)
+            self.ran.append(monotonic() - began)
+            yield ((), "updates", {"agent": {"messages": [AIMessage(content=said)]}})
+        yield ((), "values", {"messages": [AIMessage(content="done")]})
+
+
 # -- the wall-clock bound -------------------------------------------------
 
 
@@ -51,6 +70,31 @@ def test_a_turn_that_runs_past_its_bound_stops(cfg):
     # and asserting the flag could not tell which had fired.
     assert result.stop_reason == "max_duration"
     assert agent.taken < 50, "the turn ran to completion despite the bound"
+
+
+def test_a_turn_out_of_time_stops_only_once_its_superstep_has_ended(cfg):
+    """Why `claim_stale_after` adds a superstep's bound to the turn deadline rather than
+    treating the deadline as the moment a turn ends: a turn already out of time runs on
+    to the end of the superstep it is inside, and `execution_timeout_s` is what bounds
+    one holding a shell command.
+
+    Held by `test_a_claim_outlives_whatever_held_the_superstep_the_deadline_fell_in`
+    from the claim's side; this is the half that says why that arithmetic is the right
+    arithmetic.
+    """
+    held = 0.05
+    graph = Holding(held)
+
+    result = Kingfisher(
+        replace(cfg, turn_timeout_s=0), graph=graph, sessions=LocalSessions()
+    ).run(Request("go"))
+
+    assert result.stop_reason == "max_duration"
+    # Out of time before the graph was entered, and it still stopped at a chunk rather
+    # than inside the superstep that produced it: one superstep run, not none, and that
+    # one ran its full length.
+    assert len(graph.ran) == 1
+    assert graph.ran[0] >= held
 
 
 def test_being_cut_short_keeps_the_work(cfg):

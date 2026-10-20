@@ -356,13 +356,21 @@ class Config:
     def claim_stale_after(self) -> float:
         """How old a session's claim must be before another turn may take it.
 
-        The turn deadline plus the longest model timeout: a run stops only between stream
-        chunks, then still has to emit its result, collect what it left and let go.
+        The turn deadline plus the longest one superstep can hold: a run stops only
+        between stream chunks, so it stops no earlier than the end of whichever chunk
+        straddles the deadline, and then still has to emit its result, collect what it
+        left and let go.
         """
         return self.turn_timeout_s + max(
-            (profile.timeout_s for profile in self.models.models.values()),
-            # Not zero, even with no models: zero would restore the overlap.
-            default=ModelProfile.timeout_s,
+            # Every bound on a superstep, not the model's alone: the deadline is read
+            # between chunks, and a shell command straddles it exactly as a model call
+            # does. Measured, a 6s command under a 1s turn and a 1s model timeout let a
+            # second caller take the session 3.0s into a turn that ran to 6.0s.
+            self.execution_timeout_s,
+            *(profile.timeout_s for profile in self.models.models.values()),
+            # Not zero, even with neither models nor a bound on a command: zero would
+            # restore the overlap.
+            ModelProfile.timeout_s,
         )
 
     def __post_init__(self) -> None:

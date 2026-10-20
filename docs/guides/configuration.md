@@ -62,6 +62,15 @@ into the definitions folder.
 | `KINGFISHER_SESSION_MAX_BYTES` | Cap on what one session may hold. Checked between turns, never during one. | none — unbounded |
 | `KINGFISHER_SESSION_TTL_S` | How long an idle session survives a sweep — `kingfisher reap`, or a deployment's own call to `reap()`. Nothing sweeps on a schedule. | `604800` (7 days) |
 
+**A turn stops between steps, so the turn timeout is a deadline and not a limit.** A
+turn out of time finishes the step it is inside before it stops, and
+`KINGFISHER_EXECUTION_TIMEOUT_S` bounds one running a shell command — so a turn may
+overrun `KINGFISHER_TURN_TIMEOUT_S` by that much, and lowering the execution timeout
+is the only thing that makes the overrun smaller. The session stays claimed for the two
+added together, which is what keeps a second caller out of a session whose turn is still
+finishing: raising the execution timeout for a build or a test suite also lengthens how
+long a dead turn's session is locked out.
+
 **Unbounded is survivable on a disk and is not survivable in memory.** A
 deployment whose sessions are memory-backed shares one fixed size between every
 session in the process, so one session can starve the rest. `kingfisher doctor`
