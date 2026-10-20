@@ -244,3 +244,12 @@ def model_named(
         raise ConfigError(msg) from exc
     refuse_ungranted_endpoint(profile.endpoint, granted=endpoints, subject=subject)
     return build_model(profile, endpoint)
+
+
+def deployment_default(cfg: Config, *, endpoints: Selection) -> BaseChatModel:
+    """The deployment's default model, on an endpoint this request may reach.
+
+    Checked as a named one is, or a definition naming no model would reach any endpoint.
+    """
+    named = cfg.models.default
+    return model_named(named, cfg, endpoints=endpoints, subject=f"the default model {named!r}")

@@ -215,7 +215,7 @@ def indistinct_subagents(  # noqa: PLR0913 -- the agent and caller make this the
         spec = defined[name]
         model = resolved_model(spec.wanted, override=wanted.get(name))
         try:
-            why = indistinct(spec, cfg, model=model)
+            why = indistinct(spec, cfg, model=model, main=agent.wanted if agent else None)
         except ConfigError:
             # The build refuses an unrunnable model with the message worth reading, and a
             # supplied graph is not built here at all: a report must not fail the turn.

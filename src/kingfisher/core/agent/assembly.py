@@ -71,7 +71,7 @@ from .backend import (
     skills_sources,
 )
 from .interpreter import interpreter
-from .models import build_model, model_named, summarizer_trigger
+from .models import deployment_default, model_named, summarizer_trigger
 from .permitted_backend import PermittedBackend
 from .prompting import behind_instructions, memory_guidelines, system_prompt
 from .session_paths import SessionPaths
@@ -233,8 +233,8 @@ def _running(
     mine = None if agent is None else model_object(agent, cfg, endpoints=endpoints)
     if injected is not None:
         return injected, None
-    profile, endpoint = cfg.models.resolve(None if agent is None else agent.wanted)
-    return mine or build_model(profile, endpoint), profile.clear_results_at
+    profile, _ = cfg.models.resolve(None if agent is None else agent.wanted)
+    return mine or deployment_default(cfg, endpoints=endpoints), profile.clear_results_at
 
 
 def _provisions(

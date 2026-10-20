@@ -96,6 +96,19 @@ replaced the four layers began.
   `outputs="DATA"`, which on macOS are one folder; a name that differs from a reserved
   one only in case, such as `Skills`; and a name ending in a newline.
 
+## A request's endpoints hold the default model too, after #988
+
+- **`Capabilities(endpoints=(...))` now refuses an agent that names no model** when the
+  deployment's default resolves to an endpoint outside the list, and so does a built
+  subagent naming none. Only a named model was checked, so naming none ran the default
+  wherever it lives while naming the same model was refused. The refusal is the same
+  `CapabilityError`, naming "the default model". If you restrict endpoints, include the
+  default's, or have the agent name a model on one you list.
+- **The `indistinct` event compares a subagent with the main agent's own model**, not
+  the deployment's default, and says "the same host as the main agent's" where it said
+  "the same host as the default". Only an agent naming a model of its own reports
+  differently.
+
 ## A caller named wrong raises `CallerError`, after #980
 
 - **`from kingfisher import CallerError`** names what a call raises when it says who

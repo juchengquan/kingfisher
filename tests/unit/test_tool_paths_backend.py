@@ -15,7 +15,7 @@ from kingfisher.core.agent.permitted_backend import PermittedBackend, host_path
 from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.layout import DEFAULT_LAYOUT
-from kingfisher.plugins import LocalSessions, ShellSettings
+from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced, shell_confinement
 from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
@@ -191,3 +191,17 @@ def test_a_subagent_is_handed_the_parents_paths_on_any_backend(cfg, tmp_path):
     (theirs,) = translating(middleware_of(built, "reviewer"))
     (mine,) = translating(built.middleware)
     assert theirs.paths is mine.paths
+
+
+def test_a_route_named_without_its_slash_is_the_routed_folder(cfg, session_dir):
+    """`/skills` misses the `/skills/` route by its prefix, and fell through to a folder of
+    that name in the session. The real backend rather than a composite made here, so the
+    route under test is the one the session mounts."""
+    skills = cfg.catalogue_roots["skills"].resolve()
+
+    found = host_path(backend_at(cfg, session_dir), "/skills")
+
+    assert found is not None
+    root, where = found
+    assert where.resolve() == skills, where
+    assert root is not None and root.resolve() == skills

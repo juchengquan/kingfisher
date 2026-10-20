@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 from kingfisher.core.access.capabilities import ALL, Capabilities
 from kingfisher.core.agent.activation import indistinct_subagents
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import Endpoint, ModelProfile
+from kingfisher.core.definitions.agents.reading import read
+from kingfisher.core.definitions.documents import DefinitionText
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn
 from kingfisher.core.request import Request
@@ -141,6 +144,25 @@ def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
     assert "same host" in _found(cfg, ("cheap",))["cheap"]
 
 
+def test_the_main_agent_is_the_one_its_own_model_names(cfg, session_dir):
+    """Compared against the deployment's default, so with the agent pinned elsewhere a
+    subagent on the default was reported as matching it and one on its own model was not."""
+    _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
+    _define(cfg, ASKED_FOR_A_MODEL.format(model="elsewhere-model").replace("cheap", "far"))
+    agent = read(
+        DefinitionText(
+            "name: pinned\ndescription: d\nmodel: elsewhere-model\nbuiltin_tools: ['*']\n"
+            "subagents: [cheap, far]\n"
+            "system_prompt: |\n  Go.\n",
+            Path("pinned.yaml"),
+        )
+    )
+
+    found = _found(cfg, ("cheap", "far"), agent=agent)
+
+    assert found == {"far": "runs 'elsewhere-model', the same model as the main agent"}
+
+
 def test_a_subagent_that_asked_for_nothing_is_never_reported(cfg, session_dir):
     """`reviewer` runs on the deployment's own model on purpose."""
     _define(cfg, ASKED_FOR_NOTHING)
@@ -230,7 +252,7 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
 
 def test_the_message_names_the_subagent(cfg, session_dir):
     """`[indistinct] second-opinion runs 'gpt-5' on endpoint 'openai', which points at
-    the same host as the default (…)` -- readable without the field.
+    the same host as the main agent's (…)` -- readable without the field.
     """
     from kingfisher.core.result import RunEvent
 
