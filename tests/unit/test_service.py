@@ -16,7 +16,7 @@ from kingfisher.core.interfaces import CommandResult
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
 from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
-from kingfisher.core.session.running import refused_credentials
+from kingfisher.core.session.running import refused_credentials, refused_request
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.turn import turn_message
 from kingfisher.plugins import LocalSessions, backend_at
@@ -697,6 +697,87 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
 
     with pytest.raises(ConfigError, match="rejected the key"):
         service.run(Request(task="anything"))
+
+
+def _provider_refused(status: int, model: str = "claude-nope") -> Exception:
+    """The SDK's own error for a status, over the request it would have sent."""
+    import anthropic
+    import httpx
+
+    request = httpx.Request(
+        "POST", f"{FAKE_ENDPOINT.base_url}/v1/messages", json={"model": model, "max_tokens": 1}
+    )
+    body = {"type": "error", "error": {"type": "not_found_error", "message": f"model: {model}"}}
+    response = httpx.Response(status, request=request, json=body)
+    return anthropic.APIStatusError(f"Error code: {status}", response=response, body=body)
+
+
+def test_a_model_the_endpoint_does_not_serve_names_the_model_and_the_endpoint(cfg):
+    """A 404 for a mistyped model name reached the terminal as a provider traceback with
+    exit 1, the code for a turn that ran; it is a line of `models.yaml` to fix."""
+    refused = refused_request(_provider_refused(404), cfg)
+
+    assert refused is not None
+    assert "endpoint 'fake'" in str(refused)
+    assert FAKE_ENDPOINT.base_url in str(refused)
+    assert "model 'claude-nope'" in str(refused)
+    assert "(404): model: claude-nope" in str(refused)
+
+
+@pytest.mark.parametrize("status", [429, 500, 529])
+def test_a_refusal_that_may_pass_is_not_called_configuration(cfg, status):
+    """The control beside it: a rate limit or an outage is a stop the turn ends on, and
+    a configuration error would send the reader to a file with nothing wrong in it."""
+    assert refused_request(_provider_refused(status), cfg) is None
+    assert refused_request(RuntimeError("the model went away"), cfg) is None
+
+
+def test_a_rejected_key_is_still_the_credentials_message(cfg):
+    """A 401 is a 4xx too, and the general message would drop the variable it names."""
+    refused = refused_request(_provider_refused(401), cfg)
+
+    assert refused is not None and "rejected the key" in str(refused)
+
+
+def _failing(exc: Exception) -> FakeGraph:
+    """A graph whose first model call raises `exc`."""
+
+    class Fails(FakeGraph):
+        def stream(self, state, config, stream_mode=None, subgraphs=False):
+            yield ((), "values", {"messages": []})
+            raise exc
+
+        def get_state(self, config):
+            return None
+
+    return Fails()
+
+
+def test_a_turn_translates_any_provider_refusal_and_leaves_a_bug_alone(cfg):
+    """Driven, for the reason the 401 test above is: the translation lives in the turn's
+    own `except`, and a bug keeps its traceback."""
+    refused = Kingfisher(cfg, graph=_failing(_provider_refused(404)), sessions=LocalSessions())
+    broken = Kingfisher(cfg, graph=_failing(KeyError("limit")), sessions=LocalSessions())
+
+    with pytest.raises(ConfigError, match="model 'claude-nope'"):
+        refused.run(Request(task="anything"))
+    with pytest.raises(KeyError):
+        broken.run(Request(task="anything"))
+
+
+def test_the_command_reports_a_provider_refusal_in_one_line(cfg, monkeypatch, capsys):
+    """Through `main`: exit 2, never ran, and no traceback."""
+    from kingfisher.cli import __main__ as entry
+
+    service = Kingfisher(cfg, graph=_failing(_provider_refused(404)), sessions=LocalSessions())
+    monkeypatch.setattr(entry, "config_from_env", lambda: cfg)
+    monkeypatch.setattr("kingfisher.Kingfisher", lambda *a, **k: service)
+
+    assert entry.main(["run", "anything", "--agent", "assistant"]) == 2
+
+    said = capsys.readouterr().err
+    assert "configuration error: endpoint 'fake'" in said
+    assert "Traceback" not in said
 
 
 def _snapshot_reads(monkeypatch) -> list[Path]:

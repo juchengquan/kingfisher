@@ -10,7 +10,7 @@ import httpx
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher import Kingfisher, Request
+from kingfisher import ConfigError, Kingfisher, Request
 from kingfisher.core.agent.middlewares.guarded_calls import GuardedCallsMiddleware
 from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
 from kingfisher.core.session.runtime import ModelUnavailableError, unavailable
@@ -218,8 +218,9 @@ def test_an_overload_inside_a_stream_stops_the_turn_rather_than_raising(refusing
 
 
 def test_a_failure_that_will_not_pass_still_raises(refusing):
-    """The control: only the failures that may pass become a stop."""
-    with pytest.raises(RefusedError):
+    """The control: only the failures that may pass become a stop; a 400 is the
+    deployment's to fix, and says so."""
+    with pytest.raises(ConfigError, match=r"\(400\)"):
         _turn(refusing, RefusedError(400))
 
 

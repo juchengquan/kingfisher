@@ -9,6 +9,7 @@ import shlex
 import sys
 import time
 import warnings
+from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -39,7 +40,7 @@ from kingfisher import (
     paths_from_env,
     seed,
 )
-from kingfisher.core.access import with_datazone
+from kingfisher.core.access import Datazone, with_datazone
 
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.config import MissingCredentialsWarning
@@ -50,7 +51,7 @@ from .listing import as_json, failed, origins_document, render
 from .progress import show
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterator
     from typing import TextIO
 
     from kingfisher import Config, Kingfisher, PendingDecision, RunResult
@@ -441,6 +442,10 @@ def _plain_warnings() -> Iterator[None]:
 
 def _run(args: argparse.Namespace) -> int:
     """Run one task, and say how it ended in the only channel that is left."""
+    if not args.task.strip():
+        # Refused here, as `--input` is: the library's refusal is a `ValueError` traceback.
+        print("the task is empty -- say what to do", file=sys.stderr)
+        return 2
     missing = [p for p in args.input if not Path(p).expanduser().is_file()]
     if missing:
         # Every one in a line: the library refuses as well, but names only the first.
@@ -508,11 +513,16 @@ def _drive(
         return 2
 
     print(f"\nsession {result.session_id}  turn {result.turn_id}", file=sys.stderr)
+    # Not when the session goes: `_discard` names them as what goes with it.
+    if result.artifacts and not (result.completed and delete_session):
+        print("files, by the names `kingfisher artifact` takes:", file=sys.stderr)
+        for name in result.artifacts:
+            print(f"  {name}", file=sys.stderr)
     if not result.completed:
         # Different words: running again continues a turn cut off at a bound, but
         # discards what a gate stopped to ask.
         if result.pending:
-            _awaiting(result)
+            _awaiting(result, held)
         else:
             print(
                 f"stopped: {result.stop_reason} -- the answer above is what was "
@@ -614,17 +624,31 @@ def _answer(call: PendingDecision) -> str:
     make the whole printed line one `decide` refuses."""
     takes = call.decisions or ("approve",)
     if "approve" in takes:
-        return f"--approve {call.call_id}"
+        return f"--approve {shlex.quote(call.call_id)}"
     if "reject" in takes:
-        return f"--reject {call.call_id}"
+        return f"--reject {shlex.quote(call.call_id)}"
     return f"--respond {shlex.quote(f'{call.call_id}=<your answer>')}"
 
 
-def _awaiting(result: RunResult) -> None:
+def _caller(held: Held | None) -> str:
+    """`held` as the `--as` and `--datazone` that name it again, with a leading space."""
+    if held is None:
+        return ""
+    if not isinstance(held, Sequence):
+        return " --as UNSCOPED"
+    ids = [one for one in held if not isinstance(one, Datazone)]
+    said = f" --as {shlex.quote(','.join(ids))}" if ids else ""
+    return said + "".join(
+        f" --datazone {shlex.quote(one)}" for one in held if isinstance(one, Datazone)
+    )
+
+
+def _awaiting(result: RunResult, held: Held | None) -> None:
     """What a turn that stopped at an approval gate owes the person who ran it.
 
     Prints the ids, the only way to answer, and says that running again supersedes the
-    gate rather than answering it.
+    gate rather than answering it. The line names the caller, or under a policy `decide`
+    refuses it as asked by nobody.
     """
     print(
         f"stopped: {result.stop_reason} -- waiting for a decision on "
@@ -634,7 +658,7 @@ def _awaiting(result: RunResult) -> None:
     _list_calls(result.pending)
     # Every call: `decide` refuses an answer that leaves one waiting.
     print(
-        f"answer with: kingfisher decide --session {result.session_id} "
+        f"answer with: kingfisher decide --session {result.session_id}{_caller(held)} "
         + " ".join(_answer(call) for call in result.pending),
         file=sys.stderr,
     )
@@ -719,6 +743,23 @@ def _age(seconds: float) -> str:
         if seconds >= size:
             return f"{int(seconds // size)}{suffix}"
     return "<1m"
+
+
+def _exactly(seconds: float) -> str:
+    """A span in the largest unit that holds it whole: `_age` floors, and a threshold
+    printed floored names an age the sweep did not use."""
+    for suffix, size in (("d", 24 * 3600), ("h", 3600), ("m", 60)):
+        if seconds >= size and seconds % size == 0:
+            return f"{int(seconds // size)}{suffix}"
+    return f"{seconds:g}s"
+
+
+def _shorter(seconds: float) -> str:
+    """An `--older-than` below `seconds`, so the hint is never the age that removed nothing."""
+    for suffix, size in (("d", 24 * 3600), ("h", 3600), ("m", 60)):
+        if seconds > size:
+            return f"1{suffix}"
+    return "0"
 
 
 def _size(count: int) -> str:
@@ -820,9 +861,10 @@ def _nothing_reaped(kept: int, busy: int, age: float, *, from_config: bool) -> N
         print(f"nothing to reap -- a turn is running in {held}; reap again when it finishes")
         return
     rest = kept - busy
-    waited = f"has been idle longer than {_age(age)}"
+    waited = f"has been idle longer than {_exactly(age)}"
     if busy:
-        print(f"nothing to reap -- {_count(busy)} is busy, and none of the other "
+        verb = "is" if busy == 1 else "are"
+        print(f"nothing to reap -- {_count(busy)} {verb} busy, and none of the other "
               f"{_count(rest)} here {waited}")
         return
     why = f"none of the {_count(kept)} here {waited}"
@@ -830,7 +872,7 @@ def _nothing_reaped(kept: int, busy: int, age: float, *, from_config: bool) -> N
         print(f"nothing to reap -- {why}")
         return
     print(f"nothing to reap -- {why}, which is KINGFISHER_SESSION_TTL_S")
-    print("--older-than sweeps on a shorter age: kingfisher reap --older-than 1d")
+    print(f"--older-than sweeps on a shorter age: kingfisher reap --older-than {_shorter(age)}")
 
 
 def _artifact(args: argparse.Namespace) -> int:
@@ -847,7 +889,11 @@ def _artifact(args: argparse.Namespace) -> int:
         sys.stdout.buffer.write(content)
         sys.stdout.flush()
         return 0
-    Path(args.out).write_bytes(content)
+    out = Path(args.out).expanduser()
+    # Made, as `--log` makes its own: the bytes are already fetched, and a missing
+    # directory would lose them to a traceback.
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(content)
     print(f"wrote {args.name} to {args.out}")
     return 0
 

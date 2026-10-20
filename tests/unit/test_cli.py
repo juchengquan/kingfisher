@@ -400,19 +400,43 @@ def _finished(stop_reason="end_turn", artifacts=()):
 
 
 def test_the_answer_goes_to_stdout_and_the_watching_to_stderr(cfg, monkeypatch, capsys):
-    """What makes the verb compose."""
-    from kingfisher import RunEvent
+    """With a streaming model stdout got every reply the agent made, its narration before
+    a tool call included, so `> answer.md` kept prose that was not the answer.
 
-    _ran(monkeypatch, [RunEvent(kind="run_start", text="t001"),
-                       RunEvent(kind="token", text="forty two"),
-                       _finished()], cfg)
+    Driven through a real two-call turn, because only a real one streams the narration.
+    """
+    from dataclasses import replace
 
-    assert main(["run", "do a thing", "--agent", "assistant"]) == 0
+    from langchain_core.messages import AIMessage
+
+    from kingfisher import Landing
+    from kingfisher.cli import __main__ as entry
+    from kingfisher.plugins import WireFormat
+    from tests.unit.scripted import Streamed
+
+    row = WireFormat(
+        f"{Streamed.__module__}:Streamed",
+        Landing(model="model", base_url="base_url", api_key="api_key",
+                max_tokens="max_tokens", timeout="timeout"),
+    )
+    endpoints = {name: replace(one, wire_format=row) for name, one in cfg.models.endpoints.items()}
+    streamed = replace(cfg, models=replace(cfg.models, endpoints=endpoints))
+    monkeypatch.setattr(entry, "config_from_env", lambda: streamed)
+    Streamed.script.clear()
+    Streamed.script.extend([
+        AIMessage(content="Let me write that down first.", tool_calls=[{
+            "name": "write_file", "id": "c1",
+            "args": {"file_path": "/outputs/note.txt", "content": "42"},
+        }]),
+        AIMessage(content="The answer is forty two."),
+    ])
+
+    assert main(["run", "do a thing", "--agent", an_agent(cfg)]) == 0
 
     shown = capsys.readouterr()
-    assert shown.out == "forty two"
-    assert "[start] t001" in shown.err
-    assert "forty two" not in shown.err
+    assert shown.out == "The answer is forty two."
+    assert "Let me write that down first." in shown.err, "the narration was not watched"
+    assert "write_file" in shown.err
 
 
 def test_an_answer_that_did_not_stream_is_printed_when_the_run_ends(cfg, monkeypatch, capsys):
@@ -561,8 +585,31 @@ def test_a_subagents_prose_is_progress_rather_than_answer(cfg, monkeypatch, caps
     main(["run", "t", "--agent", "assistant"])
 
     shown = capsys.readouterr()
-    assert shown.out == "mine"
+    assert shown.out == "42"
     assert "theirs" in shown.err
+
+
+@pytest.mark.parametrize("task", ["", "   "], ids=["empty", "spaces"])
+def test_an_empty_task_is_refused_before_anything_runs(task, capsys):
+    """`kingfisher run ''` died on the library's `ValueError` with a traceback and exit 1,
+    the code for a turn that ran and stopped."""
+    assert main(["run", task, "--agent", "assistant"]) == 2
+
+    said = capsys.readouterr().err
+    assert "the task is empty" in said
+    assert "Traceback" not in said
+
+
+def test_the_run_names_the_files_it_left(cfg, monkeypatch, capsys):
+    """`kingfisher artifact` fetches "by the name the run printed", and the run printed
+    none, so the one way to learn a name was to read the session's folder."""
+    _ran(monkeypatch, [_finished(artifacts=("outputs/report.html", "memory/notes.md"))], cfg)
+
+    assert main(["run", "t", "--agent", "assistant"]) == 0
+
+    said = capsys.readouterr().err
+    assert "  outputs/report.html\n" in said
+    assert "  memory/notes.md\n" in said
 
 
 def test_a_turn_stopped_at_a_bound_exits_non_zero(cfg, monkeypatch, capsys):
@@ -878,6 +925,41 @@ def test_an_age_you_asked_for_is_not_blamed_on_the_setting(cfg, monkeypatch, cap
     printed = capsys.readouterr().out
     assert "7d" in printed
     assert "KINGFISHER_SESSION_TTL_S" not in printed
+
+
+@pytest.mark.parametrize(
+    "ttl_said_shorter",
+    [(5400, "90m", "1h"), (30, "30s", "0"), (7 * 86400, "7d", "1d")],
+    ids=["90m", "30s", "a week"],
+)
+def test_the_age_that_spared_them_is_printed_as_it_was(
+    cfg, monkeypatch, capsys, ttl_said_shorter
+):
+    """Floored, a 5400s TTL read "longer than 1h" and a 30s one "longer than <1m", and the
+    hint was always `--older-than 1d`, longer than any TTL under a day."""
+    from dataclasses import replace
+
+    ttl, said, shorter = ttl_said_shorter
+    _looking_at(monkeypatch, replace(cfg, session_ttl_s=ttl))
+    start(cfg, "fresh")
+
+    assert main(["reap"]) == 0
+
+    printed = capsys.readouterr().out
+    assert f"idle longer than {said}, which is KINGFISHER_SESSION_TTL_S" in printed
+    assert f"kingfisher reap --older-than {shorter}\n" in printed
+
+
+def test_more_than_one_busy_session_are_busy(cfg, monkeypatch, capsys):
+    """It said "2 sessions is busy"."""
+    _looking_at(monkeypatch, cfg)
+    _busy_since(cfg, "held", hours=2)
+    _busy_since(cfg, "also", hours=2)
+    start(cfg, "fresh")
+
+    assert main(["reap", "--older-than", "30m"]) == 0
+
+    assert "2 sessions are busy" in capsys.readouterr().out
 
 
 def _busy_since(cfg, session_id: str, *, hours: float) -> str:

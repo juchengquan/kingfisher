@@ -8,12 +8,13 @@ builds.
 
 from __future__ import annotations
 
+import json
 from collections import deque
 from typing import ClassVar
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 
 
 class Scripted(BaseChatModel):
@@ -54,3 +55,23 @@ class Scripted(BaseChatModel):
             return ChatResult(generations=[ChatGeneration(message=AIMessage("a summary"))])
         self.heard.append(list(messages))
         return ChatResult(generations=[ChatGeneration(message=self.script.popleft())])
+
+
+class Streamed(Scripted):
+    """`Scripted`, streaming each reply's prose a few characters at a time, as a
+    provider does: the only way a turn's narration reaches its reader as tokens."""
+
+    def _stream(self, messages, stop=None, run_manager=None, **kwargs):
+        reply = self._generate(messages, stop, run_manager, **kwargs).generations[0].message
+        text = reply.text
+        for start in range(0, len(text), 4):
+            piece = AIMessageChunk(content=text[start : start + 4])
+            if run_manager is not None:
+                run_manager.on_llm_new_token(piece.text, chunk=ChatGenerationChunk(message=piece))
+            yield ChatGenerationChunk(message=piece)
+        if reply.tool_calls:
+            calls = [
+                {"name": c["name"], "args": json.dumps(c["args"]), "id": c["id"], "index": i}
+                for i, c in enumerate(reply.tool_calls)
+            ]
+            yield ChatGenerationChunk(message=AIMessageChunk(content="", tool_call_chunks=calls))
