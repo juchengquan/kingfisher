@@ -266,10 +266,10 @@ def refuse_unmountable(root: Path, mounts: Mapping[str, Path]) -> None:
         if label in {skill_registry.CATALOGUE, RESERVED_SKILL_FOLDER}:
             msg = f"{where}: {label!r} already names part of the catalogue; pick another"
             raise ConfigError(msg)
-        if SEPARATOR in label or "/" in label:
+        if SEPARATOR in label or "/" in label or label in {".", ".."}:
             msg = (
                 f"{where}: a label is half of a skill's identity and a path segment, "
-                f"so it may not contain {SEPARATOR!r} or '/'"
+                f"so it may not contain {SEPARATOR!r} or '/', nor be '.' or '..'"
             )
             raise ConfigError(msg)
         # A mount's route is longer, so it wins: a namesake in the catalogue would vanish.

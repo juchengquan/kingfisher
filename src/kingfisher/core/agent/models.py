@@ -55,6 +55,14 @@ WIRE_FORMATS: Mapping[str, WireFormat] = {
 FILLABLE = 0.95
 
 
+#: Every keyword `build_model` passes the chat class itself, which an `extra` naming one
+#: would pass a second time: Python refuses the call, from inside every build.
+BUILT_WITH: frozenset[str] = frozenset(
+    {"model", "base_url", "api_key", "max_tokens", "timeout", "max_retries", "temperature",
+     "top_p"}
+)
+
+
 def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
     """Build a chat model from `profile`, pointed at `endpoint`."""
     wire_format = endpoint.wire_format
