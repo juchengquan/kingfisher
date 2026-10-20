@@ -50,10 +50,11 @@ from kingfisher.core.session.store import (
     remember_agent,
 )
 from kingfisher.core.session.threads import thread_pool
+from kingfisher.core.session.unused import DeleteUnusedResults
 
 from . import environment as config_module
 from .config import Config, ConfigError
-from .interfaces import Instructions, Sessions
+from .interfaces import Instructions, Sessions, UnusedResults
 from .origins import Origins
 from .request import Request, Resume
 from .workspace import ensure_layout
@@ -87,6 +88,8 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # Left out, `INSTRUCTIONS.md` beside the definitions. Asked once per agent built,
         # so a change reaches the next turn.
         instructions: Instructions | None = None,
+        # Left out, each saved result nothing names is removed.
+        unused_results: UnusedResults | None = None,
     ) -> None:
         self.cfg = cfg or config_module.config_from_env()
         refuse_a_workspace_prompt(self.cfg)
@@ -138,6 +141,9 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # `grants` still clamps which registered names a request may reach.
         self.middlewares: Mapping[str, MiddlewareFactory] = middlewares or {}
         self.instructions: Instructions = instructions or InstructionsFile()
+        self.unused_results: UnusedResults = (
+            unused_results if unused_results is not None else DeleteUnusedResults()
+        )
         # Here, not when a definition names one, so the deployment hears it where it
         # wired the registry rather than from the first caller to reach the wrong name.
         refuse_unbuildable_middleware(self.middlewares)

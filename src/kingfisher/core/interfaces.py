@@ -14,6 +14,7 @@ from kingfisher.core.session.threads import off_loop, thread_pool
 
 if TYPE_CHECKING:
     from kingfisher.core.definitions.catalogue import Definitions
+    from kingfisher.core.session.unused import UnusedFiles
 
     from .config import Config
 
@@ -252,4 +253,22 @@ class Instructions(Protocol):
 
     def text(self, cfg: Config) -> str:
         """The instructions, or an empty string for none."""
+        ...
+
+
+class UnusedResults(Protocol):
+    """What becomes of the saved tool results nothing points to any more.
+
+    Asked at the end of every turn that leaves one, once the ledger and the conversation
+    are written and while the session is still claimed. Every file handed over has
+    already been judged safe to drop: no row names it, and its name is one kingfisher's
+    recorder gives, so nothing the agent wrote beside them is among them.
+    """
+
+    def settle(self, found: UnusedFiles) -> None:
+        """Do what this deployment does with each file in `found`.
+
+        A file not removed is handed over again by the next turn. An exception here is
+        logged and the turn finishes as it would have.
+        """
         ...

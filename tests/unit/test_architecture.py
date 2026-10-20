@@ -2072,13 +2072,14 @@ WITNESSES: dict[str, dict[str, str]] = {
     },
     "kingfisher.plugins": {
         # The five a plugin implements, written in `core/interfaces.py` and checked
-        # below to still be there. `ports.md` gives `CommandRunner`, `RunEvents` and
-        # `Sessions` a section each, and `configuration.md`'s `KINGFISHER_SESSIONS` row
-        # names the type a factory returns.
+        # below to still be there. `ports.md` gives `CommandRunner`, `RunEvents`,
+        # `UnusedResults` and `Sessions` a section each, and `configuration.md`'s
+        # `KINGFISHER_SESSIONS` row names the type a factory returns.
         "Sessions": "interface",
         "RunEvents": "interface",
         "CommandRunner": "interface",
         "Instructions": "interface",
+        "UnusedResults": "interface",
         # The type a runner returns. Nothing *imports* it in a snippet -- a runner's
         # `run` returns one, so a deployment cannot write the interface without it.
         "CommandResult": "interface",
@@ -2105,6 +2106,11 @@ WITNESSES: dict[str, dict[str, str]] = {
         # can wrap one rather than reimplement it. No page writes either name out.
         "JsonlRunEvents": "embedder",
         "InstructionsFile": "embedder",
+        "DeleteUnusedResults": "embedder",
+        # What `UnusedResults.settle` is handed, which `ports.md` writes out in its
+        # example plugin's signature and loop.
+        "UnusedFiles": "document",
+        "UnusedFile": "document",
         # What `KINGFISHER_WIRE_FORMATS` returns. `configuration.md` writes the setting
         # and the factory out, importing `WireFormat` from this door.
         "WireFormat": "document",

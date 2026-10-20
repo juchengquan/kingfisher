@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## What becomes of an unused result is a plugin, after #1012
+
+- **`UnusedResults`, `DeleteUnusedResults`, `UnusedFiles` and `UnusedFile` are new
+  on `kingfisher.plugins`**, and `Kingfisher` takes `unused_results=`, as `Plugins`
+  does for the command. Left out, nothing changes: every result file no row names is
+  removed, as before. `docs/guides/ports.md` has the section.
+- **A backend that raises while one is removed no longer fails the end of the turn.**
+  It is logged as a warning naming the session, and the file is offered again next
+  turn.
+- **`sweep_results` takes `unused_results=` and `session_id=` as well.**
+
 ## Result files are swept after the transcript, after #1011
 
 - **`keep_ledger` no longer sweeps and no longer takes `tool_results_route=`.** The sweep

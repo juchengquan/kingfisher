@@ -13,7 +13,7 @@ from deepagents.backends.utils import sanitize_tool_call_id
 
 from kingfisher.core.agent.middlewares.recorded import stamp
 
-from .steps import Steps, changing, reading
+from .steps import Steps, on_host, reading
 from .store import (
     KeptLedger,
     entry_id,
@@ -21,10 +21,12 @@ from .store import (
     names_a_result,
     write_ledger,
 )
+from .unused import UnusedFiles, settle_unused
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from kingfisher.core.interfaces import UnusedResults
     from kingfisher.core.result import LedgerEntry, Listed
 
 
@@ -111,14 +113,17 @@ def keep_ledger(
     return entries
 
 
-def sweep_results(
+def sweep_results(  # noqa: PLR0913 -- by keyword, so no route is passed for a session id
     files: Any,
     ledger: Ledger,
     entries: tuple[LedgerEntry, ...],
     *,
     tool_results_route: str,
+    unused_results: UnusedResults,
+    session_id: str,
 ) -> Steps[None]:
-    """Remove the result files no row names, once the conversation is written.
+    """Hand `unused_results` the result files no row names, and remove the offloaded
+    copies of expired ones, once the conversation is written.
 
     After the transcript, not the ledger: a file the sweep removes may still be named by
     the conversation the turn is about to write, and a crash between the two leaves that
@@ -129,6 +134,8 @@ def sweep_results(
         ledger.earlier.paths | {e.path for e in entries if e.path},
         tool_results_route=tool_results_route,
         offloaded=_offloads_freed(files, ledger.expired),
+        unused_results=unused_results,
+        session_id=session_id,
     )
 
 
@@ -199,9 +206,11 @@ def _swept(
     *,
     tool_results_route: str,
     offloaded: dict[str, int],
+    unused_results: UnusedResults,
+    session_id: str,
 ) -> Steps[None]:
-    """Remove every result file a recorder wrote that no row names, and each offloaded file
-    in `offloaded` that is still the length given.
+    """Hand over every result file a recorder wrote that no row names, and only those, and
+    remove each offloaded file in `offloaded` that is still the length given.
 
     Only a turn that died before writing its rows leaves one, beside our copies of
     repointed results and the files of expired ones. One turn runs at a time, so no running
@@ -211,13 +220,19 @@ def _swept(
     tools are refused this folder, but its shell is not.
     """
     listing = yield reading(files, "ls", tool_results_route)
-    for one in listing.entries or ():
-        if one.get("is_dir") or one["path"] in named:
-            continue
-        if not names_a_result(PurePosixPath(one["path"]).name):
-            continue
-        # Its answer is not checked: a file left behind is swept by the next turn.
-        yield changing(files, "delete", one["path"])
+    unused = [
+        (one["path"], one.get("size"))
+        for one in listing.entries or ()
+        if not one.get("is_dir")
+        and one["path"] not in named
+        and names_a_result(PurePosixPath(one["path"]).name)
+    ]
+    if unused:
+        # On the host, and waited for by a cancel: the turn lets go of its claim only
+        # after this, so no new turn can name a file while it is being dropped.
+        yield on_host(
+            settle_unused, unused_results, UnusedFiles(files, unused), session_id=session_id
+        )
     if not offloaded:
         return
     listing = yield reading(files, "ls", _offloaded_under(files))
