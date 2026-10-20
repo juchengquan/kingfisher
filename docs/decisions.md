@@ -3542,6 +3542,13 @@ line of the two that file needs. The tolerant-reader limit is unchanged and stil
 stated -- a name computed rather than written out is invisible, as a value the YAML reader
 cannot walk is. *(2026-10-19, from an architecture review.)*
 
+**Only a package or a bundle is decided whole, and by everything in it.** Every folder was,
+by its `.py` alone: a bundle whose definition named a source id was reported seeded with
+the definition held back and its tool copied, which `doctor` then called an orphaned folder;
+and one module in a grouping folder held back an unrelated subagent beside it. A folder is
+one definition when it holds `__init__.py` or the definition named for it, the loader's own
+rules; any other folder is judged file by file. *(2026-10-20, from a code review.)*
+
 **`Seeded` says what it left behind, because three callers said it and two were wrong.**
 `seed` leaves a definition alone for one of two reasons with opposite remedies -- middleware
 is registered in code, a source id declared in a file -- hence `UNCONSULTED` and `REMEDY`,
