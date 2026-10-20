@@ -73,6 +73,9 @@ class LocalMiddlewareRepository:
             for entry in exported_from(path, where=where, declares=DECLARES):
                 _refuse_unless_buildable(entry, where=where)
                 name = name_of(entry)
+                if claimed.get(name) == where:
+                    msg = f"{where}: middleware {name!r} is defined twice in this file"
+                    raise MiddlewareError(msg)
                 if (earlier := claimed.get(name)) is not None:
                     msg = (
                         f"{where}: two files define middleware {name!r} -- {earlier} "

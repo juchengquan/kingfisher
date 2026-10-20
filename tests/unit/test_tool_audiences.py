@@ -191,6 +191,13 @@ def test_an_empty_audience_is_refused_rather_than_read_as_nobody():
         found(ToolSpec(count, source_ids=[]))
 
 
+def test_an_empty_audience_says_leaving_it_out_opens_the_tool_to_everyone():
+    """It said leaving the line out would inherit the audience around it, which a tool
+    has none of: left out, it is open to everyone."""
+    with pytest.raises(ToolError, match="Leave the line out to open it to everyone"):
+        found(ToolSpec(count, source_ids=[]))
+
+
 # -- read off the catalogue --------------------------------------------------------
 
 

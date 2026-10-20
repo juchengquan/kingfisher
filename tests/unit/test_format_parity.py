@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from kingfisher.core.definitions import documents
 from kingfisher.core.definitions.agents import reading as agents
 from kingfisher.core.definitions.agents import spec as agent_spec
 from kingfisher.core.definitions.agents.spec import KNOWN as AGENT_KNOWN
@@ -396,3 +397,50 @@ def test_a_document_that_will_not_parse_names_the_file_it_is(kind):
 
     assert "unreadable.yaml" in str(refused.value)
     assert "cannot read definition" in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    "written",
+    [
+        "source_ids: [hr_admin]\nsource_ids: ['*']\n",
+        "skills:\n  - name: audit\n    source_ids: [hr_admin]\n    source_ids: ['*']\n",
+    ],
+    ids=["at the top", "inside an entry"],
+)
+@pytest.mark.parametrize("kind", sorted(FORMATS))
+def test_a_key_written_twice_is_refused_rather_than_the_last_kept(kind, written):
+    """`safe_load` kept the last of two, so a second `source_ids: ["*"]` opened a
+    definition restricted to hr_admin to everyone without a word."""
+    read, _known, _spec = FORMATS[kind]
+    errors = {"agent": AgentError, "subagent": SubagentError}
+
+    with pytest.raises(errors[kind]) as refused:
+        read(f"name: x\ndescription: d\n{written}system_prompt: |\n  Go.\n", "twice.yaml")
+
+    assert "twice.yaml" in str(refused.value)
+    assert "'source_ids' is written twice" in str(refused.value)
+
+
+def test_a_merge_key_overriding_what_it_merges_is_not_a_repeat():
+    """The control: `<<` has no constructor, so a check that built every key refused
+    any document using a merge at all."""
+    assert documents.load("base: &b {a: 1, c: 3}\nx:\n  <<: *b\n  a: 2\n")["x"] == {
+        "a": 2,
+        "c": 3,
+    }
+
+
+@pytest.mark.parametrize("field", ["name", "description", "system_prompt"])
+@pytest.mark.parametrize("kind", sorted(FORMATS))
+def test_a_required_field_written_as_a_list_or_mapping_is_refused(kind, field):
+    """Each was stringified, so a list `system_prompt` reached the model as a Python
+    repr of the list."""
+    read, _known, _spec = FORMATS[kind]
+    errors = {"agent": AgentError, "subagent": SubagentError}
+    fields = {"name": "x", "description": "d", "system_prompt": "|\n  Go."}
+    for shape, value in (("list", "\n  - one\n  - two"), ("mapping", "\n  a: 1")):
+        written = "".join(
+            f"{key}: {value if key == field else text}\n" for key, text in fields.items()
+        )
+        with pytest.raises(errors[kind], match=f"'{field}' is one piece of text, not a {shape}"):
+            read(written, "shaped.yaml")

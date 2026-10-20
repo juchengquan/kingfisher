@@ -124,7 +124,14 @@ def with_datazone[Caller: Iterable[str] | _Unscoped | None](
             "source ids with their datazone, or UNSCOPED alone"
         )
         raise CallerError(msg)
-    return (*(source_ids or ()), Datazone(datazone))
+    # Carried on, the zone would be a caller, and `caller_holds` never see nobody named.
+    if source_ids is None:
+        msg = (
+            f"datazone {datazone!r} is a caller's, and this call names no caller -- pass "
+            "the caller's source ids with it, from the command line --as A,B"
+        )
+        raise CallerError(msg)
+    return (*source_ids, Datazone(datazone))
 
 
 def jointly(audiences: Iterable[Audience]) -> Audience:
