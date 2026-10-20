@@ -468,6 +468,9 @@ _TOKEN, _TAKEN = "token", "taken"
 
 def _take(dirs: LocalSessionDirs, path: Path, token: str) -> bool:
     """Create the claim, naming its taker; `False` where one is there."""
+    # So a sweep can claim a session laid out without a `.harness`. Not `parents=True`:
+    # a session deleted under a starting turn would be listed again, holding the claim.
+    path.parent.mkdir(exist_ok=True)
     if not dirs.create_exclusive(path):
         return False
     (path / _TOKEN).write_text(token, encoding="utf-8")

@@ -297,7 +297,7 @@ def test_a_runner_that_is_not_here_gets_the_command_unwrapped(cfg, session_dir):
 
     backend.execute("echo hi")
 
-    assert runner.seen == [("echo hi", None)], "the local prefix must not travel"
+    assert runner.seen == [("echo hi", cfg.execution_timeout_s)], "the local prefix must not travel"
 
 
 def test_a_runner_that_says_nothing_keeps_the_fence(cfg, session_dir):

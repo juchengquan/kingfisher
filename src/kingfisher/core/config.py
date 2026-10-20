@@ -365,7 +365,8 @@ class Config:
             # Every bound on a superstep, not the model's alone: the deadline is read
             # between chunks, and a shell command straddles it exactly as a model call
             # does. Measured, a 6s command under a 1s turn and a 1s model timeout let a
-            # second caller take the session 3.0s into a turn that ran to 6.0s.
+            # second caller take the session 3.0s into a turn that ran to 6.0s. A bound
+            # only while `execute` refuses a longer `timeout` and the shell clamps to it.
             self.execution_timeout_s,
             *(profile.timeout_s for profile in self.models.models.values()),
             # Not zero, even with neither models nor a bound on a command: zero would

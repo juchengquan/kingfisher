@@ -12,7 +12,7 @@ from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.layout import Layout
 
 from .attachments import AttachmentsMiddleware
-from .builtin_tools import BuiltinToolsMiddleware
+from .builtin_tools import BuiltinToolsMiddleware, longest_command
 from .clearing import ResultClearingMiddleware
 from .guarded_calls import (
     GuardedCallsMiddleware,
@@ -41,6 +41,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     backend: Any,
     step_limit: int,
     trigger: int,
+    execution_timeout_s: int,
     recorder: RecorderMiddleware | None = None,
     clearing: Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None = None,
     tools: Sequence[str] | None = None,
@@ -113,7 +114,12 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.
     standing.append(AttachmentsMiddleware(trigger))
     standing.append(
-        BuiltinToolsMiddleware(layout, shell_prompt_of(backend), here=shell_runs_here(backend))
+        BuiltinToolsMiddleware(
+            layout,
+            shell_prompt_of(backend),
+            longest=longest_command(execution_timeout_s),
+            here=shell_runs_here(backend),
+        )
     )
     if skills is not None:
         standing.append(
