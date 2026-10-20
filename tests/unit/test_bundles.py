@@ -281,10 +281,10 @@ def test_a_bundles_tool_is_not_in_the_shared_offering(tmp_path):
     """The whole feature in one assertion."""
     catalogue = catalogue_with_bundle(tmp_path)
 
-    offered = Offering.of(catalogue.tools.found)
+    offering = Offering.of(catalogue.tools.found)
 
-    assert "shared" in offered.workspace
-    assert "probe" not in offered.workspace
+    assert "shared" in offering.offered
+    assert "probe" not in offering.offered
 
 
 def test_a_broken_private_tool_fails_at_startup(tmp_path):

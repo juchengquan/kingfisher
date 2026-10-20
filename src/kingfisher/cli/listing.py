@@ -99,7 +99,7 @@ def _tools(found: Inventory) -> Iterator[str]:
 
     # The renderer a refusal uses, so the two cannot drift: a name two files define
     # prints as the reference a `tools:` line has to say.
-    yield "\nworkspace tools — grant with tools: in an agent file"
+    yield "\noffered tools — grant with tools: in an agent file"
     yield offered(dict(found.tool_sources), found.tools)
 
 

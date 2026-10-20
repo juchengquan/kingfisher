@@ -16,7 +16,7 @@ from .builtin_tools import BuiltinToolsMiddleware, longest_command
 from .clearing import ResultClearingMiddleware
 from .guarded_calls import (
     GuardedCallsMiddleware,
-    WorkspaceToolFailureMiddleware,
+    OfferedToolFailureMiddleware,
 )
 from .model_reply import ModelReplyMiddleware
 from .narrowing import (
@@ -54,7 +54,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     """Every standing middleware for one graph, in the order it wraps it.
 
     Built here and nowhere else, so what kingfisher guarantees on a graph is read in one
-    place. `names` are the workspace tools the graph holds; `tools` narrows what it is
+    place. `names` are the offered tools the graph holds; `tools` narrows what it is
     offered and `skills` its skills index, each `None` where nothing narrows; `clearing`,
     which builds the result clearing for that grant, and `reachable` are the agent's alone.
     `budget` is the turn's, whose step limit reaches only the agent's own run, so a subagent
@@ -63,7 +63,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
 
     `inner` is what the deployment's settings switch on and what its definitions name, which
     go inside every standing one. Taken here rather than appended by each caller so that the
-    one layer that must stay under them -- `WorkspaceToolFailureMiddleware`, which answers
+    one layer that must stay under them -- `OfferedToolFailureMiddleware`, which answers
     for what the tool raised and must not answer for them -- cannot be left off a graph.
     """
     if kind != "agent" and (clearing is not None or reachable is not None):
@@ -128,8 +128,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             )
         )
     standing.extend(inner)
-    # Last of all, under `inner`. Left out where the graph holds no workspace tool: there is
+    # Last of all, under `inner`. Left out where the graph holds no offered tool: there is
     # no name for it to answer for, and a middleware that cannot act reads as one that does.
     if names:
-        standing.append(WorkspaceToolFailureMiddleware(names))
+        standing.append(OfferedToolFailureMiddleware(names))
     return standing

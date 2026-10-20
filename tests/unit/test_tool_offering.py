@@ -9,7 +9,7 @@ from kingfisher.core.definitions.tools.spec import FoundTool, Offering
 
 WORKSPACE = Offering(
     builtin=("read_file", "execute"),
-    workspace=("http_fetch", "csv_columns"),
+    offered=("http_fetch", "csv_columns"),
     sources={"http_fetch": "http_fetch.py", "csv_columns": "csv_profile/"},
 )
 
@@ -135,6 +135,6 @@ def test_an_offering_is_built_from_what_the_repository_found():
         [FoundTool(tool=FakeTool(), source="net/http_fetch.py")], builtin=("read_file",)
     )
 
-    assert offering.workspace == ("http_fetch",)
+    assert offering.offered == ("http_fetch",)
     assert offering.sources == {"http_fetch": "net/http_fetch.py"}
     assert offering.builtin == ("read_file",)

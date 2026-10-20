@@ -439,7 +439,7 @@ def reported(kf, source_ids, name: str, *, asked_for: Capabilities | None = None
     )
 
 
-#: A workspace tool no definition here declares at all. `surveyor` names `line_count`
+#: An offered tool no definition here declares at all. `surveyor` names `line_count`
 #: and nothing else, so nobody reaches this one through any agent.
 UNDECLARED_TOOL = '''
 from langchain_core.tools import tool
@@ -474,7 +474,7 @@ system_prompt: |
 
 @pytest.fixture
 def policied_with_a_stranger(policied):
-    """`policied`, plus a workspace tool no definition offers anyone, and one offered
+    """`policied`, plus a tool in `tools/` no definition offers anyone, and one offered
     only by a subagent in reach.
     """
     (tools_dir(policied) / "secret_export.py").write_text(UNDECLARED_TOOL, encoding="utf-8")
@@ -713,7 +713,7 @@ def test_the_operator_is_still_offered_the_subagent_nobody_activates(
 
 def test_a_refusal_lists_no_tool_out_of_the_callers_reach(policied_with_a_typo):
     """The subagent refusals were scoped and this one was not: a caller holding `A` was
-    handed every workspace tool and its file -- measured, three names and three paths
+    handed every offered tool and its file -- measured, three names and three paths
     where the agent they reach grants one. A refusal is read by whoever triggered it,
     so it is as much a listing as the listing is.
     """

@@ -139,7 +139,7 @@ def _subagent_tools(found: Inventory) -> Iterator[Check]:
         yield Check(
             "subagent tools",
             "warn",
-            "shadowing not checked -- the workspace tool catalogue did not load; its "
+            "shadowing not checked -- the offered tool catalogue did not load; its "
             "own row says why",
         )
     elif found.shadowed:

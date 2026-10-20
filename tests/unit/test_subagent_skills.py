@@ -162,7 +162,7 @@ def test_omitting_tools_grants_none(cfg, session_dir):
     """The same rule as skills: an allowlist of `None` lets every tool through, which is
     the shell for a subagent whose file never asked for it.
 
-    With a workspace tool to hand, or a reader granting every workspace tool for a missing
+    With an offered tool to hand, or a reader granting every offered tool for a missing
     `tools:` still leaves this allowlist empty in a workspace that defines none.
     """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)

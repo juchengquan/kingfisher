@@ -101,7 +101,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # Read and parsed now, not per request: a catalogue that cannot be read is a
         # wiring mistake, to fail at startup rather than serve an agent told about nothing.
         self.catalogue: Definitions = resolve_definitions(self.cfg).warm()
-        # Whether a workspace tool wears a built-in's name, refused at startup: only an
+        # Whether an offered tool wears a built-in's name, refused at startup: only an
         # assembled graph can say, so `warm` cannot. A subagent's own tools as well as the
         # catalogue's: a bundled `read_file` replaced deepagents' own in that subagent and
         # crashed every model call it made, and nothing said so -- `doctor` called the

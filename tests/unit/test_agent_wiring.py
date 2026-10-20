@@ -214,10 +214,10 @@ def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
     assert names.index("_Audit") > names.index("GrantedOnlyMiddleware"), (
         f"the deployment's middleware runs ahead of the narrowing: {names}"
     )
-    # Not `names[-1]`: `WorkspaceToolFailureMiddleware` goes under the deployment's own on a
-    # graph that holds a workspace tool, so asserting the deployment's was last held only
+    # Not `names[-1]`: `OfferedToolFailureMiddleware` goes under the deployment's own on a
+    # graph that holds an offered tool, so asserting the deployment's was last held only
     # because this workspace defines none.
-    assert set(names[names.index("_Audit") + 1 :]) <= {"WorkspaceToolFailureMiddleware"}, names
+    assert set(names[names.index("_Audit") + 1 :]) <= {"OfferedToolFailureMiddleware"}, names
 
 
 def test_an_agent_naming_middleware_nothing_registered_is_refused(cfg, session_dir):

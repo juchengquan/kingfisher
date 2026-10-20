@@ -466,7 +466,7 @@ def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name(way):
 
 
 def test_a_correction_reaches_the_shells_result_and_no_other_tools(way):
-    """Without the name gate any tool's result gains the shell's advice: a workspace tool
+    """Without the name gate any tool's result gains the shell's advice: an offered tool
     printing a path it could not open had the model told about shell spellings on a tool
     that is not a shell. The rule driving `execute` alone passes either way.
     """

@@ -1,4 +1,4 @@
-"""What a workspace tool's arguments mean against one session."""
+"""What an offered tool's arguments mean against one session."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .host_paths import HOST_ROOTS, HostPathError
 #: means a sentence there too.
 PATH_ARGUMENTS: frozenset[str] = frozenset({"path"})
 
-#: Where a workspace tool's other arguments may not point: the file tools' refused
+#: Where an offered tool's other arguments may not point: the file tools' refused
 #: prefixes, and those a process reads its host and itself through -- `/proc/self/environ`
 #: holds this process's API keys. Refused, not translated, since nothing says such an
 #: argument names a file. Not a boundary, as a tool can open anything, but it removes

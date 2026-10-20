@@ -212,7 +212,7 @@ def test_the_shape_decides_the_rules_rather_than_where_the_entry_came_from():
 # -- the guard that would be a hole -----------------------------------------
 
 
-def test_a_portable_declaration_is_granted_no_workspace_tool(cfg, session_dir):
+def test_a_portable_declaration_is_granted_no_offered_tool(cfg, session_dir):
     """A portable entry's `tools` carries objects and never names, so it can grant no
     catalogue tool -- read as the request's `ALL`, an imported subagent would be handed
     the deployment's whole catalogue: the request below grants `shared`, and `shared`
@@ -542,14 +542,14 @@ def test_the_helper_refusal_points_at_a_key_that_exists():
 # -- one tool axis everything, the other nothing ------------------------------
 
 #: Each leaves one axis at `ALL` and the other empty, as a portable subagent asking for
-#: every built-in has it: it never holds a workspace tool.
+#: every built-in has it: it never holds an offered tool.
 ONE_AXIS_OPEN = {
     "portable, every built-in": (
         "surveyor.py",
         "SUBAGENTS = [{'name': 'surveyor', 'description': 'd', 'system_prompt': 'Go.', "
         "'builtin_tools': ['*']}]\n",
     ),
-    "document, no workspace tools": (
+    "document, no offered tools": (
         "surveyor.yaml",
         'name: surveyor\ndescription: d\nsystem_prompt: |\n  Go.\nbuiltin_tools: ["*"]\n'
         "tools: []\n",
@@ -567,7 +567,7 @@ def test_a_subagent_with_one_axis_open_builds_in_a_workspace_with_no_tools(
     cfg, session_dir, filename, text
 ):
     """A request naming only the subagent raised `ValueError: one tool axis resolved
-    to '*'`: with no workspace tools and nothing narrowed, the names were never read
+    to '*'`: with no offered tools and nothing narrowed, the names were never read
     off the probe, and "every built-in plus none" has no spelling as an allowlist.
     """
     for kind in ("skills", "subagents", "tools"):

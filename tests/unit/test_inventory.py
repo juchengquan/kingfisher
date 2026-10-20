@@ -152,7 +152,7 @@ from langchain_core.tools import tool
 
 @tool
 def read_file(text: str) -> str:
-    """A workspace tool wearing a built-in's name, which is refused when a graph
+    """An offered tool wearing a built-in's name, which is refused when a graph
     is assembled and never before."""
     return text
 

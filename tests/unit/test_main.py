@@ -461,7 +461,7 @@ def test_no_flags_leaves_every_kind_unrestricted(cfg):
     """Absent, not enumerated and not `None`.
 
     Which is what `tests/integration/driver.py "task"` was quietly sending. Measured
-    against a real run: every workspace tool and every skill came back as withheld on
+    against a real run: every offered tool and every skill came back as withheld on
     a command line carrying no capability flags, while this file's own docstring
     promised that omitting a flag means everything the workspace offers.
     """
@@ -492,11 +492,11 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg, shipped):
     # The other axis is untouched: subtracting a built-in says nothing about
     # what the workspace defines, so it is absent rather than `None`.
     assert "tools" not in granted
-    assert "http_fetch" not in builtin, "a workspace tool leaked onto the builtin axis"
+    assert "http_fetch" not in builtin, "an offered tool leaked onto the builtin axis"
 
 
 def test_the_two_tool_axes_subtract_independently(cfg, shipped):
-    """A workspace tool is subtracted from the workspace set, and only that."""
+    """An offered tool is subtracted from the `tools` set, and only that."""
     from kingfisher.core.definitions import seeding
 
     seeding.seed(cfg, shipped)
@@ -505,7 +505,7 @@ def test_the_two_tool_axes_subtract_independently(cfg, shipped):
 
     assert tools is not None
     assert "http_fetch" not in tools
-    assert "csv_profile" in tools  # a workspace tool, so it had to be built to be seen
+    assert "csv_profile" in tools  # an offered tool, so it had to be built to be seen
     assert "read_file" not in tools, "a builtin leaked onto the workspace axis"
 
 

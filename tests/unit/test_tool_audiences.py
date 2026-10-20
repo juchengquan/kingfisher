@@ -103,7 +103,7 @@ def policied(cfg):
 
 
 def built(kf: Kingfisher, held: tuple[str, ...]) -> list[str]:
-    """The workspace tools handed to `create_deep_agent` for this caller."""
+    """The offered tools handed to `create_deep_agent` for this caller."""
     session = kf.workspace / "sessions" / "-".join(held)
     session.mkdir(parents=True, exist_ok=True)
     ensure_session_layout(session, DEFAULT_LAYOUT)

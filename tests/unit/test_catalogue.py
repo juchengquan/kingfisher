@@ -15,7 +15,7 @@ from kingfisher.core.agent.activation import (
     defined_subagents,
 )
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.kinds.tools import workspace_tool_names
+from kingfisher.core.agent.kinds.tools import offered_tool_names
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
 from kingfisher.core.definitions.middlewares.catalogue import MiddlewareError
@@ -137,10 +137,10 @@ def test_a_supplied_folder_missing_a_kind_offers_none_of_it(tmp_path, cfg):
 
     assert roots.skills.root == staged / "skills"
     assert available_skills(cfg, catalogue=roots) == ("staged-only",)
-    assert workspace_tool_names(cfg, catalogue=roots) == ()
+    assert offered_tool_names(cfg, catalogue=roots) == ()
     # The control: the configured folder does offer it, so the line above is not
     # passing on a tool that never loads.
-    assert workspace_tool_names(cfg) == ("elsewhere",)
+    assert offered_tool_names(cfg) == ("elsewhere",)
 
 
 def test_the_agent_reads_the_supplied_catalogue_and_not_the_configured_one(tmp_path, cfg):
@@ -154,7 +154,7 @@ def test_the_agent_reads_the_supplied_catalogue_and_not_the_configured_one(tmp_p
 
     assert available_skills(cfg, catalogue=roots) == ("staged-only",)
     assert tuple(defined_subagents(cfg, catalogue=roots)) == ("reviewer",)
-    assert workspace_tool_names(cfg, catalogue=roots) == ("elsewhere",)
+    assert offered_tool_names(cfg, catalogue=roots) == ("elsewhere",)
 
     # And the configured one is still what is read when nothing is supplied.
     assert available_skills(cfg) == ("configured",)
@@ -262,7 +262,7 @@ from langchain_core.tools import tool
 
 @tool
 def read_file(text: str) -> str:
-    '''A workspace tool wearing a built-in's name.'''
+    '''An offered tool wearing a built-in's name.'''
     return text
 
 
@@ -275,7 +275,7 @@ ITS_OWN_NAME = SHADOWING_TOOL.replace("read_file", "probe_shadow")
 def test_a_tool_wearing_a_builtin_name_fails_at_startup(cfg):
     """The refusal `warm` cannot make for itself.
 
-    Whether a workspace tool shadows a built-in is only answerable from an assembled
+    Whether an offered tool shadows a built-in is only answerable from an assembled
     graph, and `warm` has no `Config` to assemble one with -- so this waited for the
     first request that touched tools, and refused a turn somebody was already
     waiting on rather than a deployment nobody was.

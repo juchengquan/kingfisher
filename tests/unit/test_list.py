@@ -1100,7 +1100,7 @@ def test_a_star_entry_out_of_reach_stays_out_of_reach(form, cfg, at_the_command_
 def test_an_agent_granting_every_tool_offers_the_whole_catalogue(
     form, cfg, at_the_command_line, capsys
 ):
-    """A caller reaching an agent written `tools: ["*"]` is shown every workspace tool.
+    """A caller reaching an agent written `tools: ["*"]` is shown every offered tool.
 
     `"*"` is a string, so a walk that unions the entries of each field without stopping
     at it collects the character rather than the catalogue.
@@ -1434,7 +1434,7 @@ def test_a_tool_only_a_subagent_declares_is_not_offered_to_that_caller(
     form, cfg, at_the_command_line, capsys
 ):
     """`ceiling` narrows a subagent's tools by what the agent that reached it holds, so
-    a workspace tool no reachable agent grants is one no path reaches.
+    an offered tool no reachable agent grants is one no path reaches.
 
     This read the other way round for a release, and said so: the walk unioned what
     every reached definition *declared*, and offered `secret_export` to `B` while a run

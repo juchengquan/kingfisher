@@ -295,13 +295,13 @@ narrowing kingfisher applies, so it observes the tool set the request and the
 definition actually left in reach rather than what the definition asked for.
 
 **Host paths, not the paths the model wrote.** Running after kingfisher's own puts
-your hook below the translation, so `wrap_tool_call` on a workspace tool is handed
+your hook below the translation, so `wrap_tool_call` on an offered tool is handed
 `/Users/.../sessions/s/inputs/n.txt` where the model wrote `/inputs/n.txt`. An audit
 log fills with host paths, and a matcher looking for `/outputs/` never matches.
 Translate back against the session's own root, or match on the tail.
 
 **An exception from your hook ends the turn, whichever tool was called.** Raise in
-`wrap_tool_call` and the caller gets your exception -- on a workspace tool as on a
+`wrap_tool_call` and the caller gets your exception -- on an offered tool as on a
 built-in such as `read_file`. It is the loud answer deliberately: a failed result
 would carry *the tool's* name, so your fault would read as the tool's while the turn
 carried on with your rule not applied. Catch what your hook can raise, and where a

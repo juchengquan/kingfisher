@@ -45,7 +45,7 @@ SUBJECT = "subagent 'd'"
 
 
 def _offering(sources):
-    return Offering(workspace=tuple(sources), sources=sources)
+    return Offering(offered=tuple(sources), sources=sources)
 
 
 def _spec(name="d", tools="csv_columns"):
@@ -256,7 +256,7 @@ def test_the_long_form_of_a_unique_tool_is_not_an_unknown_tool():
 
 def test_the_long_form_of_a_unique_tool_reaches_the_allowlist():
     """The half that the first fix missed, and that only running it found."""
-    offering = Offering(builtin=("read_file",), workspace=("csv_columns",), sources=UNIQUE)
+    offering = Offering(builtin=("read_file",), offered=("csv_columns",), sources=UNIQUE)
 
     permitted = offering.permitted(ALL, ("csv_profile::csv_columns",))
 
@@ -265,7 +265,7 @@ def test_the_long_form_of_a_unique_tool_reaches_the_allowlist():
 
 def test_a_clashing_name_still_has_to_be_spelt_out():
     """The behaviour this must not change."""
-    offering = Offering(workspace=CLASHING, sources={})
+    offering = Offering(offered=CLASHING, sources={})
 
     assert offering.spelt(("fetch",)) == ("fetch",)
     with pytest.raises(CapabilityError, match=r"write a/t\.py::fetch, b/t\.py::fetch"):
@@ -315,10 +315,10 @@ class _Request:
 
 
 def test_an_agents_long_form_grant_reaches_the_tools_it_carries():
-    """`granted_workspace` narrows the request's grant against what is offered, and
+    """`offered_grant` narrows the request's grant against what is offered, and
     `narrowed` is set membership with no opinion about what exists -- so the long
     form did not raise here, it silently resolved to nothing and the agent carried no
-    workspace tools at all.
+    offered tools at all.
     """
     surface = ToolSurface(
         offering=Offering.of(PROBE),

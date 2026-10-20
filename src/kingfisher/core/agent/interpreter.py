@@ -38,11 +38,11 @@ def interpreter(
     permitted: tuple[str, ...] | None,
     *,
     gated: Collection[str] = (),
-    workspace: Sequence[Any] = (),
+    offered: Sequence[Any] = (),
 ) -> Any:
     """The JavaScript sandbox, if this deployment wired one.
 
-    `workspace` is the granted workspace tools, each already wrapped by
+    `offered` is the offered tools granted, each already wrapped by
     `guarded_tools`, and `gated` the names this agent stops on.
 
     `max_snapshot_bytes=1` drops the VM image rather than writing the whole QuickJS heap
@@ -57,15 +57,15 @@ def interpreter(
     quieten_expected_snapshot_drop()
 
     # A call from code meets no `wrap_tool_call` and no gate, so this list must be safe
-    # with neither. A workspace tool goes in as its `GuardedTool`, never by name, which
+    # with neither. An offered tool goes in as its `GuardedTool`, never by name, which
     # would reach the bare object; a gated tool is left out, since from here it would
     # run with nobody asked. `None` turns `tools.*` off, not on for everything.
-    wrapped = {one.name for one in workspace}
+    wrapped = {one.name for one in offered}
     ptc: list[Any] | None = (
         None
         if permitted is None
         else [
-            *(one for one in workspace if one.name not in gated),
+            *(one for one in offered if one.name not in gated),
             *(
                 name
                 for name in permitted

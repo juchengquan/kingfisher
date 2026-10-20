@@ -84,7 +84,7 @@ def zoned(cfg):
 
 
 def built(kf: Kingfisher, source_ids, datazone: str | None) -> tuple[set[str], set[str]]:
-    """The workspace tools and subagents `create_deep_agent` is handed for this caller."""
+    """The offered tools and subagents `create_deep_agent` is handed for this caller."""
     caller = with_datazone(source_ids, datazone)
     session = kf.workspace / "sessions" / f"{datazone}-{id(caller)}"
     session.mkdir(parents=True, exist_ok=True)

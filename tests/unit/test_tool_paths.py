@@ -1,4 +1,4 @@
-"""What a workspace tool is handed, once the session is on both routes."""
+"""What an offered tool is handed, once the session is on both routes."""
 
 from __future__ import annotations
 
@@ -218,7 +218,7 @@ def test_an_argument_that_only_looks_like_a_path_is_handed_over(bridge):
 # -- what it leaves alone ----------------------------------------------------
 
 
-def test_a_tool_that_is_not_a_workspace_tool_is_untouched(bridge):
+def test_a_tool_that_is_not_an_offered_tool_is_untouched(bridge):
     """The built-in file tools already resolve against the session, inside the backend."""
     assert handed(bridge, a_call("read_file", path="/inputs/config.ini")) == {
         "path": "/inputs/config.ini"
@@ -436,7 +436,7 @@ def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
 
 
 #: A link the shell can plant, by where it sits and what it points at, both inside the
-#: session: each target is a file a workspace tool writing to its `path` must not reach.
+#: session: each target is a file an offered tool writing to its `path` must not reach.
 PLANTED = {
     "the pinned agent": ("scratchpad/link", f"{HARNESS}/{PINNED_AGENT}"),
     "a saved result": ("outputs/link", "scratchpad/tool_results/r1.txt"),
@@ -475,7 +475,7 @@ def test_an_ordinary_path_beside_a_refused_link_still_resolves(session, bridge):
 
 
 @macos
-def test_a_link_the_shell_plants_is_refused_to_a_workspace_tool(cfg, session, bridge):
+def test_a_link_the_shell_plants_is_refused_to_an_offered_tool(cfg, session, bridge):
     """Measured: `ln -s ../.harness/agent.yaml scratchpad/link` run by the confined shell
     handed a tool the real pin, which it runs outside every fence to write."""
     planted = backend_at(cfg, session).execute(
@@ -537,7 +537,7 @@ def test_a_tool_that_raises_answers_instead_of_ending_the_run(paths, session):
 
     @tool
     def missing(path: str) -> str:
-        """Raise the way a workspace tool raises."""
+        """Raise the way an offered tool raises."""
         msg = f"[Errno 2] No such file or directory: {path!r}"
         raise FileNotFoundError(msg)
 

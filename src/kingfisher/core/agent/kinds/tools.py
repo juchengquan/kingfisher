@@ -46,22 +46,22 @@ def registered_tools(graph: Any) -> tuple[str, ...] | None:
     return () if "model" in nodes else None
 
 
-def workspace_tool_names(
+def offered_tool_names(
     cfg: Config, *, catalogue: Definitions | None = None
 ) -> tuple[str, ...]:
     """The tools this workspace defines, as a grant would write them."""
     found = (catalogue or Definitions.from_config(cfg)).tools.found
-    return tuple(sorted(Offering.of(found).workspace))
+    return tuple(sorted(Offering.of(found).offered))
 
 
 def _refuse_shadowed(
     walked: Sequence[FoundTool], *, builtin: tuple[str, ...], where: str
 ) -> None:
-    """Refuse a workspace tool that shadows a built-in."""
+    """Refuse an offered tool that shadows a built-in."""
     shadowed = tuple(sorted({one.name for one in walked} & set(builtin)))
     if shadowed:
         msg = (
-            f"workspace tool(s) {', '.join(shadowed)} would replace a built-in of "
+            f"offered tool(s) {', '.join(shadowed)} would replace a built-in of "
             f"the same name; rename them in {where}"
         )
         raise CapabilityError(msg)
@@ -80,14 +80,14 @@ class ToolSurface:
     #: The built tool objects, by name, off the probe graph. Only a helper needs them, and
     #: `create_deep_agent` builds them where nothing else can reach.
     objects: Mapping[str, Any] = field(default_factory=dict)
-    #: Every workspace tool with its file: two files may each define a `fetch`, and a name
+    #: Every offered tool with its file: two files may each define a `fetch`, and a name
     #: would lose one of them before any narrowing ran.
     found: tuple[FoundTool, ...] = ()
     #: Tools whose audience shuts this caller out. Taken out of the grant, not `found`: a
     #: definition naming one names a real tool, which `refuse_unknown` must not call a typo.
     out_of_reach: frozenset[str] = frozenset()
     #: Every name a call anywhere under this build can carry, bundles included -- what a gate
-    #: is judged against. Not `offering.workspace`, which spells a name two files share the
+    #: is judged against. Not `offering.offered`, which spells a name two files share the
     #: long way: a gate written that way was accepted and then matched nothing.
     dispatchable: frozenset[str] = frozenset()
     #: Names only a compiled subagent's own folder holds, each with whose folder it is, so a
@@ -101,7 +101,7 @@ class ToolSurface:
         if self.offering is None:
             return tuple(one.tool for one in self.found)
         return tuple(
-            one.tool for one in self.offering.carried(self.granted_workspace, self.found)
+            one.tool for one in self.offering.carried(self.offered_grant, self.found)
         )
 
     @property
@@ -116,7 +116,7 @@ class ToolSurface:
             return None
         # The grant once a tool is taken out of it: an unrestricted request is no allowlist,
         # which would hand the tool back to the parent and every subagent it caps.
-        tools = self.granted_workspace if self.out_of_reach else self.asked.tools
+        tools = self.offered_grant if self.out_of_reach else self.asked.tools
         return self.offering.permitted(self.asked.builtin_tools, tools)
 
     @property
@@ -127,12 +127,12 @@ class ToolSurface:
         return narrowed(self.asked.builtin_tools, by=self.offering.builtin) or ()
 
     @property
-    def granted_workspace(self) -> Selection:
-        """The request's workspace grant, resolved against what was offered."""
+    def offered_grant(self) -> Selection:
+        """The request's grant of offered tools, resolved against the offering."""
         if self.offering is None:
             return ALL
         # `spelt` first: `narrowed` is set membership and would drop a long-form grant silently.
-        granted = narrowed(self.offering.spelt(self.asked.tools), by=self.offering.workspace)
+        granted = narrowed(self.offering.spelt(self.asked.tools), by=self.offering.offered)
         return tuple(name for name in granted or () if name not in self.out_of_reach)
 
 
@@ -208,7 +208,7 @@ def _tool_objects(graph: Any) -> Mapping[str, Any]:
 def resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the composition root knows
     where: str,
     capabilities: Capabilities,
-    workspace_tools: Sequence[FoundTool],
+    offered_tools: Sequence[FoundTool],
     # `Any`: naming the record it returns would import `core.agent.assembly`, which imports
     # this module.
     assemble: Callable[[tuple[Any, ...]], Any],
@@ -228,17 +228,17 @@ def resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the comp
     the built-ins; it costs a compile, so a caller asks only when one does.
     """
     unrestricted = capabilities.builtin_tools == ALL and capabilities.tools == ALL
-    if not names_needed and not workspace_tools and not bundled and unrestricted:
+    if not names_needed and not offered_tools and not bundled and unrestricted:
         return ToolSurface()
 
     probe = assemble(()).graph
     # `None` is unreachable on our own probe; `or ()` keeps an upstream shape change from
     # crashing here.
     builtin = registered_tools(probe) or ()
-    _refuse_shadowed(workspace_tools, builtin=builtin, where=where)
+    _refuse_shadowed(offered_tools, builtin=builtin, where=where)
     for found, holder, _ in bundled:
         _refuse_shadowed((found,), builtin=builtin, where=holder)
-    offering = Offering.of(workspace_tools, builtin=builtin)
+    offering = Offering.of(offered_tools, builtin=builtin)
     offering.refuse_unknown(
         capabilities.builtin_tools,
         capabilities.tools,
@@ -247,7 +247,7 @@ def resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the comp
     )
     dispatchable = (
         frozenset(builtin)
-        | {one.name for one in workspace_tools}
+        | {one.name for one in offered_tools}
         # Left out where the bundle is a compiled subagent's: deepagents hands a graph it
         # did not build none of this agent's gates, so a gate on a name nothing else holds
         # would be accepted and never fire -- the outcome gates are refused to prevent.
@@ -257,8 +257,8 @@ def resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the comp
         offering=offering,
         asked=capabilities,
         objects=_tool_objects(probe),
-        found=tuple(workspace_tools),
-        out_of_reach=out_of_reach(workspace_tools, held),
+        found=tuple(offered_tools),
+        out_of_reach=out_of_reach(offered_tools, held),
         dispatchable=dispatchable,
         only_compiled={
             one.name: owner

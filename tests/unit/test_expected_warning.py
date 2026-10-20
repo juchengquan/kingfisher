@@ -10,7 +10,7 @@ from kingfisher.plugins import backend_at
 LOGGER = "langchain_quickjs.middleware"
 
 #: The four this must not touch, quoted from the dependency. The last one is why
-#: silencing the whole logger was the wrong fix: a workspace tool skipped for
+#: silencing the whole logger was the wrong fix: an offered tool skipped for
 #: its name is exactly the silent drop this codebase refuses everywhere else.
 STILL_HEARD = (
     ("Failed to restore QuickJS snapshot for thread_id=%s", ("t1",)),

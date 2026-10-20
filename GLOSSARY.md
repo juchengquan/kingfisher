@@ -105,14 +105,13 @@ _Avoid_: zone, data zone, region
 **Built-in tool**:
 A tool that comes with the agent, for a definition to grant or leave out: the file tools, the
 shell, the checklist, and handing work to a subagent. Not one a deployment supplies, which is
-a workspace tool.
+an offered tool.
 _Avoid_: core tool, native tool, standard tool
 
-**Workspace tool**:
+**Offered tool**:
 A tool a deployment supplies itself rather than a built-in one, shared by its definitions or
-kept by one subagent as its own. The name is older than the definitions folder; such a tool
-is kept there now, not in the workspace.
-_Avoid_: custom tool, user tool, plugin tool
+kept by one subagent as its own.
+_Avoid_: workspace tool, custom tool, user tool, plugin tool
 
 **Attachment**:
 A file a tool's result carries in a block of its own rather than as text: a PDF, an image,

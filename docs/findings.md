@@ -246,7 +246,7 @@ for the next reader who reaches for one.*
   `isinstance`.** A tool result over 20,000 tokens, counted at four characters each,
   is saved to `large_tool_results/<call id>` and the model is handed a head-and-tail
   stub naming the path. Every tool but the file tools is evicted, so `execute` and
-  each workspace tool are; when a call overflows the context, the summarizer
+  each offered tool are; when a call overflows the context, the summarizer
   offloads the large tool results it keeps there too. A user message over 50,000 tokens goes to
   `conversation_history/<uuid>.md`, beside the summarizer's history and its
   `media/`. Both folders hang off `CompositeBackend.artifacts_root`, `/` by default,
@@ -405,13 +405,13 @@ for the next reader who reaches for one.*
 
 ## Tool shapes
 
-What a workspace tool may be written as is pinned by `tests/unit/test_tool_shapes.py`
+What an offered tool may be written as is pinned by `tests/unit/test_tool_shapes.py`
 -- a `BaseTool` from `@tool`, a `BaseTool` subclass, or a plain function -- so it is
 not repeated here. What that file does not say is what the decorator is *for*, which
 cost an experiment to establish.
 
 - **`@tool` buys control, not capability.** A plain function reaches the graph, is
-  offered to the model, dispatches, and is covered by `WorkspaceToolFailureMiddleware`
+  offered to the model, dispatches, and is covered by `OfferedToolFailureMiddleware`
   exactly as a decorated one is -- deepagents wraps whatever it is handed, so by the time a
   tool is in the graph it has `.name` and `.invoke` either way. The decorator is
   worth reaching for when the name or description must *differ* from the function as
@@ -446,7 +446,7 @@ cost an experiment to establish.
   `[]` as empty content. Reading `_format_output` alone predicts the first of those
   wrong. Pinned by `tests/unit/test_tool_returns.py`. *(2026-10-12,
   langgraph-prebuilt 1.1.0.)*
-- **A `Command` returned by a workspace tool is applied, not wrapped.**
+- **A `Command` returned by an offered tool is applied, not wrapped.**
   `_format_output` hands back any `ToolOutputMixin` untouched, and both
   `ToolMessage` and langgraph's `Command` are one -- so a tool can replace its own
   result or write graph state, and `GuardedCallsMiddleware` never sees it because it
@@ -645,7 +645,7 @@ directly, and `filter_tools_for_ptc` called on its own.*
 - **An exception the program does not catch leaves `eval` as itself.** The original is
   re-raised out of the evaluation and meets whatever wraps the `eval` call: in
   kingfisher, `GuardedCallsMiddleware` turned the backend's host-path refusal into a failed
-  `eval` result, and a workspace tool's `FileNotFoundError` ended the turn. Caught in
+  `eval` result, and an offered tool's `FileNotFoundError` ended the turn. Caught in
   the program, either reads as `HostError: Host function failed`, its message lost. A
   tool with `handle_tool_error` returns its error text as an ordinary value instead.
 - **The `tools.*` reference renders a return type from `tool.func` or

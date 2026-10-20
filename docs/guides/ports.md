@@ -400,7 +400,7 @@ graph. Whatever saver it was compiled with, each turn runs a copy of it on kingf
 own, empty one: the conversation comes from the transcript, as it does for every agent. `run()` and `stream()` take `sessions=` too, and refuse to run without it,
 with a graph or without.
 
-**What you return is also what a workspace tool is handed.** A tool that asks for
+**What you return is also what an offered tool is handed.** A tool that asks for
 it reaches this backend's file methods directly — behind the turn's permissions,
 and without `execute`; [`tools.md`](tools.md#or-the-tool-is-handed-the-sessions-filesystem)
 is the tool's side of it. So every file method of `BackendProtocol` may be called
@@ -459,7 +459,7 @@ cannot look inside them.
 Nothing else is read from a directory on this host. A backend that keeps its
 sessions somewhere else keeps all of them there.
 
-**Saying a file is on this host: `host_path`.** A workspace tool that takes a `path`
+**Saying a file is on this host: `host_path`.** An offered tool that takes a `path`
 is handed a real file to open — see [`tools.md`](tools.md). Kingfisher asks the
 backend where that file lives here: it follows your routes, and a
 `FilesystemBackend` answers from its own root, so a backend built from those needs

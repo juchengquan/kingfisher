@@ -343,7 +343,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
     by_kind = dict(withheld_told(prepared.events))
 
     # The two kinds are reported apart, which is the whole point of the split.
-    assert "http_fetch" in by_kind["tool"]  # a workspace tool
+    assert "http_fetch" in by_kind["tool"]  # an offered tool
     assert "execute" in by_kind["builtin tool"]  # and a built-in
     assert "read_file" not in by_kind["builtin tool"]  # granted, so not withheld
 
@@ -403,7 +403,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     assert set(by_kind) == {"builtin tool", "tool", "skill", "subagent"}
     assert "execute" in by_kind["builtin tool"]  # granted read_file only
     assert "read_file" not in by_kind["builtin tool"]  # and it was granted
-    assert "http_fetch" in by_kind["tool"]  # a workspace tool, reported apart
+    assert "http_fetch" in by_kind["tool"]  # an offered tool, reported apart
     assert by_kind["skill"] == tuple(sorted(seeded_skills - {"code-review"}))
     assert by_kind["subagent"] == tuple(sorted(seeded_subagents - {"reviewer"}))
 

@@ -257,7 +257,7 @@ def _failed(exc: sqlite3.Error, bound: _Bound) -> str:
     """What a failed statement is answered with.
 
     A bad query is something the model can fix on the next step, and it reads this the
-    same whether returned or raised: the failure guard turns a workspace tool's exception
+    same whether returned or raised: the failure guard turns an offered tool's exception
     into a failed result. Returning costs the status, which reports the call as a success.
     """
     if bound.expired:

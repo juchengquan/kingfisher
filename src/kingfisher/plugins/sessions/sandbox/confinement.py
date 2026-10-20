@@ -223,7 +223,7 @@ class ShellSettings:
 
     # One of `MODES`. On by default because an exposure nobody opted into is one nobody
     # knows they have: unconfined, the shell read this deployment's API keys, `~/.aws`
-    # and the GitHub CLI's token, and a workspace tool can send them.
+    # and the GitHub CLI's token, and an offered tool can send them.
     sandbox: str = AUTO
     #: Directories put on the shell's `PATH` ahead of the system's, and readable to it.
     path_extra: tuple[str, ...] = ()
