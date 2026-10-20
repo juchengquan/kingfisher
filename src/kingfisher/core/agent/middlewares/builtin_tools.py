@@ -41,13 +41,24 @@ ABSOLUTE = (
 )
 
 
-#: deepagents' longest `timeout`, which kingfisher leaves at its default.
+#: deepagents' longest `timeout`, which `create_deep_agent` offers no way to lower.
 _LONGEST = (
     inspect.signature(FilesystemMiddleware.__init__).parameters["max_execute_timeout"].default
 )
 
-#: Said on every shell: models passed milliseconds, 5000 to 40000, and each was refused.
-TIMEOUT = f"- `timeout` is in seconds, {_LONGEST:,} at most."
+
+def longest_command(execution_timeout_s: int) -> int:
+    """The longest `timeout` a model may give `execute`.
+
+    The setting, not deepagents' hour: `claim_stale_after` counts on no command outliving
+    it, and one asked to run past the turn's deadline outlived the session's claim.
+    """
+    return min(execution_timeout_s, _LONGEST)
+
+
+def timeout_line(longest: int) -> str:
+    """Said on every shell: models passed milliseconds, 5000 to 40000, and each was refused."""
+    return f"- `timeout` is in seconds, {longest:,} at most, which is also the default."
 
 
 #: How deepagents opens the section of host paths it appends to the system prompt where the
@@ -104,16 +115,41 @@ def hint(path: str) -> str:
     )
 
 
-def _described(tool: Any, rule: str | None) -> Any:
+def _described(tool: Any, rule: str | None, timed: str) -> Any:
     if isinstance(tool, BaseTool) and tool.name == EXECUTE:
-        return tool.model_copy(update={"description": _timed(_ruled(tool.description, rule))})
+        said = _timed(_ruled(tool.description, rule), timed)
+        return tool.model_copy(update={"description": said})
     if isinstance(tool, dict) and tool.get("name") == EXECUTE:
-        return {**tool, "description": _timed(_ruled(tool.get("description") or "", rule))}
+        return {**tool, "description": _timed(_ruled(tool.get("description") or "", rule), timed)}
     return tool
 
 
-def _timed(description: str) -> str:
-    return description if TIMEOUT in description else f"{description}\n{TIMEOUT}"
+def _timed(description: str, timed: str) -> str:
+    return description if timed in description else f"{description}\n{timed}"
+
+
+def _overlong(request: Any, longest: int) -> ToolMessage | None:
+    """The refusal of an `execute` call asking for longer than `longest`, as deepagents'
+    own would read; `None` for any other call."""
+    call = request.tool_call
+    if call.get("name") != EXECUTE:
+        return None
+    asked = (call.get("args") or {}).get("timeout")
+    if asked is None:
+        return None
+    try:
+        seconds = float(asked)
+    except (TypeError, ValueError):
+        # Left to the tool's own schema, which refuses it.
+        return None
+    if seconds <= longest:
+        return None
+    return ToolMessage(
+        content=f"Error: timeout {asked}s exceeds maximum allowed ({longest}s).",
+        name=EXECUTE,
+        tool_call_id=call["id"],
+        status="error",
+    )
 
 
 def _ruled(description: str, rule: str | None) -> str:
@@ -353,8 +389,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     how a missed path is spelt there, and keep deepagents' host paths from a shell that
     is not on this host; have `read_file` read 1,000 lines unless told otherwise, and
     `grep` search each string of `a|b`, and say so; say nothing of the shell or of
-    `write_todos` to a graph not holding it; and have each built-in's description name
-    only the tools the graph holds.
+    `write_todos` to a graph not holding it; have each built-in's description name only
+    the tools the graph holds; and refuse a command asked to run longer than `longest`.
 
     The shell's line goes in the description, not the system prompt: a subagent gets none
     of `system.md`, and the description reaches every graph holding the shell. At
@@ -371,9 +407,12 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         layout: Layout,
         shell: ShellPrompt | None = None,
         *,
+        longest: int,
         here: bool = True,
     ) -> None:
         super().__init__()
+        self._longest = longest
+        self._timed = timeout_line(longest)
         # Whether the shell runs on this host; where not, deepagents' section names paths it
         # does not have.
         self._here = here
@@ -388,7 +427,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         held = {tool_name(tool) for tool in request.tools}
         lines = _held_lines(held)
         tools = [
-            _offered(_described(_naming_held(tool, lines), self._rule)) for tool in request.tools
+            _offered(_described(_naming_held(tool, lines), self._rule, self._timed))
+            for tool in request.tools
         ]
         if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
             request = request.override(tools=tools)
@@ -419,6 +459,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         return await handler(self._told(request))
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        if (refused := _overlong(request, self._longest)) is not None:
+            return refused
         if (parts := _split(request)) is None:
             return self._corrected(request, handler(_limited(request)))
         call = request.tool_call
@@ -431,6 +473,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
+        if (refused := _overlong(request, self._longest)) is not None:
+            return refused
         if (parts := _split(request)) is None:
             return self._corrected(request, await handler(_limited(request)))
         call = request.tool_call

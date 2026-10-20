@@ -72,7 +72,8 @@ while each caller reads every other caller's files as their own.
 ## `CommandRunner` — what runs a shell command
 
 `run(command, timeout=None)` returning a `CommandResult`. For a deployment that
-runs commands somewhere else, or as another user, or with resource limits.
+runs commands somewhere else, or as another user, or with resource limits. Kingfisher's
+own shell always hands it a `timeout`, `KINGFISHER_EXECUTION_TIMEOUT_S` at most.
 
 Supplied to kingfisher's own sessions as a **callable taking the session
 directory**, not an instance: `LocalSessions(runner=lambda session_dir:

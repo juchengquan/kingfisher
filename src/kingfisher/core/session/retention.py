@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from enum import Enum
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,12 @@ class SweepPlan:
     #: How many of `kept` a running turn spared rather than their age, which `kept`
     #: cannot tell apart: blaming age for a busy session contradicts `kingfisher sessions`.
     busy: int = 0
+
+
+class Spared(Enum):
+    """What `discard` answers for a session a turn claimed after the plan named it."""
+
+    BUSY = "busy"
 
 
 def expired(
@@ -49,21 +56,25 @@ def expired(
 
 def apply(
     sweep_plan: SweepPlan,
-    discard: Callable[[str], str | None],
+    discard: Callable[[str], str | Spared | None],
 ) -> SweepResult:
-    """Carry out a plan, one session at a time. `discard` answers a failure, or `None`."""
+    """Carry out a plan, one session at a time. `discard` answers a failure, `BUSY`, or
+    `None`."""
     removed: list[str] = []
     failures: list[str] = []
+    late = 0
     for name in sweep_plan.doomed:
         failure = discard(name)
-        if failure:
+        if failure is Spared.BUSY:
+            late += 1
+        elif failure:
             failures.append(failure)
         else:
             removed.append(name)
 
     return SweepResult(
         removed=tuple(removed),
-        kept=sweep_plan.kept,
-        busy=sweep_plan.busy,
+        kept=sweep_plan.kept + late,
+        busy=sweep_plan.busy + late,
         failures=tuple(failures),
     )

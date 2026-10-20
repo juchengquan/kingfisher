@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from deepagents.backends import LocalShellBackend
+from deepagents.backends.local_shell import DEFAULT_EXECUTE_TIMEOUT
 from deepagents.backends.protocol import ExecuteResponse
 
 from kingfisher.core.agent.prompting import ShellPrompt
@@ -137,6 +138,7 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         *,
         runner: CommandRunner | None = None,
         shell_prompt: ShellPrompt | None = None,
+        timeout: int = DEFAULT_EXECUTE_TIMEOUT,
         **kwargs: Any,
     ) -> None:
         self.confinement = confined
@@ -144,7 +146,10 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         #: What this shell says of itself, which `shell_prompt_of` reads. Set by
         #: `backend_at`, which knows whether the runner is kingfisher's own.
         self.shell_prompt = shell_prompt
-        super().__init__(**kwargs)
+        #: The default and the most a command may ask for: `claim_stale_after` counts on
+        #: no command outliving `execution_timeout_s`, which `backend_at` passes here.
+        self.timeout = timeout
+        super().__init__(timeout=timeout, **kwargs)
 
     @property
     def runs_here(self) -> bool:
@@ -152,13 +157,15 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         return self.runner is None or runs_locally(self.runner)
 
     def execute(self, command: str, *, timeout: int | None = None) -> Any:
+        # Filled in for a runner too, which `None` would leave running for good.
+        bounded = self.timeout if timeout is None else min(timeout, self.timeout)
         if self.runner is None:
-            return super().execute(self.confinement.wrap(command), timeout=timeout)
+            return super().execute(self.confinement.wrap(command), timeout=bounded)
         # A confinement is a prefix naming paths on *this* host: shipped elsewhere, it
         # fails looking like a broken remote shell rather than a wrong prefix.
         outcome = self.runner.run(
             self.confinement.wrap(command) if runs_locally(self.runner) else command,
-            timeout=timeout,
+            timeout=bounded,
         )
         return ExecuteResponse(
             output=outcome.output,

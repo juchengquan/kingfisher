@@ -320,6 +320,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         # The parent's, whose shell is the one this subagent's `execute` runs on.
         backend=backend,
         step_limit=cfg.recursion_limit,
+        execution_timeout_s=cfg.execution_timeout_s,
         trigger=summarizer_trigger(runs),
         recorder=recorder,
         # `None` permits nothing: an empty allowlist, not an absent one.

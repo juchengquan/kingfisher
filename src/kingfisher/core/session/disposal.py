@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from . import retention
-from .retention import SweepResult
+from .retention import Spared, SweepResult
 from .steps import Steps, changing, drive
 
 if TYPE_CHECKING:
@@ -39,7 +39,30 @@ class Disposal:
         # running turn's session, so `plan.busy` can say why nothing was removed.
         idle = retention.expired(entries, age, now)
         plan = retention.expired(entries, age, now, busy=self._busy(idle.doomed, now=now))
-        return retention.apply(plan, lambda session_id: drive(self._discard_steps(session_id)))
+        return retention.apply(
+            plan, lambda session_id: drive(self._swept_steps(session_id, now=now))
+        )
+
+    def _swept_steps(self, session_id: str, *, now: float) -> Steps[str | Spared | None]:
+        """Delete an idle session under its claim, or spare it where a turn holds that."""
+        # Taken, not asked: `held` answering no leaves room for a turn to claim before the
+        # delete, which then removes the session under it.
+        try:
+            claimed = yield changing(
+                self._sessions, "claim", self.cfg, session_id,
+                stale_after=self.cfg.claim_stale_after, now=now,
+            )
+        except Exception:
+            # Removed since the listing, by another sweep or a delete: what was asked.
+            if session_id not in (yield from self._known_steps()):
+                return None
+            raise
+        if claimed is None:
+            return Spared.BUSY
+        try:
+            return (yield from self._discard_steps(session_id))
+        finally:
+            yield changing(self._sessions, "release", self.cfg, session_id, claimed)
 
     def _discard_steps(self, session_id: str) -> Steps[str | None]:
         """Delete the session through its backend; a failure, or None."""

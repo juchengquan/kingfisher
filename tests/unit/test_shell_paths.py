@@ -17,13 +17,14 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.middlewares.builtin_tools import (
     ABSOLUTE,
     MAPPINGS,
-    TIMEOUT,
     BuiltinToolsMiddleware,
     _virtual,
     hint,
     missed,
+    timeout_line,
 )
 from kingfisher.core.agent.prompting import execute_line
+from kingfisher.core.interfaces import CommandResult
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import LocalSessions, ShellPrompt
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
@@ -210,7 +211,7 @@ def test_every_shell_says_its_timeout_is_in_seconds(shelled, shell):
 
     assert len(offered) == 3
     for tools in offered:
-        assert TIMEOUT in _execute(tools)
+        assert timeout_line(cfg.execution_timeout_s) in _execute(tools)
 
 
 def test_a_miss_on_a_shell_kingfisher_does_not_run_is_left_as_it_was(shelled):
@@ -315,7 +316,7 @@ def _asked(way: str, request: Any) -> Any:
     while the same change to its sync twin reddened the rules above.
     """
     asked: list[Any] = []
-    middleware = BuiltinToolsMiddleware(Layout(), kingfishers_shell(), here=False)
+    middleware = BuiltinToolsMiddleware(Layout(), kingfishers_shell(), longest=120, here=False)
     if way == "sync":
         middleware.wrap_model_call(request, asked.append)
         return asked[0]
@@ -393,7 +394,7 @@ def _answered(way: str, name: str, result: Any) -> Any:
     nothing: making `awrap_tool_call` return the result uncorrected left the whole suite
     green, while the same change to its sync twin reddened the rules above.
     """
-    middleware = BuiltinToolsMiddleware(Layout(), kingfishers_shell())
+    middleware = BuiltinToolsMiddleware(Layout(), kingfishers_shell(), longest=120)
     request = Call(tool_call={"name": name, "args": {}, "id": "c1"})
     if way == "sync":
         return middleware.wrap_tool_call(request, lambda _: result)
@@ -459,7 +460,7 @@ def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name(way):
     )
 
     assert told == [
-        {"name": "execute", "description": f"Run a command.\n\n{rule}\n{TIMEOUT}"},
+        {"name": "execute", "description": f"Run a command.\n\n{rule}\n{timeout_line(120)}"},
         {"name": "read_file", "description": "Read a file."},
     ]
 
@@ -482,11 +483,11 @@ def test_a_shell_that_says_it_starts_in_the_session_is_corrected_whoever_said_it
     request = Call(tool_call={"name": "execute", "args": {}, "id": "c1"})
     starts_there = replace(THEIRS, starts_in_session=True)
 
-    corrected = BuiltinToolsMiddleware(Layout(), starts_there).wrap_tool_call(
+    corrected = BuiltinToolsMiddleware(Layout(), starts_there, longest=120).wrap_tool_call(
         request, lambda _: ToolMessage(MISSED, tool_call_id="c1")
     )
     # The control: the same shell, not saying it.
-    left = BuiltinToolsMiddleware(Layout(), THEIRS).wrap_tool_call(
+    left = BuiltinToolsMiddleware(Layout(), THEIRS, longest=120).wrap_tool_call(
         request, lambda _: ToolMessage(MISSED, tool_call_id="c1")
     )
 
@@ -505,3 +506,85 @@ def test_a_result_the_shell_could_not_have_returned_is_handed_back_untouched(way
 
     command = Command(update={"messages": []})
     assert _answered(way, "execute", command) is command
+
+
+# -- how long a command may ask to run -------------------------------------
+
+
+def _asking(seconds: int) -> AIMessage:
+    return _calls(("execute", {"command": "touch ran", "timeout": seconds}, "x1"))
+
+
+@pytest.mark.parametrize("graph", ["agent", "checker", "general-purpose"])
+def test_no_graph_runs_a_command_asking_for_longer_than_the_setting(shelled, way, graph):
+    """deepagents let `execute` ask for up to an hour whatever the setting, so a command
+    started near the deadline outlived the claim `claim_stale_after` sized to it."""
+    cfg, _ = shelled
+    bounded = replace(cfg, execution_timeout_s=1)
+    held = 1 if graph == "agent" else 2
+    if graph == "agent":
+        script: tuple[AIMessage, ...] = (_asking(5), AIMessage("done"))
+    else:
+        asked = {"description": "check", "subagent_type": graph}
+        script = (_calls(("task", asked, "t1")), _asking(5), AIMessage("x"), AIMessage("done"))
+    Scripted.script.extend(script)
+    kf = Kingfisher(bounded, sessions=LocalSessions())
+    turn = Request("go", agent="only", session_id="s")
+    if way == "sync":
+        kf.run(turn)
+    else:
+        asyncio.run(kf.arun(turn))
+
+    (said,) = [m for m in Scripted.heard[held] if isinstance(m, ToolMessage)][-1:]
+    assert said.status == "error"
+    assert "exceeds maximum allowed (1s)" in said.text
+    assert not (bounded.sessions_root / "s" / "ran").exists()
+
+
+def test_a_command_asking_for_the_setting_itself_runs(shelled):
+    """The control: a refusal of every `timeout` would pass the rule above."""
+    cfg, _ = shelled
+    Scripted.script.extend((_asking(cfg.execution_timeout_s), AIMessage("done")))
+
+    Kingfisher(cfg, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
+
+    assert (cfg.sessions_root / "s" / "ran").exists()
+
+
+def test_execute_is_told_the_setting_as_its_longest(shelled):
+    """The description said 3,600 seconds while the setting was what a command ran for."""
+    cfg, offered = shelled
+    bounded = replace(cfg, execution_timeout_s=7)
+
+    _run(bounded, AIMessage("done"))
+
+    assert timeout_line(7) in _execute(offered[0])
+
+
+@dataclass
+class Timed:
+    """A runner keeping the timeout each command was handed."""
+
+    handed: list[int | None] = field(default_factory=list)
+
+    @property
+    def local(self) -> bool:
+        return True
+
+    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+        self.handed.append(timeout)
+        return CommandResult(output="", exit_code=0, truncated=False)
+
+
+def test_kingfishers_shell_hands_no_runner_more_than_the_setting(cfg):
+    """A runner was handed whatever `timeout` arrived, or `None`, which a fence's
+    `subprocess.run` reads as no bound at all."""
+    runner = Timed()
+    start(cfg, "s")
+    shell = LocalSessions(runner=lambda _where: runner).open(cfg, "s").default
+
+    shell.execute("true")
+    shell.execute("true", timeout=cfg.execution_timeout_s + 100)
+    shell.execute("true", timeout=1)
+
+    assert runner.handed == [cfg.execution_timeout_s, cfg.execution_timeout_s, 1]

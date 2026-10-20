@@ -134,6 +134,7 @@ def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
             layout=cfg.layout,
             backend=None,
             step_limit=cfg.recursion_limit,
+            execution_timeout_s=cfg.execution_timeout_s,
             trigger=170_000,
             **given,
         )
@@ -153,6 +154,7 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
         layout=cfg.layout,
         backend=backend_at(cfg, session_dir),
         step_limit=cfg.recursion_limit,
+        execution_timeout_s=cfg.execution_timeout_s,
         trigger=170_000,
         tools=("read_file",),
     )
