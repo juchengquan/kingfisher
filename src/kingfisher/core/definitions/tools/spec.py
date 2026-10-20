@@ -1,4 +1,4 @@
-"""What a tool is, seen from the domain: what its file wrote, and what the loader found."""
+"""What a tool is, as a definition: what its file wrote, and what the loader found."""
 
 from __future__ import annotations
 

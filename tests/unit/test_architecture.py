@@ -404,11 +404,6 @@ def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
     )
 
 
-#: Everything in this repository that may import kingfisher, not only the package
-#: and its tests: a tree outside those two is the last place anyone thinks to look
-#: after a move here.
-
-
 #: The trees this repository keeps Python in. One list, because two rules read it and
 #: a second copy is a second thing to keep in step. `assets` is apart from
 #: them: it imports kingfisher only through the front door, as a deployment's own tool
@@ -725,8 +720,8 @@ def test_the_dangling_import_rule_can_tell_a_gone_module_from_a_real_one():
 
 
 def test_the_trees_outside_the_package_are_in_scope():
-    """`assets/` is where a move once broke, in a tree outside the package, and the
-    rule is worth nothing if it stops looking outside `src/` and `tests/`.
+    """A dangling-import rule that stopped reading `evals/` and `spikes/`, which a move in
+    `src/` would then break with nothing red.
     """
     scanned = {p.relative_to(REPO).parts[0] for p in _everything_that_imports_kingfisher()}
     assert {"evals", "spikes"} <= scanned, (
@@ -1466,7 +1461,7 @@ def test_a_subpackage_is_judged_by_its_own_area():
     # name the runtime without the rest of `core/definitions` inheriting the permission.
     assert _area_of(KINDS_DIR / "skills" / "registry.py") == "core/definitions/skills"
     # And the folder over them is an area of its own, so a kind that arrives
-    # without an entry is judged by `kinds` -- which grants only `yaml` -- rather
+    # without an entry is judged by `core/definitions` -- which grants only `yaml` -- rather
     # than by the longest prefix happening to be the package root.
     assert _area_of(KINDS_DIR / "importing.py") == "core/definitions"
     assert _area_of(SRC / "__init__.py") == ""
@@ -3235,11 +3230,11 @@ def test_the_catalogue_holds_one_module_per_kind():
 
     assert not missing, (
         f"{missing} is a kind the catalogue reads with no module of its own -- "
-        "each kind owns a directory under `kinds/` holding its `catalogue`"
+        "each kind owns a directory under `core/definitions/` holding its `catalogue`"
     )
 
 
-#: What sits in `kinds/` and is not a kind. `importing` loads a workspace's own
+#: What sits in `core/definitions/` and is not a kind. `importing` loads a workspace's own
 #: Python without putting it on the import path, and the kind catalogues that load
 #: Python read it; `documents` reads the YAML the agent and subagent formats are
 #: written in; `fields` reads one decoded field as the value the format meant, for
@@ -3257,7 +3252,7 @@ KINDS_HELPERS = frozenset(
 
 
 def _kinds_directory_contents(root: Path) -> tuple[frozenset[str], frozenset[str]]:
-    """The directories and the loose modules in a `kinds/` directory.
+    """The directories and the loose modules in a `core/definitions/` directory.
 
     `root` is a parameter so the reporting can be tested against a tree built wrong on
     purpose, rather than by waiting for this one to go wrong.
@@ -3293,12 +3288,12 @@ def test_kinds_holds_exactly_the_kinds():
     directories, modules = _kinds_directory_contents(KINDS_DIR)
 
     assert directories == set(DEFINITION_KINDS), (
-        f"kinds/ holds {sorted(directories)} where DEFINITION_KINDS names "
+        f"core/definitions/ holds {sorted(directories)} where DEFINITION_KINDS names "
         f"{sorted(DEFINITION_KINDS)} -- a directory here is a kind, or it belongs "
         "somewhere that is not this folder"
     )
     assert modules == KINDS_HELPERS, (
-        f"kinds/ holds the loose modules {sorted(modules)} rather than "
+        f"core/definitions/ holds the loose modules {sorted(modules)} rather than "
         f"{sorted(KINDS_HELPERS)} -- a helper the kinds share is the thing they "
         "duplicate to avoid, so adding one means editing that set and saying why "
         "this one is different"
