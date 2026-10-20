@@ -1223,12 +1223,7 @@ def test_the_warning_and_the_remedy_name_the_same_missing_piece(cfg, monkeypatch
 
 
 def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
-    """"confined" was true and unhelpful.
-
-    Asserted against `_mechanism` rather than a real `examine`, because the confined
-    branch is only reachable on a host with `sandbox-exec`, and a test that quietly
-    asserts nothing on the CI runner is worse than no test.
-    """
+    """"confined" was true and unhelpful."""
     from kingfisher.plugins.sessions.sandbox.confinement import Confinement, _unwrapped
 
     assert health_isolation._mechanism(Confinement(wrap=lambda c: c, mechanism="sandbox-exec")) == (
@@ -1241,6 +1236,17 @@ def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
     said = health_isolation._mechanism(Confinement(wrap=_unwrapped, mechanism="bubblewrap"))
     assert "bubblewrap" in said
     assert "no network" in said
+
+
+@pytest.mark.parametrize("mechanism", ("sandbox-exec", *LINUX_FENCES), ids=str)
+def test_the_confined_row_names_the_mechanism(cfg, monkeypatch, mechanism):
+    """A row saying only "confined", with `_mechanism` still right, kept every test green."""
+    _fenced_by(monkeypatch, mechanism)
+
+    check = _row(examine(cfg), "shell")
+
+    assert check is not None and check.verdict == "ok"
+    assert mechanism in check.detail
 
 
 def test_the_doctor_says_which_answer_it_is_giving(cfg):

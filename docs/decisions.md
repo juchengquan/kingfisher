@@ -3740,7 +3740,7 @@ relocated path, because resolving a catalogue *created* its directory, so a mist
 said `0 defined` as a fresh workspace does; it went when a start stopped making the folder
 and began refusing a missing one. The other said a configuration was being ignored, which
 needed `examine` to take the inventory rather than build one agreeing with `cfg` by
-construction. Its premise was `Kingfisher(catalogue=)`; once #784 removed that, `doctor`'s
+construction. Its premise was `Kingfisher(catalogue=)`; once #798 removed that, `doctor`'s
 inventory and `cfg` read the one folder, and the row could not fire -- breaking it turned
 red only a test handing `examine` an inventory built by hand. Removed rather than kept
 guarding nothing. `examine` still takes the inventory, so the header `doctor` prints and
