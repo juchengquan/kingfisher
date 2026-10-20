@@ -79,7 +79,6 @@ def keep_ledger(
     ledger: Ledger,
     *,
     summarised: bool,
-    tool_results_route: str,
 ) -> Steps[tuple[LedgerEntry, ...]]:
     """Keep this turn's entries, and say where each result is now.
 
@@ -87,7 +86,7 @@ def keep_ledger(
 
     The ledger is written after every result file and before the conversation, so a
     row never names a missing file and a result the conversation shows always has a
-    row. The sweep follows it, because until then a row may name a file it removes.
+    row.
     """
     entries = yield from _repointed(files, ledger.entries)
     yield from write_ledger(
@@ -98,12 +97,27 @@ def keep_ledger(
         resumed=ledger.resumed,
         summarised=summarised,
     )
+    return entries
+
+
+def sweep_results(
+    files: Any,
+    ledger: Ledger,
+    entries: tuple[LedgerEntry, ...],
+    *,
+    tool_results_route: str,
+) -> Steps[None]:
+    """Remove the result files no row names, once the conversation is written.
+
+    After the transcript, not the ledger: a file the sweep removes may still be named by
+    the conversation the turn is about to write, and a crash between the two leaves that
+    conversation naming a file that has gone.
+    """
     yield from _swept(
         files,
         ledger.earlier.paths | {e.path for e in entries if e.path},
         tool_results_route=tool_results_route,
     )
-    return entries
 
 
 def _offloaded_under(files: Any) -> str:

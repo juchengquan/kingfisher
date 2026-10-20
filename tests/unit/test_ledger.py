@@ -491,7 +491,7 @@ def test_an_offloaded_result_is_pointed_at_deepagents_copy(ledgered):
 
 
 class _Ordered(LocalSessions):
-    """Kingfisher's own backends, noting every file written through one, in order."""
+    """Kingfisher's own backends, noting every file written or deleted through one, in order."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -506,6 +506,13 @@ class _Ordered(LocalSessions):
             return upload(files)
 
         opened.upload_files = noted
+        delete = opened.delete
+
+        def deleted(path):
+            self.written.append(f"deleted {path}")
+            return delete(path)
+
+        opened.delete = deleted
         return opened
 
     def at(self, name: str) -> int:
@@ -528,6 +535,25 @@ def test_results_are_written_before_the_ledger_and_the_ledger_before_the_transcr
 
     assert backends.at("A-0001-web_search.txt") < backends.at(LEDGER_FILE)
     assert backends.at(LEDGER_FILE) < backends.at(TRANSCRIPT_FILE)
+
+
+def test_a_result_file_is_swept_only_once_the_transcript_is_written(ledgered):
+    """Swept before it, a crash between the two leaves the conversation the next turn is
+    rebuilt from naming a file that has gone.
+    """
+    stray = _session(ledgered) / SCRATCH / TOOL_RESULTS / "A-0007-web_search.txt"
+    stray.parent.mkdir(parents=True, exist_ok=True)
+    stray.write_text("from a turn that died", encoding="utf-8")
+    backends = _Ordered()
+    _run(
+        ledgered,
+        _calls(("web_search", {"query": "EV"}, "c1")),
+        AIMessage(content="done"),
+        kf=Kingfisher(ledgered, sessions=backends),
+    )
+
+    assert not stray.exists(), "the stray file was never swept"
+    assert backends.at(TRANSCRIPT_FILE) < backends.at("A-0007-web_search.txt")
 
 
 def test_a_paused_turn_keeps_its_rows_before_its_state(ledgered):
