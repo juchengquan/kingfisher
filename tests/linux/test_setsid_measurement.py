@@ -94,13 +94,43 @@ def _reaped(command: str) -> str:
     return f"{shlex.quote(sys.executable)} -I -c {shlex.quote(REAPER)} {shlex.quote(command)}"
 
 
+def _mark(session: Path) -> Path:
+    return session / DEFAULT_LAYOUT.scratchpad / f"mark-{time.monotonic_ns()}"
+
+
 def _survives(runner, session: Path, command: str, *, reaped: bool, timeout: int = 20) -> bool:
     """Whether what `command` started wrote its mark after the run had returned."""
-    mark = session / DEFAULT_LAYOUT.scratchpad / f"mark-{time.monotonic_ns()}"
+    mark = _mark(session)
     inner = f"export M={shlex.quote(str(mark))}\n{command}"
     runner.run(_reaped(inner) if reaped else inner, timeout=timeout)
     time.sleep(3)
     return mark.exists()
+
+
+def _unkilled(runner, session: Path, command: str) -> tuple[bool, str]:
+    """The control: the same command under the same Landlock policy, launched with no
+    group kill at all. Without the mark here, a `killed` above means nothing ran."""
+    import importlib
+    import subprocess
+
+    # By name: the wheel is Linux-only, and this file is type-checked on macOS too.
+    confine = importlib.import_module("sandlock").confine
+
+    mark = _mark(session)
+    inner = f"export M={shlex.quote(str(mark))}\n{command.replace('>/dev/null 2>&1', '')}"
+    done = subprocess.run(  # noqa: S602 -- the control, deliberately not killed
+        inner,
+        shell=True,
+        cwd=runner.cwd,
+        env=runner.env,
+        preexec_fn=lambda: confine(runner.policy),
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    time.sleep(3)
+    return mark.exists(), (done.stdout + done.stderr).strip()[-200:]
 
 
 def _said(survived: bool) -> str:
@@ -113,14 +143,16 @@ def test_measure_setsid_escapes_under_landlock(tmp_path):
 
     session = ensure_session_layout(tmp_path / "sessions" / "s", DEFAULT_LAYOUT)
     runner = _runner(session)
-    lines = []
+    lines = [f"found: {runner.run('command -v setsid perl python3', timeout=20).output!r}"]
     for name, command in ESCAPES.items():
+        wrote, said = _unkilled(runner, session, command)
         plain = _survives(runner, session, command, reaped=False)
         at_exit = _survives(runner, session, command, reaped=True)
         # The launcher is the group's leader, so a timeout's SIGKILL reaches it too.
         at_timeout = _survives(runner, session, f"{command}\nsleep 30", reaped=True, timeout=1)
         lines.append(
-            f"{name}: plain {_said(plain)}; reaper, command ends {_said(at_exit)}; "
+            f"{name}: control, never killed {'MARK WRITTEN' if wrote else 'NO MARK'} "
+            f"({said!r}); plain {_said(plain)}; reaper, command ends {_said(at_exit)}; "
             f"reaper, command times out {_said(at_timeout)}"
         )
     lines.append(_cost(runner))
