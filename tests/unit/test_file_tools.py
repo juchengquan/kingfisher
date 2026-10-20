@@ -32,11 +32,11 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
     REGEX,
     SEARCHING,
     SEPARATELY,
-    TIMEOUT,
     WHOLE,
     WRITE_FILE,
     BuiltinToolsMiddleware,
     alternatives,
+    timeout_line,
 )
 from kingfisher.core.agent.prompting import EXECUTE, execute_line
 from kingfisher.core.layout import DEFAULT_LAYOUT
@@ -244,7 +244,7 @@ def test_execute_holding_no_search_or_read_tool_loses_the_line_whole(reading):
         assert name not in said, name
     assert "-" not in [line.strip() for line in said.splitlines()]
     assert "\n\n\n" not in said
-    assert TIMEOUT in said
+    assert timeout_line(reading[0].execution_timeout_s) in said
 
 
 @pytest.mark.parametrize("grant", ["[grep, execute]", "[grep]"])
@@ -328,7 +328,8 @@ def test_an_unrestricted_graph_is_told_what_deepagents_says_but_the_false_claim(
     assert len(offered) == 3
     for tools in offered:
         said = {getattr(tool, "name", None): tool.description for tool in tools}
-        assert said[EXECUTE] == f"{EXECUTE_TOOL_DESCRIPTION.replace(ABSOLUTE, rule)}\n{TIMEOUT}"
+        timed = timeout_line(cfg.execution_timeout_s)
+        assert said[EXECUTE] == f"{EXECUTE_TOOL_DESCRIPTION.replace(ABSOLUTE, rule)}\n{timed}"
         assert said[GREP] == GREP_TOOL_DESCRIPTION.replace(SEPARATELY, JOINED)
         assert said[LS] == LIST_FILES_TOOL_DESCRIPTION
         assert said[WRITE_FILE] == WRITE_FILE_TOOL_DESCRIPTION.strip()

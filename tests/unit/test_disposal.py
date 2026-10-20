@@ -160,6 +160,120 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     assert (cfg.workspace / "sessions" / busy).exists()
 
 
+class ClaimedRightAfterTheCheck(LocalSessions):
+    """A turn that claims its session the instant a sweep has asked whether it is held."""
+
+    tokens: list[str | None]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tokens = []
+
+    def held(self, cfg, session_id, /, *, stale_after, now=None):
+        answer = super().held(cfg, session_id, stale_after=stale_after, now=now)
+        # Once: `claim` asks `held` of a slot it finds taken.
+        if not self.tokens:
+            self.mark_used(cfg, session_id)
+            self.tokens.append(self.claim(cfg, session_id, stale_after=stale_after))
+        return answer
+
+
+def test_a_turn_claiming_after_the_sweep_asked_keeps_its_session(cfg):
+    """`reap` asked `held` and then deleted unclaimed, so a turn claiming between the two
+    had its session removed mid-turn."""
+    import os
+    import time
+
+    sessions = ClaimedRightAfterTheCheck()
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=sessions)
+    session = start(cfg, "s")
+    directory = cfg.workspace / "sessions" / session
+    stale = time.time() - 10_000
+    os.utime(directory, (stale, stale))
+
+    result = kf.reap(older_than_seconds=1.0, now=time.time())
+
+    assert sessions.tokens and sessions.tokens[0] is not None, "the turn took its claim"
+    assert result.removed == ()
+    assert (result.kept, result.busy) == (1, 1), "spared as busy, not as young"
+    assert directory.exists()
+    assert sessions.held(cfg, session, stale_after=cfg.claim_stale_after)
+
+
+def test_a_sweep_gives_back_the_claim_it_took_when_the_delete_fails(cfg, monkeypatch):
+    """A sweep's own claim left behind would lock a session it could not remove out of
+    every turn until the claim went stale."""
+    import os
+    import time
+
+    monkeypatch.setattr(LocalSessions, "delete", Stuck.delete)
+    kf = service(cfg)
+    session = start(cfg, "s")
+    stale = time.time() - 10_000
+    os.utime(cfg.workspace / "sessions" / session, (stale, stale))
+
+    result = kf.reap(older_than_seconds=1.0, now=time.time())
+
+    assert result.failures
+    assert not _claim(cfg, session).exists()
+
+
+class RemovedFirst(LocalSessions):
+    """Another sweep removing the session between this one's listing and its claim."""
+
+    def claim(self, cfg, session_id, /, *, stale_after, now=None):
+        self.delete(cfg, session_id)
+        return super().claim(cfg, session_id, stale_after=stale_after, now=now)
+
+
+class Unclaimable(LocalSessions):
+    def claim(self, cfg, session_id, /, *, stale_after, now=None):
+        msg = "the lock store is down"
+        raise OSError(msg)
+
+
+def test_a_session_another_sweep_removed_first_does_not_stop_this_one(cfg):
+    """Its claim fails for want of the session, which is what a sweep was after; raised,
+    it ended the sweep for every session after it."""
+    import os
+    import time
+
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=RemovedFirst())
+    stale = time.time() - 10_000
+    for name in ("a", "b"):
+        os.utime(cfg.workspace / "sessions" / start(cfg, name), (stale, stale))
+
+    result = kf.reap(older_than_seconds=1.0, now=time.time())
+
+    assert sorted(result.removed) == ["a", "b"]
+    assert result.failures == ()
+
+
+def test_claiming_a_session_that_is_gone_does_not_make_it_again(cfg):
+    """A claim making its `.harness` with its parents would leave a session deleted under
+    a starting turn listed again, holding nothing but the claim."""
+    start(cfg, "kept")
+
+    with pytest.raises(FileNotFoundError):
+        LocalSessions().claim(cfg, "gone", stale_after=60)
+    assert not (cfg.workspace / "sessions" / "gone").exists()
+
+
+def test_a_claim_that_fails_on_a_session_still_there_is_raised(cfg):
+    """The control: a sweep that read every failed claim as a removal would delete
+    nothing and report every session gone."""
+    import os
+    import time
+
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=Unclaimable())
+    stale = time.time() - 10_000
+    os.utime(cfg.workspace / "sessions" / start(cfg, "s"), (stale, stale))
+
+    with pytest.raises(OSError, match="lock store"):
+        kf.reap(older_than_seconds=1.0, now=time.time())
+    assert (cfg.workspace / "sessions" / "s").exists()
+
+
 def test_the_rule_itself_keeps_what_is_busy():
     """The domain half, without a filesystem."""
     entries = (("a", 0.0), ("b", 0.0))

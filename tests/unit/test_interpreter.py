@@ -377,7 +377,7 @@ def test_a_tool_taking_the_turns_backend_still_gets_it_from_code(cfg, session_di
     [("write_file", "writeFile"), ("peek", "peek")],
 )
 def test_a_gated_tool_is_out_of_reach_from_code(cfg, session_dir, gated, spelled):
-    """Under `interrupt_on: [write_file]` a `tools.writeFile` from `eval` wrote with no
+    """Under `interrupt_on: [write_file]` a `tools.writeFile(...)` from `eval` wrote with no
     pause: the gate reads the model's tool calls, and a call from code is never one.
     """
     wired = replace(cfg, interpreter_enabled=True)

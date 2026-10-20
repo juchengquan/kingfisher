@@ -463,6 +463,7 @@ def stack(cfg, session_dir, paths):
         layout=cfg.layout,
         backend=backend_at(cfg, session_dir),
         budget=StepBudget(cfg.recursion_limit),
+        execution_timeout_s=cfg.execution_timeout_s,
         trigger=170_000,
     )
 
@@ -517,6 +518,7 @@ def _stack_around(cfg, session_dir, paths, inner):
         layout=cfg.layout,
         backend=backend_at(cfg, session_dir),
         budget=StepBudget(cfg.recursion_limit),
+        execution_timeout_s=cfg.execution_timeout_s,
         trigger=170_000,
         inner=inner,
     )
