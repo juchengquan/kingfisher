@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import anthropic
 import httpx
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
@@ -31,6 +32,23 @@ class APITimeoutError(Exception):
     """Named as both SDKs name theirs, which is all `unavailable` reads of it."""
 
 
+def streamed(kind: str, message: str = "Overloaded") -> anthropic.APIStatusError:
+    """What the anthropic SDK raises for an `error` event inside a stream that began as a
+    200: the SDK's own class, so a change to how it sets `type` lands here."""
+    body = {"type": "error", "error": {"type": kind, "message": message}}
+    response = httpx.Response(200, request=httpx.Request("POST", "https://api.invalid"))
+    return anthropic.APIStatusError(str(body), response=response, body=body)
+
+
+class StreamedError(Exception):
+    """A 200 stream's error carrying its type only in the body, as an SDK may leave it."""
+
+    def __init__(self, kind: Any) -> None:
+        super().__init__("in the stream")
+        self.status_code = 200
+        self.body = {"type": "error", "error": {"type": kind, "message": "busy"}}
+
+
 def _chained() -> Exception:
     """An SDK's error under langchain's re-raise of it, as `raise ... from` leaves them."""
     wrapped = RuntimeError("langchain's own")
@@ -51,22 +69,31 @@ def _chained() -> Exception:
         (ConnectionResetError(), "the connection to the provider failed"),
         (_chained(), "429: quota"),
         (ModelUnavailableError("said already"), "said already"),
+        (streamed("overloaded_error"), "overloaded_error: Overloaded"),
+        (streamed("api_error", "Internal server error"), "api_error: Internal server error"),
+        (streamed("rate_limit_error", "quota"), "rate_limit_error: quota"),
+        (StreamedError("overloaded_error"), "overloaded_error: busy"),
     ],
     ids=["429", "503", "529", "sdk-timeout", "httpx-timeout", "timeout", "httpx-connect",
-         "connection-reset", "chained", "own"],
+         "connection-reset", "chained", "own", "streamed-overloaded", "streamed-api",
+         "streamed-rate-limit", "streamed-body-only"],
 )
 def test_a_failure_that_may_pass_is_named_with_the_providers_words(exc, why):
     """A 429 or 5xx, a timeout or a dropped connection, from either SDK or httpx under
-    them, and through the cause langchain re-raises it from."""
+    them, and through the cause langchain re-raises it from; and Anthropic's error sent
+    inside a 200 stream, which read as a 200 and killed the turn with a traceback."""
     assert unavailable(exc) == why
 
 
 @pytest.mark.parametrize(
-    "exc", [RefusedError(400), RefusedError(401), ValueError("a bug")], ids=["400", "401", "bug"]
+    "exc",
+    [RefusedError(400), RefusedError(401), ValueError("a bug"),
+     streamed("invalid_request_error"), StreamedError(["overloaded_error"])],
+    ids=["400", "401", "bug", "streamed-invalid", "streamed-unhashable"],
 )
 def test_a_failure_that_will_not_pass_is_left_alone(exc):
-    """The control: a 401 is a configuration error, a 400 fails the same way again, and a
-    bug keeps its traceback."""
+    """The control: a 401 is a configuration error, a 400 fails the same way again, a
+    bug keeps its traceback, and so does a stream's error of any other type."""
     assert unavailable(exc) is None
 
 
@@ -178,6 +205,16 @@ def test_the_stop_says_what_the_provider_said(refusing):
     (said,) = [one.text for one in events if one.kind == "cut_short"]
     assert "429: Token Plan limit reached" in said
     assert "run it again on this session" in said
+
+
+@pytest.mark.parametrize("way", ["sync", "async"])
+def test_an_overload_inside_a_stream_stops_the_turn_rather_than_raising(refusing, way):
+    """Anthropic's `overloaded_error` sent after a 200 escaped `run` as the SDK's
+    exception, because its status read as a success."""
+    result = _turn(refusing, streamed("overloaded_error"), way=way)
+
+    assert result.stop_reason == "model_unavailable"
+    assert not result.completed
 
 
 def test_a_failure_that_will_not_pass_still_raises(refusing):

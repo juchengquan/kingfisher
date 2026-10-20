@@ -31,6 +31,14 @@ replaced the four layers began.
   and call its `measure(graph)` once the agent's graph is compiled. Unmeasured, it
   assumes three steps a call.
 
+## An overload inside a stream stops the turn, after #999
+
+- **A turn can end with `stop_reason: model_unavailable` on an error Anthropic sends
+  after a response has begun**: an `overloaded_error`, `api_error` or
+  `rate_limit_error` that escaped `run` and `stream` as the SDK's `APIStatusError`
+  with status 200. The `cut_short` event names the type and the provider's message.
+  Any other type sent that way still raises.
+
 ## Definitions refuse what would have loaded wrong, after #994
 
 - **A key written twice in one YAML mapping is refused**, at any depth, in an agent or
