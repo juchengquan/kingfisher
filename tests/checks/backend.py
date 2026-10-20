@@ -10,12 +10,20 @@ files and run commands, which a library should not do at a build.
 
 from __future__ import annotations
 
+import os
+import threading
+import time
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from deepagents.backends import CompositeBackend
 
-from kingfisher.plugins import HostPathError, unrouted_denials, why_no_shell
+from kingfisher.plugins import (
+    HostPathError,
+    scratch_runs_of,
+    unrouted_denials,
+    why_no_shell,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -184,10 +192,78 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
         raise AssertionError(msg) from refused
 
 
+def scratch_runs(make: Callable[[], Any]) -> None:
+    """What an offered tool is promised of a run, where a backend offers one at all.
+
+    Optional, so a backend with no `run_in_scratch` is asked nothing; found the way the
+    middleware finds it, through `scratch_runs_of`, since a composite forwards no method
+    of its own and asked alone would let kingfisher's backend skip every line below.
+
+    The outputs a run makes come back and the rest are named; nothing of this process's
+    environment reaches the command; a link left as an output is not followed, since the
+    files are read where no fence stands; `timeout` ends a run that would not; and so
+    does `stop`, which `arun` sets when its caller is cancelled. The link is made before
+    it is judged: a shell with no `ln` would pass that line having tried nothing.
+    """
+    _, backend = make()
+    run = scratch_runs_of(backend)
+    if run is None:
+        return
+    body = uuid4().hex
+
+    ran = run(
+        ["/bin/sh", "-c", "cat in.txt > out.txt"],
+        {"in.txt": body.encode()},
+        outputs=["out.txt", "never.txt"],
+    )
+    if ran.error is not None or ran.files.get("out.txt") != body.encode():
+        msg = (
+            f"a run did not bring back the file it made: error {ran.error!r}, files "
+            f"{sorted(ran.files)!r}, output {ran.output!r}"
+        )
+        raise AssertionError(msg)
+    if "never.txt" not in ran.missing:
+        msg = "an output the command never made is not named in `missing`"
+        raise AssertionError(msg)
+
+    canary = f"KINGFISHER_CONTRACT_{body}"
+    os.environ[canary] = body
+    try:
+        seen = run(["/usr/bin/env"], {}, outputs=[]).output
+    finally:
+        del os.environ[canary]
+    if body in seen or "KINGFISHER_SKILLS" in seen:
+        msg = f"a run's command saw an environment it was not given: {seen!r}"
+        raise AssertionError(msg)
+
+    linked = run(["/bin/ln", "-s", "/etc/hosts", "out.txt"], {}, outputs=["out.txt"])
+    if linked.exit_code != 0:
+        msg = f"the command could not make a link to test: {linked.output!r}"
+        raise AssertionError(msg)
+    if "out.txt" in linked.files:
+        msg = (
+            "an output that is a link was followed, and what it names read in the "
+            "process outside the fence; open outputs refusing links"
+        )
+        raise AssertionError(msg)
+
+    for how, keywords, stop in (
+        ("timeout=1", {"timeout": 1}, None),
+        ("a stop set after half a second", {}, threading.Event()),
+    ):
+        if stop is not None:
+            threading.Timer(0.5, stop.set).start()
+        started = time.monotonic()
+        run(["/bin/sleep", "30"], {}, outputs=[], stop=stop, **keywords)
+        if time.monotonic() - started > 10:
+            msg = f"a run of `sleep 30` given {how} ran on past it"
+            raise AssertionError(msg)
+
+
 #: Every check a backend a deployment's `open` returned must pass, in the order a
 #: deployment wants to read them: the silent failure first, then the one that stops
 #: the graph building, then the promises the prompt makes, then what the shell must
-#: not write, then the refusal.
+#: not write, then the refusal, then what a tool's run is promised.
 BACKEND_CHECKS: tuple[Callable[[Callable[[], Any]], None], ...] = (
     execution_support,
     route_coverage,
@@ -195,6 +271,7 @@ BACKEND_CHECKS: tuple[Callable[[Callable[[], Any]], None], ...] = (
     offloads_in_the_scratchpad,
     shell_denied,
     host_path_refusal,
+    scratch_runs,
 )
 
 

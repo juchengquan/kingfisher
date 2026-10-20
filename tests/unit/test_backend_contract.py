@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import inspect
+import os
 import re
 from dataclasses import replace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from deepagents.backends import CompositeBackend
-from deepagents.backends.protocol import ReadResult, WriteResult
+from deepagents.backends.protocol import BackendProtocol, ReadResult, WriteResult
 
 from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH_ROUTE, Layout
-from kingfisher.plugins import LocalSessions
+from kingfisher.plugins import LocalSessions, ScratchRun, scratch_runs_of
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from tests.checks import backend as backend_kit
 from tests.checks.backend import (
@@ -22,6 +23,7 @@ from tests.checks.backend import (
     host_path_refusal,
     offloads_in_the_scratchpad,
     route_coverage,
+    scratch_runs,
 )
 
 
@@ -250,3 +252,50 @@ def test_the_kit_is_run_against_the_real_tree_not_a_composite_of_its_own(cfg, se
 
     assert isinstance(real, WorkspaceScopedBackend)
     assert "/inputs/" in real.routes
+
+
+# -- a tool's runs ---------------------------------------------------------------
+
+
+def test_the_run_check_is_asked_of_kingfishers_own_backend(cfg, session_dir):
+    """`scratch_runs` asks nothing of a backend without the method, so the kit passing
+    says nothing unless kingfisher's own backend is found to have one -- behind the
+    composite it is, which forwards no method of its own."""
+    assert scratch_runs_of(backend_at(cfg, session_dir)) is not None
+
+
+class _Wrong:
+    """A backend whose run is kingfisher's own but for one promise, broken by `kind`."""
+
+    def __init__(self, cfg, session_dir, kind: str) -> None:
+        self._real = backend_at(cfg, session_dir).default
+        self._kind = kind
+
+    def run_in_scratch(self, argv, files, *, outputs, timeout=None, stop=None) -> ScratchRun:
+        if self._kind == "brings nothing back":
+            return ScratchRun(exit_code=0)
+        if self._kind == "leaks the environment" and argv == ["/usr/bin/env"]:
+            seen = "\n".join(f"{key}={value}" for key, value in os.environ.items())
+            return ScratchRun(output=seen, exit_code=0)
+        if self._kind == "follows links" and argv[0] == "/bin/ln":
+            return ScratchRun(exit_code=0, files={"out.txt": b"127.0.0.1 localhost"})
+        return self._real.run_in_scratch(
+            argv, files, outputs=outputs, timeout=timeout, stop=stop
+        )
+
+
+@pytest.mark.parametrize(
+    ("kind", "says"),
+    [
+        ("brings nothing back", "did not bring back the file it made"),
+        ("leaks the environment", "an environment it was not given"),
+        ("follows links", "a link was followed"),
+    ],
+)
+def test_a_run_breaking_a_promise_fails_the_check(cfg, session_dir, kind, says):
+    """Behind a composite, as kingfisher's own is: a check that looked for the method on
+    the backend alone would skip these and pass."""
+    wrong = cast("BackendProtocol", _Wrong(cfg, session_dir, kind))
+
+    with pytest.raises(AssertionError, match=says):
+        scratch_runs(lambda: (cfg, CompositeBackend(default=wrong, routes={})))

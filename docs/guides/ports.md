@@ -484,6 +484,42 @@ refused before your method is asked. `host_path(backend, virtual)`, from
 `kingfisher.plugins`, answers as kingfisher will: `(the root it must stay in, the
 path)`, or `None`.
 
+**Running a command for an offered tool: `run_in_scratch`.** An offered tool whose
+agent may use the shell can run a program over files it hands in —
+`runtime.context.run`, in [`tools.md`](tools.md) — and kingfisher asks your backend to
+do it. Kingfisher's own backend makes a throwaway folder in the session's scratchpad and
+runs the program through the session's fence. A backend whose shell is elsewhere supplies
+its own, as an optional method on what your `open` returns:
+
+```python
+from kingfisher.plugins import ScratchRun
+
+
+class MySandbox(...):
+    def run_in_scratch(self, argv, files, *, outputs, timeout=None, stop=None):
+        # Make a new empty folder, write `files` into it, run `argv` there, and read
+        # back the names in `outputs`.
+        return ScratchRun(output=..., exit_code=..., files={...}, missing={...})
+```
+
+Without it a tool's run is refused, saying so; kingfisher builds no stand-in from
+`upload_files`, `execute` and `download_files`, which could promise none of this:
+
+- `argv` is a program and its arguments, run with no shell, in a folder of its own that
+  is gone afterwards.
+- The command sees an environment of its own, not the shell's and not this process's.
+- `files` and `missing`: each output that came back, and why each other one did not. An
+  output that is a link is not followed; the bytes are read wherever no fence stands.
+- `timeout` and `stop` end the command and everything it started: `timeout` in seconds,
+  `stop` a `threading.Event` that `arun` sets when its caller is cancelled.
+- A refusal is `ScratchRun(error=...)`, never an exception.
+
+Kingfisher has already checked the names (plain, no folder), what the files come to, and
+the call's deadline, before your method is asked. `scratch_runs_of(backend)`, from
+`kingfisher.plugins`, finds the method as kingfisher will: yours, else your composite's
+default's. **`scratch_runs`**, in `tests/checks/backend.py`, holds a backend that has one
+to the list above, and asks nothing of one without.
+
 **Three more extras are read where you declare them.** `unprotected` on the backend,
 a tuple of what it could not make read-only, which a turn reports to its caller as
 `protect_failed`. `runs_here` on the shell, `True` when its commands run on this host,

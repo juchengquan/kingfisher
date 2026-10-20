@@ -28,6 +28,7 @@ _EXPORTS = {
     "why_no_shell": "kingfisher.core.agent.usable_backend",
     "unrouted_denials": "kingfisher.core.agent.usable_backend",
     "host_path": "kingfisher.core.agent.permitted_backend",
+    "scratch_runs_of": "kingfisher.core.agent.permitted_backend",
     "LocalSessions": "kingfisher.plugins.sessions.backend",
     "backend_at": "kingfisher.plugins.sessions.backend",
     "JsonlRunEvents": "kingfisher.plugins.events",
@@ -59,6 +60,7 @@ __all__ = [
     "host_path",
     "list_skills",
     "reject_host_path",
+    "scratch_runs_of",
     "unrouted_denials",
     "why_no_shell",
 ]
@@ -68,6 +70,7 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.host_paths import reject_host_path as reject_host_path
     from kingfisher.core.agent.models import WIRE_FORMATS as WIRE_FORMATS
     from kingfisher.core.agent.permitted_backend import host_path as host_path
+    from kingfisher.core.agent.permitted_backend import scratch_runs_of as scratch_runs_of
     from kingfisher.core.agent.prompting import InstructionsFile as InstructionsFile
     from kingfisher.core.agent.prompting import ShellPrompt as ShellPrompt
     from kingfisher.core.agent.usable_backend import unrouted_denials as unrouted_denials
