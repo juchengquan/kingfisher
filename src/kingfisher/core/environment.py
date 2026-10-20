@@ -22,7 +22,7 @@ from .config import (
 
 # `Config` and the rest are imported to use, not re-exported: their one import path is
 # `kingfisher.core.config`.
-__all__ = ["config_from_env", "enforce_local_only_tracing"]
+__all__ = ["config_from_env", "enforce_local_only_tracing", "paths_from_env"]
 
 
 @dataclass(frozen=True)
