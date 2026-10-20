@@ -9,6 +9,7 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
+from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher import Kingfisher, Request
@@ -31,14 +32,14 @@ def busy(scripted):
     return scripted
 
 
-def _turn(cfg: Any, calls: int, way: str = "sync") -> Any:
+def _turn(cfg: Any, calls: int, way: str = "sync", middlewares: Any = None) -> Any:
     """A turn whose model lists the session `calls` times, then answers."""
     Scripted.script.extend(
         AIMessage(content="", tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": f"c{n}"}])
         for n in range(calls)
     )
     Scripted.script.append(AIMessage("done"))
-    service = Kingfisher(cfg, sessions=LocalSessions())
+    service = Kingfisher(cfg, sessions=LocalSessions(), middlewares=middlewares or {})
     request = Request("go", agent="only", session_id="s")
     return asyncio.run(service.arun(request)) if way == "async" else service.run(request)
 
@@ -76,6 +77,44 @@ def test_the_count_follows_the_limit_a_deployment_sets(busy):
     assert told == [None] * 16 + [3, 2, 1, "last"], told
 
 
+class Hooked(AgentMiddleware):
+    """A deployment's middleware with a hook ahead of every model call."""
+
+    def before_model(self, state: Any, runtime: Any) -> None:
+        return None
+
+
+#: Each adds one graph step to every model call: an approval gate's hook after the call,
+#: and a deployment's before it.
+STACKS = {
+    "gate": {"interrupt_on": "[write_file]"},
+    "before_model": {"middlewares": "[hooked]"},
+    "both": {"interrupt_on": "[write_file]", "middlewares": "[hooked]"},
+}
+
+
+@pytest.mark.parametrize(
+    ("hooks", "told"),
+    [
+        # Four steps a call: calls fall on 2, 6 ... 58, the last a 60-step turn makes.
+        ("gate", [None] * 12 + [2, 1, "last"]),
+        ("before_model", [None] * 12 + [2, 1, "last"]),
+        # Five, and the hook before the first call is a step too: 3, 8 ... 58.
+        ("both", [None] * 9 + [2, 1, "last"]),
+    ],
+)
+def test_a_hook_beside_the_model_call_is_counted_in_what_is_left(busy, hooks, told, way):
+    """Three steps a call were assumed whatever the stack, so a turn with an approval gate
+    was told it had a call left on its last one."""
+    an_agent(busy, **EVERY_TOOL, **STACKS[hooks])
+    cfg = replace(busy, recursion_limit=60)
+
+    result = _turn(cfg, calls=30, way=way, middlewares={"hooked": Hooked})
+
+    assert result.stop_reason == "max_steps"
+    assert _told() == told, _told()
+
+
 def test_a_turn_well_inside_its_steps_is_never_told(busy):
     """A note on every call would cost every turn tokens for nothing."""
     _turn(busy, calls=5)
@@ -108,9 +147,9 @@ def consulting(busy):
     return busy
 
 
-def _run(cfg: Any, *script: AIMessage, way: str = "sync") -> Any:
+def _run(cfg: Any, *script: AIMessage, way: str = "sync", middlewares: Any = None) -> Any:
     Scripted.script.extend(script)
-    service = Kingfisher(cfg, sessions=LocalSessions())
+    service = Kingfisher(cfg, sessions=LocalSessions(), middlewares=middlewares or {})
     request = Request("go", agent="only", session_id="s")
     return asyncio.run(service.arun(request)) if way == "async" else service.run(request)
 
@@ -193,6 +232,28 @@ def test_a_subagent_summarised_partway_is_still_held_to_its_budget(consulting, w
     assert _handed_back().startswith(
         "[Stopped: this subagent reached its limit of 10 model calls, and the answer below "
         "is what it had then.]"
+    )
+
+
+@pytest.mark.parametrize("who", ["helper", "general-purpose"])
+def test_a_subagents_budget_follows_what_a_call_costs_the_agent(consulting, who):
+    """Divided by three whatever the stack, a subagent under an agent spending five steps a
+    call was given 10 calls of a 30-step turn, where the agent itself had 6."""
+    an_agent(consulting, subagents="[helper]", **EVERY_TOOL, **STACKS["both"])
+    cfg = replace(consulting, recursion_limit=30)
+
+    _run(
+        cfg,
+        _ask(who),
+        *(_listing(n) for n in range(6)),
+        AIMessage("done"),
+        middlewares={"hooked": Hooked},
+    )
+
+    # The agent's call, the subagent's six, told only on its last, and the agent's answer.
+    assert _told() == [None] + [None] * 5 + ["last"] + [None], _told()
+    assert _handed_back().startswith(
+        "[Stopped: this subagent reached its limit of 6 model calls"
     )
 
 

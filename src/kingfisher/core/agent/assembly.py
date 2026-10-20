@@ -47,6 +47,7 @@ from kingfisher.core.agent.kinds.tools import (
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware, high_mark
 from kingfisher.core.agent.middlewares.recorder import Audiences, RecorderMiddleware
 from kingfisher.core.agent.middlewares.standing import standing_middleware
+from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
@@ -391,6 +392,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     )
     # Filled in kingfisher's order once the grant is known; the probe reads it before.
     middleware: list[Any] = []
+    # One for the agent and every subagent, measured by `assemble`: a subagent's budget is
+    # the agent's in calls, and only the agent's compiled graph says what a call costs.
+    budget = StepBudget(cfg.recursion_limit)
     # What the deployment's settings switch on, which goes after every standing one.
     switched: list[Any] = []
     narrowed_skills: tuple[str, ...] | None = None
@@ -467,7 +471,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             paths=paths,
             layout=cfg.layout,
             backend=backend,
-            step_limit=cfg.recursion_limit,
+            budget=budget,
             trigger=trigger,
             recorder=recording(agent),
             clearing=clearing,
@@ -511,11 +515,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             "context_schema": ToolContext,
             **extras,
         }
-        return Assembled(
-            graph=create_deep_agent(**attached),
-            context=ToolContext(backend=under_rules),
-            **attached,
-        )
+        graph = create_deep_agent(**attached)
+        budget.measure(graph)
+        return Assembled(graph=graph, context=ToolContext(backend=under_rules), **attached)
 
     # `asked`, not `capabilities`: combined, the agent's names are the ones this caller
     # reaches, and a typo in the file must be refused whoever is calling.
@@ -634,6 +636,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 run_on=wanted.get(name),
                 held=held,
                 recorder=recording(defined[name]),
+                budget=budget,
                 extra_middleware=declared_middleware(
                     defined[name],
                     registry,
@@ -732,7 +735,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     paths=paths,
                     layout=cfg.layout,
                     backend=backend,
-                    step_limit=cfg.recursion_limit,
+                    budget=budget,
                     trigger=trigger,
                     recorder=recording(agent),
                     tools=permitted,

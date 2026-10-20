@@ -15,17 +15,55 @@ from .replies import last_reply, replaced, text_of
 #: The share of a run's steps after which the agent is told what is left.
 WARN_AT = 0.8
 
-#: Graph steps one model call costs on kingfisher's graphs: the call, the todo list's hook
-#: after it, and the tools. A deployment's own hook beside the model costs one more.
+#: What `StepBudget` assumes until it has read the agent's graph: the default stack's call,
+#: `TodoListMiddleware`'s hook after it, and the tools.
 STEPS_PER_CALL = 3
 
+#: Both sides: a `before_model` hook runs on every call as surely as an `after_model` one.
+HOOKS = (".before_model", ".after_model")
 
-def calls_left() -> int | None:
+
+def steps_per_call(graph: Any) -> int:
+    """Graph steps one model call costs on a compiled `graph`.
+
+    The call and the tools, and one more for each middleware hook beside the call, which
+    langgraph runs as a node of its own: an approval gate's, or a deployment's.
+    """
+    return 2 + sum(str(node).endswith(HOOKS) for node in graph.get_graph().nodes)
+
+
+class StepBudget:
+    """A turn's step limit, and what one model call costs of it on the agent's graph.
+
+    One per build, shared by the agent's middleware and every subagent's, and read when a
+    call runs rather than when they are built: the subagents are built before the agent's
+    graph is compiled, which is the only thing that knows its cost.
+    """
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.steps_per_call = STEPS_PER_CALL
+
+    def measure(self, graph: Any) -> None:
+        """Read the cost off the agent's compiled `graph`.
+
+        Every build sets it, so the last one -- the graph served, not a probe -- is the one
+        that holds.
+        """
+        self.steps_per_call = steps_per_call(graph)
+
+    @property
+    def calls(self) -> int:
+        """The agent's budget in model calls, which a subagent is held to."""
+        return self.limit // self.steps_per_call
+
+
+def calls_left(steps: int) -> int | None:
     """About how many model calls this run has after this one, once it is past `WARN_AT`.
 
     Read off langgraph's own step counter and limit, so it follows whatever limit a
-    deployment sets. A run stops past its first step plus the limit plus one; a fresh turn's
-    first step is 0, and a resumed one's later, which only warns it early.
+    deployment sets, at `steps` a call. A run stops past its first step plus the limit plus
+    one; a fresh turn's first step is 0, and a resumed one's later, which only warns it early.
     """
     try:
         config = get_config()
@@ -35,7 +73,7 @@ def calls_left() -> int | None:
     step = (config.get("metadata") or {}).get("langgraph_step")
     if not isinstance(limit, int) or not isinstance(step, int) or step < WARN_AT * limit:
         return None
-    return (limit + 1 - step) // STEPS_PER_CALL
+    return (limit + 1 - step) // steps
 
 
 def warning(left: int) -> str:
@@ -76,17 +114,18 @@ class StepBudgetMiddleware(AgentMiddleware):
     transcript stays clean, the prompt cache is untouched, and it never piles up.
     """
 
-    def __init__(self, *, calls: int | None = None) -> None:
+    def __init__(self, budget: StepBudget, *, subagent: bool = False) -> None:
         super().__init__()
-        #: A subagent's budget in model calls, enforced here, since deepagents runs one under
-        #: 9,999 steps of its own. `None` for the agent, whose limit langgraph enforces.
-        self.calls = calls
+        self.budget = budget
+        #: A subagent's budget is enforced here in model calls, since deepagents runs one
+        #: under 9,999 steps of its own. The agent's limit langgraph enforces.
+        self.subagent = subagent
 
     def _left(self, request: Any) -> int | None:
-        if self.calls is None:
-            return calls_left()
-        made = _made(request)
-        return None if made < WARN_AT * self.calls else max(0, self.calls - made - 1)
+        if not self.subagent:
+            return calls_left(self.budget.steps_per_call)
+        calls, made = self.budget.calls, _made(request)
+        return None if made < WARN_AT * calls else max(0, calls - made - 1)
 
     def _told(self, request: Any) -> Any:
         if (left := self._left(request)) is None:
@@ -95,12 +134,12 @@ class StepBudgetMiddleware(AgentMiddleware):
 
     def _held(self, request: Any, response: Any) -> Any:
         """A subagent's last allowed reply, without the calls it may no longer make."""
-        if self.calls is None or _made(request) + 1 < self.calls:
+        if not self.subagent or _made(request) + 1 < (calls := self.budget.calls):
             return response
         reply = last_reply(response)
         if reply is None or not reply.tool_calls:
             return response
-        return replaced(response, reply, _stopped(reply, self.calls))
+        return replaced(response, reply, _stopped(reply, calls))
 
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         return self._held(request, handler(self._told(request)))

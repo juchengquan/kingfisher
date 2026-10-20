@@ -408,6 +408,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
 
     from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
     from kingfisher.core.agent.middlewares.standing import standing_middleware
+    from kingfisher.core.agent.middlewares.step_budget import StepBudget
     from kingfisher.core.session.ledger import Ledger
     from kingfisher.core.session.store import KeptLedger
     from tests.unit.test_workspace_tool_errors import _through
@@ -427,7 +428,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
         paths=None,
         layout=cfg.layout,
         backend=backend,
-        step_limit=cfg.recursion_limit,
+        budget=StepBudget(cfg.recursion_limit),
         trigger=UNPROFILED,
         recorder=RecorderMiddleware(ledger, backend, None, cfg.layout.tool_results_route),
     )

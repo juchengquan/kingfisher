@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A model call's cost in steps is counted off the agent's graph, after #1000
+
+- **A subagent may make `KINGFISHER_RECURSION_LIMIT` ÷ the steps one of the agent's model
+  calls costs**, where it was ÷ 3 whatever the stack. A call costs two steps and one more
+  for each `before_model` or `after_model` hook on the agent's graph: three on the default
+  stack, so 50 calls at the default limit as before; four with an approval gate; five
+  with a gate and a middleware of yours holding a model hook, so 30. The agent's own
+  note on what is left counts the same way.
+- **`standing_middleware` takes `budget=`** in place of `step_limit=`: pass
+  `StepBudget(cfg.recursion_limit)`, from `kingfisher.core.agent.middlewares.step_budget`,
+  and call its `measure(graph)` once the agent's graph is compiled. Unmeasured, it
+  assumes three steps a call.
+
 ## A caller named wrong raises `CallerError`, after #980
 
 - **`from kingfisher import CallerError`** names what a call raises when it says who
