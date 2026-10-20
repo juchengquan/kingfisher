@@ -12,7 +12,7 @@ from deepagents.middleware.memory import MEMORY_SYSTEM_PROMPT
 from langchain.agents.middleware.types import ModelRequest
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.graph import END, START, StateGraph
 from pydantic import Field
@@ -39,6 +39,7 @@ from tests.conftest import (
     dispatched,
     subagent_of,
 )
+from tests.unit.test_gate_declaration import _agent
 
 SUBAGENT = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -199,6 +200,47 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, session_di
     shown = scoped[0]._format_skills_list(loaded)
     assert "other" in shown, shown
     assert "tabular-qa" not in shown, shown
+
+
+def _reads_a_skill(cfg, session_dir, **narrowing: Any) -> str:
+    """What `read_file` on an existing skill's `SKILL.md` returns, under `narrowing`."""
+    _write_skill(cfg.definitions, "tabular-qa")
+    wired = replace(cfg, skills_enabled=True)
+    reads = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "read_file", "args": {"file_path": "/skills/tabular-qa/SKILL.md"}, "id": "r"}
+        ],
+    )
+    out = build_agent(
+        wired,
+        backend=backend_at(wired, session_dir),
+        model=FakeToolCallingModel(responses=[reads, AIMessage(content="done")]),
+        **narrowing,
+    ).graph.invoke({"messages": [{"role": "user", "content": "go"}]}, {"recursion_limit": 12})
+    (result,) = [m for m in out["messages"] if isinstance(m, ToolMessage)]
+    return str(result.content)
+
+
+@pytest.mark.parametrize(
+    "narrowing",
+    [
+        pytest.param({"agent": _agent()}, id="an-agent-file-naming-none"),
+        pytest.param({"capabilities": Capabilities(skills=None)}, id="a-request-granting-none"),
+    ],
+)
+def test_granting_no_skills_denies_reading_every_one(cfg, session_dir, narrowing):
+    """No skills wrote no deny rules, so an agent granted none read any skill's `SKILL.md`,
+    while one granted a single skill was refused the rest.
+    """
+    assert "permission denied" in _reads_a_skill(cfg, session_dir, **narrowing)
+
+
+def test_granting_the_skill_still_reads_it(cfg, session_dir):
+    """The control: a skill a request does grant is read, so the refusal above is the grant."""
+    granted = _reads_a_skill(cfg, session_dir, capabilities=Capabilities(skills=("tabular-qa",)))
+
+    assert "Do the thing." in granted
 
 
 def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, session_dir):

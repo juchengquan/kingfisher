@@ -288,8 +288,9 @@ it stops a call on either of them: a call carries the name alone, so nothing
 downstream can tell the two apart. It is the one place a gate is wider than the
 line that wrote it.
 
-Subagents inherit their parent's gates and cannot declare their own — the field
-is refused in a subagent file. The caller answering a pause is the agent's
+Subagents inherit the agent's gates, down to a helper another subagent consults,
+and cannot declare their own — the field is refused in a subagent file. A pause
+that deep is answered like any other. The caller answering a pause is the agent's
 caller, and a subagent that could widen or narrow what stops for them would be
 deciding that on their behalf. A subagent's own bundled tool is gated like any
 other, by its name, which is how a tool that exists in no other graph can be
@@ -1271,9 +1272,9 @@ subagents
 
 *A private skill is unadvertised, not unreadable.* Skills are mounted read-only
 under `/skills/`, and anything holding `read_file` can open a bundle's skills
-there — no read of one is ever denied. The shared catalogue differs only under a
-request that names the skills it grants, which denies reads of the rest; a
-request granting every skill leaves all of it open. What a bundle buys for a
+there — no read of one is ever denied. The shared catalogue differs: a grant
+naming some skills denies reads of the rest, a grant of none denies every one,
+and a grant of every skill leaves all of it open. What a bundle buys for a
 skill is that no other subagent is *told* about it. A private tool is
 stronger: an ungranted tool is never bound into an agent, so it cannot be
 called at all. Do not put in a bundled skill anything you would mind another

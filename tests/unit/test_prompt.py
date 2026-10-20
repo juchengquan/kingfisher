@@ -524,6 +524,43 @@ def test_a_subagent_is_not_told_of_a_shell_it_does_not_hold(scripted, subagent, 
     assert MAPPINGS not in systems[1]
 
 
+class _HouseRules:
+    """A deployment's instructions, handed in as `Kingfisher(instructions=)` takes them."""
+
+    def text(self, cfg) -> str:
+        return "House rule: never delete anything."
+
+
+@pytest.mark.parametrize(
+    ("subagent", "agent"),
+    [
+        ("reader", {"subagents": "[reader]", "builtin_tools": '["*"]'}),
+        ("general-purpose", {"builtin_tools": "[read_file, task]"}),
+    ],
+)
+def test_every_subagent_is_given_the_deployments_instructions(scripted, subagent, agent):
+    """`general-purpose` was handed deepagents' prompt bare, so a house rule held for every
+    subagent but the one the agent delegates to when it names none.
+    """
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "reader.yaml").write_text(READER, encoding="utf-8")
+    an_agent(scripted, **agent)
+    asks = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "task", "args": {"description": "read", "subagent_type": subagent}, "id": "t"}
+        ],
+    )
+    Scripted.script.extend([asks, AIMessage("read"), AIMessage("done")])
+    Kingfisher(scripted, sessions=LocalSessions(), instructions=_HouseRules()).run(
+        Request("go", agent="only", session_id=start(scripted, "s"))
+    )
+    systems = [m.text for heard in Scripted.heard for m in heard if isinstance(m, SystemMessage)]
+
+    assert len(systems) == 3
+    assert "House rule: never delete anything." in systems[1]
+
+
 # -- told to read back and save only with the tools it holds ------------------------
 
 #: How each tool that reads a saved result back is told of, as the prompt reads.

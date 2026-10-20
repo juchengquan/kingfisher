@@ -16,7 +16,8 @@ from kingfisher.core.definitions.subagents.spec import (
     declared,
 )
 from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, declared_subagents
+from tests.conftest import FAKE_KEY_VAR, FakeToolCallingModel, declared_subagents
+from tests.unit.test_gate_declaration import _agent
 
 COMPILED = '''"""A subagent the workspace assembled."""
 
@@ -495,6 +496,25 @@ def _tools_given(cfg, session_dir, capabilities):
     _model, tools = store.SEEN
     del store.SEEN
     return tools
+
+
+def test_a_compiled_subagent_naming_no_model_runs_the_agents(cfg, session_dir, monkeypatch):
+    """A graph is handed no model by deepagents, and one naming none was built on the
+    deployment's default while the agent that summoned it ran `cheap-model`.
+    """
+    monkeypatch.setenv(FAKE_KEY_VAR, "not-a-real-key")
+    _write(cfg.definitions / "subagents", "researcher.py", RECORDING.format(extra=""))
+
+    build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        agent=_agent(model="cheap-model", subagents="[researcher]"),
+    )
+    import kingfisher.core.definitions.subagents.catalogue as store
+
+    model, _tools = store.SEEN
+    del store.SEEN
+    assert model.model == "cheap-model"
 
 
 def _tools_seen(cfg, session_dir, capabilities):
