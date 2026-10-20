@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `general-purpose` is told the deployment's instructions, after #998
+
+- **deepagents' `general-purpose` subagent now gets your instructions** --
+  `INSTRUCTIONS.md`, or what `Kingfisher(instructions=)` returns -- ahead of its own
+  prompt, as a subagent you declare already did. Work delegated to it used to run
+  without them. If a rule there was written for the main agent alone, say so in it.
+- **A compiled subagent still gets none of them**: its `build` writes its prompt. Put
+  a house rule it must follow into what `build` builds.
+
 ## A caller named wrong raises `CallerError`, after #980
 
 - **`from kingfisher import CallerError`** names what a call raises when it says who
