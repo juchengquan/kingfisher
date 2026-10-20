@@ -1557,7 +1557,11 @@ turns down that way. These may pass, so the turn stops as `model_unavailable`, t
 provider's words on its `cut_short` event and its output kept; running again carries on.
 A 401 stays a configuration error; other 4xx and bugs keep their traceback. Recognised on
 the model call by status code and type names through the causes, so no SDK is imported
-and a tool's own timeout is not taken for the model. A subagent's comes back as a failed
+and a tool's own timeout is not taken for the model. An error Anthropic sends inside a
+stream that began as a 200 reaches kingfisher with status 200, so it is recognised by its
+type instead -- `overloaded_error`, `api_error` or `rate_limit_error`, the same three
+refusals -- and any other type there still raises. OpenAI's mid-stream errors are not
+read, as none has been seen yet. A subagent's comes back as a failed
 `task` result, because the parent may go on without that part. **Not taken: retrying in
 kingfisher.** The SDKs retry twice with backoff already; a second layer multiplies, up to
 nine requests for one call against a quota, and no measured failure has outlasted their
