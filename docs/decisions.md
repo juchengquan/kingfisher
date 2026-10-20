@@ -2722,6 +2722,13 @@ deployment can switch off. So the checkpoint is msgpack through langgraph's seri
 and not `InMemorySaver(factory=PersistentDict)`, the persistence seam langgraph ships and
 the obvious thing to reach for: it is unconditionally pickle, and a tampered pickle read
 back is arbitrary code at resume time where tampered msgpack is only bad graph state.
+That last holds only under an allowlist: langgraph's serialiser by default imports and
+calls any `module.name` a msgpack extension names, and a hand-built `paused.state` ran
+`os.system` on resume. Both the read of the file and the saver it rebuilds therefore
+take `allowed_msgpack_modules=None`, langgraph's built-in safe types, which a deep
+agent's paused turn was measured to stay inside (messages, `Interrupt`, `Send`); a test
+fails if a gated turn ever writes a type outside them, where the reader would otherwise
+hand back its raw fields. *(2026-10-20.)*
 
 The pending writes go with the checkpoint. A turn can stop on one gated call while a
 sibling in the same superstep has already run; drop those writes and the sibling runs
