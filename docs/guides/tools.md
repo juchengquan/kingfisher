@@ -475,7 +475,47 @@ as a failed result too, with the virtual path to use instead.
 
 **There is no `execute`.** No permission rule reaches the shell, so a tool holding
 it would be the way round every row of that table — and would run commands for a
-request that was refused the shell.
+request that was refused the shell. What a tool has instead is below.
+
+## A tool that runs a command
+
+Some work should not happen in kingfisher's process: drawing a PDF page is native code
+reading a file nobody vouched for. `runtime.context.run` runs a program over files you
+hand it, in a new empty folder inside the session's fenced shell, and hands back the
+files you name:
+
+```python
+ran = runtime.context.run(
+    ["python", "-I", "-c", SCRIPT],
+    {"doc.pdf": data},
+    outputs=["page.png"],
+)
+if ran.error:
+    raise PermissionError(ran.error)
+image = ran.files.get("page.png")
+```
+
+It comes back a `ScratchRun`: `output` and `exit_code` as `execute` gives them,
+`files` holding each output that came back, and `missing` saying why each other one
+did not. `await runtime.context.arun(...)` is the same for an `async` tool.
+
+- **Only for an agent that may use the shell itself.** A tool is handed a run when the
+  agent or subagent calling it holds `execute`, ungated; otherwise `error` says so and
+  nothing runs. A tool called from `eval`'s code is never handed one.
+- **`argv` is a program and its arguments**, not a shell line, so a file name is never
+  read as shell. Write `["sh", "-c", ...]` for a pipeline, and quote it yourself.
+- **The folder is all it sees of the session.** Names are plain — no folder, no leading
+  dot — and the folder is gone afterwards. Its environment is `PATH`, the locale, and
+  `HOME` and `TMPDIR` pointing at the folder.
+- **One clock for the call.** Every run in one call shares
+  `KINGFISHER_EXECUTION_TIMEOUT_S`, each given what is left, and what a call was
+  handed stops working when it returns.
+- **Capped.** At most 32 MB of files in and 32 MB back, 64 outputs named, and the
+  command's output cut where `execute`'s is.
+- **On kingfisher's own sessions only**, unless a deployment's backend offers
+  `run_in_scratch` itself; one whose commands go through a runner of its own refuses it.
+
+`pdf_render` among the shipped tools is written this way.
 
 **Do not call the argument `path`.** The two ways of handing a tool a file do not
 mix. `path` is rewritten to the real file before the tool runs, the backend takes

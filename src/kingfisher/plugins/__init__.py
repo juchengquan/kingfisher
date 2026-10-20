@@ -15,6 +15,7 @@ _EXPORTS = {
     "Instructions": "kingfisher.core.interfaces",
     "CommandRunner": "kingfisher.core.interfaces",
     "CommandResult": "kingfisher.core.interfaces",
+    "ScratchRun": "kingfisher.core.interfaces",
     "Definitions": "kingfisher.core.definitions.catalogue",
     "list_skills": "kingfisher.core.definitions.skills.registry",
     "WireFormat": "kingfisher.core.config",
@@ -49,6 +50,7 @@ __all__ = [
     "LocalSessions",
     "Plugins",
     "RunEvents",
+    "ScratchRun",
     "Sessions",
     "ShellPrompt",
     "ShellSettings",
@@ -77,6 +79,7 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import CommandRunner as CommandRunner
     from kingfisher.core.interfaces import Instructions as Instructions
     from kingfisher.core.interfaces import RunEvents as RunEvents
+    from kingfisher.core.interfaces import ScratchRun as ScratchRun
     from kingfisher.core.interfaces import Sessions as Sessions
     from kingfisher.core.layout import DEFAULT_LAYOUT as DEFAULT_LAYOUT
     from kingfisher.core.layout import Layout as Layout

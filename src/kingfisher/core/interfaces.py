@@ -7,7 +7,7 @@ and the conversation is kept in the session, so none of them is here.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from kingfisher.core.session.threads import off_loop, thread_pool
@@ -26,6 +26,33 @@ class CommandResult:
     exit_code: int
     #: Set when `output` is not all of it: a caller cannot tell a cut result from a short one.
     truncated: bool = False
+
+
+#: What one scratch run may carry in, and again what it may bring back. A backend hands
+#: files over whole, into kingfisher's own process, so the bound is set before the run.
+MAX_SCRATCH_BYTES = 32 * 1024 * 1024
+
+#: How many files one scratch run may name to bring back.
+MAX_SCRATCH_OUTPUTS = 64
+
+
+@dataclass(frozen=True)
+class ScratchRun:
+    """What a command run over files in a throwaway folder produced.
+
+    Refused is `error`, never an exception, as a backend reports everything else: then
+    nothing ran.
+    """
+
+    output: str = ""
+    exit_code: int = 1
+    #: Set when `output` is not all of it.
+    truncated: bool = False
+    #: The outputs asked for that came back, by name.
+    files: Mapping[str, bytes] = field(default_factory=dict)
+    #: The outputs asked for that did not, by name, each with why.
+    missing: Mapping[str, str] = field(default_factory=dict)
+    error: str | None = None
 
 
 class CommandRunner(Protocol):

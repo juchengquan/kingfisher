@@ -244,10 +244,12 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     settings = shell if shell is not None else confinement.ShellSettings.from_env()
     confined = confinement.shell_confinement(cfg, settings, skills=every_skills_dir)
     env = shell_env(cfg, session_dir, path_extra=settings.path_extra, catalogue=definitions)
+    fence = None
     if runner is None:
-        chosen = fence_for(
+        fence = fence_for(
             cfg, session_dir, confined, every_skills_dir, env, path_extra=settings.path_extra
         )
+        chosen: CommandRunner | None = fence
     else:
         # A supplied runner that is not local receives nothing this process applied, so
         # the confinement must stop claiming it.
@@ -265,6 +267,8 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     confined_shell = ConfinedLocalShellBackend(
         confined,
         runner=chosen,
+        fence=fence,
+        scratchpad=cfg.layout.scratchpad,
         # The deployment's runner, not `chosen`, which on Linux is kingfisher's own fence:
         # that one is handed `env` and the session directory, a deployment's only the
         # command.

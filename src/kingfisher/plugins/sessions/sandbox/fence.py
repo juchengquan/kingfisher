@@ -17,6 +17,7 @@ from .linux import present
 from .process import MAX_OUTPUT_BYTES, run_command
 
 if TYPE_CHECKING:
+    import threading
     from collections.abc import Mapping
 
     from kingfisher.core.interfaces import CommandResult
@@ -99,7 +100,13 @@ class LandlockRunner:
         self.env = dict(env or {})
         self.max_output_bytes = max_output_bytes
 
-    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+    def run(
+        self,
+        command: str,
+        *,
+        timeout: int | None = None,
+        stop: threading.Event | None = None,
+    ) -> CommandResult:
         """Run `command` through a shell, fenced."""
         from sandlock import confine  # noqa: PLC0415
 
@@ -114,4 +121,5 @@ class LandlockRunner:
             max_output_bytes=self.max_output_bytes,
             preexec_fn=fence,
             unstartable="the Landlock fence could not be applied",
+            stop=stop,
         )

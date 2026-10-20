@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.core.interfaces import CommandResult
 
 if TYPE_CHECKING:
+    import threading
     from collections.abc import Callable, Mapping, Sequence
 
 #: `LocalShellBackend`'s own limit: a fence must not change how much output a turn sees.
@@ -40,12 +41,14 @@ def run_command(  # noqa: PLR0913 -- one argument per thing a launch differs by
     max_output_bytes: int = MAX_OUTPUT_BYTES,
     preexec_fn: Callable[[], None] | None = None,
     unstartable: str | None = None,
+    stop: threading.Event | None = None,
 ) -> CommandResult:
     """Run `command` -- through `/bin/sh` when it is a string -- and say what came back.
 
     When the shell exits, everything it started is killed with it, and a timeout kills
     the whole group: a process left behind writes into the session after the turn that
-    started it has let go of it. `unstartable` names the fence a launch failure means.
+    started it has let go of it. `unstartable` names the fence a launch failure means;
+    `stop`, once set, ends the command as running out of time would.
     """
     try:
         process = subprocess.Popen(  # noqa: S603 -- a shell command is the whole job
@@ -71,7 +74,7 @@ def run_command(  # noqa: PLR0913 -- one argument per thing a launch differs by
 
     keep = (max_output_bytes + 1) * _WIDEST_CHARACTER
     try:
-        stdout, stderr, timed_out = _collect(process, timeout, keep)
+        stdout, stderr, timed_out = _collect(process, timeout, keep, stop)
     finally:
         _kill_group(process.pid)
         for pipe in (process.stdout, process.stderr):
@@ -114,7 +117,10 @@ def shaped(stdout: str, stderr: str, exit_code: int, max_output_bytes: int) -> C
 
 
 def _collect(
-    process: subprocess.Popen[bytes], timeout: int | None, keep: int
+    process: subprocess.Popen[bytes],
+    timeout: int | None,
+    keep: int,
+    stop: threading.Event | None,
 ) -> tuple[bytes, bytes, bool]:
     """Both streams, `keep` bytes of each at most, until the shell has exited and the
     pipes have closed, or until `timeout`; and whether it ran out of time.
@@ -136,9 +142,11 @@ def _collect(
             selector.register(exit_watch.source, selectors.EVENT_READ)
         while not exited or len(selector.get_map()) > 0:
             left = None if deadline is None else deadline - time.monotonic()
-            if left is not None and left <= 0:
+            if (left is not None and left <= 0) or (stop is not None and stop.is_set()):
                 return bytes(kept[process.stdout]), bytes(kept[process.stderr]), True
-            wait = left if exit_watch.source is not None else min(left or _POLL_S, _POLL_S)
+            # Nothing wakes the wait when `stop` is set, so it is asked as often as polling.
+            polled = exit_watch.source is None or stop is not None
+            wait = min(left or _POLL_S, _POLL_S) if polled else left
             for key, _ in selector.select(wait):
                 if key.fileobj is exit_watch.source:
                     selector.unregister(key.fileobj)

@@ -184,8 +184,8 @@ def test_every_preset_tool_loads(shipped):
         # And a class, which is the third. See below.
         "sql_explain",
         "web_search",
-        # The four that make a file and answer with where it went.
-        "bar_chart", "csv_filter", "pdf_text", "pdf_pages",
+        # The five that make a file and answer with where it went.
+        "bar_chart", "csv_filter", "pdf_text", "pdf_pages", "pdf_render",
     }
 
 
@@ -763,7 +763,7 @@ def test_the_typed_presets_tool_reports_rather_than_repairs(shipped):
 #: a tool added fails this and gets the check, and one that drops out fails it too.
 NAMES_A_FILE = frozenset({
     "bar_chart", "csv_filter", "csv_profile", "csv_columns", "line_count",
-    "status_codes", "log_levels", "pdf_pages", "pdf_text", "mask_secrets",
+    "status_codes", "log_levels", "pdf_pages", "pdf_render", "pdf_text", "mask_secrets",
 })
 
 

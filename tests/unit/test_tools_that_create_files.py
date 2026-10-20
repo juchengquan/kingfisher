@@ -644,3 +644,84 @@ def test_the_guides_recipe_says_saved_only_for_a_file_that_was(handed):
     # a tool's exception reaches the model.
     assert said in guide
     assert f"Error: OSError: {refused.value}" in guide
+
+
+# -- a file drawn in the fence -------------------------------------------------
+
+
+@pytest.fixture
+def drawing(tools, handed, cfg, session_dir):
+    """`pdf_render` called as a turn calls it for an agent that may use the shell: its
+    reads and saves under the turn's rules, its run on the session's own backend."""
+    from langchain.tools import ToolRuntime
+
+    from kingfisher import ToolContext
+    from kingfisher.core.agent.scratch import ScratchRunner
+
+    def call(**args):
+        runtime = ToolRuntime(
+            state={},
+            context=ToolContext(
+                backend=handed, scratch=ScratchRunner(backend_at(cfg, session_dir), seconds=30)
+            ),
+            config={},
+            stream_writer=lambda _: None,
+            tool_call_id="t",
+            store=None,
+        )
+        return tools["pdf_render"].func(**args, runtime=runtime)
+
+    return call
+
+
+def test_each_page_drawn_is_saved_and_said_in_a_line_of_its_own(drawing, handed):
+    """Drawn by PDFium in the session's fenced shell, never in kingfisher's process."""
+    said = drawing(file_path="/inputs/report.pdf", pages="1,3")
+
+    found = [LINE.fullmatch(line) for line in said.splitlines()]
+    assert [one["path"] if one else None for one in found] == [
+        "/scratchpad/report.p1.png",
+        "/scratchpad/report.p3.png",
+    ]
+    assert all("of 3; open it with read_file" in line for line in said.splitlines())
+    assert (_saved(handed, "/scratchpad/report.p1.png") or b"").startswith(b"\x89PNG")
+
+
+@pytest.mark.parametrize(("args", "says"), [
+    ({"pages": "4-9"}, "has 3 page(s); pages '4-9' names none of them"),
+    ({"pages": "1", "scale": 3.0}, "scale 3.0: draw pages at more than 0 and at most 2.0"),
+    ({"pages": "seven"}, "pages 'seven': write page numbers and ranges"),
+])
+def test_pages_or_a_scale_it_cannot_draw_are_refused(drawing, args, says):
+    with pytest.raises(ValueError, match=re.escape(says)):
+        drawing(file_path="/inputs/report.pdf", **args)
+
+
+def test_more_pages_than_one_call_draws_are_refused(drawing, session_dir):
+    """Clipped to the document first, so `1-999` of a twelve-page file is twelve."""
+    (session_dir / "inputs" / "long.pdf").write_bytes(a_pdf(*(f"page {n}" for n in range(12))))
+
+    with pytest.raises(ValueError, match="name 12, past the 10 drawn at once"):
+        drawing(file_path="/inputs/long.pdf", pages="1-999")
+
+
+def test_a_file_pdfium_cannot_read_is_a_failure_naming_it(drawing, session_dir):
+    (session_dir / "inputs" / "fake.pdf").write_bytes(b"not a pdf at all")
+
+    says = "/inputs/fake.pdf: not a PDF this tool can draw"
+    with pytest.raises(ValueError, match=re.escape(says)):
+        drawing(file_path="/inputs/fake.pdf", pages="1")
+
+
+def test_drawing_is_refused_for_an_agent_that_may_not_use_the_shell(tools, handed):
+    """The shell is where the drawing happens, so an agent refused it gets no drawing."""
+    with pytest.raises(PermissionError, match="may not run commands itself"):
+        on_backend(tools["pdf_render"], handed, file_path="/inputs/report.pdf", pages="1")
+
+
+def test_the_page_limit_is_the_largest_image_the_guard_hands_over(tools):
+    """Above it a page is saved and then replaced with advice; below it a page the model
+    could have seen is refused."""
+    from kingfisher.core.agent.middlewares.attachments import MAX_IMAGE_CHARS
+
+    assert tools["pdf_render"].func.__globals__["MAX_PAGE_BYTES"] == MAX_IMAGE_CHARS * 3 // 4

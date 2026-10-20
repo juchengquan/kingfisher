@@ -55,7 +55,7 @@ into the definitions folder.
 
 | Variable | What it does | Default |
 | --- | --- | --- |
-| `KINGFISHER_EXECUTION_TIMEOUT_S` | How long one shell command, or one `eval` in the interpreter, may run. The model may give a command less with `execute`'s `timeout`, never more. | `120` |
+| `KINGFISHER_EXECUTION_TIMEOUT_S` | How long one shell command, or one `eval` in the interpreter, may run, and how long one offered tool call's commands may run all told. The model may give a command less with `execute`'s `timeout`, never more. | `120` |
 | `KINGFISHER_TURN_TIMEOUT_S` | How long one turn may run. | `3600` |
 | `KINGFISHER_RECURSION_LIMIT` | How many steps a turn may take before it stops. | `150` |
 | `KINGFISHER_THREAD_POOL_SIZE` | How many threads `astream` and `arun` hand blocking work to. One pool per process: a second service asking for a different number is refused when it is built. It serves the short work a turn does on this host, and any session-backends method left to its default, which runs the sync one on it: raise it for many turns at once on remote sessions whose async methods are those defaults. | `16` |

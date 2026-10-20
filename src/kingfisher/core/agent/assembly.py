@@ -459,6 +459,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         interpreter_at = len(switched)
         switched.append(interpreter(cfg, None))
 
+    # Before the first build, which binds a tool's runs under the gates.
+    gated = _gates_for(agent, checkpointer)
+
     def agents_standing(
         *,
         tools: tuple[str, ...] | None = None,
@@ -481,12 +484,12 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             skills=narrowed_skills,
             skill_sources=narrowed_sources,
             reachable=reachable,
+            gated=gated,
         )
 
     # What the probe below builds with: nothing narrowed yet, and no subagents to name.
     middleware[:] = agents_standing(inner=switched)
 
-    gated = _gates_for(agent, checkpointer)
     if gated:
         # `True`, not an `InterruptOnConfig`: its `when` is a narrowing this format does
         # not offer, and which decisions a pause allows is decided where it is read.
@@ -745,6 +748,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     trigger=trigger,
                     recorder=recording(agent),
                     tools=permitted,
+                    gated=gated,
                 )
             ),
         }
