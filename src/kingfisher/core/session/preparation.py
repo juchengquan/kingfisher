@@ -86,7 +86,8 @@ class Preparation:
     _refuse_if_over_budget: Callable[..., Steps[None]]
     _files_for: Callable[..., Steps[Any]]
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
-    _agent_for: Callable[..., Steps[AgentSpec | None]]
+    _agent_for: Callable[..., AgentSpec | None]
+    _pin_agent_in: Callable[..., Steps[None]]
     _graph_for: Callable[..., Any]
 
     def _prepare_steps(
@@ -98,9 +99,10 @@ class Preparation:
     ) -> Steps[Prepared]:
         """Everything up to the model call, as the one sequence both loops drive.
 
-        Every refusal comes before `run_start`, so a refused request leaves no turn
-        behind; the claim is taken before them and given back if one refuses, and a
-        session this request made goes with it.
+        Every refusal comes before `run_start` and before the session's agent and datazone
+        are pinned, so a refused request leaves no turn behind and fixes nothing; the claim
+        is taken before them and given back if one refuses, and a session this request
+        made goes with it.
         """
         cfg = self.cfg
         session = yield from self._session_for(request)
@@ -192,15 +194,11 @@ class Preparation:
         )
         # Not resolved for a supplied graph where nothing is locked: that would refuse a
         # request naming another agent.
-        agent = (
-            (yield from self._agent_for(request, harness, held=held, pinned=pinned))
-            if self._graph is None or held is not None
-            else None
-        )
-        # Beside the agent's pin and before any tool runs: what a zoned caller's tools
-        # return stays in the session, so from here it is read only from that datazone.
-        if zone is None and held is not None and (ran_in := zone_held(held)) is not None:
-            yield from remember_zone(harness, ran_in)
+        resolved = self._graph is None or held is not None
+        agent = self._agent_for(request, held=held, pinned=pinned) if resolved else None
+        # What a zoned caller's tools return stays in the session, so once one runs it is
+        # read only from that datazone. Kept beside the agent's pin, after the build.
+        ran_in = zone_held(held) if zone is None and held is not None else None
         if self._graph is None:
             # Before the build and the reports, which must both see a bare name settled to
             # the one this caller reaches.
@@ -232,12 +230,22 @@ class Preparation:
             earlier=earlier,
         )
         # After the build's refusals and before the graph runs: a refused request must
-        # leave the session's files and its gate as they were. The inputs first: a caller
-        # can send a file again, and nobody can recreate a pause.
+        # leave the session's files, its agent and datazone, and its gate as they were. A
+        # pin is for good, so it waits for the upload; a caller can send a file again, and
+        # nobody can recreate a pause. `run_start` last, so a refused request logs no turn.
         try:
             yield from place_inputs(placement, files, self.cfg.layout)
+            if resolved and pinned is None:
+                yield from self._pin_agent_in(harness, request.agent)
+            if ran_in is not None:
+                yield from remember_zone(harness, ran_in)
             if superseded:
                 yield from clear_pause(harness)
+            # A resume says so in `run_start`: a task-shaped one would read as the work
+            # being requested again.
+            asked = getattr(request, "task", "")
+            started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
+            yield on_host(prepared.logger.run_start, started)
         except BaseException:
             # Built and not yet handed over, so no ending will let go of it.
             release_interpreter(self.cfg, prepared.graph)
@@ -391,17 +399,13 @@ class Preparation:
                 turn_id=turn.id,
                 endpoints={name: p.endpoint for name, p in cfg.models.models.items()},
             )
-            # A resume says so in `run_start`: a task-shaped one would read as the work
-            # being requested again.
-            asked = getattr(request, "task", "")
-            started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
-            logger.run_start(started)
         except BaseException:
             # Built and not yet handed over, so nothing else will let go of them.
             if graph is not None:
                 release_interpreter(cfg, graph)
             raise
 
+        asked = getattr(request, "task", "")
         return Prepared(
             graph=graph,
             files=files,

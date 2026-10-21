@@ -271,16 +271,23 @@ def test_the_turn_message_carries_no_output_convention():
 
 
 #: Every way a request is turned down after its session is claimed: over the files
-#: it names, and over the session already being too large.
-REFUSALS = ["inputs name a missing file", "inputs name one file twice", "session over budget"]
+#: it names, over the session already being too large, and over the backend refusing
+#: the upload, which comes after the build.
+REFUSALS = [
+    "inputs name a missing file",
+    "inputs name one file twice",
+    "session over budget",
+    "backend refuses the upload",
+]
 
 
 @pytest.mark.parametrize("how", REFUSALS)
-def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how):
+def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how, monkeypatch):
     """Refused after the claim and before it went back, the session stayed claimed
     until the claim went stale; refused after `run_start`, the run log held a turn that
     never ran.
     """
+    from kingfisher.core.session import preparation
     from kingfisher.core.session.files import InputsError
     from kingfisher.core.session.model import QuotaExceededError
     from tests.conftest import RecordedEvents, start
@@ -294,7 +301,16 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how)
         "inputs name a missing file": (tmp_path / "nope.csv",),
         "inputs name one file twice": (tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv"),
         "session over budget": (),
+        "backend refuses the upload": (tmp_path / "a" / "same.csv",),
     }[how]
+    if how == "backend refuses the upload":
+
+        def refusing(placement, files, layout):
+            msg = "the session's backend refused /inputs/same.csv: permission_denied"
+            raise InputsError(msg)
+            yield
+
+        monkeypatch.setattr(preparation, "place_inputs", refusing)
     budgeted = replace(cfg, session_max_bytes=1) if how == "session over budget" else cfg
     session = start(budgeted, "s")
     (budgeted.workspace / "sessions" / session / "outputs" / "big.txt").write_text("x" * 64)

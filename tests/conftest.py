@@ -334,13 +334,17 @@ def harness_in(cfg, session_dir: Path):
 
 
 def agent_for(service, request, harness, *, source_ids=None):
-    """The agent a turn on this session runs, with its pin read first as setup reads it."""
+    """The agent a turn on this session runs, with its pin read first and written after
+    as setup reads and writes it."""
     from kingfisher.core.access import caller_holds
     from kingfisher.core.session.store import pinned_in
 
     pinned, _zone = drive(pinned_in(harness))
     held = caller_holds(service.vocabulary, source_ids)
-    return drive(service._agent_for(request, harness, held=held, pinned=pinned))
+    agent = service._agent_for(request, held=held, pinned=pinned)
+    if pinned is None:
+        drive(service._pin_agent_in(harness, request.agent))
+    return agent
 
 
 def agent_named(service, name, *, source_ids=None):
