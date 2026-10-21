@@ -3065,8 +3065,20 @@ subagent is held to the same budget.** Over 71 trial turns, every turn either fi
 close. `StepBudgetMiddleware` reads langgraph's own step counter and limit, so it follows
 `KINGFISHER_RECURSION_LIMIT`, and from 80% of the steps adds a note as the last thing each
 model call reads: about how many calls remain, and on the last that it is the last. The
-note is never stored: kept, it would be resent stale on every later call, and coming after
-the cached part it leaves the prompt cache whole. The limit stays at 150 steps.
+note is never stored: kept, it would be resent stale on every later call. The limit stays
+at 150 steps.
+
+Sent last, the note took the conversation's cache breakpoint, which goes on the last
+block, so every call past 80% wrote an entry ending in a note no later call sends.
+`PromptCachingMiddleware` takes deepagents' caching slot on every graph that has one and,
+where a call ends in messages the conversation does not keep -- this note, or a cut answer
+asked again -- moves the breakpoint onto the last block it does keep, dropping the
+top-level `cache_control`. Moved rather than added: with memory on, Anthropic's four are
+spent. A deployment's own middleware in the slot keeps it. Measured on a real build with a
+recording `ChatAnthropic`, on the direct API and off it, sync and async: the note's call
+carries four breakpoints, the last on the `tool_result` before the note, and a call ending
+in what the conversation keeps is sent byte for byte as deepagents' slot sends it.
+*(2026-10-21.)*
 
 What a call costs is counted off the agent's compiled graph, not assumed. A call is its
 model step and its tools step, and every middleware hook beside the call -- a

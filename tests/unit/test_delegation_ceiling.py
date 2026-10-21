@@ -553,7 +553,7 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
     assert kinds == [
         "StepBudgetMiddleware", "ModelReplyMiddleware", "GrantedOnlyMiddleware",
         "GuardedCallsMiddleware", "AttachmentsMiddleware", "FilesystemMiddleware",
-        "BuiltinToolsMiddleware",
+        "BuiltinToolsMiddleware", "PromptCachingMiddleware",
     ], kinds
 
 

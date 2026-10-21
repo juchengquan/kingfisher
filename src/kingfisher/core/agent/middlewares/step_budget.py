@@ -111,7 +111,8 @@ class StepBudgetMiddleware(AgentMiddleware):
 
     A turn either finished well inside its 50 calls or ran to the limit and stopped
     mid-work; told, it can end on an answer. The note goes last and is never stored: the
-    transcript stays clean, the prompt cache is untouched, and it never piles up.
+    transcript stays clean and it never piles up. Last, it would take the conversation's
+    cache breakpoint, which `PromptCachingMiddleware` moves back onto what is stored.
     """
 
     def __init__(self, budget: StepBudget, *, subagent: bool = False) -> None:

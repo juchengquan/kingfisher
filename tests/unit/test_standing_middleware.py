@@ -94,6 +94,7 @@ def test_the_agent_is_wrapped_in_standing_then_switched_then_offered(cfg, sessio
         "MemoryMiddleware",
         "CodeInterpreterMiddleware",
         "_Offered",
+        "PromptCachingMiddleware",
         "OfferedToolFailureMiddleware",
     ]
 
@@ -115,6 +116,7 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
         "FilesystemMiddleware",
         "BuiltinToolsMiddleware",
         "_Offered",
+        "PromptCachingMiddleware",
         "OfferedToolFailureMiddleware",
     ]
 

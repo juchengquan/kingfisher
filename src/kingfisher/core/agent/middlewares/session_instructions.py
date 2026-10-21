@@ -5,15 +5,12 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
 from langchain_core.messages import SystemMessage
 
-#: The slot this takes. deepagents merges by name, so a class named otherwise lands ahead
-#: of the slot, and the text ahead of the static prompt's breakpoint.
-CACHING = AnthropicPromptCachingMiddleware.__name__
+from .caching import PromptCachingMiddleware
 
 
-class SessionInstructionsMiddleware(AnthropicPromptCachingMiddleware):
+class SessionInstructionsMiddleware(PromptCachingMiddleware):
     """deepagents' prompt caching, then this session's text after the block it marks.
 
     In that slot the text follows every middleware that writes the prompt and precedes the
@@ -22,15 +19,11 @@ class SessionInstructionsMiddleware(AnthropicPromptCachingMiddleware):
     """
 
     def __init__(self, text: str, *, cached: bool = True) -> None:
-        # As deepagents builds its own; any other model is sent the text uncached.
-        super().__init__(unsupported_model_behavior="ignore")
+        # Any other model is sent the text uncached.
+        super().__init__()
         self.text = text
         #: False for a graph deepagents gives no caching, which this must not start.
         self.cached = cached
-
-    @property
-    def name(self) -> str:
-        return CACHING
 
     def _told(self, request: Any) -> Any:
         system = request.system_message
