@@ -133,6 +133,7 @@ def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
     with pytest.raises(ValueError, match="agent"):
         standing_middleware(
             kind,
+            name="helper",
             names=frozenset(),
             paths=None,
             layout=cfg.layout,
@@ -153,6 +154,7 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
 
     stack = standing_middleware(
         "agent",
+        name="",
         names=frozenset(),
         paths=None,
         layout=cfg.layout,

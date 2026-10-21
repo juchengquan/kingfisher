@@ -55,6 +55,7 @@ from .interfaces import (
     AgentsMiddlewares,
     Instructions,
     PdfAttachments,
+    ScratchRunLimit,
     SessionInstructions,
     Sessions,
     SubagentMiddlewares,
@@ -101,6 +102,8 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         pdf_attachments: PdfAttachments | None = None,
         # Left out, a portable subagent runs the agent's middleware, as the agent wrote it.
         subagent_middlewares: SubagentMiddlewares | None = None,
+        # Left out, every graph kingfisher would hand a run is handed one.
+        scratch_run_limit: ScratchRunLimit | None = None,
     ) -> None:
         self.cfg = cfg or config_module.config_from_env()
         refuse_a_workspace_prompt(self.cfg)
@@ -162,6 +165,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         self.subagent_middlewares: SubagentMiddlewares = (
             subagent_middlewares if subagent_middlewares is not None else AgentsMiddlewares()
         )
+        self.scratch_run_limit: ScratchRunLimit | None = scratch_run_limit
         # Here, not when a definition names one, so the deployment hears it where it
         # wired the registry rather than from the first caller to reach the wrong name.
         refuse_unbuildable_middleware(self.middlewares)
@@ -231,6 +235,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
             ),
             pdf_attachments=self.pdf_attachments,
             subagent_middlewares=self.subagent_middlewares,
+            scratch_run_limit=self.scratch_run_limit,
             checkpointer=checkpointer,
             catalogue=self.catalogue,
             ledger=ledger,

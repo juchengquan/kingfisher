@@ -11,6 +11,7 @@ from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.config import ConfigError
+from kingfisher.core.interfaces import NoScratchRunLimit
 from kingfisher.core.layout import Layout
 
 from .attachments import AttachmentsMiddleware
@@ -31,7 +32,7 @@ from .session_instructions import CACHING, SessionInstructionsMiddleware
 from .step_budget import StepBudget, StepBudgetMiddleware
 
 if TYPE_CHECKING:
-    from kingfisher.core.interfaces import PdfAttachments
+    from kingfisher.core.interfaces import PdfAttachments, ScratchRunLimit
 
 #: The graphs kingfisher builds itself: the agent, a subagent a definition declares, and
 #: deepagents' `general-purpose`, which is handed the agent's own tools. A compiled
@@ -42,6 +43,7 @@ Kind = Literal["agent", "subagent", "general-purpose"]
 def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing one is built from
     kind: Kind,
     *,
+    name: str,
     names: frozenset[str],
     paths: SessionPaths | None,
     layout: Layout,
@@ -60,6 +62,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     skill_sources: Sequence[Any] = (),
     reachable: Sequence[str] | None = None,
     pdf_attachments: PdfAttachments | None = None,
+    scratch_run_limit: ScratchRunLimit | None = None,
     inner: Sequence[AgentMiddleware[Any, Any, Any]] = (),
     session_text: str | None = None,
     session_cached: bool = True,
@@ -75,6 +78,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     is held to it in model calls; one per build, shared by all three kinds. `trigger` is
     where this graph's own summariser fires, which sizes the PDFs its turn may hold open,
     and `pdf_attachments` is the deployment's say in what each of them is replaced with.
+    `name` is the graph's, as `scratch_run_limit` is asked about it.
 
     `inner` is what the deployment's settings switch on and what its definitions name, which
     go inside every standing one. Taken here rather than appended by each caller so that the
@@ -141,6 +145,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     standing.append(GuardedCallsMiddleware(names, paths))
     # Only where the graph holds offered tools: theirs are the only calls it binds.
     if names:
+        limit = NoScratchRunLimit() if scratch_run_limit is None else scratch_run_limit
         standing.append(
             ScratchRunsMiddleware(
                 names,
@@ -148,6 +153,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
                 tools=granted,
                 gated=gated,
                 seconds=execution_timeout_s,
+                limit_allows=limit.allows(name, kind),
             )
         )
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from .interfaces import (
         Instructions,
         PdfAttachments,
+        ScratchRunLimit,
         SessionInstructions,
         SubagentMiddlewares,
         UnusedResults,
@@ -33,6 +34,7 @@ class Plugins:
     unused_results: UnusedResults | None = None
     pdf_attachments: PdfAttachments | None = None
     subagent_middlewares: SubagentMiddlewares | None = None
+    scratch_run_limit: ScratchRunLimit | None = None
 
     def keywords(self) -> dict[str, Any]:
         """The fields that are set, as `Kingfisher`'s keywords."""

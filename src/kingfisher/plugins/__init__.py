@@ -19,6 +19,8 @@ _EXPORTS = {
     "ReturnedPdf": "kingfisher.core.interfaces",
     "SubagentMiddlewares": "kingfisher.core.interfaces",
     "AgentsMiddlewares": "kingfisher.core.interfaces",
+    "ScratchRunLimit": "kingfisher.core.interfaces",
+    "NoScratchRunLimit": "kingfisher.core.interfaces",
     "CommandRunner": "kingfisher.core.interfaces",
     "CommandResult": "kingfisher.core.interfaces",
     "ScratchRun": "kingfisher.core.interfaces",
@@ -60,11 +62,13 @@ __all__ = [
     "JsonlRunEvents",
     "Layout",
     "LocalSessions",
+    "NoScratchRunLimit",
     "PdfAttachments",
     "Plugins",
     "ReturnedPdf",
     "RunEvents",
     "ScratchRun",
+    "ScratchRunLimit",
     "SessionInstructions",
     "Sessions",
     "ShellPrompt",
@@ -100,10 +104,12 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import CommandResult as CommandResult
     from kingfisher.core.interfaces import CommandRunner as CommandRunner
     from kingfisher.core.interfaces import Instructions as Instructions
+    from kingfisher.core.interfaces import NoScratchRunLimit as NoScratchRunLimit
     from kingfisher.core.interfaces import PdfAttachments as PdfAttachments
     from kingfisher.core.interfaces import ReturnedPdf as ReturnedPdf
     from kingfisher.core.interfaces import RunEvents as RunEvents
     from kingfisher.core.interfaces import ScratchRun as ScratchRun
+    from kingfisher.core.interfaces import ScratchRunLimit as ScratchRunLimit
     from kingfisher.core.interfaces import SessionInstructions as SessionInstructions
     from kingfisher.core.interfaces import Sessions as Sessions
     from kingfisher.core.interfaces import SubagentMiddlewares as SubagentMiddlewares

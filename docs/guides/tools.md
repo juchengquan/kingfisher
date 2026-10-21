@@ -503,7 +503,10 @@ did not. `await runtime.context.arun(...)` is the same for an `async` tool.
 
 - **Only for an agent that may use the shell itself.** A tool is handed a run when the
   agent or subagent calling it holds `execute`, ungated; otherwise `error` says so and
-  nothing runs. A tool called from `eval`'s code is never handed one.
+  nothing runs. A tool called from `eval`'s code is never handed one. A deployment may
+  refuse it to more graphs with a
+  [`ScratchRunLimit`](ports.md#scratchrunlimit--which-graphs-tools-may-run-commands),
+  never to fewer.
 - **`argv` is a program and its arguments**, not a shell line, so a file name is never
   read as shell. Write `["sh", "-c", ...]` for a pipeline, and quote it yourself.
 - **The folder is all it sees of the session.** Names are plain — no folder, no leading

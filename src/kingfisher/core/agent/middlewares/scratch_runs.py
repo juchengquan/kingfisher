@@ -22,7 +22,7 @@ class ScratchRunsMiddleware(AgentMiddleware):
     pause for a person inside a tool.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 -- one keyword per term of the rule, and what a run needs
         self,
         names: frozenset[str],
         *,
@@ -30,13 +30,17 @@ class ScratchRunsMiddleware(AgentMiddleware):
         tools: Sequence[str] | None,
         gated: Collection[str],
         seconds: int,
+        limit_allows: bool,
     ) -> None:
         super().__init__()
         self.names = names
         self.backend = backend
         self.seconds = seconds
         #: `None` is an unnarrowed grant, which holds the shell like any other built-in.
-        self.allowed = (tools is None or EXECUTE in tools) and EXECUTE not in gated
+        #: The deployment's `ScratchRunLimit` is joined with `and`, so it can only take away.
+        self.allowed = (
+            (tools is None or EXECUTE in tools) and EXECUTE not in gated and limit_allows
+        )
 
     def _bound(self, request: Any) -> tuple[Any, ScratchRunner | None]:
         runtime = request.runtime

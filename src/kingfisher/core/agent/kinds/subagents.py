@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
     from kingfisher.core.config import Config
     from kingfisher.core.definitions.skills.registry import SkillRegistry
-    from kingfisher.core.interfaces import PdfAttachments
+    from kingfisher.core.interfaces import PdfAttachments, ScratchRunLimit
     from kingfisher.core.session.ledger import Ledger
 
 
@@ -278,6 +278,8 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     session_text: str | None = None,
     #: What the deployment hands over in place of a PDF, asked by every subagent built here.
     pdf_attachments: PdfAttachments | None = None,
+    #: Which graphs' offered tools the deployment refuses a run, asked of this one by name.
+    scratch_run_limit: ScratchRunLimit | None = None,
     #: What the agent stops on, which every subagent it reaches stops on too.
     gated: Collection[str] = (),
     #: The build's, which the agent's compiled graph measures; `None` assumes the default
@@ -344,6 +346,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     # differ. `paths` is handed down, not read off the backend, which need not carry it.
     subagent["middleware"] = standing_middleware(
         "subagent",
+        name=spec.name,
         # Inside every standing one: deepagents gives a subagent no `task` tool, and
         # `middleware` is the only spec field that carries code, so `task` comes the way
         # the main agent gets it; the deployment's own go after that, so they see
@@ -363,6 +366,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         keep_results_rounds=cfg.keep_results_rounds,
         trigger=trigger,
         pdf_attachments=pdf_attachments,
+        scratch_run_limit=scratch_run_limit,
         recorder=recorder,
         clearing=result_clearing(
             ledger, trigger, clear_results_at, subject=f"subagent {spec.name!r}"

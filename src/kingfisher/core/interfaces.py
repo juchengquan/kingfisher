@@ -364,3 +364,31 @@ class AgentsMiddlewares:
 
     def names(self, subagent: str, agent: str, middlewares: tuple[str, ...]) -> Sequence[str]:  # noqa: ARG002 -- the agent's, whoever asks
         return middlewares
+
+
+class ScratchRunLimit(Protocol):
+    """Which graphs' offered tools a deployment refuses `ToolContext.run`, among those
+    kingfisher would hand it to.
+
+    Asked once per graph built with offered tools: the agent, each subagent a definition
+    declares, and `general-purpose`. Its answer only takes away. A graph refused the shell,
+    or holding it behind a person, is refused a run whatever it says, and a tool called
+    from `eval`'s code is never handed one. An exception here fails the build.
+    """
+
+    def allows(self, name: str, kind: Literal["agent", "subagent", "general-purpose"]) -> bool:
+        """Whether the tools of graph `name` may run commands, where kingfisher would let them.
+
+        `name` is the agent's, empty for a request naming none; the subagent's; or
+        `general-purpose` for deepagents' own.
+        """
+        ...
+
+
+class NoScratchRunLimit:
+    """Every graph kingfisher would hand a run is handed one."""
+
+    def allows(
+        self, name: str, kind: Literal["agent", "subagent", "general-purpose"]  # noqa: ARG002
+    ) -> bool:
+        return True

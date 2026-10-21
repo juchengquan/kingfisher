@@ -2090,6 +2090,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         # What `PdfAttachments.replacement` is handed, as `ScratchRun` is below.
         "ReturnedPdf": "interface",
         "SubagentMiddlewares": "interface",
+        "ScratchRunLimit": "interface",
         # The type a runner returns. Nothing *imports* it in a snippet -- a runner's
         # `run` returns one, so a deployment cannot write the interface without it.
         "CommandResult": "interface",
@@ -2118,6 +2119,8 @@ WITNESSES: dict[str, dict[str, str]] = {
         "InstructionsFile": "embedder",
         "DeleteUnusedResults": "embedder",
         "AgentsMiddlewares": "embedder",
+        # `ports.md` names it as what a deployment leaving the limit out is given.
+        "NoScratchRunLimit": "document",
         # What `UnusedResults.settle` is handed, which `ports.md` writes out in its
         # example plugin's signature and loop.
         "UnusedFiles": "document",

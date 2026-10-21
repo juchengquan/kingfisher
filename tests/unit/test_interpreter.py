@@ -265,7 +265,7 @@ def _with_code_tools(cfg, session_dir) -> str:
     return str(other / "theirs.txt")
 
 
-def _from_code(cfg, session_dir, code, *, capabilities=NARROWED, agent=None):
+def _from_code(cfg, session_dir, code, *, capabilities=NARROWED, agent=None, **keywords):
     """What one `eval` of `code` answered, and the turn's last word."""
     built = build_agent(
         cfg,
@@ -284,6 +284,7 @@ def _from_code(cfg, session_dir, code, *, capabilities=NARROWED, agent=None):
         # A gate needs somewhere to pause into, and the agents here that carry one
         # are refused without it.
         checkpointer=InMemorySaver() if agent is not None else None,
+        **keywords,
     )
     try:
         out = built.graph.invoke(

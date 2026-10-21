@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A deployment may refuse a graph's tools their runs, with a plugin, after #1034
+
+- **`ScratchRunLimit` and `NoScratchRunLimit` are new on `kingfisher.plugins`**, and
+  `Kingfisher` takes `scratch_run_limit=`, as `Plugins` does for the command: an object
+  with `allows(name, kind) -> bool`, asked once per graph holding offered tools whether
+  their `runtime.context.run` is bound. Left out, nothing changes. It can refuse a run
+  kingfisher would bind, never bind one kingfisher refuses. `docs/guides/ports.md` has
+  the section.
+- **`standing_middleware` takes `name=`, and `ScratchRunsMiddleware` `limit_allows=`**,
+  each with no default: the graph's name, as the limit is asked about it, and its
+  answer. Pass the agent's name, empty for none; the subagent's; or `"general-purpose"`.
+  Neither is exported; code importing them from `kingfisher.core` needs the keyword.
+
 ## A portable subagent runs the agent's middleware, after #1033
 
 - **This changes what an existing deployment runs, with nothing written.** A portable
