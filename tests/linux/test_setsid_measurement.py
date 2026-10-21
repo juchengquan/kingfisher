@@ -55,11 +55,11 @@ sys.exit(os.waitstatus_to_exitcode(status))
 #: command's group, so the group kill must stop it, which is what makes the rest mean
 #: anything.
 ESCAPES = {
-    "control: background, same group": "sh -c 'sleep 2; touch \"$M\"' >/dev/null 2>&1 &",
-    "setsid(1)": "setsid sh -c 'sleep 2; touch \"$M\"' >/dev/null 2>&1 &",
+    "control: background, same group": "sh -c 'sleep 2; touch \"$M\"' >\"$M.log\" 2>&1 &",
+    "setsid(1)": "setsid sh -c 'sleep 2; touch \"$M\"' >\"$M.log\" 2>&1 &",
     "python os.setsid": (
         "python3 -c 'import os, time, pathlib; os.setsid(); time.sleep(2); "
-        "pathlib.Path(os.environ[\"M\"]).touch()' >/dev/null 2>&1 &"
+        "pathlib.Path(os.environ[\"M\"]).touch()' >\"$M.log\" 2>&1 &"
     ),
     "fork, setsid, fork": (
         "python3 -c 'import os, time, pathlib\n"
@@ -68,11 +68,11 @@ ESCAPES = {
         "    if os.fork() == 0:\n"
         "        time.sleep(2); pathlib.Path(os.environ[\"M\"]).touch()\n"
         "    os._exit(0)\n"
-        "os.wait()' >/dev/null 2>&1"
+        "os.wait()' >\"$M.log\" 2>&1"
     ),
     "perl setsid": (
         "perl -MPOSIX -e 'POSIX::setsid(); sleep 2; open(F, \">\", $ENV{M})' "
-        ">/dev/null 2>&1 &"
+        ">\"$M.log\" 2>&1 &"
     ),
 }
 
@@ -117,7 +117,7 @@ def _unkilled(runner, session: Path, command: str) -> tuple[bool, str]:
     confine = importlib.import_module("sandlock").confine
 
     mark = _mark(session)
-    inner = f"export M={shlex.quote(str(mark))}\n{command.replace('>/dev/null 2>&1', '')}"
+    inner = f"export M={shlex.quote(str(mark))}\n{command.replace('>\"$M.log\" 2>&1', '')}"
     done = subprocess.run(  # noqa: S602 -- the control, deliberately not killed
         inner,
         shell=True,
@@ -166,7 +166,11 @@ def test_measure_setsid_escapes_under_landlock(tmp_path):
 
     session = ensure_session_layout(tmp_path / "sessions" / "s", DEFAULT_LAYOUT)
     runner = _runner(session)
-    lines = [f"found: {runner.run('command -v setsid perl python3', timeout=20).output!r}"]
+    lines = [
+        f"found: {runner.run('command -v setsid perl python3', timeout=20).output!r}",
+        "dev/null: "
+        + repr(runner.run("echo hi > /dev/null; echo rc=$?; ls -l /dev/null", timeout=20).output),
+    ]
     for name, command in ESCAPES.items():
         wrote, said = _unkilled(runner, session, command)
         plain = _survives(runner, session, command, reaped=False)
