@@ -15,6 +15,8 @@ from kingfisher.core.agent.assembly import (
 )
 from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository, reachable
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.plugins import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import a_subagent, repository_root, subagents_dir, tools_dir
@@ -334,6 +336,30 @@ def test_a_definition_naming_only_a_datazone_is_left_behind(cfg, tmp_path):
     assert "switches on access control" in "\n".join(done.report())
 
 
+def test_a_star_datazone_is_left_behind_and_refused_where_it_loads(cfg, tmp_path):
+    """Seed read `datazone: "*"` as "any" and copied the file, and the loader read it as a
+    datazone named `*`: copied, it switched on access control and shut its subagent to
+    every caller. Seed and the loader now agree it is no "any" -- left behind as a named
+    datazone is, and refused by name if copied anyway.
+    """
+    source = tmp_path / "presets"
+    (source / "subagents").mkdir(parents=True)
+    (source / "subagents" / "ledger.yaml").write_text(
+        "name: ledger\ndescription: d\ndatazone: '*'\nsystem_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert "subagents/ledger.yaml" not in done.written
+    (left,) = done.skipped
+    assert (left.label, left.datazones) == ("subagents/ledger.yaml", ("*",))
+
+    assert "subagents/ledger.yaml" in seeding.seed(cfg, source, everything=True).written
+    with pytest.raises(SubagentError, match=r"datazone '\*' is not 'any'"):
+        _ = LocalSubagentRepository(subagents_dir(cfg)).specs
+
+
 #: Every way a definition says who reaches it *in Python*: the only place a tool can say
 #: it, and one of the two places a subagent can. Read by a tolerant reader of seeding's
 #: own, as the YAML above is, so a spelling it stops covering does not fail -- the
@@ -388,6 +414,21 @@ CODE_SPELLINGS = {
         (),
         ("emea",),
     ),
+    # `"*"` is everyone in `source_ids`, but no "any" in a datazone, which refuses it.
+    "a subagent entry's datazone written '*'": (
+        "subagents",
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+        '             "datazone": "*"}]\n',
+        (),
+        ("*",),
+    ),
+    "a tool spec's datazone written '*'": (
+        "tools",
+        "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\nTOOLS = [ToolSpec(t, datazone='*')]\n",
+        (),
+        ("*",),
+    ),
 }
 
 
@@ -412,6 +453,35 @@ def test_every_way_python_names_an_audience_is_left_behind(spelling, cfg, tmp_pa
         sorted(datazones),
     )
     assert left[0].wants == "source_ids"
+
+
+@pytest.mark.parametrize(
+    ("kind", "written"),
+    [
+        (
+            "subagents",
+            'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+            '             "source_ids": ["*"]}]\n',
+        ),
+        (
+            "tools",
+            "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+            "    return ''\n\n\nTOOLS = [ToolSpec(t, source_ids=['*'])]\n",
+        ),
+    ],
+)
+def test_source_ids_of_everyone_are_copied_in_python(kind, written, cfg, tmp_path):
+    """The control the `'*'` datazone rows need: in `source_ids` it is everyone, so a
+    reader that took it for a name there too would leave an open definition behind.
+    """
+    source = tmp_path / "presets"
+    (source / kind).mkdir(parents=True)
+    (source / kind / "open.py").write_text(written, encoding="utf-8")
+
+    done = seeding.seed(cfg, source)
+
+    assert f"{kind}/open.py" in done.written
+    assert not done.skipped
 
 
 def test_a_module_that_only_mentions_an_audience_is_copied(cfg, tmp_path):

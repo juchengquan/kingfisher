@@ -1852,6 +1852,9 @@ and a tool file writes `ToolSpec(tool, datazone="finance")`.
   tool's `source_ids` *and* be in its datazone.
 - **A caller in no datazone reaches only what names none.** Forgetting to pass one
   must not hand a caller every datazone's tools. `UNSCOPED` switches both checks off.
+- **Left out is any, and `"*"` is not.** In `source_ids` it is everyone, but a
+  datazone has no such word: `datazone: "*"` is refused when the definition loads, and
+  `seed` leaves it behind as it does any datazone.
 - **An agent has no datazone**, and writing one is refused: an agent runs in
   whichever datazone its caller names. Nor does an entry —
   `{name: payroll, datazone: hr}` is refused, since on an entry it could only repeat

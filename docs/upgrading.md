@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A datazone written `"*"` is refused, after #9999
+
+- **`datazone: "*"` no longer loads.** It was read as a datazone named `*`, which no
+  caller is in, so the subagent or tool was shut to everyone and access control was
+  switched on; `seed` meanwhile took it for "any" and copied the file. Leave
+  `datazone` out for any datazone, which is what `"*"` was meant to say. The same goes
+  for `"datazone": "*"` in Python and `ToolSpec(..., datazone="*")`.
+
 ## A skill written bare and qualified is refused, after #9999
 
 - **`skills: [audit, catalogue::audit]` no longer loads.** Both entries loaded and

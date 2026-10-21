@@ -175,7 +175,8 @@ def datazones_named(fields: Mapping[str, object]) -> tuple[str, ...]:
     writing one is refused and so is an entry, so there is nowhere else to look.
     """
     written = fields.get("datazone")
-    if isinstance(written, str) and written.strip() and written.strip() != "*":
+    # `"*"` included: it is no "any" here, as it is in an audience, and the loader refuses it.
+    if isinstance(written, str) and written.strip():
         return (written.strip(),)
     return ()
 
@@ -205,29 +206,31 @@ def audiences_in_code(text: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
             for key, value in zip(node.keys, node.values, strict=True):
                 field_name = key.value if isinstance(key, ast.Constant) else None
                 if isinstance(field_name, str) and field_name in found:
-                    _written(value, into=found[field_name])
+                    _written(value, into=found[field_name], field=field_name)
         elif isinstance(node, ast.Call):
             for keyword in node.keywords:
                 if keyword.arg in found:
-                    _written(keyword.value, into=found[keyword.arg])
+                    _written(keyword.value, into=found[keyword.arg], field=keyword.arg)
     return tuple(dict.fromkeys(found["source_ids"])), tuple(dict.fromkeys(found["datazone"]))
 
 
-def _written(node: ast.expr, *, into: list[str]) -> None:
+def _written(node: ast.expr, *, into: list[str], field: str) -> None:
     """Every name one audience spells out, by any of the shapes the field takes."""
     if isinstance(node, ast.Constant):
-        if isinstance(node.value, str) and node.value.strip() and node.value.strip() != "*":
-            into.append(node.value.strip())
+        name = node.value.strip() if isinstance(node.value, str) else ""
+        # `"*"` is everyone in `source_ids` and no one's name; a datazone has no such word.
+        if name and not (name == "*" and field == "source_ids"):
+            into.append(name)
     elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
         for one in node.elts:
-            _written(one, into=into)
+            _written(one, into=into, field=field)
     elif isinstance(node, ast.Dict):
         # A requirement, which is a set: written in Python it is `{"a", "b"}`, and a
         # reader that walked only `ast.Set` would miss the mapping YAML's `{a, b}` becomes
         # when somebody copies it across.
         for key in node.keys:
             if key is not None:
-                _written(key, into=into)
+                _written(key, into=into, field=field)
 
 
 def _collect(written: object, *, into: list[str]) -> None:
