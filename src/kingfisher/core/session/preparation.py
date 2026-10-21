@@ -415,7 +415,13 @@ class Preparation:
             ledger=ledger,
             # A resume adds no message: it continues a superstep, and a user turn
             # appended there would be one the model never saw asked.
-            message=turn_message(asked, placement.placed, earlier, layout=self.cfg.layout)
+            message=turn_message(
+                asked,
+                placement.placed,
+                earlier,
+                layout=self.cfg.layout,
+                note=getattr(request, "note", ""),
+            )
             if asked
             else "",
             session=session,

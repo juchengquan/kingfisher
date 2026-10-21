@@ -73,12 +73,16 @@ def turn_message(
     earlier: KeptLedger | None = None,
     *,
     layout: Layout,
+    note: str = "",
 ) -> str:
-    """The task, plus this turn's facts and nothing more.
+    """The task and the caller's note, plus this turn's facts and nothing more.
 
     `earlier` is the ledger as the turn found it, or `None` for a graph the deployment
     supplied, which records nothing.
     """
+    # Beside the task, as the caller wrote it: it is the caller's, and kingfisher's lines
+    # after it are about where the work is done.
+    noted = f"{note}\n\n" if note else ""
     # Named because the inputs changed under a session the agent may already have seen.
     arrived = f" New files in {layout.inputs_route}: {', '.join(placed)}." if placed else ""
     # Here, never in the system prompt: a line changing every turn in the cached prefix
@@ -90,6 +94,7 @@ def turn_message(
     # about three times the whole task.
     return (
         f"{task}\n\n"
+        f"{noted}"
         f"{layout.scratch_route} is yours to work in (from the shell, {layout.scratchpad})."
         f"{arrived}"
         f"{ledger}"

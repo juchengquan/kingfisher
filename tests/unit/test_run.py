@@ -251,6 +251,35 @@ def test_supplied_inputs_are_still_there_on_the_next_turn(cfg):
     assert not (session / "input").exists()  # nothing was re-supplied
 
 
+def test_a_note_is_replayed_as_it_was_sent_and_reaches_no_other_turn(cfg):
+    """Kept in the turn's own message, so the next turn replays it byte for byte; a note
+    held anywhere else would be lost from the history, or sent again with every turn.
+    """
+    start(cfg, "noted")
+    first, second = StubAgent("ok"), StubAgent("ok")
+    run(
+        Request("look at it", session_id="noted", note="Answer in French."),
+        cfg=cfg,
+        graph=first,
+        sessions=LocalSessions(),
+    )
+    run(
+        Request("and again", session_id="noted"),
+        cfg=cfg,
+        graph=second,
+        sessions=LocalSessions(),
+    )
+
+    sent = first.state["messages"][-1]["content"]
+    assert sent == (
+        "look at it\n\nAnswer in French.\n\n"
+        "/scratchpad/ is yours to work in (from the shell, scratchpad)."
+    )
+    replayed, *_, asked = second.state["messages"]
+    assert replayed["content"] == sent
+    assert "French" not in asked["content"]
+
+
 def test_the_agent_is_told_what_arrived_in_inputs(cfg):
     """It may already have looked at /inputs this session."""
     source = cfg.workspace / "fresh.csv"

@@ -2125,7 +2125,10 @@ cache on every call. `system.md` carries fixed text, *What your tools returned*,
 agent alone. A new message carries `<ledger_delta>`, the rows since the previous user
 message, a subagent's indented under its answer so the parent sees where they are and
 never what they hold. A resume adds no message, so *since* reaches back past it. No block
-when nothing was recorded, on a resume, or for a graph the deployment supplied.
+when nothing was recorded, on a resume, or for a graph the deployment supplied. A
+request's `note` goes in the same message, right after the task and untagged: it is the
+caller's text, so it sits with the caller's words, and kept in that message it is
+replayed as sent rather than repeated on every turn or lost from the history.
 
 **A subagent reads the id on its results and is told nothing about it, and that is left
 as it is.** Measured, the agent's prompt is 9,543 characters and explains the id; a

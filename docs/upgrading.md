@@ -41,6 +41,16 @@ replaced the four layers began.
   calls `high_mark(trigger, written, subject=...)`; `summarizer_trigger(model)` still
   reads deepagents' own, and `summarizer_trigger(model, middleware)` the one that runs.
 
+## A request may carry a note for its turn, after #1024
+
+- **`Request` has a `note` field**, text for that turn alone. It is sent right after
+  the task in the turn's message and kept there, so later turns replay it as sent.
+  Left empty, the message is exactly what it was. `docs/guides/formats.md` has the
+  section.
+- **If you add per-turn text yourself**, appended to the task or placed by a
+  middleware of your own, `note` is the place for it. Moved out of the task, it leaves
+  the `run_start` event, which logs the task alone.
+
 ## A subagent's calls name its model, and `extra` refuses a class's own names, after #1022
 
 - **A `model_call` or `model_error` made by a subagent carries that subagent's

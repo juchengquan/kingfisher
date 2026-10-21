@@ -220,6 +220,32 @@ def test_a_bare_task_is_told_only_where_to_work():
     )
 
 
+def test_a_note_follows_the_task_and_comes_before_kingfishers_own_lines():
+    """A note after the scratch line or the new files reads as more about where to work,
+    and one ahead of the task puts the caller's aside before what was asked.
+    """
+    message = turn_message(
+        "analyse", ("fresh.csv",), layout=DEFAULT_LAYOUT, note="Figures are in euros."
+    )
+
+    assert message == (
+        "analyse\n\nFigures are in euros.\n\n"
+        "/scratchpad/ is yours to work in (from the shell, scratchpad)."
+        " New files in /inputs/: fresh.csv."
+    )
+
+
+def test_an_empty_note_leaves_the_message_as_it_was():
+    """The control: a turn without a note that gained so much as a blank line would send
+    a different message from every turn before it.
+    """
+    message = turn_message("do a thing", (), layout=DEFAULT_LAYOUT, note="")
+
+    assert message == (
+        "do a thing\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
+    )
+
+
 def test_files_supplied_with_the_request_are_named():
     """They went to a directory of the turn's own and are session inputs now, so the
     one line that used to name two places names one.
