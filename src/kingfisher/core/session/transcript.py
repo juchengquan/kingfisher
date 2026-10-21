@@ -36,6 +36,9 @@ class Message:
     call_id: str = ""
     #: Which tool answered, for a reader who has only this line.
     name: str = ""
+    #: Set only on the summary deepagents wrote in place of the messages before it, which
+    #: it must still recognise when it summarises again.
+    summary: bool = False
 
 
 def as_json(messages: tuple[Message, ...]) -> str:
@@ -57,6 +60,7 @@ def as_json(messages: tuple[Message, ...]) -> str:
                 ),
                 **({"call_id": message.call_id} if message.call_id else {}),
                 **({"name": message.name} if message.name else {}),
+                **({"summary": True} if message.summary else {}),
             },
             sort_keys=True,
         )
@@ -82,6 +86,7 @@ def from_json(document: str) -> tuple[Message, ...]:
                 ),
                 call_id=raw.get("call_id", ""),
                 name=raw.get("name", ""),
+                summary=bool(raw.get("summary", False)),
             )
         )
     return tuple(read)

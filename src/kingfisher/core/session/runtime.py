@@ -7,7 +7,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import replace
 from typing import Any
 
-from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from langgraph.types import Command, StreamMode
 
@@ -110,6 +110,11 @@ STREAM_MODES: list[StreamMode] = ["updates", "values", "messages", "custom"]
 CUT_OFF_MARK = "kingfisher.cut_off"
 
 
+#: The `lc_source` deepagents' summariser tags its model's calls with, and the summary
+#: message it writes, by which it knows an earlier summary when it summarises again.
+SUMMARISER = "summarization"
+
+
 def user_payload(text: str, history: tuple[Message, ...] = ()) -> dict[str, Any]:
     """The graph's input: what was said before, then what is being asked now."""
     return {"messages": [*(_as_langchain(message) for message in history),
@@ -130,6 +135,8 @@ def _as_langchain(message: Message) -> Any:
                 for call in message.tool_calls
             ],
         )
+    if message.summary:
+        return HumanMessage(content=message.content, additional_kwargs={"lc_source": SUMMARISER})
     return {"role": message.role, "content": message.content}
 
 
@@ -160,6 +167,8 @@ def as_transcript(messages: Iterable[Any]) -> tuple[Message, ...]:
                 ),
                 call_id=str(getattr(raw, "tool_call_id", "") or ""),
                 name=str(getattr(raw, "name", "") or ""),
+                summary=(getattr(raw, "additional_kwargs", None) or {}).get("lc_source")
+                == SUMMARISER,
             )
         )
     return tuple(read)
@@ -387,7 +396,7 @@ def _token_event(chunk: Any) -> RunEvent | None:
     message, metadata = chunk
     # The summariser calls its model inside the model node, so only the tag it sets
     # tells its tokens from the answer's.
-    if isinstance(metadata, Mapping) and metadata.get("lc_source") == "summarization":
+    if isinstance(metadata, Mapping) and metadata.get("lc_source") == SUMMARISER:
         return None
     # Not the base `AIMessage`, which would admit the tool results this exists to exclude.
     if not isinstance(message, AIMessageChunk):
@@ -454,6 +463,24 @@ def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
 #: Where deepagents' summariser keeps the summary it made. Private state, so what
 #: `invoke` returns leaves it out and only the graph's own state has it.
 SUMMARY_EVENT = "_summarization_event"
+
+
+def as_seen(snapshot: Any) -> list[Any]:
+    """The conversation as the model last saw it: the summary and what followed its cut,
+    where deepagents summarised, else every message.
+
+    Every message stays in state with the summary beside it, as private state the next
+    turn's graph is never given: kept whole, each turn summarises the conversation again.
+    """
+    values = getattr(snapshot, "values", None)
+    if not isinstance(values, Mapping):
+        return []
+    messages = list(values.get("messages") or ())
+    event = values.get(SUMMARY_EVENT)
+    if not isinstance(event, Mapping):
+        return messages
+    # Cut here, before `as_transcript` drops any message: the cut is a position in this list.
+    return [event["summary_message"], *messages[event["cutoff_index"] :]]
 
 
 def summarised_in(snapshot: Any) -> bool:

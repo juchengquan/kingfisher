@@ -2197,11 +2197,25 @@ allowed almost never clears, the nearest thing to off. The summariser also fires
 last reply's reported usage, which this does not read. A model the deployment passes in
 takes the default. The ledger is unchanged by clearing.
 
-**Still open: the summariser re-runs every turn once past its trigger.** Its event is in
-state the next turn's graph is not given, so each turn summarises again and appends the
-same history once more. The fix designed writes the summary and the messages after its
-cut as the transcript. Clearing makes the trigger rare on a large window; on a small one
-it is the next thing to fix.
+**A summarised turn is kept as the model last saw it: the summary, then the messages after
+its cut.** deepagents keeps every message in state and the summary beside them as private
+state, which no turn's graph is given. Kept whole, each turn started past the trigger
+again and summarised the whole conversation once more: measured, three summaries over
+three turns where one was due, each a model call over nearly everything, a new history
+file repeating the early messages, and a summary rewritten at the front of what the
+model sees, so nothing of the prompt was cached. The transcript stops being every word
+said; the words summarised away are in `conversation_history/`, which the summary names.
+The summary keeps the `lc_source` mark deepagents knows it by, as `Message.summary`:
+read back unmarked, the next summary copies it into its history file as if the user had
+said it. The cut is applied before the messages become records, since `as_transcript`
+drops roles it does not know and the cut is a position. **Reversed: restoring the
+summary into the next turn's state instead.** A private key cannot be passed in as input,
+only written with `update_state` onto a saver that is new each turn, and the cut would
+still be a position into a list conversion can shorten. **One history file a summary,
+not one a session.** deepagents names the file by an id it also keeps in private state;
+carrying that id across turns is the same workaround, and after this fix the files do not
+overlap. **Kept for the life of the session**, unlike saved tool results: a history file
+is the only copy of what it holds, and no call fetches it again. *(2026-10-21.)*
 
 **Whether the model may cite a result is a deployment's switch, on by default.**
 `KINGFISHER_CITE_RESULTS`, read into `Config.cite_results`. Citing is the provenance the

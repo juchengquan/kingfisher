@@ -232,7 +232,7 @@ class Running:
             # No state, or a turn that died before its first superstep: this runs after
             # every turn, failed ones included.
             return
-        messages = snapshot.values.get("messages")
+        messages = runtime.as_seen(snapshot)
         if messages:
             yield from write_transcript(prepared.harness, runtime.as_transcript(messages))
 

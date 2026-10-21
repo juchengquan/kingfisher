@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A summarised conversation is kept summarised, after #1017
+
+- **`.harness/transcript.jsonl` is the conversation as the model last saw it.** Once a
+  turn ends summarised, it opens on the summary and holds only the messages after the
+  summary's cut; the rest is in `scratchpad/conversation_history/`, which the summary
+  names. Anything reading the transcript as every word said reads less after a summary.
+- **`Message` has a `summary` field**, true only on that summary, and written as
+  `"summary": true` in the transcript line.
+
 ## What becomes of an unused result is a plugin, after #1012
 
 - **`UnusedResults`, `DeleteUnusedResults`, `UnusedFiles` and `UnusedFile` are new
