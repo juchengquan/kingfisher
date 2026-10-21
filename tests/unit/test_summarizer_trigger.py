@@ -8,17 +8,21 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 import pytest
-from deepagents.middleware.summarization import SummarizationMiddleware
+from deepagents.middleware.summarization import (
+    SummarizationMiddleware,
+    create_summarization_middleware,
+)
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware import SummarizationMiddleware as LangchainSummarization
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages.utils import count_tokens_approximately
 
 from assets.middlewares.summarize_by_count import SummarizeByCount
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.attachments import AttachmentsMiddleware, pdf_allowance
 from kingfisher.core.agent.middlewares.clearing import DEFAULT_MARK, ResultClearingMiddleware
-from kingfisher.core.agent.models import summarizer_trigger, supplied_trigger
+from kingfisher.core.agent.models import summarizer_count, summarizer_trigger, supplied_trigger
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.session.ledger import Ledger
@@ -45,6 +49,23 @@ class Early(SummarizationMiddleware):
 
     def __init__(self, model: Any, backend: Any) -> None:
         super().__init__(model, backend=backend, trigger=("tokens", EARLY))
+        self.name = "SummarizationMiddleware"
+
+
+def calibrated(messages: Any, *, tools: Any = None) -> int:
+    """A deployment's counter, calibrated against a gateway counting twice what langchain
+    estimates."""
+    return 2 * count_tokens_approximately(messages, tools=tools)
+
+
+class Calibrated(SummarizationMiddleware):
+    """deepagents' summariser in its own place, counting with `calibrated`."""
+
+    name = "calibrated"
+    wants = frozenset({"model", "backend"})
+
+    def __init__(self, model: Any, backend: Any) -> None:
+        super().__init__(model, backend=backend, token_counter=calibrated)
         self.name = "SummarizationMiddleware"
 
 
@@ -130,6 +151,73 @@ def test_the_trigger_is_where_the_summarizer_in_the_stack_fires(
     assert not fires(trigger - 1), trigger
 
 
+#: A conversation whose last reply reports more than langchain estimates, which its default
+#: counter scales by, and a tool whose schema deepagents counts.
+REPORTED = [
+    HumanMessage("x" * 4_000),
+    AIMessage(
+        "y" * 400,
+        response_metadata={"model_provider": "anthropic"},
+        usage_metadata={"input_tokens": 9_000, "output_tokens": 100, "total_tokens": 9_100},
+    ),
+    ToolMessage("z" * 8_000, tool_call_id="c1"),
+]
+TOOLS = [{"name": "probe", "description": "d" * 400, "parameters": {"type": "object"}}]
+
+
+def _own(model: Any) -> Any:
+    return create_summarization_middleware(model, None)  # ty: ignore[invalid-argument-type]
+
+
+def _deepagents_calibrated(model: Any) -> Any:
+    return SummarizationMiddleware(model, backend=None, token_counter=calibrated)  # ty: ignore[invalid-argument-type]
+
+
+@pytest.mark.parametrize(
+    ("summarizer", "tools"),
+    [
+        (_own, TOOLS),
+        (lambda model: Foreign(), TOOLS),
+        (_deepagents_calibrated, TOOLS),
+        (lambda model: Early(model, None), TOOLS),
+        (lambda model: LangchainSummarization(model=model, token_counter=calibrated), []),
+    ],
+    ids=[
+        "deepagents' own",
+        "one it cannot read",
+        "deepagents', calibrated",
+        "deepagents', supplied",
+        "langchain's",
+    ],
+)
+def test_clearing_counts_as_the_summarizer_in_the_stack_does(summarizer, tools):
+    """Counted by langchain's bare default, clearing measured a mark read off the
+    summariser's trigger in another unit, and a deployment calibrating its summariser's
+    counter against the gateway moved the trigger but not where clearing started.
+
+    Driven through the count each summariser decides on -- deepagents' with the prompt and
+    tools, langchain's on the messages alone -- and on an Anthropic model, where its default
+    differs from the bare one: the control below. The unscaled count is asked of the whole
+    conversation, because no single message is scaled.
+    """
+    model = _anthropic(200_000)
+    built = summarizer(model)
+    deciding = _own(model) if isinstance(built, Foreign) else built
+    if isinstance(deciding, SummarizationMiddleware):
+        decided = deciding._count_tokens(REPORTED, None, tools)
+        helper = deciding._lc_helper
+    else:
+        decided = deciding.token_counter(REPORTED)
+        helper = deciding
+
+    count = summarizer_count(model, [built])
+    assert count.request(REPORTED, tools) == decided
+    assert decided != count_tokens_approximately(REPORTED, tools=tools), "the control"
+    partial = helper._partial_token_counter
+    unscaled = partial(REPORTED, tools=tools) if tools else partial(REPORTED)
+    assert count.unscaled(REPORTED, tools) == unscaled
+
+
 def test_a_summarizer_with_no_size_to_read_is_sized_as_deepagents_own():
     """A trigger of message counts alone, or a class kingfisher cannot read, would
     otherwise leave nothing to size by; deepagents' own is the size it falls back to."""
@@ -145,7 +233,7 @@ def _built(cfg: Any, session_dir: Any, **given: Any) -> Any:
     return build_agent(
         cfg,
         backend=backend_at(cfg, session_dir),
-        middleware_registry={"early": Early, "foreign": Foreign},
+        middleware_registry={"early": Early, "foreign": Foreign, "calibrated": Calibrated},
         ledger=Ledger("t", KeptLedger()),
         **given,
     )
@@ -224,6 +312,35 @@ def test_clearing_starts_at_half_where_the_deployments_summarizer_fires(cfg, ses
     assert _high(_built(cfg, session_dir, agent=_spec(cfg, "unnamed")).middleware) == (
         DEFAULT_MARK
     )
+
+
+def test_every_graph_clears_by_the_count_of_the_summarizer_it_runs(cfg, session_dir):
+    """A deployment's counter reached the summariser and not clearing, so its calibration
+    moved where the conversation was summarised and not where it was cleared: the agent,
+    `general-purpose`, which runs the agent's middleware, and a subagent naming it."""
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(
+        "name: helper\ndescription: Helps.\nmiddlewares: [calibrated]\n"
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
+    )
+    (subagents_dir(cfg) / "plain.yaml").write_text(
+        "name: plain\ndescription: Helps.\nsystem_prompt: |\n  You help.\n", encoding="utf-8"
+    )
+    an_agent(cfg, middlewares="[calibrated]", subagents="[helper, plain]", **EVERY_TOOL)
+
+    built = _built(cfg, session_dir, agent=_spec(cfg))
+
+    graphs = {spec["name"]: spec["middleware"] for spec in built.subagents or ()}
+    twice = 2 * count_tokens_approximately(REPORTED)
+    for middleware in (built.middleware, graphs["general-purpose"], graphs["helper"]):
+        assert _counted(middleware) == twice
+    assert _counted(graphs["plain"]) < twice, "a subagent naming none"
+
+
+def _counted(middleware: Any) -> int:
+    (clearing,) = [one for one in middleware if isinstance(one, ResultClearingMiddleware)]
+    return clearing.count.request(REPORTED, [])
 
 
 def _marked(cfg: Any, model: str | None = None, **fields: Any) -> Any:

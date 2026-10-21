@@ -2380,6 +2380,22 @@ from it. Then capped at the input budget, as deepagents' own is. Where nothing c
 read -- a class that is neither, or a trigger of counts alone -- it is sized as
 deepagents' own, and the notice the replacement is built with says so. *(2026-10-21.)*
 
+**Clearing counts with the counter of the summariser that runs.** The marks are read off
+its trigger, and were counted with `count_tokens_approximately` as if that were how it
+counts. It is not: langchain swaps in 3.3 characters a token on an Anthropic class, which
+the MiniMax rows are, and scales by the provider's reported usage (`findings.md` has how),
+so a pass started later than half the trigger and took each saving in another unit. And a
+deployment calibrating its summariser's `token_counter` against a gateway's real counts
+moved the trigger but not clearing. So each graph reads the counter off the summariser
+`summarizer_trigger` reads, deepagents' own default where it reads none, and counts the
+request with the prompt and tools as deepagents does. A saving is counted per message
+unscaled, as the summariser sizes its cut, and multiplied by the factor the whole count
+was scaled by: unscaled, a pass cleared past the low mark by that factor. The default
+mark stays 64,000, now in those tokens, a sixth to a third fewer characters on the MiniMax
+rows; the approximation ran some 16% under MiniMax's own count in the trials that chose
+it, so the new unit is the nearer to what was meant, kept on the owner's word until the
+trials are re-run under it. *(2026-10-21, from a downstream request.)*
+
 **A summarised turn is kept as the model last saw it: the summary, then the messages after
 its cut.** deepagents keeps every message in state and the summary beside them as private
 state, which no turn's graph is given. Kept whole, each turn started past the trigger

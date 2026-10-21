@@ -336,6 +336,17 @@ counting messages alone fires at any size, and is left out. So a summarizer firi
 kingfisher cannot read -- neither deepagents' nor langchain's, or one counting only
 messages -- is sized as deepagents' own, and the notice it is built with says so.
 
+**Clearing counts as your summarizer counts.** Its `token_counter` is read off the same
+summarizer, so calibrating it against what your gateway reports moves the trigger and
+where clearing starts together: a counter that counts twice the estimate clears at half
+the conversation it did. Pass it to deepagents' summarizer as its own keyword, in a
+class taking that summarizer's place as `SummarizeByCount` does. It is called on every
+model call, and past the mark on each message a pass may clear as well, so a counter
+asking the gateway over the network makes that many requests: a calibrated
+`chars_per_token` on `count_tokens_approximately` makes none. Left alone,
+deepagents' own counts as langchain's default does, which on `ChatAnthropic` is 3.3
+characters a token, scaled by the usage the provider last reported.
+
 ## What your middleware sees
 
 **Already-narrowed capabilities.** A deployment's middleware runs after the

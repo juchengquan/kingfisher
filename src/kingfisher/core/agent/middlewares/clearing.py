@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware, ExtendedModelResponse
 from langchain_core.messages import AIMessage, ToolMessage
-from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.types import Command
 
 from kingfisher.core.agent.prompting import EDIT_FILE, FILE_TOOLS, WRITE_FILE
@@ -29,6 +28,7 @@ from .recorded import (
 )
 
 if TYPE_CHECKING:
+    from kingfisher.core.agent.models import SummarizerCount
     from kingfisher.core.result import LedgerEntry
     from kingfisher.core.session.ledger import Ledger
 
@@ -95,17 +95,27 @@ def high_mark(trigger: int, written: int | None, *, subject: str) -> int:
 
 
 def result_clearing(
-    ledger: Ledger | None, trigger: int, written: int | None, *, subject: str
+    ledger: Ledger | None,
+    trigger: int,
+    written: int | None,
+    *,
+    count: SummarizerCount,
+    subject: str,
 ) -> Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None:
     """What builds `subject`'s clearing once its grant is known, or `None` where no ledger
     is kept for a handle to name.
 
-    Each graph's own `trigger` and `written`: a subagent on a smaller model, or naming a
-    summariser of its own, would otherwise clear by a mark it never reaches.
+    Each graph's own `trigger`, `written` and `count`: a subagent on a smaller model, or
+    naming a summariser of its own, would otherwise clear by a mark it never reaches.
     """
     if ledger is None:
         return None
-    return partial(ResultClearingMiddleware, ledger, high_mark(trigger, written, subject=subject))
+    return partial(
+        ResultClearingMiddleware,
+        ledger,
+        high_mark(trigger, written, subject=subject),
+        count=count,
+    )
 
 
 @dataclass(frozen=True)
@@ -118,7 +128,7 @@ class _Item:
     #: The message with this item cleared.
     clear: Callable[[Any], Any]
     #: What clearing it alone frees, in the summariser's tokens.
-    frees: int
+    frees: float
 
 
 class ResultClearingMiddleware(AgentMiddleware):
@@ -140,12 +150,17 @@ class ResultClearingMiddleware(AgentMiddleware):
         ledger: Ledger,
         high: int,
         tools: tuple[str, ...] | None = None,
+        *,
+        count: SummarizerCount,
     ) -> None:
         super().__init__()
         #: The turn's, whose rows say where each result with an id is kept.
         self._ledger = ledger
         self.high = high
         self._low = high // 2
+        # The summariser's, not langchain's bare default: the marks are read off its
+        # trigger, and its default counts 3.3 characters a token on an Anthropic model.
+        self.count = count
         # The graph's grant, not `request.tools`: this runs before `GrantedOnlyMiddleware`
         # narrows them.
         self._granted = None if tools is None else frozenset(tools)
@@ -168,14 +183,21 @@ class ResultClearingMiddleware(AgentMiddleware):
         or the request as it came and `None` where no pass runs."""
         sent = list(request.messages)
         fixed = [] if request.system_message is None else [request.system_message]
-        total = count_tokens_approximately([*fixed, *sent], tools=request.tools)
+        total = self.count.request([*fixed, *sent], request.tools)
         if total < self.high:
             return request, None
+        # Scaled as the total is, or a pass would clear past the low mark by the factor
+        # the provider's reported usage put on the total and not on each message.
+        scale = total / max(1, self.count.unscaled([*fixed, *sent], request.tools))
+
+        def tokens(message: Any) -> float:
+            return self.count.each([message]) * scale
+
         messages = list(request.state.get("messages") or ())
         # The summariser's view omits what its summary stands for and may shorten arguments,
         # so a handle is made from the message in state and counted against the one sent.
         as_sent = {one.id: one for one in sent if one.id is not None}
-        items = self._items(messages, as_sent)
+        items = self._items(messages, as_sent, tokens)
         if sum(item.frees for item in items) < self.high * WORTH:
             return request, None
         changed: dict[int, Any] = {}
@@ -184,7 +206,7 @@ class ResultClearingMiddleware(AgentMiddleware):
                 break
             counted = changed[item.at] if item.at in changed else as_sent[messages[item.at].id]
             after = item.clear(changed.get(item.at, messages[item.at]))
-            total -= _tokens(counted) - _tokens(after)
+            total -= tokens(counted) - tokens(after)
             changed[item.at] = after
         if not changed:
             return request, None
@@ -192,7 +214,9 @@ class ResultClearingMiddleware(AgentMiddleware):
         cleared = request.override(messages=[replaced.get(one.id, one) for one in sent])
         return cleared, Command(update={"messages": list(replaced.values())})
 
-    def _items(self, messages: list[Any], as_sent: Mapping[str, Any]) -> list[_Item]:
+    def _items(
+        self, messages: list[Any], as_sent: Mapping[str, Any], tokens: Callable[[Any], float]
+    ) -> list[_Item]:
         """Everything a pass may clear, oldest first, each freeing something.
 
         Spared: the latest batch of calls with its results, the `KEEP_RECENT` most
@@ -227,8 +251,14 @@ class ResultClearingMiddleware(AgentMiddleware):
         def sending(at: int) -> Any:
             return as_sent.get(messages[at].id) if messages[at].id is not None else None
 
+        def item(at: int, order: int, clear: Callable[[Any], Any]) -> _Item:
+            """One item, freeing what its handle saves against the message as this call
+            sends it."""
+            frees = tokens(sending(at)) - tokens(clear(messages[at]))
+            return _Item(at=at, order=order, clear=clear, frees=frees)
+
         items = [
-            _item(messages[at], sending(at), at, 0, _replaced(handle))
+            item(at, 0, _replaced(handle))
             for at, call, handle in results
             if sending(at) is not None and call not in kept
         ]
@@ -240,9 +270,7 @@ class ResultClearingMiddleware(AgentMiddleware):
                 if call["id"] in succeeded and call["id"] not in kept:
                     cleared = _file_text_cleared(call)
                     if cleared:
-                        items.append(
-                            _item(one, sending(at), at, order, _rewritten(call["id"], cleared))
-                        )
+                        items.append(item(at, order, _rewritten(call["id"], cleared)))
         return sorted(
             (item for item in items if item.frees > 0), key=lambda item: (item.at, item.order)
         )
@@ -294,11 +322,6 @@ def _with(response: Any, update: Command[Any] | None) -> Any:
     return ExtendedModelResponse(model_response=response, command=update)
 
 
-def _tokens(message: Any) -> int:
-    """One message as the summariser counts it, which is per message and rounded up."""
-    return count_tokens_approximately([message])
-
-
 def _failed(result: ToolMessage) -> bool:
     return result.status == "error" or _FAILED.search(result.text) is not None
 
@@ -311,11 +334,6 @@ def _size(result: ToolMessage) -> int | None:
     if all(isinstance(b, str) or b.get("type") == "text" for b in content):
         return len(result.text)
     return None
-
-
-def _item(message: Any, sent: Any, at: int, order: int, clear: Callable[[Any], Any]) -> _Item:
-    """One item, freeing what its handle saves against the message as this call sends it."""
-    return _Item(at=at, order=order, clear=clear, frees=_tokens(sent) - _tokens(clear(message)))
 
 
 def _replaced(handle: str) -> Callable[[Any], Any]:

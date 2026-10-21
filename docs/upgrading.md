@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Clearing counts as the summarizer does, after #1037
+
+- **Clearing starts sooner on an Anthropic-format model.** It counted four characters a
+  token; it now counts as the graph's summarizer does, which on `ChatAnthropic` --
+  MiniMax-M3 and -M2.5 included -- is 3.3, scaled by up to a quarter more by the usage
+  the provider last reported. The default mark is still 64,000, so a pass starts at
+  between a sixth and a third fewer characters. A `clear_results_at` you set is read in
+  the same tokens: raise it by that much to keep where it cleared.
+- **A `token_counter` on your summarizer now moves clearing too.** Calibrated against
+  your gateway, the trigger and the marks follow it together. `docs/guides/middleware.md`
+  says what a counter costs.
+- **`result_clearing` and `ResultClearingMiddleware` take `count=`**, a
+  `SummarizerCount` from `summarizer_count(model, middleware)`. Neither is exported;
+  code building either by hand passes the count of the summarizer that graph runs.
+
 ## The agent may not write a kept record, after #1036
 
 - **`/scratchpad/conversation_history/`, `/scratchpad/blobs/` and

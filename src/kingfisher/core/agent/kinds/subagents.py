@@ -16,7 +16,12 @@ from kingfisher.core.access import ALL, Selection, ceiling, narrowed, refuse_uno
 from kingfisher.core.agent.middlewares.clearing import result_clearing
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
-from kingfisher.core.agent.models import deployment_default, model_named, summarizer_trigger
+from kingfisher.core.agent.models import (
+    deployment_default,
+    model_named,
+    summarizer_count,
+    summarizer_trigger,
+)
 from kingfisher.core.agent.prompting import behind_instructions
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.agent.tool_guards import guarded_tools
@@ -369,7 +374,11 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         scratch_run_limit=scratch_run_limit,
         recorder=recorder,
         clearing=result_clearing(
-            ledger, trigger, clear_results_at, subject=f"subagent {spec.name!r}"
+            ledger,
+            trigger,
+            clear_results_at,
+            count=summarizer_count(runs, extra_middleware or ()),
+            subject=f"subagent {spec.name!r}",
         ),
         # `None` permits nothing: an empty allowlist, not an absent one.
         tools=None

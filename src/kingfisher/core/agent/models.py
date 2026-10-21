@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from functools import partial
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
@@ -213,6 +215,15 @@ def supplied_trigger(summarizer: Any) -> int | None:
     trigger of only those has none. Their own clauses and window, not a copy of how
     either parses a trigger.
     """
+    helper = _langchains(summarizer)
+    if helper is None:
+        return None
+    return _earliest(helper._trigger_clauses, _summarised_window(helper.model))
+
+
+def _langchains(summarizer: Any) -> Any:
+    """The langchain summariser that holds `summarizer`'s trigger and counter, or `None`
+    where it is neither langchain's nor deepagents'."""
     # Here, as in `_deepagents_own`.
     from deepagents.middleware.summarization import (  # noqa: PLC0415
         SummarizationMiddleware as DeepAgentsSummarization,
@@ -221,13 +232,57 @@ def supplied_trigger(summarizer: Any) -> int | None:
         SummarizationMiddleware as LangchainSummarization,
     )
 
-    # deepagents' is no langchain one: it holds one, which keeps the trigger.
+    # deepagents' is no langchain one: it holds one, which keeps both.
     helper = (
         summarizer._lc_helper if isinstance(summarizer, DeepAgentsSummarization) else summarizer
     )
-    if not isinstance(helper, LangchainSummarization):
-        return None
-    return _earliest(helper._trigger_clauses, _summarised_window(helper.model))
+    return helper if isinstance(helper, LangchainSummarization) else None
+
+
+@dataclass(frozen=True)
+class SummarizerCount:
+    """How the summariser a graph runs counts tokens, so what is measured against its
+    trigger is measured in its unit: a deployment calibrating the counter moves both."""
+
+    #: The count it decides to summarise on. langchain's default scales it by the
+    #: provider's last reported usage.
+    whole: Callable[..., int]
+    #: One message as it sizes its cut, never scaled: a reply counted alone scales to
+    #: the whole conversation its usage reported.
+    each: Callable[..., int]
+    #: Whether both take the tools' schemas, which deepagents counts where they do.
+    tools: bool
+
+    def request(self, messages: Sequence[Any], tools: Sequence[Any]) -> int:
+        return self.whole(messages, tools=tools) if self.tools else self.whole(messages)
+
+    def unscaled(self, messages: Sequence[Any], tools: Sequence[Any]) -> int:
+        return self.each(messages, tools=tools) if self.tools else self.each(messages)
+
+
+def summarizer_count(model: BaseChatModel, stack: Sequence[Any] = ()) -> SummarizerCount:
+    """How the summariser of a graph on `model` handed `stack` counts: the one
+    `summarizer_trigger` reads, and deepagents' own where it reads none."""
+    # Here, as in `_deepagents_own`.
+    from deepagents.middleware.summarization import (  # noqa: PLC0415
+        _token_counter_accepts_tools,
+    )
+    from langchain.agents.middleware.summarization import (  # noqa: PLC0415
+        _get_approximate_token_counter,
+    )
+
+    supplied = [one for one in stack if getattr(one, "name", None) == SUMMARIZER]
+    helper = _langchains(supplied[-1]) if supplied else None
+    if helper is not None:
+        whole, each = helper.token_counter, helper._partial_token_counter
+    else:
+        # What langchain puts in place of the `count_tokens_approximately` deepagents
+        # hands it: not 4 characters a token on every model.
+        whole = _get_approximate_token_counter(model)
+        # Typed as taking the messages alone, as langchain's own copy of this line is.
+        each = partial(whole, use_usage_metadata_scaling=False)  # ty: ignore[unknown-argument]
+    # One whose signature cannot be read is asked without them, where deepagents tries both.
+    return SummarizerCount(whole, each, tools=_token_counter_accepts_tools(whole) is True)
 
 
 def _earliest(clauses: Sequence[Mapping[str, float]], window: int | None) -> int | None:

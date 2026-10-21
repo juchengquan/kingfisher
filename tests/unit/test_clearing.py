@@ -38,7 +38,7 @@ from kingfisher.core.agent.middlewares.clearing import (
 from kingfisher.core.agent.middlewares.model_reply import _refusal
 from kingfisher.core.agent.middlewares.recorded import arguments, stamp, summary
 from kingfisher.core.agent.middlewares.recorder import UNRECORDED
-from kingfisher.core.agent.models import summarizer_trigger
+from kingfisher.core.agent.models import SummarizerCount, summarizer_count, summarizer_trigger
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TRANSCRIPT_FILE
 from kingfisher.core.result import MAIN, LedgerEntry
@@ -61,6 +61,10 @@ TOOL_RESULTS_ROUTE = DEFAULT_LAYOUT.tool_results_route
 
 #: About 2,000 tokens, which a mark of 1,000 clears at once.
 BIG = "x" * 8_000
+
+#: How deepagents' own summariser counts on the model these tests fake: four characters a
+#: token, where no reply reports its usage.
+FAKE_COUNT = summarizer_count(FakeToolCallingModel(responses=[]))
 
 
 def _text(first: str) -> str:
@@ -141,12 +145,14 @@ class Talk:
         sent: list[Any] | None = None,
         system: str | None = None,
         tools: tuple[str, ...] | None = None,
+        count: SummarizerCount = FAKE_COUNT,
     ) -> tuple[list[Any], dict[str, Any] | None]:
         """What one model call at this high mark sent, and the state update it returned.
 
         `sent` is the conversation as deepagents' summariser hands it on, the whole of it
         unless a test says otherwise; the state is the whole conversation either way.
-        `tools` is the agent's grant, every tool unless a test says otherwise.
+        `tools` is the agent's grant, every tool unless a test says otherwise, and `count`
+        how the summariser counts.
         """
         request = ModelRequest(
             model=FakeToolCallingModel(responses=[]),
@@ -161,9 +167,9 @@ class Talk:
             heard.append(request)
             return ModelResponse(result=[AIMessage("ok")])
 
-        returned = ResultClearingMiddleware(self.ledger, high, tools).wrap_model_call(
-            request, model
-        )
+        returned = ResultClearingMiddleware(
+            self.ledger, high, tools, count=count
+        ).wrap_model_call(request, model)
         (asked,) = heard
         if isinstance(returned, ExtendedModelResponse):
             assert returned.command is not None
@@ -275,6 +281,48 @@ def test_the_count_includes_the_prompt_and_tools_the_call_sends():
 
     assert talk.passed(high)[1] is None
     assert talk.passed(high, system="p" * 4_000)[1] is not None
+
+
+def _reporting(messages: list[Any], total: int) -> list[Any]:
+    """`messages`, every reply from one provider and the last reporting `total` tokens,
+    which langchain's default counter scales its whole count by."""
+    last = max(at for at, one in enumerate(messages) if isinstance(one, AIMessage))
+    usage = {"input_tokens": total, "output_tokens": 0, "total_tokens": total}
+    return [
+        one.model_copy(
+            update={
+                "response_metadata": {"model_provider": "anthropic"},
+                **({"usage_metadata": usage} if at == last else {}),
+            }
+        )
+        if isinstance(one, AIMessage)
+        else one
+        for at, one in enumerate(messages)
+    ]
+
+
+def test_a_pass_starts_and_stops_where_the_summariser_counts_the_marks():
+    """The marks are read off the summariser's trigger, so counted any other way a pass
+    starts late and stops wrong: on an Anthropic model langchain counts 3.3 characters a
+    token, not 4, and scales the whole by the provider's last reported usage but no one
+    message, so a pass taking each saving unscaled cleared past the low mark."""
+    count = summarizer_count(_anthropic(None))
+    talk = Talk()
+    old = [talk.call("web_search", {"query": f"q{n}"}, _text(f"result {n}")) for n in range(14)]
+    talk.pad()
+    talk.messages = _reporting(talk.messages, 10**6)
+    total = count.request(talk.messages, [])
+    assert total > count_tokens_approximately(talk.messages) * 1.25 * 1.15, "the control"
+
+    assert talk.passed(high=total + 1, count=count)[1] is None
+    after = _applied(talk.messages, talk.passed(high=total, count=count)[1])
+
+    cleared = [call for call in old if _of(after, call) != talk.result(call)]
+    assert 0 < len(cleared) < len(old)
+    assert count.request(after, []) <= total // 2
+    last = after.index(_of(after, cleared[-1]))
+    one_fewer = [*after[:last], talk.messages[last], *after[last + 1 :]]
+    assert count.request(one_fewer, []) > total // 2, "kept clearing past the low mark"
 
 
 def test_the_call_a_pass_runs_on_sends_the_handles():
