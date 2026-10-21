@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `seed` sees a requirement written `frozenset(...)`, after #9999
+
+- **A Python definition whose requirement is `frozenset({...})` or `set(...)` is left
+  behind by `seed`, as a set literal is.** The loader read either as the requirement it
+  is, but seed saw only the braces, so it copied the tool as an open one, and the copy
+  switched on access control in the workspace it landed in. Seed again with `--all` to
+  copy one anyway.
+
 ## A PDF plugin that hands over nothing leaves kingfisher's verdict, after #9999
 
 - **`""`, no blocks, or blank text alone from `PdfAttachments.replacement` is read as

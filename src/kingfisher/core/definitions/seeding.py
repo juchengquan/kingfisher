@@ -231,6 +231,15 @@ def _written(node: ast.expr, *, into: list[str], field: str) -> None:
         for key in node.keys:
             if key is not None:
                 _written(key, into=into, field=field)
+    elif (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in ("frozenset", "set")
+        and len(node.args) == 1
+    ):
+        # The loader takes a `frozenset({...})` as the requirement it is, so a reader that
+        # saw only the braces copied a locked tool as an open one.
+        _written(node.args[0], into=into, field=field)
 
 
 def _collect(written: object, *, into: list[str]) -> None:

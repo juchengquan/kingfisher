@@ -414,6 +414,29 @@ CODE_SPELLINGS = {
         (),
         ("emea",),
     ),
+    # The loader reads each as the requirement it is; seed saw none of them.
+    "a tool spec's requirement written as frozenset({...})": (
+        "tools",
+        "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\n"
+        "TOOLS = [ToolSpec(t, source_ids=[frozenset({'sales_db', 'pii'})])]\n",
+        ("pii", "sales_db"),
+        (),
+    ),
+    "a subagent entry's requirement written as frozenset([...])": (
+        "subagents",
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+        '             "source_ids": [frozenset(["A", "B"])]}]\n',
+        ("A", "B"),
+        (),
+    ),
+    "a subagent entry's requirement written as set(...)": (
+        "subagents",
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+        '             "source_ids": [set(("A", "B"))]}]\n',
+        ("A", "B"),
+        (),
+    ),
     # `"*"` is everyone in `source_ids`, but no "any" in a datazone, which refuses it.
     "a subagent entry's datazone written '*'": (
         "subagents",
@@ -482,6 +505,24 @@ def test_source_ids_of_everyone_are_copied_in_python(kind, written, cfg, tmp_pat
 
     assert f"{kind}/open.py" in done.written
     assert not done.skipped
+
+
+def test_an_empty_frozenset_is_the_loaders_to_refuse_not_seeds_to_crash_on(cfg, tmp_path):
+    """Reading inside a `frozenset(...)` call, seed must not take an argument that is not
+    there: `frozenset()` names nobody, and is copied for the loader to refuse in its own
+    words, as an unparseable file is.
+    """
+    source = tmp_path / "presets"
+    (source / "tools").mkdir(parents=True)
+    (source / "tools" / "empty.py").write_text(
+        "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\nTOOLS = [ToolSpec(t, source_ids=[frozenset()])]\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert "tools/empty.py" in done.written
 
 
 def test_a_module_that_only_mentions_an_audience_is_copied(cfg, tmp_path):
