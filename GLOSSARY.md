@@ -118,3 +118,30 @@ A file a tool's result carries in a block of its own rather than as text: a PDF,
 audio or video, or any other kind. Not the result's text, even where that names a file, and
 not a file a caller sends with a request.
 _Avoid_: file block, media, binary
+
+**Tool result**:
+What one tool call hands back. Not a file the agent wrote, even where the result names one,
+and not anything said in the conversation around it.
+_Avoid_: tool output, tool response, observation
+
+**Recorded result**:
+A tool result kingfisher keeps its own copy of, so that a later turn can read back what a
+call answered. Not every result is one: a file tool's read or write is already a file, and
+the checklist is one list the conversation carries.
+_Avoid_: saved result, cached result, logged result
+
+**Preview**:
+What stands in for a recorded result too long to show the model whole: its beginning and
+end, and where the whole of it is kept. The result itself is unchanged.
+_Avoid_: stub, truncation, excerpt, elision
+
+**Cleared result**:
+A recorded result swapped in the conversation for a short handle, because the conversation
+has grown rather than because the result was long. What it points at is the recorded copy.
+_Avoid_: evicted result, dropped result, compacted result
+
+**Conversation history**:
+What is kept of the conversation itself rather than of any tool's answer: a message too
+long to carry, and the record a summary leaves behind. Not tool results, and kept apart
+from them.
+_Avoid_: transcript, message log, chat history
