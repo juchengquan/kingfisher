@@ -71,6 +71,10 @@ slices land.
   bring skills of its own while the skills kingfisher read and the skills the agent
   sees stay one list. The check it rests on has landed; the feature waits for a
   deployment that needs it.
+- [Thinking a model can read](design/2026-10-21-thinking-a-model-can-read.md) — what
+  kingfisher sends back of a model's thinking once the vendor, or the conversation
+  before it, has changed, keyed on the endpoint that answered. Nothing built; each
+  premise waits on one live Anthropic call.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
