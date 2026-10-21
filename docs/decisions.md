@@ -2456,6 +2456,20 @@ the environment nor the kill. **Refused where a deployment supplied a runner**, 
 run as another user or under limits a launch of kingfisher's own would go round. Not
 taken: a generic fallback, or a tool gated by name. *(2026-10-20.)*
 
+**An output is not evidence the command wrote it.** The run's folder is in the session's
+scratchpad because the Linux fences grant one session and nothing else, so the agent's
+shell and its file tools reach it while the run is going -- measured in one message
+asking for the run and for `execute`, which found the live folder by glob and dropped a
+file under an output's name that the run then brought back as its own. The folder itself
+holds: every step goes through a descriptor opened refusing links, so what is open is
+the bytes under a name the tool asked for, never a path outside the folder. Not taken: a
+folder outside the session, which the fences would have to grant a second root to reach,
+against *The two fences share a toolchain and not a workspace*; or attributing a write to
+the command, which a folder cannot say. So the rule is the author's rather than the
+runtime's -- `guides/tools.md` says to trust an output as far as the agent, and
+`test_an_output_the_agent_planted_mid_run_comes_back_as_the_commands_own` holds the
+measurement. *(2026-10-21.)*
+
 ## Confining the shell
 
 **The two fences share a toolchain and not a workspace**, and the asymmetry is the
