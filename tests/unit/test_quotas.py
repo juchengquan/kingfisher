@@ -14,7 +14,8 @@ from kingfisher.core.request import Request
 from kingfisher.core.session.model import QuotaExceededError
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.folders import session_bytes
-from tests.conftest import FakeGraph, start
+from tests.conftest import EVERY_TOOL, FakeGraph, an_agent, start
+from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 
 
@@ -186,6 +187,26 @@ def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg):
 
     ends = sink.named("run_end")
     assert ends and ends[-1]["ok"] is True
+
+
+def test_a_turn_out_of_steps_after_a_tool_answers_with_what_the_model_said(scripted):
+    """A turn that ran out of steps just after a tool ran reported the tool's output, a
+    folder listing, as its answer."""
+    an_agent(scripted, **EVERY_TOOL)
+    Scripted.script.extend(
+        AIMessage(
+            content="Listing the folders first.",
+            tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": f"l{n}"}],
+        )
+        for n in range(20)
+    )
+
+    result = Kingfisher(replace(scripted, recursion_limit=4), sessions=LocalSessions()).run(
+        Request("list the folders", agent="only")
+    )
+
+    assert result.stop_reason == "max_steps"
+    assert result.answer == "Listing the folders first."
 
 
 def test_running_out_of_steps_says_which_bound_and_how_to_raise_it(cfg):

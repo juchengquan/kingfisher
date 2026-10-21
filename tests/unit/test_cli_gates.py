@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import shlex
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -130,6 +131,20 @@ def test_a_turn_cut_off_at_a_bound_still_says_to_continue_it(monkeypatch, capsys
     assert code == 1
     assert "the answer above is what was reached" in said
     assert "discards these" not in said
+
+
+def test_a_turn_the_model_never_answered_points_at_no_answer(monkeypatch, capsys):
+    """Over an empty stdout, a turn the model never answered was said to have reached
+    "the answer above"."""
+    _drive(monkeypatch, replace(CUT_SHORT, answer="", stop_reason="model_unavailable"))
+
+    code = cli._run(_args())
+
+    said = capsys.readouterr()
+    assert code == 1
+    assert said.out == ""
+    assert "it stopped before the model answered" in said.err
+    assert "the answer above" not in said.err
 
 
 def test_a_gated_ending_still_declines_to_delete_the_session(monkeypatch, capsys):

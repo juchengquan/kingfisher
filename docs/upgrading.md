@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A stopped turn answers only with what the model said, after #1041
+
+- **`RunResult.answer` of a turn that stopped is the model's words, or `""`.** A turn
+  whose first model call failed (`model_unavailable`) answered with the caller's own
+  message, kingfisher's lines after it included, and one stopped just after a tool ran,
+  at `max_steps` or `model_unavailable`, answered with that tool's output. Each now
+  answers with what the model last said, and `""` where it said nothing. A caller that
+  showed a stopped turn's answer shows nothing where it showed the task back.
+- **`kingfisher run` says so on stderr.** Over an empty answer the ending reads "it
+  stopped before the model answered" in place of "the answer above is what was reached".
+
 ## A listing names only the folders that are there, after #1038
 
 - **`ls` no longer names a route whose folder nothing has made.** #1036 mounted

@@ -524,9 +524,15 @@ def _drive(
         if result.pending:
             _awaiting(result, held)
         else:
+            # Empty where the model never spoke, and stdout then holds nothing to point at.
+            reached = (
+                "the answer above is what was reached"
+                if result.answer
+                else "it stopped before the model answered"
+            )
             print(
-                f"stopped: {result.stop_reason} -- the answer above is what was "
-                f"reached, and what it wrote is in /outputs and /memory",
+                f"stopped: {result.stop_reason} -- {reached}, and what it wrote is in "
+                f"/outputs and /memory",
                 file=sys.stderr,
             )
         if delete_session:
