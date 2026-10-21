@@ -26,6 +26,9 @@ class Request:
     #: Subagent name -> where this request wants it to run. Not in `capabilities`, and
     #: never narrowed: an assignment is not a permission.
     run_on: Mapping[str, RunOn] = field(default_factory=dict)
+    #: Text for this turn alone, sent after the task in its message rather than in the
+    #: system prompt, so it changes every turn without missing the cache.
+    note: str = ""
 
     def __post_init__(self) -> None:
         if not self.task or not self.task.strip():

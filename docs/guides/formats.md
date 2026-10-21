@@ -52,6 +52,26 @@ other way round: a field it leaves out grants none. Naming something that does
 not exist raises `CapabilityError` at build time rather than running with
 quietly less than you asked for.
 
+### A note for one turn
+
+`note` is text for this turn alone, for what your own code adds beside the
+caller's words -- today's date, the page they were on -- without rewriting the
+task:
+
+```python
+run(Request(
+    task="Summarise this week's tickets",
+    agent="assistant",
+    note="The user is viewing the billing queue.",
+), sessions=LocalSessions())
+```
+
+It is sent right after the task, as written, in the turn's own message, ahead of
+what kingfisher says there about where to work. So it is kept with that message:
+a later turn replays it as it was sent and is not sent it again. It never goes in
+the system prompt, whose text is the cached part of every call. A `Resume` has
+none, because a resume adds no message.
+
 ### Putting one subagent on a different model
 
 A definition says where its subagent runs. A request can override that for a
