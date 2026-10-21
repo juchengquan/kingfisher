@@ -238,11 +238,12 @@ and a sink that keeps state between events wants a lock.
 
 ## `UnusedResults` — what becomes of a saved result nothing names
 
-Every result a tool returns is saved under `/scratchpad/tool_results/`, and the
-session's ledger names its file. A turn that died before it wrote its ledger leaves
-files no row names, and so does a result deepagents saved a copy of its own, once the
-row is pointed at that copy, and one older than `KINGFISHER_KEEP_RESULTS_ROUNDS` keeps,
-once its row is expired. Kingfisher's own plugin removes them; yours decides instead — keep them in an archive, count them, hold them for an audit:
+Every result kingfisher records — not a file tool's, nor the checklist's — is saved under
+`/scratchpad/tool_results/`, and the session's ledger names its file. Two things leave a
+file there that no row names: a turn that died before it wrote its ledger, and a result
+older than `KINGFISHER_KEEP_RESULTS_ROUNDS` keeps, once its row is expired. Kingfisher's
+own plugin removes them; yours decides instead — keep them in an archive, count them,
+hold them for an audit:
 
 ```python
 from kingfisher.plugins import UnusedFiles
@@ -268,16 +269,14 @@ written, and only when there is something to hand over: a turn that leaves no un
 file does not call it. What it is handed is an `UnusedFiles`, which has the
 `session_id` they are in and iterates as one `UnusedFile` per file, each with `path`
 (as the agent's file tools name it), `size` (in bytes as the backend listed it, or
-`None` where the listing did not say), `read()` and `remove()`. That is all of it. There is no way through it to any other file in the
-session: a path not among those handed over is refused, and the session's backend is
-not on offer.
+`None` where the listing did not say), `read()` and `remove()`. That is all of it.
+There is no way through it to any other file in the session: a path not among those
+handed over is refused, and the session's backend is not on offer.
 
 Every file handed over has already been judged safe to drop: no row names it, and its
-name is one kingfisher's recorder gives, so a file the agent's shell wrote into the
-folder under a name of its own is never among them. Only kingfisher's own saved
-results: deepagents' copies under `/scratchpad/large_tool_results/` are not handed
-over, whether or not a row names them, and an expired result's copy there is removed by
-kingfisher itself.
+name starts with a result's id, as the recorder names it, so a file the agent's shell
+wrote into the folder under a name of its own is never among them. Nothing outside that
+folder is ever handed over: it is the one place a result is saved.
 
 Things to know:
 
@@ -593,8 +592,10 @@ with `upload_files` under `/inputs/`, what a turn left is listed with `glob` und
 `download_files`. Each tool result a turn records is saved with `upload_files` under
 `/scratchpad/tool_results/`, outside the file tools' permissions, which deny that folder
 to them, though your backend's own refusals still apply; at
-the end of the turn that folder and deepagents' offload folder are listed with `ls`, and
-a result file no row of the ledger names is removed with `delete`. So all of those
+the end of the turn that folder is listed with `ls`, and a result file no row of the
+ledger names is handed to
+[`UnusedResults`](#unusedresults--what-becomes-of-a-saved-result-nothing-names), whose
+default removes it with `delete`. So all of those
 work on a backend that keeps the session somewhere other than the directory it was
 handed. `/inputs` has to take that upload
 while refusing the agent's own writes: `LocalSessions` routes it to
@@ -746,7 +747,7 @@ Both are yours to ask before kingfisher does: `why_no_shell(backend)` and
 would be refused, or answer `None`.
 
 **The other four stay yours**, in `tests/checks/backend.py`: that the backend reads
-back what it was given, keeps deepagents' offloads in the scratchpad, keeps the shell
+back what it was given, keeps deepagents' own files in the scratchpad, keeps the shell
 out of `/.harness` and `/inputs`, and refuses a host path. Three write files and run
 shell commands, and a library should not do either at a build. The fourth only looks,
 and finds a folder in the wrong place rather than an agent that cannot work, which is
@@ -778,14 +779,14 @@ dropping its leading slash, and route one somewhere the shell cannot follow, and
 agent can read its inputs and run nothing over them, with a confused model as the
 only symptom.
 
-**deepagents' own files have to land under `/scratchpad/`.** A tool result too
-long for a message is saved to a file and the model handed a stub naming it, and
-the summarizer saves the conversation it replaces. Both go under the composite's
-`artifacts_root`, as `large_tool_results/` and `conversation_history/`, and the
-prompt tells the agent that is `/scratchpad/`. The backend `backend_at` builds has
-it set, and so does a subclass of its class that calls its `__init__`. A
-`CompositeBackend` of your own defaults to `/` and puts both folders at the session
-root: pass `artifacts_root="/scratchpad/"`. deepagents reads it only off a
+**deepagents' own files have to land under `/scratchpad/`.** The summarizer saves
+the conversation it replaces under the composite's `artifacts_root`, as
+`conversation_history/`, and the prompt tells the agent that is `/scratchpad/`. A tool
+result too long to show whole is kingfisher's to save, under `tool_results/`, whatever
+`artifacts_root` says. The backend `backend_at` builds has it set, and so does a
+subclass of its class that calls its `__init__`. A `CompositeBackend` of your own
+defaults to `/` and puts that folder at the session root: pass
+`artifacts_root="/scratchpad/"`. deepagents reads it only off a
 `CompositeBackend`, so on anything else it is `/` whatever you set.
 `offloads_in_the_scratchpad` reads it the same way.
 
