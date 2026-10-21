@@ -155,7 +155,7 @@ def test_a_shell_that_cannot_see_what_the_tools_wrote_is_caught(cfg, session_dir
 
 def test_a_composite_of_a_deployment_s_own_puts_deepagents_files_at_the_root(cfg, session_dir):
     """A `CompositeBackend` assembled from kingfisher's own parts still defaults to `/`,
-    so the tool results deepagents evicts land where the prompt never sends the agent.
+    so the history deepagents' summarizer keeps lands where the prompt never sends the agent.
     """
     real = backend_at(cfg, session_dir)
     own = CompositeBackend(default=real.default, routes=dict(real.routes))

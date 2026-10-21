@@ -50,7 +50,6 @@ WORTH = 1 / 4
 #: The arguments that carry a file's text, by the file tool they belong to.
 FILE_TEXT = {WRITE_FILE: ("content",), EDIT_FILE: ("old_string", "new_string")}
 
-#: How deepagents' eviction stub begins, `_TOO_LARGE_TOOL_MSG` up to its first field.
 #: The handles this module writes, as each ends. Asked before clearing anything: a later pass
 #: would otherwise read a handle as what it replaced and clear it again, wrongly.
 _RESULT_HANDLE = re.compile(
@@ -147,7 +146,6 @@ class ResultClearingMiddleware(AgentMiddleware):
         self._ledger = ledger
         self.high = high
         self._low = high // 2
-        #: This layout's `/scratchpad/large_tool_results/`, as the model addresses it.
         # The graph's grant, not `request.tools`: this runs before `GrantedOnlyMiddleware`
         # narrows them.
         self._granted = None if tools is None else frozenset(tools)
@@ -275,13 +273,8 @@ class ResultClearingMiddleware(AgentMiddleware):
     def _row_handle(self, row: LedgerEntry) -> str | None:
         """A recorded result's handle, naming where its whole text is kept to an agent
         holding the tool that reaches it there, and the call that made it to any other.
-
-        An offloaded one is named by a search for its id, not by its file: deepagents names
-        that file after the call id, which a later call with the same id overwrites. So an
-        agent without `grep` is not handed the path instead, even one holding `read_file`.
         """
         again = f"call {row.tool} again to see it"
-        # Ahead of the offloaded stub's test, which would send a search to the file removed.
         if row.expired_in is not None:
             where = f"expired, {again}"
         elif row.path is not None:

@@ -139,8 +139,8 @@ def sweep_results(  # noqa: PLR0913 -- by keyword, so no route is passed for a s
     unused_results: UnusedResults,
     session_id: str,
 ) -> Steps[None]:
-    """Hand `unused_results` the result files no row names, and remove the offloaded
-    copies of expired ones, once the conversation is written.
+    """Hand `unused_results` the result files no row names, once the conversation is
+    written.
 
     After the transcript, not the ledger: a file the sweep removes may still be named by
     the conversation the turn is about to write, and a crash between the two leaves that
@@ -153,9 +153,6 @@ def sweep_results(  # noqa: PLR0913 -- by keyword, so no route is passed for a s
         unused_results=unused_results,
         session_id=session_id,
     )
-
-
-
 
 
 def _swept(

@@ -95,21 +95,21 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
 def offloads_in_the_scratchpad(make: Callable[[], Any]) -> None:
     """deepagents' own files land where `system.md` tells the agent they are.
 
-    A tool result too long for a message, and the history the summarizer keeps, go
-    under the backend's `artifacts_root`, which defaults to `/`. `WorkspaceScopedBackend`
-    sets it, so a subclass passes; a `CompositeBackend` assembled without it puts both
-    folders at the session root, where the agent is never sent to search. Read the way
-    deepagents reads it, `isinstance` included, because a backend that is no
-    `CompositeBackend` is `/` whatever attribute it carries.
+    The history the summarizer keeps goes under the backend's `artifacts_root`, which
+    defaults to `/`. `WorkspaceScopedBackend` sets it, so a subclass passes; a
+    `CompositeBackend` assembled without it puts that folder at the session root, where
+    the agent is never sent to search. Read the way deepagents reads it, `isinstance`
+    included, because a backend that is no `CompositeBackend` is `/` whatever attribute
+    it carries.
     """
     cfg, backend = make()
     root = backend.artifacts_root if isinstance(backend, CompositeBackend) else "/"
     scratch = cfg.layout.scratch_route
     if root.rstrip("/") != scratch.rstrip("/"):
         msg = (
-            f"{type(backend).__name__} has deepagents write the tool results it evicts "
-            f"and the history it summarizes under {root!r}, and the agent is told they "
-            f"are under {scratch}. Pass artifacts_root={scratch!r} to the "
+            f"{type(backend).__name__} has deepagents write the history it summarizes "
+            f"under {root!r}, and the agent is told it is under {scratch}. Pass "
+            f"artifacts_root={scratch!r} to the "
             "CompositeBackend, as the one backend_at builds does"
         )
         raise AssertionError(msg)

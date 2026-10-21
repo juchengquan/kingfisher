@@ -91,7 +91,7 @@ def test_without_the_stream_s_history_every_message_is_reported():
 
 TOOLS = '''
 def bulky(n: int) -> str:
-    """Return about 16,000 characters, under what deepagents offloads."""
+    """Return about 16,000 characters, under what is previewed."""
     return "\\n".join(f"row {n}-{i:04d} " + "y" * 70 for i in range(200))
 
 

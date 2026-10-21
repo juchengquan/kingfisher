@@ -145,7 +145,7 @@ class Sessions(Protocol):
     What `open` returns, held by `tests/checks/backend.py`: deepagents recognises it
     as running commands and it routes every path kingfisher denies -- both refused at
     startup by `refuse_unusable_backend` -- and it reads back what it was given, keeps
-    deepagents' offloads in the scratchpad, keeps the shell out of `/.harness` and
+    deepagents' own files in the scratchpad, keeps the shell out of `/.harness` and
     `/inputs`, and refuses a host path.
     """
 
