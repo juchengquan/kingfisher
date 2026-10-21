@@ -260,6 +260,9 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, session_dir):
     assert {r.paths[0] for r in built.permissions} == {
         "/.harness/**",
         "/inputs/**",
+        "/scratchpad/blobs/**",
+        "/scratchpad/conversation_history/**",
+        "/scratchpad/large_tool_results/**",
         "/scratchpad/tool_results/**",
         "/skills/**",
     }

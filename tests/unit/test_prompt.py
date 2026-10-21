@@ -120,6 +120,10 @@ def test_the_prompt_names_the_folder_deepagents_writes_on_its_own(cfg, session_d
 
     assert f"`{root}/conversation_history/`" in text
     assert "large_tool_results" not in text, "a folder nothing writes is still named"
+    # Said because the line above sends the model here: an agent tidying its scratchpad
+    # would otherwise learn the folder is not its own from a refusal, having deleted
+    # nothing only because the rule stopped it.
+    assert "Yours to read and not to write" in text
 
 
 def test_the_prompt_names_a_recorded_result_as_the_ledger_does():

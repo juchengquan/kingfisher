@@ -50,6 +50,16 @@ def test_the_default_layout_is_the_module_constants():
         "/scratchpad/tool_results/",
     )
     assert default.saved_results == ("scratchpad/tool_results",)
+    assert default.kept_records == (
+        "scratchpad/tool_results",
+        "scratchpad/conversation_history",
+        "scratchpad/blobs",
+        "scratchpad/large_tool_results",
+    )
+    assert default.history == "scratchpad/conversation_history"
+    # Made, unlike the other two: a fence binds only a folder that is already there.
+    assert default.made_dirs[-1] == "scratchpad/conversation_history"
+    assert "scratchpad/blobs" not in default.made_dirs
 
 
 # -- a renamed layout derives everything from its leaves ------------------------
@@ -62,6 +72,14 @@ def test_a_renamed_layout_spells_every_route_from_its_leaves():
     assert MOVED.scratch_route == "/scratch/"
     assert MOVED.tool_results_route == "/scratch/results/"
     assert MOVED.saved_results == ("scratch/results",)
+    # Only the parent moves: the three leaves are deepagents' own spellings.
+    assert MOVED.kept_records == (
+        "scratch/results",
+        "scratch/conversation_history",
+        "scratch/blobs",
+        "scratch/large_tool_results",
+    )
+    assert MOVED.history == "scratch/conversation_history"
     assert MOVED.session_dirs == ("in", "out", "mem", "scratch")
     assert MOVED.artifact_dirs == ("out", "mem")
 
@@ -69,6 +87,8 @@ def test_a_renamed_layout_spells_every_route_from_its_leaves():
 def test_a_renamed_layout_routes_and_denies_under_its_own_names():
     routed = MOVED.routed_paths()
     assert {"/in/", "/mem/", "/scratch/results/"} <= set(routed)
+    # Every kept record is mounted, because a deny rule under no route is refused.
+    assert set(MOVED.kept_record_routes) <= set(routed)
     # The fixed routes are still there, unmoved.
     assert {"/skills/", "/.harness/"} <= set(routed)
     # And the default spellings are gone, not left beside the renamed ones.
@@ -79,6 +99,9 @@ def test_a_renamed_layout_routes_and_denies_under_its_own_names():
     assert {
         "/in/**",
         "/scratch/results/**",
+        "/scratch/conversation_history/**",
+        "/scratch/blobs/**",
+        "/scratch/large_tool_results/**",
         "/skills/**",
         "/.harness/**",
     } == set(denied)

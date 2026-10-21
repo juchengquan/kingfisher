@@ -170,9 +170,11 @@ class WorkspaceScopedBackend(CompositeBackend):
         layout: Layout,
     ) -> None:
         # Where deepagents writes on its own: a tool result too long to send, the history
-        # its summarizer keeps. Working material, so not `/outputs`, which would hand each
-        # to the caller as an artifact, nor the default `/`, outside every folder the layout
-        # names. The shell may rewrite them: nothing kingfisher reads back trusts them.
+        # its summarizer keeps, an attachment's payload. Working material, so not
+        # `/outputs`, which would hand each to the caller as an artifact, nor the default
+        # `/`, outside every folder the layout names. Each is a kept record, denied to the
+        # file tools and to the shell: kingfisher reads none of them back, but the prompt
+        # sends the model to the history, and that reader is the one being protected.
         # deepagents reads this only off a `CompositeBackend`, so it is set here.
         super().__init__(default=default, routes=routes, artifacts_root=layout.scratch_route)
         #: What a host path is refused against; not the session, which the refusal's
@@ -289,12 +291,14 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         # Mounted so it can be refused, not as a way in: `read_only_permissions` denies
         # every operation, and a rule is expressible only against a routed path.
         layout.harness_route: lambda: FilesystemBackend(root_dir=str(session_dir / layout.harness)),
-        # Mounted for the same reason, but readable: the agent reads a result back from
-        # it, and only writing is denied.
-        layout.tool_results_route: lambda: FilesystemBackend(
-            root_dir=str(session_dir / layout.scratchpad / layout.tool_results)
-        ),
     }
+    # Each kept record for the same reason, readable: the agent reads a result and the
+    # conversation kept aside back from them, and only writing is denied. A mount does not
+    # make the folder, so the two nothing writes stay absent until something does.
+    backing.update({
+        route: (lambda folder=folder: FilesystemBackend(root_dir=str(session_dir / folder)))
+        for route, folder in zip(layout.kept_record_routes, layout.kept_records, strict=True)
+    })
     missing = [path for path in layout.routed_paths() if path not in backing]
     if missing:  # pragma: no cover -- a table edit, caught by its own test
         msg = f"routes declared in kingfisher.core.layout with nothing to back them: {missing}"

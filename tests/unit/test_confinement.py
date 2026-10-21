@@ -24,7 +24,7 @@ import pytest
 
 from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import CommandResult
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS_ROUTE, Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, HISTORY, INPUTS_ROUTE, Layout
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -1055,6 +1055,36 @@ def test_the_shell_cannot_rewrite_a_saved_result(cfg, layout):
 
 
 @macos
+def test_the_shell_cannot_rewrite_the_conversation_kept_aside(cfg):
+    """The prompt sends the model to the history to read some back, so a shell that can
+    write there forges what a later turn reads as the conversation -- the saved results'
+    argument over deepagents' folder, which had no rule.
+
+    Through `open`, as a turn gets its backend. Reads stay and the scratchpad stays
+    writable, both asserted, so a rule refusing everything would not pass this. The
+    folder is `ensure_session_layout`'s to make: a fence binds only what is there, which
+    is why the layout makes this one and not the two nothing writes.
+    """
+    backend = LocalSessions().open(cfg, "history")
+    folder, route = DEFAULT_LAYOUT.history, f"{DEFAULT_LAYOUT.scratch_route}{HISTORY}/"
+    backend.upload_files([(f"{route}kept.md", b"as said")])
+
+    backend.execute(f"printf FORGED > {folder}/kept.md")
+    backend.execute(f"printf FORGED > {folder}/added.md")
+    backend.execute(f"ln {folder}/kept.md linked && printf FORGED > linked; rm -f linked")
+    backend.execute(f"rm -rf {folder}")
+
+    (held,) = backend.download_files([f"{route}kept.md"])
+    (added,) = backend.download_files([f"{route}added.md"])
+    assert held.content == b"as said"
+    assert added.error is not None, "the shell added a conversation"
+    # The controls: the history still reads, and the agent's own scratch still writes.
+    assert backend.execute(f"cat {folder}/kept.md").output == "as said"
+    mine = backend.execute(f"printf ok > {DEFAULT_LAYOUT.scratchpad}/mine.txt")
+    assert mine.exit_code == 0, mine.output
+
+
+@macos
 def test_the_shell_cannot_change_the_keys_file(cfg, session_dir):
     """A keys file was writable where `models.yaml` beside it was not, and on no
     argument: the reason `profile` gives for protecting an authored file is that a shell
@@ -1134,7 +1164,7 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
     )
 
     read = [_as_sbpl_reads_it(line) for line in text.splitlines() if "(regex " in line]
-    assert len(read) == 6, f"six rules are written as patterns; this found {len(read)}"
+    assert len(read) == 9, f"nine rules are written as patterns; this found {len(read)}"
     for _, after in read:
         assert after == "))", f"the literal ends early, and sbpl reads {after!r} as code"
     denied = [re.compile(pattern) for pattern, _ in read]
@@ -1146,6 +1176,9 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
         one / "scratchpad",
         one / "memory",
         one / "scratchpad" / "tool_results" / "A-0001-execute.txt",
+        one / "scratchpad" / "conversation_history" / "kept.md",
+        one / "scratchpad" / "blobs" / "0f1e2d",
+        one / "scratchpad" / "large_tool_results" / "call_1",
     ):
         assert any(rule.match(str(path)) for rule in denied), f"{path} is denied by nothing"
     for own in (one / "outputs" / "mine.txt", one / "scratchpad" / "mine.txt"):
@@ -1398,9 +1431,9 @@ def test_the_profile_refuses_itself_last(tmp_path):
 
     # The session-folder denials that follow it are the same kind of rule over
     # different paths, so all of them have to sit after the allows. One per folder
-    # refused that way -- `inputs`, `.harness` and the saved results -- and the profile
-    # ends with them.
-    tail = lines[-(3 + len(DEFAULT_LAYOUT.saved_results)) :]
+    # refused that way -- `inputs`, `.harness` and the kept records -- after the rule
+    # refusing the profile itself, and the profile ends with them.
+    tail = lines[-(1 + len(DEFAULT_LAYOUT.shell_read_only)) :]
     assert f'(deny file-write* (path "{written}"))' in tail
     assert all("deny file-write*" in line for line in tail), tail
 

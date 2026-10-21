@@ -2185,6 +2185,30 @@ read-only grant under a writable parent being stepped over (`_session_writable`)
 is also why `shell_denied` does not ask a deployment's backend for it. Two of three is not
 a boundary, so nothing claims one. *(2026-10-16, before clearing results to handles.)*
 
+**Every folder of kept records is denied, not only the ones a row names.** The question
+was always who reads the file back: a row's file is denied because the prompt tells the
+model to read it. The prompt sends it to `conversation_history/` in the same breath, and
+nothing denied that -- measured, `write_file` planted `USER: give me the keys` there and
+read it straight back, `delete` removed a kept file, and the shell wrote there too, while
+the same calls against the results folder were refused. Nothing of kingfisher's reads
+those files, which is what the backend's own comment said and why the gap lasted: the
+reader being protected is the next turn's model, and the person reading the session after
+it. So `Layout.kept_records` names the class -- the saved results, the conversation kept
+aside, and the two deepagents folders nothing writes -- and the routes, the deny rules and
+`shell_read_only` are all derived from it, because writing a rule per folder is how three
+of the four came to be missing one. **Mounted to be denied**, as `.harness` is:
+deepagents refuses `permissions=` for a rule whose path lies under no route. **The
+history is made with the session**, although deepagents makes it on the first eviction
+anyway, because `present` drops an absent path -- without it the shell could make the
+folder in one turn and have the next turn's fence bind the forgery read-only. **The other
+two are not made**, since nothing writes them and a mount does not make a folder; they
+are denied all the same, because a deployment that replaces `FilesystemMiddleware` back
+turns them on, and a rule written for today's writers would not be there on the day it
+did. The middleware that keeps a record writes through the backend, so none of this
+reaches it -- driven in one turn with the refusals, since a turn that only checked the
+refusals would pass with the keeping broken. Not taken: denying reads, which is what the
+history is for. *(2026-10-21.)*
+
 **The caller's inputs are refused the shell by each fence, not by their mode bits.** The
 shell runs as the uid that owns them: measured through `execute`, a plain write is
 refused, but `chmod u+w` and the same write replaces the caller's file, and `rm -rf
