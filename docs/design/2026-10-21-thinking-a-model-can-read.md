@@ -82,7 +82,7 @@ its second step note, and on a newer account fails there.
 
 One pull request each, off main, in this order.
 
-1. **Drop thinking another signer made.** Landed in #9999 as `SignedThinkingMiddleware`,
+1. **Drop thinking another signer made.** Landed in #1048 as `SignedThinkingMiddleware`,
    a standing one on every graph kingfisher builds. Each reply records the endpoint's
    name, its `base_url` and the model that served it -- name and address both, since a
    gateway moved under one name is another signer, and so is a second account at one

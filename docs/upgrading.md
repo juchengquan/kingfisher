@@ -18,7 +18,7 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
-## A preview shows a result's ends, and names only a file that is there, after #9999
+## A preview shows a result's ends, and names only a file that is there, after #1048
 
 - **A long result on one line is previewed by its start and its end.** The preview kept
   whole lines only, so minified JSON, or a result whose every line was wider than half
@@ -30,7 +30,7 @@ replaced the four layers began.
   write. A backend that refuses or raises on a save under `/scratchpad/tool_results/`
   now sends the model the whole result, and its row still says it was not kept.
 
-## A lone `datazone=` name is refused like a listed one, after #9999
+## A lone `datazone=` name is refused like a listed one, after #1048
 
 - **`source_ids: datazone=finance`, written without brackets, no longer loads.** The list
   form was refused and the lone name was not, so an agent written that way required a
@@ -39,7 +39,7 @@ replaced the four layers began.
   `datazone: finance` on a subagent, or `ToolSpec(tool, datazone="finance")`; an agent
   takes none.
 
-## A datazone written `"*"` is refused, after #9999
+## A datazone written `"*"` is refused, after #1048
 
 - **`datazone: "*"` no longer loads.** It was read as a datazone named `*`, which no
   caller is in, so the subagent or tool was shut to everyone and access control was
@@ -47,7 +47,7 @@ replaced the four layers began.
   `datazone` out for any datazone, which is what `"*"` was meant to say. The same goes
   for `"datazone": "*"` in Python and `ToolSpec(..., datazone="*")`.
 
-## A skill written bare and qualified is refused, after #9999
+## A skill written bare and qualified is refused, after #1048
 
 - **`skills: [audit, catalogue::audit]` no longer loads.** Both entries loaded and
   meant one skill, so the one saying no `source_ids` reached every caller the other
@@ -55,7 +55,7 @@ replaced the four layers began.
   naming both spellings, and `doctor` fails on its `skill entries` row; keep one entry,
   the one carrying the audience you mean.
 
-## A helper may run your own `FilesystemMiddleware`, after #9999
+## A helper may run your own `FilesystemMiddleware`, after #1048
 
 - **A helper whose stack holds a middleware answering to `FilesystemMiddleware` now
   builds.** It failed on "Please remove duplicate middleware instances", because
@@ -66,7 +66,7 @@ replaced the four layers began.
   adds none beside it. It must still enforce `permissions` itself, as
   `docs/guides/middleware.md` says.
 
-## A switch of model or endpoint sends no earlier thinking, after #9999
+## A switch of model or endpoint sends no earlier thinking, after #1048
 
 - **A reply's thinking goes back only to the endpoint and model that produced it.** A
   session moved to another model, or to another endpoint -- one renamed, or one whose
