@@ -2014,8 +2014,8 @@ session, so there is no grace period. *(2026-10-13, from an architecture review.
 file nothing names is deleted, archived or kept is the deployment's to say. The sweep still
 chooses -- every rule above, unchanged -- and hands the files to `settle`, whose
 default, `DeleteUnusedResults`, removes each. It is handed an `UnusedFiles`, which
-offers each file's path, size, contents and removal and refuses any other path, so a
-plugin is given those files and not the session. Asked while the turn still holds the
+names the session and offers each file's path, size, contents and removal and refuses
+any other path, so a plugin is given those files and not the session. Asked while the turn still holds the
 claim, waited for by a cancel, and on the pool for an async turn, as other host work
 is; not asked when there is nothing. A raise is logged and the turn finishes.
 **Not taken:** session deletion through it, which is the sessions plugin's `delete`

@@ -43,8 +43,11 @@ class UnusedFiles:
     against the set: a plugin handed this is handed those files, not the session.
     """
 
-    def __init__(self, files: Any, listed: Iterable[tuple[str, int | None]]) -> None:
+    def __init__(
+        self, files: Any, listed: Iterable[tuple[str, int | None]], *, session_id: str
+    ) -> None:
         self._files = files
+        self._session_id = session_id
         self._each = tuple(UnusedFile(path, size, self) for path, size in listed)
         self._paths = frozenset(one.path for one in self._each)
         self._removed: set[str] = set()
@@ -56,7 +59,12 @@ class UnusedFiles:
         return len(self._each)
 
     def __repr__(self) -> str:
-        return f"UnusedFiles({[one.path for one in self._each]!r})"
+        return f"UnusedFiles({self._session_id!r}, {[one.path for one in self._each]!r})"
+
+    @property
+    def session_id(self) -> str:
+        """The session they are in. A path is unique within a session, not across them."""
+        return self._session_id
 
     @property
     def _left(self) -> int:
@@ -92,7 +100,7 @@ class DeleteUnusedResults:
             one.remove()
 
 
-def settle_unused(plugin: UnusedResults, found: UnusedFiles, *, session_id: str) -> None:
+def settle_unused(plugin: UnusedResults, found: UnusedFiles) -> None:
     """Hand `found` to `plugin`, logging rather than raising what it raises.
 
     The turn has run and its answer is kept: failing it now would lose that answer over
@@ -104,7 +112,7 @@ def settle_unused(plugin: UnusedResults, found: UnusedFiles, *, session_id: str)
         _log.warning(
             "session %s: the unused results plugin raised; %d of %d file(s) left for "
             "the next turn",
-            session_id,
+            found.session_id,
             found._left,
             len(found),
             exc_info=True,

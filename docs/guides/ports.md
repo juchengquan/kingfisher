@@ -251,7 +251,7 @@ class ArchiveUnusedResults:
 
     def settle(self, found: UnusedFiles) -> None:
         for one in found:
-            self.archive.put(one.path, one.read())
+            self.archive.put(found.session_id, one.path, one.read())
             one.remove()
 
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(), unused_results=ArchiveUnusedResults(archive))
@@ -263,10 +263,10 @@ For the command, return it from your `KINGFISHER_PLUGINS` factory as
 
 `settle` is asked at the end of a turn, once the ledger and the conversation are
 written, and only when there is something to hand over: a turn that leaves no unused
-file does not call it. What it is handed is an `UnusedFiles`, which iterates as one
-`UnusedFile` per file, each with `path` (as the agent's file tools name it), `size` (in
-bytes as the backend listed it, or `None` where the listing did not say), `read()` and
-`remove()`. That is all of it. There is no way through it to any other file in the
+file does not call it. What it is handed is an `UnusedFiles`, which has the
+`session_id` they are in and iterates as one `UnusedFile` per file, each with `path`
+(as the agent's file tools name it), `size` (in bytes as the backend listed it, or
+`None` where the listing did not say), `read()` and `remove()`. That is all of it. There is no way through it to any other file in the
 session: a path not among those handed over is refused, and the session's backend is
 not on offer.
 
@@ -293,8 +293,8 @@ Things to know:
 - **An exception is logged and the turn still finishes**, with its answer. The warning
   names the session and how many files were left, and they are handed over again next
   turn.
-- **It is not told which session it is in**, only the files. A path is unique within
-  a session, not across them.
+- **A path is unique within a session, not across them.** Key what you keep by
+  `found.session_id` as well, as the example does.
 - **Deleting a whole session does not go through it.** `Session.delete`, `reap` and
   `delete_session=True` remove everything through the sessions plugin's `delete`, so a
   deployment that archives results archives a session it is about to delete there.

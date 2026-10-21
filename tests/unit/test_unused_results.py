@@ -85,9 +85,11 @@ class Keeping:
 
     def __init__(self) -> None:
         self.handed: list[list[tuple[str, int | None, bytes]]] = []
+        self.sessions: list[str] = []
 
     def settle(self, found: UnusedFiles) -> None:
         self.handed.append([(one.path, one.size, one.read()) for one in found])
+        self.sessions.append(found.session_id)
 
 
 def test_the_default_removes_exactly_what_the_sweep_removed(workspace):
@@ -119,6 +121,7 @@ def test_a_plugin_is_handed_only_the_files_safe_to_drop(workspace):
 
     stray = (f"{ROUTE}{STRAY}", len(LEFT), LEFT)
     assert keeping.handed == [[stray], [stray]], "the stray was not handed over alone"
+    assert keeping.sessions == ["s", "s"], "an archive could not tell whose files these are"
     assert _kept(workspace) == [
         "A-0001-web_search.txt", "A-0002-web_search.txt", STRAY, "A-0009-dir", "notes.md",
     ]
@@ -172,7 +175,7 @@ def test_the_files_handed_over_reach_no_other_path(workspace):
     assert len(reaching.refused) == 3, reaching.refused
     assert all("is not one of the unused results" in said for said in reaching.refused)
     assert (workspace.workspace / "sessions" / "s" / ".harness" / TRANSCRIPT_FILE).exists()
-    assert reaching.offered == (set(), {"path", "size", "read", "remove"})
+    assert reaching.offered == ({"session_id"}, {"path", "size", "read", "remove"})
 
 
 class Raising:

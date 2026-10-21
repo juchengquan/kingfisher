@@ -231,7 +231,7 @@ def _swept(
         # On the host, and waited for by a cancel: the turn lets go of its claim only
         # after this, so no new turn can name a file while it is being dropped.
         yield on_host(
-            settle_unused, unused_results, UnusedFiles(files, unused), session_id=session_id
+            settle_unused, unused_results, UnusedFiles(files, unused, session_id=session_id)
         )
     if not offloaded:
         return

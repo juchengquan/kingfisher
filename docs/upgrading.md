@@ -27,7 +27,8 @@ replaced the four layers began.
 - **A backend that raises while one is removed no longer fails the end of the turn.**
   It is logged as a warning naming the session, and the file is offered again next
   turn.
-- **`sweep_results` takes `unused_results=` and `session_id=` as well.**
+- **`sweep_results` takes `unused_results=` and `session_id=` as well.** The id is
+  handed on as `UnusedFiles.session_id`, since a result's path repeats across sessions.
 
 ## Result files are swept after the transcript, after #1011
 
