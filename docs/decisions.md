@@ -1706,13 +1706,15 @@ totals 2026-10-19.)*
 **PDFs up to half the graph's summariser trigger in a turn, known by their type in
 whatever block carries them.** The trap is the conversation's size, not one file's: ten
 200 KB invoices each passed a 256 KB limit, and from the third the summariser ran before
-every model call. So a turn holds `pdf_allowance(summarizer_trigger(model))` of PDF, half
-the trigger as the summariser counts a PDF, a token per four characters of base64, which
-is three bytes a token: 249 KB with no profile, where the trap measured about 478 KB; 130
-to 159 KB on a 128k window by its `max_tokens`; 185 KB for claude-sonnet-4-5's 200k at its
-default 64k reservation; 332 KB for gpt-5; 1.2 MB for the template's MiniMax-M3. One PDF
-past it is past it. The graph's own model, because one figure for all was more than a
-128k window lets through and a fraction of a 1M one. Counted from the graph's saved
+every model call. So a turn holds `pdf_allowance(summarizer_trigger(model, stack))` of
+PDF, half the trigger as the summariser counts a PDF, a token per four characters of
+base64, which is three bytes a token: 249 KB with no profile, where the trap measured
+about 478 KB; 130 to 159 KB on a 128k window by its `max_tokens`; 185 KB for
+claude-sonnet-4-5's 200k at its default 64k reservation; 332 KB for gpt-5; 1.2 MB for the
+template's MiniMax-M3. One PDF past it is past it. The graph's own model, because one
+figure for all was more than a 128k window lets through and a fraction of a 1M one; and
+the summariser that graph runs, a deployment's in deepagents' place included (*The
+trigger is the summariser's that runs*, below). Counted from the graph's saved
 conversation, what the summariser has folded away included, so it can come out high and
 never low; it starts each turn at nothing, since an earlier turn comes back as its
 results' text. Bytes, because the summarizer counts them and pages would mean parsing every
@@ -2205,8 +2207,8 @@ it holds. Accepted rather than re-worded per call, for a grant that shrank betwe
 *(2026-10-18.)*
 
 **The marks.** The high mark is the model entry's `clear_results_at`, or else the smaller
-of 64,000 tokens and half the summariser's trigger, read from
-`compute_summarization_defaults` and never copied, so a small window still clears first.
+of 64,000 tokens and half the trigger of the summariser the graph runs, read off it and
+never copied, so a small window still clears first.
 The low mark is half the high. Replaying the 372 model calls of those sessions chose
 them: at 64k, four passes, input tokens 72% and transcripts 60% of a run without
 clearing, 82% of the cost at Anthropic's cache prices, each pass re-caching everything
@@ -2217,10 +2219,28 @@ nears the low mark: at a 20k mark one session fired 40 times without it and 12 w
 
 **One setting, and no flag and no off switch.** The trigger moves with the model's
 window, so the mark sits beside the model, and a flag would be a second place to look. A
-mark at or past the summariser's trigger is refused when the model is built; the highest
-allowed almost never clears, the nearest thing to off. The summariser also fires on the
-last reply's reported usage, which this does not read. A model the deployment passes in
-takes the default. The ledger is unchanged by clearing.
+mark at or past deepagents' own trigger is refused when the model is built, and one at or
+past a deployment's summariser that fires sooner when the agent is built, since only the
+agent's middleware says which runs; the highest allowed almost never clears, the nearest
+thing to off. The summariser also fires on the last reply's reported usage, which this
+does not read. A model the deployment passes in takes the default. The ledger is
+unchanged by clearing.
+
+**The trigger is the summariser's that runs, read off it.** deepagents merges middleware
+by name, so a deployment's answering to `SummarizationMiddleware` summarises in place of
+its own, and what kingfisher sized by deepagents' default -- the PDFs a turn holds, where
+clearing starts -- sat past where that one fired: a summariser at 100,000 tokens on a model
+with no profile left 255,000 bytes of PDF open and the clearing mark at 64,000, where its
+own trigger allows 150,000 and 50,000. So each graph reads the last summariser by that
+name among the middleware it is handed, its own definition's for a subagent and the
+agent's for `general-purpose`, which is why the deployment's middleware is built before
+kingfisher's. Read off langchain's clauses, which deepagents' summariser holds: a token
+count as written, a fraction of its model's window, a clause of several parts by the
+largest, since all must be met, and of several clauses the smallest, since any fires. A
+clause of message counts alone is skipped: it fires at any size, and no allowance is safe
+from it. Then capped at the input budget, as deepagents' own is. Where nothing can be
+read -- a class that is neither, or a trigger of counts alone -- it is sized as
+deepagents' own, and the notice the replacement is built with says so. *(2026-10-21.)*
 
 **A summarised turn is kept as the model last saw it: the summary, then the messages after
 its cut.** deepagents keeps every message in state and the summary beside them as private

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import Selection, refuse_ungranted_endpoint
 from kingfisher.core.config import ConfigError, Landing, WireFormat
@@ -165,33 +165,99 @@ def _reserved_output(model: BaseChatModel) -> int:
     )
 
 
-def summarizer_trigger(model: BaseChatModel) -> int:
+#: The name deepagents' summariser answers to. deepagents merges middleware by name, so a
+#: deployment's answering to it is the summariser that runs, in its place.
+SUMMARIZER = "SummarizationMiddleware"
+
+
+def summarizer_trigger(model: BaseChatModel, stack: Sequence[Any] = ()) -> int:
     """How large a conversation on `model` gets, in deepagents' approximate tokens,
-    before its summariser rewrites it.
+    before the summariser of a graph handed `stack` rewrites it.
 
-    Read from `compute_summarization_defaults`, never a number copied out of it, and
-    capped where the request's input budget is reached first.
-
-    Imported here, so a catalogue reading `WIRE_FORMATS` does not load deepagents.
+    The last of `stack` answering to `SUMMARIZER` is that summariser, as deepagents'
+    merge keeps the last; with none, or one `supplied_trigger` cannot read, it is
+    deepagents' own, read from `compute_summarization_defaults`, never a number copied
+    out of it. Capped where the request's input budget is reached first.
     """
+    supplied = [one for one in stack if getattr(one, "name", None) == SUMMARIZER]
+    trigger = supplied_trigger(supplied[-1]) if supplied else None
+    if trigger is None:
+        trigger = _deepagents_own(model)
+    window = _advertised_window(model)
+    if window is not None:
+        # Over the budget, not at it, so one past it.
+        trigger = min(trigger, int(window * FILLABLE) - _reserved_output(model) + 1)
+    return trigger
+
+
+def _deepagents_own(model: BaseChatModel) -> int:
+    """Where deepagents' own summariser on `model` fires by size: a fraction is picked only
+    where the profile holds a window."""
+    # Here, so a catalogue reading `WIRE_FORMATS` does not load deepagents.
     from deepagents.middleware.summarization import (  # noqa: PLC0415
         compute_summarization_defaults,
     )
 
     kind, value = compute_summarization_defaults(model)["trigger"]
-    window = _advertised_window(model)
-    if kind != "fraction":
-        trigger = int(value)
-    elif window is None:
-        # A profile deepagents read as a window and `_advertised_window` refuses as
-        # one -- `max_input_tokens: 0` -- for which langchain triggers at one token.
-        return 1
-    else:
-        trigger = max(1, int(window * value))
-    if window is not None:
-        # Over the budget, not at it, so one past it.
-        trigger = min(trigger, int(window * FILLABLE) - _reserved_output(model) + 1)
-    return trigger
+    window = _summarised_window(model)
+    if kind == "fraction" and window is not None:
+        return max(1, int(window * value))
+    return int(value)
+
+
+def supplied_trigger(summarizer: Any) -> int | None:
+    """The size at which `summarizer` first summarises, or `None` where that cannot be read.
+
+    Read off deepagents' summariser or langchain's, whose clauses are OR'd and AND'd
+    within: a clause counting messages alone never fires by size and is skipped, so a
+    trigger of only those has none. Their own clauses and window, not a copy of how
+    either parses a trigger.
+    """
+    # Here, as in `_deepagents_own`.
+    from deepagents.middleware.summarization import (  # noqa: PLC0415
+        SummarizationMiddleware as DeepAgentsSummarization,
+    )
+    from langchain.agents.middleware import (  # noqa: PLC0415
+        SummarizationMiddleware as LangchainSummarization,
+    )
+
+    # deepagents' is no langchain one: it holds one, which keeps the trigger.
+    helper = (
+        summarizer._lc_helper if isinstance(summarizer, DeepAgentsSummarization) else summarizer
+    )
+    if not isinstance(helper, LangchainSummarization):
+        return None
+    return _earliest(helper._trigger_clauses, _summarised_window(helper.model))
+
+
+def _earliest(clauses: Sequence[Mapping[str, float]], window: int | None) -> int | None:
+    """The smallest size at which any of `clauses` fires, each needing all of its parts.
+
+    A fraction is of `window` and at least one token, as langchain counts it; with no
+    window its clause never fires.
+    """
+    sizes: list[int] = []
+    for clause in clauses:
+        parts: list[int] = []
+        for kind, value in clause.items():
+            if kind == "tokens":
+                parts.append(int(value))
+            elif kind == "fraction":
+                if window is None:
+                    break
+                parts.append(max(1, int(window * value)))
+        else:
+            if parts:
+                sizes.append(max(parts))
+    return min(sizes, default=None)
+
+
+def _summarised_window(model: Any) -> int | None:
+    """The window a summariser takes a fraction of: langchain's reading of the profile, which
+    unlike `_advertised_window` takes any integer, so `max_input_tokens: 0` fires at one token."""
+    profile = getattr(model, "profile", None)
+    window = profile.get("max_input_tokens") if isinstance(profile, Mapping) else None
+    return window if isinstance(window, int) else None
 
 
 def _refuse_a_clearing_mark_the_summarizer_reaches_first(

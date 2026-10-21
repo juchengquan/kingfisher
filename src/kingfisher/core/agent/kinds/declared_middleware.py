@@ -19,6 +19,7 @@ from kingfisher.core.access import (
     refuse_unprovided_wants,
     refuse_written_wants,
 )
+from kingfisher.core.agent.models import SUMMARIZER, supplied_trigger
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -289,6 +290,13 @@ def _warn_if_it_replaces_deepagents(
         if job
         else ""
     )
+    if name == SUMMARIZER and supplied_trigger(instance) is None:
+        weight = (
+            " kingfisher reads the size a summariser fires at off deepagents' or "
+            "langchain's trigger, and this one is neither or fires at no size, so the "
+            "PDFs a turn may hold and where results are cleared are sized as if "
+            "deepagents' own still ran."
+        )
     warnings.warn(
         f"{subject} runs middleware registered as {registered_as!r} whose class is "
         f"named {name!r}, which is a name deepagents uses for its own. deepagents "

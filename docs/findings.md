@@ -236,6 +236,16 @@ for the next reader who reaches for one.*
   otherwise.** Its `name` answers `SummarizationMiddleware` only for the exact
   class and the subclass's own class name otherwise, so replacing it is something
   a subclass opts into. `summarize_by_count.py` does. *(2026-10-01.)*
+- **deepagents' summarizer is no langchain one: it holds one, which keeps the
+  trigger.** It subclasses `AgentMiddleware` and asks a langchain
+  `SummarizationMiddleware` in `_lc_helper` whether to summarise. That one's
+  `_trigger_clauses` is every trigger in one shape: a list of clauses, any of which
+  fires, each a dict whose parts must all be met, a tuple being a dict of one. A
+  fraction is of the `max_input_tokens` on the summarizer's own model, taken as any
+  integer, and is at least one token; with no window its clause never fires, and
+  langchain refuses one at construction. Only deepagents' also fires past the input
+  budget. `test_the_trigger_is_where_the_summarizer_in_the_stack_fires` drives both
+  classes. *(2026-10-21, deepagents 0.7.22, langchain 1.4.5.)*
 - **What it summarizes away is kept, and the summary says where.** One file per
   session, `conversation_history/<session_id>.md` under the root the next entry
   describes, a timestamped section appended each time; through kingfisher's backend

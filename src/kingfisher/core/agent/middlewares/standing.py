@@ -65,7 +65,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     grant, and `reachable` are the agent's alone.
     `budget` is the turn's, whose step limit reaches only the agent's own run, so a subagent
     is held to it in model calls; one per build, shared by all three kinds. `trigger` is
-    where this graph's own model is summarised, which sizes the PDFs its turn may hold open.
+    where this graph's own summariser fires, which sizes the PDFs its turn may hold open.
 
     `inner` is what the deployment's settings switch on and what its definitions name, which
     go inside every standing one. Taken here rather than appended by each caller so that the

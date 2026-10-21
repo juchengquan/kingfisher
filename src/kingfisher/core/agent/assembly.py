@@ -380,14 +380,37 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         return RecorderMiddleware(ledger, backend, audiences, cfg.layout.tool_results_route)
 
     running, mark = _running(agent, cfg, capabilities.endpoints, model)
-    # The agent's and `general-purpose`'s, which deepagents runs on the agent's model.
-    trigger = summarizer_trigger(running)
+    # Merged once, so an agent and its subagents select from one mapping, or a name would
+    # mean different things one level apart.
+    middlewares = offered_middleware(middleware_registry or {}, roots.middlewares)
+    agent_provisions = (
+        {}
+        if agent is None
+        else _provisions(
+            running,
+            agent,
+            cfg=cfg,
+            endpoints=capabilities.endpoints,
+            backend=backend,
+        )
+    )
+    # Before anything the summariser sizes: one of these may be it, in deepagents' place.
+    named = _deployment_middleware(
+        agent, middlewares, capabilities.middlewares, provisions=agent_provisions
+    )
+    trigger = summarizer_trigger(running, named)
     # The agent's alone, and only with a ledger for its handles to name.
     clearing = (
         None
         if ledger is None
         else partial(
-            ResultClearingMiddleware, ledger, high_mark(running, mark)
+            ResultClearingMiddleware,
+            ledger,
+            high_mark(
+                trigger,
+                mark,
+                subject="this agent" if agent is None else f"agent {agent.name!r}",
+            ),
         )
     )
     # Filled in kingfisher's order once the grant is known; the probe reads it before.
@@ -580,10 +603,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         # not told to save.
         switched[memory_at] = remembering(permitted)
 
-    # Before either branch, and merged once: an agent and its subagents must select
-    # from one mapping, or a name would mean different things one level apart.
-    registry = offered_middleware(middleware_registry or {}, roots.middlewares)
-
     if capabilities.subagents is not None:
         # The registry rather than its `names`: a subagent's grant has to be
         # resolved to the skill it means, not merely recognised as a word.
@@ -647,7 +666,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 budget=budget,
                 extra_middleware=declared_middleware(
                     defined[name],
-                    registry,
+                    middlewares,
                     capabilities.middlewares,
                     kind="subagent",
                     provisions=_provisions(
@@ -712,22 +731,14 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             _with_helpers(n, nested=False) for n in activated
         ]
 
-    agent_provisions = (
-        {}
-        if agent is None
-        else _provisions(
-            running,
-            agent,
-            cfg=cfg,
-            endpoints=capabilities.endpoints,
-            backend=backend,
-        )
-    )
-
     # deepagents adds a `general-purpose` subagent with the agent's capabilities and none
     # of our middleware whenever `task` is offered. One supplied by that name replaces
     # it, so it keeps working under the caller's ceiling rather than being withheld.
     supplied = list(extras.get("subagents", ()))
+    # Its own instances: two graphs sharing one would share its state.
+    general = _deployment_middleware(
+        agent, middlewares, capabilities.middlewares, provisions=agent_provisions
+    )
     supplied.append(
         {
             **GENERAL_PURPOSE_SUBAGENT,
@@ -739,9 +750,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 # The agent's recorder: these are the agent's tools, under its audiences.
                 standing_middleware(
                     "general-purpose",
-                    inner=_deployment_middleware(
-                        agent, registry, capabilities.middlewares, provisions=agent_provisions
-                    ),
+                    inner=general,
                     names=guarded,
                     paths=paths,
                     layout=cfg.layout,
@@ -750,7 +759,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     execution_timeout_s=cfg.execution_timeout_s,
                     permissions=permissions,
                     keep_results_rounds=cfg.keep_results_rounds,
-                    trigger=trigger,
+                    trigger=summarizer_trigger(running, general),
                     recorder=recording(agent),
                     tools=permitted,
                     gated=gated,
@@ -765,12 +774,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     middleware[:] = agents_standing(
         tools=permitted,
         reachable=tuple(spec["name"] for spec in supplied),
-        inner=[
-            *switched,
-            *_deployment_middleware(
-                agent, registry, capabilities.middlewares, provisions=agent_provisions
-            ),
-        ],
+        inner=[*switched, *named],
     )
 
     return assemble(surface.carried, permitted)
