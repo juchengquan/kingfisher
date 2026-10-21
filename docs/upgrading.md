@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A PDF plugin that hands over nothing leaves kingfisher's verdict, after #9999
+
+- **`""`, no blocks, or blank text alone from `PdfAttachments.replacement` is read as
+  `None`**, and logged. It was taken as a replacement that became nothing, so the model
+  was handed an empty result marked failed, with no line saying why. Now a PDF that
+  passes is handed over and one past the limit is refused with kingfisher's reason. A
+  plugin that meant to withhold a PDF should hand over text saying so.
+
 ## The prompt no longer sends the model to `grep` for a cleared result, after #9999
 
 - **The sentence on a cleared result names only what its handle offers.** An agent

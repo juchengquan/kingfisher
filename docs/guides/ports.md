@@ -428,6 +428,9 @@ Things to know:
 - **Anything it hands over counts as the call succeeding.** The result is recorded, and
   gets an id, as any other; a call whose only answer is kingfisher's own line is a failed
   call, with no row.
+- **Nothing is not a replacement.** `""`, no blocks, or blank text alone is logged and
+  read as `None`, so kingfisher's verdict stands: handed over, it reached the model as an
+  empty failed result with no word why. To withhold a PDF, hand over text saying so.
 - **The calls of one graph are asked one at a time**, since each PDF is judged beside
   what the one before became. Be quick. It is a plain method: on the async path it is
   called on kingfisher's thread pool, off the event loop.

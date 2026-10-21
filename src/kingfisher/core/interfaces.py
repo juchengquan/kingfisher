@@ -334,8 +334,9 @@ class PdfAttachments(Protocol):
 
         Text or content blocks, as a tool may return. They are judged as any result is, so
         a PDF handed back in its place is still refused past what the turn holds. Anything
-        handed over counts as the call succeeding. An exception here is logged, and the
-        verdict stands.
+        handed over counts as the call succeeding; nothing -- `""`, no blocks, or blank
+        text alone -- is logged and read as `None`, so to withhold a PDF, say so in text.
+        An exception here is logged, and the verdict stands.
         """
         ...
 
