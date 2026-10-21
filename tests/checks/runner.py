@@ -137,12 +137,29 @@ def a_command_leaves_nothing_running(make: Callable[[], CommandRunner]) -> None:
     by the mark it would make, and the mark is first made where nothing stops it: a shell
     that cannot write there would pass this having proved nothing. In `TMPDIR`, because
     under Landlock the shell cannot write the directory it starts in.
+
+    **The background job says it began**, and its output goes beside the mark, not to
+    `/dev/null`: under Landlock that redirection was refused, the job never started, and
+    this passed there with nothing running to kill.
     """
     runner = make()
-    mark = f'"${{TMPDIR:-/tmp}}/kingfisher-contract-{uuid.uuid4().hex}"'
-    look = f"test -e {mark} && echo present || echo absent"
+    base = f"${{TMPDIR:-/tmp}}/kingfisher-contract-{uuid.uuid4().hex}"
+    mark, began, log = (f'"{base}{end}"' for end in ("", "-began", ".log"))
+
+    def present(path: str) -> bool:
+        return "present" in runner.run(f"test -e {path} && echo present || echo absent").output
+
+    def started(job: str, *, then: str, timeout: int) -> None:
+        runner.run(f"rm -f {began}; ({job}) >{log} 2>&1 & {then}", timeout=timeout)
+        if not present(began):
+            msg = (
+                f"the background job never began ({runner.run(f'cat {log}').output!r}), "
+                "so this check cannot see whether it would have been left behind"
+            )
+            raise AssertionError(msg)
+
     try:
-        seen = runner.run(f"touch {mark} && {look}; rm -f {mark}").output
+        seen = runner.run(f"touch {mark} && echo present; rm -f {mark}").output
         if "present" not in seen:
             msg = (
                 f"the command could not leave a mark in $TMPDIR ({seen!r}), so this check "
@@ -150,25 +167,30 @@ def a_command_leaves_nothing_running(make: Callable[[], CommandRunner]) -> None:
             )
             raise AssertionError(msg)
 
-        runner.run(f"(sleep 1; touch {mark}) >/dev/null 2>&1 &")
+        # The command waits until its job has begun, so it ends with the job running.
+        started(
+            f"touch {began}; sleep 1; touch {mark}",
+            then=f"while [ ! -e {began} ]; do sleep 0.05; done",
+            timeout=5,
+        )
         time.sleep(1.5)
-        if "absent" not in runner.run(look).output:
+        if present(mark):
             msg = (
                 "a process the command started in the background was still running after "
                 "the command ended; kill the command's process group when it exits"
             )
             raise AssertionError(msg)
 
-        runner.run(f"(sleep 1.5; touch {mark}) >/dev/null 2>&1 & sleep 30", timeout=1)
+        started(f"touch {began}; sleep 1.5; touch {mark}", then="sleep 30", timeout=1)
         time.sleep(1)
-        if "absent" not in runner.run(look).output:
+        if present(mark):
             msg = (
                 "a process the command started was still running after the command timed "
                 "out; kill the command's process group, not only the shell"
             )
             raise AssertionError(msg)
     finally:
-        runner.run(f"rm -f {mark}")
+        runner.run(f"rm -f {mark} {began} {log}")
 
 
 #: Every check a `CommandRunner` must pass. These run commands, and two wait for a

@@ -29,6 +29,10 @@ SYSTEM_PATHS: tuple[str, ...] = (
     "/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc", "/proc", "/dev",
 )
 
+#: Written to by every `2>/dev/null` a model types, and holding nothing. The device
+#: alone: `/dev` holds the host's disks.
+WRITABLE_DEVICES: tuple[str, ...] = ("/dev/null",)
+
 
 def _session_writable(session_dir: Path, layout: Layout) -> list[Path]:
     """Everywhere inside one session the shell may write: its directories, one by one.
@@ -66,6 +70,7 @@ def policy_for(
         fs_readable=present([*SYSTEM_PATHS, *readable, session_dir]),
         fs_writable=present([
             *_session_writable(session_dir, layout),
+            *WRITABLE_DEVICES,
             *writable,
         ]),
     )

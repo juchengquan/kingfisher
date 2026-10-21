@@ -162,6 +162,18 @@ class BlindRunner:
         return CommandResult(output="absent", exit_code=0)
 
 
+@dataclass(frozen=True)
+class RefusedRedirectRunner:
+    """A runner whose shell refuses the job's redirection, as Landlock refused
+    `>/dev/null`: the job never starts, so no mark could ever appear."""
+
+    local: bool = True
+
+    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+        refused = command.replace('.log"', '.log/refused"')
+        return ReferenceRunner().run(refused, timeout=timeout)
+
+
 def _run(contract, name, subject):
     """One named check from a contract, against one subject."""
     (check,) = [c for c in contract if c.__name__ == name]
@@ -194,3 +206,11 @@ def test_a_runner_that_cannot_leave_a_mark_is_not_passed():
     leftover, which is what Landlock's working directory would have been."""
     with pytest.raises(AssertionError, match="cannot see a process left behind"):
         _run(RUNNER_CHECKS, "a_command_leaves_nothing_running", BlindRunner)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the check runs POSIX shell commands")
+def test_a_job_that_never_began_is_not_passed():
+    """The check passed under Landlock with its job refused `/dev/null`: nothing ran, so
+    nothing was left behind to find."""
+    with pytest.raises(AssertionError, match="never began"):
+        _run(RUNNER_CHECKS, "a_command_leaves_nothing_running", RefusedRedirectRunner)
