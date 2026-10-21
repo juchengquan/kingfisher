@@ -1,11 +1,12 @@
-"""Older tool results and file text in the main agent's conversation, swapped for handles
-once it grows large."""
+"""Older tool results and file text in a graph's conversation, swapped for handles once it
+grows large."""
 
 from __future__ import annotations
 
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware, ExtendedModelResponse
@@ -92,6 +93,20 @@ def high_mark(trigger: int, written: int | None, *, subject: str) -> int:
         )
         raise ConfigError(msg)
     return written
+
+
+def result_clearing(
+    ledger: Ledger | None, trigger: int, written: int | None, *, subject: str
+) -> Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None:
+    """What builds `subject`'s clearing once its grant is known, or `None` where no ledger
+    is kept for a handle to name.
+
+    Each graph's own `trigger` and `written`: a subagent on a smaller model, or naming a
+    summariser of its own, would otherwise clear by a mark it never reaches.
+    """
+    if ledger is None:
+        return None
+    return partial(ResultClearingMiddleware, ledger, high_mark(trigger, written, subject=subject))
 
 
 @dataclass(frozen=True)

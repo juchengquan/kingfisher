@@ -13,6 +13,7 @@ from deepagents.middleware import SubAgentMiddleware
 from langchain_core.runnables import Runnable
 
 from kingfisher.core.access import ALL, Selection, ceiling, narrowed, refuse_unoffered
+from kingfisher.core.agent.middlewares.clearing import result_clearing
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import deployment_default, model_named, summarizer_trigger
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from kingfisher.core.config import Config
     from kingfisher.core.definitions.skills.registry import SkillRegistry
     from kingfisher.core.interfaces import PdfAttachments
+    from kingfisher.core.session.ledger import Ledger
 
 
 def _identities(registry: SkillRegistry, selection: Selection) -> Selection:
@@ -123,6 +125,22 @@ def model_object(  # a parameter per rule picking the model: folding two hides w
     if model_id is None:
         return inherited
     return model_named(model_id, cfg, endpoints=endpoints, subject=_subject(spec))
+
+
+def clearing_mark(
+    spec: SubagentSpec,
+    cfg: Config,
+    *,
+    run_on: RunOn | None = None,
+    inherited: int | None = None,
+) -> int | None:
+    """The `clear_results_at` of the entry `model_object` builds this subagent from, or
+    `inherited`, its summoner's, where it runs its summoner's model."""
+    model_id = resolved_model(spec.wanted, override=run_on)
+    if model_id is None:
+        return inherited
+    profile, _ = cfg.models.resolve(model_id)
+    return profile.clear_results_at
 
 
 def indistinct(
@@ -250,6 +268,10 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     #: The turn's recorder for this definition. A compiled subagent's calls go unrecorded;
     #: its parent records its answer as the result of `task`.
     recorder: RecorderMiddleware | None = None,
+    #: The turn's, whose rows its cleared results' handles name; `None` clears nothing.
+    ledger: Ledger | None = None,
+    #: As `clearing_mark` reads it for this subagent.
+    clear_results_at: int | None = None,
     #: The deployment's instructions, which every subagent is given ahead of its own.
     instructions: str = "",
     #: The session's, as `standing_middleware` takes them.
@@ -316,6 +338,8 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         granted = () if skills in (None, ALL) else tuple(skills)
         skills = tuple(dict.fromkeys((*granted, *own_names)))
         skill_sources = [*(skill_sources or []), *own_sources]
+    # A summariser it names takes deepagents' place in its stack, so it is the one read.
+    trigger = summarizer_trigger(runs, extra_middleware or ())
     # From `standing_middleware`, so the agent, this subagent and `general-purpose` cannot
     # differ. `paths` is handed down, not read off the backend, which need not carry it.
     subagent["middleware"] = standing_middleware(
@@ -337,10 +361,12 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         budget=StepBudget(cfg.recursion_limit) if budget is None else budget,
         execution_timeout_s=cfg.execution_timeout_s,
         keep_results_rounds=cfg.keep_results_rounds,
-        # A summariser it names takes deepagents' place in its stack, so it is the one read.
-        trigger=summarizer_trigger(runs, extra_middleware or ()),
+        trigger=trigger,
         pdf_attachments=pdf_attachments,
         recorder=recorder,
+        clearing=result_clearing(
+            ledger, trigger, clear_results_at, subject=f"subagent {spec.name!r}"
+        ),
         # `None` permits nothing: an empty allowlist, not an absent one.
         tools=None
         if allowed == ALL

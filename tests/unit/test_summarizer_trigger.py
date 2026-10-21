@@ -226,10 +226,12 @@ def test_clearing_starts_at_half_where_the_deployments_summarizer_fires(cfg, ses
     )
 
 
-def _marked(cfg: Any, **fields: Any) -> Any:
+def _marked(cfg: Any, model: str | None = None, **fields: Any) -> Any:
+    """`cfg`, with one model's entry -- the default's unless named -- carrying `fields`."""
     models = cfg.models
-    entry = replace(models.models[models.default], **fields)
-    return replace(cfg, models=replace(models, models={**models.models, models.default: entry}))
+    name = model or models.default
+    entry = replace(models.models[name], **fields)
+    return replace(cfg, models=replace(models, models={**models.models, name: entry}))
 
 
 def test_a_mark_the_deployments_summarizer_reaches_first_is_refused_at_build(
@@ -246,6 +248,31 @@ def test_a_mark_the_deployments_summarizer_reaches_first_is_refused_at_build(
     assert _high(_built(at, session_dir, agent=_spec(at, "unnamed")).middleware) == EARLY
     below = _marked(cfg, clear_results_at=EARLY - 1)
     assert _high(_built(below, session_dir, agent=_spec(below)).middleware) == EARLY - 1
+
+
+def test_a_mark_a_subagents_own_summarizer_reaches_first_is_refused_at_build(
+    cfg, session_dir
+):
+    """A subagent's mark is held to its own graph's summariser, as the agent's is: one on
+    a model of its own, under a summariser firing at `EARLY`, never cleared anything."""
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(
+        "name: helper\ndescription: Helps.\nmodel: cheap-model\nmiddlewares: [early]\n"
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
+    )
+    # The agent names `early` too, which is what lets a subagent name it; its own mark is
+    # the default rule's, half of `EARLY`, so only the subagent's can be refused.
+    an_agent(cfg, middlewares="[early]", subagents="[helper]", **EVERY_TOOL)
+    at = _marked(cfg, "cheap-model", clear_results_at=EARLY)
+
+    with pytest.raises(ConfigError, match=rf"subagent 'helper' .* fires at {EARLY} tokens"):
+        _built(at, session_dir, agent=_spec(at))
+    below = _marked(cfg, "cheap-model", clear_results_at=EARLY - 1)
+    built = _built(below, session_dir, agent=_spec(below))
+    graphs = {spec["name"]: spec["middleware"] for spec in built.subagents or ()}
+    assert _high(graphs["helper"]) == EARLY - 1
+    assert _high(built.middleware) == EARLY // 2
 
 
 def test_the_build_says_when_it_cannot_read_the_summarizer_it_runs(cfg, session_dir):

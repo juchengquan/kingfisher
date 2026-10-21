@@ -8,7 +8,6 @@ deepagents, and naming `system_prompt` must not.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +31,7 @@ from kingfisher.core.agent.kinds.declared_middleware import (
 )
 from kingfisher.core.agent.kinds.subagents import (
     as_subagent,
+    clearing_mark,
     model_object,
     subagent_helpers,
     subagent_skills,
@@ -44,7 +44,7 @@ from kingfisher.core.agent.kinds.tools import (
     registered_tools,
     resolve_tools,
 )
-from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware, high_mark
+from kingfisher.core.agent.middlewares.clearing import result_clearing
 from kingfisher.core.agent.middlewares.recorder import (
     Audiences,
     RecorderMiddleware,
@@ -410,19 +410,11 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         agent, middlewares, capabilities.middlewares, provisions=agent_provisions
     )
     trigger = summarizer_trigger(running, named)
-    # The agent's alone, and only with a ledger for its handles to name.
-    clearing = (
-        None
-        if ledger is None
-        else partial(
-            ResultClearingMiddleware,
-            ledger,
-            high_mark(
-                trigger,
-                mark,
-                subject="this agent" if agent is None else f"agent {agent.name!r}",
-            ),
-        )
+    clearing = result_clearing(
+        ledger,
+        trigger,
+        mark,
+        subject="this agent" if agent is None else f"agent {agent.name!r}",
     )
     # Filled in kingfisher's order once the grant is known; the probe reads it before.
     middleware: list[Any] = []
@@ -634,7 +626,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
 
         wanted = _wanted_endpoints(run_on, activated, capabilities.models)
 
-        def _built(
+        def _built(  # noqa: PLR0913 -- by keyword, so a mark is never passed for a model
             name: str,
             *,
             # This subagent's model, not the agent's.
@@ -642,6 +634,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             helpers: list[Any] | None = None,
             default_model: Any = None,
             tool_objects: list[Any] | None = None,
+            # Read with `runs`, from the entry that built it.
+            clear_results_at: int | None = None,
         ) -> dict[str, Any]:
             """One subagent, with the request's ceiling on every axis."""
             return as_subagent(
@@ -678,6 +672,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 run_on=wanted.get(name),
                 held=held,
                 recorder=recording(defined[name]),
+                ledger=ledger,
+                clear_results_at=clear_results_at,
                 budget=budget,
                 extra_middleware=declared_middleware(
                     defined[name],
@@ -706,7 +702,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         # nested one none, and refuses a nested spec with no model.
         root = running
 
-        def _with_helpers(name: str, *, nested: bool, inherited: Any = None) -> Any:
+        def _with_helpers(
+            name: str, *, nested: bool, inherited: Any = None, inherited_mark: int | None
+        ) -> Any:
+            # `inherited` alone in the key: the mark comes with the model it was read beside.
             key = (name, nested, id(inherited))
             if key not in compiled:
                 override = wanted.get(name)
@@ -717,6 +716,11 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     run_on=override,
                     inherited=inherited,
                 )
+                # Beside `mine`, from the same entry: a mark read off another model's
+                # clears by a size this one's summariser may come to first.
+                marked = clearing_mark(
+                    defined[name], cfg, run_on=override, inherited=inherited_mark
+                )
                 helpers = [
                     _with_helpers(
                         helper,
@@ -724,6 +728,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                         # Its parent's model, not the agent's: "runs whatever
                         # summoned it", one level down.
                         inherited=mine if mine is not None else root,
+                        inherited_mark=marked,
                     )
                     # `activated`, not the grant, which may be `"*"`: it leaves out
                     # a helper out of this caller's reach.
@@ -739,11 +744,12 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     helpers=helpers or None,
                     default_model=inherited if nested else None,
                     tool_objects=list(surface.objects.values()) if nested else None,
+                    clear_results_at=marked,
                 )
             return compiled[key]
 
         extras["subagents"] = [
-            _with_helpers(n, nested=False) for n in activated
+            _with_helpers(n, nested=False, inherited_mark=mark) for n in activated
         ]
 
     # deepagents adds a `general-purpose` subagent with the agent's capabilities and none
@@ -754,6 +760,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     general = _deployment_middleware(
         agent, middlewares, capabilities.middlewares, provisions=agent_provisions
     )
+    generals_trigger = summarizer_trigger(running, general)
     supplied.append(
         {
             **GENERAL_PURPOSE_SUBAGENT,
@@ -774,9 +781,13 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     execution_timeout_s=cfg.execution_timeout_s,
                     permissions=permissions,
                     keep_results_rounds=cfg.keep_results_rounds,
-                    trigger=summarizer_trigger(running, general),
+                    trigger=generals_trigger,
                     pdf_attachments=pdf_attachments,
                     recorder=recording(agent),
+                    # The agent's model and its entry's mark, read against its own stack.
+                    clearing=result_clearing(
+                        ledger, generals_trigger, mark, subject="general-purpose"
+                    ),
                     tools=permitted,
                     gated=gated,
                     session_text=session_instructions,

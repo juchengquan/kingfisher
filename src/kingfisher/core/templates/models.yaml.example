@@ -102,16 +102,17 @@ default: MiniMax-M3
 #   top_p        unset
 #   clear_results_at
 #                unset, and never sent: it is kingfisher's own. The size, in
-#                tokens, at which older tool results and file text in the main
-#                agent's conversation start being swapped for a short handle
-#                naming where the whole of each still is, until it is under half
-#                this. Unset is the smaller of 64000 and half of where the agent's
-#                summarizer summarizes its conversation: deepagents' on this model,
-#                or one the agent's middleware puts in its place. Written, it is
-#                used as written, and one at or past that point is refused -- when
-#                the model is built, or when the agent is for a summarizer of its
-#                own -- since clearing would never come first. There is no off: the
-#                highest it may be almost never clears.
+#                tokens, at which older tool results and file text in the
+#                conversation of an agent or subagent running this model start
+#                being swapped for a short handle naming where the whole of each
+#                still is, until it is under half this. Unset is the smaller of
+#                64000 and half of where that graph's summarizer summarizes its
+#                conversation: deepagents' on this model, or one its definition's
+#                middleware puts in its place. Written, it is used as written, and
+#                one at or past that point is refused -- when the model is built,
+#                or when the agent is for a summarizer a definition names -- since
+#                clearing would never come first. There is no off: the highest it
+#                may be almost never clears.
 #   extra        forwarded as kwargs, for settings peculiar to one endpoint.
 #                Additive only -- it may not name any of the above, nor the chat
 #                class's own name for one (`openai_api_key`, `request_timeout`,

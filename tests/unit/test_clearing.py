@@ -1,4 +1,4 @@
-"""Clearing older results and file text to handles in the main agent's conversation.
+"""Clearing older results and file text to handles in each graph's conversation.
 
 Two halves. The rule -- what is cleared, what a handle says, when a pass runs -- is driven
 on conversations built here, because its cases are positions in a list and a turn can
@@ -16,6 +16,7 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
+from deepagents.middleware import SubAgentMiddleware
 from deepagents.middleware._message_eviction import (
     _TOO_LARGE_TOOL_MSG,
     _create_content_preview,
@@ -946,31 +947,186 @@ def _spec(cfg: Any, name: str) -> Any:
     return LocalAgentRepository(cfg.catalogue_roots["agents"]).specs[name]
 
 
-def test_only_the_main_agent_of_a_turn_kingfisher_built_clears(bulky):
-    """A subagent's conversation ends with its answer, and its middleware is built apart;
-    a build no turn keeps has no ledger for a handle to name."""
-    subagents_dir(bulky).mkdir(parents=True, exist_ok=True)
-    (subagents_dir(bulky) / "helper.yaml").write_text(
-        "name: helper\ndescription: Helps.\n"
-        'builtin_tools: ["*"]\ntools: ["*"]\n'
-        "system_prompt: |\n  You help.\n",
+#: A compiled subagent, which deepagents runs as it was built.
+COMPILED = '''
+SUBAGENTS = [
+    {
+        "name": "built",
+        "description": "Runs as it was built.",
+        "build": lambda model, tools: _graph(model, tools),
+    }
+]
+
+
+def _graph(model, tools):
+    from langchain.agents import create_agent
+
+    return create_agent(model, tools)
+'''
+
+#: A subagent holding every tool, `read_file` among them.
+WORKER = 'builtin_tools: ["*"]\ntools: ["*"]\n'
+
+
+def _subagent(cfg: Any, name: str, body: str = "") -> None:
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / f"{name}.yaml").write_text(
+        f"name: {name}\ndescription: Helps.\n{body}system_prompt: |\n  You help.\n",
         encoding="utf-8",
     )
-    an_agent(bulky, subagents="[helper]", **EVERY_TOOL)
+
+
+def _helpers(spec: Any) -> dict[str, Any]:
+    """A subagent's helpers, as built: deepagents keeps their specs in the
+    `SubAgentMiddleware` that hands the subagent `task`, and nowhere else."""
+    (task,) = [one for one in spec["middleware"] if isinstance(one, SubAgentMiddleware)]
+    return {one["name"]: one for one in task._subagents}
+
+
+def test_every_graph_kingfisher_builds_for_a_turn_clears(bulky):
+    """A subagent's conversation was left to grow until its summariser fired while the
+    agent's was cleared, though its results have rows a handle can name: a declared
+    subagent, a helper it consults and `general-purpose` alike. A compiled subagent runs
+    as it was built, and a build no turn keeps has no ledger for a handle to name."""
+    _subagent(bulky, "worker", WORKER + "subagents: [inner]\n")
+    _subagent(bulky, "inner", WORKER)
+    (subagents_dir(bulky) / "built.py").write_text(COMPILED, encoding="utf-8")
+    an_agent(bulky, subagents="[worker, inner, built]", **EVERY_TOOL)
     backend = backend_at(bulky, bulky.workspace / "sessions" / "s")
     agent = _spec(bulky, "only")
 
     kept = build_agent(bulky, backend=backend, ledger=Ledger("t", KeptLedger()), agent=agent)
     none = build_agent(bulky, backend=backend, agent=agent)
 
-    assert [type(one) for one in kept.middleware].count(ResultClearingMiddleware) == 1
-    assert isinstance(kept.middleware[0], ResultClearingMiddleware), (
-        "not where it measures the request"
-    )
-    assert {spec["name"] for spec in kept.subagents or ()} >= {"helper", "general-purpose"}
-    for spec in kept.subagents or ():
-        assert _clearing(spec.get("middleware", ())) == [], spec["name"]
+    graphs = {spec["name"]: spec for spec in kept.subagents or ()}
+    stacks = {
+        "the agent": kept.middleware,
+        **{name: graphs[name]["middleware"] for name in ("worker", "inner", "general-purpose")},
+        "worker's helper": _helpers(graphs["worker"])["inner"]["middleware"],
+    }
+    for name, middleware in stacks.items():
+        assert len(_clearing(middleware)) == 1, name
+        assert isinstance(middleware[0], ResultClearingMiddleware), (
+            f"{name}: not where it measures the request"
+        )
+    assert "middleware" not in graphs["built"], "a compiled subagent is handed none"
     assert _clearing(none.middleware) == []
+    for spec in none.subagents or ():
+        assert _clearing(spec.get("middleware", ())) == [], spec["name"]
+
+
+def _task(who: str) -> AIMessage:
+    asked = {"description": "dig", "subagent_type": who}
+    return AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": f"t-{who}"}])
+
+
+def _subagents_last_call() -> dict[str, str]:
+    """What the subagent that called `bulky` was handed on its last call, by call id: the
+    agent's own conversation holds only the `task` that answered it."""
+    calls = [
+        heard
+        for heard in Scripted.heard
+        if any(isinstance(one, ToolMessage) and one.name == "bulky" for one in heard)
+    ]
+    return {one.tool_call_id: one.text for one in calls[-1] if isinstance(one, ToolMessage)}
+
+
+@pytest.mark.parametrize(
+    ("subagent", "asks"),
+    [
+        ("worker", ("worker",)),
+        ("general-purpose", ("general-purpose",)),
+        ("a helper", ("worker", "inner")),
+    ],
+)
+def test_a_subagents_long_task_clears_to_its_own_rows(bulky, subagent, asks):
+    """Driven through real turns, as the agent's is: a subagent's handle names the file
+    under its own row, which is still there once the turn is over, and the subagent is
+    handed it from the call after the pass."""
+    _subagent(bulky, "worker", WORKER + "subagents: [inner]\n")
+    _subagent(bulky, "inner", WORKER)
+    an_agent(bulky, subagents="[worker, inner]", **EVERY_TOOL)
+    cfg = _marked(bulky, clear_results_at=12_000)
+
+    calls = (_one("bulky", n, n=n) for n in range(1, 7))
+    answers = (AIMessage(content="dug") for _ in asks)
+    result = _turn(cfg, *map(_task, asks), *calls, *answers, AIMessage(content="done"))
+
+    assert result.answer == "done"
+    said = _subagents_last_call()
+    rows = {entry.call: entry for entry in result.ledger}
+    for call in ("c1", "c2"):
+        row = rows[call]
+        assert row.path is not None and row.path.endswith(f"{row.id}-bulky.txt")
+        assert said[call].endswith(f"bytes, cleared; full result: {row.path})\n[{row.id}]"), (
+            subagent
+        )
+        assert (cfg.workspace / "sessions" / "s" / row.path.lstrip("/")).exists()
+    for call in ("c3", "c4", "c5", "c6"):
+        assert len(said[call]) > 16_000, (subagent, call)
+
+
+def test_a_subagent_without_read_file_is_told_to_call_its_tool_again(bulky):
+    """The grant a subagent's handles are written for is its own: handed the agent's, or
+    none, one granted no file tool is sent to read a path it cannot."""
+    # `builtin_tools` left out grants none, so neither `read_file` nor `grep`.
+    _subagent(bulky, "bare", 'tools: ["*"]\n')
+    an_agent(bulky, subagents="[bare]", **EVERY_TOOL)
+    cfg = _marked(bulky, clear_results_at=12_000)
+
+    calls = (_one("bulky", n, n=n) for n in range(1, 7))
+    result = _turn(cfg, _task("bare"), *calls, AIMessage("dug"), AIMessage(content="done"))
+
+    said = _subagents_last_call()
+    rows = {entry.call: entry for entry in result.ledger}
+    for call in ("c1", "c2"):
+        handle = f"bytes, cleared; call bulky again to see it)\n[{rows[call].id}]"
+        assert said[call].endswith(handle)
+
+
+def test_a_subagent_clears_by_the_mark_beside_the_model_it_runs(bulky):
+    """Each graph's mark is read from the entry that built its model: a subagent naming a
+    model of its own was otherwise cleared by the agent's mark, which that model's
+    summariser may reach first. One naming none runs its summoner's model, so its mark;
+    `general-purpose` runs the agent's; a model passed in has no entry."""
+    cfg = _marked(_marked(bulky, clear_results_at=100_000), "cheap-model", clear_results_at=30_000)
+    _subagent(cfg, "pinned", WORKER + "model: cheap-model\nsubagents: [inner]\n")
+    _subagent(cfg, "plain", WORKER + "subagents: [inner]\n")
+    _subagent(cfg, "inner")
+    an_agent(cfg, subagents="[pinned, plain, inner]", **EVERY_TOOL)
+    backend = backend_at(cfg, cfg.workspace / "sessions" / "s")
+
+    def marks(**given: Any) -> dict[str, int]:
+        built = build_agent(
+            cfg, backend=backend, ledger=Ledger("t", KeptLedger()), agent=_spec(cfg, "only"),
+            **given,
+        )
+        graphs = {spec["name"]: spec for spec in built.subagents or ()}
+        helpers = {
+            f"{name}'s inner": _helpers(graphs[name])["inner"] for name in ("pinned", "plain")
+        }
+        return {
+            name: _clearing(spec["middleware"])[0].high
+            for name, spec in {**graphs, **helpers}.items()
+        }
+
+    assert marks() == {
+        "pinned": 30_000,
+        "pinned's inner": 30_000,
+        "plain": 100_000,
+        "plain's inner": 100_000,
+        "inner": 100_000,
+        "general-purpose": 100_000,
+    }
+    injected = FakeToolCallingModel(responses=[])
+    assert marks(model=injected) == {
+        "pinned": 30_000,
+        "pinned's inner": 30_000,
+        "plain": DEFAULT_MARK,
+        "plain's inner": DEFAULT_MARK,
+        "inner": DEFAULT_MARK,
+        "general-purpose": DEFAULT_MARK,
+    }
 
 
 def test_the_mark_is_the_one_written_beside_the_model_the_agent_runs(bulky):

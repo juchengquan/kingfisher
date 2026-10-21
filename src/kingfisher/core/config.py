@@ -89,8 +89,9 @@ class ModelProfile:
     temperature: float | None = None
     top_p: float | None = None
     extra: Mapping[str, Any] = NO_EXTRA
-    #: Where older tool results start being cleared from the main agent's conversation,
-    #: in tokens, or `None` for the default rule. Kingfisher's own, so never a kwarg.
+    #: Where older tool results start being cleared from the conversation of a graph
+    #: running this model, in tokens, or `None` for the default rule. Kingfisher's own, so
+    #: never a kwarg.
     clear_results_at: int | None = None
 
     def kwargs(self) -> dict[str, Any]:
