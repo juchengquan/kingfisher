@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Sequence
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
@@ -29,6 +29,9 @@ from .recorder import RecorderMiddleware
 from .scratch_runs import ScratchRunsMiddleware
 from .session_instructions import CACHING, SessionInstructionsMiddleware
 from .step_budget import StepBudget, StepBudgetMiddleware
+
+if TYPE_CHECKING:
+    from kingfisher.core.interfaces import PdfAttachments
 
 #: The graphs kingfisher builds itself: the agent, a subagent a definition declares, and
 #: deepagents' `general-purpose`, which is handed the agent's own tools. A compiled
@@ -56,6 +59,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     skills: Sequence[str] | None = None,
     skill_sources: Sequence[Any] = (),
     reachable: Sequence[str] | None = None,
+    pdf_attachments: PdfAttachments | None = None,
     inner: Sequence[AgentMiddleware[Any, Any, Any]] = (),
     session_text: str | None = None,
     session_cached: bool = True,
@@ -69,7 +73,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     grant, and `reachable` are the agent's alone.
     `budget` is the turn's, whose step limit reaches only the agent's own run, so a subagent
     is held to it in model calls; one per build, shared by all three kinds. `trigger` is
-    where this graph's own summariser fires, which sizes the PDFs its turn may hold open.
+    where this graph's own summariser fires, which sizes the PDFs its turn may hold open,
+    and `pdf_attachments` is the deployment's say in what each of them is replaced with.
 
     `inner` is what the deployment's settings switch on and what its definitions name, which
     go inside every standing one. Taken here rather than appended by each caller so that the
@@ -146,7 +151,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             )
         )
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.
-    standing.append(AttachmentsMiddleware(trigger))
+    standing.append(AttachmentsMiddleware(trigger, pdf_attachments))
     # deepagents merges by name, so this *replaces* the `FilesystemMiddleware` it would
     # build itself -- in this graph's stack and, through the spec, in each subagent's.
     # Only to turn its offloading off: a result too long to show whole is kingfisher's to

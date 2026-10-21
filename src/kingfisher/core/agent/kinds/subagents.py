@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
     from kingfisher.core.config import Config
     from kingfisher.core.definitions.skills.registry import SkillRegistry
+    from kingfisher.core.interfaces import PdfAttachments
 
 
 def _identities(registry: SkillRegistry, selection: Selection) -> Selection:
@@ -253,6 +254,8 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     instructions: str = "",
     #: The session's, as `standing_middleware` takes them.
     session_text: str | None = None,
+    #: What the deployment hands over in place of a PDF, asked by every subagent built here.
+    pdf_attachments: PdfAttachments | None = None,
     #: What the agent stops on, which every subagent it reaches stops on too.
     gated: Collection[str] = (),
     #: The build's, which the agent's compiled graph measures; `None` assumes the default
@@ -336,6 +339,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         keep_results_rounds=cfg.keep_results_rounds,
         # A summariser it names takes deepagents' place in its stack, so it is the one read.
         trigger=summarizer_trigger(runs, extra_middleware or ()),
+        pdf_attachments=pdf_attachments,
         recorder=recorder,
         # `None` permits nothing: an empty allowlist, not an absent one.
         tools=None

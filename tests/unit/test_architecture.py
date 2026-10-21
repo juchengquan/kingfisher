@@ -2087,6 +2087,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         "Instructions": "interface",
         "SessionInstructions": "interface",
         "UnusedResults": "interface",
+        "PdfAttachments": "interface",
+        # What `PdfAttachments.replacement` is handed, as `ScratchRun` is below.
+        "ReturnedPdf": "interface",
         # The type a runner returns. Nothing *imports* it in a snippet -- a runner's
         # `run` returns one, so a deployment cannot write the interface without it.
         "CommandResult": "interface",
