@@ -338,3 +338,29 @@ class PdfAttachments(Protocol):
         verdict stands.
         """
         ...
+
+
+class SubagentMiddlewares(Protocol):
+    """Which of the agent's middleware a portable subagent runs, since it may name none.
+
+    Asked once for each portable subagent built, a helper too, with the main agent's names
+    whatever summoned it: the agent's line is the ceiling everything beneath it is clamped
+    by. Each name answered is built with the settings the agent's file wrote for it. A
+    subagent the deployment wrote, or one that arrives compiled, is never asked about.
+    """
+
+    def names(self, subagent: str, agent: str, middlewares: tuple[str, ...]) -> Sequence[str]:
+        """The middleware `subagent` runs, from `middlewares`, the agent's own, in order.
+
+        A name outside them is refused when the agent is built, not dropped: it would be
+        middleware this request was never granted.
+        """
+        ...
+
+
+class AgentsMiddlewares:
+    """`SubagentMiddlewares` answering the agent's own: what a subagent written to travel
+    cannot name, it runs as the agent it works for does."""
+
+    def names(self, subagent: str, agent: str, middlewares: tuple[str, ...]) -> Sequence[str]:  # noqa: ARG002 -- the agent's, whoever asks
+        return middlewares

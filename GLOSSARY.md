@@ -90,6 +90,15 @@ the prompt they share with every other session, and the plugin that supplies it.
 note, which a caller adds to one turn.
 _Avoid_: session prompt, conversation prompt, dynamic prompt, per-session system text
 
+### Definitions
+
+**Portable subagent**:
+A subagent written to travel between deployments, usually in a package, that kingfisher
+builds from its description. It cannot name anything only one deployment knows: its own
+middleware, its helpers, or its model. Not one that arrives already built, and not one
+written in a deployment's own definitions folder.
+_Avoid_: packaged subagent, Python subagent, external subagent
+
 ### Access
 
 **Source id**:

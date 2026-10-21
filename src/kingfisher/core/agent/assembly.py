@@ -7,7 +7,7 @@ deepagents, and naming `system_prompt` must not.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +20,7 @@ from kingfisher.core.access import (
     Capabilities,
     CapabilityError,
     Selection,
+    approved_middleware,
     offers,
     refuse_ungranted_models,
 )
@@ -57,6 +58,7 @@ from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.spec import RunOn, opens_skills
 from kingfisher.core.definitions.tools.spec import FoundTool, audienced, own_audiences
+from kingfisher.core.interfaces import AgentsMiddlewares
 from kingfisher.core.layout import Layout
 
 from .activation import (
@@ -88,7 +90,8 @@ if TYPE_CHECKING:
 
     from langgraph.graph.state import CompiledStateGraph
 
-    from kingfisher.core.interfaces import PdfAttachments
+    from kingfisher.core.definitions.subagents.spec import SubagentSpec
+    from kingfisher.core.interfaces import PdfAttachments, SubagentMiddlewares
     from kingfisher.core.session.ledger import Ledger
 
 
@@ -340,6 +343,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     instructions: str = "",
     session_instructions: str | None = None,
     pdf_attachments: PdfAttachments | None = None,
+    subagent_middlewares: SubagentMiddlewares | None = None,
 ) -> Assembled:
     """Wire model, backend and checkpointer into a deep agent, and say what was wired.
 
@@ -347,6 +351,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     `session_instructions` is the session's text for every graph but a compiled one, `None`
     where the deployment wired no `SessionInstructions`.
     `pdf_attachments` is asked by every graph built here, as the ledger is recorded into.
+    `subagent_middlewares` is asked of every portable subagent; `None` runs the agent's own.
     """
     # The agent file is the baseline and the request only subtracts from it. One
     # function, because the run's report of what it activated reads the same answer.
@@ -626,6 +631,34 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
 
         wanted = _wanted_endpoints(run_on, activated, capabilities.models)
 
+        # The agent's own, as `named` holds them: what a portable subagent's are chosen from.
+        agents_names = (
+            ()
+            if agent is None
+            else approved_middleware(
+                agent.middlewares,
+                registered=middlewares,
+                granted=capabilities.middlewares,
+                subject=f"agent {agent.name!r}",
+            )
+        )
+        choosing = subagent_middlewares or AgentsMiddlewares()
+
+        def _middleware_of(spec: SubagentSpec) -> tuple[SubagentSpec, str | None]:
+            """`spec`, holding the agent's middleware the deployment chose for it if it
+            is portable, and who chose it: one written to travel cannot name any."""
+            # No agent resolved is nothing to inherit, as `_deployment_middleware` answers.
+            if not spec.portable or agent is None:
+                return spec, None
+            # A tuple, so `"*"` answered is a name refused rather than a grant of all.
+            chosen = tuple(choosing.names(spec.name, agent.name, agents_names))
+            settings = agent.middleware_settings
+            return replace(
+                spec,
+                middlewares=chosen,
+                middleware_settings={one: settings[one] for one in chosen if one in settings},
+            ), "this deployment's SubagentMiddlewares"
+
         def _built(  # noqa: PLR0913 -- by keyword, so a mark is never passed for a model
             name: str,
             *,
@@ -638,6 +671,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             clear_results_at: int | None = None,
         ) -> dict[str, Any]:
             """One subagent, with the request's ceiling on every axis."""
+            selecting, chosen_by = _middleware_of(defined[name])
             return as_subagent(
                 defined[name],
                 cfg,
@@ -676,7 +710,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 clear_results_at=clear_results_at,
                 budget=budget,
                 extra_middleware=declared_middleware(
-                    defined[name],
+                    selecting,
                     middlewares,
                     capabilities.middlewares,
                     kind="subagent",
@@ -687,6 +721,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                         endpoints=capabilities.endpoints,
                         backend=backend,
                     ),
+                    chosen_by=chosen_by,
                 ),
             )
 

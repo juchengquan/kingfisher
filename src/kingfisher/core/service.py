@@ -51,7 +51,15 @@ from kingfisher.core.session.unused import DeleteUnusedResults
 
 from . import environment as config_module
 from .config import Config, ConfigError
-from .interfaces import Instructions, PdfAttachments, SessionInstructions, Sessions, UnusedResults
+from .interfaces import (
+    AgentsMiddlewares,
+    Instructions,
+    PdfAttachments,
+    SessionInstructions,
+    Sessions,
+    SubagentMiddlewares,
+    UnusedResults,
+)
 from .origins import Origins
 from .request import Request, Resume
 from .workspace import ensure_layout
@@ -91,6 +99,8 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         unused_results: UnusedResults | None = None,
         # Left out, each PDF a tool returns is handed over or refused by its size alone.
         pdf_attachments: PdfAttachments | None = None,
+        # Left out, a portable subagent runs the agent's middleware, as the agent wrote it.
+        subagent_middlewares: SubagentMiddlewares | None = None,
     ) -> None:
         self.cfg = cfg or config_module.config_from_env()
         refuse_a_workspace_prompt(self.cfg)
@@ -149,6 +159,9 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
             unused_results if unused_results is not None else DeleteUnusedResults()
         )
         self.pdf_attachments: PdfAttachments | None = pdf_attachments
+        self.subagent_middlewares: SubagentMiddlewares = (
+            subagent_middlewares if subagent_middlewares is not None else AgentsMiddlewares()
+        )
         # Here, not when a definition names one, so the deployment hears it where it
         # wired the registry rather than from the first caller to reach the wrong name.
         refuse_unbuildable_middleware(self.middlewares)
@@ -217,6 +230,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
                 else self.session_instructions.text(self.cfg, session_id)
             ),
             pdf_attachments=self.pdf_attachments,
+            subagent_middlewares=self.subagent_middlewares,
             checkpointer=checkpointer,
             catalogue=self.catalogue,
             ledger=ledger,

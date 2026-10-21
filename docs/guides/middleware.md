@@ -368,7 +368,9 @@ is not a way around an audit hook — otherwise the way to run unaudited would b
 to ask for nothing in particular.
 
 A subagent inherits none of its parent's middleware — each definition's is built
-from its own `middlewares:` field.
+from its own `middlewares:` field. A portable subagent, which may not write one, runs
+the main agent's instead, unless a `SubagentMiddlewares` says otherwise
+([`ports.md`](ports.md#subagentmiddlewares--what-a-portable-subagent-runs)).
 
 **So register the class, not an instance of it.** `middlewares={"audit": Audit}`,
 never `{"audit": Audit()}`. Building it yourself hands every graph the same

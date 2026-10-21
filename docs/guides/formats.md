@@ -176,7 +176,7 @@ true of every agent in the workspace.
 | `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
 | `subagents` | optional | Subagents it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers. `builtin_tools` has to hold `task`, the tool one is called through |
-| `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
+| `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited, with one exception: a [portable subagent](#a-subagent-that-travels--a-subagents-entry-with-no-build), which may not write it, runs this line unless the deployment's `SubagentMiddlewares` says otherwise |
 | `model` | optional | One entry in your `models.yaml`. Unset runs the `default:` there. A list is refused |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `interrupt_on` | optional | Tools whose every call stops for a person before it runs — see [Approval gates](#approval-gates) |
@@ -628,7 +628,7 @@ on the spot, so every entry after the first would be unreachable.
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table above. `["*"]` is all of them. Unset grants **none**, as `[]` does. `eval` is refused here: the code sandbox is the agent's alone, and no subagent is handed it |
 | `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
-| `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
+| `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited. A [portable subagent](#a-subagent-that-travels--a-subagents-entry-with-no-build) is the one exception: it runs the main agent's line |
 | `subagents` | optional | Subagents this one may consult mid-job. Unset grants **none**. Any depth, no loops — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the subagent runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
@@ -997,6 +997,12 @@ something only one deployment knows — `subagents` names *your* subagents,
 `middlewares` selects code *you* registered, `model` a profile in *your*
 `models.yaml`. A definition written somewhere else cannot mean anything by them, so
 each is refused with that reason rather than a generic "unknown key".
+
+**It runs the agent's middleware**, since it can name none: the names the main agent's
+file wrote, in its order and with its settings, whether it is consulted by the agent or
+by another subagent. This is the one place middleware is inherited rather than granted.
+A deployment that wants otherwise wires a `SubagentMiddlewares`, which
+[`ports.md`](ports.md#subagentmiddlewares--what-a-portable-subagent-runs) describes.
 
 `source_ids` names ids only *your* deployment hands out too, and is taken anyway,
 because it fails the safe way: a name your callers never hold locks the subagent

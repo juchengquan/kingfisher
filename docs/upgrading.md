@@ -18,6 +18,22 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A portable subagent runs the agent's middleware, after #1033
+
+- **This changes what an existing deployment runs, with nothing written.** A portable
+  subagent, a `SUBAGENTS` entry with no `build`, ran under kingfisher's standing
+  middleware alone. It now runs the middleware the main agent's file names, in its order
+  and with the settings written there for each, a summarizer included; a helper another
+  subagent consults gets the agent's, not its summoner's. A subagent written in your
+  definitions folder and a compiled one are unchanged.
+- **To keep the old behaviour, wire a `SubagentMiddlewares` answering nothing**:
+  `names(subagent, agent, middlewares)` returning `()`, passed as
+  `Kingfisher(subagent_middlewares=...)` or `Plugins(subagent_middlewares=...)`.
+  `SubagentMiddlewares` and the default, `AgentsMiddlewares`, are new on
+  `kingfisher.plugins`; `docs/guides/ports.md` has the section.
+- **A name it answers outside the agent's line is refused** with a `CapabilityError`
+  when the agent is built, naming `SubagentMiddlewares`, as a definition naming one is.
+
 ## `AccessError` and `Kingfisher.access_report` are gone, after #1030
 
 - **`from kingfisher import AccessError` fails.** Since the vocabulary is collected from
