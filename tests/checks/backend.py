@@ -46,15 +46,16 @@ def route_coverage(make: Callable[[], Any]) -> None:
 
 
 def filesystem_consistency(make: Callable[[], Any]) -> None:
-    """The promise `prompts/system.md` makes the model, and the one nothing else tests.
+    """The promise kingfisher's shell prompt makes the model, and the one nothing else tests.
 
-    *"A virtual path becomes a shell path by dropping the leading slash, and nothing
-    in the workspace is out of the shell's reach"* -- written in a table the model
-    reads every turn. A backend routing a path somewhere the shell cannot follow
-    leaves the agent able to read its inputs and unable to run anything over them, and
-    the only symptom is a confused model. Both directions, because they fail
-    separately: a route the shell cannot see, and a shell whose writes the tools
-    cannot find.
+    *"A virtual path becomes a shell path by putting that variable in front of it, slash
+    included, and nothing in the workspace is out of the shell's reach"* -- written in a
+    table the model reads every turn. Spelt relative here, since a deployment copying
+    this check has a shell that need not export the variable. A backend routing a path
+    somewhere the shell cannot follow leaves the agent able to read its inputs and unable
+    to run anything over them, and the only symptom is a confused model. Both
+    directions, because they fail separately: a route the shell cannot see, and a shell
+    whose writes the tools cannot find.
 
     **The content and the filename are different tokens, and that is not tidiness.**
     Written with one token for both, `cat` failing prints the path it could not find

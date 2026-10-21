@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import platform
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,8 @@ from kingfisher.core.layout import (
 )
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
+from kingfisher.plugins.sessions.sandbox import confinement
+from kingfisher.plugins.sessions.sandbox.bubblewrap import bubblewrap_available
 from kingfisher.plugins.sessions.shell import shell_env
 from tests.unit.test_bundles import (
     OWN_TOOL_AND_SKILL,
@@ -448,11 +452,84 @@ def test_home_is_not_shared_between_two_sessions(cfg, workspace):
 
 
 def test_the_catalogue_is_named_because_the_shell_cannot_derive_it(cfg, session_dir):
-    """Every other virtual path becomes a shell path by dropping the slash."""
+    """Every other virtual path is reached from `$KINGFISHER_SESSION_ROOT`."""
     env = shell_env(cfg, session_dir)
 
     assert env["KINGFISHER_SKILLS"] == str(cfg.skills_dir)
     assert not Path(env["KINGFISHER_SKILLS"]).is_relative_to(session_dir)
+
+
+#: A script under the macOS fence starts this interpreter, which the GitHub macOS runner's
+#: `sandbox-exec` refuses to start, as `draws_in_the_fence` says of the same runner.
+_STARTS_PYTHON_FENCED = pytest.mark.skipif(
+    os.environ.get("CI") == "true" and platform.system() == "Darwin",
+    reason="the macOS runner's sandbox refuses to start the venv's interpreter",
+)
+
+
+def _every_sandbox(*on_auto: Any) -> list[Any]:
+    """Every setting kingfisher's own shell runs under on this host, `on_auto` marking
+    `auto`, which is whichever fence the host has: Landlock, bubblewrap or sandbox-exec.
+    """
+    no_bwrap = pytest.mark.skipif(
+        not bubblewrap_available(), reason="no bwrap, or this host cannot make a namespace"
+    )
+    marks = {confinement.AUTO: on_auto, confinement.BUBBLEWRAP: (no_bwrap,)}
+    return [pytest.param(mode, marks=marks.get(mode, ())) for mode in confinement.MODES]
+
+
+def _reads_its_inputs(cfg, session_dir, sandbox: str) -> tuple[Any, str]:
+    """Kingfisher's own backend under `sandbox`, and the text of an input file it holds.
+
+    The text is not the file's name, so a failed `cat` quoting its argument back cannot
+    pass for a read.
+    """
+    body = f"read-{sandbox}-{os.getpid()}"
+    (session_dir / cfg.layout.inputs / "given.csv").write_text(body, encoding="utf-8")
+    shell = confinement.ShellSettings(sandbox=sandbox)
+    return backend_at(cfg, session_dir, shell=shell), body
+
+
+@pytest.mark.parametrize("sandbox", _every_sandbox())
+def test_a_path_spelt_from_the_session_root_survives_a_cd(cfg, session_dir, sandbox):
+    """Taught to drop the slash, the agent's `inputs/x` missed once a command moved the
+    working directory. Driven under each setting, since each fence hands the shell its
+    environment its own way; the relative read after the same `cd` is the control, or a
+    shell whose `cd` did nothing would pass.
+    """
+    backend, body = _reads_its_inputs(cfg, session_dir, sandbox)
+    inputs = cfg.layout.inputs
+
+    rooted = backend.execute(f'cd / && cat "$KINGFISHER_SESSION_ROOT/{inputs}/given.csv"')
+    relative = backend.execute(f"cd / && cat {inputs}/given.csv")
+
+    assert rooted.exit_code == 0, rooted.output
+    assert body in rooted.output
+    assert body not in relative.output
+    assert relative.exit_code != 0
+
+
+@pytest.mark.parametrize("sandbox", _every_sandbox(_STARTS_PYTHON_FENCED))
+def test_a_script_finds_a_session_file_through_its_environment(cfg, session_dir, sandbox):
+    """The prompt tells a script to read the root with `os.environ`, never a pasted path;
+    a shell that did not hand the variable to what it runs would leave that a `KeyError`.
+    """
+    backend, body = _reads_its_inputs(cfg, session_dir, sandbox)
+    script = session_dir / cfg.layout.scratchpad / "read.py"
+    script.write_text(
+        "import os\n"
+        "os.chdir('/')\n"
+        "root = os.environ['KINGFISHER_SESSION_ROOT']\n"
+        f"print(open(os.path.join(root, {cfg.layout.inputs!r}, 'given.csv')).read())\n",
+        encoding="utf-8",
+    )
+
+    ran = backend.execute(
+        f'cd / && python "$KINGFISHER_SESSION_ROOT/{cfg.layout.scratchpad}/read.py"'
+    )
+
+    assert ran.exit_code == 0, ran.output
+    assert body in ran.output
 
 
 def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):

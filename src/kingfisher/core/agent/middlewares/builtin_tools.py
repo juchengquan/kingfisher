@@ -113,8 +113,8 @@ def hint(path: str) -> str:
     """The correction appended to a shell result that missed `path`."""
     return (
         f"`{path}` is a file-tool path, which the shell reads from the host's root. The "
-        f"shell starts in the session root, so there it is `{path.lstrip('/')}` -- in "
-        "the command and in any script it runs."
+        f'shell exports the session root, so there it is `"$KINGFISHER_SESSION_ROOT{path}"` '
+        '-- in the command, and in a script as `os.environ["KINGFISHER_SESSION_ROOT"]`.'
     )
 
 
@@ -486,8 +486,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         # does not have.
         self._here = here
         self._rule = execute_line(shell, layout)
-        # Only where the shell starts in the session root: the correction spells paths as it
-        # reads them.
+        # Only where the shell says it starts in the session: the correction names the
+        # variable kingfisher's own shell exports.
         self._corrects = shell is not None and shell.starts_in_session
         self._virtual = _virtual(layout.session_dirs)
 

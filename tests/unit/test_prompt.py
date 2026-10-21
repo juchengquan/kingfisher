@@ -75,7 +75,7 @@ def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
     text = shipped(shell=kingfishers_shell())
 
     for name in (INPUTS, OUTPUTS, SCRATCH):
-        assert f"| `/{name}/<name>` | `{name}/<name>` |" in text, name
+        assert f'| `/{name}/<name>` | `"$KINGFISHER_SESSION_ROOT/{name}/<name>"` |' in text, name
 
 
 def test_a_renamed_layout_reaches_every_path_in_the_prompt():
@@ -91,9 +91,9 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     )
 
     # The renamed leaves, spelled where the default names used to be.
-    assert "| `/in/<name>` | `in/<name>` |" in text
-    assert "| `/out/<name>` | `out/<name>` |" in text
-    assert "| `/scratch/<name>` | `scratch/<name>` |" in text
+    assert '| `/in/<name>` | `"$KINGFISHER_SESSION_ROOT/in/<name>"` |' in text
+    assert '| `/out/<name>` | `"$KINGFISHER_SESSION_ROOT/out/<name>"` |' in text
+    assert '| `/scratch/<name>` | `"$KINGFISHER_SESSION_ROOT/scratch/<name>"` |' in text
     assert "/scratch/results/" in text
     # The fixed sub-leaves stay fixed, under the renamed scratchpad.
     assert "/scratch/conversation_history/" in text
@@ -245,8 +245,8 @@ def test_the_system_prompt_demands_no_artifacts():
 def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements(
     cfg, session_dir
 ):
-    """The prompt tells the agent a virtual path becomes a shell path by dropping the
-    leading slash.
+    """The prompt tells the agent a virtual path is the same path under the session root,
+    which the shell exports as `$KINGFISHER_SESSION_ROOT`.
     """
     from kingfisher.plugins.sessions.backend import backend_at
 
@@ -263,8 +263,8 @@ def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements
 
 
 def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
-    """The skills section warns that `/skills` is the one path where dropping the slash
-    silently reads the wrong directory.
+    """The skills section warns that `/skills` is the one path not under
+    `$KINGFISHER_SESSION_ROOT`.
     """
     from kingfisher.plugins.sessions.backend import backend_at
 
@@ -273,7 +273,7 @@ def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
     backend.write("/skills/demo/SKILL.md", "hello")
 
     assert not (cwd / "skills" / "demo").exists(), (
-        "the catalogue now resolves by dropping the slash -- drop the warning"
+        "the catalogue is now under the session root -- drop the warning"
     )
 
     # The escape hatch is checked by running it through the agent's own shell,

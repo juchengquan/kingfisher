@@ -175,7 +175,8 @@ def test_the_shell_path_rule_and_matcher_follow_a_renamed_layout():
     from kingfisher.core.agent.prompting import execute_line
     from kingfisher.plugins.sessions.shell import kingfishers_shell
 
-    assert "`/in/data.csv` is `in/data.csv`" in (execute_line(kingfishers_shell(), MOVED) or "")
+    said = execute_line(kingfishers_shell(), MOVED) or ""
+    assert '`/in/data.csv` is `"$KINGFISHER_SESSION_ROOT/in/data.csv"`' in said
     virtual = _virtual(MOVED.session_dirs)
     assert missed("python: can't open file '/in/x.py'", virtual) == "/in/x.py"
     # The default leaf is no longer one it reads as a file-tool path.

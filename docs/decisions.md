@@ -3005,8 +3005,8 @@ are what the caller gets back. The dot came off `.tmp` because its only reason w
 the agent never named it, and `SESSION_DIRS` is "the names the agent addresses". Told
 only the virtual form of a path, the agent passed it to `execute` 4 times in 10, each
 failing and costing about three times the whole task; so a folder and its route
-correspond as every route does -- drop the slash -- and folders are renamed rather than
-given prettier virtual names. *(2026-09-21.)*
+correspond as every route does -- the route's name under the session root -- and folders
+are renamed rather than given prettier virtual names. *(2026-09-21.)*
 
 **`execute`'s own description states the shell's path rule, and a miss is answered
 with it.** deepagents' description says "Use absolute paths", and the only absolute paths
@@ -3108,7 +3108,8 @@ warning. *(2026-10-17, from the trial transcripts and a scripted turn.)*
 `capability_skills.md` and `BuiltinToolsMiddleware` told every deployment's agent four
 things true only of kingfisher's own shell: it runs on the host in the session root,
 `TMPDIR` is the scratchpad, `KINGFISHER_SKILLS` is the catalogue, and every session
-folder is reached by dropping the slash. A deployment whose shell runs elsewhere reported
+folder is reached from the session root -- by dropping the slash then, and from
+`$KINGFISHER_SESSION_ROOT` since. A deployment whose shell runs elsewhere reported
 it; the prompt was built from `Config` alone, so nothing about the backend could reach it.
 
 `runs_locally` cannot choose the wording. Measured on 2026-10-15 with the plainest runner
@@ -3161,6 +3162,29 @@ describes itself, and instructions for every agent go in the instructions file o
 `instructions=` on `Kingfisher`. The correction on a missed path goes only to a shell whose
 `ShellPrompt` says `starts_in_session`, since it spells the path from the session root.
 *(2026-10-15.)*
+
+**Kingfisher's own shell spells a session path from `$KINGFISHER_SESSION_ROOT`, not
+relative to where it starts.** The shell starts in the session root, and the agent was
+taught to drop a file-tool path's leading slash. A relative path is right only while
+nothing moves the working directory, and a `cd` in the command, a script calling
+`os.chdir`, or a script run from elsewhere each did: a deployment saw commands miss
+session files that way. So `shell_env` exports the session folder's absolute path, and
+the prompt, `execute`'s line and the correction teach one rule: put the variable in front
+of a file-tool path, slash included. One taught form, since two correct answers is how
+one script ends up mixing them; the shell still starts in the session root, so a
+relative path works where nothing moved it, and is not taught. One root rather than a
+variable per folder, so a renamed or added folder needs nothing new; the folders still
+get none of their own, as the 2026-10-17 entry above settled. Named for the "session
+root" the prompt already says, not "workspace", which holds every session, and not a
+bare `KINGFISHER_SESSION`, which reads as an id beside the retired
+`KINGFISHER_SESSION_ID`. A script reads it with `os.environ`, never a pasted path: a kept
+script must survive the session moving, and a pasted path writes the host's layout into
+what the caller gets back. A tool's `run` is not handed it: the tool decides what goes in
+and what comes out, and handed the session root a renderer fed a crafted PDF could read
+the caller's inputs or write into `/outputs` behind its back. That stays until a real
+tool needs to reach session files rather than be handed them. A deployment's own shell
+is untouched; how one would opt in is proposed in
+`docs/design/2026-10-21-one-absolute-path-for-the-shell.md`. *(2026-10-21.)*
 
 **deepagents' host paths reach only a shell on this host.** deepagents appends a section
 giving each routed folder's host path to any shell of its local class, which kingfisher's
@@ -3499,7 +3523,7 @@ more than its name: "data" did not say its files were the caller's and not to be
 and "derived" did not say what goes there is handed back; `inputs` and `outputs` say which
 way files go. `/memory` keeps its name. The folder on disk moved with the route, because
 the agent reaches both, and a route renamed over a folder left as it was would break the
-path table's one rule, drop the slash. Artifact names follow, as paths in the session. The
+path table's one rule, the route's name under the session root. Artifact names follow, as paths in the session. The
 shell's guard on the inputs folder and the upload into it name one constant, and a test
 finds where an upload landed rather than naming the folder: a name spelt by hand beside the
 constant would have left a caller's inputs writable to the shell. *(2026-10-07.)*
@@ -3630,9 +3654,9 @@ whole workspace, carving out only `skills/`, so `models.yaml` and every definiti
 were writable by the agent's shell -- and a file the agent could edit is not a boundary.
 Definitions are fenced now, but only under the fences kingfisher applies; under `off` or
 `external` a file is whatever the deployment makes it. The agent cannot reach environment
-variables at all: its shell gets an allowlist of five plus `KINGFISHER_SKILLS`. This is
-why a store as a workspace *asset* is closed rather than deferred -- the middleware
-decision again, one object further in.
+variables at all: its shell gets an allowlist of five plus `KINGFISHER_SKILLS` and
+`KINGFISHER_SESSION_ROOT`. This is why a store as a workspace *asset* is closed rather
+than deferred -- the middleware decision again, one object further in.
 
 **A port a deployment can name gets a runnable contract.** A setting inviting an
 implementation with no way to check it is worse than no setting, and the parts easiest to

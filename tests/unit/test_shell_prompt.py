@@ -17,10 +17,19 @@ from kingfisher.plugins import CommandResult, LocalSessions, ShellPrompt, backen
 from kingfisher.plugins.sessions.shell import kingfishers_shell
 
 #: What a command can see of the claims kingfisher's own wording makes.
-PROBE = 'echo "pwd=$(pwd)"; echo "tmp=$TMPDIR"; echo "skills=$KINGFISHER_SKILLS"'
+PROBE = (
+    'echo "pwd=$(pwd)"; echo "tmp=$TMPDIR"; echo "skills=$KINGFISHER_SKILLS"; '
+    'echo "root=$KINGFISHER_SESSION_ROOT"'
+)
 
 #: Phrases only kingfisher's own shell may be described with.
-ITS_OWN = ("runs on the host", "out of the shell's reach", "$TMPDIR", "$KINGFISHER_SKILLS")
+ITS_OWN = (
+    "runs on the host",
+    "out of the shell's reach",
+    "$TMPDIR",
+    "$KINGFISHER_SKILLS",
+    "$KINGFISHER_SESSION_ROOT",
+)
 
 THEIRS = ShellPrompt(
     prompt="## The shell\n\nIt runs in a sandbox holding this session at `/workspace`, so "
@@ -57,15 +66,17 @@ def _told(shell: ShellPrompt | None, layout: Layout = DEFAULT_LAYOUT, **kwargs: 
 
 
 def test_kingfishers_own_shell_is_described_by_what_holds_of_it(cfg, session_dir):
-    """Its wording says the shell starts in the session root with `TMPDIR` the
-    scratchpad and `KINGFISHER_SKILLS` set. Driven rather than read off `shell_env`,
-    because the claim is about what a command sees.
+    """Its wording says the shell starts in the session root, exported as
+    `KINGFISHER_SESSION_ROOT`, with `TMPDIR` the scratchpad and `KINGFISHER_SKILLS` set.
+    Driven rather than read off `shell_env`, because the claim is about what a command
+    sees.
     """
     backend = backend_at(cfg, session_dir)
     seen = _seen(backend.execute(PROBE).output)
 
     assert shell_prompt_of(backend) is kingfishers_shell()
     assert Path(seen["pwd"]).resolve() == session_dir.resolve()
+    assert Path(seen["root"]).resolve() == session_dir.resolve()
     assert Path(seen["tmp"]).resolve() == (session_dir / "scratchpad").resolve()
     assert seen["skills"]
     for phrase in ITS_OWN:
@@ -83,6 +94,7 @@ def test_a_runner_s_shell_is_not_described_as_kingfishers_own(cfg):
 
     assert Path(seen["pwd"]).resolve() != (cfg.workspace / "sessions" / "s").resolve()
     assert not seen["skills"]
+    assert not seen["root"]
     assert shell_prompt_of(backend) is None
     told = _told(None)
     for phrase in ITS_OWN:

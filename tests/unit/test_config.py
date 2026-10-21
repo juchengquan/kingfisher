@@ -411,7 +411,7 @@ def test_the_file_shows_exactly_the_knobs_that_exist():
     )
 
 
-def test_no_message_names_a_variable_nothing_reads():
+def test_no_message_names_a_variable_nothing_reads(cfg, session_dir):
     """The other direction, and the one that had gone wrong."""
     import ast
     import re
@@ -419,6 +419,7 @@ def test_no_message_names_a_variable_nothing_reads():
 
     import kingfisher
     from kingfisher.cli import health
+    from kingfisher.plugins.sessions.shell import shell_env
 
     read = _looked_up()
     # A name `doctor` reports as retired is the one kind of message that names a
@@ -436,6 +437,9 @@ def test_no_message_names_a_variable_nothing_reads():
         | set(REMOVED_SETTINGS)
         | set(RENAMED_SETTINGS)
         | set(FOLDED_SETTINGS)
+        # And a name kingfisher's shell is handed, which the agent reads rather than
+        # kingfisher. Asked of `shell_env`, so a message naming one it stopped handing fails.
+        | {name for name in shell_env(cfg, session_dir) if name.startswith("KINGFISHER_")}
     )
     package = _Path(kingfisher.__file__).parent
 

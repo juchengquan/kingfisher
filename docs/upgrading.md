@@ -18,6 +18,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Kingfisher's shell exports `KINGFISHER_SESSION_ROOT`, after #1047
+
+- **The agent is taught a different spelling for a session path in the shell.** It was
+  told to drop a file-tool path's leading slash, `inputs/data.csv`; it is now told to
+  put the session root in front of it, `"$KINGFISHER_SESSION_ROOT/inputs/data.csv"`,
+  and to read it in a script as `os.environ["KINGFISHER_SESSION_ROOT"]`. That reaches
+  the file after a `cd` or from a script run elsewhere, where the relative path missed.
+  The shell still starts in the session root, so a relative path still works where
+  nothing moved it. Anything comparing the prompt or `execute`'s description, or a
+  recorded shell result's correction, against the old wording sees it change.
+- **Kingfisher's own shell exports the variable**, the session folder's absolute path,
+  under every `KINGFISHER_SHELL_SANDBOX` setting. A tool's `run` does not get it.
+- **A shell of your own whose `ShellPrompt` says `starts_in_session=True`** now has a
+  missed path answered with `$KINGFISHER_SESSION_ROOT`, so it must export that variable
+  as its session folder too, or set `starts_in_session` false. A runner handed to
+  `LocalSessions(runner=...)` is unchanged: it is described neutrally and not corrected.
+
 ## The step note leaves the cache breakpoint where it is read, after #1045
 
 - **A call past 80% of a turn's steps now reads the cache the call before it wrote.**

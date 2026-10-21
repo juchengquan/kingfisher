@@ -188,8 +188,8 @@ class ShellPrompt:
     prompt: str | None = None
     skills: str | None = None
     execute: str | None = None
-    #: Whether the shell starts in the session folder, so a file-tool path less its
-    #: leading slash reaches the file; only then is a missed command told that spelling.
+    #: Whether the shell starts in the session folder and exports it as
+    #: `KINGFISHER_SESSION_ROOT`; only then is a missed command told to spell paths from it.
     starts_in_session: bool = False
 
     def __post_init__(self) -> None:

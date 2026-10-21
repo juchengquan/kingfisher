@@ -75,6 +75,11 @@ slices land.
   kingfisher sends back of a model's thinking once the vendor, or the conversation
   before it, has changed, keyed on the endpoint that answered. Nothing built; each
   premise waits on one live Anthropic call.
+- [One absolute path for the
+  shell](design/2026-10-21-one-absolute-path-for-the-shell.md) — every shell that can
+  vouch for it exports `KINGFISHER_SESSION_ROOT`, and the agent writes session paths
+  from it instead of relative ones. Part A, kingfisher's own shell, has landed;
+  part B, a deployment's, is not built.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,

@@ -1395,7 +1395,7 @@ Three shapes:
   `skills/<name>/scripts/` — and give the command in the procedure, reaching it
   through `$KINGFISHER_SKILLS`, which the shell exports as the catalogue's path:
 
-      python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" inputs/api.log
+      cd "$KINGFISHER_SESSION_ROOT" && python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" inputs/api.log
 
   Reach for this where a step is mechanical and a model doing it by eye would
   miss things — `skills/incident/timeline/` walks every line of a log so a
