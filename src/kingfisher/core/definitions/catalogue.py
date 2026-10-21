@@ -9,7 +9,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from kingfisher.core.access import ALL, SEPARATOR, CapabilityError, collected
+from kingfisher.core.access import ALL, SEPARATOR, CapabilityError, Selection, collected
 from kingfisher.core.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.agents.spec import DIRECTORY as AGENT_DIRECTORY
@@ -188,6 +188,16 @@ class Definitions:
         # startup rather than at the first turn naming one.
         _ = self.middlewares.classes
         _ = self.registry
+        # Here, not in the reader: whether `audit` is `catalogue::audit` is the catalogue's
+        # to say. Both load, and the entry without an audience reaches whom the other kept out.
+        for kind, specs, error in (
+            ("agent", self.agents.specs, AgentError),
+            ("subagent", self.subagents.specs, SubagentError),
+        ):
+            for spec in specs.values():
+                refuse_one_skill_twice(
+                    spec.skills, self.registry, subject=f"{kind} {spec.name!r}", error=error
+                )
         # A bundle's tools too, though only one subagent can call them: otherwise the
         # deployment starts fine and fails on the first request activating that subagent.
         for name, repository in self.bundled_tools.items():
@@ -299,6 +309,35 @@ def resolve_definitions(cfg: Config) -> Definitions:
     return Definitions.from_roots(
         definition_roots_for(cfg.definitions), skills_mounts=cfg.skills_mounts
     )
+
+
+def doubled_skill(skills: Selection, registry: SkillRegistry) -> str | None:
+    """How two `skills:` entries are one skill, spelt bare and qualified, if they are.
+
+    Asked as well as refused, so `doctor` can report what startup refuses.
+    """
+    if not isinstance(skills, tuple):
+        return None
+    seen: dict[str, str] = {}
+    for written in skills:
+        # A name meaning no one skill is the build's to refuse, saying which it could be.
+        if (meant := registry.identity(written)) is None:
+            continue
+        if (first := seen.setdefault(meant, written)) != written:
+            return f"skills names {first!r} and {written!r}, which are one skill ({meant!r})"
+    return None
+
+
+def refuse_one_skill_twice(
+    skills: Selection, registry: SkillRegistry, *, subject: str, error: type[Exception]
+) -> None:
+    """Refuse two `skills:` entries that are one skill."""
+    if (found := doubled_skill(skills, registry)) is not None:
+        msg = (
+            f"{subject}: {found}. One name is one thing to build, so a second entry for it "
+            f"is either two answers that cannot both apply or a line that says nothing"
+        )
+        raise error(msg)
 
 
 def refuse_unmountable(root: Path, mounts: Mapping[str, Path]) -> None:

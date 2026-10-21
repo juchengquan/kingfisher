@@ -194,6 +194,15 @@ def a_portable_subagent_carrying_one_skill_name_twice(cfg):
     )
 
 
+def an_agent_naming_one_skill_bare_and_qualified(cfg):
+    _write(_root(cfg, "skills") / "audit" / "SKILL.md", "---\nname: audit\ndescription: d\n---\n")
+    _write(
+        _root(cfg, "agents") / "a.yaml",
+        AGENT.format(name="a")
+        + "builtin_tools: [read_file]\nskills: [audit, catalogue::audit]\n",
+    )
+
+
 def a_portable_subagent_carrying_a_class(cfg):
     _write(_root(cfg, "subagents") / "p.py", CARRYING.format(tools="[str]"))
 
@@ -310,6 +319,9 @@ REFUSALS: dict[str, Refusal] = {
         2, defect=a_portable_subagent_whose_skills_hold_one_another),
     "core/definitions/catalogue.py::_one_registry": Refusal(
         1, defect=a_portable_subagent_carrying_one_skill_name_twice),
+    # Raises the error class it was handed, agent's or subagent's: an agent's is filed.
+    "core/definitions/catalogue.py::refuse_one_skill_twice": Refusal(
+        1, defect=an_agent_naming_one_skill_bare_and_qualified),
     # Filed on the build rather than on a missing name, which is what it used to be:
     # an entry with no `build` is now a portable declaration rather than a compiled
     # one missing a key, so the old defect reaches `_portable` and never gets here.

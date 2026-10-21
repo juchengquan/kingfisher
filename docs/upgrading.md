@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A skill written bare and qualified is refused, after #9999
+
+- **`skills: [audit, catalogue::audit]` no longer loads.** Both entries loaded and
+  meant one skill, so the one saying no `source_ids` reached every caller the other
+  kept out, with nothing in the access report. Startup now refuses the definition,
+  naming both spellings, and `doctor` fails on its `skill entries` row; keep one entry,
+  the one carrying the audience you mean.
+
 ## A helper may run your own `FilesystemMiddleware`, after #9999
 
 - **A helper whose stack holds a middleware answering to `FilesystemMiddleware` now

@@ -1362,6 +1362,10 @@ alone would silently pick one: write legal::lookup, research::lookup
 That refusal is the point. Adding a colliding skill turns a working grant into a
 loud error instead of silently changing which skill the caller gets.
 
+**One skill is one entry, however it is spelt.** `audit` and `catalogue::audit` in
+one `skills:` list are the same skill, and are refused when the definitions load:
+each entry may say who is told of it, and only one of the two could apply.
+
 Renaming is still the better answer for anyone who controls both files — the
 model chooses between two entries on description alone, and two distinct names
 tell it more than one name and a qualifier. This exists for when nobody controls
