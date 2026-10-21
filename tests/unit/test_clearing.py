@@ -439,7 +439,7 @@ def test_an_expired_result_is_cleared_and_says_to_call_its_tool_again():
 
 def test_a_result_recorded_as_a_stub_is_named_by_its_own_copy():
     """A tool that offloads its own output hands the recorder the stub, so the copy the
-    row names holds what the model saw and the offloaded file holds no id to search for.
+    row names holds what the model saw, and the handle names that copy, not the tool's file.
     """
     talk = Talk()
     call = talk.call("execute", {"command": "make"}, _stub("c1", "/elsewhere/c1", BIG + "\n" + BIG))
@@ -544,9 +544,8 @@ def test_text_a_reply_carries_twice_is_cleared_in_both():
 
 # -- what a handle names, by what the agent holds ------------------------------------
 
-#: Where a handle sends an agent holding `read_file`, and one holding `grep`.
+#: Where a handle sends an agent holding `read_file`.
 PATH = "full result: /scratchpad/tool_results/A-0001-execute.txt"
-SEARCH = "offloaded: grep for [A-0002] under /scratchpad/large_tool_results/"
 
 
 def _handles(tools: tuple[str, ...] | None) -> tuple[str, str]:
@@ -771,7 +770,7 @@ def test_a_written_mark_is_used_as_written():
 
 TOOLS = '''
 def bulky(n: int) -> str:
-    """Return about 16,000 characters, under what deepagents offloads."""
+    """Return about 16,000 characters, under what is previewed."""
     return "\\n".join(f"row {n}-{i:04d} " + "y" * 70 for i in range(200))
 
 

@@ -48,12 +48,11 @@ def result_id() -> str | None:
 #: `execute`: what a command did is what a later turn wants to read back.
 UNRECORDED = frozenset({*FILE_TOOLS, WRITE_TODOS})
 
-#: Above how many characters a result is shown as a preview rather than whole. Read off
-#: deepagents, whose `FilesystemMiddleware` offloaded at exactly this length until
-#: kingfisher turned that off in `standing_middleware`: the same results are previewed as
-#: before, so what changed is who writes the file and where, not which calls are affected.
+#: Above how many characters a result is shown as a preview rather than whole: the length
+#: deepagents' `FilesystemMiddleware` offloads at, its offloading turned off in
+#: `standing_middleware`, so a result is cut where deepagents would have cut it.
 #: Characters, not the UTF-8 bytes a row's `size` counts -- bytes exceed characters for
-#: anything but ASCII, and previewing on them would cut a result deepagents left whole.
+#: anything but ASCII, and previewing on them would cut a result deepagents leaves whole.
 PREVIEW_ABOVE = NUM_CHARS_PER_TOKEN * 20_000
 
 #: How much of a previewed result the model is shown, split between its head and its tail.
@@ -122,8 +121,8 @@ class RecorderMiddleware(AgentMiddleware):
 
     Ahead of the guards in what `standing_middleware` returns, `GuardedCallsMiddleware` among
     them, so it records the arguments the model wrote rather than the host paths they
-    become. Sitting inside
-    deepagents' eviction and seeing what a deployment's middleware left do not depend on it.
+    become. Seeing what a deployment's middleware left does not depend on it: those go
+    inside every standing one.
     """
 
     def __init__(
@@ -204,8 +203,7 @@ class RecorderMiddleware(AgentMiddleware):
         if answer.status == "error":
             return None
         text = str(answer.text)
-        # The text alone: the ledger finds deepagents' copy of an offloaded result by this
-        # length, so what the text leaves out is said in the summary instead.
+        # The text alone: an attachment the result carried is said in the summary instead.
         content = text.encode("utf-8")
         call_id = str(call.get("id") or "")
         run = RUN.get()
