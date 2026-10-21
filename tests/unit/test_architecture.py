@@ -1411,7 +1411,7 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # an upgrade is still a list of files rather than a search, and the list spans
     # more than one directory.
     # `langchain_anthropic` for one class: the prompt caching deepagents builds, which
-    # `SessionInstructionsMiddleware` extends to take its slot by name. A model is still
+    # `PromptCachingMiddleware` extends to take its slot by name. A model is still
     # named by its wire format, never imported.
     "core/agent": frozenset({
         "deepagents",

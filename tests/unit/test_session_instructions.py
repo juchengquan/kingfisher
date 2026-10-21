@@ -15,10 +15,7 @@ from pydantic import Field
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.session_instructions import (
-    CACHING,
-    SessionInstructionsMiddleware,
-)
+from kingfisher.core.agent.middlewares.caching import CACHING, PromptCachingMiddleware
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.layout import MEMORY
@@ -189,10 +186,14 @@ def _every_kind(cfg) -> Kingfisher:
     return Kingfisher(cfg, sessions=LocalSessions())
 
 
-def test_every_graph_kingfisher_builds_is_sent_it_and_a_compiled_one_is_not(cfg, session_dir):
+@pytest.mark.parametrize("text", [TEXT, None], ids=["told", "untold"])
+def test_every_graph_kingfisher_builds_is_sent_it_and_a_compiled_one_is_not(
+    cfg, session_dir, way, text
+):
     """A rule for the session that reached the agent and nothing it delegated to is one
     delegated work escapes. A helper, which deepagents gives no prompt caching, is sent
-    the text and still no breakpoint. A compiled subagent writes its own prompt."""
+    the text and still no breakpoint, nor one where there is no text to send. A compiled
+    subagent writes its own prompt."""
     kf = _every_kind(cfg)
     model = _model(
         _task("reviewer", "t1"),
@@ -210,10 +211,14 @@ def test_every_graph_kingfisher_builds_is_sent_it_and_a_compiled_one_is_not(cfg,
         agent=agent_named(kf, "lead"),
         backend=backend_at(cfg, session_dir),
         model=model,
-        session_instructions=TEXT,
+        session_instructions=text,
     )
 
-    built.graph.invoke({"messages": [{"role": "user", "content": "go"}]}, context=built.context)
+    asked = {"messages": [{"role": "user", "content": "go"}]}
+    if way == "async":
+        asyncio.run(built.graph.ainvoke(asked, context=built.context))
+    else:
+        built.graph.invoke(asked, context=built.context)
 
     by_graph: dict[str, list[dict[str, Any]]] = {}
     for payload in model.sent:
@@ -238,10 +243,10 @@ def test_every_graph_kingfisher_builds_is_sent_it_and_a_compiled_one_is_not(cfg,
     }
 
     assert told == {
-        "agent": True,
-        "reviewer": True,
-        "checker": True,
-        "general-purpose": True,
+        "agent": text is not None,
+        "reviewer": text is not None,
+        "checker": text is not None,
+        "general-purpose": text is not None,
         "researcher": False,
     }
     assert {graph: _breakpoints(sent[0]) for graph, sent in by_graph.items()} == {
@@ -293,7 +298,7 @@ def test_a_deployments_own_prompt_caching_still_builds_without_it(cfg, session_d
         built = _own_caching(cfg, session_dir)
 
     assert [m for m in built.middleware if isinstance(m, _OwnCaching)]
-    assert not [m for m in built.middleware if isinstance(m, SessionInstructionsMiddleware)]
+    assert not [m for m in built.middleware if isinstance(m, PromptCachingMiddleware)]
 
 
 class Asked:

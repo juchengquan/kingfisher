@@ -16,6 +16,7 @@ from kingfisher.core.layout import Layout
 
 from .attachments import AttachmentsMiddleware
 from .builtin_tools import BuiltinToolsMiddleware, longest_command
+from .caching import CACHING, PromptCachingMiddleware
 from .clearing import ResultClearingMiddleware
 from .guarded_calls import (
     GuardedCallsMiddleware,
@@ -28,7 +29,7 @@ from .narrowing import (
 )
 from .recorder import RecorderMiddleware
 from .scratch_runs import ScratchRunsMiddleware
-from .session_instructions import CACHING, SessionInstructionsMiddleware
+from .session_instructions import SessionInstructionsMiddleware
 from .step_budget import StepBudget, StepBudgetMiddleware
 
 if TYPE_CHECKING:
@@ -192,6 +193,9 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # prompt.
     if session_text:
         standing.append(SessionInstructionsMiddleware(session_text, cached=session_cached))
+    # A deployment's own caching keeps the slot; a helper has none to take.
+    elif session_cached and not any(m.name == CACHING for m in inner):
+        standing.append(PromptCachingMiddleware())
     # Last of all, under `inner`. Left out where the graph holds no offered tool: there is
     # no name for it to answer for, and a middleware that cannot act reads as one that does.
     if names:

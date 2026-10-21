@@ -222,6 +222,14 @@ for the next reader who reaches for one.*
   session id goes along; the helper's input schema leaves private keys out, and drops
   it, so each graph's evicted messages go to a history file of its own.
   *(2026-10-21, deepagents 0.7.22.)*
+- **The conversation's breakpoint goes on the request's last block, whatever put it
+  there.** The direct API places the top-level `cache_control` on the last cacheable
+  block, and on any other transport `ChatAnthropic` puts it on the last eligible block
+  itself; either way it is one of the four. So what a middleware outside the caching
+  slot appends for one call takes it, and the entry written ends where no later call
+  reads. A `cache_control` on a block of a `ToolMessage`'s content is hoisted onto its
+  `tool_result`, and the API reads a string and the one text block it stands for as the
+  same prefix. *(2026-10-21, langchain-anthropic 1.7.6.)*
 - **Upstream protects `FilesystemMiddleware` and `SubAgentMiddleware` on one path
   and not the other.** `_apply_excluded_middleware` refuses to strip them;
   `_apply_custom_middleware` will replace them without a word. *(2026-08-31.)*

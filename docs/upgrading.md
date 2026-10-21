@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The step note leaves the cache breakpoint where it is read, after #1045
+
+- **A call past 80% of a turn's steps now reads the cache the call before it wrote.**
+  The step budget's note, sent last, took the conversation's breakpoint, so each such
+  call paid to cache an entry no later call read. The breakpoint now goes on the last
+  block the conversation keeps, and the same for a cut answer asked again; the count is
+  still four with memory on.
+- **deepagents' caching slot is kingfisher's on every graph that has one**, not only
+  where `session_instructions=` is wired: a stack listing shows
+  `PromptCachingMiddleware` there. A middleware of your own in that slot keeps it, as
+  before, and is still refused beside `session_instructions=`.
+
 ## A helper summarizes, after #1044
 
 - **A helper another subagent consults now runs deepagents' summarizer**, as the agent,
