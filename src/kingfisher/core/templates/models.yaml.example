@@ -111,7 +111,9 @@ default: MiniMax-M3
 #                is built, since clearing would never come first. There is no off:
 #                the highest it may be almost never clears.
 #   extra        forwarded as kwargs, for settings peculiar to one endpoint.
-#                Additive only -- it may not name any of the above.
+#                Additive only -- it may not name any of the above, nor the chat
+#                class's own name for one (`openai_api_key`, `request_timeout`,
+#                `default_request_timeout`), which would be ignored or overrule it.
 #
 #                `profile:` under it is what the model can take: its context
 #                window as `max_input_tokens`, and `pdf_inputs: false` for one

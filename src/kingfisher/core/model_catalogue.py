@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from kingfisher.core.agent.models import BUILT_WITH, WIRE_FORMATS
+from kingfisher.core.agent.models import BUILT_WITH, WIRE_FORMATS, spelled_otherwise
 from kingfisher.core.definitions import fields
 
 from .config import (
@@ -42,6 +42,22 @@ KNOWN_MODEL: frozenset[str] = frozenset(
     {
         "endpoint", "max_tokens", "timeout_s", "max_retries", "temperature", "top_p",
         "clear_results_at", "extra",
+    }
+)
+
+
+#: Where in this file each keyword `build_model` passes is written, for a refusal of
+#: the chat class's own name for one to point at.
+WRITTEN_AS: Mapping[str, str] = MappingProxyType(
+    {
+        "model": "the entry's name under 'models'",
+        "base_url": "its endpoint's 'base_url'",
+        "api_key": "its endpoint's 'key' or 'key_env'",
+        "max_tokens": "'max_tokens'",
+        "timeout": "'timeout_s'",
+        "max_retries": "'max_retries'",
+        "temperature": "'temperature'",
+        "top_p": "'top_p'",
     }
 )
 
@@ -288,6 +304,17 @@ def _models(
                 f"{source}: model {name!r} names {', '.join(collision)} under 'extra', "
                 f"which kingfisher passes the chat class itself, from the endpoint, this "
                 f"entry's own keys or its wire format; 'extra' may only add keywords"
+            )
+            raise ConfigError(msg)
+        spelled = spelled_otherwise(row) if row is not None and extra else {}
+        if row is not None and (collision := tuple(sorted(set(extra) & set(spelled)))):
+            # Named, never quoted: the value may be a key.
+            instead = "; ".join(f"{one} is {WRITTEN_AS[spelled[one]]}" for one in collision)
+            msg = (
+                f"{source}: model {name!r} names {', '.join(collision)} under 'extra', "
+                f"which {row.chat_class} takes for what kingfisher fills in itself, so "
+                f"the model would not run as this entry says. Write it as kingfisher's "
+                f"own: {instead}"
             )
             raise ConfigError(msg)
         subject = f"{source}: model {name!r}"

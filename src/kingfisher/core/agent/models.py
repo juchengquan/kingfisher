@@ -63,6 +63,32 @@ BUILT_WITH: frozenset[str] = frozenset(
 )
 
 
+def spelled_otherwise(wire_format: WireFormat) -> Mapping[str, str]:
+    """The chat class's other names for what `build_model` passes it, mapped to the
+    keyword each stands for: its field names and aliases for those settings.
+
+    Under `extra` such a name is ignored for the keyword, or overrules it, and either way
+    the model does not run as the entry says. Read off the class's pydantic fields, so a
+    provider renaming one moves this with it.
+    """
+    try:
+        chat_class = wire_format.resolve()
+    except (ImportError, AttributeError):
+        return {}  # refused when it is built, by the error that says why
+    fields = getattr(chat_class, "model_fields", None)
+    if not isinstance(fields, Mapping):
+        return {}
+    spelled: dict[str, str] = {}
+    for name, field in fields.items():
+        # Not `alias`: pydantic copies it here, and a class may set this alone.
+        alias = getattr(field, "validation_alias", None)
+        spellings = {name, alias} if isinstance(alias, str) else {name}
+        keyword = min(spellings & BUILT_WITH, default=None)
+        if keyword is not None:
+            spelled.update(dict.fromkeys(spellings - BUILT_WITH, keyword))
+    return MappingProxyType(spelled)
+
+
 def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
     """Build a chat model from `profile`, pointed at `endpoint`."""
     wire_format = endpoint.wire_format

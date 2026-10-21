@@ -246,8 +246,9 @@ endpoints:
     key_env: GATEWAY_API_KEY
 ```
 
-The class is named as `module:Class` and imported only when a model is built.
-Its package has to be installed; kingfisher installs only the two it ships.
+The class is named as `module:Class` and imported when a model is built, and
+earlier, as the catalogue loads, for a model entry with an `extra`. Its package has
+to be installed; kingfisher installs only the two it ships.
 
 `Landing` is the part to get right. kingfisher passes every class the same
 keywords — `model`, `base_url`, `api_key`, `max_tokens`, `timeout`, and
@@ -263,7 +264,11 @@ refused.
 A name kingfisher already ships is refused rather than replaced, so an existing
 `api: anthropic` cannot quietly start meaning your class. `extra` on a `WireFormat`
 is passed to every model it builds, and may not name anything the model entry
-already sets.
+already sets. Nor may an `extra` on a model entry name the class's own field or
+alias for one of the keywords above — `openai_api_key` or `request_timeout` on
+`ChatOpenAI` — which the class would ignore, or let overrule the keyword. Those
+names are read off the class's pydantic fields as the file loads, so they need no
+list of yours; a class with no pydantic fields gets no such check.
 
 The setting is read wherever the catalogue is, so `kingfisher doctor` and
 `kingfisher run` see your rows as well as your own program does.

@@ -388,6 +388,7 @@ class Preparation:
                 endpoint=running.endpoint,
                 session_id=session.id,
                 turn_id=turn.id,
+                endpoints={name: p.endpoint for name, p in cfg.models.models.items()},
             )
             # A resume says so in `run_start`: a task-shaped one would read as the work
             # being requested again.
