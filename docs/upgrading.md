@@ -18,6 +18,35 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The agent may not write a kept record, after #1036
+
+- **`/scratchpad/conversation_history/`, `/scratchpad/blobs/` and
+  `/scratchpad/large_tool_results/` are read-only to the agent**, as
+  `/scratchpad/tool_results/` already was: the file tools refuse a write, an edit and a
+  delete there, and so does an offered tool handed `runtime.context.backend`, which keeps
+  the same rules. Reads are untouched, and the rest of the scratchpad stays the agent's.
+  Nothing shipped wrote to those folders; a tool of your own that saved there needs
+  another path, `/outputs/` or the scratchpad itself.
+- **The middleware that keeps a record still writes.** The rules bind the tools, not a
+  backend call, so deepagents' summarizer and its long-message eviction are unaffected,
+  and so is your own middleware.
+- **A session is made with `scratchpad/conversation_history/` in it**, and `backend_at`
+  refuses a session directory without it, as it does for the folders it already required.
+  A session made by an older kingfisher gets the folder from `ensure_session_layout`; one
+  opened without it raises, naming it. The other two folders are not made, since nothing
+  writes them.
+- **`Layout` gains `kept_records`, `kept_record_routes` and `history`**, and
+  `shell_read_only` now lists the kept records rather than only `saved_results`.
+  `saved_results` is unchanged -- it is still the folder a ledger row names, which the
+  unused results walk. A deployment that renamed its scratchpad or results leaf gets the
+  new paths derived from its own names; the three deepagents leaves are fixed, as before.
+- **Both fences refuse the shell the history too**, on macOS by the regex it writes for
+  `.harness` and under bubblewrap by a read-only bind. Landlock still cannot, inside a
+  scratchpad it grants whole, so no boundary is claimed there -- unchanged from the saved
+  results.
+- **The system prompt gains a clause**: the history is the model's to read and not to
+  write. If you cache the prompt yourself, its text has changed.
+
 ## A deployment may refuse a graph's tools their runs, with a plugin, after #1034
 
 - **`ScratchRunLimit` and `NoScratchRunLimit` are new on `kingfisher.plugins`**, and
