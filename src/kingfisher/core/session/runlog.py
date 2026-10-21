@@ -71,8 +71,15 @@ class LoggedRunEvents:
 class RunLogger(BaseCallbackHandler):
     """Turns one turn's model and tool callbacks into events for a `RunEvents`."""
 
-    def __init__(
-        self, sink: Any, *, model: str, endpoint: str, session_id: str, turn_id: str
+    def __init__(  # noqa: PLR0913 -- the stamp's four fields, and where each model runs
+        self,
+        sink: Any,
+        *,
+        model: str,
+        endpoint: str,
+        session_id: str,
+        turn_id: str,
+        endpoints: Mapping[str, str] | None = None,
     ) -> None:
         self._sink = sink
         self._stamp = {
@@ -81,10 +88,15 @@ class RunLogger(BaseCallbackHandler):
             "model": model,
             "endpoint": endpoint,
         }
+        #: Each catalogue model's endpoint, by name.
+        self._endpoints = dict(endpoints or {})
+        #: The model and endpoint of each call under way, by its run id.
+        self._calls: dict[Any, dict[str, str]] = {}
 
-    def _write(self, event: str, **fields: Any) -> None:
+    def _write(self, event: str, *, call: Mapping[str, str] | None = None, **fields: Any) -> None:
+        stamp = {**self._stamp, **(call or {})}
         try:
-            self._sink.record({"ts": time.time(), "event": event, **self._stamp, **fields})
+            self._sink.record({"ts": time.time(), "event": event, **stamp, **fields})
         except Exception:  # noqa: BLE001 -- a turn outlives a failing sink: `run_start`
             # and `run_end` are called outside langchain's guard around callbacks.
             _log.warning("a RunEvents sink failed to record %r", event, exc_info=True)
@@ -95,11 +107,25 @@ class RunLogger(BaseCallbackHandler):
     def run_end(self, *, ok: bool, answer_chars: int) -> None:
         self._write("run_end", ok=ok, answer_chars=answer_chars)
 
-    def on_llm_end(self, response: Any, **_: Any) -> None:
+    def on_chat_model_start(
+        self,
+        *_: Any,
+        run_id: Any = None,
+        metadata: Mapping[str, Any] | None = None,
+        **__: Any,
+    ) -> None:
+        # Read off the call, not the turn: a subagent may run a model of its own. A name
+        # the catalogue does not hold keeps the turn's stamp rather than half of one.
+        named = (metadata or {}).get("ls_model_name")
+        if isinstance(named, str) and named in self._endpoints:
+            self._calls[run_id] = {"model": named, "endpoint": self._endpoints[named]}
+
+    def on_llm_end(self, response: Any, *, run_id: Any = None, **_: Any) -> None:
         message = _first_message(response)
         usage = runtime.usage_of(message)
         self._write(
             MODEL_CALL,
+            call=self._calls.pop(run_id, None),
             **usage,
             usage_present=bool(getattr(message, "usage_metadata", None)),
             tool_calls=list(runtime.tool_names(message)),
@@ -116,8 +142,12 @@ class RunLogger(BaseCallbackHandler):
     def on_tool_error(self, error: BaseException, **_: Any) -> None:
         self._write("tool_error", error=f"{type(error).__name__}: {error}")
 
-    def on_llm_error(self, error: BaseException, **_: Any) -> None:
-        self._write("model_error", error=f"{type(error).__name__}: {error}")
+    def on_llm_error(self, error: BaseException, *, run_id: Any = None, **_: Any) -> None:
+        self._write(
+            "model_error",
+            call=self._calls.pop(run_id, None),
+            error=f"{type(error).__name__}: {error}",
+        )
 
 
 def _first_message(response: Any) -> Any:

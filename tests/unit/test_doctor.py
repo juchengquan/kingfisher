@@ -9,6 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+import yaml
 
 from kingfisher import seed
 from kingfisher.cli import health, health_isolation
@@ -579,6 +580,24 @@ def test_an_unknown_shell_sandbox_is_a_configuration_error_not_a_traceback(
     err = capsys.readouterr().err
     assert "configuration error: KINGFISHER_SHELL_SANDBOX" in err
     assert "'bogus'" in err
+
+
+def test_extra_naming_the_chat_classs_spelling_of_a_setting_is_a_configuration_error(
+    at_the_command_line, capsys
+):
+    """It is refused as the catalogue loads, which `doctor` reports in one line like the
+    other refusals of `extra`, rather than as a row that said the catalogue was fine."""
+    path = at_the_command_line.definitions / "models.yaml"
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    document["models"]["fake-model"]["extra"] = {"anthropic_api_key": "sk-in-the-file"}
+    path.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    assert main(["doctor"]) == 2
+
+    err = capsys.readouterr().err
+    assert "configuration error" in err
+    assert "names anthropic_api_key under 'extra'" in err
+    assert "sk-in-the-file" not in err
 
 
 # -- a credential that is absent, and what it takes down -------------------

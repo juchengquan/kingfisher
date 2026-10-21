@@ -18,7 +18,7 @@ from kingfisher.core.session.runlog import (
     usage_of,
 )
 from kingfisher.plugins import LocalSessions
-from tests.conftest import RecordedEvents, an_agent, start
+from tests.conftest import RecordedEvents, an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 
@@ -139,6 +139,51 @@ def test_every_event_names_the_model_the_agent_runs(scripted, fields, runs):
 
     assert "model_call" in {e["event"] for e in sink.events}
     assert {(e["model"], e["endpoint"]) for e in sink.events} == {runs}
+
+
+def test_a_subagents_calls_name_the_model_it_runs(scripted):
+    """Every event carried the main agent's model, so a subagent's calls on a model of
+    its own were logged, and priced, on one that never made them."""
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "helper.yaml").write_text(
+        "name: helper\ndescription: Helps.\nmodel: elsewhere-model\n"
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
+    )
+    an_agent(scripted, "pinned", subagents="[helper]", builtin_tools="[task]")
+    start(scripted, "s")
+    asked = {"description": "go", "subagent_type": "helper"}
+    Scripted.script.extend([
+        AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}]),
+        AIMessage("helped"),
+        AIMessage("done"),
+    ])
+    sink = RecordedEvents()
+
+    Kingfisher(scripted, sessions=LocalSessions(), run_events=sink).run(
+        Request("t", agent="pinned", session_id="s")
+    )
+
+    assert [(e["model"], e["endpoint"]) for e in sink.named("model_call")] == [
+        ("fake-model", "fake"),
+        ("elsewhere-model", "elsewhere"),
+        ("fake-model", "fake"),
+    ]
+
+
+def test_a_failed_call_names_the_model_that_made_it():
+    """`model_error` is the other event a call ends in, and kept the turn's stamp."""
+    sink = RecordedEvents()
+    logger = RunLogger(
+        sink, model="m", endpoint="gateway", session_id="s", turn_id="t1",
+        endpoints={"m": "gateway", "other": "elsewhere"},
+    )
+
+    logger.on_chat_model_start({}, [], run_id="r1", metadata={"ls_model_name": "other"})
+    logger.on_llm_error(TimeoutError("slow"), run_id="r1")
+
+    (event,) = sink.named("model_error")
+    assert (event["model"], event["endpoint"]) == ("other", "elsewhere")
 
 
 def test_a_sink_that_is_empty_is_still_the_one_used(cfg):

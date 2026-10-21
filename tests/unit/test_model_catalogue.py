@@ -20,8 +20,9 @@ from kingfisher.core.config import (
     MissingCredentialsWarning,
     ModelProfile,
     Models,
+    WireFormat,
 )
-from kingfisher.core.model_catalogue import load
+from kingfisher.core.model_catalogue import WRITTEN_AS, load
 from kingfisher.plugins import LocalSessions
 
 GOOD = """
@@ -287,6 +288,59 @@ def test_extra_cannot_name_a_keyword_its_wire_format_sets(tmp_path, environ):
     assert loaded(tmp_path, OPENAI_TUNED, environ={"OPENAI_API_KEY": "sk-x"}).models[
         "gpt-5"
     ].extra == {"reasoning_effort": "high"}
+
+
+@pytest.mark.parametrize(
+    ("body", "spelled", "instead"),
+    [
+        (GOOD, "anthropic_api_key", "'key' or 'key_env'"),
+        (GOOD, "anthropic_api_url", "'base_url'"),
+        (GOOD, "model_name", "name under 'models'"),
+        (GOOD, "default_request_timeout", "'timeout_s'"),
+        (GOOD, "max_tokens_to_sample", "'max_tokens'"),
+        (OPENAI_TUNED, "openai_api_key", "'key' or 'key_env'"),
+        (OPENAI_TUNED, "openai_api_base", "'base_url'"),
+        (OPENAI_TUNED, "model_name", "name under 'models'"),
+        (OPENAI_TUNED, "request_timeout", "'timeout_s'"),
+        (OPENAI_TUNED, "max_completion_tokens", "'max_tokens'"),
+    ],
+)
+def test_extra_cannot_name_the_chat_classs_own_spelling_of_a_setting(
+    tmp_path, body, spelled, instead
+):
+    """`openai_api_key` or `request_timeout` under `extra` built without a word and was
+    ignored, and `anthropic_api_key` was refused only once a model was built."""
+    written_value = "sk-written-into-models-yaml"
+    body = body.replace("reasoning_effort: high", f"{spelled}: {written_value}")
+
+    with pytest.raises(ConfigError, match=f"names {spelled} under 'extra'") as refused:
+        loaded(tmp_path, body, environ={**KEYS, "OPENAI_API_KEY": "sk-x"})
+
+    assert f"{spelled} is " in str(refused.value)
+    assert instead in str(refused.value)
+    assert written_value not in str(refused.value)
+
+
+def test_every_keyword_the_build_passes_has_a_place_a_refusal_can_name():
+    """A keyword missing from `WRITTEN_AS` turns the refusal of its other spelling into a
+    `KeyError` from inside the loader."""
+    assert set(WRITTEN_AS) == BUILT_WITH
+
+
+class NotPydantic:
+    """A deployment's chat class with no pydantic fields to read spellings from."""
+
+
+@pytest.mark.parametrize("chat_class", ["nowhere_installed:Chat", f"{__name__}:NotPydantic"])
+def test_a_class_the_loader_cannot_read_spellings_from_still_loads(tmp_path, chat_class):
+    """Only the build can say why a class does not import, and a class that is not
+    pydantic has no fields to compare; neither may stop the catalogue loading."""
+    row = WireFormat(chat_class, WIRE_FORMATS["anthropic"].lands)
+    body = GOOD.replace("api: anthropic", "api: theirs")
+
+    catalogue = load(written(tmp_path, body), KEYS, {**WIRE_FORMATS, "theirs": row})
+
+    assert catalogue.models["tuned"].extra == {"reasoning_effort": "high"}
 
 
 # -- endpoints that are not there ------------------------------------------

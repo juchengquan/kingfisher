@@ -18,6 +18,22 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A subagent's calls name its model, and `extra` refuses a class's own names, after #1022
+
+- **A `model_call` or `model_error` made by a subagent carries that subagent's
+  `model` and `endpoint`**, where it runs a model of its own or one a request routed
+  with `run_on`. Both were the main agent's, so a bill totalled by model priced a
+  subagent's tokens on the main agent's. The other events keep the main agent's.
+- **A `models.yaml` that loaded may now be refused at startup**, in `doctor` too: an
+  `extra:` naming the chat class's own field or alias for a setting kingfisher fills
+  in -- `openai_api_key`, `openai_api_base`, `model_name` or `request_timeout` on
+  `openai_responses`, `anthropic_api_key`, `anthropic_api_url`, `model_name` or
+  `default_request_timeout` on `anthropic`, and the like on a wire format of your own.
+  Most were ignored without a word, so the model ran on the endpoint's key, URL and
+  timeout regardless; the rest were refused only once a model was built. Delete the
+  line, or write the value where the refusal says: the endpoint's `base_url` and `key`
+  or `key_env`, or the entry's own `timeout_s` and `max_tokens`.
+
 ## Every tool result is saved in one folder, after #1018
 
 - **`scratchpad/large_tool_results/` is gone.** A result too long to show the model
