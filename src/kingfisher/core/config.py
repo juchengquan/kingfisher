@@ -366,8 +366,8 @@ class Config:
             # does. Measured, a 6s command under a 1s turn and a 1s model timeout let a
             # second caller take the session 3.0s into a turn that ran to 6.0s. A bound
             # only while `execute` refuses a longer `timeout` and the shell clamps to it,
-            # and only for what stays in the command's process group: on macOS and under
-            # Landlock, a process calling `setsid()` outlives it.
+            # and only for what the shell can reach: on macOS, a process calling
+            # `setsid()` outlives it.
             self.execution_timeout_s,
             *(profile.timeout_s for profile in self.models.models.values()),
             # Not zero, even with neither models nor a bound on a command: zero would
