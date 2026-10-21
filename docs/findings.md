@@ -203,6 +203,15 @@ for the next reader who reaches for one.*
   holds it. And `system_prompt=None` drops the memory file's contents with the
   guidelines: they are loaded into state and never appended. *(2026-10-07,
   deepagents 0.7.6.)*
+- **The static prompt's breakpoint is on whatever block was written last before the
+  caching slot.** `AnthropicPromptCachingMiddleware` tags the last system block it is
+  handed and the last tool, and passes a top-level `cache_control` the direct API turns
+  into the conversation's breakpoint. On kingfisher's agent that block is
+  `write_todos`'s section; with memory on, the memory block's own makes four, Anthropic's
+  limit. A helper reached through a `SubAgentMiddleware` built directly has none at all:
+  `create_sub_agent` runs the spec's own middleware and adds no caching. And of two
+  custom middleware sharing a name, `_apply_custom_middleware` keeps the later one in
+  the slot, without a word. *(2026-10-21, deepagents 0.7.22, langchain-anthropic 1.7.6.)*
 - **Upstream protects `FilesystemMiddleware` and `SubAgentMiddleware` on one path
   and not the other.** `_apply_excluded_middleware` refuses to strip them;
   `_apply_custom_middleware` will replace them without a word. *(2026-08-31.)*

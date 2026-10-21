@@ -352,6 +352,7 @@ class Preparation:
                 agent=agent,
                 held=held,
                 files=files,
+                session_id=session.id,
                 ledger=ledger,
             )
             # `isinstance`, not a duck test on `.graph`, which would accept anything

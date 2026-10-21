@@ -332,10 +332,13 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     held: frozenset[str] | None = None,
     ledger: Ledger | None = None,
     instructions: str = "",
+    session_instructions: str | None = None,
 ) -> Assembled:
     """Wire model, backend and checkpointer into a deep agent, and say what was wired.
 
     `ledger` is the turn's, recorded into by every graph built here; `None` records nothing.
+    `session_instructions` is the session's text for every graph but a compiled one, `None`
+    where the deployment wired no `SessionInstructions`.
     """
     # The agent file is the baseline and the request only subtracts from it. One
     # function, because the run's report of what it activated reads the same answer.
@@ -510,6 +513,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             skill_sources=narrowed_sources,
             reachable=reachable,
             gated=gated,
+            session_text=session_instructions,
         )
 
     # What the probe below builds with: nothing narrowed yet, and no subagents to name.
@@ -636,6 +640,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 cfg,
                 runs=runs,
                 instructions=instructions,
+                session_text=session_instructions,
                 backend=backend,
                 permissions=permissions,
                 gated=gated,
@@ -763,6 +768,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     recorder=recording(agent),
                     tools=permitted,
                     gated=gated,
+                    session_text=session_instructions,
                 )
             ),
         }

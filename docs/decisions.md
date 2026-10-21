@@ -455,6 +455,38 @@ instructions ahead of deepagents' text, joined as a declared subagent's are, and
 nothing of the harness's prompt. A compiled subagent stays outside: its `build` writes its
 prompt, and that is said in the contract. *(2026-10-20.)*
 
+**A session's own text is sent after the cached part, from deepagents' caching slot.** A
+deployment telling each session something of its own -- its caller, its case -- replaced
+`AnthropicPromptCachingMiddleware` to get the text past the static prompt's breakpoint:
+`Instructions` is inside that prefix, and text there that differs by session gives every
+session a cache of its own. `SessionInstructions.text(cfg, session_id)` is a plugin of
+its own rather than a second method on `Instructions`, so a deployment wanting one writes
+nothing for the other; asked once per turn, it reaches every graph `Instructions` reaches.
+`SessionInstructionsMiddleware` extends deepagents' class and takes its slot by name,
+marking as it does and then appending the text. A middleware of a new name lands ahead of
+the slot instead, as a `MemoryMiddleware` passed without `memory=` did. Measured on a real
+build with a recording `ChatAnthropic`, sync and async: the agent's system message is
+kingfisher's prompt, the shell-paths section and `write_todos`'s, which takes the static
+prompt's breakpoint, then the memory block with its own; with the last tool and the
+top-level `cache_control` that is four breakpoints with memory on and three without, and
+three for `general-purpose`. The text lands between `write_todos`'s block and memory's,
+unmarked, and no count moves. It takes none of its own because there is none to give:
+with memory on, Anthropic's four are spent. Text that changes between turns costs the
+memory block and the conversation, and nothing before them.
+
+A helper, built through its parent's own `SubAgentMiddleware`, which deepagents gives no
+caching, is sent the text unmarked: marking it would start caching that graph was never
+given, and a cache write costs more than the input it caches. A deployment's own
+middleware named for the slot is refused beside the plugin -- of two with one name
+deepagents keeps the later, the deployment's, and the text would never be sent -- and
+refused whenever the plugin is wired, not only when a turn has text, or the refusal would
+come and go by session. An empty text places nothing, so the request is what it was.
+`core/agent` imports `langchain_anthropic` for the one class it extends, a package
+kingfisher already depends on. Bedrock's and Fireworks' caching, which deepagents appends
+after Anthropic's when their packages are installed, are not installed here and were not
+measured: read off the code, with a Bedrock model Bedrock's would mark the last block it
+is handed, which is the text. *(2026-10-21.)*
+
 **`TodoListMiddleware` stays standing, for now.** `build_agent` reads which tools are
 built in off the middleware its probe holds, so an offered checklist would leave the
 probe and `builtin_tools: [write_todos]` would name a tool that is not there. Moving it

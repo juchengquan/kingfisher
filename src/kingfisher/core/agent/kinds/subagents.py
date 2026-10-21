@@ -251,6 +251,8 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     recorder: RecorderMiddleware | None = None,
     #: The deployment's instructions, which every subagent is given ahead of its own.
     instructions: str = "",
+    #: The session's, as `standing_middleware` takes them.
+    session_text: str | None = None,
     #: What the agent stops on, which every subagent it reaches stops on too.
     gated: Collection[str] = (),
     #: The build's, which the agent's compiled graph measures; `None` assumes the default
@@ -349,6 +351,9 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         if skills is None or skills == ALL or backend is None
         else tuple(skills),
         skill_sources=skill_sources or [],
+        session_text=session_text,
+        # A helper's stack is its parent's `SubAgentMiddleware`'s, which caches nothing.
+        session_cached=default_model is None,
     )
 
     # Objects, not names: names raise inside `ToolNode`. The whole set goes in and

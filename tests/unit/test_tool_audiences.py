@@ -449,6 +449,7 @@ def test_the_run_report_agrees_with_the_build(policied):
             agent=agent,
             held=held,
             files=drive(kf._files_for(session.name)),
+            session_id=session.name,
         ).graph
         # A request declining every tool, or the report skips the axis and says nothing.
         allowed = kf.grants.intersect(Capabilities(tools=()))

@@ -54,7 +54,7 @@ from kingfisher.core.session.unused import DeleteUnusedResults
 
 from . import environment as config_module
 from .config import Config, ConfigError
-from .interfaces import Instructions, Sessions, UnusedResults
+from .interfaces import Instructions, SessionInstructions, Sessions, UnusedResults
 from .origins import Origins
 from .request import Request, Resume
 from .workspace import ensure_layout
@@ -88,6 +88,8 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # Left out, `INSTRUCTIONS.md` beside the definitions. Asked once per agent built,
         # so a change reaches the next turn.
         instructions: Instructions | None = None,
+        # Left out, no session is told anything of its own. Asked once per turn.
+        session_instructions: SessionInstructions | None = None,
         # Left out, each saved result nothing names is removed.
         unused_results: UnusedResults | None = None,
     ) -> None:
@@ -141,6 +143,9 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # `grants` still clamps which registered names a request may reach.
         self.middlewares: Mapping[str, MiddlewareFactory] = middlewares or {}
         self.instructions: Instructions = instructions or InstructionsFile()
+        # No default to fall back on: one wired is what refuses a deployment's own
+        # prompt caching, whose slot the text is sent from, whatever a turn's text is.
+        self.session_instructions: SessionInstructions | None = session_instructions
         self.unused_results: UnusedResults = (
             unused_results if unused_results is not None else DeleteUnusedResults()
         )
@@ -184,6 +189,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         agent: AgentSpec | None,
         held: frozenset[str] | None,
         files: Any,
+        session_id: str,
         ledger: Ledger | None = None,
     ) -> Any:
         """What serves one request, rooted at its session.
@@ -213,6 +219,11 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
             run_on=request.run_on,
             middleware_registry=self.middlewares,
             instructions=self.instructions.text(self.cfg),
+            session_instructions=(
+                None
+                if self.session_instructions is None
+                else self.session_instructions.text(self.cfg, session_id)
+            ),
             checkpointer=checkpointer,
             catalogue=self.catalogue,
             ledger=ledger,

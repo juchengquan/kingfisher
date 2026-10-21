@@ -10,6 +10,7 @@ from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
 from kingfisher.core.agent.session_paths import SessionPaths
+from kingfisher.core.config import ConfigError
 from kingfisher.core.layout import Layout
 
 from .attachments import AttachmentsMiddleware
@@ -26,6 +27,7 @@ from .narrowing import (
 )
 from .recorder import RecorderMiddleware
 from .scratch_runs import ScratchRunsMiddleware
+from .session_instructions import CACHING, SessionInstructionsMiddleware
 from .step_budget import StepBudget, StepBudgetMiddleware
 
 #: The graphs kingfisher builds itself: the agent, a subagent a definition declares, and
@@ -55,6 +57,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     skill_sources: Sequence[Any] = (),
     reachable: Sequence[str] | None = None,
     inner: Sequence[AgentMiddleware[Any, Any, Any]] = (),
+    session_text: str | None = None,
+    session_cached: bool = True,
 ) -> list[AgentMiddleware[Any, Any, Any]]:
     """Every standing middleware for one graph, in the order it wraps it.
 
@@ -71,6 +75,10 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     go inside every standing one. Taken here rather than appended by each caller so that the
     one layer that must stay under them -- `OfferedToolFailureMiddleware`, which answers
     for what the tool raised and must not answer for them -- cannot be left off a graph.
+
+    `session_text` is what the deployment's `SessionInstructions` said for this turn, `None`
+    where it wired none; `session_cached` is false only for a helper, whose stack its
+    parent's own `SubAgentMiddleware` builds with no prompt caching.
     """
     if kind != "agent" and (clearing is not None or reachable is not None):
         msg = f"result clearing and the declared-subagent check are the agent's, not a {kind}'s"
@@ -81,6 +89,15 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             "to narrow"
         )
         raise ValueError(msg)
+    # Whatever this turn's text: refused only on some sessions, it would look intermittent.
+    if session_text is not None and any(m.name == CACHING for m in inner):
+        msg = (
+            f"{kind} middleware named {CACHING!r} replaces deepagents' prompt caching, the "
+            f"slot kingfisher sends the text of session_instructions= from, after the "
+            f"cached part of the prompt; with both, that text would never be sent. Drop the "
+            f"replacement, which the plugin is there to make unnecessary, or the plugin"
+        )
+        raise ConfigError(msg)
 
     # One grant for the handles and the filter, so a handle never names a tool it refuses.
     granted = None if tools is None else tuple(tools)
@@ -159,6 +176,11 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             )
         )
     standing.extend(inner)
+    # After `inner`: in deepagents' stack it takes the caching slot by name wherever it is
+    # listed, and in a helper's, which has none, it must still follow all that writes the
+    # prompt.
+    if session_text:
+        standing.append(SessionInstructionsMiddleware(session_text, cached=session_cached))
     # Last of all, under `inner`. Left out where the graph holds no offered tool: there is
     # no name for it to answer for, and a middleware that cannot act reads as one that does.
     if names:
