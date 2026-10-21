@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A clearing mark is held to the summarizer the graph runs, after #9999
+
+- **A `clear_results_at` past deepagents' own trigger is accepted under a summarizer of
+  yours that fires later.** It was refused when the model was built, against deepagents'
+  170,000 on a model with no window, though a summarizer a definition names runs in its
+  place. A graph left with deepagents' own still refuses it, in the same words, now
+  when the agent is built rather than the model, which is the same moment for a turn.
+- **`build_model` no longer refuses one.** It is not exported, so this matters only to a
+  deployment that called it anyway.
+
 ## A caller's datazone is read as a definition's is, after #9999
 
 - **A blank datazone is refused, and a padded one is the name inside it.**

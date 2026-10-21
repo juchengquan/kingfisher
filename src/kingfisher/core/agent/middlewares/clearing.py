@@ -81,8 +81,8 @@ def high_mark(trigger: int, written: int | None, *, subject: str) -> int:
     """
     if written is None:
         return min(DEFAULT_MARK, int(TRIGGER_SHARE * trigger))
-    # `build_model` refused one past deepagents' own summariser, and only this graph's
-    # middleware says whether a deployment's fires sooner.
+    # One past deepagents' own was refused beside the graph's middleware, which only then
+    # says whose summariser runs; this is a deployment's, firing sooner or later.
     if written >= trigger:
         msg = (
             f"{subject} runs a summariser of the deployment's that fires at {trigger} "

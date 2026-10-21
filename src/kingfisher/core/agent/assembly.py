@@ -77,7 +77,13 @@ from .backend import (
     skills_sources,
 )
 from .interpreter import interpreter
-from .models import deployment_default, model_named, summarizer_count, summarizer_trigger
+from .models import (
+    deployment_default,
+    model_named,
+    refuse_a_mark_deepagents_reaches_first,
+    summarizer_count,
+    summarizer_trigger,
+)
 from .permitted_backend import PermittedBackend
 from .prompting import behind_instructions, memory_guidelines, system_prompt
 from .session_paths import SessionPaths
@@ -420,6 +426,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     named = _deployment_middleware(
         agent, middlewares, capabilities.middlewares, provisions=agent_provisions
     )
+    # The agent's alone: `general-purpose` runs its own copies of these, so the same answer.
+    refuse_a_mark_deepagents_reaches_first(running, mark, named)
     trigger = summarizer_trigger(running, named)
     clearing = result_clearing(
         ledger,
