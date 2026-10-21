@@ -505,6 +505,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         tools: tuple[str, ...] | None = None,
         reachable: tuple[str, ...] | None = None,
         inner: Sequence[Any] = (),
+        limit: ScratchRunLimit | None = None,
     ) -> list[Any]:
         return standing_middleware(
             "agent",
@@ -521,7 +522,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             keep_results_rounds=cfg.keep_results_rounds,
             trigger=trigger,
             pdf_attachments=pdf_attachments,
-            scratch_run_limit=scratch_run_limit,
+            scratch_run_limit=limit,
             recorder=recording(agent),
             clearing=clearing,
             tools=tools,
@@ -533,6 +534,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         )
 
     # What the probe below builds with: nothing narrowed yet, and no subagents to name.
+    # No limit either: this stack never runs, and a deployment's is asked once a graph.
     middleware[:] = agents_standing(inner=switched)
 
     if gated:
@@ -858,6 +860,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         tools=permitted,
         reachable=tuple(spec["name"] for spec in supplied),
         inner=[*switched, *named],
+        limit=scratch_run_limit,
     )
 
     return assemble(surface.carried, permitted)

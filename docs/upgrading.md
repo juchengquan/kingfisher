@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A `ScratchRunLimit` is asked about the agent once, after #9999
+
+- **The agent's question comes once a build, as the interface always said.** A stack
+  built only to learn the agent's tools, and thrown away, asked your limit about the
+  agent too, so a limit that counts or logs saw the agent twice and its first answer
+  was never used. Subagents and `general-purpose` were already asked once each.
+
 ## A `run_on` is refused where no subagent is granted, after #9999
 
 - **A request naming a subagent in `run_on` is refused when it was granted none.** The
