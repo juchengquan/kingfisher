@@ -336,7 +336,12 @@ class Preparation:
             # Before the build, because every row the graph records names the turn.
             turn = session.allocate_turn(request.turn_id)
             ledger = (
-                Ledger(turn.id, earlier, resumed=resume is not None)
+                Ledger(
+                    turn.id,
+                    earlier,
+                    resumed=resume is not None,
+                    keep_rounds=cfg.keep_results_rounds,
+                )
                 if earlier is not None
                 else None
             )

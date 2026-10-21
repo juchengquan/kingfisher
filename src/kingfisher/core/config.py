@@ -308,6 +308,10 @@ class Config:
     # Unset by default: workspaces vary by orders of magnitude. Checked before a turn,
     # never during: `execute` writes without any file tool seeing it.
     session_max_bytes: int | None = None
+    # How many rounds of a conversation keep their saved tool results; an older one keeps
+    # only its ledger row. Unset keeps every one: what a session can do without is the
+    # deployment's to judge.
+    keep_results_rounds: int | None = None
     # How long an idle session survives a `reap` that names no age. An age, not a count
     # kept: a count would weigh every caller's sessions against each other.
     session_ttl_s: int = 7 * 24 * 3600

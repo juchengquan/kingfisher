@@ -260,7 +260,10 @@ class ResultClearingMiddleware(AgentMiddleware):
         agent without `grep` is not handed the path instead, even one holding `read_file`.
         """
         again = f"call {row.tool} again to see it"
-        if (row.path is not None and row.path.startswith(self._offloads)) or (
+        # Ahead of the offloaded stub's test, which would send a search to the file removed.
+        if row.expired_in is not None:
+            where = f"expired, {again}"
+        elif (row.path is not None and row.path.startswith(self._offloads)) or (
             text.startswith(EVICTED) and row.size > len(text.encode("utf-8"))
         ):
             where = (

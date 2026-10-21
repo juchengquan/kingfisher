@@ -190,6 +190,7 @@ LIMITS = {
     "session_ttl_s": "KINGFISHER_SESSION_TTL_S",
     "recursion_limit": "KINGFISHER_RECURSION_LIMIT",
     "thread_pool_size": "KINGFISHER_THREAD_POOL_SIZE",
+    "keep_results_rounds": "KINGFISHER_KEEP_RESULTS_ROUNDS",
 }
 
 
@@ -219,6 +220,7 @@ FLOORS = {
     "KINGFISHER_THREAD_POOL_SIZE": 1,
     "KINGFISHER_SESSION_TTL_S": 0,
     "KINGFISHER_SESSION_MAX_BYTES": 0,
+    "KINGFISHER_KEEP_RESULTS_ROUNDS": 1,
 }
 
 

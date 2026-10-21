@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import MISSING, asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -248,16 +248,47 @@ def _listed(access: list[Any]) -> Listed:
 
 
 _FIELDS = tuple(one.name for one in fields(LedgerEntry))
+#: A field with a default is one rows written before it lack: required, every older row
+#: would read as a closing line and drop out of the exchanges.
+_REQUIRED = tuple(one.name for one in fields(LedgerEntry) if one.default is MISSING)
 
 
 def _entry(row: Mapping[str, Any]) -> LedgerEntry | None:
     """A row as the entry it was written from, or `None` for a closing line."""
-    if not all(name in row for name in _FIELDS):
+    if not all(name in row for name in _REQUIRED):
         return None
-    held = {name: row[name] for name in _FIELDS}
+    held = {name: row[name] for name in _FIELDS if name in row}
     if isinstance(held["access"], list):
         held["access"] = _listed(held["access"])
     return LedgerEntry(**held)
+
+
+def expired(
+    earlier: KeptLedger, rounds: int | None, *, turn: str, resumed: bool
+) -> tuple[KeptLedger, tuple[LedgerEntry, ...]]:
+    """`earlier` with every kept result older than `rounds` exchanges marked expired in
+    `turn`, and those entries as they were, still naming their files.
+
+    The current exchange counts as one of the `rounds`: a resume carries on the last kept one.
+    """
+    if rounds is None:
+        return earlier, ()
+    kept = rounds if resumed else rounds - 1
+    old = earlier.exchanges[: max(len(earlier.exchanges) - kept, 0)]
+    expiring = {entry for exchange in old for entry in exchange if entry.path is not None}
+    if not expiring:
+        return earlier, ()
+    lines = []
+    for line in earlier.lines:
+        row = json.loads(line)
+        # Patched as parsed rather than rewritten from the entry, which would drop any key
+        # this version does not read.
+        lines.append(
+            json.dumps({**row, "path": None, "expired_in": turn}, ensure_ascii=False)
+            if _entry(row) in expiring
+            else line
+        )
+    return _kept("\n".join(lines)), tuple(sorted(expiring, key=lambda entry: entry.id))
 
 
 def write_ledger(  # noqa: PLR0913 -- two marks, by keyword so neither is passed for the other

@@ -265,7 +265,19 @@ def _file_tools(held: tuple[str, ...], layout: Layout) -> str:
     return _filled(FILE_TOOLS_FILE, layout, file_tools=named).strip()
 
 
-def _tool_results(held: tuple[str, ...], layout: Layout, *, shelled: bool) -> str:
+def _expiring(rounds: int | None) -> str:
+    """Said where saved results expire, since the rest promises every one is kept."""
+    if rounds is None:
+        return ""
+    return (
+        f"A result older than {rounds} rounds of this conversation expires: its file is "
+        "removed, so to see it again, call its tool again."
+    )
+
+
+def _tool_results(
+    held: tuple[str, ...], layout: Layout, *, shelled: bool, rounds: int | None
+) -> str:
     """The paragraphs on seeing a saved result again, naming only the tools in `held`."""
     told = [said for needs, said in _READING if all(name in held for name in needs)]
     unread = _AGAIN if shelled else _UNREAD
@@ -273,6 +285,7 @@ def _tool_results(held: tuple[str, ...], layout: Layout, *, shelled: bool) -> st
         TOOL_RESULTS_FILE,
         layout,
         reading=_fill("\n".join(told) or unread, layout, TOOL_RESULTS_FILE),
+        expiring=_expiring(rounds),
         recovering=_RECOVERING[READ_FILE in held, GREP in held],
     ).strip()
 
@@ -286,6 +299,7 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     skills_enabled: bool = False,
     memory_enabled: bool = False,
     cite_results: bool = True,
+    keep_results_rounds: int | None = None,
     extra: str = "",
     layout: Layout,
     shell: ShellPrompt | None = None,
@@ -322,7 +336,9 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
         base.replace(FILE_TOOLS_MARKER, _file_tools(held, layout))
         .replace(SHELL_MARKER, _said(shell, "prompt", layout) if shelled else "")
         .replace(CITING_MARKER, _CITING if cite_results else "")
-        .replace(TOOL_RESULTS_MARKER, _tool_results(held, layout, shelled=shelled))
+        .replace(TOOL_RESULTS_MARKER, _tool_results(
+            held, layout, shelled=shelled, rounds=keep_results_rounds
+        ))
         .replace(CAPABILITY_MARKER, sections),
         extra,
     )
@@ -392,6 +408,7 @@ def system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describe
         skills_enabled=bool(cfg and cfg.skills_enabled) and skills,
         memory_enabled=bool(cfg and cfg.memory_enabled),
         cite_results=cfg.cite_results if cfg else True,
+        keep_results_rounds=cfg.keep_results_rounds if cfg else None,
         extra=behind_instructions(agent, instructions),
         layout=cfg.layout if cfg else DEFAULT_LAYOUT,
         shell=shell,

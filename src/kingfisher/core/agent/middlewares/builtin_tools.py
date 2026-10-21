@@ -118,6 +118,24 @@ def hint(path: str) -> str:
     )
 
 
+def _found_nothing(tool: str, said: str) -> bool:
+    """Whether `read_file`, `glob` or `grep` said it found nothing, as deepagents words it.
+
+    `read_file` only as an error: a result file's own text may say "not found".
+    """
+    if tool == READ_FILE:
+        return said.startswith("Error") and "not found" in said
+    return "No files found" in said or "No matches found" in said
+
+
+def expired_note(rounds: int) -> str:
+    """Appended to a search of the saved results that found nothing."""
+    return (
+        f"A saved result older than {rounds} rounds of this conversation has expired and "
+        "its file is gone; to see it again, call the tool that made it again."
+    )
+
+
 def _described(tool: Any, rule: str | None, timed: str) -> Any:
     if isinstance(tool, BaseTool) and tool.name == EXECUTE:
         said = _timed(_ruled(tool.description, rule), timed)
@@ -443,9 +461,16 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         *,
         longest: int,
         here: bool = True,
+        expires_after: int | None = None,
     ) -> None:
         super().__init__()
         self._longest = longest
+        # The folders a ledger row names, as the file tools spell them, where results expire.
+        routes = (layout.tool_results_route, layout.offloads_route)
+        self._expiring = (
+            () if expires_after is None else tuple(route.rstrip("/") for route in routes)
+        )
+        self._expired = "" if expires_after is None else expired_note(expires_after)
         self._timed = timeout_line(longest)
         # Whether the shell runs on this host; where not, deepagents' section names paths it
         # does not have.
@@ -484,6 +509,24 @@ class BuiltinToolsMiddleware(AgentMiddleware):
             return result
         return result.model_copy(update={"content": f"{result.content}\n\n{hint(path)}"})
 
+    def _explained(self, request: Any, result: Any) -> Any:
+        """`result`, saying results expire where a file tool looked for one and found nothing.
+
+        Said on the miss, not by rewriting the handles that name a removed file: a handle
+        keeps its wording once written, and an id the model remembers names no file at all.
+        """
+        call = request.tool_call
+        if not self._expiring or call.get("name") not in (READ_FILE, GLOB, GREP):
+            return result
+        if not isinstance(result, ToolMessage) or not isinstance(result.content, str):
+            return result
+        said = [str(value) for value in (call.get("args") or {}).values()]
+        if not any(route in value for value in said for route in self._expiring):
+            return result
+        if not _found_nothing(call["name"], result.content):
+            return result
+        return result.model_copy(update={"content": f"{result.content}\n\n{self._expired}"})
+
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         return handler(self._told(request))
 
@@ -498,13 +541,13 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         if (refused := _unreadable(request)) is not None:
             return refused
         if (parts := _split(request)) is None:
-            return self._corrected(request, handler(_limited(request)))
+            return self._explained(request, self._corrected(request, handler(_limited(request))))
         call = request.tool_call
         answers = [
             handler(request.override(tool_call=_parted(call, part, n)))
             for n, part in enumerate(parts)
         ]
-        return _joined(call, parts, answers)
+        return self._explained(request, _joined(call, parts, answers))
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
@@ -514,10 +557,11 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         if (refused := _unreadable(request)) is not None:
             return refused
         if (parts := _split(request)) is None:
-            return self._corrected(request, await handler(_limited(request)))
+            result = await handler(_limited(request))
+            return self._explained(request, self._corrected(request, result))
         call = request.tool_call
         answers = [
             await handler(request.override(tool_call=_parted(call, part, n)))
             for n, part in enumerate(parts)
         ]
-        return _joined(call, parts, answers)
+        return self._explained(request, _joined(call, parts, answers))
