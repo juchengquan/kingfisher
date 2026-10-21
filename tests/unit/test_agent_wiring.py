@@ -90,7 +90,6 @@ def test_planning_and_permissions_are_wired(cfg, session_dir):
     assert read_only == {
         "/.harness/**",
         "/inputs/**",
-        "/scratchpad/large_tool_results/**",
         "/scratchpad/tool_results/**",
         "/skills/**",
     }

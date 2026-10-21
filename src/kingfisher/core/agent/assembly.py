@@ -387,7 +387,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         None
         if ledger is None
         else partial(
-            ResultClearingMiddleware, ledger, high_mark(running, mark), cfg.layout.offloads_route
+            ResultClearingMiddleware, ledger, high_mark(running, mark)
         )
     )
     # Filled in kingfisher's order once the grant is known; the probe reads it before.
@@ -477,6 +477,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             backend=backend,
             budget=budget,
             execution_timeout_s=cfg.execution_timeout_s,
+            permissions=permissions,
             keep_results_rounds=cfg.keep_results_rounds,
             trigger=trigger,
             recorder=recording(agent),
@@ -617,6 +618,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 runs=runs,
                 instructions=instructions,
                 backend=backend,
+                permissions=permissions,
                 gated=gated,
                 endpoints=capabilities.endpoints,
                 builtin_tools=surface.granted_builtin,
@@ -746,6 +748,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     backend=backend,
                     budget=budget,
                     execution_timeout_s=cfg.execution_timeout_s,
+                    permissions=permissions,
                     keep_results_rounds=cfg.keep_results_rounds,
                     trigger=trigger,
                     recorder=recording(agent),

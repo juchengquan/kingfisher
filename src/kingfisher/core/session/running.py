@@ -203,7 +203,6 @@ class Running:
             return ()
         return (
             yield from keep_ledger(
-                prepared.files,
                 prepared.harness,
                 prepared.ledger,
                 summarised=runtime.summarised_in(snapshot),

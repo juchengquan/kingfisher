@@ -14,10 +14,9 @@ same thing in every session and on every machine:
   called.
 - `/{{scratchpad}}` — working files: intermediates, downloads, anything you need while you
   think. Nothing here is reported back and old sessions are swept, so anything you
-  want kept belongs in `/{{outputs}}` instead. A tool result too long
-  to show you whole is saved under `/{{scratchpad}}/large_tool_results/`, and conversation
-  summarized away under `/{{scratchpad}}/conversation_history/`: search there when you
-  need one back and nothing names its path.
+  want kept belongs in `/{{outputs}}` instead. Conversation summarized away is saved
+  under `/{{scratchpad}}/conversation_history/`: search there when you need some back
+  and nothing names its path.
 
 Tools this workspace defines take these same virtual paths.
 

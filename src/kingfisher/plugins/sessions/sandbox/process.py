@@ -42,16 +42,13 @@ def run_command(  # noqa: PLR0913 -- one argument per thing a launch differs by
     preexec_fn: Callable[[], None] | None = None,
     unstartable: str | None = None,
     stop: threading.Event | None = None,
-    grace: float | None = None,
 ) -> CommandResult:
     """Run `command` -- through `/bin/sh` when it is a string -- and say what came back.
 
     When the shell exits, everything it started is killed with it, and a timeout kills
     the whole group: a process left behind writes into the session after the turn that
     started it has let go of it. `unstartable` names the fence a launch failure means;
-    `stop`, once set, ends the command as running out of time would. With `grace`, the
-    command is first sent SIGTERM that many seconds before its time is up, for a launcher
-    that cleans up after itself; the group is killed when the time is up regardless.
+    `stop`, once set, ends the command as running out of time would.
     """
     try:
         process = subprocess.Popen(  # noqa: S603 -- a shell command is the whole job
@@ -77,7 +74,7 @@ def run_command(  # noqa: PLR0913 -- one argument per thing a launch differs by
 
     keep = (max_output_bytes + 1) * _WIDEST_CHARACTER
     try:
-        stdout, stderr, timed_out = _collect(process, timeout, keep, stop, grace)
+        stdout, stderr, timed_out = _collect(process, timeout, keep, stop)
     finally:
         _kill_group(process.pid)
         for pipe in (process.stdout, process.stderr):
@@ -124,7 +121,6 @@ def _collect(
     timeout: int | None,
     keep: int,
     stop: threading.Event | None,
-    grace: float | None,
 ) -> tuple[bytes, bytes, bool]:
     """Both streams, `keep` bytes of each at most, until the shell has exited and the
     pipes have closed, or until `timeout`; and whether it ran out of time.
@@ -132,7 +128,7 @@ def _collect(
     Read as it arrives rather than collected whole: `yes` for three seconds is gigabytes,
     in this process, beside every other session's turn.
     """
-    clock = _Clock(timeout, grace, stop)
+    deadline = None if timeout is None else time.monotonic() + timeout
     kept: dict[Any, bytearray] = {process.stdout: bytearray(), process.stderr: bytearray()}
     exit_watch = _ExitWatch(process.pid)
     exited = exit_watch.happened
@@ -145,15 +141,9 @@ def _collect(
         if exit_watch.source is not None:
             selector.register(exit_watch.source, selectors.EVENT_READ)
         while not exited or len(selector.get_map()) > 0:
-            now = time.monotonic()
-            if clock.up(now):
+            left = None if deadline is None else deadline - time.monotonic()
+            if (left is not None and left <= 0) or (stop is not None and stop.is_set()):
                 return bytes(kept[process.stdout]), bytes(kept[process.stderr]), True
-            if clock.due(now):
-                # The leader alone, which is still uncollected and so still this command.
-                with suppress(ProcessLookupError):
-                    os.kill(process.pid, signal.SIGTERM)
-                clock.asked = True
-            left = clock.left(now)
             # Nothing wakes the wait when `stop` is set, so it is asked as often as polling.
             polled = exit_watch.source is None or stop is not None
             wait = min(left or _POLL_S, _POLL_S) if polled else left
@@ -178,43 +168,7 @@ def _collect(
     finally:
         selector.close()
         exit_watch.close()
-    # A command that ended once it was asked to ended because its time was up.
-    return bytes(kept[process.stdout]), bytes(kept[process.stderr]), clock.asked
-
-
-class _Clock:
-    """When a command is asked to stop, and when it is stopped regardless."""
-
-    def __init__(
-        self, timeout: int | None, grace: float | None, stop: threading.Event | None
-    ) -> None:
-        now = time.monotonic()
-        self.deadline = None if timeout is None else now + timeout
-        # Inside the time given, not after it, so a command still never outlives `timeout`.
-        self.ask_at = (
-            None if timeout is None or grace is None else now + timeout - min(grace, timeout / 2)
-        )
-        self.grace = grace
-        self.stop = stop
-        self.asked = False
-
-    def up(self, now: float) -> bool:
-        """Whether the time is up; a `stop` set first asks, where there is a grace."""
-        if self.stop is not None and self.stop.is_set():
-            if self.grace is None:
-                return True
-            if not self.asked:
-                self.ask_at = now
-                cut = now + self.grace
-                self.deadline = cut if self.deadline is None else min(self.deadline, cut)
-        return self.deadline is not None and now >= self.deadline
-
-    def due(self, now: float) -> bool:
-        return self.ask_at is not None and not self.asked and now >= self.ask_at
-
-    def left(self, now: float) -> float | None:
-        wakes = [t for t in (self.deadline, None if self.asked else self.ask_at) if t is not None]
-        return min(wakes) - now if wakes else None
+    return bytes(kept[process.stdout]), bytes(kept[process.stderr]), False
 
 
 class _ExitWatch:
@@ -262,8 +216,8 @@ class _ExitWatch:
 def _kill_group(pgid: int) -> None:
     """Kill every process still in the group the command started.
 
-    A process that called `setsid()` has left it and is not reached here; under Landlock
-    `_reaper.py`, which adopts it, is what does.
+    A process that called `setsid()` has left it and is not reached; recorded in
+    `docs/decisions.md` under *Confining the shell*.
     """
     # Nothing left, or, on macOS, only the uncollected leader.
     with suppress(ProcessLookupError, PermissionError):

@@ -219,6 +219,9 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     builtin_tools: Selection = ALL,
     tools: Selection = ALL,
     backend: Any = None,
+    #: The deployment's filesystem rules, handed to the `FilesystemMiddleware` this
+    #: subagent's stack replaces: its own spec carries none, so these are the agent's.
+    permissions: Any = None,
     skills: Selection = None,
     # `Any`: deepagents' `SubAgent` is a TypedDict a plain dict cannot satisfy without
     # restating its schema.
@@ -323,6 +326,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         names=frozenset(entry.name for entry in (*catalogue, *private)),
         paths=paths,
         layout=cfg.layout,
+        permissions=permissions,
         # The parent's, whose shell is the one this subagent's `execute` runs on.
         backend=backend,
         budget=StepBudget(cfg.recursion_limit) if budget is None else budget,

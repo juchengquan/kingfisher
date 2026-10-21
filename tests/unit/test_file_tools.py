@@ -27,6 +27,7 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
     JOINED,
     LS,
     MUST_READ,
+    OFFLOADED_ELSEWHERE,
     PREFER_EDIT,
     READ_FIRST,
     READ_LINES,
@@ -364,7 +365,14 @@ def test_an_unrestricted_graph_is_told_what_deepagents_says_but_the_false_claim(
         said = {getattr(tool, "name", None): tool.description for tool in tools}
         timed = timeout_line(cfg.execution_timeout_s)
         assert said[EXECUTE] == f"{EXECUTE_TOOL_DESCRIPTION.replace(ABSOLUTE, rule)}\n{timed}"
-        assert said[GREP] == GREP_TOOL_DESCRIPTION.replace(SEPARATELY, JOINED)
+        # And deepagents' sentence on the offload folder is dropped, not reworded:
+        # nothing writes that folder now, so it would send a search nowhere.
+        assert said[GREP] == (
+            GREP_TOOL_DESCRIPTION.replace(SEPARATELY, JOINED)
+            .replace(OFFLOADED_ELSEWHERE, "")
+            .rstrip()
+        )
+        assert "large_tool_results" not in said[GREP]
         assert said[LS] == LIST_FILES_TOOL_DESCRIPTION
         assert said[WRITE_FILE] == WRITE_FILE_TOOL_DESCRIPTION.strip()
         assert READ_FIRST in said[EDIT_FILE]

@@ -96,7 +96,6 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     assert "| `/scratch/<name>` | `scratch/<name>` |" in text
     assert "/scratch/results/" in text
     # The fixed sub-leaves stay fixed, under the renamed scratchpad.
-    assert "/scratch/large_tool_results/" in text
     assert "/scratch/conversation_history/" in text
     # The memory capability section names the renamed memory leaf.
     assert "/mem" in text
@@ -106,20 +105,21 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
         assert gone not in text, gone
 
 
-def test_the_prompt_names_the_folders_deepagents_writes_on_its_own(cfg, session_dir):
-    """A prompt naming folders the backend no longer has deepagents write sends the
-    agent's search somewhere empty, as deepagents' own `grep` description already does.
+def test_the_prompt_names_the_folder_deepagents_writes_on_its_own(cfg, session_dir):
+    """A prompt naming a folder the backend no longer has deepagents write sends the
+    agent's search somewhere empty, as deepagents' own `grep` description did.
 
-    The root is read off what `backend_at` builds rather than spelled here, so moving
-    the setting or renaming the scratchpad fails this until the prompt follows.
+    One folder, not two: its offloading is off, so `conversation_history` is all it
+    writes here. The root is read off what `backend_at` builds rather than spelled here,
+    so moving the setting or renaming the scratchpad fails this until the prompt follows.
     """
     from kingfisher.plugins.sessions.backend import backend_at
 
     root = backend_at(cfg, session_dir).artifacts_root.rstrip("/")
     text = shipped()
 
-    for folder in ("large_tool_results", "conversation_history"):
-        assert f"`{root}/{folder}/`" in text, folder
+    assert f"`{root}/conversation_history/`" in text
+    assert "large_tool_results" not in text, "a folder nothing writes is still named"
 
 
 def test_the_prompt_names_a_recorded_result_as_the_ledger_does():

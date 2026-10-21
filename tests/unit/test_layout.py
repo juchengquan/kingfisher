@@ -45,12 +45,11 @@ def test_the_default_layout_is_the_module_constants():
         "/memory/",
         "/outputs/",
     )
-    assert (default.scratch_route, default.tool_results_route, default.offloads_route) == (
+    assert (default.scratch_route, default.tool_results_route) == (
         "/scratchpad/",
         "/scratchpad/tool_results/",
-        "/scratchpad/large_tool_results/",
     )
-    assert default.saved_results == ("scratchpad/tool_results", "scratchpad/large_tool_results")
+    assert default.saved_results == ("scratchpad/tool_results",)
 
 
 # -- a renamed layout derives everything from its leaves ------------------------
@@ -62,16 +61,14 @@ def test_a_renamed_layout_spells_every_route_from_its_leaves():
     assert MOVED.outputs_route == "/out/"
     assert MOVED.scratch_route == "/scratch/"
     assert MOVED.tool_results_route == "/scratch/results/"
-    # `large_tool_results` is deepagents' own leaf: only the parent scratchpad moves.
-    assert MOVED.offloads_route == "/scratch/large_tool_results/"
-    assert MOVED.saved_results == ("scratch/results", "scratch/large_tool_results")
+    assert MOVED.saved_results == ("scratch/results",)
     assert MOVED.session_dirs == ("in", "out", "mem", "scratch")
     assert MOVED.artifact_dirs == ("out", "mem")
 
 
 def test_a_renamed_layout_routes_and_denies_under_its_own_names():
     routed = MOVED.routed_paths()
-    assert {"/in/", "/mem/", "/scratch/results/", "/scratch/large_tool_results/"} <= set(routed)
+    assert {"/in/", "/mem/", "/scratch/results/"} <= set(routed)
     # The fixed routes are still there, unmoved.
     assert {"/skills/", "/.harness/"} <= set(routed)
     # And the default spellings are gone, not left beside the renamed ones.
@@ -82,7 +79,6 @@ def test_a_renamed_layout_routes_and_denies_under_its_own_names():
     assert {
         "/in/**",
         "/scratch/results/**",
-        "/scratch/large_tool_results/**",
         "/skills/**",
         "/.harness/**",
     } == set(denied)

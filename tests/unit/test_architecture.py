@@ -1418,8 +1418,10 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
         "langgraph",
     }),
     # Running a turn and keeping its conversation: the stream the graph emits and the
-    # checkpointer it was built with.
-    "core/session": frozenset({"deepagents", "langchain_core", "langgraph"}),
+    # checkpointer it was built with. Not deepagents: the ledger read its backend and
+    # its call-id spelling only to find the copy of a result it offloaded, and nothing
+    # offloads now.
+    "core/session": frozenset({"langchain_core", "langgraph"}),
     # Kingfisher's own sessions: a deepagents composite over a session's folder, and
     # the Linux shell fence, which is the OS in the most literal sense this table holds
     # -- Landlock, applied to a process before it execs. Optional and Linux-only, so

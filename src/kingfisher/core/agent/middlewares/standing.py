@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Collection, Sequence
 from typing import Any, Literal
 
+from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 
 from kingfisher.core.agent.backend import shell_prompt_of, shell_runs_here
@@ -43,6 +44,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     budget: StepBudget,
     trigger: int,
     execution_timeout_s: int,
+    permissions: Any = None,
     keep_results_rounds: int | None = None,
     recorder: RecorderMiddleware | None = None,
     clearing: Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None = None,
@@ -128,6 +130,19 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         )
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.
     standing.append(AttachmentsMiddleware(trigger))
+    # deepagents merges by name, so this *replaces* the `FilesystemMiddleware` it would
+    # build itself -- in this graph's stack and, through the spec, in each subagent's.
+    # Only to turn its offloading off: a result too long to show whole is kingfisher's to
+    # save, in the one folder a ledger row names, and a second copy under a name only
+    # deepagents knows cost a reconciliation at every turn's end to tell the two apart.
+    # `_permissions` is deepagents' own keyword, private and passed as it asks.
+    standing.append(
+        FilesystemMiddleware(
+            backend=backend,
+            tool_token_limit_before_evict=None,
+            _permissions=permissions,
+        )
+    )
     standing.append(
         BuiltinToolsMiddleware(
             layout,

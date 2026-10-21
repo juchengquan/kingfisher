@@ -14,7 +14,7 @@ from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.types import Command
 
 from kingfisher.core.agent.models import summarizer_trigger
-from kingfisher.core.agent.prompting import EDIT_FILE, FILE_TOOLS, GREP, WRITE_FILE
+from kingfisher.core.agent.prompting import EDIT_FILE, FILE_TOOLS, WRITE_FILE
 from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.session.runtime import with_call_args
@@ -50,8 +50,6 @@ WORTH = 1 / 4
 FILE_TEXT = {WRITE_FILE: ("content",), EDIT_FILE: ("old_string", "new_string")}
 
 #: How deepagents' eviction stub begins, `_TOO_LARGE_TOOL_MSG` up to its first field.
-EVICTED = "Tool result too large, the result of this tool call "
-
 #: The handles this module writes, as each ends. Asked before clearing anything: a later pass
 #: would otherwise read a handle as what it replaced and clear it again, wrongly.
 _RESULT_HANDLE = re.compile(
@@ -117,7 +115,6 @@ class ResultClearingMiddleware(AgentMiddleware):
         self,
         ledger: Ledger,
         high: int,
-        offloads_route: str,
         tools: tuple[str, ...] | None = None,
     ) -> None:
         super().__init__()
@@ -126,7 +123,6 @@ class ResultClearingMiddleware(AgentMiddleware):
         self.high = high
         self._low = high // 2
         #: This layout's `/scratchpad/large_tool_results/`, as the model addresses it.
-        self._offloads = offloads_route
         # The graph's grant, not `request.tools`: this runs before `GrantedOnlyMiddleware`
         # narrows them.
         self._granted = None if tools is None else frozenset(tools)
@@ -240,7 +236,7 @@ class ResultClearingMiddleware(AgentMiddleware):
         if (number := stamped_id(text)) is not None and (
             row := rows.get(number)
         ) is not None and row.call == result.tool_call_id:
-            return self._row_handle(row, text)
+            return self._row_handle(row)
         # What a file tool returned is a file's text or a listing of files, and calling it
         # again gets that back.
         if result.name in FILE_TOOLS:
@@ -251,7 +247,7 @@ class ResultClearingMiddleware(AgentMiddleware):
             return f"{called} -- {what}; call {result.name} again to see it as it is now"
         return None
 
-    def _row_handle(self, row: LedgerEntry, text: str) -> str | None:
+    def _row_handle(self, row: LedgerEntry) -> str | None:
         """A recorded result's handle, naming where its whole text is kept to an agent
         holding the tool that reaches it there, and the call that made it to any other.
 
@@ -263,14 +259,6 @@ class ResultClearingMiddleware(AgentMiddleware):
         # Ahead of the offloaded stub's test, which would send a search to the file removed.
         if row.expired_in is not None:
             where = f"expired, {again}"
-        elif (row.path is not None and row.path.startswith(self._offloads)) or (
-            text.startswith(EVICTED) and row.size > len(text.encode("utf-8"))
-        ):
-            where = (
-                f"offloaded: grep for [{row.id}] under {self._offloads}"
-                if self._holds(GREP)
-                else again
-            )
         elif row.path is not None:
             where = f"full result: {row.path}" if self._holds(READ_FILE) else again
         else:
