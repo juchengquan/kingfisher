@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -260,23 +261,6 @@ def test_every_shell_says_its_timeout_is_in_seconds(shelled, shell):
         assert timeout_line(cfg.execution_timeout_s) in _execute(tools)
 
 
-def test_a_miss_on_a_shell_kingfisher_does_not_run_is_left_as_it_was(shelled):
-    """The correction says the shell starts in the session root and spells the path
-    from there, which holds of kingfisher's own shell and of no other it knows.
-    """
-    cfg, _ = shelled
-    _run(
-        cfg,
-        _calls(("execute", {"command": "cat /inputs/cars.csv"}, "c1")),
-        AIMessage(content="done"),
-        backends=LocalSessions(runner=lambda _where: Plain()),
-    )
-    (answer,) = [m.text for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
-
-    assert "No such file" in answer
-    assert "file-tool path" not in answer
-
-
 def test_a_subagent_is_told_the_inputs_folder_the_layout_names(shelled):
     """A subagent's guards were built without the layout, so under a renamed one its
     `execute` line went on saying `/inputs` while the session held `/in`.
@@ -440,7 +424,7 @@ def _answered(way: str, name: str, result: Any) -> Any:
     nothing: making `awrap_tool_call` return the result uncorrected left the whole suite
     green, while the same change to its sync twin reddened the rules above.
     """
-    middleware = BuiltinToolsMiddleware(Layout(), kingfishers_shell(), longest=120)
+    middleware = BuiltinToolsMiddleware(Layout(), kingfishers_shell(), longest=120, rooted=True)
     request = Call(tool_call={"name": name, "args": {}, "id": "c1"})
     if way == "sync":
         return middleware.wrap_tool_call(request, lambda _: result)
@@ -520,24 +504,6 @@ def test_a_correction_reaches_the_shells_result_and_no_other_tools(way):
     assert hint("/inputs/api.log") in corrected.text
 
     left = _answered(way, "line_count", ToolMessage(MISSED, tool_call_id="c1"))
-    assert left.text == MISSED
-
-
-def test_a_shell_that_says_it_starts_in_the_session_is_corrected_whoever_said_it():
-    """The correction went to kingfisher's own shell by identity, so a shell of a
-    deployment's own that starts in the session root was never offered it."""
-    request = Call(tool_call={"name": "execute", "args": {}, "id": "c1"})
-    starts_there = replace(THEIRS, starts_in_session=True)
-
-    corrected = BuiltinToolsMiddleware(Layout(), starts_there, longest=120).wrap_tool_call(
-        request, lambda _: ToolMessage(MISSED, tool_call_id="c1")
-    )
-    # The control: the same shell, not saying it.
-    left = BuiltinToolsMiddleware(Layout(), THEIRS, longest=120).wrap_tool_call(
-        request, lambda _: ToolMessage(MISSED, tool_call_id="c1")
-    )
-
-    assert hint("/inputs/api.log") in corrected.text
     assert left.text == MISSED
 
 
@@ -634,3 +600,130 @@ def test_kingfishers_shell_hands_no_runner_more_than_the_setting(cfg):
     shell.execute("true", timeout=1)
 
     assert runner.handed == [cfg.execution_timeout_s, cfg.execution_timeout_s, 1]
+
+
+# -- a runner's shell that exports the session root ------------------------
+
+
+def _job(session_dir: Path) -> str:
+    """Where a runner given `session_root=` says its shell sees the session."""
+    return f"/home/runner/job-{session_dir.name}"
+
+
+#: What only an agent told of `$KINGFISHER_SESSION_ROOT` reads, filled from the layout.
+SPELT = '`"$KINGFISHER_SESSION_ROOT/inputs/data.csv"`'
+READ = 'os.environ["KINGFISHER_SESSION_ROOT"]'
+
+
+def _system() -> str:
+    (system,) = [m for m in Scripted.heard[0] if isinstance(m, SystemMessage)]
+    return " ".join(system.text.split())
+
+
+@pytest.mark.parametrize("subagent", ["checker", "general-purpose"])
+@pytest.mark.parametrize("given", [True, False], ids=["session-root", "none"])
+def test_a_runner_given_its_session_root_is_told_the_variable_in_every_graph(
+    shelled, subagent, given
+):
+    """A deployment's shell exporting the variable was described as one that might not
+    see the session at all, so its agent went on guessing paths. In `execute`'s
+    description as well, which is all a subagent reads; without `session_root=` the
+    neutral wording and deepagents' line stay, as the control.
+    """
+    cfg, offered = shelled
+    backends = LocalSessions(runner=lambda _where: Plain(), session_root=_job if given else None)
+    _run(cfg, *_consulting(subagent), backends=backends)
+
+    system = _system()
+    assert (SPELT in system and READ in system) is given
+    assert "check what the shell sees" in system
+    assert len(offered) == 3
+    for tools in offered:
+        described = " ".join(_execute(tools).split())
+        assert (SPELT in described and READ in described) is given
+        assert (ABSOLUTE in described) is not given
+
+
+def test_a_runner_s_own_wording_is_followed_by_the_variable_and_an_empty_part_by_nothing(
+    shelled,
+):
+    """`""` is how a deployment says nothing, and a sentence added to it would speak for
+    it; a part with wording of its own is told the variable after it, the control.
+    """
+    cfg, offered = shelled
+    theirs = ShellPrompt(prompt="## The shell\n\nMine.", execute="")
+    backends = LocalSessions(runner=lambda _where: Plain(), shell_prompt=theirs, session_root=_job)
+    _run(cfg, *_consulting("checker"), backends=backends)
+
+    system = _system()
+    assert "## The shell Mine." in system
+    assert system.index("Mine.") < system.index(SPELT)
+    for tools in offered:
+        assert "KINGFISHER_SESSION_ROOT" not in _execute(tools)
+
+
+def test_kingfishers_own_shell_is_not_told_the_variable_twice(shelled):
+    """Its wording already teaches the variable, and the sentence for a runner's shell
+    would follow it -- the same rule twice, in two wordings, in every graph.
+    """
+    cfg, offered = shelled
+    _run(cfg, *_consulting("checker"))
+
+    assert _system().count(READ) == 1
+    assert len(offered) == 3
+    for tools in offered:
+        assert _execute(tools).count(READ) == 1
+
+
+@pytest.mark.parametrize("given", [True, False], ids=["session-root", "none"])
+def test_a_miss_is_corrected_only_on_a_shell_exporting_the_session_root(shelled, given):
+    """The correction was gated on `starts_in_session`, which a deployment's shell could
+    claim without exporting the variable the correction names. Without `session_root=`,
+    the control, the miss is left as the shell said it.
+    """
+    cfg, _ = shelled
+    _run(
+        cfg,
+        _calls(("execute", {"command": "cat /inputs/cars.csv"}, "c1")),
+        AIMessage(content="done"),
+        backends=LocalSessions(
+            runner=lambda _where: Plain(), session_root=_job if given else None
+        ),
+    )
+    (answer,) = [m.text for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
+
+    assert "No such file" in answer
+    assert (hint("/inputs/cars.csv") in answer) is given
+
+
+@dataclass
+class Noting:
+    """A runner keeping each command it was handed."""
+
+    handed: list[str] = field(default_factory=list)
+
+    @property
+    def local(self) -> bool:
+        return False
+
+    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+        self.handed.append(command)
+        return CommandResult(output="", exit_code=0, truncated=False)
+
+
+def test_a_runner_exporting_the_session_root_is_handed_the_command_as_written(shelled):
+    """Kingfisher says the variable to the agent and never puts it in a command: an
+    `export` in front assumes the runner's shell is `sh`, and shows its logs and its
+    allow-list a command the model did not write.
+    """
+    cfg, _ = shelled
+    runner = Noting()
+    written = """python3 -c 'import os; print(os.environ["KINGFISHER_SESSION_ROOT"])' """
+    _run(
+        cfg,
+        _calls(("execute", {"command": written}, "c1")),
+        AIMessage(content="done"),
+        backends=LocalSessions(runner=lambda _where: runner, session_root=_job),
+    )
+
+    assert runner.handed == [written]

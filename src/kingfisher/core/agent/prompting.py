@@ -8,7 +8,7 @@ SDKs behind it for anyone naming it.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from importlib import resources
 from typing import TYPE_CHECKING
@@ -119,6 +119,12 @@ _SAVERS = (EDIT_FILE, WRITE_FILE)
 #: shell runs. No `execute` line: deepagents' own stands.
 _ELSEWHERE = ("shell_elsewhere.md", "shell_elsewhere_skills.md")
 
+#: What a shell exporting the session root adds to its section and to `execute`'s line.
+_ROOTED = ("shell_rooted.md", "shell_rooted_execute.md")
+
+#: The variable a shell that knows where it sees the session folder exports it as.
+SESSION_ROOT = "KINGFISHER_SESSION_ROOT"
+
 #: A deployment's standing instructions for every agent and subagent but a compiled one,
 #: written by people; `/memory/AGENTS.md` is the agent's own.
 INSTRUCTIONS_FILE = "INSTRUCTIONS.md"
@@ -188,9 +194,6 @@ class ShellPrompt:
     prompt: str | None = None
     skills: str | None = None
     execute: str | None = None
-    #: Whether the shell starts in the session folder and exports it as
-    #: `KINGFISHER_SESSION_ROOT`; only then is a missed command told to spell paths from it.
-    starts_in_session: bool = False
 
     def __post_init__(self) -> None:
         # At construction, not at render on the first turn: a typo is heard at startup.
@@ -211,6 +214,34 @@ class ShellPrompt:
 def _neutral() -> ShellPrompt:
     prompt, skills = (_prompt_text(name).strip() for name in _ELSEWHERE)
     return ShellPrompt(prompt=prompt, skills=skills)
+
+
+@lru_cache(maxsize=8)
+def rooted(shell: ShellPrompt | None) -> ShellPrompt:
+    """`shell`, its section and its `execute` line also telling the agent of
+    `$KINGFISHER_SESSION_ROOT`, for a shell that exports it.
+
+    The `execute` line, because it is all a subagent is told; where `shell` left it
+    `None`, the sentence takes the place of deepagents' "Use absolute paths" line.
+    """
+    said = shell or ShellPrompt()
+    prompt, execute = (_prompt_text(name).strip() for name in _ROOTED)
+    return replace(
+        said,
+        prompt=_adding(prompt, said.prompt if said.prompt is not None else _neutral().prompt),
+        execute=_adding(execute, said.execute),
+    )
+
+
+def _adding(sentence: str, text: str | None) -> str:
+    """`text`, followed by `sentence`, unless `text` is `""` or already names the variable."""
+    # `""` is how a deployment says nothing; a part naming the variable has said it, as
+    # kingfisher's own shell does, and would be told it twice.
+    if text is None:
+        return sentence
+    if not text or SESSION_ROOT in text:
+        return text
+    return f"{text}\n\n{sentence}"
 
 
 def _said(shell: ShellPrompt | None, part: str, layout: Layout) -> str:

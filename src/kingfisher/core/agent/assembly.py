@@ -73,7 +73,7 @@ from .activation import (
 )
 from .backend import (
     memory_sources,
-    shell_prompt_of,
+    shell_told,
     skills_sources,
 )
 from .interpreter import interpreter
@@ -366,7 +366,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     roots = catalogue or Definitions.from_config(cfg)
     # Every backend: a check only some builds ran would be one nothing here exercises.
     refuse_unusable_backend(backend, cfg.layout)
-    shell = shell_prompt_of(backend)
+    shell = shell_told(backend)
     # Before the middleware stack, because `standing_middleware` needs the names. A caller that
     # has walked them itself -- `--list` -- wins over the catalogue.
     walked = tuple(roots.tools.found if offered_tools is None else offered_tools)

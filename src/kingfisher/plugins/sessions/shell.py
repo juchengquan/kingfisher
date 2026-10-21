@@ -85,7 +85,7 @@ def kingfishers_shell() -> ShellPrompt:
     prompt, skills, execute = (
         prompts.joinpath(name).read_text(encoding="utf-8").strip() for name in _HERE
     )
-    return ShellPrompt(prompt=prompt, skills=skills, execute=execute, starts_in_session=True)
+    return ShellPrompt(prompt=prompt, skills=skills, execute=execute)
 
 
 #: Where the shell's view of a catalogue with mounts is built. Inside
@@ -153,6 +153,7 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         fence: LandlockRunner | BubblewrapRunner | None = None,
         scratchpad: str | None = None,
         shell_prompt: ShellPrompt | None = None,
+        session_root: str | None = None,
         timeout: int = DEFAULT_EXECUTE_TIMEOUT,
         **kwargs: Any,
     ) -> None:
@@ -166,6 +167,9 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         #: What this shell says of itself, which `shell_prompt_of` reads. Set by
         #: `backend_at`, which knows whether the runner is kingfisher's own.
         self.shell_prompt = shell_prompt
+        #: Where the shell sees the session folder, which `session_root_of` reads and the
+        #: shell exports as `KINGFISHER_SESSION_ROOT`; `None` where nobody vouches for it.
+        self.session_root = session_root
         #: The default and the most a command may ask for: `claim_stale_after` counts on
         #: no command outliving `execution_timeout_s`, which `backend_at` passes here.
         self.timeout = timeout

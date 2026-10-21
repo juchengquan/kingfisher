@@ -3160,7 +3160,8 @@ deciding what it sees. A blank no layout has is refused when the `ShellPrompt` i
 not on the first turn. `shell_prompt=` without a runner is refused: kingfisher's own shell
 describes itself, and instructions for every agent go in the instructions file or
 `instructions=` on `Kingfisher`. The correction on a missed path goes only to a shell whose
-`ShellPrompt` says `starts_in_session`, since it spells the path from the session root.
+`ShellPrompt` says `starts_in_session`, since it spells the path from the session root --
+until 2026-10-21, when that flag went for the shell's `session_root`, below.
 *(2026-10-15.)*
 
 **Kingfisher's own shell spells a session path from `$KINGFISHER_SESSION_ROOT`, not
@@ -3177,14 +3178,37 @@ variable per folder, so a renamed or added folder needs nothing new; the folders
 get none of their own, as the 2026-10-17 entry above settled. Named for the "session
 root" the prompt already says, not "workspace", which holds every session, and not a
 bare `KINGFISHER_SESSION`, which reads as an id beside the retired
-`KINGFISHER_SESSION_ID`. A script reads it with `os.environ`, never a pasted path: a kept
+`KINGFISHER_SESSION_ID`. `/skills` stays the exception: the catalogue is shared and not
+under the session root, so a skill's script is still reached from `$KINGFISHER_SKILLS`.
+A script reads it with `os.environ`, never a pasted path: a kept
 script must survive the session moving, and a pasted path writes the host's layout into
 what the caller gets back. A tool's `run` is not handed it: the tool decides what goes in
 and what comes out, and handed the session root a renderer fed a crafted PDF could read
 the caller's inputs or write into `/outputs` behind its back. That stays until a real
-tool needs to reach session files rather than be handed them. A deployment's own shell
-is untouched; how one would opt in is proposed in
-`docs/design/2026-10-21-one-absolute-path-for-the-shell.md`. *(2026-10-21.)*
+tool needs to reach session files rather than be handed them. *(2026-10-21.)*
+
+**A deployment's shell is taught the variable where it says where it sees the session.**
+Every shell that can vouch for the root has it, and kingfisher never edits a command. A
+runner says it with `LocalSessions(session_root=...)`, a function of the session folder
+like `runner`, and puts the same value in its own shell's environment; a remote one gives
+its own side's path. A deployment's own shell carries a `session_root` attribute, read off
+the shell as `shell_prompt` is, and refused unless a `str`. One saying nothing gets
+nothing, and keeps "check with `pwd` and `ls`". Not taken: an attribute on the runner,
+which hides a setting inside an object; handing the value to `run` or to the runner's
+builder, which changes the call every existing runner implements; and prefixing
+`export ...;` to the command, which assumes the runner's shell is `sh` and shows its logs
+and allow-list a command the model did not write. `session_root=` without a runner is
+refused, as `shell_prompt=` is: kingfisher's own shell exports its folder itself.
+
+Where it is set, the sentence follows the shell's own `prompt` and `execute` text, or the
+neutral wording where a part is `None` -- in `execute`'s line too, since that is all a
+subagent reads. A part set to `""` stays silent, as any part does, and a part already
+naming `KINGFISHER_SESSION_ROOT` is not told again: that is how kingfisher's own shell,
+whose wording teaches it, avoids hearing it twice, and how a deployment words it itself.
+Keyed on the text rather than on whose shell it is, so a deployment's own wording is
+judged by the same rule. The correction on a missed path follows the same root instead
+of `ShellPrompt.starts_in_session`, which could be claimed without exporting the
+variable the correction names, and which nothing else read, so it went. *(2026-10-21.)*
 
 **deepagents' host paths reach only a shell on this host.** deepagents appends a section
 giving each routed folder's host path to any shell of its local class, which kingfisher's

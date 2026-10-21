@@ -1,0 +1,1 @@
+- The shell exports the session root, the directory the file tools call `/`, as `$KINGFISHER_SESSION_ROOT`. Put it in front of a file-tool path, slash included -- `/{{inputs}}/data.csv` is `"$KINGFISHER_SESSION_ROOT/{{inputs}}/data.csv"` -- and in a script read it as `os.environ["KINGFISHER_SESSION_ROOT"]` rather than pasting the path.

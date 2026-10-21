@@ -108,6 +108,23 @@ timeout. Things to know:
   told, neutrally, that the shell may not see the session's files. Say what yours
   sees with `shell_prompt=` beside the runner: see
   [`ShellPrompt`](#shellprompt--what-the-agent-is-told-about-your-shell).
+- **Say where your shell sees the session with `session_root=`**, a function of the
+  session folder like `runner`, and have the runner put the same value in its shell's
+  environment as `KINGFISHER_SESSION_ROOT`. One function can feed both:
+
+  ```python
+  where = lambda session_dir: f"/home/runner/job-{session_dir.name}"
+  LocalSessions(runner=lambda session_dir: SshRunner(root=where(session_dir)), session_root=where)
+  ```
+
+  The agent is then taught to spell a session path from the variable,
+  `"$KINGFISHER_SESSION_ROOT/inputs/data.csv"`, in its prompt and in `execute`'s
+  description, and a command that misses a file-tool path is answered with that
+  spelling. A remote runner gives its own side's path. The command still reaches `run`
+  exactly as the model wrote it: kingfisher puts nothing in front of it, so exporting
+  the variable is the runner's job. `session_root=` without a runner is refused, since
+  kingfisher's own shell exports its session folder itself; without `session_root=`,
+  the agent is told nothing of the variable.
 - **A subclass of `LocalSessions` keeps the runner.** `super().open(...)` builds
   the backend with the runner the instance was given, so an `open` that adjusts what
   it built still runs its commands where you chose. See
@@ -155,11 +172,13 @@ backends = LocalSessions(runner=lambda session_dir: MyRunner(session_dir), shell
 ```
 
 A shell of your own carries it instead — the object your backend runs `execute` on,
-which is the composite's `default` where you return a `CompositeBackend`:
+which is the composite's `default` where you return a `CompositeBackend` — and carries
+`session_root` beside it where it exports `KINGFISHER_SESSION_ROOT`, as a `str`:
 
 ```python
 class MySandbox(BaseSandbox):
     shell_prompt = SANDBOX
+    session_root = "/workspace"
 ```
 
 Things to know:
@@ -185,11 +204,14 @@ Things to know:
 - **Kingfisher's own shell describes itself**, so `shell_prompt=` without a runner is
   refused. Standing instructions for every agent go in `INSTRUCTIONS.md` beside the
   definitions, or `instructions=` on `Kingfisher`.
-- **A miss is corrected where the shell says it starts in the session.**
-  `starts_in_session=True` says so, and a command that fails on a file-tool path is
-  then answered with the path spelt from `$KINGFISHER_SESSION_ROOT`, so a shell saying
-  it must also export that variable as its session folder. Kingfisher's own shell says
-  it; a shell that does not is not corrected.
+- **Where the shell has a session root, the agent is told the variable after your
+  wording.** A sentence teaching `$KINGFISHER_SESSION_ROOT` follows your `prompt` and
+  `execute` text, or the neutral wording where a part is `None`; for `execute` it takes
+  the place of deepagents' line. A part set to `""` stays silent, and a part already
+  naming `KINGFISHER_SESSION_ROOT` is left as you wrote it, so you can word it yourself.
+  A command that fails on a file-tool path is answered with the path spelt from the
+  variable, on such a shell only. A `session_root` that is not a `str` is refused,
+  naming your shell's class.
 - **deepagents' list of this host's paths is kept only for a shell on this host.**
   deepagents adds a "Shell paths vs. virtual paths" section giving each routed folder's
   path here. It stays for kingfisher's own shell and for a runner whose `local` is

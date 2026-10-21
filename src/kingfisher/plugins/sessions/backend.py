@@ -316,6 +316,16 @@ class InputsBackend(FilesystemBackend):
             return super().upload_files(files)
 
 
+def _refuse_root_without_runner(runner: Any, session_root: object) -> None:
+    """Kingfisher's own shell exports its session folder, and another root would be wrong."""
+    if runner is None and session_root is not None:
+        msg = (
+            "session_root says where a runner's shell sees the session, and no runner was "
+            "given: kingfisher's own shell exports its session folder itself"
+        )
+        raise TypeError(msg)
+
+
 def _require_layout(session_dir: Path, layout: Layout) -> None:
     """Refuse a session directory that has not been made yet, or whose folders are links."""
     refuse_linked_folders(session_dir, layout)
@@ -335,15 +345,19 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     catalogue: Definitions | None = None,
     runner: CommandRunner | None = None,
     shell_prompt: ShellPrompt | None = None,
+    session_root: str | None = None,
     shell: confinement.ShellSettings | None = None,
 ) -> WorkspaceScopedBackend:
     """Kingfisher's own backend, rooted at one session directory on this host.
 
-    `shell_prompt` describes the shell `runner` provides, and is refused without one.
+    `shell_prompt` describes the shell `runner` provides, and `session_root` is where
+    that shell sees `session_dir` and exports it as `KINGFISHER_SESSION_ROOT`; each is
+    refused without a runner.
     Typed to the class rather than deepagents' protocol: a deployment adjusting what this
     built reads `default` and `routes` off it, and the protocol carries neither.
     """
     _refuse_wording_without_runner(runner, shell_prompt)
+    _refuse_root_without_runner(runner, session_root)
     definitions = catalogue or Definitions.from_config(cfg)
     skills_dir = definitions.skills.root
 
@@ -382,6 +396,8 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         # that one is handed `env` and the session directory, a deployment's only the
         # command.
         shell_prompt=kingfishers_shell() if runner is None else shell_prompt,
+        # What `shell_env` exports, where the shell is kingfisher's own.
+        session_root=str(session_dir) if runner is None else session_root,
         root_dir=str(session_dir),
         env=env,
         timeout=cfg.execution_timeout_s,
@@ -436,6 +452,7 @@ class LocalSessions(Sessions):
     #: sessions.
     _runner: Callable[[Path], CommandRunner] | None = None
     _shell_prompt: ShellPrompt | None = None
+    _session_root: Callable[[Path], str] | None = None
     #: How this shell is fenced. `None` reads the environment at each opening.
     shell: confinement.ShellSettings | None = None
 
@@ -444,6 +461,7 @@ class LocalSessions(Sessions):
         *,
         runner: Callable[[Path], CommandRunner] | None = None,
         shell_prompt: ShellPrompt | None = None,
+        session_root: Callable[[Path], str] | None = None,
         shell: confinement.ShellSettings | None = None,
     ) -> None:
         # A callable only: a runner is built per session, as kingfisher's own fence is. A
@@ -455,10 +473,19 @@ class LocalSessions(Sessions):
                 "`lambda session_dir: your_runner` if you have one to share"
             )
             raise TypeError(msg)
+        # Per session for the same reason: where a runner's shell sees it depends on which.
+        if session_root is not None and not callable(session_root):
+            msg = (
+                "session_root is asked per session, so it takes a callable: pass "
+                "`lambda session_dir: where_your_runner_sees_it`"
+            )
+            raise TypeError(msg)
         # As well as in `backend_at`, so a deployment hears it at startup, not first turn.
         _refuse_wording_without_runner(runner, shell_prompt)
+        _refuse_root_without_runner(runner, session_root)
         self._runner = runner
         self._shell_prompt = shell_prompt
+        self._session_root = session_root
         self.shell = shell if shell is not None else confinement.ShellSettings.from_env()
 
     def open(
@@ -474,12 +501,14 @@ class LocalSessions(Sessions):
         # turn, not raised: one file owned by another user would end the session for good.
         unprotected = protect_inputs(directory, cfg.layout)
         runner = self._runner(directory) if self._runner is not None else None
+        root = self._session_root(directory) if self._session_root is not None else None
         built = backend_at(
             cfg,
             directory,
             catalogue=catalogue,
             runner=runner,
             shell_prompt=self._shell_prompt,
+            session_root=root,
             shell=self.shell,
         )
         built.unprotected = unprotected

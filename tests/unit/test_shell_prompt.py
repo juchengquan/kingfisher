@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from deepagents.backends import CompositeBackend, LocalShellBackend
 
-from kingfisher.core.agent.backend import shell_prompt_of
+from kingfisher.core.agent.backend import session_root_of, shell_prompt_of, shell_told
 from kingfisher.core.agent.prompting import render_system_prompt
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import CommandResult, LocalSessions, ShellPrompt, backend_at
@@ -215,3 +215,83 @@ def test_a_part_left_out_is_said_neutrally_and_an_empty_one_says_nothing():
     assert neutral_skills not in " ".join(
         render_system_prompt(layout=DEFAULT_LAYOUT, shell=ShellPrompt(prompt="Mine.")).split()
     ), "skills are off"
+
+
+# -- where the shell sees the session --------------------------------------
+
+
+def test_session_root_is_asked_of_each_session_s_folder(cfg, session_dir):
+    """Where a runner's shell sees a session depends on which session, as the runner
+    does: asked once for all, every session's agent would be told one folder. Kingfisher's
+    own shell exports its folder, and a runner nobody vouches for has none -- the controls.
+    """
+    asked: list[Path] = []
+
+    def where(folder: Path) -> str:
+        asked.append(folder)
+        return f"/home/runner/job-{folder.name}"
+
+    rooted = LocalSessions(runner=lambda _where: Plain(), session_root=where).open(cfg, "s")
+
+    assert asked == [cfg.sessions_root / "s"]
+    assert session_root_of(rooted) == "/home/runner/job-s"
+    assert session_root_of(backend_at(cfg, session_dir)) == str(session_dir)
+    assert session_root_of(LocalSessions(runner=lambda _where: Plain()).open(cfg, "s")) is None
+
+
+def test_a_session_root_without_a_runner_is_refused(cfg, session_dir):
+    """Kingfisher's own shell exports the folder it runs in, so a root handed in for it
+    could only disagree with what its commands see.
+    """
+    with pytest.raises(TypeError, match="no runner was given"):
+        LocalSessions(session_root=str)
+    with pytest.raises(TypeError, match="no runner was given"):
+        backend_at(cfg, session_dir, session_root=str(session_dir))
+
+
+def test_a_session_root_that_is_not_a_function_is_refused():
+    """A path handed in where the function goes would fail on the first turn, as a
+    `str` that cannot be called.
+    """
+    with pytest.raises(TypeError, match="takes a callable"):
+        LocalSessions(runner=lambda _where: Plain(), session_root="/home/runner")  # ty: ignore[invalid-argument-type]
+
+
+class Rooted(LocalShellBackend):
+    """A deployment's own shell, saying where it sees the session."""
+
+    session_root = "/workspace"
+
+
+def test_a_shell_of_a_deployment_s_own_is_told_the_variable_it_exports(session_dir):
+    """Read off the shell, so a sessions plugin of a deployment's own opts in the same
+    way kingfisher's runner does; one saying nothing is not told it, the control.
+    """
+    told = _told(shell_told(Rooted(root_dir=str(session_dir))))
+
+    assert '`"$KINGFISHER_SESSION_ROOT/inputs/data.csv"`' in told
+    assert "KINGFISHER_SESSION_ROOT" not in _told(shell_told(Silent(root_dir=str(session_dir))))
+
+
+def test_a_session_root_that_is_not_a_string_is_refused(session_dir):
+    """A `Path` set where the root goes would reach the prompt as whatever it prints,
+    and the refusal names the shell, which is where the mistake is.
+    """
+
+    class Mistaken(LocalShellBackend):
+        session_root = Path("/workspace")
+
+    with pytest.raises(TypeError, match=r"Mistaken\.session_root is a \w*Path"):
+        session_root_of(Mistaken(root_dir=str(session_dir)))
+
+
+def test_an_empty_session_root_is_refused(session_dir):
+    """An empty root would teach `"$KINGFISHER_SESSION_ROOT/inputs/x"`, which the shell
+    expands to the host's `/inputs/x`, the path the variable exists to keep it from.
+    """
+
+    class Empty(LocalShellBackend):
+        session_root = ""
+
+    with pytest.raises(ValueError, match=r"Empty\.session_root is empty"):
+        session_root_of(Empty(root_dir=str(session_dir)))
