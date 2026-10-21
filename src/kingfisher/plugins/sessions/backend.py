@@ -10,7 +10,7 @@ import re
 import time
 import uuid
 import warnings
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
@@ -96,24 +96,26 @@ def _directly_under(path: str, here: str) -> bool:
     return bool(rest) and "/" not in rest
 
 
-def _listing(result: Any, path: str, routes: Iterable[tuple[str, Any]]) -> Any:
+def _listing(result: Any, path: str) -> Any:
     """One directory's own entries: what it holds, each named once.
 
-    At the root deepagents appends a stand-in row for every route, nested ones included.
-    Each is moved under the directory it belongs to rather than dropped: before anything
-    is written there, that row is the only sign the route is reachable.
+    deepagents answers `/` with a row for every route, nested ones included, while its own
+    `ls` does not recurse -- so `/scratchpad/tool_results/` arrived as an entry of `/`,
+    beside the folder that holds it. Those rows are dropped rather than moved under the
+    directory they belong to, because nothing needs them: measured with every route
+    mounted and a bundle shipped, the only rows this was ever asked to move were two whose
+    folder nothing had made, and a route whose folder exists is listed by the backend that
+    holds it anyway. #1036 is what measured the cost of moving one: `ls /scratchpad` named
+    four folders where two existed, and the model opening either of the others was told
+    `path_not_found` about a path the listing had just offered it.
     """
     if result.entries is None:
         return result
     here = path if path.endswith("/") else f"{path}/"
-    kept = [one for one in result.entries if _directly_under(one.get("path", ""), here)]
-    named = {one.get("path", "") for one in kept}
-    kept += [
-        {"path": prefix, "is_dir": True, "size": 0, "modified_at": ""}
-        for prefix, _ in routes
-        if _directly_under(prefix, here) and prefix not in named
-    ]
-    kept.sort(key=lambda one: one.get("path", ""))
+    kept = sorted(
+        (one for one in result.entries if _directly_under(one.get("path", ""), here)),
+        key=lambda one: one.get("path", ""),
+    )
     return _once(replace(result, entries=kept), key=_by_path, field="entries")
 
 
@@ -127,10 +129,10 @@ class WorkspaceScopedBackend(CompositeBackend):
     """
 
     def ls(self, path: str) -> Any:
-        return _listing(super().ls(path), path, self.sorted_routes)
+        return _listing(super().ls(path), path)
 
     async def als(self, path: str) -> Any:
-        return _listing(await super().als(path), path, self.sorted_routes)
+        return _listing(await super().als(path), path)
 
     def glob(self, pattern: str, path: str | None = None) -> Any:
         return _once(super().glob(pattern, path), key=_by_path)

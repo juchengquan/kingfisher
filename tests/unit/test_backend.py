@@ -12,7 +12,12 @@ from kingfisher.core.agent.host_paths import (
     HostPathError,
     reject_host_path,
 )
-from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, DEFAULT_LAYOUT, SCRATCH_ROUTE
+from kingfisher.core.layout import (
+    BUNDLED_SKILLS_ROUTE,
+    DEFAULT_LAYOUT,
+    SCRATCH_ROUTE,
+    SKILLS_ROUTE,
+)
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.shell import shell_env
@@ -581,15 +586,46 @@ def test_the_root_holds_no_path_that_is_not_in_it(cfg, session_dir, way):
 
 
 def test_a_route_below_another_is_listed_under_the_one_above_it(cfg, session_dir, way):
-    """The other half, and the reason the rows above are moved rather than dropped:
-    nothing has written there yet, so the folder does not exist and that row is the
-    only place the model hears the route is reachable.
+    """The other half: a nested route's row belongs under the directory that holds it,
+    not at the root beside it.
     """
     backend = backend_at(cfg, session_dir)
 
     found = [one["path"] for one in _entries(_asked(backend, way, "ls", SCRATCH_ROUTE))]
 
     assert DEFAULT_LAYOUT.tool_results_route in found
+
+
+def test_a_route_whose_folder_is_not_there_is_not_listed(cfg, session_dir, way):
+    """A mounted route is no folder. #1036 mounted the two kept records nothing writes,
+    and `ls /scratchpad` then named four folders where two existed, the model being told
+    `path_not_found` about either of the others when it opened one.
+
+    Driven through the backend a turn gets, with the write as the control: a listing that
+    answered nothing at all under the scratchpad would pass the first half.
+    """
+    backend = backend_at(cfg, session_dir)
+    absent = f"{SCRATCH_ROUTE}blobs/"
+
+    found = [one["path"] for one in _entries(_asked(backend, way, "ls", SCRATCH_ROUTE))]
+    assert absent not in found, "a folder the model cannot open was named"
+    assert DEFAULT_LAYOUT.tool_results_route in found, "and the control: made, so named"
+
+    backend.upload_files([(f"{absent}0f1e2d", b"payload")])
+    after = [one["path"] for one in _entries(_asked(backend, way, "ls", SCRATCH_ROUTE))]
+    assert absent in after, "written to, and the folder it made went unnamed"
+
+
+def test_a_route_outside_the_session_is_still_named_at_the_root(cfg, session_dir, way):
+    """What the rule above must not take with it, and the reason dropping deepagents'
+    route rows costs nothing: `/skills/` is a directory the default backend never walks
+    past, and deepagents names it at the root itself.
+    """
+    backend = backend_at(cfg, session_dir)
+
+    found = [one["path"] for one in _entries(_asked(backend, way, "ls", "/"))]
+
+    assert SKILLS_ROUTE in found
 
 
 def test_a_directory_still_lists_what_it_actually_holds(cfg, session_dir, way):
