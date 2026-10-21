@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A helper summarizes, after #1044
+
+- **A helper another subagent consults now runs deepagents' summarizer**, as the agent,
+  each declared subagent and `general-purpose` already did. Its conversation was never
+  summarized: a long job grew until the model refused the request, while its clearing
+  mark and PDF allowance were sized as if a summarizer ran. It is now summarized where
+  deepagents' own fires on the model it runs, and what it evicts goes to a history file
+  of its own under `/scratchpad/conversation_history/`.
+- **A summarizer the helper's definition names runs instead**, as in every other graph;
+  a portable helper's comes from the agent's line. A middleware of yours on a helper that
+  reads earlier messages may now find a summary where they were, as on any other graph.
+
 ## A refused request fixes nothing in its session, after #1043
 
 - **A request refused at the build no longer pins its agent or its datazone.** Both

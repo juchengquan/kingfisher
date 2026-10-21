@@ -2333,6 +2333,14 @@ subagent is still told nothing of the harness: each says what was left out, wher
 whole is, and names only a tool that graph holds. *(2026-10-21, from a downstream
 request.)*
 
+**A helper runs deepagents' summariser, as every other graph does.** `create_sub_agent`,
+which builds a helper, adds none, so a helper's conversation was never summarised: a long
+job grew until the model refused it, while its clearing mark and PDF allowance were sized
+by a summariser that was not there. Saying so in the docs instead would have left that
+job to end at the window. It goes outside the standing middleware, where deepagents puts
+its own, so clearing measures what it counted; one the definition names runs instead.
+*(2026-10-21, from review.)*
+
 **The recorder and clearing stay two classes**, because they wrap different calls from
 different places: clearing each model call, first, where it measures what the summariser
 counted, and the recorder each tool call, ahead of the guards that rewrite what the

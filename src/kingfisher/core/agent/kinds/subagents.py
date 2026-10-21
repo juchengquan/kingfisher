@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from deepagents.middleware import SubAgentMiddleware
+from deepagents.middleware.summarization import create_summarization_middleware
 from langchain_core.runnables import Runnable
 
 from kingfisher.core.access import ALL, Selection, ceiling, narrowed, refuse_unoffered
@@ -17,6 +18,7 @@ from kingfisher.core.agent.middlewares.clearing import result_clearing
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import (
+    SUMMARIZER,
     deployment_default,
     model_named,
     summarizer_count,
@@ -345,11 +347,23 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         granted = () if skills in (None, ALL) else tuple(skills)
         skills = tuple(dict.fromkeys((*granted, *own_names)))
         skill_sources = [*(skill_sources or []), *own_sources]
+    # A helper's stack is its spec's alone: `create_sub_agent` adds no summariser, where
+    # `create_deep_agent` gives every other graph deepagents' own, and without one its
+    # conversation grows until the model refuses it. One its definition names runs instead.
+    summarizing = (
+        [create_summarization_middleware(runs, backend)]
+        if default_model is not None
+        and not any(one.name == SUMMARIZER for one in extra_middleware or ())
+        else []
+    )
+    summarizers = [*summarizing, *(extra_middleware or ())]
     # A summariser it names takes deepagents' place in its stack, so it is the one read.
-    trigger = summarizer_trigger(runs, extra_middleware or ())
+    trigger = summarizer_trigger(runs, summarizers)
     # From `standing_middleware`, so the agent, this subagent and `general-purpose` cannot
     # differ. `paths` is handed down, not read off the backend, which need not carry it.
-    subagent["middleware"] = standing_middleware(
+    # A helper's summariser goes outside them, where deepagents puts its own in every other
+    # stack: clearing measures the request that summariser counted.
+    subagent["middleware"] = summarizing + standing_middleware(
         "subagent",
         name=spec.name,
         # Inside every standing one: deepagents gives a subagent no `task` tool, and
@@ -377,7 +391,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
             ledger,
             trigger,
             clear_results_at,
-            count=summarizer_count(runs, extra_middleware or ()),
+            count=summarizer_count(runs, summarizers),
             subject=f"subagent {spec.name!r}",
         ),
         # `None` permits nothing: an empty allowlist, not an absent one.

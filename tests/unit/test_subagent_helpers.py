@@ -3,14 +3,23 @@
 from __future__ import annotations
 
 import pytest
+from deepagents.middleware.summarization import (
+    SummarizationMiddleware as DeepAgentsSummarization,
+)
 from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.middlewares.attachments import pdf_allowance
+from kingfisher.core.agent.middlewares.clearing import high_mark
+from kingfisher.core.agent.models import SUMMARIZER, summarizer_trigger
+from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.subagents.rules import refuse_cycles
 from kingfisher.core.definitions.subagents.spec import SubagentError, SubagentSpec
+from kingfisher.core.session.ledger import Ledger
+from kingfisher.core.session.store import KeptLedger
 from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, a_subagent, subagents_dir
+from tests.conftest import EVERY_TOOL, FakeToolCallingModel, a_subagent, an_agent, subagents_dir
 
 REVIEWER = """name: reviewer
 description: Checks figures.
@@ -624,3 +633,141 @@ def test_a_helper_under_an_unpinned_subagent_still_runs_the_agents_model(
 
     parent = {spec["name"]: spec for spec in built.subagents or ()}["reviewer"]
     assert _helper_specs(parent)["second-opinion"]["model"] is main
+
+
+# -- a helper summarises, as every other graph does -----------------------------
+
+
+def _summarizers(middleware) -> list:
+    return [one for one in middleware if getattr(one, "name", None) == SUMMARIZER]
+
+
+def _reviewers_helper(built) -> dict:
+    parent = {spec["name"]: spec for spec in built.subagents or ()}["reviewer"]
+    return _helper_specs(parent)["second-opinion"]
+
+
+def test_a_helper_runs_deepagents_summarizer(cfg, session_dir):
+    """A helper's conversation was never summarised, and grew until the model refused it:
+    `create_sub_agent` builds its stack from the spec alone, where `create_deep_agent`
+    gives every other graph deepagents' own summariser."""
+    _define(cfg, REVIEWER, HELPER)
+    model = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=model,
+        capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
+    )
+
+    (summarizer,) = _summarizers(_reviewers_helper(built)["middleware"])
+    assert isinstance(summarizer, DeepAgentsSummarization)
+    assert summarizer._lc_helper.model is model, "on the model the helper runs"
+    # The control: deepagents adds a top-level subagent's itself, so its spec carries none.
+    parent = {spec["name"]: spec for spec in built.subagents or ()}["reviewer"]
+    assert not _summarizers(parent["middleware"])
+
+
+@pytest.mark.filterwarnings("ignore:.*a name deepagents uses:UserWarning")
+def test_a_helper_naming_its_own_summarizer_runs_that_one_alone(cfg, session_dir):
+    """Beside deepagents' own, a deployment's summariser answers to the same name, which
+    langchain refuses to build; in every other graph the one a definition names replaces
+    deepagents', and a helper's is no different."""
+    from tests.unit.test_summarizer_trigger import Early
+
+    _define(
+        cfg, REVIEWER, HELPER.replace("system_prompt:", "middlewares: [early]\nsystem_prompt:")
+    )
+    an_agent(cfg, middlewares="[early]", subagents="[reviewer, second-opinion]", **EVERY_TOOL)
+
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        middleware_registry={"early": Early},
+        agent=LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["only"],
+    )
+
+    (summarizer,) = _summarizers(_reviewers_helper(built)["middleware"])
+    assert isinstance(summarizer, Early)
+
+
+def test_a_helpers_clearing_and_pdfs_are_sized_by_the_summarizer_it_runs(cfg, session_dir):
+    """A helper's clearing mark and PDF allowance were sized by a summariser that never ran
+    there, so neither said where its conversation would be rewritten; read off the one in
+    its stack, both are, on a window of its model's own."""
+    from tests.unit.test_summarizer_trigger import _allowance, _high
+
+    _define(cfg, REVIEWER, HELPER)
+    model = FakeToolCallingModel(
+        responses=[AIMessage(content="ok")], profile={"max_input_tokens": 100_000}
+    )
+
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=model,
+        ledger=Ledger("t", KeptLedger()),
+        capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
+    )
+
+    helper = _reviewers_helper(built)["middleware"]
+    (summarizer,) = _summarizers(helper)
+    fires = summarizer_trigger(model, [summarizer])
+    assert fires < 170_000, "a fraction of this window, not deepagents' fixed default"
+    assert _allowance(helper) == pdf_allowance(fires)
+    assert _high(helper) == high_mark(fires, None, subject="the helper")
+
+
+def test_a_helpers_history_is_kept_apart_from_its_summoners(cfg, session_dir):
+    """The task tool hands a helper its summoner's state, the summariser's own keys among
+    them: had the session id that names a history file come too, the helper's evicted
+    messages would have been appended to its summoner's. Driven, both summarising."""
+    _define(cfg, REVIEWER, HELPER)
+    for name, mark in (("a.txt", "REVIEWERS"), ("b.txt", "HELPERS")):
+        line = f"{mark} " + "x" * 280 + "\n"
+        (session_dir / "inputs" / name).write_text(line * 100, encoding="utf-8")
+
+    def task(who: str) -> AIMessage:
+        asked = {"description": f"TASK-FOR-{who}", "subagent_type": who}
+        return AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": who}])
+
+    def read(path: str) -> AIMessage:
+        asked = {"file_path": path}
+        return AIMessage(content="", tool_calls=[{"name": "read_file", "args": asked, "id": path}])
+
+    # A window this small puts one read past either graph's trigger, so each summarises on
+    # its next call and asks this model for the summary first.
+    model = FakeToolCallingModel(
+        responses=[
+            task("reviewer"),
+            read("/inputs/a.txt"),
+            AIMessage(content="REVIEWER-SUMMARY"),
+            task("second-opinion"),
+            read("/inputs/b.txt"),
+            AIMessage(content="HELPER-SUMMARY"),
+            AIMessage(content="SECOND-OPINION-ANSWERED"),
+            AIMessage(content="REVIEWER-DONE"),
+            AIMessage(content="PARENT-DONE"),
+        ],
+        profile={"max_input_tokens": 8_000},
+    )
+    graph = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=model,
+        capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
+    ).graph
+
+    out = graph.invoke({"messages": [{"role": "user", "content": "go"}]}, {"recursion_limit": 40})
+
+    assert out["messages"][-1].content == "PARENT-DONE"
+    histories = [
+        path.read_text(encoding="utf-8")
+        for path in (session_dir / "scratchpad" / "conversation_history").glob("*.md")
+    ]
+    whose = sorted(
+        ("TASK-FOR-reviewer" in text, "TASK-FOR-second-opinion" in text) for text in histories
+    )
+    assert whose == [(False, True), (True, False)], "one history each, holding its own"
