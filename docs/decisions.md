@@ -2778,7 +2778,11 @@ or written, and again in `backend_at`; what the link points at may be someone's 
 nothing deletes it. The macOS profile also denies the `memory` node, as it does the
 scratchpad's. Linux was not measured: by the policy below Landlock grants no write to the
 session folder, which removing `memory` needs, and bubblewrap's writable session does; the
-refusal at open covers either. *(2026-10-20.)*
+refusal at open covers either. *(2026-10-20.)* Every kept-records folder is checked too,
+made or not (`Layout.unlinked_dirs`): #1036 mounted `scratchpad/blobs`, which nothing
+makes, and a link the shell left there rooted the next turn's route on the host, where
+`read_file` read the operator's credentials. Within the turn the link was made in, the
+route was rooted before it and upstream refuses the path out. *(2026-10-21.)*
 
 **Landlock cannot take back what it has granted, and the Linux job is what
 established that.** The first policy granted the session writable and its `.harness`

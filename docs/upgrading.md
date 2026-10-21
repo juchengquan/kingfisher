@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A link where a kept record would be refuses the session, after #1042
+
+- **A session with a link at `scratchpad/blobs` or `scratchpad/large_tool_results` no
+  longer opens.** #1036 mounted both, and nothing makes either folder, so a link the
+  shell left there rooted the next turn's route wherever it pointed: `read_file` read the
+  host. `LocalSessions` and `backend_at` now refuse it, as they refuse a linked `memory`;
+  remove the link to use the session. Nothing is deleted, since the link's target may be
+  someone's data.
+- **`Layout.unlinked_dirs` names the folders checked.** A backend of your own that mounts
+  a route inside a session can hold its folder to the same rule by checking these.
+
 ## A stopped turn answers only with what the model said, after #1041
 
 - **`RunResult.answer` of a turn that stopped is the model's words, or `""`.** A turn
