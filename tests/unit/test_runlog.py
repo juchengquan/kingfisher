@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
@@ -17,7 +18,8 @@ from kingfisher.core.session.runlog import (
     usage_of,
 )
 from kingfisher.plugins import LocalSessions
-from tests.conftest import RecordedEvents, start
+from tests.conftest import RecordedEvents, an_agent, start
+from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 
 
@@ -115,6 +117,28 @@ def test_a_turn_records_its_start_and_end(cfg):
 
     assert [e["event"] for e in sink.events] == ["run_start", "run_end"]
     assert {e["turn_id"] for e in sink.events} == {result.turn_id}
+
+
+@pytest.mark.parametrize(
+    ("fields", "runs"),
+    [({"model": "elsewhere-model"}, ("elsewhere-model", "elsewhere")),
+     ({}, ("fake-model", "fake"))],
+    ids=["its-own", "the-default"],
+)
+def test_every_event_names_the_model_the_agent_runs(scripted, fields, runs):
+    """An agent naming its own model had every event stamped with the deployment's
+    default, so a log read for what a turn cost priced it on a model that never ran."""
+    an_agent(scripted, "pinned", **fields)
+    start(scripted, "s")
+    Scripted.script.append(AIMessage("done"))
+    sink = RecordedEvents()
+
+    Kingfisher(scripted, sessions=LocalSessions(), run_events=sink).run(
+        Request("t", agent="pinned", session_id="s")
+    )
+
+    assert "model_call" in {e["event"] for e in sink.events}
+    assert {(e["model"], e["endpoint"]) for e in sink.events} == {runs}
 
 
 def test_a_sink_that_is_empty_is_still_the_one_used(cfg):

@@ -217,6 +217,27 @@ def test_an_overload_inside_a_stream_stops_the_turn_rather_than_raising(refusing
     assert not result.completed
 
 
+@pytest.mark.parametrize("way", ["sync", "async"])
+def test_a_bad_request_inside_a_stream_is_refused_as_a_400_is(refusing, way):
+    """Anthropic's `invalid_request_error` sent after a 200 escaped `run` as the SDK's
+    exception, where the same error sent as a 400 is a configuration error."""
+    with pytest.raises(ConfigError) as streamed_400:
+        _turn(refusing, streamed("invalid_request_error", "prompt is too long"), way=way)
+    with pytest.raises(ConfigError) as plain_400:
+        _turn(refusing, RefusedError(400, "prompt is too long"), way=way)
+
+    assert str(streamed_400.value) == str(plain_400.value).replace(
+        "(400)", "(invalid_request_error)"
+    )
+
+
+def test_a_streams_error_of_another_type_keeps_its_traceback(refusing):
+    """The control: a stream's error of a type nobody named keeps its traceback, so a
+    bug still looks like one."""
+    with pytest.raises(anthropic.APIStatusError):
+        _turn(refusing, streamed("some_new_error"))
+
+
 def test_a_failure_that_will_not_pass_still_raises(refusing):
     """The control: only the failures that may pass become a stop; a 400 is the
     deployment's to fix, and says so."""

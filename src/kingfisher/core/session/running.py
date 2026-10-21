@@ -121,7 +121,8 @@ def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
 
 
 def refused_request(exc: BaseException, cfg: Config) -> ConfigError | None:
-    """A provider's 4xx as the configuration error it is, or `None` for anything else.
+    """A provider's 4xx, or the same refusal sent inside a stream, as the configuration
+    error it is, or `None` for anything else.
 
     Not a 429, which may pass and ends a turn as a stop before this is reached. The rest
     of the range -- a model name the endpoint does not serve, a request it will not
@@ -130,15 +131,20 @@ def refused_request(exc: BaseException, cfg: Config) -> ConfigError | None:
     if (refused := refused_credentials(exc, cfg)) is not None:
         return refused
     status = getattr(exc, "status_code", None)
-    if not isinstance(status, int) or not CLIENT_ERROR <= status < runtime.SERVER_ERROR:
+    if not isinstance(status, int) or status == runtime.TOO_MANY_REQUESTS:
         return None
-    if status == runtime.TOO_MANY_REQUESTS:
+    # Named by its type: a stream's error carries the 200 the stream began with.
+    if status < CLIENT_ERROR and runtime.error_type(exc) == runtime.REFUSED_TYPE:
+        code: int | str = runtime.REFUSED_TYPE
+    elif CLIENT_ERROR <= status < runtime.SERVER_ERROR:
+        code = status
+    else:
         return None
     named = _endpoint_of(exc, cfg)
     where = f"endpoint {named[0][0]!r} ({named[0][1].base_url})" if named else "the endpoint"
     model = _model_of(exc)
     which = f"model {model!r}" if model else "the model"
-    return ConfigError(f"{where} refused a call to {which} ({status}): {runtime.said(exc)}")
+    return ConfigError(f"{where} refused a call to {which} ({code}): {runtime.said(exc)}")
 
 
 def _endpoint_of(exc: BaseException, cfg: Config) -> list[tuple[str, Endpoint]]:

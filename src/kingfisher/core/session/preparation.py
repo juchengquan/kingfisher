@@ -380,10 +380,12 @@ class Preparation:
                 agent=agent,
                 held=held,
             )
+            # The agent's own model where it names one, which is what this turn runs.
+            running = cfg.models.resolve(agent.wanted if agent is not None else None)[0]
             logger = RunLogger(
                 self.run_events,
-                model=cfg.models.default,
-                endpoint=cfg.models.resolve()[0].endpoint,
+                model=running.model,
+                endpoint=running.endpoint,
                 session_id=session.id,
                 turn_id=turn.id,
             )

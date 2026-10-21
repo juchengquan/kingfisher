@@ -210,9 +210,10 @@ kingfisher = Kingfisher(cfg, sessions=LocalSessions(), run_events=ShipToCollecto
 
 Each event is a flat mapping. `event` names it — `run_start`, `run_end`,
 `model_call`, `tool_start`, `tool_end`, `tool_error`, `model_error` — and `ts`,
-`session_id`, `turn_id`, `model` and `endpoint` ride on every one. `model_call`
-carries `input_tokens`, `output_tokens` and `cache_read`, which is what a bill is
-totalled from, and `cut_off`, true for a reply that stopped at the model's output cap.
+`session_id`, `turn_id`, `model` and `endpoint` ride on every one — the last two
+the main agent's, on a subagent's calls too. `model_call` carries `input_tokens`,
+`output_tokens` and `cache_read`, which is what a bill is totalled from, and `cut_off`,
+true for a reply that stopped at the model's output cap.
 
 **Wire nothing and they go to the `kingfisher.run` logger**, one JSON line per event
 at `INFO`, with the mapping itself on the record as `run_event` for a handler that

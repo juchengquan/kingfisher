@@ -375,6 +375,31 @@ def test_an_answer_still_takes_all_three(at_the_command_line, monkeypatch, tmp_p
     assert (tmp_path / "kept").is_dir(), "--log never reached the turn's run events"
 
 
+@pytest.mark.parametrize(
+    "asked",
+    [
+        (["--session", "", "--approve", "abc123#0"], "--session is empty"),
+        (["--session", "s-1", "--approve", "abc123#0", "--approve", "abc123#0"],
+         "abc123#0 answered more than once"),
+    ],
+    ids=["empty-session", "answered-twice"],
+)
+def test_an_answer_resume_would_refuse_is_refused_through_the_command(
+    asked, at_the_command_line, monkeypatch, tmp_path, capsys
+):
+    """Each reached `Resume`, whose `ValueError` was a traceback and exit 1, the code
+    `decide --help` gives a turn that ran and stopped at another gate."""
+    given, refused = asked
+    _paused_at_the_command_line(at_the_command_line, monkeypatch, tmp_path)
+
+    code = cli.main(["decide", *given])
+
+    said = capsys.readouterr().err
+    assert code == 2
+    assert refused in said
+    assert "Traceback" not in said
+
+
 def test_asking_about_a_session_that_does_not_exist_says_that_instead(
     cfg, monkeypatch, capsys
 ):

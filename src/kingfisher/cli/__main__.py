@@ -544,6 +544,10 @@ def _drive(
 
 def _decide(args: argparse.Namespace) -> int:
     """Answer a waiting session, or say what it is waiting on."""
+    # Refused here, as an empty task is: the library's refusal is a `ValueError` traceback.
+    if not args.session.strip():
+        print("--session is empty -- name the waiting session", file=sys.stderr)
+        return 2
     decisions: list[Decision] = [
         *(Decision(call_id=one, action="approve") for one in args.approve),
         *(Decision(call_id=one, action="reject") for one in args.reject),
@@ -555,6 +559,12 @@ def _decide(args: argparse.Namespace) -> int:
             print(f"--respond wants CALL_ID=TEXT, got {written!r}", file=sys.stderr)
             return 2
         decisions.append(Decision(call_id=call_id, action="respond", message=text))
+    # `Resume` refuses this as well, with a traceback.
+    called = [decision.call_id for decision in decisions]
+    if twice := sorted({call for call in called if called.count(call) > 1}):
+        print(f"{', '.join(twice)} answered more than once -- give each call one answer",
+              file=sys.stderr)
+        return 2
 
     # Refused, not ignored: with no turn to act on, a silent `--agent` reads as the check
     # its help promises having passed.
