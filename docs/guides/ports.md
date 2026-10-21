@@ -234,6 +234,72 @@ async path langchain hands each event to a worker thread. So the events of tool
 calls made together can interleave, though each call's start comes before its end,
 and a sink that keeps state between events wants a lock.
 
+## `UnusedResults` — what becomes of a saved result nothing names
+
+Every result a tool returns is saved under `/scratchpad/tool_results/`, and the
+session's ledger names its file. A turn that died before it wrote its ledger leaves
+files no row names, and so does a result deepagents saved a copy of its own, once the
+row is pointed at that copy, and one older than `KINGFISHER_KEEP_RESULTS_ROUNDS` keeps,
+once its row is expired. Kingfisher's own plugin removes them; yours decides instead — keep them in an archive, count them, hold them for an audit:
+
+```python
+from kingfisher.plugins import UnusedFiles
+
+class ArchiveUnusedResults:
+    def __init__(self, archive):
+        self.archive = archive
+
+    def settle(self, found: UnusedFiles) -> None:
+        for one in found:
+            self.archive.put(found.session_id, one.path, one.read())
+            one.remove()
+
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(), unused_results=ArchiveUnusedResults(archive))
+```
+
+For the command, return it from your `KINGFISHER_PLUGINS` factory as
+`Plugins(unused_results=ArchiveUnusedResults(archive))`. Left out, it is
+`DeleteUnusedResults`, which removes every file it is handed.
+
+`settle` is asked at the end of a turn, once the ledger and the conversation are
+written, and only when there is something to hand over: a turn that leaves no unused
+file does not call it. What it is handed is an `UnusedFiles`, which has the
+`session_id` they are in and iterates as one `UnusedFile` per file, each with `path`
+(as the agent's file tools name it), `size` (in bytes as the backend listed it, or
+`None` where the listing did not say), `read()` and `remove()`. That is all of it. There is no way through it to any other file in the
+session: a path not among those handed over is refused, and the session's backend is
+not on offer.
+
+Every file handed over has already been judged safe to drop: no row names it, and its
+name is one kingfisher's recorder gives, so a file the agent's shell wrote into the
+folder under a name of its own is never among them. Only kingfisher's own saved
+results: deepagents' copies under `/scratchpad/large_tool_results/` are not handed
+over, whether or not a row names them, and an expired result's copy there is removed by
+kingfisher itself.
+
+Things to know:
+
+- **A file you keep is handed over again every turn**, since nothing names it and
+  nothing remembers that you kept it. It counts toward `KINGFISHER_SESSION_MAX_BYTES`
+  for as long as it is there.
+- **The same file can come twice.** A `settle` that failed part way is handed what it
+  left next turn, so archiving one again has to be harmless.
+- **A file may already be gone.** `remove()` of one is not an error; `read()` of one
+  raises `FileNotFoundError`. `remove()` asks the backend and does not check its
+  answer: a file it would not remove is handed over by the next turn.
+- **It runs while the session is claimed**, so no other turn in it starts until
+  `settle` returns. Be quick: put slow work, such as an upload, on a queue of your
+  own, having read what it needs, and return. It is a plain method: on the async path
+  it is called on kingfisher's thread pool, off the event loop.
+- **An exception is logged and the turn still finishes**, with its answer. The warning
+  names the session and how many files were left, and they are handed over again next
+  turn.
+- **A path is unique within a session, not across them.** Key what you keep by
+  `found.session_id` as well, as the example does.
+- **Deleting a whole session does not go through it.** `Session.delete`, `reap` and
+  `delete_session=True` remove everything through the sessions plugin's `delete`, so a
+  deployment that archives results archives a session it is about to delete there.
+
 ## The rest
 
 **The conversation is not for replacing either.** Kingfisher keeps it in the session,

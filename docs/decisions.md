@@ -2010,6 +2010,28 @@ file in the turn that wrote it. Narrowed rather than refusing the write, because
 under `/scratchpad` is what the tools guide offers a tool author. One turn runs per
 session, so there is no grace period. *(2026-10-13, from an architecture review.)*
 
+**What the sweep finds is a plugin's to settle, `UnusedResults`.** Whether a result
+file nothing names is deleted, archived or kept is the deployment's to say. The sweep still
+chooses -- every rule above, unchanged -- and hands the files to `settle`, whose
+default, `DeleteUnusedResults`, removes each. It is handed an `UnusedFiles`, which
+names the session and offers each file's path, size, contents and removal and refuses
+any other path, so a plugin is given those files and not the session. Asked while the turn still holds the
+claim, waited for by a cancel, and on the pool for an async turn, as other host work
+is; not asked when there is nothing. A raise is logged and the turn finishes.
+**Not taken:** session deletion through it, which is the sessions plugin's `delete`
+and removes everything at once; handing the whole backend, which reaches the ledger
+and the transcript; renaming or moving, a second write path into a folder whose names
+mean something; running it after the claim is let go, since a crash can reuse an id,
+so a late `settle` could remove a file a new turn has just written under it; failing
+the turn on a raise, which loses an answer over files the next turn offers again;
+remembering what a plugin kept, a second record of the folder beside the ledger, so a
+kept file is offered every turn; an async twin, since `settle` already runs off the
+loop and a twin is a second method to keep in step; a check in the contract kits,
+since the core itself holds what is chosen and what can be reached, leaving a plugin
+no promise to break; and deepagents' copies under `large_tool_results/`, which a row may
+still name and whose expired ones the sweep removes itself, while still that row's
+length. *(2026-10-21.)*
+
 **The recorder's own folder is refused, and that is not the same decision.** Only
 `tool_results/` is write-denied to the file tools, `delete` included. A row names its file
 and the agent must not rewrite what a later turn reads back as true: measured, the row

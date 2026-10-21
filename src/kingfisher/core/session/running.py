@@ -62,6 +62,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from kingfisher.core.config import Endpoint
+    from kingfisher.core.interfaces import UnusedResults
 
 
 
@@ -170,6 +171,7 @@ class Running:
     _sessions: Any
     _prepare_steps: Callable[..., Steps[Prepared]]
     _delete_session_steps: Callable[[str], Steps[str | None]]
+    unused_results: UnusedResults
 
     def _keep(self, prepared: Prepared, snapshot: Any) -> Steps[tuple[str, ...]]:
         """Persist what this turn produced, and name it."""
@@ -209,7 +211,8 @@ class Running:
         )
 
     def _sweep_results(self, prepared: Prepared, recorded: tuple[LedgerEntry, ...]) -> Steps[None]:
-        """Remove the result files no row names, once nothing this turn writes can name one."""
+        """Hand over the result files no row names, once nothing this turn writes can name
+        one."""
         if prepared.ledger is None:
             return
         yield from sweep_results(
@@ -217,6 +220,8 @@ class Running:
             prepared.ledger,
             recorded,
             tool_results_route=self.cfg.layout.tool_results_route,
+            unused_results=self.unused_results,
+            session_id=prepared.session.id,
         )
 
     def _record_transcript(self, prepared: Prepared, snapshot: Any) -> Steps[None]:

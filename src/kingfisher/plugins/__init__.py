@@ -13,6 +13,7 @@ _EXPORTS = {
     "Sessions": "kingfisher.core.interfaces",
     "RunEvents": "kingfisher.core.interfaces",
     "Instructions": "kingfisher.core.interfaces",
+    "UnusedResults": "kingfisher.core.interfaces",
     "CommandRunner": "kingfisher.core.interfaces",
     "CommandResult": "kingfisher.core.interfaces",
     "ScratchRun": "kingfisher.core.interfaces",
@@ -34,6 +35,9 @@ _EXPORTS = {
     "JsonlRunEvents": "kingfisher.plugins.events",
     "ShellSettings": "kingfisher.plugins.sessions.sandbox.confinement",
     "InstructionsFile": "kingfisher.core.agent.prompting",
+    "DeleteUnusedResults": "kingfisher.core.session.unused",
+    "UnusedFiles": "kingfisher.core.session.unused",
+    "UnusedFile": "kingfisher.core.session.unused",
     "WIRE_FORMATS": "kingfisher.core.agent.models",
 }
 
@@ -43,6 +47,7 @@ __all__ = [
     "CommandResult",
     "CommandRunner",
     "Definitions",
+    "DeleteUnusedResults",
     "HostPathError",
     "Instructions",
     "InstructionsFile",
@@ -55,6 +60,9 @@ __all__ = [
     "Sessions",
     "ShellPrompt",
     "ShellSettings",
+    "UnusedFile",
+    "UnusedFiles",
+    "UnusedResults",
     "WireFormat",
     "backend_at",
     "host_path",
@@ -84,9 +92,13 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import RunEvents as RunEvents
     from kingfisher.core.interfaces import ScratchRun as ScratchRun
     from kingfisher.core.interfaces import Sessions as Sessions
+    from kingfisher.core.interfaces import UnusedResults as UnusedResults
     from kingfisher.core.layout import DEFAULT_LAYOUT as DEFAULT_LAYOUT
     from kingfisher.core.layout import Layout as Layout
     from kingfisher.core.plugins import Plugins as Plugins
+    from kingfisher.core.session.unused import DeleteUnusedResults as DeleteUnusedResults
+    from kingfisher.core.session.unused import UnusedFile as UnusedFile
+    from kingfisher.core.session.unused import UnusedFiles as UnusedFiles
     from kingfisher.plugins.events import JsonlRunEvents as JsonlRunEvents
     from kingfisher.plugins.sessions.backend import LocalSessions as LocalSessions
     from kingfisher.plugins.sessions.backend import backend_at as backend_at
