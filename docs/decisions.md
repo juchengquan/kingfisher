@@ -2209,6 +2209,22 @@ reaches it -- driven in one turn with the refusals, since a turn that only check
 refusals would pass with the keeping broken. Not taken: denying reads, which is what the
 history is for. *(2026-10-21.)*
 
+**Corrected hours later: a mount makes no folder, and it did make a row.** The entry
+above weighed two empty folders in every session against two the file tools would deny,
+and chose not to make them -- while `_listing` moved deepagents' route row for each under
+the directory being listed, so they were named anyway. Measured from the model's seat:
+`ls /scratchpad` answered four folders where two existed, and `ls /scratchpad/blobs` then
+answered `path_not_found` about a path that listing had just offered.
+
+The row was kept because a route whose folder is absent was thought to have no other way
+of being seen, `/skills/` being the case named for it. That was wrong, and the first fix
+-- keeping a row only where the route's own backend can list it -- was written against it
+before a surviving mutation showed the control it needed did not bite. deepagents answers
+`/` with a row for every route itself, so `/skills/` arrives without help; measured with
+every route mounted and a bundle shipped, the only rows `_listing` was ever asked to move
+were the two whose folder nothing had made. So the rows are dropped, and a route whose
+folder exists is named by the backend that holds it. *(2026-10-21.)*
+
 **The caller's inputs are refused the shell by each fence, not by their mode bits.** The
 shell runs as the uid that owns them: measured through `execute`, a plain write is
 refused, but `chmod u+w` and the same write replaces the caller's file, and `rm -rf
