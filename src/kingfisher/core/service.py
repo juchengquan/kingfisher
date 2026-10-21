@@ -271,16 +271,16 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
     def _agent_for(
         self,
         request: Request | Resume,
-        harness: HarnessFiles,
         *,
         held: frozenset[str] | None,
         pinned: DefinitionText | None,
-    ) -> Steps[AgentSpec | None]:
-        """The agent this turn runs, which is the one its session opened with, `pinned`."""
+    ) -> AgentSpec | None:
+        """The agent this turn runs, which is the one its session opened with, `pinned`.
+
+        Decided, not pinned: setup pins a session's first agent once the build has passed.
+        """
         if pinned is None:
-            spec = self._agent_named(request.agent, held=held)
-            yield from self._pin_agent_in(harness, request.agent)
-            return spec
+            return self._agent_named(request.agent, held=held)
 
         started = read(pinned)
         if request.agent is not None and request.agent != started.name:

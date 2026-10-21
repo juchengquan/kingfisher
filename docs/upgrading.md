@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A refused request fixes nothing in its session, after #1043
+
+- **A request refused at the build no longer pins its agent or its datazone.** Both
+  were written before the build's refusals had run, so a session opened with
+  `create=True` whose first request was refused there -- a stray `run_on`, say -- was
+  fixed to that agent, and a refused finance request narrowed a session no zoned turn
+  had run in, taking it from every caller in no datazone. Both are now written beside
+  the inputs, once the build has passed and before any tool runs.
+- **A backend refusing the upload leaves no `run_start` in your `RunEvents`.** The
+  upload moved after the build in #913, which logged `run_start`, so that refusal left
+  a turn start with no `run_end`. `run_start` is now the last thing setup does.
+
 ## A link where a kept record would be refuses the session, after #1042
 
 - **A session with a link at `scratchpad/blobs` or `scratchpad/large_tool_results` no

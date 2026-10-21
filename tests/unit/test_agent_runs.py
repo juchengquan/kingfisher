@@ -226,6 +226,35 @@ def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
     assert agent_for(service, Request("again", session_id="s"), _held(cfg)).name == "narrow"
 
 
+def test_a_request_refused_at_the_build_pins_no_agent(scripted):
+    """The pin was written before the build's refusals had run, so a session whose first
+    request was refused there was fixed to that agent with no turn run in it: the next
+    request, for another agent, was told the session was running the first.
+    """
+    from kingfisher.core.definitions.subagents.spec import RunOn
+    from tests.conftest import subagents_dir
+    from tests.unit.scripted import Scripted
+
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "reviewer.yaml").write_text(
+        "name: reviewer\ndescription: Checks figures.\nsystem_prompt: |\n  You check.\n",
+        encoding="utf-8",
+    )
+    delegating = (
+        "name: delegating\ndescription: Hands work on.\nbuiltin_tools: [task]\n"
+        "subagents: [reviewer]\nsystem_prompt: |\n  You hand work on.\n"
+    )
+    _agents(scripted, NARROW, delegating)
+    kf = Kingfisher(scripted, sessions=LocalSessions())
+    kf.session("s", create=True)
+
+    with pytest.raises(CapabilityError, match="did not activate"):
+        kf.run(Request("go", agent="delegating", session_id="s", run_on={"ghost": RunOn("x")}))
+
+    Scripted.script.append(AIMessage(content="done"))
+    assert kf.run(Request("go", agent="narrow", session_id="s")).answer == "done"
+
+
 def test_a_snapshot_is_written_once_and_not_overwritten(cfg, tmp_path):
     """The property that makes it a snapshot rather than a cache.
 

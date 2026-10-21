@@ -423,6 +423,27 @@ def test_the_first_zoned_turn_narrows_a_session_that_had_none(turns):
     assert kf.session("s", source_ids=("A",), datazone="finance") is not None
 
 
+def test_a_zoned_request_refused_at_the_build_leaves_the_session_unzoned(turns):
+    """The datazone was written before the build's refusals had run, so a finance request
+    refused there narrowed a session no zoned turn had run in, and took it from every
+    caller in no datazone.
+    """
+    from kingfisher.core.access.capabilities import CapabilityError
+    from kingfisher.core.definitions.subagents.spec import RunOn
+
+    kf = Kingfisher(turns, sessions=LocalSessions())
+    _turn(kf, "s", None)
+
+    with pytest.raises(CapabilityError, match="did not activate"):
+        kf.run(
+            Request("t", agent="surveyor", session_id="s", run_on={"ghost": RunOn("x")}),
+            source_ids=("A",),
+            datazone="finance",
+        )
+
+    assert kf.session("s", source_ids=("A",)) is not None
+
+
 def test_a_session_no_zoned_turn_ran_in_is_reached_from_every_datazone(turns):
     """The control: a caller in a datazone holds everything one in none does."""
     kf = Kingfisher(turns, sessions=LocalSessions())
