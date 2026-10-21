@@ -38,6 +38,12 @@ One request carried out in one session, from start to finish. A session runs one
 time, and a turn may stop partway to wait for an approval.
 _Avoid_: run, step, call
 
+**Note**:
+Text a caller adds to one turn's request, sent after the task in that turn's message and
+kept with it, so later turns see it as it was sent. A turn that answers an approval adds
+no message, and so carries no note.
+_Avoid_: hint, turn context, preamble, per-turn prompt
+
 **Workspace**:
 The folder for what sessions make: the sessions themselves, kept there by kingfisher's own
 Sessions, and kingfisher's own state beside them. Not where definitions are, which people
@@ -129,6 +135,13 @@ A tool result kingfisher keeps its own copy of, so that a later turn can read ba
 call answered. Not every result is one: a file tool's read or write is already a file, and
 the checklist is one list the conversation carries.
 _Avoid_: saved result, cached result, logged result
+
+**Result id**:
+The name a recorded result is known by for the rest of its session, such as `A-0042`. It is
+given when the result is recorded, not when the call is made, so a call that fails or is
+not recorded takes no id and the names have no gaps; and an id is never given to a second
+result.
+_Avoid_: entry number, row id, ledger id
 
 **Preview**:
 What stands in for a recorded result too long to show the model whole: its beginning and
