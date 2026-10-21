@@ -73,8 +73,8 @@ slices land.
   deployment that needs it.
 - [Thinking a model can read](design/2026-10-21-thinking-a-model-can-read.md) — what
   kingfisher sends back of a model's thinking once the vendor, or the conversation
-  before it, has changed, keyed on the endpoint that answered. Nothing built; each
-  premise waits on one live Anthropic call.
+  before it, has changed, keyed on the endpoint that answered. Its first slice has
+  landed; the rest wait on one live Anthropic call each.
 - [One absolute path for the
   shell](design/2026-10-21-one-absolute-path-for-the-shell.md) — every shell that can
   vouch for it exports `KINGFISHER_SESSION_ROOT`, and the agent writes session paths

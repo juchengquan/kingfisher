@@ -80,6 +80,7 @@ def test_the_agent_is_wrapped_in_standing_then_switched_then_offered(cfg, sessio
 
     assert [type(m).__name__ for m in built.middleware] == [
         "ResultClearingMiddleware",
+        "SignedThinkingMiddleware",
         "TodoListMiddleware",
         "RecorderMiddleware",
         "StepBudgetMiddleware",
@@ -106,6 +107,7 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
 
     assert [type(m).__name__ for m in subagent_of(built, "general-purpose")["middleware"]] == [
         "ResultClearingMiddleware",
+        "SignedThinkingMiddleware",
         "RecorderMiddleware",
         "StepBudgetMiddleware",
         "ModelReplyMiddleware",
@@ -142,6 +144,7 @@ def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
             backend=None,
             budget=StepBudget(cfg.recursion_limit),
             execution_timeout_s=cfg.execution_timeout_s,
+            models=cfg.models,
             trigger=170_000,
             **given,
         )
@@ -163,6 +166,7 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
         backend=backend_at(cfg, session_dir),
         budget=StepBudget(cfg.recursion_limit),
         execution_timeout_s=cfg.execution_timeout_s,
+        models=cfg.models,
         trigger=170_000,
         tools=("read_file",),
     )

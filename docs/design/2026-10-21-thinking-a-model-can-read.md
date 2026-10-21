@@ -82,17 +82,13 @@ its second step note, and on a newer account fails there.
 
 One pull request each, off main, in this order.
 
-1. **Drop thinking another signer made.**
-   - When a reply comes back, record on it the endpoint and model that served it.
-     `RunLogger` already looks an endpoint up from a model's name.
-   - Before each call, take `thinking`, `redacted_thinking` and `reasoning` blocks out
-     of the request -- not the stored conversation -- wherever their reply was served
-     by another endpoint or model. A reply recorded before this slice compares by
-     `model_name` alone, so a session that ran on MiniMax before it is safe after; so
-     does a model a deployment passed in, which has no catalogue entry.
-   - On every graph kingfisher builds, sync and async.
-   - Tests build the request each chat model would send, as the measurement above did:
-     another endpoint's block gone, the same endpoint's unchanged, an older reply by name.
+1. **Drop thinking another signer made.** Landed in #9999 as `SignedThinkingMiddleware`,
+   a standing one on every graph kingfisher builds. Each reply records the endpoint's
+   name, its `base_url` and the model that served it -- name and address both, since a
+   gateway moved under one name is another signer, and so is a second account at one
+   address -- and a call sends the thinking only of replies recorded as its own. A reply
+   with no record compares by `model_name`. `tests/unit/test_signed_thinking.py` builds
+   the request each chat model would send.
 2. **Keep the two notes in the conversation.** Store the step note and the note asking
    again as a message after the tool results, instead of adding them to one request.
    `ChatAnthropic` sends a message stored there inside the same user message as the

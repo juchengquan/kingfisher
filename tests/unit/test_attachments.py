@@ -420,6 +420,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
         backend=backend,
         budget=StepBudget(cfg.recursion_limit),
         execution_timeout_s=cfg.execution_timeout_s,
+        models=cfg.models,
         trigger=UNPROFILED,
         recorder=RecorderMiddleware(ledger, backend, None, cfg.layout.tool_results_route),
     )
@@ -681,6 +682,7 @@ def _stacked(cfg, session_dir, pdfs) -> tuple[list, Ledger]:
         backend=backend,
         budget=StepBudget(cfg.recursion_limit),
         execution_timeout_s=cfg.execution_timeout_s,
+        models=cfg.models,
         trigger=UNPROFILED,
         recorder=RecorderMiddleware(ledger, backend, None, cfg.layout.tool_results_route),
         pdf_attachments=pdfs,

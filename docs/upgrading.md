@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A switch of model or endpoint sends no earlier thinking, after #9999
+
+- **A reply's thinking goes back only to the endpoint and model that produced it.** A
+  session moved to another model, or to another endpoint -- one renamed, or one whose
+  `base_url` changed under the same name -- sends its earlier replies' text and tool
+  calls as before, without their thinking. A MiniMax reply's thinking reached Claude
+  signed by MiniMax, which Claude cannot check; between two models of one vendor the
+  cost is the earlier reasoning, on that switch alone. A model you pass in rather than
+  name in `models.yaml` is judged by its model name.
+- **Each reply records who served it**, in `response_metadata["kingfisher_served_by"]`:
+  the endpoint's name, its `base_url` and the model. Neither chat class sends it on, and
+  the transcript does not keep it; the conversation kingfisher keeps between turns does.
+- **`standing_middleware` takes `models=`**, the catalogue. It is not exported, so this
+  matters only to a deployment that called it anyway.
+
 ## Kingfisher's shell exports `KINGFISHER_SESSION_ROOT`, after #1047
 
 - **The agent is taught a different spelling for a session path in the shell.** It was

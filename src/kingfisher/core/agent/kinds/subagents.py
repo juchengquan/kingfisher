@@ -382,6 +382,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         backend=backend,
         budget=StepBudget(cfg.recursion_limit) if budget is None else budget,
         execution_timeout_s=cfg.execution_timeout_s,
+        models=cfg.models,
         keep_results_rounds=cfg.keep_results_rounds,
         trigger=trigger,
         pdf_attachments=pdf_attachments,
