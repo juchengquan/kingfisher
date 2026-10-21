@@ -446,7 +446,7 @@ def events_in(
 
 
 def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
-    """The assistant's last message from a `values` chunk, if it has one.
+    """What the assistant last said, from a `values` chunk that ends on its reply.
 
     `None` for a subagent's chunk, which is why this takes a namespace: their `values`
     arrive here too, and a turn cut short just after a subagent finished would report
@@ -457,9 +457,15 @@ def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
     if mode != "values":
         return None
     messages = messages_in(chunk)
-    if not messages:
+    # Only the model's own reply: the first chunk ends on the caller's message and one
+    # after the tools on a tool's output, and a turn stopped there answered with either.
+    if not messages or not isinstance(messages[-1], AIMessage):
         return None
-    return getattr(messages[-1], "text", None) or ""
+    reply = messages[-1]
+    # A reply that only calls tools says nothing, so what was said before it stands.
+    if reply.tool_calls and not reply.text:
+        return None
+    return reply.text
 
 
 #: Where deepagents' summariser keeps the summary it made. Private state, so what

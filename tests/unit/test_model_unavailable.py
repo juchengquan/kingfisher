@@ -193,6 +193,40 @@ def test_a_refusal_of_the_asking_again_after_a_cut_answer_is_the_stop_too(refusi
     assert result.stop_reason == "model_unavailable"
 
 
+@pytest.mark.parametrize("way", ["sync", "async"])
+def test_a_turn_the_model_never_answered_has_no_answer(refusing, way):
+    """A turn whose first model call was refused reported the caller's own message as its
+    answer, and the command printed it as what had been reached."""
+    result = _turn(refusing, RefusedError(429), way=way)
+
+    assert result.stop_reason == "model_unavailable"
+    assert result.answer == ""
+
+
+@pytest.mark.parametrize(
+    ("said", "answer"),
+    [("Listing the folders first.", "Listing the folders first."), ("", "")],
+    ids=["said-something", "only-called"],
+)
+@pytest.mark.parametrize("way", ["sync", "async"])
+def test_a_turn_stopped_after_a_tool_answers_with_what_the_model_said(
+    refusing, way, said, answer
+):
+    """A turn stopped just after a tool ran reported that tool's output as its answer.
+
+    The second call says nothing, so the words before it are what was reached; a rule
+    that took any reply's text would answer `""` and pass with only one call.
+    """
+    ls = {"name": "ls", "args": {"path": "/"}}
+    listing = AIMessage(content=said, tool_calls=[{**ls, "id": "l1"}])
+    again = AIMessage(content="", tool_calls=[{**ls, "id": "l2"}])
+
+    result = _turn(refusing, listing, again, RefusedError(429), way=way)
+
+    assert result.stop_reason == "model_unavailable"
+    assert result.answer == answer
+
+
 def test_the_stop_says_what_the_provider_said(refusing):
     """The status and the provider's own words, where the caller watches the turn."""
     _queue(RefusedError(429, "Token Plan limit reached"))
