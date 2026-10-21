@@ -88,6 +88,7 @@ if TYPE_CHECKING:
 
     from langgraph.graph.state import CompiledStateGraph
 
+    from kingfisher.core.interfaces import PdfAttachments
     from kingfisher.core.session.ledger import Ledger
 
 
@@ -338,12 +339,14 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     ledger: Ledger | None = None,
     instructions: str = "",
     session_instructions: str | None = None,
+    pdf_attachments: PdfAttachments | None = None,
 ) -> Assembled:
     """Wire model, backend and checkpointer into a deep agent, and say what was wired.
 
     `ledger` is the turn's, recorded into by every graph built here; `None` records nothing.
     `session_instructions` is the session's text for every graph but a compiled one, `None`
     where the deployment wired no `SessionInstructions`.
+    `pdf_attachments` is asked by every graph built here, as the ledger is recorded into.
     """
     # The agent file is the baseline and the request only subtracts from it. One
     # function, because the run's report of what it activated reads the same answer.
@@ -511,6 +514,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             permissions=permissions,
             keep_results_rounds=cfg.keep_results_rounds,
             trigger=trigger,
+            pdf_attachments=pdf_attachments,
             recorder=recording(agent),
             clearing=clearing,
             tools=tools,
@@ -646,6 +650,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 runs=runs,
                 instructions=instructions,
                 session_text=session_instructions,
+                pdf_attachments=pdf_attachments,
                 backend=backend,
                 permissions=permissions,
                 gated=gated,
@@ -770,6 +775,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     permissions=permissions,
                     keep_results_rounds=cfg.keep_results_rounds,
                     trigger=summarizer_trigger(running, general),
+                    pdf_attachments=pdf_attachments,
                     recorder=recording(agent),
                     tools=permitted,
                     gated=gated,

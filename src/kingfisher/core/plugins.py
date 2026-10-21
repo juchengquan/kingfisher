@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from .interfaces import RunEvents
 
 if TYPE_CHECKING:
-    from .interfaces import Instructions, SessionInstructions, UnusedResults
+    from .interfaces import Instructions, PdfAttachments, SessionInstructions, UnusedResults
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,7 @@ class Plugins:
     instructions: Instructions | None = None
     session_instructions: SessionInstructions | None = None
     unused_results: UnusedResults | None = None
+    pdf_attachments: PdfAttachments | None = None
 
     def keywords(self) -> dict[str, Any]:
         """The fields that are set, as `Kingfisher`'s keywords."""

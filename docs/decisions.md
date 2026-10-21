@@ -1793,9 +1793,32 @@ handed every tool the workspace defines, granted or not, so the guard reads the 
 the model's own request instead. A call replayed on a resume follows no model call and
 gets the advice with no tool named.
 
-**What it leaves.** A PDF small in bytes and long in pages still goes whole. A subagent
-the workspace compiled itself has no kingfisher middleware, so neither its `read_file`
-nor its tools are guarded. *(2026-10-13.)*
+**What it leaves.** A PDF small in bytes and long in pages still goes whole, unless the
+deployment's `PdfAttachments` says otherwise. A subagent the workspace compiled itself
+has no kingfisher middleware, so neither its `read_file` nor its tools are guarded.
+*(2026-10-13.)*
+
+**A deployment judges a PDF by more than its size through a plugin, not a page
+setting.** `PdfAttachments.replacement` is asked of every PDF once the guard has judged
+it, told the verdict, the turn's total, the allowance and the call, and answers `None`
+or what to hand over instead. A downstream deployment had been copying `_held`,
+`_asked_by` and `_passed` to do this from a middleware of its own. Not a page limit in
+kingfisher: counting pages is parsing every PDF a tool returns, in kingfisher's process,
+which *Bytes* above declined, and pypdf is not a dependency of the package. A deployment
+that wants one writes it in a few lines, which `ports.md` shows. Every PDF rather than
+only the refused ones, so a deployment can stop a long one kingfisher would pass.
+*(2026-10-21.)*
+
+**What the plugin hands over is judged again, and counts as the call succeeding.** Taken
+on trust, a replacement could hand over the PDF it was told was too large, and asked
+about again the plugin would be judging its own answer, so it is asked once and its
+answer meets the limits as a tool's would. It counts toward the turn as what it is, so
+text in place of a PDF leaves room for the next. A call the plugin answered gave the
+model what the deployment chose, so it is recorded and gets an id; one answered only by
+the guard's own line is still a failed call with no row. Asked under the guard's lock,
+since the next PDF is judged beside what this one became, and off the event loop on the
+async path, since a plugin may parse every page. An exception is logged and the verdict
+stands: a failing plugin should cost neither the limit nor a PDF that passes.
 
 **`pdf_pages` saves a page range as a smaller PDF, for a model that reads PDFs.**
 `pdf_text` leaves out a chart, a table's layout and a scanned page; a slice small enough

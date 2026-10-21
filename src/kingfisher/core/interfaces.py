@@ -6,9 +6,10 @@ and the conversation is kept in the session, so none of them is here.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import base64
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from kingfisher.core.session.threads import off_loop, thread_pool
 
@@ -285,5 +286,55 @@ class UnusedResults(Protocol):
 
         A file not removed is handed over again by the next turn. An exception here is
         logged and the turn finishes as it would have.
+        """
+        ...
+
+
+@dataclass(frozen=True)
+class ReturnedPdf:
+    """One PDF in a tool's result, as kingfisher judged it by its size.
+
+    `verdict` is `"passes"`, to be handed over as it is; `"too_large"`, more than a turn
+    holds on its own; or `"turn_full"`, small enough alone but not beside the PDFs the
+    turn already holds.
+    """
+
+    verdict: Literal["passes", "too_large", "turn_full"]
+    #: Its length in bytes, 0 for one the provider fetches by reference.
+    size: int
+    #: The PDF bytes the turn already holds, beside which it was judged.
+    held: int
+    #: The PDF bytes one turn of this graph may hold, which its model's summariser sets.
+    allowance: int
+    #: The tool whose result carries it, and the call that result answers.
+    tool: str
+    call_id: str
+    #: The file `read_file` read it from; `None` from any other tool.
+    path: str | None = None
+    _base64: str | None = field(default=None, repr=False, compare=False)
+
+    def read(self) -> bytes | None:
+        """The PDF itself, or `None` for one the provider fetches by reference."""
+        return None if self._base64 is None else base64.b64decode(self._base64)
+
+
+class PdfAttachments(Protocol):
+    """What the model is handed in place of a PDF a tool returns, for a deployment that
+    judges one by more than its size: its pages, say, or what it holds.
+
+    Asked of every PDF a tool's result carries, on every graph kingfisher builds, once
+    kingfisher has judged it -- whatever that verdict was. The calls of one graph are
+    asked one at a time, since each PDF is judged beside what the one before was
+    replaced with. A plain method: on the async path it is called on kingfisher's thread
+    pool, off the event loop.
+    """
+
+    def replacement(self, pdf: ReturnedPdf) -> str | Sequence[Any] | None:
+        """What the model is handed instead of `pdf`, or `None` for kingfisher's verdict.
+
+        Text or content blocks, as a tool may return. They are judged as any result is, so
+        a PDF handed back in its place is still refused past what the turn holds. Anything
+        handed over counts as the call succeeding. An exception here is logged, and the
+        verdict stands.
         """
         ...

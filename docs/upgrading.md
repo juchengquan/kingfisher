@@ -54,6 +54,21 @@ replaced the four layers began.
   calls `high_mark(trigger, written, subject=...)`; `summarizer_trigger(model)` still
   reads deepagents' own, and `summarizer_trigger(model, middleware)` the one that runs.
 
+## A deployment's say over a PDF is a plugin, after #1026
+
+- **`PdfAttachments` and `ReturnedPdf` are new on `kingfisher.plugins`**, and
+  `Kingfisher` takes `pdf_attachments=`, as `Plugins` does for the command. Left out,
+  nothing changes: every PDF is judged by its size, as before. `docs/guides/ports.md`
+  has the section.
+- **If you copied `AttachmentsMiddleware`'s tally** — `_held`, `_asked_by`, `_passed`
+  — to judge PDFs from a middleware of your own, move the judgement into the plugin. It
+  is told the verdict, the bytes the turn already holds and its allowance, which is what
+  those three computed. They stay private, and may change without a note here.
+- **There is no page-limit setting.** A page limit is a few lines of your own in the
+  plugin; the section's example counts pages with pypdf.
+- **A PDF the plugin replaces is a call that succeeded**, recorded with an id. One
+  kingfisher replaces with its own line is still a failed call with no row.
+
 ## A result's id is taken as its call starts, after #1025
 
 - **Ids have gaps now.** A recorded call takes its id before it runs, so one that fails

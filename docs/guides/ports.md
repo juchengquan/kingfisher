@@ -349,6 +349,70 @@ Things to know:
   be sent. A replacement written to add text after the cached part is what this plugin
   is for: drop it.
 
+## `PdfAttachments` — what the model is handed in place of a PDF
+
+Kingfisher judges a PDF a tool returns by its size: past what the turn holds, the model
+is handed a line saying so instead ([`tools.md`](tools.md#what-a-tool-returns) has the
+limits). Yours is asked about every PDF once kingfisher has judged it, and may hand over
+something else in its place: a page limit, a summary, a refusal for a kind of document.
+A page limit, counted with pypdf:
+
+```python
+import io
+
+from pypdf import PdfReader
+
+from kingfisher.plugins import ReturnedPdf
+
+class AtMostTwentyPages:
+    def replacement(self, pdf: ReturnedPdf) -> str | None:
+        data = pdf.read()
+        # Kingfisher's own line for one it refused, and nothing to count for a reference.
+        if pdf.verdict != "passes" or data is None:
+            return None
+        pages = len(PdfReader(io.BytesIO(data)).pages)
+        if pages <= 20:
+            return None
+        where = pdf.path or f"{pdf.tool}'s result"
+        return f"{where} is a {pages}-page PDF. Work from its text, a range of pages at a time."
+
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(), pdf_attachments=AtMostTwentyPages())
+```
+
+For the command, return it from your `KINGFISHER_PLUGINS` factory as
+`Plugins(pdf_attachments=AtMostTwentyPages())`. Left out, every PDF is judged by its size
+alone. pypdf is yours to install: this repository's `agent` group has it for the shipped
+PDF tools, and the package does not depend on it.
+
+`replacement` is handed a `ReturnedPdf`: kingfisher's `verdict` — `"passes"`,
+`"too_large"` for one larger than a turn holds on its own, `"turn_full"` for one that
+fits alone but not beside the PDFs already open — with the PDF's `size` in bytes, the
+bytes the turn already `held`, the `allowance` one turn of that graph holds, the `tool`
+and `call_id` whose result carries it, the `path` `read_file` read it from (`None` from
+any other tool), and `read()` for the PDF itself (`None` for one the provider fetches by
+reference). It returns `None` to leave the verdict as it is, or what to hand over
+instead: a string, or content blocks, as a tool may return.
+
+Things to know:
+
+- **It is asked of every PDF**, from `read_file` and offered tools alike, inside a
+  `Command` too, on the agent, every subagent a definition declares, and
+  `general-purpose`. Not on a compiled subagent, which deepagents runs as it was built.
+- **What it returns is judged again**, by the same limits, and it is never asked about
+  its own answer: a PDF handed back past what the turn holds is still refused. What it
+  hands over counts toward the turn as what it is, so text in place of a PDF leaves room
+  for the next one.
+- **Anything it hands over counts as the call succeeding.** The result is recorded, and
+  gets an id, as any other; a call whose only answer is kingfisher's own line is a failed
+  call, with no row.
+- **The calls of one graph are asked one at a time**, since each PDF is judged beside
+  what the one before became. Be quick. It is a plain method: on the async path it is
+  called on kingfisher's thread pool, off the event loop.
+- **An exception is logged and the verdict stands**, so a failing plugin costs neither
+  the limit nor a PDF that passes.
+- **It runs in the kingfisher process**, on whatever a tool returned. Parse with a
+  library you would trust with a file a stranger sent.
+
 ## The rest
 
 **The conversation is not for replacing either.** Kingfisher keeps it in the session,

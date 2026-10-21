@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.tools import tool as lc_tool
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import Capabilities
@@ -27,8 +28,13 @@ from kingfisher.core.agent.middlewares.attachments import (
     pdf_allowance,
 )
 from kingfisher.core.agent.middlewares.recorded import readable_size
+from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
+from kingfisher.core.agent.middlewares.standing import standing_middleware
+from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import summarizer_trigger
-from kingfisher.plugins import LocalSessions
+from kingfisher.core.session.ledger import Ledger
+from kingfisher.core.session.store import KeptLedger
+from kingfisher.plugins import LocalSessions, Plugins, ReturnedPdf
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
     EVERY_TOOL,
@@ -41,6 +47,7 @@ from tests.conftest import (
     tools_dir,
 )
 from tests.unit.scripted import Scripted
+from tests.unit.test_offered_tool_errors import _through
 from tests.unit.test_offloads import _Shown
 
 KB = 1024
@@ -121,13 +128,23 @@ def _calls(*calls: tuple[str, dict]) -> _Shown:
     )
 
 
-def _run(
-    cfg, session_dir, model: _Shown, capabilities: Capabilities | None = None, *, wait=False
+def _run(  # noqa: PLR0913 -- by keyword, each the one way a test varies the build
+    cfg,
+    session_dir,
+    model: _Shown,
+    capabilities: Capabilities | None = None,
+    *,
+    wait=False,
+    pdfs=None,
 ) -> dict:
     """One turn on a built graph; `wait` drives it through the async hooks, as
     `astream` does."""
     built = build_agent(
-        cfg, backend=backend_at(cfg, session_dir), model=model, capabilities=capabilities
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=model,
+        capabilities=capabilities,
+        pdf_attachments=pdfs,
     )
     turn = {"messages": [{"role": "user", "content": "go"}]}
     if wait:
@@ -628,3 +645,191 @@ def test_a_new_turn_holds_no_pdf_an_earlier_turn_opened(scripted):
         "the earlier turn was not replayed, so this passes whatever the total carries"
     )
     assert _files([_first_shown("r2")]), "the second turn's PDF was refused"
+
+
+class _Asking:
+    """A `PdfAttachments` keeping every PDF it is asked about, and answering `instead`'s
+    answer for it, or `None` with no `instead`."""
+
+    def __init__(self, instead=None) -> None:
+        self.instead = instead
+        self.asked: list[ReturnedPdf] = []
+        self.on_a_loop: list[bool] = []
+
+    def replacement(self, pdf: ReturnedPdf):
+        self.asked.append(pdf)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            self.on_a_loop.append(False)
+        else:
+            self.on_a_loop.append(True)
+        return None if self.instead is None else self.instead(pdf)
+
+
+def _stacked(cfg, session_dir, pdfs) -> tuple[list, Ledger]:
+    """What `standing_middleware` builds around an offered tool, recording into a ledger."""
+    backend = backend_at(cfg, session_dir)
+    ledger = Ledger("t", KeptLedger())
+    stack = standing_middleware(
+        "agent",
+        names=frozenset({"export_pdf", "export_two"}),
+        paths=None,
+        layout=cfg.layout,
+        backend=backend,
+        budget=StepBudget(cfg.recursion_limit),
+        execution_timeout_s=cfg.execution_timeout_s,
+        trigger=UNPROFILED,
+        recorder=RecorderMiddleware(ledger, backend, None, cfg.layout.tool_results_route),
+        pdf_attachments=pdfs,
+    )
+    return stack, ledger
+
+
+@lc_tool(response_format="content_and_artifact")
+def export_pdf(note: str):
+    """Return a 300 KB PDF."""
+    return [{"type": "file", "base64": "A" * (400 * KB), "mime_type": "application/pdf"}], None
+
+
+EXPORT = {"name": "export_pdf", "args": {"note": "x"}, "id": "c1"}
+
+
+def test_a_plugin_answering_none_leaves_every_verdict_as_it_was(cfg, session_dir):
+    """The control: a plugin that changed what was handed over by answering `None` would
+    take the size limit away from a deployment that only wanted to look -- and it is told
+    each verdict, the turn's total and the file, so it can judge by more than size."""
+    reads = [_pdf_of(session_dir, f"p{n}.pdf", 100 * KB) for n in (1, 2, 3)]
+    model = _calls(*(("read_file", read) for read in reads))
+    asking = _Asking()
+
+    _run(cfg, session_dir, model, pdfs=asking)
+
+    assert [len(_files([_answer(model, f"c{n}")])) for n in (1, 2, 3)] == [1, 1, 0]
+    assert "already open in this turn take up 200 KB of the 249 KB" in _answer(model, "c3").text
+    first, second, _ = asking.asked
+    assert [one.verdict for one in asking.asked] == ["passes", "passes", "turn_full"]
+    assert [one.held for one in asking.asked] == [0, first.size, first.size + second.size]
+    assert [(one.tool, one.call_id, one.path) for one in asking.asked] == [
+        ("read_file", f"c{n}", f"/inputs/p{n}.pdf") for n in (1, 2, 3)
+    ]
+    assert {one.allowance for one in asking.asked} == {pdf_allowance(UNPROFILED)}
+    assert first.read() == (session_dir / "inputs" / "p1.pdf").read_bytes()
+
+
+@lc_tool(response_format="content_and_artifact")
+def export_two(note: str):
+    """Return two 150 KB PDFs, which a turn on a model with no profile holds one of."""
+    one = {"type": "file", "base64": "A" * (200 * KB), "mime_type": "application/pdf"}
+    return [one, dict(one)], None
+
+
+def test_a_pdf_replaced_with_text_leaves_the_turn_room_for_the_next(cfg, session_dir, way):
+    """Counted as the PDF it stood in for, a page summary fills the turn just the same and
+    refuses the PDF beside it. Two in one result, so the order they are judged in is fixed,
+    as it is not for calls running at once."""
+    asking = _Asking(lambda pdf: "3 pages" if len(asking.asked) == 1 else None)
+    stack, _ = _stacked(cfg, session_dir, asking)
+    call = {"name": "export_two", "args": {"note": "x"}, "id": "c1"}
+
+    answer = _through(stack, call, export_two, way)
+
+    assert "3 pages" in answer.text
+    assert len(_files([answer])) == 1, "the PDF beside the replaced one was refused"
+    assert [one.held for one in asking.asked] == [0, 0]
+
+
+def test_a_refused_pdf_the_plugin_replaces_is_a_call_that_succeeded(cfg, session_dir, way):
+    """Read as kingfisher's own advice, a deployment's replacement left the call failed
+    and unrecorded: the model was told the call had not worked, and no later turn could
+    read back what it was handed."""
+    stack, ledger = _stacked(
+        cfg, session_dir, _Asking(lambda pdf: f"{pdf.verdict}: 412 pages; read it in parts")
+    )
+
+    answer = _through(stack, EXPORT, export_pdf, way)
+
+    assert "too_large: 412 pages; read it in parts" in answer.text
+    assert not _files([answer]), "the model was handed the PDF whole"
+    assert answer.status == "success"
+    (entry,) = ledger.entries
+    assert entry.id in answer.text, "the result was not stamped with its id"
+
+
+def test_a_pdf_the_plugin_hands_back_is_judged_again_and_asked_about_once(
+    cfg, session_dir, way
+):
+    """A replacement taken on trust lets a plugin hand over the PDF it was told was too
+    large, and one asked about again asks the plugin about its own answer."""
+    asking = _Asking(lambda pdf: [
+        {"type": "file", "base64": "A" * (400 * KB), "mime_type": "application/pdf"}
+    ])
+    stack, ledger = _stacked(cfg, session_dir, asking)
+
+    answer = _through(stack, EXPORT, export_pdf, way)
+
+    assert answer.text.startswith("export_pdf's result is a 300 KB PDF, too large"), answer.text
+    assert answer.status == "error"
+    assert ledger.entries == ()
+    assert len(asking.asked) == 1
+
+
+def test_the_async_path_asks_the_plugin_off_the_event_loop(cfg, session_dir):
+    """A plugin is a deployment's own code and may parse every page; called on the loop, it
+    would stall every turn the process is serving while it did."""
+    model = _calls(("read_file", _pdf_of(session_dir, "small.pdf", 10 * KB)))
+    asking = _Asking()
+
+    _run(cfg, session_dir, model, wait=True, pdfs=asking)
+
+    assert asking.on_a_loop == [False]
+
+
+def test_a_plugin_that_raises_leaves_kingfishers_verdict(cfg, session_dir, caplog):
+    """A failing plugin that failed the call took a PDF kingfisher would have handed over
+    away from the model, and one that passed everything took the limit away."""
+    reads = [_pdf_of(session_dir, "small.pdf", 10 * KB), {"file_path": "/inputs/big.pdf"}]
+    (session_dir / "inputs" / "big.pdf").write_bytes(LARGE)
+    model = _calls(*(("read_file", read) for read in reads))
+
+    def raising(pdf):
+        raise RuntimeError(pdf.call_id)
+
+    _run(cfg, session_dir, model, pdfs=_Asking(raising))
+
+    assert _files([_answer(model, "c1")]), "the PDF that passes was not handed over"
+    assert _answer(model, "c2").text.startswith("/inputs/big.pdf is a 300 KB PDF, too large")
+    assert caplog.text.count("the PDF attachments plugin raised on read_file's result") == 2
+
+
+def test_every_graph_kingfisher_builds_asks_the_deployments_plugin(scripted):
+    """A plugin the agent asked and its subagents did not left a declared subagent's PDFs,
+    and `general-purpose`'s, judged by size alone. Through `Plugins`, as the command hands
+    it."""
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "helper.yaml").write_text(HELPER, encoding="utf-8")
+    an_agent(scripted, subagents="[helper]", **EVERY_TOOL)
+    read = _pdf_of(scripted.workspace / "sessions" / start(scripted, "s"), "a.pdf", 10 * KB)
+
+    def delegated(call_id: str, to: str, read_as: str) -> list[AIMessage]:
+        asked = {"description": "read it", "subagent_type": to}
+        return [
+            AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": call_id}]),
+            AIMessage(content="", tool_calls=[{"name": "read_file", "args": read, "id": read_as}]),
+            AIMessage("read"),
+        ]
+
+    Scripted.script.extend([
+        *delegated("t1", "helper", "s1"),
+        *delegated("t2", "general-purpose", "g1"),
+        AIMessage(content="", tool_calls=[{"name": "read_file", "args": read, "id": "c3"}]),
+        AIMessage("done"),
+    ])
+    asking = _Asking()
+    wiring = Plugins(pdf_attachments=asking).keywords()
+
+    Kingfisher(scripted, sessions=LocalSessions(), **wiring).run(
+        Request("go", agent="only", session_id="s")
+    )
+
+    assert [one.call_id for one in asking.asked] == ["s1", "g1", "c3"]

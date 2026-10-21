@@ -236,7 +236,9 @@ reads as failed only when nothing else came back.
 
 A turn here is one graph's: a subagent counts what it opens, against its own model.
 Each turn starts with nothing open: an earlier turn's results come back as their text
-alone.
+alone. A deployment judging PDFs by more than their size, their pages say, does it with
+a [`PdfAttachments`](ports.md#pdfattachments--what-the-model-is-handed-in-place-of-a-pdf)
+plugin, which may hand over something else in a PDF's place.
 
 A message a tool writes itself is read the same way, inside a `Command` too. Return a
 file that large, or of that kind, as a path, the way
