@@ -489,17 +489,38 @@ def test_a_refused_skills_mount_leaves_the_rows_that_never_read_it(cfg, tmp_path
     assert names.index("definitions") < names.index("shell")
 
 
-def test_a_bad_shell_setting_leaves_the_rows_that_never_ask_the_fence(cfg, monkeypatch):
-    """With a deployment's own sessions the fence reads `KINGFISHER_SHELL_SANDBOX`, and
-    its refusal was one `configuration` row in place of every row after the credentials."""
+def test_a_shell_doctor_cannot_see_into_is_not_reported_as_kingfishers_fence(
+    cfg, monkeypatch
+):
+    """With a deployment's own sessions the `shell` row said "confined by sandbox-exec",
+    the fence kingfisher's own sessions would have run, though theirs fence the shell
+    themselves and the setting never reaches them."""
+    monkeypatch.delenv("KINGFISHER_SHELL_SANDBOX", raising=False)
+
+    check = {c.name: c for c in examine(cfg, sessions=Remote())}["shell"]
+
+    assert check.verdict == "warn"
+    assert "nothing here can see what confines their shell" in check.detail
+    assert "sandbox-exec" not in check.detail
+
+
+def test_a_bad_shell_setting_is_said_but_not_failed_for_sessions_doctor_cannot_see_into(
+    cfg, monkeypatch
+):
+    """`KINGFISHER_SHELL_SANDBOX=bogus` failed `doctor` for a deployment's own sessions,
+    which read it only if built on `backend_at`, and dropped every row that asks the fence.
+    Kingfisher's own sessions refuse it, as the configuration error below says."""
     monkeypatch.setenv("KINGFISHER_SHELL_SANDBOX", "bogus")
 
     checks = {c.name: c for c in examine(cfg, sessions=Remote())}
 
-    assert checks["shell"].verdict == "fail"
+    assert checks["shell"].verdict == "warn"
     assert "'bogus'" in checks["shell"].detail
-    assert {"definitions to seed", "agents", "definitions run"} <= set(checks)
-    assert "session files" not in checks
+    assert "backend_at" in checks["shell"].detail
+    assert {"definitions to seed", "agents", "definitions run", "session files"} <= set(
+        checks
+    )
+    assert worst(tuple(checks.values())) != "fail"
 
 
 def test_a_retired_setting_is_named_even_when_the_config_will_not_load(

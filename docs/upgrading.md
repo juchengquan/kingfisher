@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Doctor's `shell` row warns for sessions it cannot see into, after #9999
+
+- **With sessions of your own, the `shell` row is a warning naming them.** It reported
+  the fence kingfisher's own sessions would have run -- "confined by sandbox-exec" --
+  and with `KINGFISHER_SHELL_SANDBOX` set to a value it does not take, it failed and
+  dropped every row that asks the fence. Your sessions fence their shell themselves and
+  read the variable only if built on `backend_at`, so a bad value is now said in the
+  warning, and `doctor` no longer exits 1 on it. Kingfisher's own sessions refuse it as
+  before.
+
 ## A `ScratchRunLimit` is asked about the agent once, after #9999
 
 - **The agent's question comes once a build, as the interface always said.** A stack
