@@ -2913,13 +2913,30 @@ a deployment's included, driven against `sandbox-exec`, the unfenced shell and L
 under Landlock, at first, without testing anything, for the reason the entry on
 `/dev/null` below gives.
 
-**Not reached: a process that calls `setsid()`**, which leaves the group. Measured on
-macOS under the profile, `setsid` from Perl, from Python, and a fork-setsid-fork all
-outlived the kill. bubblewrap's process namespace should end them with its first
-process; on macOS and under Landlock they remain, recorded rather than closed. Closing
-them on Linux means a launcher that outlives the command as a subreaper and kills what
-comes back to it, a process per command, and is to be measured on the Linux job before
-it is built. macOS has no equivalent. *(2026-10-20.)*
+**Not reached by the group kill: a process that calls `setsid()`**, which leaves the
+group. Measured on macOS under the profile, `setsid` from Perl, from Python, and a
+fork-setsid-fork all outlived the kill. macOS has nothing to adopt them with, so there
+they remain, recorded rather than closed. bubblewrap's process namespace should end them
+with its first process; not measured, its namespace being refused on the Linux job.
+*(2026-10-20.)*
+
+**Under Landlock a reaper runs every command, and is asked before it is killed.**
+Measured on the Linux job on 2026-10-21, with each escape saying it had begun before its
+command ended: a fork-setsid-fork outlived the group kill there too. Backgrounded
+`setsid` escapes had looked killed, but only by racing the kill to `setsid()`, and the
+first runs had looked killed throughout because `/dev/null` was refused, so nothing
+started -- a control that is never killed is what told the two apart. `_reaper.py` runs
+as `python -I -c`, sets `PR_SET_CHILD_SUBREAPER`, runs the command through `/bin/sh`,
+and when the shell ends kills and collects whatever came back to it, pass after pass,
+whatever its session. **Asked first, at a timeout:** SIGKILL to the group reached the
+reaper too, and what it had adopted went to init -- measured, every escape survived a
+timeout until `run_command` sent the leader SIGTERM `REAPER_GRACE_S` before the time was
+up, inside it rather than after, so a command still never outlives its timeout. The
+cost is an interpreter per command, measured at 11.6ms to 35.6ms for `true`, beside a
+model call of seconds. By source, not `-m`, since the fence reads the interpreter and not
+necessarily kingfisher's own files; where it cannot adopt it hands the command to the
+shell, so the macOS tests driving the runner see what they saw. Not given to the
+unfenced shell, which is no boundary, nor to bubblewrap. *(2026-10-21.)*
 
 **Landlock refused `/dev/null`, and so every `2>/dev/null` a model typed.** The policy
 reads `/dev` and writes only the session's folders, so a redirection to it failed before
