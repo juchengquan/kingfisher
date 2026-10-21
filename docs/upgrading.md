@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A listing names only the folders that are there, after #1038
+
+- **`ls` no longer names a route whose folder nothing has made.** #1036 mounted
+  `/scratchpad/blobs/` and `/scratchpad/large_tool_results/`, and the listing named both
+  although neither existed, so the model opening one was told `path_not_found`. If your
+  own backend mounts a route whose folder is made later, the model will not see it until
+  something writes there; `/skills/` and the rest are unaffected, since deepagents names
+  every route at `/` itself.
+- **`_listing` takes no routes.** It is private to `plugins.sessions.backend`, so this
+  matters only to a deployment that called it anyway.
 ## Clearing counts as the summarizer does, after #1037
 
 - **Clearing starts sooner on an Anthropic-format model.** It counted four characters a
