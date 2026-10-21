@@ -65,6 +65,9 @@ PREVIEW_CHARS = 4_000
 #: before should not have to learn a second spelling.
 OMITTED = "... [{lines} lines truncated] ..."
 
+#: Said where part of one line was left out, so a cut line is not read as all of it.
+CUT = "... [{chars} characters truncated] ..."
+
 
 @dataclass(frozen=True)
 class Audiences:
@@ -261,24 +264,42 @@ def _preview(text: str, path: str) -> str:
     """A long result as its head and its tail, with a last line saying where the whole is.
 
     Lines rather than characters: a result cut mid-line reads as corrupt, and the head and
-    tail of a table or a log are what a reader judges it by.
+    tail of a table or a log are what a reader judges it by. Only a line too long to show
+    at all is cut, and marked: minified JSON is one line, and whole lines alone showed the
+    model nothing of it but a count.
     """
     half = PREVIEW_CHARS // 2
     lines = text.splitlines()
-    head: list[str] = []
-    tail: list[str] = []
-    for line in lines:
-        if sum(len(one) + 1 for one in head) + len(line) > half:
-            break
-        head.append(line)
-    for line in reversed(lines[len(head) :]):
-        if sum(len(one) + 1 for one in tail) + len(line) > half:
-            break
-        tail.append(line)
-    tail.reverse()
-    omitted = len(lines) - len(head) - len(tail)
-    middle = [OMITTED.format(lines=omitted)] if omitted > 0 else []
+    head = _whole(lines, half)
+    tail = _whole(lines[len(head) :][::-1], half)[::-1]
+    left = lines[len(head) : len(lines) - len(tail)]
+    if not left:
+        return "\n".join([*head, *tail, f"full result: {path}"])
+    starts = left[0][:half] if not head else ""
+    ends = left[-1][-half:] if not tail else ""
+    if len(left) == 1 and starts and ends:
+        cut = len(left[0]) - len(starts) - len(ends)
+        middle = [starts, CUT.format(chars=cut), ends] if cut > 0 else [left[0]]
+    else:
+        omitted = len(left) - bool(starts) - bool(ends)
+        middle = [
+            *([starts, CUT.format(chars=len(left[0]) - len(starts))] if starts else []),
+            *([OMITTED.format(lines=omitted)] if omitted > 0 else []),
+            *([CUT.format(chars=len(left[-1]) - len(ends)), ends] if ends else []),
+        ]
     return "\n".join([*head, *middle, *tail, f"full result: {path}"])
+
+
+def _whole(lines: list[str], room: int) -> list[str]:
+    """As many of `lines`, in order, as fit in `room` characters with a newline each."""
+    kept: list[str] = []
+    used = 0
+    for line in lines:
+        if used + len(line) > room:
+            break
+        kept.append(line)
+        used += len(line) + 1
+    return kept
 
 
 def _shown(answer: ToolMessage, entry: LedgerEntry, text: str) -> Any | None:

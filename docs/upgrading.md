@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A preview shows a result's ends however long its lines, after #9999
+
+- **A long result on one line is previewed by its start and its end.** The preview kept
+  whole lines only, so minified JSON, or a result whose every line was wider than half
+  the preview, showed the model `... [1 lines truncated] ...` and the path and nothing
+  else. A line too long to show at all is now cut and marked `... [N characters
+  truncated] ...`; results whose lines fit read as before.
+
 ## A lone `datazone=` name is refused like a listed one, after #9999
 
 - **`source_ids: datazone=finance`, written without brackets, no longer loads.** The list
