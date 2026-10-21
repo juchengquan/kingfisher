@@ -42,9 +42,9 @@ class Ledger:
         #: adds no user message, and the next one's delta reaches back past it.
         self.resumed = resumed
         #: As this turn writes it back, with every result older than `keep_rounds` exchanges
-        #: expired; `expired` holds those entries as they were, naming the files to remove.
-        #: Marked from the start, so clearing this turn hands no path the turn will remove.
-        self.earlier, self.expired = expired(earlier, keep_rounds, turn=turn, resumed=resumed)
+        #: expired: no row names its file, so the sweep removes it. Marked from the start,
+        #: so clearing this turn hands no path the turn will remove.
+        self.earlier = expired(earlier, keep_rounds, turn=turn, resumed=resumed)
         # Calls made together run on threads, each with its own recorder.
         self._lock = threading.Lock()
         self._entries: list[LedgerEntry] = []

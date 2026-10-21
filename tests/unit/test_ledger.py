@@ -2134,8 +2134,13 @@ def test_a_resume_carries_on_the_round_it_answers(ledgered):
     resumed = Ledger("t3", kept, resumed=True, keep_rounds=1)
     asked = Ledger("t3", kept, keep_rounds=1)
 
-    assert [entry.id for entry in resumed.expired] == ["A-0001"]
-    assert [entry.id for entry in asked.expired] == ["A-0001", "A-0002"]
+    assert _expired_in(resumed) == ["A-0001"]
+    assert _expired_in(asked) == ["A-0001", "A-0002"]
+
+
+def _expired_in(ledger: Ledger) -> list[str]:
+    rows = (json.loads(line) for line in ledger.earlier.lines)
+    return [row["id"] for row in rows if row.get("expired_in") == ledger.turn]
 
 
 def test_a_row_written_before_expiry_existed_is_still_read(ledgered):
