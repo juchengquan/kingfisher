@@ -256,6 +256,21 @@ class Instructions(Protocol):
         ...
 
 
+class SessionInstructions(Protocol):
+    """A deployment's text for one session, for every agent and subagent a turn in it
+    runs, but a compiled subagent, as `Instructions` reach.
+
+    Asked once per turn, and that turn's every graph is sent the same answer. Sent after
+    the part of the system prompt that is cached, so text that differs between sessions
+    costs none of them that cache; text that changes between one turn and the next costs
+    the part after it, the memory block and the conversation.
+    """
+
+    def text(self, cfg: Config, session_id: str) -> str:
+        """The text for this session, or an empty string for none."""
+        ...
+
+
 class UnusedResults(Protocol):
     """What becomes of the saved tool results nothing points to any more.
 

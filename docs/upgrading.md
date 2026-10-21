@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Text for one session is a plugin, after #1028
+
+- **`SessionInstructions` is new on `kingfisher.plugins`**, and `Kingfisher` takes
+  `session_instructions=`, as `Plugins` does for the command: an object with
+  `text(cfg, session_id) -> str`, asked once per turn. Left out, nothing changes.
+  `docs/guides/ports.md` has the section.
+- **If you replace `AnthropicPromptCachingMiddleware` to send each session text after
+  the cached part, drop the replacement and return that text from the plugin.** It is
+  sent from the same slot, after the static prompt's breakpoint and before the memory
+  block, with no breakpoint of its own, to every graph kingfisher builds. Keeping the
+  replacement beside the plugin is refused with a `ConfigError` when the agent is
+  built; without the plugin it is only warned about, as before.
+
 ## Sized by the summarizer each graph runs, after #1027
 
 - **A summarizer of yours that fires sooner now shrinks what kingfisher keeps below

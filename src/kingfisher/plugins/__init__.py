@@ -13,6 +13,7 @@ _EXPORTS = {
     "Sessions": "kingfisher.core.interfaces",
     "RunEvents": "kingfisher.core.interfaces",
     "Instructions": "kingfisher.core.interfaces",
+    "SessionInstructions": "kingfisher.core.interfaces",
     "UnusedResults": "kingfisher.core.interfaces",
     "CommandRunner": "kingfisher.core.interfaces",
     "CommandResult": "kingfisher.core.interfaces",
@@ -57,6 +58,7 @@ __all__ = [
     "Plugins",
     "RunEvents",
     "ScratchRun",
+    "SessionInstructions",
     "Sessions",
     "ShellPrompt",
     "ShellSettings",
@@ -91,6 +93,7 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import Instructions as Instructions
     from kingfisher.core.interfaces import RunEvents as RunEvents
     from kingfisher.core.interfaces import ScratchRun as ScratchRun
+    from kingfisher.core.interfaces import SessionInstructions as SessionInstructions
     from kingfisher.core.interfaces import Sessions as Sessions
     from kingfisher.core.interfaces import UnusedResults as UnusedResults
     from kingfisher.core.layout import DEFAULT_LAYOUT as DEFAULT_LAYOUT

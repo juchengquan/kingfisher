@@ -153,7 +153,8 @@ it. An agent's is the last of three parts:
 
 The middle part can come from code instead: `instructions=` on `Kingfisher` takes any
 object with `text(cfg) -> str`, asked once per agent built, so a change reaches the
-next turn.
+next turn. Text for one session rather than every one goes after all three, from
+`session_instructions=` — [`ports.md`](ports.md) says where, and why there.
 
 There is no way to replace the first. An agent without it is not leaner — it is
 one holding tools nobody told it about, discovering its permissions by being

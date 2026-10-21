@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from .interfaces import RunEvents
 
 if TYPE_CHECKING:
-    from .interfaces import Instructions, UnusedResults
+    from .interfaces import Instructions, SessionInstructions, UnusedResults
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,7 @@ class Plugins:
     run_events: RunEvents | None = None
     middlewares: Mapping[str, Callable[..., Any]] | None = None
     instructions: Instructions | None = None
+    session_instructions: SessionInstructions | None = None
     unused_results: UnusedResults | None = None
 
     def keywords(self) -> dict[str, Any]:

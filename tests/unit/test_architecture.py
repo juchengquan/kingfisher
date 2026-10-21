@@ -1410,9 +1410,13 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # `core/definitions/middlewares` reach it too, and their entries below say so --
     # an upgrade is still a list of files rather than a search, and the list spans
     # more than one directory.
+    # `langchain_anthropic` for one class: the prompt caching deepagents builds, which
+    # `SessionInstructionsMiddleware` extends to take its slot by name. A model is still
+    # named by its wire format, never imported.
     "core/agent": frozenset({
         "deepagents",
         "langchain",
+        "langchain_anthropic",
         "langchain_core",
         "langchain_quickjs",
         "langgraph",
@@ -2081,6 +2085,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         "RunEvents": "interface",
         "CommandRunner": "interface",
         "Instructions": "interface",
+        "SessionInstructions": "interface",
         "UnusedResults": "interface",
         # The type a runner returns. Nothing *imports* it in a snippet -- a runner's
         # `run` returns one, so a deployment cannot write the interface without it.

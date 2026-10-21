@@ -428,6 +428,7 @@ def reported(kf, source_ids, name: str, *, asked_for: Capabilities | None = None
         agent=agent,
         held=held,
         files=drive(kf._files_for(session.name)),
+        session_id=session.name,
     ).graph
     return withheld_by_kind(
         allowed,
@@ -846,6 +847,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         agent=agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held),
         held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name)),
+        session_id=session.name,
     ).graph
     from kingfisher.core.reporting import withheld_by_kind
 
@@ -924,6 +926,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
         agent=agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held),
         held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name)),
+        session_id=session.name,
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkillsMiddleware"]
     advertised = {name for m in narrowed for name in m._allowed}
@@ -947,6 +950,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
         agent=agent,
         held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name)),
+        session_id=session.name,
     ).graph
     report = withheld_by_kind(
         grants,
@@ -1056,6 +1060,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
         agent=agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held),
         held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name)),
+        session_id=session.name,
     )
     narrowed = [m for m in built.middleware if type(m).__name__ == "NarrowedSkillsMiddleware"]
     advertised = {name for m in narrowed for name in m._allowed}

@@ -84,6 +84,12 @@ A deployment's standing text for every agent and subagent, read after kingfisher
 and before the agent's, and the plugin that supplies it.
 _Avoid_: deployment prompt, house rules, user prompt, PROMPT.md
 
+**Session instructions**:
+A deployment's text for one session, for every agent and subagent its turns run, read after
+the prompt they share with every other session, and the plugin that supplies it. Not a
+note, which a caller adds to one turn.
+_Avoid_: session prompt, conversation prompt, dynamic prompt, per-session system text
+
 ### Access
 
 **Source id**:
