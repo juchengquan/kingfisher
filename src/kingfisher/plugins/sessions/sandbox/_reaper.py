@@ -85,7 +85,9 @@ def main(command: str) -> None:
     code = os.waitstatus_to_exitcode(status)
     if code < 0:
         # Ended by a signal: ended by it again, so the caller reads what the shell did.
-        signal.signal(-code, signal.SIG_DFL)
+        # SIGKILL's own handler cannot be set, and needs none.
+        with suppress(OSError):
+            signal.signal(-code, signal.SIG_DFL)
         os.kill(os.getpid(), -code)
     sys.exit(code)
 
