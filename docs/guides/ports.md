@@ -412,6 +412,48 @@ Things to know:
 - **It runs in the kingfisher process**, on whatever a tool returned. Parse with a
   library you would trust with a file a stranger sent.
 
+## `SubagentMiddlewares` — what a portable subagent runs
+
+A [portable subagent](formats.md#a-subagent-that-travels--a-subagents-entry-with-no-build)
+may not name middleware: the names are this deployment's, and a definition written to
+travel has never seen them. Left out, each one runs the agent's own, the names the
+agent's file wrote, in its order, with the settings it wrote for each. Yours decides
+otherwise, for one subagent or every one. Turning it off:
+
+```python
+from collections.abc import Sequence
+
+class NoneOfTheAgents:
+    def names(self, subagent: str, agent: str, middlewares: tuple[str, ...]) -> Sequence[str]:
+        return ()
+
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(), subagent_middlewares=NoneOfTheAgents())
+```
+
+For the command, return it from your `KINGFISHER_PLUGINS` factory as
+`Plugins(subagent_middlewares=NoneOfTheAgents())`. `names` is told the subagent's name,
+the agent's, and the agent's middleware, and returns which of them the subagent runs.
+Kingfisher's own, `AgentsMiddlewares`, returns `middlewares`.
+
+Things to know:
+
+- **Only a portable subagent is asked about.** One in your definitions folder writes its
+  own `middlewares:` line, and a compiled one is given no middleware at all; neither
+  changes.
+- **It is told the agent's names at any depth.** A portable helper another subagent
+  consults is told the main agent's, not its summoner's: the agent's line is the ceiling
+  everything beneath it is held to, and a compiled summoner has no line.
+- **A name outside `middlewares` is refused** when the agent is built, as one a
+  definition names past its ceiling is, and the error says your `SubagentMiddlewares`
+  chose it. It is not dropped: a subagent running without the audit hook you meant it
+  to have is the failure the refusal exists for.
+- **The settings are the agent's, the model is the subagent's.** Each name is built
+  with what the agent's file wrote for it; a middleware that `wants` a model is handed
+  the one the subagent runs.
+- **It is asked once for each portable subagent built**, a helper included, when the
+  agent is built: once a turn. With no agent resolved there is nothing to inherit, and
+  it is not asked.
+
 ## The rest
 
 **The conversation is not for replacing either.** Kingfisher keeps it in the session,

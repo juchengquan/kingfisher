@@ -55,6 +55,10 @@ class SubagentSpec(SpecBase):
     #: For a subagent declared in Python: called with a model and the tools it was
     #: granted, it returns a graph deepagents runs as given.
     build: Any = field(default=None, metadata={"derived": True})
+    #: Read from a `SUBAGENTS` entry with no `build`. Not inferred from `build` alone,
+    #: which a file in the definitions folder has none of either, nor from `carried`,
+    #: empty for an entry that brought nothing.
+    portable: bool = field(default=False, metadata={"derived": True})
     #: The one datazone a caller must be in to reach it, or `None` for any. Not on
     #: `SpecBase`: an agent runs in whichever datazone its caller is in.
     datazone: str | None = None
@@ -239,7 +243,9 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
         ),
         "middlewares": (
             "it selects code the deployment wrote and registered, which is neither "
-            "shipped with this definition nor nameable from outside"
+            "shipped with this definition nor nameable from outside. It runs the "
+            "middleware of the agent it works for instead, unless the deployment's "
+            "SubagentMiddlewares chooses otherwise"
         ),
         "model": (
             "it names a model profile only this deployment defines, and naming one "
@@ -379,6 +385,7 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
         # No catalogue names, whatever it wrote: it holds what it carried and nothing else.
         tools=None,
         carried=carried,
+        portable=True,
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
         source_ids=read.source_ids(entry.get("source_ids")),
         datazone=read.datazone(entry.get("datazone")),

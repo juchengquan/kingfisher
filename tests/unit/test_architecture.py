@@ -2089,6 +2089,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         "PdfAttachments": "interface",
         # What `PdfAttachments.replacement` is handed, as `ScratchRun` is below.
         "ReturnedPdf": "interface",
+        "SubagentMiddlewares": "interface",
         # The type a runner returns. Nothing *imports* it in a snippet -- a runner's
         # `run` returns one, so a deployment cannot write the interface without it.
         "CommandResult": "interface",
@@ -2111,11 +2112,12 @@ WITNESSES: dict[str, dict[str, str]] = {
         # the routes it serves, and names the type and the layout a `Config` defaults to.
         "Layout": "document",
         "DEFAULT_LAYOUT": "document",
-        # The shipped pair behind two of the interfaces above, public so a deployment
-        # can wrap one rather than reimplement it. No page writes either name out.
+        # The shipped defaults behind four of the interfaces above, public so a
+        # deployment can wrap one rather than reimplement it. No page writes one out.
         "JsonlRunEvents": "embedder",
         "InstructionsFile": "embedder",
         "DeleteUnusedResults": "embedder",
+        "AgentsMiddlewares": "embedder",
         # What `UnusedResults.settle` is handed, which `ports.md` writes out in its
         # example plugin's signature and loop.
         "UnusedFiles": "document",

@@ -17,6 +17,8 @@ _EXPORTS = {
     "UnusedResults": "kingfisher.core.interfaces",
     "PdfAttachments": "kingfisher.core.interfaces",
     "ReturnedPdf": "kingfisher.core.interfaces",
+    "SubagentMiddlewares": "kingfisher.core.interfaces",
+    "AgentsMiddlewares": "kingfisher.core.interfaces",
     "CommandRunner": "kingfisher.core.interfaces",
     "CommandResult": "kingfisher.core.interfaces",
     "ScratchRun": "kingfisher.core.interfaces",
@@ -47,6 +49,7 @@ _EXPORTS = {
 __all__ = [
     "DEFAULT_LAYOUT",
     "WIRE_FORMATS",
+    "AgentsMiddlewares",
     "CommandResult",
     "CommandRunner",
     "Definitions",
@@ -66,6 +69,7 @@ __all__ = [
     "Sessions",
     "ShellPrompt",
     "ShellSettings",
+    "SubagentMiddlewares",
     "UnusedFile",
     "UnusedFiles",
     "UnusedResults",
@@ -92,6 +96,7 @@ if TYPE_CHECKING:
     from kingfisher.core.config import WireFormat as WireFormat
     from kingfisher.core.definitions.catalogue import Definitions as Definitions
     from kingfisher.core.definitions.skills.registry import list_skills as list_skills
+    from kingfisher.core.interfaces import AgentsMiddlewares as AgentsMiddlewares
     from kingfisher.core.interfaces import CommandResult as CommandResult
     from kingfisher.core.interfaces import CommandRunner as CommandRunner
     from kingfisher.core.interfaces import Instructions as Instructions
@@ -101,6 +106,7 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import ScratchRun as ScratchRun
     from kingfisher.core.interfaces import SessionInstructions as SessionInstructions
     from kingfisher.core.interfaces import Sessions as Sessions
+    from kingfisher.core.interfaces import SubagentMiddlewares as SubagentMiddlewares
     from kingfisher.core.interfaces import UnusedResults as UnusedResults
     from kingfisher.core.layout import DEFAULT_LAYOUT as DEFAULT_LAYOUT
     from kingfisher.core.layout import Layout as Layout

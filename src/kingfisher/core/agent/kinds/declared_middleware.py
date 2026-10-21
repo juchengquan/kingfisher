@@ -66,25 +66,28 @@ def offered_middleware(
     return {**offered, **registered}
 
 
-def declared_middleware(
+def declared_middleware(  # noqa: PLR0913 -- `chosen_by` only for a portable subagent
     spec: Any,
     registry: Mapping[str, MiddlewareFactory],
     allowed: Selection,
     *,
     kind: str,
     provisions: Mapping[str, Any] | None = None,
+    chosen_by: str | None = None,
 ) -> list[Any]:
     """Build the middleware a definition asked for, agent or subagent.
 
     `provisions` fills a class's `wants`; it defaults to nothing so a caller with no graph
-    around it can still build a middleware that wants none.
+    around it can still build a middleware that wants none. `chosen_by` names who chose
+    `spec.middlewares` when its definition did not.
     """
     subject = f"{kind} {spec.name!r}"
     approved = approved_middleware(
         spec.middlewares,
         registered=registry,
         granted=allowed,
-        subject=subject,
+        # Whoever chose the names is who a refusal of one sends the reader to.
+        subject=subject if chosen_by is None else f"{chosen_by}, choosing for {subject},",
     )
     wrote = spec.middleware_settings
     built = []
