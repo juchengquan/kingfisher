@@ -30,6 +30,8 @@ BAD_REQUEST = 400
 #: Anthropic's names for those same refusals, all that an error sent inside a stream
 #: carries: the stream began as a 200, and the SDK raises it with that status.
 UNSERVED_TYPES = frozenset({"overloaded_error", "api_error", "rate_limit_error"})
+#: And the one for a 400, which a stream's error is just as able to carry.
+REFUSED_TYPE = "invalid_request_error"
 
 #: Matched by name through the class's ancestry, so neither SDK -- nor httpx, which both
 #: send through -- is imported here.
@@ -61,7 +63,7 @@ def unavailable(exc: BaseException) -> str | None:
         status = getattr(one, "status_code", None)
         if isinstance(status, int) and (status == TOO_MANY_REQUESTS or status >= SERVER_ERROR):
             return f"{status}: {said(one)}"
-        kind = _error_type(one)
+        kind = error_type(one)
         if isinstance(status, int) and status < BAD_REQUEST and kind in UNSERVED_TYPES:
             return f"{kind}: {said(one)}"
         names = {cls.__name__ for cls in type(one).__mro__}
@@ -74,7 +76,7 @@ def unavailable(exc: BaseException) -> str | None:
     return None
 
 
-def _error_type(exc: BaseException) -> str | None:
+def error_type(exc: BaseException) -> str | None:
     """The provider's name for the error, on the exception or in the body it came with."""
     kind = getattr(exc, "type", None)
     if not isinstance(kind, str):

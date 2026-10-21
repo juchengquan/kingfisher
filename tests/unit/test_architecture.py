@@ -936,7 +936,7 @@ def test_no_docstring_stops_mid_sentence():
     since one mentioned in passing is three.
     """
     unfinished, unclosed = [], []
-    for path in _everything_that_imports_kingfisher():
+    for path in _every_module_here():
         for name, doc in _docstrings(path):
             if inspect.cleandoc(doc).rstrip().endswith(UNFINISHED):
                 unfinished.append(f"{_module_id(path)}::{name}")
