@@ -18,6 +18,29 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Every tool result is saved in one folder, after #1018
+
+- **`scratchpad/large_tool_results/` is gone.** A result too long to show the model
+  whole is saved beside every other one, under `scratchpad/<tool_results>/`, and it is
+  shown its head and tail with the last line naming the file. deepagents offloaded it
+  before, to a folder kingfisher did not name; nothing writes that folder now. Delete a
+  leftover one: it is read by nothing.
+- **The `offloads_route` and `offloads` properties left `Layout`**, and its
+  `saved_results` holds one path rather than two. A deployment that read either to find
+  a result should read `tool_results_route` instead, which has not moved.
+- **`large_tool_results` is still a name a layout may not take.** Nothing writes it, but
+  a deployment that replaces `FilesystemMiddleware` can turn offloading back on, and a
+  layout holding the name would then overwrite the folder.
+- **If you replace `FilesystemMiddleware`**, leave `tool_token_limit_before_evict` unset
+  or `None`. kingfisher saves every result itself, and a replacement that offloads
+  writes a folder nothing names and no prompt sends the agent to. The warning such a
+  replacement already prints now says so.
+- **The prompt no longer teaches a second way to find a result.** It said to `glob` for
+  the row's id and, for an offloaded one, to `grep` for the `[A-0042]` line the file
+  ended in. Every file is named after its id now, so the `glob` is the only route; an
+  agent holding `grep` but not `glob` is told to call the tool again, as before.
+
+
 ## A summarised conversation is kept summarised, after #1017
 
 - **`.harness/transcript.jsonl` is the conversation as the model last saw it.** Once a
