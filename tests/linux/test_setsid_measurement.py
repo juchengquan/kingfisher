@@ -133,6 +133,29 @@ def _unkilled(runner, session: Path, command: str) -> tuple[bool, str]:
     return mark.exists(), (done.stdout + done.stderr).strip()[-200:]
 
 
+def _variant(session: Path, command: str, *, confined, killed: bool, policy) -> bool:
+    """One more way to start `command`, to find what ends what it leaves behind."""
+    import importlib
+    import subprocess
+
+    from kingfisher.plugins.sessions.sandbox.process import run_command
+
+    confine = importlib.import_module("sandlock").confine
+    mark = _mark(session)
+    inner = f"export M={shlex.quote(str(mark))}\n{command}"
+    env = {"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin"}
+    fence = (lambda: confine(policy)) if confined else None
+    if killed:
+        run_command(inner, env=env, timeout=20, cwd=str(session), preexec_fn=fence)
+    else:
+        subprocess.run(  # noqa: S602 -- a control, deliberately not killed
+            inner, shell=True, cwd=str(session), env=env, preexec_fn=fence,
+            start_new_session=True, capture_output=True, timeout=20, check=False,
+        )
+    time.sleep(3)
+    return mark.exists()
+
+
 def _said(survived: bool) -> str:
     return "SURVIVED" if survived else "killed"
 
@@ -150,10 +173,20 @@ def test_measure_setsid_escapes_under_landlock(tmp_path):
         at_exit = _survives(runner, session, command, reaped=True)
         # The launcher is the group's leader, so a timeout's SIGKILL reaches it too.
         at_timeout = _survives(runner, session, f"{command}\nsleep 30", reaped=True, timeout=1)
+        unfenced = _variant(session, command, confined=False, killed=True, policy=runner.policy)
+        fenced_alone = _variant(
+            session, command, confined=True, killed=False, policy=runner.policy
+        )
+        session_alone = _variant(
+            session, command, confined=False, killed=False, policy=runner.policy
+        )
         lines.append(
             f"{name}: control, never killed {'MARK WRITTEN' if wrote else 'NO MARK'} "
             f"({said!r}); plain {_said(plain)}; reaper, command ends {_said(at_exit)}; "
-            f"reaper, command times out {_said(at_timeout)}"
+            f"reaper, command times out {_said(at_timeout)}; "
+            f"A launcher unfenced {_said(unfenced)}; "
+            f"B Landlock + new session, no kill {_said(fenced_alone)}; "
+            f"C new session alone, no kill {_said(session_alone)}"
         )
     lines.append(_cost(runner))
     warnings.warn("setsid measurement:\n" + "\n".join(lines), stacklevel=1)
