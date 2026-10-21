@@ -2228,18 +2228,37 @@ the event with the checkpoint, and counts too.
 an artifact is a file under `/outputs` or `/memory`, as `RunResult.artifacts` lists, and
 the word would mean two things.
 
-**Older results and file text are cleared to handles once the agent's conversation is
-large.** Before each model call on the main agent, once the conversation reaches a high
-mark and a quarter of it could be freed, the oldest saved results, file tools' results
-and the text inside `write_file` and `edit_file` calls become handles until it is under
-half the mark. A recorded result keeps its summary, size and id and names its file; a
-file tool's names the call that gets it back; a write or edit says the file holds the
-current text. The latest batch and the three most recent clearable results stay whole.
-Settled with the owner after four real sessions were measured. *(2026-10-16.)*
+**Older results and file text are cleared to handles once a graph's conversation is
+large.** Before each model call, once the conversation reaches a high mark and a quarter
+of it could be freed, the oldest saved results, file tools' results and the text inside
+`write_file` and `edit_file` calls become handles until it is under half the mark. A
+recorded result keeps its summary, size and id and names its file; a file tool's names
+the call that gets it back; a write or edit says the file holds the current text. The
+latest batch and the three most recent clearable results stay whole. Settled with the
+owner after four real sessions were measured. *(2026-10-16.)*
 
-**The recorder and clearing stay two classes**, because the recorder runs alone on every
-subagent; what they share is how a record is written -- a row's arguments and summary,
-and the id a result ends in -- in `core.agent.middlewares.recorded`. *(2026-10-19.)*
+**Every graph kingfisher builds clears, not the agent alone.** It was the agent's, on the
+reasoning that a subagent's conversation ends with its answer. One handed a long job
+does not end soon: `general-purpose` and a declared subagent run tools the recorder
+keeps, and their conversations grew past where the agent's was cleared until a
+summariser rewrote what they had gathered as prose. Nothing held clearing to the agent:
+their results have rows a handle can name, a pass keeps nothing between calls, and run
+events tell a rewritten message from a new one per graph. So a declared subagent, a
+helper it consults and `general-purpose` clear too, each by the summariser it runs and
+by the mark beside the model it runs -- its own entry's where it names one, else its
+summoner's -- and a mark that summariser reaches first is refused naming that graph. A
+compiled subagent runs as it was built. The handles need no prompt to explain them, so a
+subagent is still told nothing of the harness: each says what was left out, where the
+whole is, and names only a tool that graph holds. *(2026-10-21, from a downstream
+request.)*
+
+**The recorder and clearing stay two classes**, because they wrap different calls from
+different places: clearing each model call, first, where it measures what the summariser
+counted, and the recorder each tool call, ahead of the guards that rewrite what the
+model wrote. What they share is how a record is written -- a row's arguments and
+summary, and the id a result ends in -- in `core.agent.middlewares.recorded`.
+*(2026-10-19; the reason restated 2026-10-21, once clearing reached every graph the
+recorder does.)*
 
 **The scope is what was resent, not what was saved.** Of what four four-turn MiniMax
 sessions resent per call, ledger results were 14.7%, file reads 36.5%, write and edit
@@ -2267,7 +2286,7 @@ is named by call id, and a later call with the same id overwrites it, so a path 
 name another call's result where a search finds nothing. A tool that offloads its own
 output hands the recorder the stub, and is named by our copy.
 
-**A handle names only a tool the agent holds.** The path goes to an agent holding
+**A handle names only a tool its graph holds.** The path goes to an agent holding
 `read_file`, the search to one holding `grep`, and any other is told to call the tool
 that made the result again. A model told to `grep` calls `grep` whatever it holds, and
 without it spends the step on a refusal. One holding `read_file` but not `grep` is not
@@ -2291,8 +2310,8 @@ nears the low mark: at a 20k mark one session fired 40 times without it and 12 w
 **One setting, and no flag and no off switch.** The trigger moves with the model's
 window, so the mark sits beside the model, and a flag would be a second place to look. A
 mark at or past deepagents' own trigger is refused when the model is built, and one at or
-past a deployment's summariser that fires sooner when the agent is built, since only the
-agent's middleware says which runs; the highest allowed almost never clears, the nearest
+past a deployment's summariser that fires sooner when the agent is built, since only
+each graph's middleware says which runs; the highest allowed almost never clears, the nearest
 thing to off. The summariser also fires on the last reply's reported usage, which this
 does not read. A model the deployment passes in takes the default. The ledger is
 unchanged by clearing.

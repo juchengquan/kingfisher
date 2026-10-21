@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A subagent's results are cleared too, after #1029
+
+- **A subagent's and `general-purpose`'s older results are cleared to handles, as the
+  agent's are.** Once a subagent's own conversation passes its mark, its oldest recorded
+  results, file reads and written text become handles saying where each still is: the
+  file under its row to one holding `read_file`, the call to make again to any other. A
+  middleware of yours on a subagent that reads earlier `ToolMessage`s may now find a
+  handle where a result was. A helper a subagent consults clears too; a compiled
+  subagent is untouched.
+- **Each subagent clears by the mark beside the model it runs.** A subagent naming a
+  model of its own takes that entry's `clear_results_at`, one naming none its
+  summoner's, and `general-purpose` the agent's. A mark at or past where a subagent's
+  own summarizer fires is now refused when the agent is built, naming the subagent;
+  before, nothing cleared there for it to be wrong about.
+
 ## Text for one session is a plugin, after #1028
 
 - **`SessionInstructions` is new on `kingfisher.plugins`**, and `Kingfisher` takes

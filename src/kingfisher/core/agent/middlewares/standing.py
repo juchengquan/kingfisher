@@ -69,8 +69,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     Built here and nowhere else, so what kingfisher guarantees on a graph is read in one
     place. `names` are the offered tools the graph holds; `tools` narrows what it is
     offered and `skills` its skills index, each `None` where nothing narrows, and `gated`
-    what it stops on for a person; `clearing`, which builds the result clearing for that
-    grant, and `reachable` are the agent's alone.
+    what it stops on for a person; `clearing` builds the result clearing for that grant,
+    `None` where no ledger is kept, and `reachable` is the agent's alone.
     `budget` is the turn's, whose step limit reaches only the agent's own run, so a subagent
     is held to it in model calls; one per build, shared by all three kinds. `trigger` is
     where this graph's own summariser fires, which sizes the PDFs its turn may hold open,
@@ -85,8 +85,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     where it wired none; `session_cached` is false only for a helper, whose stack its
     parent's own `SubAgentMiddleware` builds with no prompt caching.
     """
-    if kind != "agent" and (clearing is not None or reachable is not None):
-        msg = f"result clearing and the declared-subagent check are the agent's, not a {kind}'s"
+    if kind != "agent" and reachable is not None:
+        msg = f"the declared-subagent check is the agent's, not a {kind}'s"
         raise ValueError(msg)
     if kind == "general-purpose" and skills is not None:
         msg = (
