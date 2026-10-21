@@ -1,5 +1,6 @@
-Each of those files is under `/{{scratchpad}}/{{tool_results}}/`, or under
-`/{{scratchpad}}/large_tool_results/` for a result too long to show you whole.
+Each of those files is under `/{{scratchpad}}/{{tool_results}}/`, however long the
+result was: one too long to show you whole is shown as its head and its tail, with the
+last line naming the file that holds all of it.
 {{reading}}
 {{expiring}}
 

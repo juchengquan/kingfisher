@@ -1029,7 +1029,7 @@ def test_the_shell_cannot_rewrite_a_saved_result(cfg, layout):
     named = replace(cfg, layout=layout)
     backend = LocalSessions().open(named, "results")
     scratch, kept = layout.scratchpad, layout.tool_results
-    routes = (layout.tool_results_route, layout.offloads_route)
+    routes = (layout.tool_results_route,)
     backend.upload_files([(f"{route}A-0001.txt", b"as written") for route in routes])
 
     for folder in layout.saved_results:
@@ -1043,7 +1043,7 @@ def test_the_shell_cannot_rewrite_a_saved_result(cfg, layout):
 
     held = backend.download_files([f"{route}A-0001.txt" for route in routes])
     added = backend.download_files([f"{route}A-0002.txt" for route in routes])
-    assert [h.content for h in held] == [b"as written", b"as written"]
+    assert [h.content for h in held] == [b"as written"]
     assert all(a.error is not None for a in added), "the shell added a result"
     assert moved.exit_code != 0
     # The controls: the results still read, and the agent's own scratch still writes.
@@ -1134,7 +1134,7 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
     )
 
     read = [_as_sbpl_reads_it(line) for line in text.splitlines() if "(regex " in line]
-    assert len(read) == 7, f"seven rules are written as patterns; this found {len(read)}"
+    assert len(read) == 6, f"six rules are written as patterns; this found {len(read)}"
     for _, after in read:
         assert after == "))", f"the literal ends early, and sbpl reads {after!r} as code"
     denied = [re.compile(pattern) for pattern, _ in read]
@@ -1146,7 +1146,6 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
         one / "scratchpad",
         one / "memory",
         one / "scratchpad" / "tool_results" / "A-0001-execute.txt",
-        one / "scratchpad" / "large_tool_results" / "c1",
     ):
         assert any(rule.match(str(path)) for rule in denied), f"{path} is denied by nothing"
     for own in (one / "outputs" / "mine.txt", one / "scratchpad" / "mine.txt"):
@@ -1210,7 +1209,7 @@ def test_a_renamed_layout_moves_the_saved_results_denies_with_it(tmp_path):
         if "(regex " in line
     ]
     work = one / "work"
-    for path in (work, work / "kept" / "A.txt", work / "large_tool_results" / "c1"):
+    for path in (work, work / "kept" / "A.txt"):
         assert any(rule.match(str(path)) for rule in denied), f"{path} is denied by nothing"
     for path in (one / "scratchpad" / "tool_results" / "A.txt", work / "mine.txt"):
         assert not any(rule.match(str(path)) for rule in denied), f"{path} is denied"

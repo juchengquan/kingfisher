@@ -34,7 +34,6 @@ from kingfisher.core.layout import (
     LEDGER_FILE,
     PAUSED_STATE,
     SCRATCH,
-    SCRATCH_ROUTE,
     TOOL_RESULTS,
     TRANSCRIPT_FILE,
     Layout,
@@ -173,6 +172,39 @@ def _read(cfg, virtual: str) -> str:
 
 
 # -- what is recorded ----------------------------------------------------------
+
+
+# -- when and where it is kept -------------------------------------------------
+
+
+class _Ordered(LocalSessions):
+    """Kingfisher's own backends, noting every file written or deleted through one, in order."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.written: list[str] = []
+
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        opened = super().open(cfg, session_id, catalogue=catalogue)
+        upload = opened.upload_files
+
+        def noted(files):
+            self.written.extend(path for path, _ in files)
+            return upload(files)
+
+        opened.upload_files = noted
+        delete = opened.delete
+
+        def deleted(path):
+            self.written.append(f"deleted {path}")
+            return delete(path)
+
+        opened.delete = deleted
+        return opened
+
+    def at(self, name: str) -> int:
+        """Where the first write of a path ending in `name` came."""
+        return next(i for i, path in enumerate(self.written) if path.endswith(name))
 
 
 def test_a_result_is_recorded_kept_and_handed_to_the_caller(ledgered):
@@ -472,53 +504,6 @@ def test_a_result_too_long_to_show_is_recorded_whole(ledgered):
     assert entry.summary.startswith("loud -- row 00000 ")
 
 
-def test_an_offloaded_result_is_pointed_at_deepagents_copy(ledgered):
-    """deepagents keeps an evicted result already; without repointing the session
-    holds it twice, once under a name no stub mentions.
-    """
-    result = _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
-
-    (entry,) = result.ledger
-    assert entry.path == "/scratchpad/large_tool_results/c1"
-    assert _read(ledgered, entry.path).startswith("row 00000 ")
-    # deepagents keeps what it was handed, which is the result with its id on the end.
-    assert len(_read(ledgered, entry.path)) == entry.size + len("\n[A-0001]")
-    assert _kept(ledgered) == [], "kingfisher's own copy was kept beside deepagents'"
-    assert _rows(ledgered)[0]["path"] == entry.path
-
-
-# -- when and where it is kept -------------------------------------------------
-
-
-class _Ordered(LocalSessions):
-    """Kingfisher's own backends, noting every file written or deleted through one, in order."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.written: list[str] = []
-
-    def open(self, cfg, session_id, /, *, catalogue=None):
-        opened = super().open(cfg, session_id, catalogue=catalogue)
-        upload = opened.upload_files
-
-        def noted(files):
-            self.written.extend(path for path, _ in files)
-            return upload(files)
-
-        opened.upload_files = noted
-        delete = opened.delete
-
-        def deleted(path):
-            self.written.append(f"deleted {path}")
-            return delete(path)
-
-        opened.delete = deleted
-        return opened
-
-    def at(self, name: str) -> int:
-        """Where the first write of a path ending in `name` came."""
-        return next(i for i, path in enumerate(self.written) if path.endswith(name))
-
 
 def test_results_are_written_before_the_ledger_and_the_ledger_before_the_transcript(ledgered):
     """In that order a row never names a missing file, and a result the conversation
@@ -640,13 +625,13 @@ def test_the_agent_cannot_rewrite_or_delete_the_file_a_row_names(ledgered):
 
 
 def test_a_call_id_used_twice_leaves_each_row_on_its_own_result(ledgered):
-    """deepagents names an eviction after the call id alone, in a folder that outlasts
-    the turn -- so a provider reusing an id pointed the second row at the first
-    result's file, and the sweep then took the copy that was right.
+    """A provider reusing a call id across turns once pointed the second row at the
+    first result's file, and the sweep then took the copy that was right.
 
-    Two turns on one session, the first offloaded and the second not: without the
-    check, turn two's row read `/scratchpad/large_tool_results/c1` and `read_file` on
-    it returned turn one's 101 KB.
+    It cannot now, and that is the point: a file is named from the row's own id, which
+    is unique in the session, so the call id reaching it twice names nothing twice.
+    Kept because the shape that broke it is a provider's to produce, not ours, and a
+    future name taken from the call id would break it the same way.
     """
     first = _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
     second = _run(
@@ -655,11 +640,9 @@ def test_a_call_id_used_twice_leaves_each_row_on_its_own_result(ledgered):
 
     (was,) = first.ledger
     (now,) = second.ledger
-    assert was.path == "/scratchpad/large_tool_results/c1", "the first turn was not offloaded"
+    assert was.call == now.call == "c1", "the control: the provider reused the id"
     assert now.path != was.path, "two rows name one file, and only one of them is right"
     assert _read(ledgered, now.path).startswith("Ten results for EV")
-    # Our own copy, so the result and nothing else: the id goes on what the model is
-    # handed, and deepagents' copy is the one that keeps it.
     assert len(_read(ledgered, now.path)) == now.size
 
 
@@ -691,26 +674,6 @@ def test_two_calls_of_one_id_in_a_turn_each_keep_their_own_result(ledgered):
     for entry in (first, again):
         assert len(_read(ledgered, entry.path)) == entry.size, entry.id
 
-
-def test_two_calls_of_one_id_are_still_told_apart_when_their_lengths_differ(ledgered):
-    """The bound on the rule above: a tie is a tie in *length*, not in id. Where the
-    lengths differ the listing does tell them apart, and the row deepagents' copy
-    belongs to still takes it -- keeping ours whenever an id repeats would leave a
-    second copy of every long result in the session, which is the thing repointing
-    exists to avoid.
-    """
-    result = _run(
-        ledgered,
-        _calls(("loud_about", {"subject": "one"}, "c1")),
-        _calls(("web_search", {"query": "EV"}, "c1")),
-        AIMessage(content="done"),
-    )
-
-    long_one, short = result.ledger
-    assert long_one.path == f"{SCRATCH_ROUTE}large_tool_results/c1"
-    assert _read(ledgered, long_one.path).startswith("one 00000 ")
-    assert short.path.startswith(TOOL_RESULTS_ROUTE), "the short result is ours to keep"
-    assert _read(ledgered, short.path).startswith("Ten results for EV")
 
 
 def test_a_todo_rewrite_is_not_a_recorded_result(ledgered):
@@ -1271,31 +1234,33 @@ def test_a_command_is_stamped_in_a_copy_that_keeps_the_rest_of_it(ledgered):
     assert returned.update["messages"] == [earlier, answer]
 
 
-def test_the_id_outlasts_eviction_as_the_last_line_of_the_stub(ledgered):
-    """deepagents swaps a long result for a stub of its first and last lines, so an id
-    anywhere but last is cut away with the middle, and the model never sees it.
+def test_the_id_outlasts_the_preview_as_the_last_line_of_it(ledgered):
+    """A long result is shown as its head and tail, so an id anywhere but last is cut
+    away with the middle and the model never sees it.
     """
     _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
 
-    stub = _handed("c1").text
-    assert stub.startswith("Tool result too large"), "the control: it was never evicted"
-    assert stub.rstrip().endswith("[A-0001]")
+    shown = _handed("c1").text
+    assert len(shown) < 80_000, "the control: it was shown whole and never previewed"
+    assert "lines truncated]" in shown, "the control: nothing was left out"
+    assert shown.rstrip().endswith("[A-0001]")
 
 
-def test_the_id_outlasts_eviction_of_a_result_made_of_blocks(ledgered):
-    """deepagents joins a block list's text into one stub and keeps an image beside it,
-    so the id's own block survives only as the last line of the joined text.
+def test_the_id_outlasts_the_preview_of_a_result_made_of_blocks(ledgered):
+    """A block list's text is previewed where it stood and the image kept beside it, so
+    the id's own block survives after both -- and a caption still reads as the image's.
     """
     (tools_dir(ledgered) / "blocks.py").write_text(BLOCKS, encoding="utf-8")
 
     _run(ledgered, _calls(("loud_blocks", {}, "c1")), AIMessage(content="done"))
 
-    stub, image = _handed("c1").content
-    assert isinstance(stub, dict), "the text was no longer a block of its own"
-    assert isinstance(image, dict), "the image was lost"
-    assert stub["text"].startswith("Tool result too large"), "the control: never evicted"
-    assert stub["text"].rstrip().endswith("[A-0001]")
-    assert image["type"] == "image", "the image was lost"
+    shown, image, mark = _handed("c1").content
+    assert isinstance(shown, dict), "the text was no longer a block of its own"
+    assert len(shown["text"]) < 80_000, "the control: shown whole and never previewed"
+    assert "lines truncated]" in shown["text"], "the control: nothing was left out"
+    assert isinstance(image, dict) and isinstance(mark, dict), "a block stopped being one"
+    assert image["type"] == "image", "the image was lost, or moved behind the text"
+    assert str(mark["text"]).strip() == "[A-0001]"
 
 
 def test_a_result_the_backend_would_not_keep_is_stamped_all_the_same(ledgered):
@@ -1901,37 +1866,42 @@ def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):
     a result by: named or ended otherwise than `system.md` says, the file is one it
     cannot find again.
 
-    Through the agent's own `glob` and `grep`, under the rules its turn runs with, and
-    with the patterns read out of the prompt rather than written here, so that a test
-    spelling them right cannot pass beside a prompt spelling them wrong.
+    Through the agent's own `glob`, under the rules its turn runs with, and with the
+    pattern read out of the prompt rather than written here, so that a test spelling it
+    right cannot pass beside a prompt spelling it wrong.
+
+    One pattern for both: a long result is named after its id like any other, where it
+    was once named after its call and could only be found by grepping for the id line it
+    ended in.
     """
     taught = " ".join(render_system_prompt(layout=DEFAULT_LAYOUT).split())
     by_name = re.search(r"`glob` for `([^`]+)` in `([^`]+)`", taught)
-    by_line = re.search(r"ends in its `([^`]+)` line, so `grep` for that in `([^`]+)`", taught)
-    assert by_name and by_line, "the prompt no longer says how to find a file by its id"
+    assert by_name, "the prompt no longer says how to find a file by its id"
     first = _run(
         ledgered,
         _calls(("web_search", {"query": "EV"}, "c1")),
         _calls(("loud", {}, "c2")),
         AIMessage(content="done"),
     )
-    kept, offloaded = (next(e for e in first.ledger if e.tool == t) for t in ("web_search", "loud"))
+    kept, long = (next(e for e in first.ledger if e.tool == t) for t in ("web_search", "loud"))
+    # Both in the one folder, short and long alike: the id is what finds either, and a
+    # second folder was the reason an id had to be searched for rather than read.
     assert kept.path.startswith(TOOL_RESULTS_ROUTE), "the control: the search was not kept"
-    assert offloaded.path == f"{SCRATCH_ROUTE}large_tool_results/c2", "the control: not offloaded"
+    assert long.path.startswith(TOOL_RESULTS_ROUTE), "the control: the long result was not kept"
+    assert long.path != kept.path
 
     example = entry_id(42)
     _run(
         ledgered,
         _calls(
             ("glob", {"pattern": by_name[1].replace(example, kept.id), "path": by_name[2]}, "c3"),
-            ("grep", {"pattern": by_line[1].replace(example, offloaded.id), "path": by_line[2]},
-             "c4"),
+            ("glob", {"pattern": by_name[1].replace(example, long.id), "path": by_name[2]}, "c4"),
         ),
         AIMessage(content="done"),
     )
 
     assert kept.path in _handed("c3").text
-    assert offloaded.path in _handed("c4").text
+    assert long.path in _handed("c4").text
 
 
 # -- expiry --------------------------------------------------------------------
@@ -2023,23 +1993,6 @@ def test_an_expired_row_keeps_what_this_version_does_not_read(ledgered):
     assert (row["later"], row["path"]) == ("x", None)
     assert row["expired_in"] is not None
 
-
-@pytest.mark.parametrize("overwritten", [False, True], ids=["its-own", "another-calls"])
-def test_an_expired_offload_is_removed_only_while_it_is_still_that_result(
-    ledgered, overwritten
-):
-    """deepagents names an offloaded file after the call id alone and a later call of that
-    id overwrites it, so removing it by name deletes a result a stub still names."""
-    cfg = _rounds(ledgered, 1)
-    (entry,) = _run(cfg, _calls(("loud", {}, "c1")), AIMessage(content="done")).ledger
-    offload = _session(cfg) / entry.path.lstrip("/")
-    if overwritten:
-        offload.write_text("another call's result", encoding="utf-8")
-
-    _run(cfg, AIMessage(content="nothing this time"))
-
-    assert offload.exists() is overwritten
-    assert next(row for row in _rows(cfg) if "id" in row)["expired_in"] is not None
 
 
 def test_an_expired_result_is_listed_as_expired_not_as_not_kept():

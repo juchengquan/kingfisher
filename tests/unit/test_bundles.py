@@ -879,7 +879,6 @@ def test_a_bundles_skills_add_a_mount_and_no_rule(cfg, session_dir):
     assert DEFAULT_LAYOUT.denied_scopes() == (
         "/.harness/**",
         "/inputs/**",
-        "/scratchpad/large_tool_results/**",
         "/scratchpad/tool_results/**",
         "/skills/**",
     )

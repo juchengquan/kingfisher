@@ -40,8 +40,10 @@ SCRATCH = "scratchpad"
 #: recorder's.
 TOOL_RESULTS = "tool_results"
 
-#: deepagents' own, where a result too long to show the model whole is offloaded. Spelled
-#: here because deepagents builds it privately, with no constant to read it off.
+#: deepagents' own folder for a result too long to show the model whole. Nothing writes
+#: it: `standing_middleware` replaces the middleware that would, so a long result is
+#: previewed and kept where every other one is. Still reserved below, because a deployment
+#: may replace that middleware back and a layout holding the name would overwrite it.
 OFFLOADS = "large_tool_results"
 
 #: Where skills live.
@@ -188,16 +190,6 @@ class Layout:
         return _route(self.scratchpad, self.tool_results)
 
     @property
-    def offloads_route(self) -> str:
-        """deepagents' own, under this layout's scratchpad: the leaf is fixed, the parent moves."""
-        return _route(self.scratchpad, OFFLOADS)
-
-    @property
-    def offloads(self) -> str:
-        """deepagents' folder for a result too long to send, under the scratchpad. Fixed."""
-        return OFFLOADS
-
-    @property
     def harness(self) -> str:
         """What kingfisher keeps about the session, which no layout renames."""
         return HARNESS
@@ -212,9 +204,9 @@ class Layout:
 
     @property
     def saved_results(self) -> tuple[str, ...]:
-        """The two folders a ledger row can name, as paths inside the session: what the
-        fences refuse the shell, beside `.harness` and the inputs."""
-        return (f"{self.scratchpad}/{self.tool_results}", f"{self.scratchpad}/{OFFLOADS}")
+        """The folder a ledger row names, as a path inside the session: what the fences
+        refuse the shell, beside `.harness` and the inputs."""
+        return (f"{self.scratchpad}/{self.tool_results}",)
 
     @property
     def made_dirs(self) -> tuple[str, ...]:
@@ -256,8 +248,6 @@ class Layout:
             # refuse, via `saved_results`, and Landlock cannot inside a scratchpad it
             # grants whole, so no boundary is claimed.
             Route(self.tool_results_route, deny_write_under=f"{self.tool_results_route}**"),
-            # The same, for the folder a row names once its result was too long to show.
-            Route(self.offloads_route, deny_write_under=f"{self.offloads_route}**"),
             # Denied both ways: a write could rewrite the pinned agent or the conversation
             # the next turn is rebuilt from, and a read gains nothing the run was not
             # already told.

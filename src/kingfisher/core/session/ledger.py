@@ -3,17 +3,11 @@
 from __future__ import annotations
 
 import threading
-from collections import Counter
 from dataclasses import replace
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-from deepagents.backends import CompositeBackend
-from deepagents.backends.utils import sanitize_tool_call_id
-
-from kingfisher.core.agent.middlewares.recorded import stamp
-
-from .steps import Steps, changing, on_host, reading
+from .steps import Steps, on_host, reading
 from .store import (
     KeptLedger,
     entry_id,
@@ -87,7 +81,6 @@ class Ledger:
 
 
 def keep_ledger(
-    files: Any,
     harness: Any,
     ledger: Ledger,
     *,
@@ -101,7 +94,7 @@ def keep_ledger(
     row never names a missing file and a result the conversation shows always has a
     row.
     """
-    entries = yield from _repointed(files, ledger.entries)
+    entries = ledger.entries
     yield from write_ledger(
         harness,
         ledger.earlier,
@@ -133,88 +126,26 @@ def sweep_results(  # noqa: PLR0913 -- by keyword, so no route is passed for a s
         files,
         ledger.earlier.paths | {e.path for e in entries if e.path},
         tool_results_route=tool_results_route,
-        offloaded=_offloads_freed(files, ledger.expired),
         unused_results=unused_results,
         session_id=session_id,
     )
 
 
-def _offloaded_under(files: Any) -> str:
-    """Where deepagents puts a result too long to show, read the way it reads it.
-
-    `isinstance`, as deepagents asks: a backend that is no `CompositeBackend` evicts to
-    `/` whatever attribute it carries.
-    """
-    root = files.artifacts_root if isinstance(files, CompositeBackend) else "/"
-    return f"{root.rstrip('/')}/large_tool_results/"
 
 
-def _repointed(files: Any, entries: tuple[LedgerEntry, ...]) -> Steps[tuple[LedgerEntry, ...]]:
-    """Each entry deepagents offloaded, pointed at its copy rather than ours.
 
-    Asked here, once, because eviction runs outside the recorder. Our own copy is left
-    to the sweep, which removes it once no row names it.
-
-    **Only onto a file that is this result.** An eviction is named by call id alone,
-    which is unique only within a turn and not across an agent and its subagent, so a
-    name is not an identity. The size decides: deepagents keeps the result with the id
-    line this recorder appended, so the file is exactly that long. No size reported is
-    no match, which keeps our copy -- safe, since it is this call's whole result.
-
-    **On a tie, neither.** Two results of one length under one id cannot be told apart,
-    and taking the first points a row at another call's answer and sweeps its own.
-    """
-    if not entries:
-        return entries
-    under = _offloaded_under(files)
-    listing = yield reading(files, "ls", under)
-    offloaded = {
-        PurePosixPath(one["path"]).name: one.get("size")
-        for one in listing.entries or ()
-        if not one.get("is_dir")
-    }
-    def claimed(entry: LedgerEntry) -> str | None:
-        """The offloaded file this row is the length of, or `None` for no match."""
-        name = sanitize_tool_call_id(entry.call)
-        whole = entry.size + len(stamp(entry.id))
-        return f"{under}{name}" if offloaded.get(name) == whole else None
-
-    # Counted over the whole turn before any row is pointed: one row cannot see a tie.
-    claims = Counter(where for entry in entries if (where := claimed(entry)) is not None)
-    return tuple(
-        replace(entry, path=where)
-        if (where := claimed(entry)) is not None and claims[where] == 1
-        else entry
-        for entry in entries
-    )
-
-
-def _offloads_freed(files: Any, expiring: tuple[LedgerEntry, ...]) -> dict[str, int]:
-    """Each offloaded file an expiring row named, by name, and the length it has while it
-    is still that row's result."""
-    under = _offloaded_under(files)
-    return {
-        PurePosixPath(entry.path).name: entry.size + len(stamp(entry.id))
-        for entry in expiring
-        if entry.path is not None and entry.path.startswith(under)
-    }
-
-
-def _swept(  # noqa: PLR0913 -- by keyword, as `sweep_results` passes them
+def _swept(
     files: Any,
     named: frozenset[str] | set[str],
     *,
     tool_results_route: str,
-    offloaded: dict[str, int],
     unused_results: UnusedResults,
     session_id: str,
 ) -> Steps[None]:
-    """Hand over every result file a recorder wrote that no row names, and only those, and
-    remove each offloaded file in `offloaded` that is still the length given.
+    """Hand over every result file a recorder wrote that no row names, and only those.
 
-    Only a turn that died before writing its rows leaves one, beside our copies of
-    repointed results and the files of expired ones. One turn runs at a time, so no running
-    turn is about to name it.
+    Only a turn that died before writing its rows leaves one, beside the files of expired
+    rows. One turn runs at a time, so no running turn is about to name it.
 
     A recorder's own names rather than whatever the folder holds: the agent's file
     tools are refused this folder, but its shell is not.
@@ -233,14 +164,3 @@ def _swept(  # noqa: PLR0913 -- by keyword, as `sweep_results` passes them
         yield on_host(
             settle_unused, unused_results, UnusedFiles(files, unused, session_id=session_id)
         )
-    if not offloaded:
-        return
-    listing = yield reading(files, "ls", _offloaded_under(files))
-    for one in listing.entries or ():
-        if one.get("is_dir") or one["path"] in named:
-            continue
-        # deepagents names the file after the call id alone, and a later call of that id
-        # overwrites it: another length is another call's result, which a stub still names.
-        whole = offloaded.get(PurePosixPath(one["path"]).name)
-        if whole is not None and one.get("size") == whole:
-            yield changing(files, "delete", one["path"])

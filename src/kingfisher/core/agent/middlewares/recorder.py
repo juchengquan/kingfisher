@@ -11,6 +11,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from deepagents.middleware.filesystem import NUM_CHARS_PER_TOKEN
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
@@ -35,6 +36,24 @@ RUN: ContextVar[str | None] = ContextVar("kingfisher_ledger_run", default=None)
 #: writes are a file already, and `write_todos`, one list the conversation carries. Not
 #: `execute`: what a command did is what a later turn wants to read back.
 UNRECORDED = frozenset({*FILE_TOOLS, WRITE_TODOS})
+
+#: Above how many characters a result is shown as a preview rather than whole. Read off
+#: deepagents, whose `FilesystemMiddleware` offloaded at exactly this length until
+#: kingfisher turned that off in `standing_middleware`: the same results are previewed as
+#: before, so what changed is who writes the file and where, not which calls are affected.
+#: Characters, not the UTF-8 bytes a row's `size` counts -- bytes exceed characters for
+#: anything but ASCII, and previewing on them would cut a result deepagents left whole.
+PREVIEW_ABOVE = NUM_CHARS_PER_TOKEN * 20_000
+
+#: How much of a previewed result the model is shown, split between its head and its tail.
+#: Enough to judge the shape of an answer and read its end, at a twentieth of the length
+#: that triggered the preview; the whole of it is one `read_file` away, and the last line
+#: says where.
+PREVIEW_CHARS = 4_000
+
+#: Said where lines were left out, in deepagents' own words: a reader who has seen one
+#: before should not have to learn a second spelling.
+OMITTED = "... [{lines} lines truncated] ..."
 
 
 @dataclass(frozen=True)
@@ -110,13 +129,13 @@ class RecorderMiddleware(AgentMiddleware):
         answer = answer_in(result, request.tool_call.get("id"))
         if answer is None or (made := self._recorded(request.tool_call, answer)) is None:
             return result
-        entry, content = made
+        entry, content, text = made
         try:
             answers = self._backend.upload_files([(entry.path, content)])
         except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
             answers = exc
         self._unkept(entry, answers)
-        return _stamped(result, answer, entry.id)
+        return _stamped(result, answer, entry.id, _shown(answer, entry, text))
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
@@ -126,18 +145,19 @@ class RecorderMiddleware(AgentMiddleware):
         answer = answer_in(result, request.tool_call.get("id"))
         if answer is None or (made := self._recorded(request.tool_call, answer)) is None:
             return result
-        entry, content = made
+        entry, content, text = made
         try:
             answers = await self._backend.aupload_files([(entry.path, content)])
         except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
             answers = exc
         self._unkept(entry, answers)
-        return _stamped(result, answer, entry.id)
+        return _stamped(result, answer, entry.id, _shown(answer, entry, text))
 
     def _recorded(
         self, call: Mapping[str, Any], answer: ToolMessage
-    ) -> tuple[LedgerEntry, bytes] | None:
-        """The entry for one call and the bytes its file holds, or `None` to record nothing."""
+    ) -> tuple[LedgerEntry, bytes, str] | None:
+        """The entry for one call, the bytes its file holds and the result as text, or
+        `None` to record nothing."""
         tool = str(call.get("name") or "")
         if tool in UNRECORDED:
             return None
@@ -167,7 +187,7 @@ class RecorderMiddleware(AgentMiddleware):
                 summary=summary(tool, args, text, answer.content_blocks),
             )
         )
-        return entry, content
+        return entry, content, text
 
     def _access(self, tool: str, inside: str) -> Listed | None:
         """The audience this result was produced under, as a row holds it.
@@ -201,15 +221,69 @@ class RecorderMiddleware(AgentMiddleware):
         self._ledger.unkept(entry)
 
 
-def _stamped(result: Any, answer: ToolMessage, number: str) -> Any:
+def _preview(text: str, path: str) -> str:
+    """A long result as its head and its tail, with a last line saying where the whole is.
+
+    Lines rather than characters: a result cut mid-line reads as corrupt, and the head and
+    tail of a table or a log are what a reader judges it by.
+    """
+    half = PREVIEW_CHARS // 2
+    lines = text.splitlines()
+    head: list[str] = []
+    tail: list[str] = []
+    for line in lines:
+        if sum(len(one) + 1 for one in head) + len(line) > half:
+            break
+        head.append(line)
+    for line in reversed(lines[len(head) :]):
+        if sum(len(one) + 1 for one in tail) + len(line) > half:
+            break
+        tail.append(line)
+    tail.reverse()
+    omitted = len(lines) - len(head) - len(tail)
+    middle = [OMITTED.format(lines=omitted)] if omitted > 0 else []
+    return "\n".join([*head, *middle, *tail, f"full result: {path}"])
+
+
+def _shown(answer: ToolMessage, entry: LedgerEntry, text: str) -> Any | None:
+    """The content the model is handed for this result, or `None` to hand it whole.
+
+    The content and not a message: `answered` finds the original by identity, so a copy
+    made here would not be found and the result would go back unchanged.
+
+    A result made of blocks keeps every block that is not text -- an attachment is not
+    something a preview can stand in for -- and its text becomes one preview block.
+    """
+    if len(text) <= PREVIEW_ABOVE or entry.path is None:
+        return None
+    shown = _preview(text, entry.path)
+    content = answer.content
+    if isinstance(content, str):
+        return shown
+    # In place, where the first text block was: a caption before an image reads as its
+    # caption, and moving the text to the end would say something the tool did not.
+    def _text(one: Any) -> bool:
+        return isinstance(one, dict) and one.get("type") == "text"
+
+    at = next((n for n, one in enumerate(content) if _text(one)), len(content))
+    rest = [one for n, one in enumerate(content) if not _text(one) and n > at]
+    return [
+        *[one for n, one in enumerate(content) if not _text(one) and n < at],
+        {"type": "text", "text": shown},
+        *rest,
+    ]
+
+
+def _stamped(result: Any, answer: ToolMessage, number: str, shown: Any | None = None) -> Any:
     """The result with its id as a last line, in what the model is handed.
 
     Copied, not changed in place: a tool may hand back a message it still holds. A list of
     blocks gains one starting on a new line, because the transcript and `.text` join blocks
-    with nothing between them.
+    with nothing between them. `shown` stands in for the content where the whole of it is
+    too long to show; `answer` stays the one found by identity either way.
     """
     mark = stamp(number)
-    content = answer.content
+    content = answer.content if shown is None else shown
     marked = answer.model_copy(
         update={
             "content": f"{content}{mark}"

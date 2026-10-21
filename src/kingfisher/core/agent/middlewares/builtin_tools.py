@@ -263,6 +263,15 @@ JOINED = (
     'for "foo" and for "bar", each literally, while'
 )
 
+#: deepagents' sentence on where a long result is kept, naming a folder nothing writes:
+#: `standing_middleware` turns its offloading off, so every result is under this layout's
+#: own folder whatever its length. Left to say nothing rather than reworded, because the
+#: section above already tells the model where results are and says it once.
+OFFLOADED_ELSEWHERE = (
+    "Offloaded large tool results live under the artifacts root (`/large_tool_results/` by "
+    "default); grep that directory to search them when you do not know the exact path."
+)
+
 
 @cache
 def _shown(schema: Any) -> dict[str, Any]:
@@ -284,8 +293,9 @@ def _offered(tool: Any) -> Any:
     if not isinstance(tool, BaseTool):
         return tool
     if tool.name == GREP:
+        said = _replaced(tool.description, SEPARATELY, JOINED, JOINED)
         return tool.model_copy(
-            update={"description": _replaced(tool.description, SEPARATELY, JOINED, JOINED)}
+            update={"description": said.replace(OFFLOADED_ELSEWHERE, "").rstrip()}
         )
     if tool.name != READ_FILE or not hasattr(tool.args_schema, "model_json_schema"):
         return tool
@@ -466,7 +476,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         super().__init__()
         self._longest = longest
         # The folders a ledger row names, as the file tools spell them, where results expire.
-        routes = (layout.tool_results_route, layout.offloads_route)
+        routes = (layout.tool_results_route,)
         self._expiring = (
             () if expires_after is None else tuple(route.rstrip("/") for route in routes)
         )

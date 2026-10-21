@@ -88,9 +88,8 @@ _READING = (
     ),
     (
         (GREP,),
-        "Search them with `grep`, which also finds a result too long to show you whole: "
-        "that one is named after its call rather than its id, and ends in its `[A-0042]` "
-        "line, so `grep` for that in `/{{scratchpad}}/large_tool_results/`.",
+        "Search them with `grep`, a result too long to show you whole included: every "
+        "one is in the same folder, named after its id.",
     ),
     (
         (GLOB, READ_FILE),

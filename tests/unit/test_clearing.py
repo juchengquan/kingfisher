@@ -56,7 +56,6 @@ from tests.conftest import (
 )
 from tests.unit.scripted import Scripted
 
-OFFLOADS_ROUTE = DEFAULT_LAYOUT.offloads_route
 TOOL_RESULTS_ROUTE = DEFAULT_LAYOUT.tool_results_route
 
 #: About 2,000 tokens, which a mark of 1,000 clears at once.
@@ -160,9 +159,9 @@ class Talk:
             heard.append(request)
             return ModelResponse(result=[AIMessage("ok")])
 
-        returned = ResultClearingMiddleware(
-            self.ledger, high, OFFLOADS_ROUTE, tools
-        ).wrap_model_call(request, model)
+        returned = ResultClearingMiddleware(self.ledger, high, tools).wrap_model_call(
+            request, model
+        )
         (asked,) = heard
         if isinstance(returned, ExtendedModelResponse):
             assert returned.command is not None
@@ -414,46 +413,13 @@ def test_an_earlier_turns_result_is_named_from_the_ledger_the_turn_found():
     assert talk.ledger.entries[0].id == "A-0002", "numbered on from the ledger"
 
 
-def test_an_offloaded_result_is_named_by_a_search_for_its_id():
-    """deepagents names its copy after the call id, with no turn in the name, so a later
-    call with the same id overwrites it: a path would then name another call's result,
-    and a search for the id finds nothing instead.
 
-    Both ways a result is offloaded: a row the last turn pointed at deepagents' copy, and
-    this turn's result, whose stub is shorter than what was recorded.
-    """
-    earlier = Talk()
-    old = earlier.call("http_fetch", {"url": "https://a.example"}, _text("<html>"))
-    (row,) = earlier.ledger.entries
-    moved = replace(row, path=f"{OFFLOADS_ROUTE}{old}")
-    talk = Talk(KeptLedger(last=1, exchanges=((moved,),)))
-    talk.messages = list(earlier.messages)
-    whole = "\n".join(f"<p>{n} {'x' * 200}</p>" for n in range(500))
-    new = talk.call("http_fetch", {"url": "https://b.example"}, whole)
-    # What deepagents' eviction leaves, from its own template and preview, so `EVICTED`
-    # is checked against the stub it names.
-    stub = _stub(new, f"{OFFLOADS_ROUTE}{new}", talk.result(new).content)
-    talk.messages[-1] = talk.messages[-1].model_copy(update={"content": stub})
-    talk.pad()
-
-    after = talk.cleared()
-
-    for call, number in ((old, "A-0001"), (new, "A-0002")):
-        handle = _of(after, call).content
-        assert f"offloaded: grep for [{number}] under /scratchpad/large_tool_results/)" in handle
-        assert handle.endswith(f"\n[{number}]")
-
-
-@pytest.mark.parametrize("offloaded", [False, True], ids=["kept", "offloaded"])
-def test_an_expired_result_is_cleared_and_says_to_call_its_tool_again(offloaded):
+def test_an_expired_result_is_cleared_and_says_to_call_its_tool_again():
     """With no file, a row read as never kept left its result whole for the rest of the
-    session, and an offloaded one's stub was handed a search for the file expiry removed.
+    session.
     """
     earlier = Talk()
     old = earlier.call("http_fetch", {"url": "https://a.example"}, _text("<html>"))
-    if offloaded:
-        stub = _stub(old, f"{OFFLOADS_ROUTE}{old}", earlier.result(old).content)
-        earlier.messages[-1] = earlier.messages[-1].model_copy(update={"content": stub})
     (row,) = earlier.ledger.entries
     gone = replace(row, path=None, expired_in="t9")
     talk = Talk(KeptLedger(last=1, exchanges=((gone,),)))
@@ -582,17 +548,16 @@ SEARCH = "offloaded: grep for [A-0002] under /scratchpad/large_tool_results/"
 
 
 def _handles(tools: tuple[str, ...] | None) -> tuple[str, str]:
-    """A recorded result's handle and an offloaded one's, cleared for an agent granted
-    `tools`."""
+    """A short recorded result's handle and a long one's, cleared for an agent granted
+    `tools`. Both are recorded: length decides what the model was shown at the time, not
+    where the file is, so the handle reads the same for either."""
     talk = Talk()
-    recorded = talk.call("execute", {"command": "python3 count.py"}, _text("rows: 86"))
+    short = talk.call("execute", {"command": "python3 count.py"}, _text("rows: 86"))
     whole = "\n".join(f"<p>{n} {'x' * 200}</p>" for n in range(500))
-    offloaded = talk.call("http_fetch", {"url": "https://a.example"}, whole)
-    stub = _stub(offloaded, f"{OFFLOADS_ROUTE}{offloaded}", talk.result(offloaded).content)
-    talk.messages[-1] = talk.messages[-1].model_copy(update={"content": stub})
+    long = talk.call("http_fetch", {"url": "https://a.example"}, whole)
     talk.pad()
     after = talk.cleared(tools=tools)
-    return _of(after, recorded).content, _of(after, offloaded).content
+    return _of(after, short).content, _of(after, long).content
 
 
 def _saying(where: str, number: str) -> str:
@@ -600,45 +565,39 @@ def _saying(where: str, number: str) -> str:
 
 
 @pytest.mark.parametrize("tools", [None, ("execute", "http_fetch", "read_file", "grep")])
-def test_an_agent_holding_read_file_and_grep_is_handed_the_path_and_the_search(tools):
-    """An agent holding both, by name or by holding everything, told to call the tool again
-    for a result it could have read back."""
-    recorded, offloaded = _handles(tools)
+def test_an_agent_holding_read_file_is_handed_the_path_whatever_the_length(tools):
+    """An agent holding it, by name or by holding everything, pointed at the file for a
+    short result and for a long one alike: a long one is saved in the same folder, so
+    there is no second answer that depends on holding `grep`."""
+    short, long = _handles(tools)
 
-    assert recorded == (
+    assert short == (
         "execute command='python3 count.py' -- rows: 86\n"
         f"(8,009 bytes, cleared; {PATH})\n[A-0001]"
     )
-    assert offloaded.endswith(_saying(SEARCH, "A-0002"))
+    where = f"full result: {TOOL_RESULTS_ROUTE}A-0002-http_fetch.txt"
+    assert long.endswith(_saying(where, "A-0002"))
 
 
-def test_an_agent_without_grep_calls_an_offloaded_result_again():
-    """An agent holding `read_file` alone handed an offloaded result's path, which a later
-    call with the same id overwrites, or told to `grep` it, a call refused."""
-    recorded, offloaded = _handles(("execute", "http_fetch", "read_file"))
+def test_an_agent_without_read_file_calls_its_tool_again_whatever_the_length():
+    """An agent holding `grep` alone told to read a result's file, a call refused -- and
+    `grep` no longer buys it a search, there being no folder only a search reaches."""
+    short, long = _handles(("execute", "http_fetch", "grep"))
 
-    assert recorded.endswith(_saying(PATH, "A-0001"))
-    assert offloaded.endswith(_saying("call http_fetch again to see it", "A-0002"))
-
-
-def test_an_agent_without_read_file_calls_a_recorded_result_again():
-    """An agent holding `grep` alone told to read a recorded result's file, a call refused."""
-    recorded, offloaded = _handles(("execute", "http_fetch", "grep"))
-
-    assert recorded.endswith(_saying("call execute again to see it", "A-0001"))
-    assert offloaded.endswith(_saying(SEARCH, "A-0002"))
+    assert short.endswith(_saying("call execute again to see it", "A-0001"))
+    assert long.endswith(_saying("call http_fetch again to see it", "A-0002"))
 
 
 def test_an_agent_holding_neither_calls_every_result_again():
     """An agent holding neither file tool sent to one for each result it cleared, every
     call refused."""
-    recorded, offloaded = _handles(("execute", "http_fetch"))
+    recorded, _long = _handles(("execute", "http_fetch"))
 
     assert recorded == (
         "execute command='python3 count.py' -- rows: 86\n"
         "(8,009 bytes, cleared; call execute again to see it)\n[A-0001]"
     )
-    assert offloaded.endswith(_saying("call http_fetch again to see it", "A-0002"))
+    assert _long.endswith(_saying("call http_fetch again to see it", "A-0002"))
 
 
 # -- what is never cleared -----------------------------------------------------------
@@ -740,14 +699,12 @@ def test_a_handle_is_never_cleared_again():
     talk.write("/outputs/b.md", "c" * 1_000_000)
     talk.call("web_search", {"query": "q"}, _text("q"))
     whole = "\n".join(f"row {n} {'x' * 200}" for n in range(500))
-    offloaded = talk.call("http_fetch", {"url": "https://a.example"}, whole)
-    stub = _stub(offloaded, f"{OFFLOADS_ROUTE}{offloaded}", talk.result(offloaded).content)
-    talk.messages[-1] = talk.messages[-1].model_copy(update={"content": stub})
+    long = talk.call("http_fetch", {"url": "https://a.example"}, whole)
     talk.pad()
     once = talk.cleared()
     handles = _changed(talk.messages, once)
     assert len(handles) == 4, "the first pass cleared all four"
-    assert "offloaded: grep for" in _of(once, offloaded).content
+    assert f"full result: {TOOL_RESULTS_ROUTE}" in _of(once, long).content
     talk.messages = once
     for n in range(3):
         talk.call("web_search", {"query": f"more {n}"}, _text(f"more {n}"))
@@ -895,19 +852,25 @@ def test_a_turn_clears_to_handles_naming_only_tools_the_agent_holds(bulky):
         assert said[call].endswith(f"bytes, cleared; call bulky again to see it)\n[{number}]")
 
 
-def test_an_offloaded_results_handle_finds_it_after_the_turn(bulky):
-    """The search the handle names has to find the result once the turn has swept our
-    copy and pointed the row at deepagents': it finds the file ending in the id."""
+def test_a_long_results_handle_finds_it_after_the_turn(bulky):
+    """The path the handle names has to still hold the result once the turn has swept
+    what no row names -- driven through a real turn, because the sweep and the handle are
+    written in different places and agreed only by accident before.
+
+    And there is one folder to look in: with deepagents' offloading off, a long result is
+    saved beside a short one, so the handle names a path rather than a search.
+    """
     cfg = _marked(bulky, clear_results_at=12_000)
 
     bulky_calls = (_one("bulky", n, n=n) for n in range(1, 7))
     _turn(cfg, _one("loud", 0), *bulky_calls, AIMessage(content="done"))
 
     said = next(one.content for one in _transcript(cfg) if one.call_id == "c0")
-    assert "cleared; offloaded: grep for [A-0001] under /scratchpad/large_tool_results/)" in said
-    folder = cfg.workspace / "sessions" / "s" / "scratchpad" / "large_tool_results"
-    found = [one for one in folder.iterdir() if "[A-0001]" in one.read_text(encoding="utf-8")]
-    assert len(found) == 1
+    assert "cleared; full result: /scratchpad/tool_results/A-0001-" in said
+    assert "large_tool_results" not in said
+    folder = cfg.workspace / "sessions" / "s" / "scratchpad" / "tool_results"
+    found = [one for one in folder.iterdir() if one.name.startswith("A-0001-")]
+    assert len(found) == 1, sorted(one.name for one in folder.iterdir())
     assert found[0].read_text(encoding="utf-8").startswith("row 00000")
 
 

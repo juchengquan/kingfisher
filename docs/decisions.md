@@ -1967,6 +1967,31 @@ deepagents' `large_tool_results/` the two read as a pair. A file the backend ref
 leaves the row's `path` null and the call succeeds: failed, the model may call again and
 run the tool twice.
 
+*Reversed on 2026-10-21: nothing offloads, so there is nothing to point at.* A result
+too long to show the model whole is kingfisher's to save and to preview, in the one
+folder a ledger row names. `standing_middleware` passes a `FilesystemMiddleware` of its
+own with `tool_token_limit_before_evict=None`, which deepagents merges by name over the
+one it would have built, in each of the three stacks it builds -- the agent's, `general-
+purpose`'s and each declared subagent's. The recorder already wrote every result and
+already rewrote the message, so the preview is the step it was one line short of. What
+went with the reversal: the repoint below and its length match, the expiry half #1013
+taught the same trick, the second route and its deny rule, the branch in `clearing.py`
+that sniffed deepagents' stub, and `core/session`'s grant on deepagents, which it no
+longer imports at all. The prompt lost a sentence too: it taught `glob` for the row id
+*and* `grep` for the `[A-0042]` line an offloaded file ended in, because a file named
+after a call could be found no other way.  **The `None` is load-bearing for the results
+we do not record, and only those.** The recorder runs inside deepagents' eviction, so
+for a result it previews deepagents sees a short message and would do nothing anyway --
+measured: with the keyword removed, every rule still passed. What it does reach is the
+eight tools `UNRECORDED` names, whose results get no preview from us: a long `read_file`
+would be offloaded to a folder nothing names and no prompt sends the agent to. That case
+is driven now, which is what makes the keyword fail when removed.  **Previewed on
+characters, not on the bytes a row's `size` counts.** deepagents' test was
+`len(content_str) > NUM_CHARS_PER_TOKEN * 20_000`, and bytes exceed characters for
+anything but ASCII, so previewing on bytes would cut a result deepagents left whole and
+leave a row pointing at a file holding less than it says. Driven with 30,000 Japanese
+characters, 90,000 bytes: shown whole. *(2026-10-21.)*
+
 **An offloaded result is pointed at deepagents' copy, not kept twice.** Eviction runs
 outside the recorder, so at the end of the turn one `ls` of `large_tool_results/`
 repoints each entry whose call id is there, and kingfisher's copy goes in the sweep. A
@@ -2658,30 +2683,13 @@ a deployment's included, driven against `sandbox-exec`, the unfenced shell and L
 under Landlock, at first, without testing anything, for the reason the entry on
 `/dev/null` below gives.
 
-**Not reached by the group kill: a process that calls `setsid()`**, which leaves the
-group. Measured on macOS under the profile, `setsid` from Perl, from Python, and a
-fork-setsid-fork all outlived the kill. macOS has nothing to adopt them with, so there
-they remain, recorded rather than closed. bubblewrap's process namespace should end them
-with its first process; not measured, its namespace being refused on the Linux job.
-*(2026-10-20.)*
-
-**Under Landlock a reaper runs every command, and is asked before it is killed.**
-Measured on the Linux job on 2026-10-21, with each escape saying it had begun before its
-command ended: a fork-setsid-fork outlived the group kill there too. Backgrounded
-`setsid` escapes had looked killed, but only by racing the kill to `setsid()`, and the
-first runs had looked killed throughout because `/dev/null` was refused, so nothing
-started -- a control that is never killed is what told the two apart. `_reaper.py` runs
-as `python -I -c`, sets `PR_SET_CHILD_SUBREAPER`, runs the command through `/bin/sh`,
-and when the shell ends kills and collects whatever came back to it, pass after pass,
-whatever its session. **Asked first, at a timeout:** SIGKILL to the group reached the
-reaper too, and what it had adopted went to init -- measured, every escape survived a
-timeout until `run_command` sent the leader SIGTERM `REAPER_GRACE_S` before the time was
-up, inside it rather than after, so a command still never outlives its timeout. The
-cost is an interpreter per command, measured at 11.6ms to 35.6ms for `true`, beside a
-model call of seconds. By source, not `-m`, since the fence reads the interpreter and not
-necessarily kingfisher's own files; where it cannot adopt it hands the command to the
-shell, so the macOS tests driving the runner see what they saw. Not given to the
-unfenced shell, which is no boundary, nor to bubblewrap. *(2026-10-21.)*
+**Not reached: a process that calls `setsid()`**, which leaves the group. Measured on
+macOS under the profile, `setsid` from Perl, from Python, and a fork-setsid-fork all
+outlived the kill. bubblewrap's process namespace should end them with its first
+process; on macOS and under Landlock they remain, recorded rather than closed. Closing
+them on Linux means a launcher that outlives the command as a subreaper and kills what
+comes back to it, a process per command, and is to be measured on the Linux job before
+it is built. macOS has no equivalent. *(2026-10-20.)*
 
 **Landlock refused `/dev/null`, and so every `2>/dev/null` a model typed.** The policy
 reads `/dev` and writes only the session's folders, so a redirection to it failed before

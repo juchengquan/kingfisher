@@ -294,9 +294,6 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         layout.tool_results_route: lambda: FilesystemBackend(
             root_dir=str(session_dir / layout.scratchpad / layout.tool_results)
         ),
-        layout.offloads_route: lambda: FilesystemBackend(
-            root_dir=str(session_dir / layout.scratchpad / layout.offloads)
-        ),
     }
     missing = [path for path in layout.routed_paths() if path not in backing]
     if missing:  # pragma: no cover -- a table edit, caught by its own test

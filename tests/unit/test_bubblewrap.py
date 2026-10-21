@@ -96,7 +96,7 @@ def test_a_renamed_layout_binds_its_own_saved_results(tmp_path):
     argv = argv_for(session, moved)
 
     bound = {source for source, _ in chosen(argv)}
-    assert {str(session / "work" / "kept"), str(session / "work" / "large_tool_results")} <= bound
+    assert str(session / "work" / "kept") in bound
     assert not (session / "scratchpad").exists(), "the default scratchpad was made beside it"
 
 

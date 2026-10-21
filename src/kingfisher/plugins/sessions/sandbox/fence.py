@@ -7,9 +7,7 @@ the network stays open, and registered tools run in kingfisher's own process, un
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Iterable
-from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -78,21 +76,6 @@ def policy_for(
     )
 
 
-#: What the reaper is given to clean up in when a command's time is up, out of that time.
-REAPER_GRACE_S = 0.5
-
-
-@cache
-def reaper() -> str:
-    """The source of `_reaper.py`, which runs every fenced command as `python -I -c`.
-
-    A process that calls `setsid()` leaves the command's group, and the group kill with
-    it: measured on the Linux job, a fork-setsid-fork outlived it. Orphans come back to
-    the reaper whatever their session.
-    """
-    return Path(__file__).with_name("_reaper.py").read_text(encoding="utf-8")
-
-
 class LandlockRunner:
     """Runs one session's commands behind that policy.
 
@@ -136,9 +119,7 @@ class LandlockRunner:
             confine(self.policy)
 
         return run_command(
-            # This process's interpreter, which the fence reads; `python` on the shell's
-            # `PATH` need not be one.
-            [sys.executable, "-I", "-c", reaper(), command],
+            command,
             env=self.env,
             timeout=timeout,
             cwd=self.cwd,
@@ -146,5 +127,4 @@ class LandlockRunner:
             preexec_fn=fence,
             unstartable="the Landlock fence could not be applied",
             stop=stop,
-            grace=REAPER_GRACE_S,
         )
