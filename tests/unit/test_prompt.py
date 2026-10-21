@@ -620,6 +620,44 @@ def test_an_agent_is_told_to_read_a_result_back_only_with_tools_it_holds(
 
 
 @pytest.mark.parametrize(
+    "granted",
+    [None, ("read_file", "grep"), ("grep",), ("read_file",), ()],
+    ids=["every", "read_file and grep", "grep", "read_file", "none"],
+)
+def test_a_cleared_result_is_told_back_only_the_way_its_handle_says(scripted, granted):
+    """An agent holding `grep` was told to "`grep` for the id where the handle says to",
+    which no handle has said since every result became kingfisher's own (#1018): the
+    model was sent looking for a pointer that was never written.
+
+    Driven against the handle clearing writes for the same grant, so a handle that names
+    a new way back and a prompt that does not, or the other way round, fail here."""
+    from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware
+    from kingfisher.core.agent.models import summarizer_count
+    from kingfisher.core.result import LedgerEntry
+    from kingfisher.core.session.ledger import Ledger
+    from kingfisher.core.session.store import KeptLedger
+
+    row = LedgerEntry(
+        id="A-0001", turn="t", call="c1", run=None, role="main", tool="web_search",
+        args="query=q", access=None, size=90_000,
+        path="/scratchpad/tool_results/A-0001-web_search.txt", summary="web_search(q)",
+    )
+    count = summarizer_count(FakeToolCallingModel(responses=[]))
+    clearing = ResultClearingMiddleware(Ledger("t", KeptLedger()), 64_000, granted, count=count)
+    handle = clearing._row_handle(row)
+    builtin = '["*"]' if granted is None else f"[{', '.join(granted)}]"
+    (system,) = _told(scripted, builtin_tools=builtin)
+    (recovering,) = (p for p in system.split("\n\n") if "cleared to a short handle" in p)
+    recovering = " ".join(recovering.split())
+
+    assert handle is not None, "no handle was written, so the rest is vacuous"
+    assert ("Read that file" in recovering) is ("full result:" in handle)
+    # A tool named in backticks is a way back the handle would have to name too.
+    named = {tool for tool in READ_BACK if f"`{tool}`" in recovering}
+    assert named <= {tool for tool in READ_BACK if tool in handle}, named
+
+
+@pytest.mark.parametrize(
     ("granted", "saver", "reads"),
     [
         ("[read_file, write_file, edit_file]", "edit_file", True),

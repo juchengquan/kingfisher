@@ -2376,10 +2376,10 @@ name another call's result where a search finds nothing. A tool that offloads it
 output hands the recorder the stub, and is named by our copy.
 
 **A handle names only a tool its graph holds.** The path goes to an agent holding
-`read_file`, the search to one holding `grep`, and any other is told to call the tool
-that made the result again. A model told to `grep` calls `grep` whatever it holds, and
-without it spends the step on a refusal. One holding `read_file` but not `grep` is not
-given an offloaded result's path, for the reason above. The grant is the one
+`read_file`, and any other is told to call the tool that made the result again. A model
+told to use a tool calls it whatever it holds, and without it spends the step on a
+refusal. The prompt says no more than the handle does: since every saved result is
+kingfisher's own, no handle names a search, so neither does the prompt. The grant is the one
 `GrantedOnlyMiddleware` filters by, so a handle never names a tool it takes away. A handle keeps its wording once written, so a later request on the
 session holding fewer tools may be pointed at one it lacks: it is refused once, told what
 it holds. Accepted rather than re-worded per call, for a grant that shrank between turns.

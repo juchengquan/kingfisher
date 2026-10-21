@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The prompt no longer sends the model to `grep` for a cleared result, after #9999
+
+- **The sentence on a cleared result names only what its handle offers.** An agent
+  holding `grep` was told to "`grep` for the id where the handle says to", which no handle
+  has said since #1018. One holding `read_file` is told to read the file or call the tool
+  again; any other, to call the tool again. Anything comparing the prompt against the old
+  wording sees it change; the paragraph on searching saved results with `grep` stands.
+
 ## `doctor` names `KINGFISHER_SOURCE_IDS_FILE` as retired, after #9999
 
 - **A deployment still setting it is told so.** #983 stopped reading it and stopped

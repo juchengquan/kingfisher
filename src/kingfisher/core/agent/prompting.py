@@ -101,14 +101,11 @@ _UNREAD = "None of your tools reads these files: to see a result again, call its
 #: For one holding the shell, which may read them.
 _AGAIN = "To see a result again, call its tool again."
 
-#: How a cleared result is seen again, by whether `read_file` and `grep` are held.
+#: How a cleared result is seen again, by whether `read_file` is held: a handle names its
+#: file to that tool alone, and tells any other agent to call the tool again.
 _RECOVERING = {
-    (True, True): "Read that file, `grep` for the id where the handle says to, or call the "
-    "tool again; a file may have changed since.",
-    (True, False): "Read that file or call the tool again; a file may have changed since.",
-    (False, True): "`grep` for the id where the handle says to, or call the tool again; a "
-    "file may have changed since.",
-    (False, False): "To see a result whole again, call its tool again.",
+    True: "Read that file or call the tool again; a file may have changed since.",
+    False: "To see a result whole again, call its tool again.",
 }
 
 #: The file tools memory is saved with, `edit_file` first: it changes the file in place,
@@ -316,7 +313,7 @@ def _tool_results(
         layout,
         reading=_fill("\n".join(told) or unread, layout, TOOL_RESULTS_FILE),
         expiring=_expiring(rounds),
-        recovering=_RECOVERING[READ_FILE in held, GREP in held],
+        recovering=_RECOVERING[READ_FILE in held],
     ).strip()
 
 
