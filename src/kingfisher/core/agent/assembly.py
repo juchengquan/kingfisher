@@ -623,6 +623,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         # not told to save.
         switched[memory_at] = remembering(permitted)
 
+    # Outside the block below, which runs only where a subagent is granted: a request
+    # granted none is refused its `run_on` too, rather than having it ignored unsaid.
+    wanted = _wanted_endpoints(run_on, activated, capabilities.models)
+
     if capabilities.subagents is not None:
         # The registry rather than its `names`: a subagent's grant has to be
         # resolved to the skill it means, not merely recognised as a word.
@@ -638,8 +642,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             # After the unknown-name check, so a misspelt name is told it is wrong
             # rather than that it has moved.
             surface.offers.refuse_moved(defined[name].tool_sources, subject=subject)
-
-        wanted = _wanted_endpoints(run_on, activated, capabilities.models)
 
         # The agent's own, as `named` holds them: what a portable subagent's are chosen from.
         agents_names = (

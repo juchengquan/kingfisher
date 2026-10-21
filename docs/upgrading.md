@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A `run_on` is refused where no subagent is granted, after #9999
+
+- **A request naming a subagent in `run_on` is refused when it was granted none.** The
+  check that refuses a name the request did not activate ran only where some subagent
+  was granted, so with an agent whose file has no `subagents:` line, or a request
+  passing `subagents=None`, the override was accepted and ignored -- a model the caller
+  may not use included. It is now the `CapabilityError` the same name gets beside a
+  granted subagent: drop the `run_on`, or grant the subagent.
+
 ## A deployment's shell can say where it sees the session, after #1049
 
 - **`LocalSessions(session_root=...)` teaches your runner's agent

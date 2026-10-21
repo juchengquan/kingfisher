@@ -208,5 +208,34 @@ def test_naming_a_subagent_the_request_did_not_activate_is_refused(cfg, session_
         )
 
 
+@pytest.mark.parametrize("granted_models", [ALL, None], ids=["models granted", "none granted"])
+def test_a_run_on_is_refused_where_no_subagent_is_granted(cfg, session_dir, granted_models):
+    """`run_on` was checked only where a subagent was granted, so a request granted none
+    had its override accepted without a word -- a model it may not use included.
+    """
+    with pytest.raises(CapabilityError, match="did not activate"):
+        _built(
+            cfg,
+            session_dir,
+            granted_models=granted_models,
+            subagents=None,
+            run_on={"reviewer": RunOn("cheap-model")},
+        )
+
+
+def test_an_agent_granting_no_subagents_refuses_a_run_on(scripted):
+    """The same override, reaching the build through an agent file with no `subagents:`
+    line, which is how a request is granted none without asking for none."""
+    from kingfisher.core.service import Kingfisher
+    from kingfisher.plugins import LocalSessions
+    from tests.conftest import an_agent
+
+    an_agent(scripted, "plain")
+    kf = Kingfisher(scripted, sessions=LocalSessions())
+
+    with pytest.raises(CapabilityError, match="did not activate"):
+        kf.run(Request("go", agent="plain", run_on={"reviewer": RunOn("cheap-model")}))
+
+
 def test_a_request_carries_none_by_default():
     assert Request("go").run_on == {}
