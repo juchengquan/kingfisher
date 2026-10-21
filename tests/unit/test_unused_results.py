@@ -127,6 +127,26 @@ def test_a_plugin_is_handed_only_the_files_safe_to_drop(workspace):
     ]
 
 
+def test_an_expired_result_is_handed_over_and_kept_if_the_plugin_keeps_it(workspace):
+    """Removed behind the plugin's back, an expired result never reaches the archive a
+    deployment plugged in to keep it."""
+    keeping = Keeping()
+    kf = Kingfisher(
+        replace(workspace, keep_results_rounds=1),
+        sessions=LocalSessions(),
+        unused_results=keeping,
+    )
+
+    _turn(kf, *_searched())
+    _turn(kf)
+
+    searched = f"{ROUTE}A-0001-web_search.txt"
+    assert [sorted(path for path, *_ in each) for each in keeping.handed] == [
+        [f"{ROUTE}{STRAY}"], sorted([f"{ROUTE}{STRAY}", searched]),
+    ]
+    assert "A-0001-web_search.txt" in _kept(workspace)
+
+
 def test_a_turn_with_nothing_unused_does_not_ask(workspace):
     """Asked with nothing, a plugin that does slow setup per call pays it every turn."""
     keeping = Keeping()

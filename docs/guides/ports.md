@@ -239,8 +239,8 @@ and a sink that keeps state between events wants a lock.
 Every result a tool returns is saved under `/scratchpad/tool_results/`, and the
 session's ledger names its file. A turn that died before it wrote its ledger leaves
 files no row names, and so does a result deepagents saved a copy of its own, once the
-row is pointed at that copy. Kingfisher's own plugin removes them; yours decides
-instead — keep them in an archive, count them, hold them for an audit:
+row is pointed at that copy, and one older than `KINGFISHER_KEEP_RESULTS_ROUNDS` keeps,
+once its row is expired. Kingfisher's own plugin removes them; yours decides instead — keep them in an archive, count them, hold them for an audit:
 
 ```python
 from kingfisher.plugins import UnusedFiles
@@ -274,7 +274,8 @@ Every file handed over has already been judged safe to drop: no row names it, an
 name is one kingfisher's recorder gives, so a file the agent's shell wrote into the
 folder under a name of its own is never among them. Only kingfisher's own saved
 results: deepagents' copies under `/scratchpad/large_tool_results/` are not handed
-over, whether or not a row names them.
+over, whether or not a row names them, and an expired result's copy there is removed by
+kingfisher itself.
 
 Things to know:
 

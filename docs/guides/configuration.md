@@ -60,7 +60,7 @@ into the definitions folder.
 | `KINGFISHER_RECURSION_LIMIT` | How many steps a turn may take before it stops. | `150` |
 | `KINGFISHER_THREAD_POOL_SIZE` | How many threads `astream` and `arun` hand blocking work to. One pool per process: a second service asking for a different number is refused when it is built. It serves the short work a turn does on this host, and any session-backends method left to its default, which runs the sync one on it: raise it for many turns at once on remote sessions whose async methods are those defaults. | `16` |
 | `KINGFISHER_SESSION_MAX_BYTES` | Cap on what one session may hold. Checked between turns, never during one. | none — unbounded |
-| `KINGFISHER_KEEP_RESULTS_ROUNDS` | How many rounds of a conversation -- a user message and the resumes after it, the current one included -- keep their saved tool results. An older result's file is removed at the end of a turn; its ledger row stays, with `path` empty and `expired_in` naming that turn, and the agent is told to call the tool again. | none — every result kept |
+| `KINGFISHER_KEEP_RESULTS_ROUNDS` | How many rounds of a conversation -- a user message and the resumes after it, the current one included -- keep their saved tool results. An older result's file is handed to the `UnusedResults` plugin at the end of a turn, which by default removes it; its ledger row stays, with `path` empty and `expired_in` naming that turn, and the agent is told to call the tool again. | none — every result kept |
 | `KINGFISHER_SESSION_TTL_S` | How long an idle session survives a sweep — `kingfisher reap`, or a deployment's own call to `reap()`. Nothing sweeps on a schedule. | `604800` (7 days) |
 
 **A turn stops between steps, so the turn timeout is a deadline and not a limit.** A

@@ -2028,8 +2028,9 @@ remembering what a plugin kept, a second record of the folder beside the ledger,
 kept file is offered every turn; an async twin, since `settle` already runs off the
 loop and a twin is a second method to keep in step; a check in the contract kits,
 since the core itself holds what is chosen and what can be reached, leaving a plugin
-no promise to break; and deepagents' copies under `large_tool_results/`, which the sweep never
-touched and a row may still name. *(2026-10-21.)*
+no promise to break; and deepagents' copies under `large_tool_results/`, which a row may
+still name and whose expired ones the sweep removes itself, while still that row's
+length. *(2026-10-21.)*
 
 **The recorder's own folder is refused, and that is not the same decision.** Only
 `tool_results/` is write-denied to the file tools, `delete` included. A row names its file

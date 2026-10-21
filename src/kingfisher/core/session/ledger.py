@@ -13,7 +13,7 @@ from deepagents.backends.utils import sanitize_tool_call_id
 
 from kingfisher.core.agent.middlewares.recorded import stamp
 
-from .steps import Steps, on_host, reading
+from .steps import Steps, changing, on_host, reading
 from .store import (
     KeptLedger,
     entry_id,
@@ -200,7 +200,7 @@ def _offloads_freed(files: Any, expiring: tuple[LedgerEntry, ...]) -> dict[str, 
     }
 
 
-def _swept(
+def _swept(  # noqa: PLR0913 -- by keyword, as `sweep_results` passes them
     files: Any,
     named: frozenset[str] | set[str],
     *,
