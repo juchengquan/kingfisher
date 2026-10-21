@@ -212,6 +212,16 @@ for the next reader who reaches for one.*
   `create_sub_agent` runs the spec's own middleware and adds no caching. And of two
   custom middleware sharing a name, `_apply_custom_middleware` keeps the later one in
   the slot, without a word. *(2026-10-21, deepagents 0.7.22, langchain-anthropic 1.7.6.)*
+- **A helper reached through a `SubAgentMiddleware` built directly gets no summariser.**
+  `create_sub_agent` runs the spec's own middleware and adds only
+  `HumanInTheLoopMiddleware`, where the spec carries `interrupt_on`, and
+  `UnsupportedContentMiddleware`; `create_deep_agent` puts `FilesystemMiddleware`, its
+  summariser and `PatchToolCallsMiddleware` ahead of each spec it builds. Such a
+  middleware also hands the helper its summoner's state with no private keys taken out,
+  since only `create_deep_agent` tells its own which they are, so the summariser's
+  session id goes along; the helper's input schema leaves private keys out, and drops
+  it, so each graph's evicted messages go to a history file of its own.
+  *(2026-10-21, deepagents 0.7.22.)*
 - **Upstream protects `FilesystemMiddleware` and `SubAgentMiddleware` on one path
   and not the other.** `_apply_excluded_middleware` refuses to strip them;
   `_apply_custom_middleware` will replace them without a word. *(2026-08-31.)*

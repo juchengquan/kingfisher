@@ -1053,7 +1053,13 @@ def test_every_graph_kingfisher_builds_for_a_turn_clears(bulky):
     }
     for name, middleware in stacks.items():
         assert len(_clearing(middleware)) == 1, name
-        assert isinstance(middleware[0], ResultClearingMiddleware), (
+        (first,) = [
+            i for i, one in enumerate(middleware) if isinstance(one, ResultClearingMiddleware)
+        ]
+        # Behind the summariser alone, where deepagents puts its own: a helper's spec is its
+        # whole stack, so the one it is given is listed there and nowhere else.
+        expected = ["SummarizationMiddleware"] if name == "worker's helper" else []
+        assert [one.name for one in middleware[:first]] == expected, (
             f"{name}: not where it measures the request"
         )
     assert "middleware" not in graphs["built"], "a compiled subagent is handed none"
