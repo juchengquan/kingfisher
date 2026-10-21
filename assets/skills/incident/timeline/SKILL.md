@@ -17,12 +17,13 @@ of every log you name and prints the warnings and errors in time order, each
 repeat collapsed into one line with a count, and every stretch in which no log
 said anything:
 
-    python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" inputs/api.log inputs/worker.log
+    cd "$KINGFISHER_SESSION_ROOT" && python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" inputs/api.log inputs/worker.log
 
-Those are shell paths: what the file tools call `/inputs/api.log` is `inputs/api.log`
-in the shell. `$KINGFISHER_SKILLS` is where the shell finds this catalogue. If it
-is unset, this deployment cannot run skill scripts — say so, and build the
-timeline from `grep` over the same logs instead.
+Run it from the session root, as written, and name each log from there: each event
+cites the path it was given, so `inputs/api.log` keeps the write-up free of host
+paths. `$KINGFISHER_SKILLS` is where the shell finds this catalogue. If either is
+unset, this deployment cannot run skill scripts — say so, and build the timeline
+from `grep` over the same logs instead.
 
 Add `--gap 10` to mark only silences of ten minutes or more; the default is five.
 

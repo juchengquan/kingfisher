@@ -59,6 +59,9 @@ def shell_env(
         "LANG": "en_US.UTF-8",
         "LC_ALL": "en_US.UTF-8",
         "TMPDIR": str(session_dir / cfg.layout.scratchpad),
+        # Absolute, so a path spelt from it survives a `cd`; bubblewrap binds the session
+        # at this same path, so it holds inside that fence too.
+        "KINGFISHER_SESSION_ROOT": str(session_dir),
     }
     skills = (catalogue or Definitions.from_config(cfg)).skills
     env["KINGFISHER_SKILLS"] = str(skills_view(skills.root, skills.mounts, cfg.kingfisher_dir))
@@ -74,8 +77,9 @@ _HERE = ("shell_here.md", "shell_here_skills.md", "shell_here_execute.md")
 def kingfishers_shell() -> ShellPrompt:
     """What kingfisher's own shell says of itself.
 
-    It starts in the session root, with `TMPDIR` the scratchpad and `KINGFISHER_SKILLS`
-    the catalogue, which is true of no runner a deployment supplies.
+    It exports the session root as `KINGFISHER_SESSION_ROOT`, with `TMPDIR` the
+    scratchpad and `KINGFISHER_SKILLS` the catalogue, which is true of no runner a
+    deployment supplies.
     """
     prompts = resources.files("kingfisher.plugins.sessions.prompts")
     prompt, skills, execute = (
@@ -222,6 +226,8 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         bounded = self.timeout if timeout is None else min(timeout, self.timeout)
         with ScratchFolder(Path(self.cwd), scratchpad) as folder:
             folder.write(files)
+            # Not `KINGFISHER_SESSION_ROOT`: the tool decides what goes in and comes out, and
+            # handed the session a renderer fed a crafted file could read or write behind it.
             env = {key: self._env[key] for key in ("PATH", "LANG", "LC_ALL") if key in self._env}
             # Its own home and temporary folder, so nothing it caches outlives it.
             env |= {"HOME": str(folder.path), "TMPDIR": str(folder.path)}

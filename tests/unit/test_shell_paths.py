@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -26,7 +27,7 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
 from kingfisher.core.agent.prompting import execute_line
 from kingfisher.core.interfaces import CommandResult
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
-from kingfisher.plugins import LocalSessions, ShellPrompt
+from kingfisher.plugins import LocalSessions, ShellPrompt, backend_at
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from kingfisher.plugins.sessions.shell import kingfishers_shell
 from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
@@ -131,6 +132,51 @@ def test_a_shell_call_missing_a_file_tool_path_is_told_the_shell_spelling(shelle
     # The control: a miss spelt the shell's way is a missing file, and says only that.
     assert "No such file" in answers["c2"]
     assert "file-tool path" not in answers["c2"]
+
+
+def test_the_correction_gives_a_spelling_the_shell_reaches_from_anywhere(shelled):
+    """The correction said `inputs/cars.csv`, the relative spelling that misses after any
+    `cd`. What it now gives is run as written, from `/`, through the session's own shell.
+    """
+    cfg, _ = shelled
+    _run(
+        cfg,
+        _calls(("execute", {"command": "cat /outputs/cars.csv"}, "c1")),
+        AIMessage(content="done"),
+    )
+    (answer,) = [m.text for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
+    suggested = re.search(r'`("\$KINGFISHER_SESSION_ROOT/[^`]+")`', answer)
+    assert suggested, answer
+    session = cfg.sessions_root / "s"
+    (session / cfg.layout.outputs / "cars.csv").write_text("make,model\n", encoding="utf-8")
+
+    ran = backend_at(cfg, session).execute(f"cd / && cat {suggested.group(1)}")
+
+    assert "make,model" in ran.output, ran.output
+
+
+def test_the_shell_is_taught_one_spelling_and_not_a_relative_one(shelled):
+    """Taught to drop the slash, the agent wrote relative paths, which miss once anything
+    moves the working directory. Read off what the model was sent -- the system prompt and
+    `execute`'s description -- since the shipped text reaches it only once filled in.
+    """
+    cfg, offered = shelled
+    _run(replace(cfg, skills_enabled=True), AIMessage(content="done"))
+    (system,) = [m for m in Scripted.heard[0] if isinstance(m, SystemMessage)]
+    told = " ".join(f"{system.text}\n{_execute(offered[0])}".split())
+
+    relative = [
+        span
+        for span in re.findall(r"`([^`]*)`", told)
+        if span.split("/")[0] in cfg.layout.session_dirs
+    ]
+    assert not relative
+    for gone in ("leading slash", "avoid `cd`", "dropping the slash"):
+        assert gone not in told, gone
+    # The control: the rule is there to be read, the `/skills` exception included.
+    assert '`"$KINGFISHER_SESSION_ROOT/inputs/data.csv"`' in told
+    assert 'os.environ["KINGFISHER_SESSION_ROOT"]' in told
+    assert "`$KINGFISHER_SESSION_ROOT/skills` names a directory that does not exist" in told
 
 
 @pytest.mark.parametrize(
@@ -240,7 +286,7 @@ def test_a_subagent_is_told_the_inputs_folder_the_layout_names(shelled):
 
     assert len(offered) == 3
     for tools in offered:
-        assert "`/in/data.csv` is `in/data.csv`" in _execute(tools)
+        assert '`/in/data.csv` is `"$KINGFISHER_SESSION_ROOT/in/data.csv"`' in _execute(tools)
 
 
 class Here(Plain):
@@ -421,7 +467,7 @@ def _told_tools(way: str, tools: list[Any]) -> list[Any]:
 
 def test_the_shell_rule_reaches_execute_and_no_other_tool(shelled):
     """Without the name gate the rule lands on every tool offered, and what it says --
-    that a path is the shell's spelling without its leading slash -- is wrong advice for
+    that a path is spelt from `$KINGFISHER_SESSION_ROOT` in the shell -- is wrong advice for
     `read_file`, whose paths are the virtual ones. The rule asserting `execute` carries
     it passes just as well when every tool does.
     """

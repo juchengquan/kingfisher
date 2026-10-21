@@ -691,6 +691,20 @@ def test_the_command_sees_only_its_own_environment(cfg, session_dir, monkeypatch
     assert "HOME" in named
 
 
+def test_a_tools_run_is_not_handed_the_session_root(cfg, session_dir):
+    """The tool decides what goes in and comes out: handed the session root, a renderer fed
+    a crafted file could read the caller's inputs behind its back. The shell's own command
+    beside it is the control, or a variable nobody exported would pass.
+    """
+    backend = backend_at(cfg, session_dir)
+
+    ran = backend.default.run_in_scratch(["/usr/bin/env"], {}, outputs=[])
+    shell = backend.execute("/usr/bin/env")
+
+    assert "KINGFISHER_SESSION_ROOT=" not in ran.output
+    assert f"KINGFISHER_SESSION_ROOT={session_dir}" in shell.output.splitlines()
+
+
 def test_a_fifo_left_as_an_output_is_refused_without_waiting(cfg, session_dir):
     """Opened blocking, a FIFO holds the read, and the turn, until something writes it."""
     started = time.monotonic()

@@ -131,8 +131,9 @@ the shell backend is also the filesystem for every unrouted path, so handing ove
 ## `ShellPrompt` — what the agent is told about your shell
 
 Kingfisher can say how a shell sees the session's files only of the shell it runs
-itself: started in the session root, so `/inputs/data.csv` is `inputs/data.csv`
-there, with `$TMPDIR` the scratchpad and `$KINGFISHER_SKILLS` the catalogue. Any
+itself: started in the session root and exporting it as `$KINGFISHER_SESSION_ROOT`,
+so `/inputs/data.csv` is `"$KINGFISHER_SESSION_ROOT/inputs/data.csv"` there, with
+`$TMPDIR` the scratchpad and `$KINGFISHER_SKILLS` the catalogue. Any
 other shell is described neutrally — it may not see a file-tool path under that name
 or any other, so check before relying on one — until it says what is true of it:
 
@@ -186,8 +187,9 @@ Things to know:
   definitions, or `instructions=` on `Kingfisher`.
 - **A miss is corrected where the shell says it starts in the session.**
   `starts_in_session=True` says so, and a command that fails on a file-tool path is
-  then answered with the path's spelling in the shell, worked out from the session
-  root. Kingfisher's own shell says it; a shell that does not is not corrected.
+  then answered with the path spelt from `$KINGFISHER_SESSION_ROOT`, so a shell saying
+  it must also export that variable as its session folder. Kingfisher's own shell says
+  it; a shell that does not is not corrected.
 - **deepagents' list of this host's paths is kept only for a shell on this host.**
   deepagents adds a "Shell paths vs. virtual paths" section giving each routed folder's
   path here. It stays for kingfisher's own shell and for a runner whose `local` is
