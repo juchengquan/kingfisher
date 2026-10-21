@@ -76,10 +76,13 @@ class Ledger:
         with self._lock:
             return entry_id(self.earlier.last + self._reserved) if self._reserved else None
 
-    def unkept(self, entry: LedgerEntry) -> None:
-        """Mark one entry as having no file, because the backend would not take it."""
+    def unkept(self, entry: LedgerEntry) -> LedgerEntry:
+        """Mark one entry as having no file, because the backend would not take it, and
+        hand back the entry as it now stands."""
+        bare = replace(entry, path=None)
         with self._lock:
-            self._entries[self._entries.index(entry)] = replace(entry, path=None)
+            self._entries[self._entries.index(entry)] = bare
+        return bare
 
     def access_in(self, run: str) -> tuple[Listed, ...]:
         """The access of every entry recorded under one run, before this turn as well."""

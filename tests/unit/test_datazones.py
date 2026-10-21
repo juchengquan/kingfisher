@@ -198,6 +198,30 @@ def test_a_datazone_is_one_name():
         )
 
 
+@pytest.mark.parametrize("written", ["*", " * "])
+def test_a_star_datazone_is_refused_rather_than_read_as_a_name(written):
+    """`datazone: "*"` loaded as a datazone named `*`, which no caller is in, so it shut
+    its subagent to everyone and switched on access control -- after seed, reading the
+    same `"*"` as "any", had copied the file as open.
+    """
+    with pytest.raises(SubagentError, match="datazone '\\*' is not 'any' -- leave datazone out"):
+        declared(
+            {"name": "s", "description": "d", "system_prompt": "Go.", "datazone": written},
+            "acme.py",
+        )
+
+
+def test_a_tool_star_datazone_is_refused_too():
+    """A tool's datazone is read by the subagent's reader, so `"*"` is the same mistake."""
+
+    def count(path: str) -> str:
+        """Count the lines in a text file."""
+        return "0"
+
+    with pytest.raises(ToolError, match="datazone '\\*' is not 'any'"):
+        found_in(ToolSpec(count, datazone="*"), where="pay.py", holder="TOOLS")
+
+
 def test_an_agent_has_no_datazone(zoned):
     """It runs in whichever datazone its caller names; a line here would be a second
     answer to a question the call already answered.

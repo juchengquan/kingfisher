@@ -30,15 +30,20 @@ from .narrowing import (
 from .recorder import RecorderMiddleware
 from .scratch_runs import ScratchRunsMiddleware
 from .session_instructions import SessionInstructionsMiddleware
+from .signed_thinking import SignedThinkingMiddleware, signers_of
 from .step_budget import StepBudget, StepBudgetMiddleware
 
 if TYPE_CHECKING:
+    from kingfisher.core.config import Models
     from kingfisher.core.interfaces import PdfAttachments, ScratchRunLimit
 
 #: The graphs kingfisher builds itself: the agent, a subagent a definition declares, and
 #: deepagents' `general-purpose`, which is handed the agent's own tools. A compiled
 #: subagent is not among them: deepagents runs it as given.
 Kind = Literal["agent", "subagent", "general-purpose"]
+
+#: The name deepagents merges its filesystem middleware by, which a deployment's may take.
+FILESYSTEM = FilesystemMiddleware.__name__
 
 
 def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing one is built from
@@ -52,6 +57,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     budget: StepBudget,
     trigger: int,
     execution_timeout_s: int,
+    models: Models,
     permissions: Any = None,
     keep_results_rounds: int | None = None,
     recorder: RecorderMiddleware | None = None,
@@ -79,7 +85,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     is held to it in model calls; one per build, shared by all three kinds. `trigger` is
     where this graph's own summariser fires, which sizes the PDFs its turn may hold open,
     and `pdf_attachments` is the deployment's say in what each of them is replaced with.
-    `name` is the graph's, as `scratch_run_limit` is asked about it.
+    `name` is the graph's, as `scratch_run_limit` is asked about it, and `models` the
+    deployment's catalogue, whose endpoints say who answered each call.
 
     `inner` is what the deployment's settings switch on and what its definitions name, which
     go inside every standing one. Taken here rather than appended by each caller so that the
@@ -116,6 +123,10 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     standing: list[AgentMiddleware[Any, Any, Any]] = (
         [] if clearing is None else [clearing(granted)]
     )
+    # After clearing, which measures what the summariser counted. Outside the step budget
+    # and the reply checks, so the reply it records is the one kept and a call asked again
+    # goes as they built it; and outside the caching slot, which marks what this sends.
+    standing.append(SignedThinkingMiddleware(signers_of(models)))
     if kind == "agent":
         # Outside `BuiltinToolsMiddleware`, which takes its prose out where `write_todos`
         # was not granted.
@@ -165,13 +176,16 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # save, in the one folder a ledger row names, and a second copy under a name only
     # deepagents knows cost a reconciliation at every turn's end to tell the two apart.
     # `_permissions` is deepagents' own keyword, private and passed as it asks.
-    standing.append(
-        FilesystemMiddleware(
-            backend=backend,
-            tool_token_limit_before_evict=None,
-            _permissions=permissions,
+    # Not beside one `inner` names: deepagents' merge keeps the later of the two, and a
+    # helper's stack, which meets no merge, refused to build holding both.
+    if not any(one.name == FILESYSTEM for one in inner):
+        standing.append(
+            FilesystemMiddleware(
+                backend=backend,
+                tool_token_limit_before_evict=None,
+                _permissions=permissions,
+            )
         )
-    )
     standing.append(
         BuiltinToolsMiddleware(
             layout,

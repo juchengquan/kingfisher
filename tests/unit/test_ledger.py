@@ -808,6 +808,33 @@ class _Raising(LocalSessions):
         return opened
 
 
+@pytest.mark.parametrize(
+    ("sessions", "awaited"),
+    # `_Refusing` refuses the sync save only, so the awaited half goes through `_Raising`.
+    [(_Refusing, False), (_Raising, False), (_Raising, True)],
+    ids=["refused", "raised", "raised-arun"],
+)
+def test_a_long_result_the_backend_would_not_keep_is_handed_over_whole(
+    ledgered, sessions, awaited
+):
+    """The preview was built from the entry as it was before its path came off, so the
+    model got four thousand characters of a hundred thousand and a `full result:` line
+    naming a file that was never written.
+    """
+    kf = Kingfisher(ledgered, sessions=sessions())
+    request = Request("go", agent="only", session_id="s")
+    Scripted.script.extend([_calls(("loud", {}, "c1")), AIMessage(content="done")])
+
+    result = asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+
+    assert result.answer == "done", "the save failing failed the call"
+    shown = _handed("c1").text
+    assert _kept(ledgered) == [], "the control: the backend kept the file after all"
+    assert "full result:" not in shown, "the model was pointed at a file that is not there"
+    assert "row 00500 " in shown, "the middle of a result nothing kept was left out"
+    assert shown.rstrip().endswith("[A-0001]")
+
+
 @pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
 def test_a_save_that_raises_does_not_fail_the_call_the_model_is_about_to_read(
     ledgered, caplog, awaited
@@ -1409,6 +1436,53 @@ def test_the_id_outlasts_the_preview_as_the_last_line_of_it(ledgered):
     assert len(shown) < 80_000, "the control: it was shown whole and never previewed"
     assert "lines truncated]" in shown, "the control: nothing was left out"
     assert shown.rstrip().endswith("[A-0001]")
+
+
+WIDE = '''
+def one_line() -> str:
+    """Return about 220,000 characters of JSON on one line, as an API's minified body is."""
+    pad = "x" * 20
+    return "[" + ",".join(f'{{"row": {n}, "pad": "{pad}"}}' for n in range(5_000)) + "]"
+
+
+def wide_rows() -> str:
+    """Return forty lines, each longer than half of what a preview shows."""
+    return "\\n".join(f"wide {n:02d} " + "x" * 3_000 + f" end {n:02d}" for n in range(40))
+
+
+TOOLS = [one_line, wide_rows]
+'''
+
+
+def test_a_result_on_one_line_is_previewed_by_its_ends(ledgered):
+    """The preview kept whole lines only, so minified JSON on one line was shown as
+    `... [1 lines truncated] ...` and the path, with nothing of the result itself.
+    """
+    (tools_dir(ledgered) / "wide.py").write_text(WIDE, encoding="utf-8")
+
+    _run(ledgered, _calls(("one_line", {}, "c1")), AIMessage(content="done"))
+
+    shown = _handed("c1").text
+    assert len(shown) < 80_000, "the control: it was shown whole and never previewed"
+    assert shown.startswith('[{"row": 0, '), "the preview kept no head of the result"
+    assert '{"row": 4999, ' in shown, "the preview kept no tail of the result"
+    assert shown.count("characters truncated]") == 1, "one line's cut was said twice, or not"
+    assert "lines truncated]" not in shown, "one line was counted as left out entirely"
+
+
+def test_a_result_whose_every_line_is_too_wide_keeps_its_first_and_last(ledgered):
+    """Each line longer than half the preview left nothing whole to show, so a result of
+    forty wide lines was previewed as a count of them.
+    """
+    (tools_dir(ledgered) / "wide.py").write_text(WIDE, encoding="utf-8")
+
+    _run(ledgered, _calls(("wide_rows", {}, "c1")), AIMessage(content="done"))
+
+    shown = _handed("c1").text
+    assert shown.startswith("wide 00 "), "the first line's start was not shown"
+    assert " end 39\nfull result: " in shown, "the last line's end was not shown"
+    assert "... [38 lines truncated] ..." in shown, "the two cut lines were counted as lost"
+    assert shown.count("characters truncated]") == 2
 
 
 def test_the_id_outlasts_the_preview_of_a_result_made_of_blocks(ledgered):

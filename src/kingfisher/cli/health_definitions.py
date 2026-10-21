@@ -88,6 +88,30 @@ def _subagent_references(found: Inventory) -> Iterator[Check]:
         )
 
 
+def _skill_entries(found: Inventory) -> Iterator[Check]:
+    """A definition naming one skill twice, bare and qualified.
+
+    A failure because `warm` refuses it: a deployment carrying one does not start.
+    """
+    if not found.doubled_skills_checked:
+        yield Check(
+            "skill entries",
+            "warn",
+            "not checked -- a catalogue it reads did not load, which is above",
+        )
+        return
+    if not found.doubled_skills:
+        yield Check("skill entries", "ok", "every definition names each skill once")
+        return
+    for subject, complaint in sorted(found.doubled_skills.items()):
+        yield Check(
+            "skill entries",
+            "fail",
+            f"{subject} {complaint}",
+            "keep one entry, the one carrying the audience you mean",
+        )
+
+
 def _bundled_entries(found: Inventory) -> Iterator[Check]:
     """A definition's `source: bundled` entries, against the folder they come from.
 
@@ -263,6 +287,7 @@ def checks(cfg: Config, found: Inventory) -> Iterator[Check]:
     yield from _catalogues(found)
     yield from _tool_references(found)
     yield from _subagent_references(found)
+    yield from _skill_entries(found)
     yield from _bundled_entries(found)
     yield from _subagent_tools(found)
     yield from _definitions(cfg, found)

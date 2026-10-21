@@ -11,10 +11,13 @@ from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
 from kingfisher.core.agent.middlewares.narrowing import NarrowedSkillsMiddleware
+from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills import registry as skill_registry
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
+from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, an_agent
 
 SKILL = "---\nname: {name}\ndescription: {desc}\n---\nBody of the skill.\n"
 
@@ -181,6 +184,55 @@ def test_two_sources_that_both_load_are_reported_as_missing_nothing(cfg):
 
     assert registry.unloadable == ()
     assert registry.names == ("legal::lookup", "research::lookup")
+
+
+# -- one skill, two spellings ----------------------------------------------
+
+#: `audit` narrowed to A, and the same skill again qualified, under a line reaching A or B.
+BOTH_SPELLINGS = (
+    "source_ids: [A, B]\nbuiltin_tools: [read_file]\n"
+    "skills:\n  - name: audit\n    source_ids: [A]\n  - catalogue::audit\n"
+)
+
+
+def _written(cfg, kind, body):
+    """One definition of `kind` carrying `body`, beside a skill called `audit`."""
+    _skill(cfg.skills_dir, "audit", "audit", "Audit the books.")
+    directory = cfg.catalogue_roots["agents" if kind == "agent" else "subagents"]
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{kind}.yaml").write_text(
+        f"name: {kind}\ndescription: d\n{body}system_prompt: |\n  You do it.\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize(("kind", "error"), [("agent", AgentError), ("subagent", SubagentError)])
+def test_one_skill_written_bare_and_qualified_is_refused(cfg, kind, error):
+    """Both entries loaded and resolved to one skill, so the one with no audience cancelled
+    the narrower one's: a caller holding only B was offered a skill written for A, and the
+    access report said nothing.
+    """
+    _written(cfg, kind, BOTH_SPELLINGS)
+
+    with pytest.raises(error, match=r"names 'audit' and 'catalogue::audit', which are one"):
+        Definitions.from_config(cfg).warm()
+
+
+def test_two_skills_sharing_a_bare_name_are_still_two_entries(cfg):
+    """The control: the check compares what a name means, not how it reads, so the two
+    parties' `lookup` in one list stay two skills.
+    """
+    _two_parties(cfg)
+    an_agent(
+        cfg,
+        "boss",
+        builtin_tools="[read_file]",
+        skills="[research::lookup, legal::lookup]",
+    )
+
+    warmed = Definitions.from_config(cfg).warm()
+
+    assert warmed.agents.specs["boss"].skills == ("research::lookup", "legal::lookup")
 
 
 # -- the two loaders, which do not delegate --------------------------------

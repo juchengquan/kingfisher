@@ -30,6 +30,7 @@ from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import (
     Definitions,
     bundled_tool_names,
+    doubled_skill,
     resolve_definitions,
 )
 from kingfisher.core.definitions.importing import defined_in_a_workspace
@@ -169,6 +170,12 @@ class Inventory:
     unresolved_subagents: Mapping[str, tuple[str, ...]] = _NO_NAMES
     #: Whether `unresolved_subagents` was asked at all; `False` is not "none".
     unresolved_subagents_checked: bool = True
+
+    #: Definition -> how it names one skill twice, keyed as `moved_tools` is. Startup
+    #: refuses this, and `doctor` promises to say in advance what startup refuses.
+    doubled_skills: Mapping[str, str] = _NOTHING
+    #: Whether `doubled_skills` was asked at all; `False` is not "none".
+    doubled_skills_checked: bool = True
 
     #: Definitions whose `source: bundled` entries and own folder disagree, with how.
     #: Startup refuses this, and `doctor` promises to say in advance what startup refuses.
@@ -470,6 +477,27 @@ def _unresolved_subagents(
         return None
 
 
+def _doubled_skills(resolved: Definitions) -> Mapping[str, str] | None:
+    """Definitions naming one skill twice, bare and qualified, or `None` when that could
+    not be asked.
+
+    Through the rule `warm` refuses with, and as written rather than as a caller reaches
+    it: startup refuses the file whoever is asking.
+    """
+    try:
+        return MappingProxyType({
+            _subject(kind, name): found
+            for kind, specs in (
+                ("agent", resolved.agents.specs),
+                ("subagent", resolved.subagents.specs),
+            )
+            for name, spec in specs.items()
+            if (found := doubled_skill(spec.skills, resolved.registry)) is not None
+        })
+    except (AgentError, SubagentError):
+        return None
+
+
 def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str] | None:
     """Definitions whose bundled entries no longer match their own folder, or `None`
     when that could not be asked.
@@ -685,6 +713,7 @@ def inventory(
     middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved, held)
     unresolved_subagents = _unresolved_subagents(resolved, held)
+    doubled_skills = _doubled_skills(resolved)
     miscounted_bundles = _miscounted_bundles(resolved)
 
     builtin, offered_tools, sources, tools_error, builtin_checked, build_error = _tools(
@@ -876,6 +905,10 @@ def inventory(
             else _kept(unresolved_subagents, reached_subjects)
         ),
         unresolved_subagents_checked=unresolved_subagents is not None,
+        doubled_skills=(
+            _NOTHING if doubled_skills is None else _kept(doubled_skills, reached_subjects)
+        ),
+        doubled_skills_checked=doubled_skills is not None,
         miscounted_bundles=(
             _NOTHING
             if miscounted_bundles is None

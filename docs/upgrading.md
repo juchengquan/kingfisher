@@ -18,6 +18,69 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A preview shows a result's ends, and names only a file that is there, after #1048
+
+- **A long result on one line is previewed by its start and its end.** The preview kept
+  whole lines only, so minified JSON, or a result whose every line was wider than half
+  the preview, showed the model `... [1 lines truncated] ...` and the path and nothing
+  else. A line too long to show at all is now cut and marked `... [N characters
+  truncated] ...`; results whose lines fit read as before.
+- **A long result your backend would not keep is handed to the model whole.** It was
+  previewed with a `full result:` line naming the file the save had just failed to
+  write. A backend that refuses or raises on a save under `/scratchpad/tool_results/`
+  now sends the model the whole result, and its row still says it was not kept.
+
+## A lone `datazone=` name is refused like a listed one, after #1048
+
+- **`source_ids: datazone=finance`, written without brackets, no longer loads.** The list
+  form was refused and the lone name was not, so an agent written that way required a
+  datazone through the one line that cannot say one, and only callers in `finance`
+  reached it. `ToolSpec(tool, source_ids="datazone=finance")` took the same path. Write
+  `datazone: finance` on a subagent, or `ToolSpec(tool, datazone="finance")`; an agent
+  takes none.
+
+## A datazone written `"*"` is refused, after #1048
+
+- **`datazone: "*"` no longer loads.** It was read as a datazone named `*`, which no
+  caller is in, so the subagent or tool was shut to everyone and access control was
+  switched on; `seed` meanwhile took it for "any" and copied the file. Leave
+  `datazone` out for any datazone, which is what `"*"` was meant to say. The same goes
+  for `"datazone": "*"` in Python and `ToolSpec(..., datazone="*")`.
+
+## A skill written bare and qualified is refused, after #1048
+
+- **`skills: [audit, catalogue::audit]` no longer loads.** Both entries loaded and
+  meant one skill, so the one saying no `source_ids` reached every caller the other
+  kept out, with nothing in the access report. Startup now refuses the definition,
+  naming both spellings, and `doctor` fails on its `skill entries` row; keep one entry,
+  the one carrying the audience you mean.
+
+## A helper may run your own `FilesystemMiddleware`, after #1048
+
+- **A helper whose stack holds a middleware answering to `FilesystemMiddleware` now
+  builds.** It failed on "Please remove duplicate middleware instances", because
+  kingfisher put its own beside yours and a helper's stack, unlike every other, is never
+  merged by name. Since #1033 a portable helper runs the agent's middleware line, so an
+  agent naming one failed every turn that reached such a helper. Yours now takes the
+  helper's first place, where deepagents puts it in every other stack, and kingfisher
+  adds none beside it. It must still enforce `permissions` itself, as
+  `docs/guides/middleware.md` says.
+
+## A switch of model or endpoint sends no earlier thinking, after #1048
+
+- **A reply's thinking goes back only to the endpoint and model that produced it.** A
+  session moved to another model, or to another endpoint -- one renamed, or one whose
+  `base_url` changed under the same name -- sends its earlier replies' text and tool
+  calls as before, without their thinking. A MiniMax reply's thinking reached Claude
+  signed by MiniMax, which Claude cannot check; between two models of one vendor the
+  cost is the earlier reasoning, on that switch alone. A model you pass in rather than
+  name in `models.yaml` is judged by its model name.
+- **Each reply records who served it**, in `response_metadata["kingfisher_served_by"]`:
+  the endpoint's name, its `base_url` and the model. Neither chat class sends it on, and
+  the transcript does not keep it; the conversation kingfisher keeps between turns does.
+- **`standing_middleware` takes `models=`**, the catalogue. It is not exported, so this
+  matters only to a deployment that called it anyway.
+
 ## Kingfisher's shell exports `KINGFISHER_SESSION_ROOT`, after #1047
 
 - **The agent is taught a different spelling for a session path in the shell.** It was

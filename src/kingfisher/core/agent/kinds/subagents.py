@@ -15,7 +15,7 @@ from langchain_core.runnables import Runnable
 
 from kingfisher.core.access import ALL, Selection, ceiling, narrowed, refuse_unoffered
 from kingfisher.core.agent.middlewares.clearing import result_clearing
-from kingfisher.core.agent.middlewares.standing import standing_middleware
+from kingfisher.core.agent.middlewares.standing import FILESYSTEM, standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import (
     SUMMARIZER,
@@ -382,6 +382,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         backend=backend,
         budget=StepBudget(cfg.recursion_limit) if budget is None else budget,
         execution_timeout_s=cfg.execution_timeout_s,
+        models=cfg.models,
         keep_results_rounds=cfg.keep_results_rounds,
         trigger=trigger,
         pdf_attachments=pdf_attachments,
@@ -412,6 +413,13 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         # A helper's stack is its parent's `SubAgentMiddleware`'s, which caches nothing.
         session_cached=default_model is None,
     )
+    # A deployment's own goes outside all of it, in the slot deepagents' merge gives one in
+    # every other stack: among the rest, one that offloads would cut a long result before
+    # the recorder kept it whole.
+    if default_model is not None and any(
+        one.name == FILESYSTEM for one in extra_middleware or ()
+    ):
+        subagent["middleware"].sort(key=lambda one: one.name != FILESYSTEM)
 
     # Objects, not names: names raise inside `ToolNode`. The whole set goes in and
     # `GrantedOnlyMiddleware` decides. Set even when empty: deepagents reads a missing key

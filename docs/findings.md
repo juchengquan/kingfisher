@@ -66,6 +66,22 @@ wrong.*
   ordered deliberately.
 - **No `<think>` output on either surface**, even for a genuine reasoning prompt --
   82 and 57 chunks of step-by-step, zero `<think>`.
+- **A reply's thinking is sent back by package, not by vendor.** Building a request,
+  `ChatAnthropic` keeps a `thinking` block from any reply whose
+  `response_metadata["model_provider"]` is `anthropic` and skips a `reasoning` block from
+  one that is not; `ChatOpenAI` on the Responses API skips Anthropic's `thinking` and
+  keeps its own `reasoning`. MiniMax and every gateway on Anthropic's format come through
+  `ChatAnthropic`, so their replies say `anthropic` and their signed thinking goes to
+  Claude unchanged. Nothing on a reply names the vendor: `model_provider` is the package,
+  `model_name` what the server reported, and no response header is kept. So
+  `SignedThinkingMiddleware` records who served each reply itself. Measured on the
+  request each builds, no call made. *(2026-10-21, langchain-anthropic 1.7.6,
+  langchain-openai 1.5.1.)*
+- **The summariser's model is handed the conversation as text.** langchain's
+  `SummarizationMiddleware`, which deepagents' delegates to, renders the messages to
+  summarise with `get_buffer_string(format="xml")`, so no signed block reaches it,
+  whichever model it runs; only a `summarizer` runnable given to it is handed the
+  messages themselves. *(2026-10-21, langchain 1.4.5, deepagents 0.7.22.)*
 
 ### Nothing upstream bridges a sync stream to an async one
 
