@@ -77,7 +77,7 @@ from .backend import (
     skills_sources,
 )
 from .interpreter import interpreter
-from .models import deployment_default, model_named, summarizer_trigger
+from .models import deployment_default, model_named, summarizer_count, summarizer_trigger
 from .permitted_backend import PermittedBackend
 from .prompting import behind_instructions, memory_guidelines, system_prompt
 from .session_paths import SessionPaths
@@ -425,6 +425,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         ledger,
         trigger,
         mark,
+        count=summarizer_count(running, named),
         subject="this agent" if agent is None else f"agent {agent.name!r}",
     )
     # Filled in kingfisher's order once the grant is known; the probe reads it before.
@@ -832,7 +833,11 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     recorder=recording(agent),
                     # The agent's model and its entry's mark, read against its own stack.
                     clearing=result_clearing(
-                        ledger, generals_trigger, mark, subject="general-purpose"
+                        ledger,
+                        generals_trigger,
+                        mark,
+                        count=summarizer_count(running, general),
+                        subject="general-purpose",
                     ),
                     tools=permitted,
                     gated=gated,

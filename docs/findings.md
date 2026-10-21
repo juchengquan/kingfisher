@@ -361,6 +361,17 @@ for the next reader who reaches for one.*
   The clip cuts a `read_file` result to its text blocks -- none, for a PDF -- and
   tells the model to page with `offset` and `limit`, which `read_file` ignores for a
   PDF. *(2026-10-13, deepagents 0.7.6 and 0.7.22, langchain-core 1.5.5 and 1.6.10.)*
+- **The summarizer does not count with the counter it is handed by default.** deepagents
+  hands langchain `count_tokens_approximately`, and langchain, seeing that one, puts
+  another in its place: 3.3 characters a token on a class whose `_llm_type` starts
+  `anthropic-chat` -- `ChatAnthropic`, so MiniMax-M3 too -- and 4 elsewhere, both scaling
+  the whole count by the last reply's reported `total_tokens` over the estimate up to it,
+  held between 1 and 1.25, where every reply names one provider. A list of one message
+  is never scaled. Its cut is sized by `_partial_token_counter`, the same without scaling.
+  A counter the deployment passes is used as given, for both. On one conversation with a
+  reported reply, `ChatAnthropic`'s counted 34,144 where `count_tokens_approximately`
+  counted 22,537. `test_clearing_counts_as_the_summarizer_in_the_stack_does` drives it.
+  *(2026-10-21, langchain 1.4.5, langchain-core 1.6.10.)*
 - **A model's profile sizes the summarizer, and one passed in replaces langchain's.**
   `ChatAnthropic` built without `profile=` fills it from langchain's own table:
   `claude-sonnet-4-5` arrives with a full profile of 24 keys, `max_input_tokens`

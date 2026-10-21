@@ -102,8 +102,10 @@ default: MiniMax-M3
 #   top_p        unset
 #   clear_results_at
 #                unset, and never sent: it is kingfisher's own. The size, in
-#                tokens, at which older tool results and file text in the
-#                conversation of an agent or subagent running this model start
+#                tokens as that graph's summarizer counts them (3.3 characters
+#                a token on api: anthropic), at which older tool results and
+#                file text in the conversation of an agent or subagent running
+#                this model start
 #                being swapped for a short handle naming where the whole of each
 #                still is, until it is under half this. Unset is the smaller of
 #                64000 and half of where that graph's summarizer summarizes its
