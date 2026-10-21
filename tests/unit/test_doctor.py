@@ -868,6 +868,19 @@ def test_a_retired_setting_is_reported(cfg, monkeypatch):
     assert "KINGFISHER_SKILLS_ENABLED" in check.remedy
 
 
+def test_the_source_ids_file_setting_is_reported_as_retired(cfg, monkeypatch):
+    """`KINGFISHER_SOURCE_IDS_FILE` stopped being refused in #983, which read it nowhere
+    else, and doctor named it nowhere either: a deployment still setting it was told
+    nothing, while .env.example went on calling it refused."""
+    monkeypatch.setenv("KINGFISHER_SOURCE_IDS_FILE", "/etc/kingfisher/source_ids.yaml")
+
+    check = {c.name: c for c in examine(cfg)}["retired settings"]
+
+    assert check.verdict == "warn"
+    assert "KINGFISHER_SOURCE_IDS_FILE" in check.detail
+    assert "collected from the definitions' locks" in check.remedy
+
+
 def test_the_service_settings_are_reported_by_their_prefixes(cfg, monkeypatch):
     """Matched rather than enumerated, so a suffix nobody listed is still caught --
     under both names the HTTP service's settings had, because a deployment still

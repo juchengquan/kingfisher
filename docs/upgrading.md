@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `doctor` names `KINGFISHER_SOURCE_IDS_FILE` as retired, after #9999
+
+- **A deployment still setting it is told so.** #983 stopped reading it and stopped
+  refusing it, and nothing said either: `doctor`'s *retired settings* row now names it,
+  as a warning, and `.env.example` lists it there instead of among the settings a start
+  refuses. A `source_ids.yaml` left in the definitions folder is still read by nothing
+  and still not reported; delete it, as #983's section says.
+
 ## Doctor's `shell` row warns for sessions it cannot see into, after #9999
 
 - **With sessions of your own, the `shell` row is a warning naming them.** It reported

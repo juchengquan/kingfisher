@@ -45,6 +45,8 @@ RETIRED: dict[str, str] = {
     "KINGFISHER_SCRATCH_DIR": "nothing -- TMPDIR is a directory inside the session",
     "KINGFISHER_SESSION_KEY": "nothing -- what a session keeps is no longer signed, and "
                               "the `session files` check says what keeps the shell out",
+    "KINGFISHER_SOURCE_IDS_FILE": "nothing -- the source ids and datazones in use are "
+                                  "collected from the definitions' locks",
 }
 
 #: Prefixes that went whole, matched rather than enumerated: a list of suffixes would
