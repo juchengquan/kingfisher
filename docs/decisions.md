@@ -2190,6 +2190,44 @@ request, because the sentence is in the cached system prompt. It is spliced in a
 marker from `prompting.py`, as the other optional parts of `system.md` are, rather than
 cut out of the markdown's text. *(2026-10-20.)*
 
+**A saved result older than a deployment's rounds loses its file and keeps its row.**
+`KINGFISHER_KEEP_RESULTS_ROUNDS`, read into `Config.keep_results_rounds`, unset by
+default so nothing changes until a deployment asks. A round is an exchange as the ledger
+already groups them -- a user message and the resumes after it -- with the current one
+counted, so a resume does not age the round it answers. Not wall-clock age, which the
+session reaper covers, and not a count or byte budget, under which one heavy round
+expires results from two rounds ago. The owner's pain was the number of files a fifty-round
+session leaves in `tool_results/`. The row keeps its id, arguments, size and summary,
+gains `expired_in` naming the turn, and has `path` empty; `expired_in` is apart from
+`path` because an empty `path` already meant a file the backend refused. Older rows lack
+the field and are still read, which `test_a_row_written_before_expiry_existed_is_still_read`
+holds: required, every one of them read as a closing line. An expired row is patched as
+parsed, so a key another version wrote survives. *(2026-10-20.)*
+
+**Marked when the turn's ledger is built, removed by the sweep.** `Ledger` marks the rows
+as it is made, so clearing in that turn hands no path the turn is about to remove, and the
+existing sweep removes what no row names. An offloaded file is removed only while it is
+still the expiring row's length, the identity test repointing uses: deepagents names it by
+call id, a later call of that id overwrites it, and another length is a result a stub
+still names.
+
+**A miss explains itself; nothing already written is reworded.** A `read_file`, `glob` or
+`grep` under the two result folders that finds nothing says results expire and to call
+the tool again, from `BuiltinToolsMiddleware`, on every graph. Clearing hands an expired
+row a handle saying the same, ahead of the offloaded-stub test that would send a search to
+the removed file. `<ledger_delta>` and `<ledger_index>` say `expired`, and
+`tool_results.md` says results expire where they do. **Rejected: rewriting the handles
+already in the transcript.** It reverses "a handle keeps its wording once written",
+re-caches the conversation from the earliest handle on every round once expiry starts,
+comes back from `paused.state` on a resume, and still cannot reach a path in an earlier
+`<ledger_delta>`, in `conversation_history/`, or an id the model remembers.
+
+**Left for later.** Keeping a result an answer cited: its row still resolves the
+citation to a tool, arguments and summary. Replacing a file with a few-line tombstone
+rather than removing it, which answers bytes and the session cap rather than the file
+count. `conversation_history/`, whose growth is the summariser re-running every turn,
+noted under clearing. *(2026-10-20, from a grilled plan.)*
+
 **Not built, and still open.**
 
 - **A handle in place of a large result's stub.** A handle in place of *every* result,

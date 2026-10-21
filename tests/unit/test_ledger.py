@@ -1889,3 +1889,154 @@ def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):
 
     assert kept.path in _handed("c3").text
     assert offloaded.path in _handed("c4").text
+
+
+# -- expiry --------------------------------------------------------------------
+
+
+def _rounds(cfg, rounds: int | None):
+    return replace(cfg, keep_results_rounds=rounds)
+
+
+def _searched(cfg, at: str):
+    return _run(cfg, _calls(("web_search", {"query": at}, at)), AIMessage(content="done"))
+
+
+def _closed(*rows: dict[str, Any]) -> list[str]:
+    """Each row as the ledger writes it, closed as turn `t1`."""
+    return [*(json.dumps(row) for row in rows), json.dumps({"turn": "t1"})]
+
+
+def _written(cfg, lines: list[str]) -> None:
+    ledger = _session(cfg) / HARNESS / LEDGER_FILE
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_a_result_older_than_the_rounds_kept_loses_its_file_and_keeps_its_row(ledgered):
+    """Kept for every round, a long session's results folder grows without bound; expired
+    without its row, an id the model was handed names nothing at all."""
+    cfg = _rounds(ledgered, 2)
+    _searched(cfg, "c1")
+    _searched(cfg, "c2")
+    assert _kept(cfg) == ["A-0001-web_search.txt", "A-0002-web_search.txt"]
+
+    third = _run(cfg, AIMessage(content="nothing this time"))
+
+    assert _kept(cfg) == ["A-0002-web_search.txt"]
+    first, second = (row for row in _rows(cfg) if "id" in row)
+    assert (first["path"], first["expired_in"]) == (None, third.turn_id)
+    assert first["summary"] == "web_search query='c1' -- Ten results for c1"
+    assert second["path"] == "/scratchpad/tool_results/A-0002-web_search.txt"
+    assert second["expired_in"] is None
+
+
+def test_unset_every_result_keeps_its_file(ledgered):
+    """The control beside expiry: a deployment that never set it must lose nothing."""
+    for at in ("c1", "c2", "c3"):
+        _searched(ledgered, at)
+
+    assert len(_kept(ledgered)) == 3
+    assert all(row.get("expired_in") is None for row in _rows(ledgered))
+
+
+def test_a_resume_carries_on_the_round_it_answers(ledgered):
+    """Counted as a round of its own, a resume would age the results of the round it
+    answers, and a session paused at every gate would lose them a round early."""
+    first, second = _entry(1, "web_search"), _entry(2, "web_search")
+    kept = KeptLedger(
+        lines=tuple(json.dumps(asdict(one)) for one in (first, second)),
+        exchanges=((first,), (second,)),
+    )
+
+    resumed = Ledger("t3", kept, resumed=True, keep_rounds=1)
+    asked = Ledger("t3", kept, keep_rounds=1)
+
+    assert [entry.id for entry in resumed.expired] == ["A-0001"]
+    assert [entry.id for entry in asked.expired] == ["A-0001", "A-0002"]
+
+
+def test_a_row_written_before_expiry_existed_is_still_read(ledgered):
+    """A field every row must carry reads each older row as a closing line, and the
+    delta, the index and clearing lose every result recorded before it."""
+    row = asdict(replace(_entry(1, "web_search"), turn="t1"))
+    del row["expired_in"]
+    _written(ledgered, _closed(row))
+
+    _run(ledgered, AIMessage(content="done"))
+
+    assert _listed_in(_asked()) == ["A-0001"]
+
+
+def test_an_expired_row_keeps_what_this_version_does_not_read(ledgered):
+    """Rewritten from the entry rather than patched, a row loses any key another version
+    wrote into it."""
+    cfg = _rounds(ledgered, 1)
+    _written(cfg, _closed({**asdict(replace(_entry(1, "web_search"), turn="t1")), "later": "x"}))
+
+    _run(cfg, AIMessage(content="done"))
+
+    (row,) = (row for row in _rows(cfg) if "id" in row)
+    assert (row["later"], row["path"]) == ("x", None)
+    assert row["expired_in"] is not None
+
+
+@pytest.mark.parametrize("overwritten", [False, True], ids=["its-own", "another-calls"])
+def test_an_expired_offload_is_removed_only_while_it_is_still_that_result(
+    ledgered, overwritten
+):
+    """deepagents names an offloaded file after the call id alone and a later call of that
+    id overwrites it, so removing it by name deletes a result a stub still names."""
+    cfg = _rounds(ledgered, 1)
+    (entry,) = _run(cfg, _calls(("loud", {}, "c1")), AIMessage(content="done")).ledger
+    offload = _session(cfg) / entry.path.lstrip("/")
+    if overwritten:
+        offload.write_text("another call's result", encoding="utf-8")
+
+    _run(cfg, AIMessage(content="nothing this time"))
+
+    assert offload.exists() is overwritten
+    assert next(row for row in _rows(cfg) if "id" in row)["expired_in"] is not None
+
+
+def test_an_expired_result_is_listed_as_expired_not_as_not_kept():
+    """'not kept' says the backend refused the file, which sends a reader to the wrong
+    cause."""
+    entry = replace(_entry(1, "web_search"), path=None, expired_in="t2")
+
+    assert ledger_delta([entry]).splitlines()[1].endswith("  expired")
+    assert ledger_delta([replace(entry, expired_in=None)]).splitlines()[1].endswith("not kept")
+
+
+def test_a_search_for_an_expired_result_says_why_it_found_nothing(ledgered):
+    """A bare 'not found' for a file a handle named reads as a wrong path, and the model
+    spends its calls looking for it."""
+    cfg = _rounds(ledgered, 1)
+    (entry,) = _searched(cfg, "c1").ledger
+    _run(cfg, AIMessage(content="nothing this time"))
+
+    _run(cfg, _calls(("read_file", {"file_path": entry.path}, "c2")), AIMessage(content="done"))
+
+    assert "not found" in _handed("c2").text
+    assert "older than 1 rounds of this conversation has expired" in _handed("c2").text
+
+
+def test_a_miss_is_not_explained_where_results_do_not_expire(ledgered):
+    """The control: told results expire where none do, the model gives up on a path it
+    merely mistyped."""
+    missing = f"{TOOL_RESULTS_ROUTE}A-0042-web_search.txt"
+
+    _run(ledgered, _calls(("read_file", {"file_path": missing}, "c1")), AIMessage(content="done"))
+
+    assert "not found" in _handed("c1").text
+    assert "expired" not in _handed("c1").text
+
+
+def test_the_prompt_says_results_expire_only_where_they_do():
+    """Unsaid, the prompt promises every result stays findable; said everywhere, a
+    deployment keeping all of them tells the model to call tools again for nothing."""
+    expiring = render_system_prompt(layout=DEFAULT_LAYOUT, keep_results_rounds=20)
+    keeping = render_system_prompt(layout=DEFAULT_LAYOUT)
+
+    assert "older than 20 rounds of this conversation expires" in " ".join(expiring.split())
+    assert "expires" not in keeping

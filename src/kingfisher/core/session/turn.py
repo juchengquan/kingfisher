@@ -164,7 +164,8 @@ def _listed(entries: Sequence[LedgerEntry]) -> list[str]:
 
 def _delta_line(entry: LedgerEntry) -> str:
     called = f"{entry.tool} {entry.args}" if entry.args else entry.tool
-    return f"{entry.id} {called} -> {readable_size(entry.size)}  {entry.path or 'not kept'}"
+    kept = entry.path or ("expired" if entry.expired_in is not None else "not kept")
+    return f"{entry.id} {called} -> {readable_size(entry.size)}  {kept}"
 
 
 def consume(  # noqa: PLR0913 -- a chunk, the answer so far, and what the stream taught

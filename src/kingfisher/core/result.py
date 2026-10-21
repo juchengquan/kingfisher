@@ -103,6 +103,9 @@ class LedgerEntry:
     #: The tool, its arguments and the first line of its result, and any attachment its
     #: saved copy, the text alone, left out. No model writes it.
     summary: str
+    #: The turn that removed its file for age, `path` then `None`. Apart from `path`, whose
+    #: `None` also means the backend refused the file, so the two read differently.
+    expired_in: str | None = None
 
 
 @dataclass(frozen=True)

@@ -17,6 +17,7 @@ from .steps import Steps, changing, reading
 from .store import (
     KeptLedger,
     entry_id,
+    expired,
     names_a_result,
     write_ledger,
 )
@@ -33,12 +34,22 @@ class Ledger:
     One per turn, handed to every recorder the build makes; the graph is per turn too.
     """
 
-    def __init__(self, turn: str, earlier: KeptLedger, *, resumed: bool = False) -> None:
+    def __init__(
+        self,
+        turn: str,
+        earlier: KeptLedger,
+        *,
+        resumed: bool = False,
+        keep_rounds: int | None = None,
+    ) -> None:
         self.turn = turn
-        self.earlier = earlier
         #: Whether this turn answers a paused one, which its closing line says: a resume
         #: adds no user message, and the next one's delta reaches back past it.
         self.resumed = resumed
+        #: As this turn writes it back, with every result older than `keep_rounds` exchanges
+        #: expired; `expired` holds those entries as they were, naming the files to remove.
+        #: Marked from the start, so clearing this turn hands no path the turn will remove.
+        self.earlier, self.expired = expired(earlier, keep_rounds, turn=turn, resumed=resumed)
         # Calls made together run on threads, each with its own recorder.
         self._lock = threading.Lock()
         self._entries: list[LedgerEntry] = []
@@ -117,6 +128,7 @@ def sweep_results(
         files,
         ledger.earlier.paths | {e.path for e in entries if e.path},
         tool_results_route=tool_results_route,
+        offloaded=_offloads_freed(files, ledger.expired),
     )
 
 
@@ -170,16 +182,30 @@ def _repointed(files: Any, entries: tuple[LedgerEntry, ...]) -> Steps[tuple[Ledg
     )
 
 
+def _offloads_freed(files: Any, expiring: tuple[LedgerEntry, ...]) -> dict[str, int]:
+    """Each offloaded file an expiring row named, by name, and the length it has while it
+    is still that row's result."""
+    under = _offloaded_under(files)
+    return {
+        PurePosixPath(entry.path).name: entry.size + len(stamp(entry.id))
+        for entry in expiring
+        if entry.path is not None and entry.path.startswith(under)
+    }
+
+
 def _swept(
     files: Any,
     named: frozenset[str] | set[str],
     *,
     tool_results_route: str,
+    offloaded: dict[str, int],
 ) -> Steps[None]:
-    """Remove every result file a recorder wrote that no row names.
+    """Remove every result file a recorder wrote that no row names, and each offloaded file
+    in `offloaded` that is still the length given.
 
     Only a turn that died before writing its rows leaves one, beside our copies of
-    repointed results. One turn runs at a time, so no running turn is about to name it.
+    repointed results and the files of expired ones. One turn runs at a time, so no running
+    turn is about to name it.
 
     A recorder's own names rather than whatever the folder holds: the agent's file
     tools are refused this folder, but its shell is not.
@@ -192,3 +218,14 @@ def _swept(
             continue
         # Its answer is not checked: a file left behind is swept by the next turn.
         yield changing(files, "delete", one["path"])
+    if not offloaded:
+        return
+    listing = yield reading(files, "ls", _offloaded_under(files))
+    for one in listing.entries or ():
+        if one.get("is_dir") or one["path"] in named:
+            continue
+        # deepagents names the file after the call id alone, and a later call of that id
+        # overwrites it: another length is another call's result, which a stub still names.
+        whole = offloaded.get(PurePosixPath(one["path"]).name)
+        if whole is not None and one.get("size") == whole:
+            yield changing(files, "delete", one["path"])

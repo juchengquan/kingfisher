@@ -43,6 +43,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     budget: StepBudget,
     trigger: int,
     execution_timeout_s: int,
+    keep_results_rounds: int | None = None,
     recorder: RecorderMiddleware | None = None,
     clearing: Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None = None,
     tools: Sequence[str] | None = None,
@@ -133,6 +134,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             shell_prompt_of(backend),
             longest=longest_command(execution_timeout_s),
             here=shell_runs_here(backend),
+            expires_after=keep_results_rounds,
         )
     )
     if skills is not None:

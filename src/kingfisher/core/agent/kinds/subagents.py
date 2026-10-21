@@ -327,6 +327,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         backend=backend,
         budget=StepBudget(cfg.recursion_limit) if budget is None else budget,
         execution_timeout_s=cfg.execution_timeout_s,
+        keep_results_rounds=cfg.keep_results_rounds,
         trigger=summarizer_trigger(runs),
         recorder=recorder,
         # `None` permits nothing: an empty allowlist, not an absent one.

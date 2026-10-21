@@ -444,6 +444,31 @@ def test_an_offloaded_result_is_named_by_a_search_for_its_id():
         assert handle.endswith(f"\n[{number}]")
 
 
+@pytest.mark.parametrize("offloaded", [False, True], ids=["kept", "offloaded"])
+def test_an_expired_result_is_cleared_and_says_to_call_its_tool_again(offloaded):
+    """With no file, a row read as never kept left its result whole for the rest of the
+    session, and an offloaded one's stub was handed a search for the file expiry removed.
+    """
+    earlier = Talk()
+    old = earlier.call("http_fetch", {"url": "https://a.example"}, _text("<html>"))
+    if offloaded:
+        stub = _stub(old, f"{OFFLOADS_ROUTE}{old}", earlier.result(old).content)
+        earlier.messages[-1] = earlier.messages[-1].model_copy(update={"content": stub})
+    (row,) = earlier.ledger.entries
+    gone = replace(row, path=None, expired_in="t9")
+    talk = Talk(KeptLedger(last=1, exchanges=((gone,),)))
+    talk.messages = list(earlier.messages)
+    # A stub is short: without something larger beside it no pass is worth running.
+    talk.call("web_search", {"query": "bulk"}, _text("bulk"))
+    talk.pad()
+
+    handle = _of(talk.cleared(), old).content
+
+    assert "bytes, cleared; expired, call http_fetch again to see it)" in handle
+    assert "grep" not in handle
+    assert handle.endswith("\n[A-0001]")
+
+
 def test_a_result_recorded_as_a_stub_is_named_by_its_own_copy():
     """A tool that offloads its own output hands the recorder the stub, so the copy the
     row names holds what the model saw and the offloaded file holds no id to search for.
