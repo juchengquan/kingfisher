@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A lone `datazone=` name is refused like a listed one, after #9999
+
+- **`source_ids: datazone=finance`, written without brackets, no longer loads.** The list
+  form was refused and the lone name was not, so an agent written that way required a
+  datazone through the one line that cannot say one, and only callers in `finance`
+  reached it. `ToolSpec(tool, source_ids="datazone=finance")` took the same path. Write
+  `datazone: finance` on a subagent, or `ToolSpec(tool, datazone="finance")`; an agent
+  takes none.
+
 ## A datazone written `"*"` is refused, after #9999
 
 - **`datazone: "*"` no longer loads.** It was read as a datazone named `*`, which no

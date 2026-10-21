@@ -373,7 +373,8 @@ class Reader:
     ) -> Audience:
         """A list of source ids, any entry of which may be a set `{a, b}`."""
         if isinstance(listed, str) and lone_name and listed.strip() and listed.strip() != ALL:
-            return (listed.strip(),)
+            # A list of one, not an answer: a lone name meets every check a listed one does.
+            listed = [listed]
         if isinstance(listed, (Mapping, set, frozenset)):
             if isinstance(listed, Mapping):
                 # A mapping with a value is no set, and the advice below would name its keys

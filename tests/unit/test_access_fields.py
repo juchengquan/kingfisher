@@ -310,6 +310,35 @@ def test_a_definitions_own_line_still_takes_a_single_unbracketed_name():
     assert read.source_ids("analysts") == ("analysts",)
 
 
+@pytest.mark.parametrize("written", ["datazone=finance", ["datazone=finance"]])
+def test_a_datazone_spelled_as_a_source_id_is_refused_however_the_line_is_written(written):
+    """A lone name returned before the `datazone=` check its list form meets, so
+    `source_ids: datazone=finance` loaded and shut the agent to every caller outside a
+    datazone it may not even require.
+    """
+    with pytest.raises(AgentError, match="how a datazone is held"):
+        read.source_ids(written)
+
+
+@pytest.mark.parametrize("written", ["datazone=finance", ["datazone=finance"]])
+def test_a_tool_spec_spelled_with_a_held_datazone_is_refused_either_way(written):
+    """The same reader as a definition's line, so `ToolSpec(source_ids="datazone=x")`
+    went through the same gap.
+    """
+    from langchain_core.tools import tool
+
+    from kingfisher.core.definitions.tools.catalogue import ToolError, found_in
+    from kingfisher.core.definitions.tools.spec import ToolSpec
+
+    @tool
+    def payroll(month: str) -> str:
+        """The month's payroll."""
+        return month
+
+    with pytest.raises(ToolError, match="how a datazone is held"):
+        found_in(ToolSpec(payroll, source_ids=written), where="tools.py", holder="TOOLS")
+
+
 # -- the two fields whose entries say nothing about who may use them -------------
 
 HEAD = "name: x\ndescription: d\nsource_ids: [A, B]\nsystem_prompt: |\n  Go.\n"
