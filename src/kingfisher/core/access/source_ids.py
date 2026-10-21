@@ -112,6 +112,15 @@ def with_datazone[Caller: Iterable[str] | _Unscoped | None](
     if datazone is None or isinstance(source_ids, str):
         # A bare string is refused by `held_by`, naming the string; leave it to say so.
         return source_ids
+    # Read as a definition's is: held as given, `" finance"` reached nothing zoned finance
+    # and pinned the session it ran in to `' finance'` for good.
+    zone = datazone.strip() if isinstance(datazone, str) else ""
+    if not zone:
+        msg = (
+            f"a caller's datazone is one name -- pass datazone='finance', from the command "
+            f"line --datazone finance -- got {datazone!r}"
+        )
+        raise CallerError(msg)
     if isinstance(source_ids, _Unscoped):
         msg = (
             "UNSCOPED runs with no caller, so it has no datazone -- pass the caller's "
@@ -121,11 +130,11 @@ def with_datazone[Caller: Iterable[str] | _Unscoped | None](
     # Carried on, the zone would be a caller, and `caller_holds` never see nobody named.
     if source_ids is None:
         msg = (
-            f"datazone {datazone!r} is a caller's, and this call names no caller -- pass "
+            f"datazone {zone!r} is a caller's, and this call names no caller -- pass "
             "the caller's source ids with it, from the command line --as A,B"
         )
         raise CallerError(msg)
-    return (*source_ids, Datazone(datazone))
+    return (*source_ids, Datazone(zone))
 
 
 def jointly(audiences: Iterable[Audience]) -> Audience:

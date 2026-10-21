@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A caller's datazone is read as a definition's is, after #9999
+
+- **A blank datazone is refused, and a padded one is the name inside it.**
+  `datazone=""` or `"  "`, on any door that takes one (`run`, `stream`, `session`,
+  `sessions`, `inventory` and `--datazone`), was held as a datazone no definition could
+  require, and a session a turn ran in was pinned to it for good. It is now a
+  `CallerError`, as a definition's blank datazone is refused at load. `" finance"` is
+  `finance`: it reached nothing zoned finance before, and pinned its session to
+  `' finance'`, which no finance caller could reach again. A session already pinned that
+  way keeps the pin, which no caller can name now; `UNSCOPED` still reaches it.
+
 ## `seed` sees a requirement written `frozenset(...)`, after #9999
 
 - **A Python definition whose requirement is `frozenset({...})` or `set(...)` is left
