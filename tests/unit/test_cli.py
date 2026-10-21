@@ -1208,6 +1208,7 @@ def _said_and_not_raised() -> tuple[type[Exception], ...]:
     parametrized over the tuple, an entry dropped from it would take its case along."""
     from kingfisher import (
         ArtifactError,
+        CallerError,
         CapabilityError,
         DecisionError,
         InputsError,
@@ -1220,6 +1221,7 @@ def _said_and_not_raised() -> tuple[type[Exception], ...]:
     return (
         AgentError,
         ArtifactError,
+        CallerError,
         CapabilityError,
         DecisionError,
         InputsError,

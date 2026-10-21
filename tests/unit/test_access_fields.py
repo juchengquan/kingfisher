@@ -197,16 +197,24 @@ def test_an_empty_requirement_is_refused():
         )
 
 
-def test_the_retired_keyword_is_refused_by_name():
-    """A definition written before the set spelling names `all_of` and means it. Read as
-    a set it would require the single name `all_of`, which nobody holds -- an audience
-    quietly narrowed to nobody, so it is refused pointing at the shape that replaced it.
+def test_the_retired_keyword_is_refused_as_the_mapping_with_a_value_it_is():
+    """Read as a set, `{all_of: [A, B]}` would require the single name `all_of`, which
+    nobody holds -- an audience quietly narrowed to nobody. Nothing names the old key any
+    more; it is refused because a value is written after it, in a file as from a mapping.
     """
-    with pytest.raises(AgentError, match=r"write the requirement as the set it is"):
+    with pytest.raises(AgentError, match=r"\{a, b\}, not \{a: b\}"):
         audienced(
             [{"name": "audit", "source_ids": [{"all_of": ["A", "B"]}]}],
             absent=ALL,
             key="skills",
+        )
+    with pytest.raises(AgentError, match=r"\{a, b\}, not \{a: b\}"):
+        read_agent(
+            DefinitionText(
+                "name: x\ndescription: d\nsource_ids: [{all_of: [A, B]}]\n"
+                "system_prompt: |\n  Go.\n",
+                Path("x.yaml"),
+            )
         )
 
 
@@ -220,14 +228,16 @@ def test_a_requirement_written_as_the_whole_audience_is_refused():
         )
 
 
-def test_the_retired_keyword_is_named_when_it_is_the_whole_audience_too():
-    """The two refusals sit on either side of one guard, and the old spelling reaches
-    both -- `source_ids: {all_of: [A, B]}` is a mapping before it is anything else.
+def test_a_mapping_with_a_value_as_the_whole_audience_is_not_advised_as_a_set():
+    """`source_ids: {all_of: [A, B]}` is a mapping with a value, and the whole-audience
+    refusal would have told it to write `[{all_of}]` -- a requirement on a name nobody holds.
     """
-    with pytest.raises(AgentError, match=r"\[\{A, B\}\]"):
+    with pytest.raises(AgentError, match=r"\{a, b\}, not \{a: b\}") as refused:
         audienced(
             [{"name": "audit", "source_ids": {"all_of": ["A", "B"]}}], absent=ALL, key="skills"
         )
+
+    assert "[{all_of}]" not in str(refused.value)
 
 
 def test_everyone_cannot_be_part_of_a_requirement():

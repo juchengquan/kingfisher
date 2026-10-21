@@ -534,8 +534,8 @@ def _access(
     }
     if vocabulary is None:
         return stated, AccessReport()
-    # The walk `Kingfisher` runs at construction, by the same function, so a listing
-    # cannot disagree with startup about what is left open.
+    # Tools are not audited: one stating no audience is open to whoever opens an agent
+    # granting it.
     return stated, audit(("agent", agents), ("subagent", subagents))
 
 

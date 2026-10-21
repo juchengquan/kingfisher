@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `AccessError` and `Kingfisher.access_report` are gone, after #1030
+
+- **`from kingfisher import AccessError` fails.** Since the vocabulary is collected from
+  the definitions, every refusal it made was of a caller named wrong, raised as
+  `CallerError`, so the two names caught the same thing. Catch `CallerError`.
+  `kingfisher run` prints such a refusal as `CallerError: ...`, where it said `access
+  error: ...`; the exit code is still `2`.
+- **`Kingfisher.access_report` is gone.** It was built at every start and read by
+  nothing. What it said is `inventory(cfg).access_report`, the report `kingfisher list`
+  prints.
+
 ## A subagent's results are cleared too, after #1029
 
 - **A subagent's and `general-purpose`'s older results are cleared to handles, as the

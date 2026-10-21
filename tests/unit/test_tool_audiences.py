@@ -11,7 +11,7 @@ from langchain_core.tools import tool
 from kingfisher import ToolSpec
 from kingfisher.core.access.capabilities import ALL
 from kingfisher.core.access.checks import caller_holds
-from kingfisher.core.access.source_ids import AccessError
+from kingfisher.core.access.source_ids import CallerError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorder import Audiences
 from kingfisher.core.definitions.tools.catalogue import (
@@ -273,7 +273,7 @@ def test_a_lock_only_a_tool_carries_switches_checking_on(cfg):
 
     assert kf.vocabulary is not None
     assert kf.vocabulary.source_ids == {"A": ("tool line_count",)}
-    with pytest.raises(AccessError, match="must say who is calling"):
+    with pytest.raises(CallerError, match="must say who is calling"):
         agent_named(kf, "surveyor")
 
 

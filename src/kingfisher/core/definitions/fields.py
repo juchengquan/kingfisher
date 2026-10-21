@@ -367,12 +367,12 @@ class Reader:
         if isinstance(listed, str) and lone_name and listed.strip() and listed.strip() != ALL:
             return (listed.strip(),)
         if isinstance(listed, (Mapping, set, frozenset)):
-            inner = listed.get("all_of") if isinstance(listed, Mapping) else None
+            if isinstance(listed, Mapping):
+                # A mapping with a value is no set, and the advice below would name its keys
+                # as one: `{all_of: [A, B]}` would be told to write `[{all_of}]`.
+                self._conjunction(listed, where=where)
             named = (
-                inner
-                if isinstance(inner, list)
-                else sorted(listed, key=str) if isinstance(listed, (set, frozenset))
-                else tuple(listed)
+                sorted(listed, key=str) if isinstance(listed, (set, frozenset)) else tuple(listed)
             )
             parts = ", ".join(str(one) for one in named) or "..."
             msg = (
@@ -436,15 +436,6 @@ class Reader:
 
     def _conjunction(self, raw: Mapping[str, object], *, where: str) -> frozenset[str]:
         """One audience entry that is satisfied only by holding every name in it."""
-        if raw.get("all_of") is not None:
-            inner = raw["all_of"]
-            listed = inner if isinstance(inner, (list, tuple)) else ()
-            parts = ", ".join(str(one) for one in listed) or "..."
-            msg = (
-                f"{where}: 'all_of' is not a key the format takes -- write the "
-                f"requirement as the set it is, {{{parts}}}"
-            )
-            raise self.error(msg)
         # `{finance: senior}` is a mapping with a value rather than a set of two
         # names, and reading it as one would take `finance` and throw away what
         # was written beside it.

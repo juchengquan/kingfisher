@@ -12,14 +12,11 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import (
     UNRESTRICTED,
-    AccessReport,
     Capabilities,
     CapabilityError,
     Vocabulary,
-    audit,
     reaches,
 )
-from kingfisher.core.agent.activation import defined_subagents
 from kingfisher.core.agent.assembly import (
     build_agent,
     builtin_tool_names,
@@ -160,14 +157,6 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # Collected rather than read from a file: a lock written anywhere is in force, so no
         # missing file can leave one inert.
         self.vocabulary: Vocabulary | None = self.catalogue.vocabulary
-        self.access_report: AccessReport = AccessReport()
-        if self.vocabulary is not None:
-            # Tools are not audited: one stating no audience is open to whoever opens an
-            # agent granting it.
-            self.access_report = audit(
-                ("agent", self.catalogue.agents.specs),
-                ("subagent", defined_subagents(self.cfg, catalogue=self.catalogue)),
-            )
 
         # Last, so the line reports what was resolved, and a wiring failure raises
         # instead of announcing a deployment that never came up.

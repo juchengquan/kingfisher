@@ -14,7 +14,7 @@ from kingfisher.cli.__main__ import main
 from kingfisher.core.access.checks import caller_holds
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
-    AccessError,
+    CallerError,
     with_datazone,
     zone_name,
 )
@@ -142,7 +142,7 @@ def test_a_datazone_with_no_caller_is_refused(zoned):
     """`UNSCOPED` has no caller to be in a zone, so the pair says two things at once."""
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="UNSCOPED runs with no caller"):
+    with pytest.raises(CallerError, match="UNSCOPED runs with no caller"):
         caller_holds(kf.vocabulary, with_datazone(UNSCOPED, "finance"))
 
 
@@ -161,7 +161,7 @@ def test_a_datazone_where_nothing_is_locked_is_refused(cfg):
     """Ignored, the caller would believe the zone narrowed what they were handed."""
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="no definition here carries a lock"):
+    with pytest.raises(CallerError, match="no definition here carries a lock"):
         caller_holds(kf.vocabulary, with_datazone((), "finance"))
 
 
@@ -170,11 +170,11 @@ def test_every_turn_door_takes_the_datazone(zoned):
     not see that `UNSCOPED` cannot be in one."""
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="UNSCOPED runs with no caller"):
+    with pytest.raises(CallerError, match="UNSCOPED runs with no caller"):
         kf.run("t", source_ids=UNSCOPED, datazone="finance")
-    with pytest.raises(AccessError, match="UNSCOPED runs with no caller"):
+    with pytest.raises(CallerError, match="UNSCOPED runs with no caller"):
         next(iter(kf.stream("t", source_ids=UNSCOPED, datazone="finance")))
-    with pytest.raises(AccessError, match="UNSCOPED runs with no caller"):
+    with pytest.raises(CallerError, match="UNSCOPED runs with no caller"):
         asyncio.run(kf.arun("t", source_ids=UNSCOPED, datazone="finance"))
 
 

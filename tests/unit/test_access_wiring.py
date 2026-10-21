@@ -11,12 +11,13 @@ import pytest
 from deepagents.middleware import SubAgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 
+from kingfisher import inventory
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.access.checks import caller_holds, held_by
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
-    AccessError,
+    CallerError,
     Datazone,
     Held,
     Vocabulary,
@@ -117,7 +118,7 @@ def test_a_call_that_does_not_say_who_is_calling_is_refused(policied):
     rather than left to grant everything in silence.
     """
     kf = Kingfisher(policied, sessions=LocalSessions())
-    with pytest.raises(AccessError, match="source_ids="):
+    with pytest.raises(CallerError, match="source_ids="):
         kf.run("anything")
 
 
@@ -149,10 +150,10 @@ def test_naming_source_ids_where_nothing_is_locked_is_refused(cfg):
     at startup since 2026-09-01.
     """
     kf = Kingfisher(cfg, sessions=LocalSessions())
-    with pytest.raises(AccessError, match="no definition here carries a lock"):
+    with pytest.raises(CallerError, match="no definition here carries a lock"):
         held_by(kf.vocabulary, ("A",))
     # And still refused at the door a turn comes through, which is what moved.
-    with pytest.raises(AccessError, match="no definition here carries a lock"):
+    with pytest.raises(CallerError, match="no definition here carries a lock"):
         kf.run("anything", source_ids=("A",))
 
 
@@ -170,7 +171,7 @@ def test_a_bare_string_of_source_ids_is_refused_rather_than_spelled_out(policied
     """
     kf = Kingfisher(policied, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="not a string"):
+    with pytest.raises(CallerError, match="not a string"):
         caller_holds(kf.vocabulary, "A")
 
 
@@ -180,7 +181,7 @@ def test_the_refusal_names_what_was_asked_for_and_what_to_do(cfg):
     """
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
-    with pytest.raises(AccessError) as caught:
+    with pytest.raises(CallerError) as caught:
         caller_holds(kf.vocabulary, ["marketing", "sales"])
 
     said = str(caught.value)
@@ -341,8 +342,7 @@ def test_a_definition_with_no_source_ids_line_is_named(cfg):
     """Default-open must not also be silent."""
     an_agent(cfg, "assistant")
     an_agent(cfg, "locked", source_ids="[A]")
-    kf = Kingfisher(cfg, sessions=LocalSessions())
-    assert ("agent", "assistant") in kf.access_report.unrestricted
+    assert ("agent", "assistant") in inventory(cfg).access_report.unrestricted
 
 
 def test_a_subagent_with_no_source_ids_line_is_named_too(cfg):
@@ -362,10 +362,10 @@ def test_a_subagent_with_no_source_ids_line_is_named_too(cfg):
         encoding="utf-8",
     )
 
-    kf = Kingfisher(cfg, sessions=LocalSessions())
+    report = inventory(cfg).access_report
 
-    assert ("subagent", "auditor") in kf.access_report.unrestricted
-    assert "auditor" in "\n".join(kf.access_report.lines())
+    assert ("subagent", "auditor") in report.unrestricted
+    assert "auditor" in "\n".join(report.lines())
 
 
 def test_a_subagent_restricted_only_by_datazone_is_not_named(cfg):
@@ -378,21 +378,17 @@ def test_a_subagent_restricted_only_by_datazone_is_not_named(cfg):
         encoding="utf-8",
     )
 
-    kf = Kingfisher(cfg, sessions=LocalSessions())
-
-    assert ("subagent", "ledger") not in kf.access_report.unrestricted
+    assert ("subagent", "ledger") not in inventory(cfg).access_report.unrestricted
 
 
 def test_a_definition_that_restricts_is_not_named(policied):
-    kf = Kingfisher(policied, sessions=LocalSessions())
-    assert kf.access_report.is_clean
+    assert inventory(policied).access_report.is_clean
 
 
 def test_the_report_reads_as_a_sentence(cfg):
     an_agent(cfg, "assistant")
     an_agent(cfg, "locked", source_ids="[A]")
-    kf = Kingfisher(cfg, sessions=LocalSessions())
-    rendered = "\n".join(kf.access_report.lines())
+    rendered = "\n".join(inventory(cfg).access_report.lines())
     assert "reachable by everyone" in rendered
     assert "assistant" in rendered
 
