@@ -54,6 +54,21 @@ replaced the four layers began.
   calls `high_mark(trigger, written, subject=...)`; `summarizer_trigger(model)` still
   reads deepagents' own, and `summarizer_trigger(model, middleware)` the one that runs.
 
+## A result's id is taken as its call starts, after #1025
+
+- **Ids have gaps now.** A recorded call takes its id before it runs, so one that fails
+  leaves a number no result has, and so does a `task` paused at a gate and run again on
+  its resume. Nothing that reads ids should expect them to follow on one from the next,
+  or read a missing one as a lost result. None is ever given to a second result.
+- **A `task` answer is numbered before the work inside it**, not after, and a turn's
+  rows in `.harness/ledger.jsonl` are in id order rather than the order results came
+  back. A closing line may carry `"reserved"`, the turn's highest id where no row holds
+  it.
+- **A middleware may want `result_id`**, a function returning the id the call running
+  now will be recorded under, or `None`. A deployment that numbered its own files to
+  match kingfisher's can ask for this instead. `docs/guides/middleware.md` has where such
+  a file may go.
+
 ## A request may carry a note for its turn, after #1024
 
 - **`Request` has a `note` field**, text for that turn alone. It is sent right after

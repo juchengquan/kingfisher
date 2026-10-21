@@ -11,6 +11,7 @@ from langchain.agents.middleware import AgentMiddleware
 from kingfisher.core.access.capabilities import ALL, CapabilityError
 from kingfisher.core.agent.assembly import _deployment_middleware, _provisions
 from kingfisher.core.agent.kinds.declared_middleware import ByName, declared_middleware
+from kingfisher.core.agent.middlewares.recorder import result_id
 from kingfisher.core.definitions.agents import spec as agent_format
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.subagents.spec import SubagentError
@@ -563,7 +564,7 @@ def test_a_factory_declaring_wants_is_refused_rather_than_built_without_them():
 # spellings. These drive the harness's own builder instead.
 
 
-def test_the_builder_fills_the_three_keys_a_want_may_name(cfg):
+def test_the_builder_fills_every_key_a_want_may_name(cfg):
     """A key added here and not to `wants`' vocabulary is a want no class can ask for.
 
     Asserted as the whole set rather than key by key: the failure this catches is a
@@ -577,7 +578,8 @@ def test_the_builder_fills_the_three_keys_a_want_may_name(cfg):
         running, definition, cfg=cfg, endpoints=ALL, backend=backend
     )
 
-    assert set(provisions) == {"model", "backend", "definition"}
+    assert set(provisions) == {"model", "backend", "definition", "result_id"}
+    assert provisions["result_id"] is result_id
     assert provisions["backend"] is backend
     assert provisions["definition"] is definition
     assert provisions["model"].fallback is running

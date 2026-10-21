@@ -32,6 +32,17 @@ _log = logging.getLogger(__name__)
 #: Set around that call and read by every recorder inside it, on langgraph's threads too.
 RUN: ContextVar[str | None] = ContextVar("kingfisher_ledger_run", default=None)
 
+#: The id the tool call running here will be recorded under, taken before it runs, or
+#: `None` where it will not be. Set around every call a recorder sees, unrecorded ones
+#: too, so a subagent's file tool is not read as the `task` call it runs inside.
+RESULT_ID: ContextVar[str | None] = ContextVar("kingfisher_result_id", default=None)
+
+
+def result_id() -> str | None:
+    """What `RESULT_ID` holds here: the `result_id` a middleware may want."""
+    return RESULT_ID.get()
+
+
 #: What a row would bury the rest of the ledger to say: the file tools, whose reads and
 #: writes are a file already, and `write_todos`, one list the conversation carries. Not
 #: `execute`: what a command did is what a later turn wants to read back.
@@ -96,6 +107,15 @@ def _running(call: Mapping[str, Any]) -> Iterator[None]:
         RUN.reset(token)
 
 
+@contextmanager
+def _numbered(number: str | None) -> Iterator[None]:
+    token = RESULT_ID.set(number)
+    try:
+        yield
+    finally:
+        RESULT_ID.reset(token)
+
+
 class RecorderMiddleware(AgentMiddleware):
     """Record each successful tool result, keep it as a file in the session, and end
     what the model is handed with the result's id.
@@ -124,10 +144,15 @@ class RecorderMiddleware(AgentMiddleware):
         self._tool_results_route = tool_results_route
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        with _running(request.tool_call):
+        number = self._reserved(request.tool_call)
+        with _running(request.tool_call), _numbered(number):
             result = handler(request)
         answer = answer_in(result, request.tool_call.get("id"))
-        if answer is None or (made := self._recorded(request.tool_call, answer)) is None:
+        if (
+            number is None
+            or answer is None
+            or (made := self._recorded(request.tool_call, answer, number)) is None
+        ):
             return result
         entry, content, text = made
         try:
@@ -140,10 +165,15 @@ class RecorderMiddleware(AgentMiddleware):
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        with _running(request.tool_call):
+        number = self._reserved(request.tool_call)
+        with _running(request.tool_call), _numbered(number):
             result = await handler(request)
         answer = answer_in(result, request.tool_call.get("id"))
-        if answer is None or (made := self._recorded(request.tool_call, answer)) is None:
+        if (
+            number is None
+            or answer is None
+            or (made := self._recorded(request.tool_call, answer, number)) is None
+        ):
             return result
         entry, content, text = made
         try:
@@ -153,14 +183,23 @@ class RecorderMiddleware(AgentMiddleware):
         self._unkept(entry, answers)
         return _stamped(result, answer, entry.id, _shown(answer, entry, text))
 
+    def _reserved(self, call: Mapping[str, Any]) -> str | None:
+        """The id this call's result will have if it is recorded, or `None` for a tool
+        that never is.
+
+        Taken before the call runs, so a middleware inside this one can name what it
+        writes after the result; a call that then fails leaves its number unused.
+        """
+        if str(call.get("name") or "") in UNRECORDED:
+            return None
+        return self._ledger.reserve()
+
     def _recorded(
-        self, call: Mapping[str, Any], answer: ToolMessage
+        self, call: Mapping[str, Any], answer: ToolMessage, number: str
     ) -> tuple[LedgerEntry, bytes, str] | None:
         """The entry for one call, the bytes its file holds and the result as text, or
         `None` to record nothing."""
         tool = str(call.get("name") or "")
-        if tool in UNRECORDED:
-            return None
         # A failed call has nothing worth finding again, and the conversation shows it.
         if answer.status == "error":
             return None
@@ -172,21 +211,20 @@ class RecorderMiddleware(AgentMiddleware):
         run = RUN.get()
         args = arguments(call.get("args") or {})
         access = self._access(tool, run or call_id)
-        entry = self._ledger.add(
-            lambda number: LedgerEntry(
-                id=number,
-                turn=self._ledger.turn,
-                call=call_id,
-                run=run,
-                role=MAIN if run is None else WORKING,
-                tool=tool,
-                args=args,
-                access=access,
-                size=len(content),
-                path=f"{self._tool_results_route}{number}-{_segment(tool)}{_suffix(text)}",
-                summary=summary(tool, args, text, answer.content_blocks),
-            )
+        entry = LedgerEntry(
+            id=number,
+            turn=self._ledger.turn,
+            call=call_id,
+            run=run,
+            role=MAIN if run is None else WORKING,
+            tool=tool,
+            args=args,
+            access=access,
+            size=len(content),
+            path=f"{self._tool_results_route}{number}-{_segment(tool)}{_suffix(text)}",
+            summary=summary(tool, args, text, answer.content_blocks),
         )
+        self._ledger.add(entry)
         return entry, content, text
 
     def _access(self, tool: str, inside: str) -> Listed | None:

@@ -144,9 +144,9 @@ _Avoid_: saved result, cached result, logged result
 
 **Result id**:
 The name a recorded result is known by for the rest of its session, such as `A-0042`. It is
-given when the result is recorded, not when the call is made, so a call that fails or is
-not recorded takes no id and the names have no gaps; and an id is never given to a second
-result.
+taken when the call starts, not when the result is recorded, so a call that then fails, or
+a delegation paused for an approval and run again, leaves a number no result has; and an
+id is never given to a second result. A call that is never recorded takes none.
 _Avoid_: entry number, row id, ledger id
 
 **Preview**:

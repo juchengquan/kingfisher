@@ -99,9 +99,10 @@ was pinned to. The next section is for those.
 
 ## When it needs something this build decides
 
-Three things are not the deployment's to make once: **the model this graph runs**,
-**the backend it reads and writes through**, and **the definition it was built
-for**. A class asks for them by name:
+Four things are not the deployment's to make once: **the model this graph runs**,
+**the backend it reads and writes through**, **the definition it was built
+for**, and **the id the call running now will be recorded under**. A class asks
+for them by name:
 
 ```python
 class SummarizeByCount(SummarizationMiddleware):  # deepagents', not langchain's
@@ -117,7 +118,16 @@ each name in it is filled in where the agent is assembled. `model` is what *this
 graph runs — the agent's own, a subagent's own, or whatever a subagent inherited
 from the one that summoned it. `backend` is the filesystem the agent sees, rooted
 at this session. `definition` is the `AgentSpec` or `SubagentSpec` this instance
-belongs to.
+belongs to. `result_id` is a function: called in `wrap_tool_call`, it returns the
+id the call's result will be recorded under, such as `A-0042`, or `None` for a call
+that never is — a file tool, `write_todos` — and wherever no ledger is kept.
+
+**The id is taken before the call runs**, so a call that then fails leaves it
+unused, and no other result is given it. A turn that dies before keeping its
+ledger does hand its numbers out again, so write a file named after one where an
+overwrite does no harm. Never write it in the tool results folder,
+`/scratchpad/tool_results/` by default: a file there named like a result, which no
+row names, is handed to `UnusedResults`, and the default deletes it.
 
 **The set is not a closed list.** It is whatever the two build sites hold, and
 both hold the same keys so a `middlewares:` line means the same thing in an agent
@@ -146,12 +156,13 @@ id sent on the wire — `Models` refuses a table where the two differ — so wha
 here is `MiniMax-M2.5` or `gpt-5`, whatever your catalogue defines, and never a
 label like `cheap` chosen for this line.
 
-`backend` and `definition` cannot be written, because there is no name a file
-could carry for them. A class naming one in `defaults` or `yaml_settable` is
+`backend`, `definition` and `result_id` cannot be written, because there is no
+name a file could carry for them. A class naming one in `defaults` or `yaml_settable` is
 refused, whether or not any definition ever writes it.
 
 **A middleware still imports nothing from kingfisher.** What it receives is a
-LangChain chat model, a deepagents backend and a frozen spec.
+LangChain chat model, a deepagents backend, a frozen spec and a function returning
+a string.
 `summarize_by_count.py` imports deepagents' summarizer and nothing from kingfisher.
 
 ## Or put it in the definitions folder

@@ -392,8 +392,9 @@ def test_a_failed_call_is_not_recorded(ledgered):
         AIMessage(content="done"),
     )
 
-    assert [e.call for e in result.ledger] == ["c2"]
-    assert _kept(ledgered) == ["A-0001-web_search.txt"]
+    (entry,) = result.ledger
+    assert entry.call == "c2"
+    assert _kept(ledgered) == [f"{entry.id}-web_search.txt"]
 
 
 def test_a_tool_name_is_one_path_segment_in_the_tool_results_folder(ledgered):
@@ -890,7 +891,7 @@ def test_a_subagents_results_are_working_entries_of_the_run_that_started_it(ledg
         ("web_search", "working", "t1"),
     ]
     (answer,) = [e for e in result.ledger if e.tool == "task"]
-    assert answer.id == "A-0003", "the answer is numbered after the work it rests on"
+    assert answer.id == "A-0001", "the answer is numbered as its call started, before its work"
     assert _read(ledgered, answer.path) == "margins are thin"
     assert answer.args == "description='dig into it' subagent_type='researcher'"
 
@@ -914,9 +915,9 @@ def test_a_nested_helpers_results_belong_to_the_run_that_started_it(ledgered):
     )
 
     assert [(e.call, e.role, e.run) for e in result.ledger] == [
-        ("c1", "working", "t1"),
-        ("t2", "working", "t1"),
         ("t1", "main", None),
+        ("t2", "working", "t1"),
+        ("c1", "working", "t1"),
     ]
 
 
@@ -933,8 +934,8 @@ def test_general_purpose_records_as_a_subagent(ledgered):
     )
 
     assert [(e.call, e.role, e.run) for e in result.ledger] == [
-        ("c1", "working", "t1"),
         ("t1", "main", None),
+        ("c1", "working", "t1"),
     ]
 
 
@@ -982,6 +983,170 @@ def test_calls_made_together_get_numbers_of_their_own(ledgered):
     assert len(result.ledger) == TOGETHER, "a call failed, so nothing overlapped"
     assert sorted(e.id for e in result.ledger) == [f"A-000{n}" for n in range(1, TOGETHER + 1)]
     assert len(_kept(ledgered)) == TOGETHER
+
+
+# -- an id taken as the call starts ---------------------------------------------
+
+#: Each call a `_Namer` saw, by call id, and the id it was told before the call ran.
+_TOLD: list[tuple[str, str | None]] = []
+
+
+class _Namer(AgentMiddleware):
+    """A deployment's middleware inside the recorder, which would name a file of its own
+    after the id a call's result is about to have."""
+
+    name = "namer"
+    wants = frozenset({"result_id"})
+
+    def __init__(self, result_id: Any) -> None:
+        super().__init__()
+        self._result_id = result_id
+
+    def wrap_tool_call(self, request: Any, handler: Any) -> Any:
+        _TOLD.append((request.tool_call["id"], self._result_id()))
+        return handler(request)
+
+    async def awrap_tool_call(self, request: Any, handler: Any) -> Any:
+        _TOLD.append((request.tool_call["id"], self._result_id()))
+        return await handler(request)
+
+
+def _named(cfg, **fields: str) -> Kingfisher:
+    """A service whose agent names `_Namer`, with nothing told yet. Last, after every
+    definition the test writes: the service reads them as it is made."""
+    _TOLD.clear()
+    an_agent(cfg, subagents="[researcher]", middlewares="[namer]", **fields, **EVERY_TOOL)
+    return Kingfisher(cfg, sessions=LocalSessions(), middlewares={"namer": _Namer})
+
+
+@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
+def test_a_middleware_inside_the_recorder_is_told_the_id_before_the_call_runs(
+    ledgered, awaited
+):
+    """Numbered only once the result is back, a middleware inside the recorder has no
+    name to give what it writes; told the id of another call made beside it, it names
+    its file after a different result.
+    """
+    (_session(ledgered) / "outputs" / "notes.txt").write_text("alpha\n", encoding="utf-8")
+    kf = _named(ledgered)
+    Scripted.script.extend(
+        [
+            _calls(
+                ("web_search", {"query": "EV"}, "c1"),
+                ("sql_query", {"query": "select 1"}, "c2"),
+                ("read_file", {"file_path": "/outputs/notes.txt"}, "c3"),
+            ),
+            AIMessage(content="done"),
+        ]
+    )
+    request = Request("go", agent="only", session_id="s")
+
+    result = asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+
+    assert dict(_TOLD) == {**{e.call: e.id for e in result.ledger}, "c3": None}
+    assert {e.call for e in result.ledger} == {"c1", "c2"}, "the control: a call failed"
+
+
+def test_a_subagents_file_tool_is_not_told_the_id_of_the_task_it_runs_inside(ledgered):
+    """A file tool's result is never recorded, so it has no id; told the one its `task`
+    call took, a middleware names something after the subagent's answer instead.
+    """
+    (subagents_dir(ledgered) / "researcher.yaml").write_text(
+        RESEARCHER.replace("system_prompt:", "builtin_tools: [ls]\nmiddlewares: [namer]\n"
+                           "system_prompt:"),
+        encoding="utf-8",
+    )
+    kf = _named(ledgered)
+    Scripted.script.extend(
+        [
+            _task("t1"),
+            _calls(("ls", {"path": "/outputs"}, "c1"), ("web_search", {"query": "EV"}, "c2")),
+            AIMessage(content="found it"),
+            AIMessage(content="done"),
+        ]
+    )
+
+    result = kf.run(Request("go", agent="only", session_id="s"))
+
+    ids = {e.call: e.id for e in result.ledger}
+    assert dict(_TOLD) == {"t1": ids["t1"], "c1": None, "c2": ids["c2"]}
+
+
+def test_a_call_that_fails_leaves_its_id_unused(ledgered):
+    """The id is taken before the call runs, and a middleware may have named something
+    after it; given to the next call instead, that name points at another result.
+    """
+    result = _run(
+        ledgered,
+        _calls(("web_search", {"query": "one"}, "c1")),
+        _calls(("broken", {"query": "sales"}, "c2")),
+        _calls(("web_search", {"query": "two"}, "c3")),
+        AIMessage(content="done"),
+    )
+
+    assert [(e.call, e.id) for e in result.ledger] == [("c1", "A-0001"), ("c3", "A-0003")]
+
+
+def test_an_id_no_row_holds_is_still_not_given_again_the_next_turn(ledgered):
+    """A turn's rows alone say nothing of an id whose call failed last, so the next turn
+    would number from the row before it and give that id a second time.
+    """
+    first = _run(ledgered, _calls(("broken", {"query": "sales"}, "c1")), AIMessage("done"))
+    second = _run(ledgered, _calls(("web_search", {"query": "EV"}, "c2")), AIMessage("done"))
+
+    assert first.ledger == ()
+    assert _rows(ledgered)[0] == {"turn": first.turn_id, "reserved": "A-0001"}
+    assert [e.id for e in second.ledger] == ["A-0002"]
+
+
+def test_a_ledger_written_before_ids_were_reserved_numbers_on_from_its_rows(ledgered):
+    """No closing line said `reserved` until now, and a ledger lacking it has to number
+    on as it did, not start again where no closing line holds one.
+    """
+    _hand_written(ledgered, ("t1", ()), ("t2", ()))
+
+    result = _run(ledgered, _calls(("web_search", {"query": "EV"}, "c1")), AIMessage("done"))
+
+    assert [e.id for e in result.ledger] == ["A-0003"]
+
+
+def test_a_task_paused_at_a_gate_takes_a_new_id_when_it_is_run_again(ledgered):
+    """A `task` stopped at a gate before its subagent recorded anything leaves no row,
+    and its resume runs the call again; numbered from the rows, it would be given the
+    id the paused call was told, which a middleware may have named something after.
+    """
+    kf = _named(ledgered, interrupt_on="[sql_query]")
+    Scripted.script.extend([_task("t1"), _calls(("sql_query", {"query": "select 1"}, "c1"))])
+    paused = kf.run(Request("go", agent="only", session_id="s"))
+    assert paused.stop_reason == AWAITING, "the subagent never stopped at the gate"
+    assert paused.ledger == ()
+
+    Scripted.script.extend([AIMessage(content="one row"), AIMessage(content="done")])
+    resumed = kf.run(
+        Resume(
+            session_id="s",
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        )
+    )
+
+    told = [number for call, number in _TOLD if call == "t1"]
+    assert told == ["A-0001", "A-0002"], "the control: the task call was not run again"
+    assert {e.call: e.id for e in resumed.ledger} == {"t1": "A-0002", "c1": "A-0003"}
+
+
+def test_rows_are_kept_in_id_order_whatever_order_their_calls_finish_in():
+    """Calls made together finish in any order, and an exchange's span of ids is read
+    off its first row and its last; kept as they arrive, or ordered as text, past
+    `A-9999`, the span runs backwards.
+    """
+    ledger = Ledger("t", KeptLedger(last=9_998))
+    first, second = ledger.reserve(), ledger.reserve()
+
+    ledger.add(_entry(10_000, "web_search"))
+    ledger.add(_entry(9_999, "sql_query"))
+
+    assert (first, second) == ("A-9999", "A-10000")
+    assert [e.id for e in ledger.entries] == ["A-9999", "A-10000"]
 
 
 # -- access ---------------------------------------------------------------------
@@ -1194,10 +1359,10 @@ def test_a_subagents_answer_and_each_result_it_read_end_in_their_ids(ledgered, a
     """
     _delegated(ledgered, awaited=awaited)
 
-    assert _handed("t1").content == "margins are thin\n[A-0003]"
+    assert _handed("t1").content == "margins are thin\n[A-0001]"
     # The researcher's second call, which read what its own two calls returned.
     read = {_handed(call, call=2).content.rsplit("\n", 1)[-1] for call in ("c1", "c2")}
-    assert read == {"[A-0001]", "[A-0002]"}
+    assert read == {"[A-0002]", "[A-0003]"}
 
 
 def test_a_command_is_stamped_in_a_copy_that_keeps_the_rest_of_it(ledgered):
@@ -1284,7 +1449,7 @@ def test_a_file_tools_result_and_a_failed_call_carry_no_id(ledgered):
     """
     (_session(ledgered) / "outputs" / "notes.txt").write_text("alpha\n", encoding="utf-8")
 
-    _run(
+    result = _run(
         ledgered,
         _calls(
             ("read_file", {"file_path": "/outputs/notes.txt"}, "c1"),
@@ -1297,7 +1462,8 @@ def test_a_file_tools_result_and_a_failed_call_carry_no_id(ledgered):
     assert "alpha" in _handed("c1").text, "the control: the file was never read"
     assert _handed("c2").status == "error", "the control: the call never failed"
     assert "[A-" not in _handed("c1").text + _handed("c2").text
-    assert _handed("c3").text.endswith("\n[A-0001]")
+    (searched,) = result.ledger
+    assert _handed("c3").text.endswith(f"\n[{searched.id}]")
 
 
 # -- the delta in the next message ----------------------------------------------
@@ -1482,7 +1648,7 @@ def test_the_next_message_lists_a_subagents_results_under_its_answer(ledgered):
     _delegated(ledgered)
     _run(ledgered, AIMessage(content="noted"))
 
-    assert _listed_in(_asked()) == ["A-0003", "  A-0001", "  A-0002"]
+    assert _listed_in(_asked()) == ["A-0001", "  A-0002", "  A-0003"]
 
 
 def test_a_superseded_subagents_results_are_listed_as_never_answered(ledgered):
@@ -1500,7 +1666,8 @@ def test_a_superseded_subagents_results_are_listed_as_never_answered(ledgered):
 
     _run(ledgered, AIMessage(content="something else, then"))
 
-    assert _listed_in(_asked()) == ["A-0001"]
+    # `A-0001` is the `task` call's, which never answered.
+    assert _listed_in(_asked()) == ["A-0002"]
     assert _asked().split("\n</ledger_delta>")[0].endswith("  (its task never answered)")
 
 
@@ -1857,8 +2024,10 @@ def test_a_resume_is_rolled_up_with_the_turn_it_answered(ledgered):
     _say(kf, "go", AIMessage(content="done"))
 
     index = _block_in(_asked(), "ledger_index") or [""]
-    assert index[0] == "A-0001..A-0003: 1 sql_query, 1 task, 1 web_search"
-    assert [line.split()[0] for line in index[1:]] == [entry_id(n) for n in range(4, 9)]
+    # From `A-0002`: the `task` call took `A-0001` before it paused, and `A-0003` when it
+    # was run again on the resume.
+    assert index[0] == "A-0002..A-0004: 1 sql_query, 1 task, 1 web_search"
+    assert [line.split()[0] for line in index[1:]] == [entry_id(n) for n in range(5, 10)]
 
 
 def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):

@@ -1993,6 +1993,19 @@ The id is the result's last line, or a text block holding `\n[A-0042]` after a b
 list, which the transcript joins with nothing between; eviction's stub keeps the head and
 tail, so it shows there.
 
+**An id is taken when a recorded call starts, not when its result is back** *(2026-10-21)*.
+A deployment's middleware inside the recorder may name a file of its own after the
+result, and numbered on the way out it had no id to name it by. So a call that fails
+leaves its number unused, and so does a `task` paused at a gate, which its resume runs
+again under a new one: a gap is a number no result took, never a lost result. None is
+given twice. A turn whose highest id no row holds says `reserved` on its closing line,
+and the next turn numbers past it; a turn that dies before writing its ledger still
+loses its numbers, as it loses its rows. Rows are kept in id order rather than as
+results arrive, because a `<ledger_index>` line reads an exchange's span off its first
+row and its last. A `task` answer now has a lower id than the work inside it, which the
+delta lists under it either way. A middleware asks for the id with `wants: result_id`;
+a tool is not handed it.
+
 **Each result is a file in `/scratchpad/tool_results/`, `A-0042-<tool>.txt` or `.json`,**
 written as it arrives through the turn's backend. The scratchpad, because the agent reads
 one back with `read_file` and searches with `grep`, no new tool, and it is swept with the
