@@ -59,7 +59,7 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
 
     wanted = (
         r"missing outputs, memory, scratchpad, \.harness, "
-        r"scratchpad/tool_results;"
+        r"scratchpad/tool_results, scratchpad/conversation_history;"
     )
     with pytest.raises(ValueError, match=wanted):
         backend_at(cfg, bare)
@@ -109,6 +109,9 @@ def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
     assert DEFAULT_LAYOUT.denied_scopes() == (
         "/.harness/**",
         "/inputs/**",
+        "/scratchpad/blobs/**",
+        "/scratchpad/conversation_history/**",
+        "/scratchpad/large_tool_results/**",
         "/scratchpad/tool_results/**",
         "/skills/**",
     )
@@ -117,6 +120,9 @@ def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
     assert [p.paths for p in rules] == [
         ["/.harness/**"],
         ["/inputs/**"],
+        ["/scratchpad/blobs/**"],
+        ["/scratchpad/conversation_history/**"],
+        ["/scratchpad/large_tool_results/**"],
         ["/scratchpad/tool_results/**"],
         ["/skills/**"],
         ["/.harness/**"],

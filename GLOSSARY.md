@@ -145,6 +145,12 @@ What one tool call hands back. Not a file the agent wrote, even where the result
 and not anything said in the conversation around it.
 _Avoid_: tool output, tool response, observation
 
+**Kept record**:
+A file under the scratchpad that says what happened rather than what the agent made: a
+recorded result, the conversation summarised away, an attachment's payload. Written for
+the agent to read and never by it, so a write there is forgery rather than editing.
+_Avoid_: archive, log, artifact, history
+
 **Recorded result**:
 A tool result kingfisher keeps its own copy of, so that a later turn can read back what a
 call answered. Not every result is one: a file tool's read or write is already a file, and

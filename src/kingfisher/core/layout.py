@@ -46,6 +46,17 @@ TOOL_RESULTS = "tool_results"
 #: may replace that middleware back and a layout holding the name would overwrite it.
 OFFLOADS = "large_tool_results"
 
+#: The conversation deepagents keeps aside: what a summary left behind, and a message too
+#: long to send. Written in every deployment, and the prompt sends the model here to read
+#: some back, which is what makes a write here forgery rather than editing.
+HISTORY = "conversation_history"
+
+#: An attachment's payload, where deepagents keeps one it replaced in a message with a
+#: reference. Nothing writes it either -- `offload_binary_content` stays at its default --
+#: and a deployment turning it on would have the bytes of an attachment read back from a
+#: name that is their own hash.
+BLOBS = "blobs"
+
 #: Where skills live.
 SKILLS = "skills"
 
@@ -117,7 +128,7 @@ class Route:
 #: Names a renamed session leaf may not take: it shares the session with these folders,
 #: kingfisher's and deepagents', and would overwrite one.
 _RESERVED_LEAF_NAMES = frozenset(
-    {HARNESS, SESSIONS, SKILLS, OFFLOADS, "conversation_history", "blobs"}
+    {HARNESS, SESSIONS, SKILLS, OFFLOADS, HISTORY, BLOBS}
 )
 _LEAF = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -190,6 +201,11 @@ class Layout:
         return _route(self.scratchpad, self.tool_results)
 
     @property
+    def kept_record_routes(self) -> tuple[str, ...]:
+        """Each kept-records folder as the agent addresses it, in the same order."""
+        return tuple(_route(*path.split("/")) for path in self.kept_records)
+
+    @property
     def harness(self) -> str:
         """What kingfisher keeps about the session, which no layout renames."""
         return HARNESS
@@ -209,16 +225,43 @@ class Layout:
         return (f"{self.scratchpad}/{self.tool_results}",)
 
     @property
+    def history(self) -> str:
+        """Where the conversation kept aside goes, as a path inside the session."""
+        return f"{self.scratchpad}/{HISTORY}"
+
+    @property
+    def kept_records(self) -> tuple[str, ...]:
+        """Every folder of kept records, as a path inside the session: what says what
+        happened rather than what the agent made, so a write there is forgery.
+
+        Wider than `saved_results`, which is the folder a ledger row names and the unused
+        results walk -- a history file is no row's, and the two deepagents folders nothing
+        writes hold no rows either. Those two are listed all the same: a deployment that
+        replaces `FilesystemMiddleware` back turns them on, and a rule written for what
+        writes today would not be there on the day it did.
+        """
+        return (*self.saved_results, self.history, f"{self.scratchpad}/{BLOBS}",
+                f"{self.scratchpad}/{OFFLOADS}")
+
+    @property
     def made_dirs(self) -> tuple[str, ...]:
-        """Every directory a session is made with: the agent's, `.harness`, and the saved
-        results."""
-        return (*self.session_dirs, HARNESS, *self.saved_results)
+        """Every directory a session is made with: the agent's, `.harness`, the saved
+        results, and the history.
+
+        The history is made here although deepagents makes it on the first eviction
+        anyway, because a fence binds it read-only only if it is there when the fence is
+        built: `present` drops an absent path, so without this the shell could make the
+        folder itself in one turn and have the next turn's fence bind the forgery. The
+        other two kept records stay absent, since nothing writes them and a mount does not
+        make a folder.
+        """
+        return (*self.session_dirs, HARNESS, *self.saved_results, self.history)
 
     @property
     def shell_read_only(self) -> tuple[str, ...]:
         """What every fence keeps the shell from writing inside a session: the caller's
-        inputs, what kingfisher keeps about the session, and the files a ledger row names."""
-        return (self.inputs, HARNESS, *self.saved_results)
+        inputs, what kingfisher keeps about the session, and the kept records."""
+        return (self.inputs, HARNESS, *self.kept_records)
 
     @property
     def routes(self) -> tuple[Route, ...]:
@@ -242,12 +285,16 @@ class Layout:
             # Unrouted, and listed so a reader finds that here: the agent's to write.
             Route(self.outputs_route, routed=False),
             Route(self.scratch_route, routed=False),
-            # Read-only to the file tools, routed only so the rule is expressible: a row
-            # names its file and the prompt tells the model to read it back, so a write
-            # here forges what a later turn reads as true. The shell is the fences' to
-            # refuse, via `saved_results`, and Landlock cannot inside a scratchpad it
-            # grants whole, so no boundary is claimed.
-            Route(self.tool_results_route, deny_write_under=f"{self.tool_results_route}**"),
+            # The kept records: read-only to the file tools, and mounted only so the rules
+            # can be written, since deepagents refuses a rule whose path is under no route.
+            # A row names its file and the prompt sends the model to the history, so a
+            # write in either forges what a later turn reads as true. The shell is the
+            # fences' to refuse, via `shell_read_only`, and Landlock cannot inside a
+            # scratchpad it grants whole, so no boundary is claimed.
+            *(
+                Route(route, deny_write_under=f"{route}**")
+                for route in self.kept_record_routes
+            ),
             # Denied both ways: a write could rewrite the pinned agent or the conversation
             # the next turn is rebuilt from, and a read gains nothing the run was not
             # already told.
