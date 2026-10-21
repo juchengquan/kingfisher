@@ -42,6 +42,9 @@ if TYPE_CHECKING:
 #: subagent is not among them: deepagents runs it as given.
 Kind = Literal["agent", "subagent", "general-purpose"]
 
+#: The name deepagents merges its filesystem middleware by, which a deployment's may take.
+FILESYSTEM = FilesystemMiddleware.__name__
+
 
 def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing one is built from
     kind: Kind,
@@ -173,13 +176,16 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # save, in the one folder a ledger row names, and a second copy under a name only
     # deepagents knows cost a reconciliation at every turn's end to tell the two apart.
     # `_permissions` is deepagents' own keyword, private and passed as it asks.
-    standing.append(
-        FilesystemMiddleware(
-            backend=backend,
-            tool_token_limit_before_evict=None,
-            _permissions=permissions,
+    # Not beside one `inner` names: deepagents' merge keeps the later of the two, and a
+    # helper's stack, which meets no merge, refused to build holding both.
+    if not any(one.name == FILESYSTEM for one in inner):
+        standing.append(
+            FilesystemMiddleware(
+                backend=backend,
+                tool_token_limit_before_evict=None,
+                _permissions=permissions,
+            )
         )
-    )
     standing.append(
         BuiltinToolsMiddleware(
             layout,

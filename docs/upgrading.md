@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A helper may run your own `FilesystemMiddleware`, after #9999
+
+- **A helper whose stack holds a middleware answering to `FilesystemMiddleware` now
+  builds.** It failed on "Please remove duplicate middleware instances", because
+  kingfisher put its own beside yours and a helper's stack, unlike every other, is never
+  merged by name. Since #1033 a portable helper runs the agent's middleware line, so an
+  agent naming one failed every turn that reached such a helper. Yours now takes the
+  helper's first place, where deepagents puts it in every other stack, and kingfisher
+  adds none beside it. It must still enforce `permissions` itself, as
+  `docs/guides/middleware.md` says.
+
 ## A switch of model or endpoint sends no earlier thinking, after #9999
 
 - **A reply's thinking goes back only to the endpoint and model that produced it.** A

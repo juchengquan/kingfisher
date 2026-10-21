@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.summarization import (
     SummarizationMiddleware as DeepAgentsSummarization,
 )
@@ -12,6 +13,7 @@ from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityErr
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.attachments import pdf_allowance
 from kingfisher.core.agent.middlewares.clearing import high_mark
+from kingfisher.core.agent.middlewares.standing import FILESYSTEM
 from kingfisher.core.agent.models import SUMMARIZER, summarizer_trigger
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.subagents.rules import refuse_cycles
@@ -771,3 +773,99 @@ def test_a_helpers_history_is_kept_apart_from_its_summoners(cfg, session_dir):
         ("TASK-FOR-reviewer" in text, "TASK-FOR-second-opinion" in text) for text in histories
     )
     assert whose == [(False, True), (True, False)], "one history each, holding its own"
+
+
+class OwnFilesystem(FilesystemMiddleware):
+    """A deployment's own fence over the filesystem, taking deepagents' place by its name."""
+
+    wants = frozenset({"backend"})
+
+    def __init__(self, backend) -> None:
+        super().__init__(backend=backend)
+
+    @property
+    def name(self) -> str:
+        return FILESYSTEM
+
+
+#: A subagent written to travel, which since #1033 runs the agent's middleware line.
+PORTABLE_HELPER = """
+SUBAGENTS = [
+    {
+        "name": "surveyor",
+        "description": "Surveys files.",
+        "system_prompt": "You survey.",
+        "builtin_tools": ["read_file"],
+    }
+]
+"""
+
+
+def _filesystems(middleware) -> list:
+    return [one for one in middleware if one.name == FILESYSTEM]
+
+
+def _built_with_own_filesystem(cfg, session_dir):
+    return build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        middleware_registry={"own-fs": OwnFilesystem},
+        agent=LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["only"],
+    )
+
+
+@pytest.mark.filterwarnings("ignore:.*a name deepagents uses:UserWarning")
+def test_a_helper_naming_its_own_filesystem_middleware_builds_with_that_one(cfg, session_dir):
+    """A helper whose definition named its own `FilesystemMiddleware` failed to build, on
+    "Please remove duplicate middleware instances": deepagents' merge keeps one of two
+    sharing that name in every other stack, and a helper's meets no merge. It goes first,
+    where that merge puts one."""
+    _define(
+        cfg, REVIEWER, HELPER.replace("system_prompt:", "middlewares: [own-fs]\nsystem_prompt:")
+    )
+    an_agent(cfg, middlewares="[own-fs]", subagents="[reviewer, second-opinion]", **EVERY_TOOL)
+
+    helper = _reviewers_helper(_built_with_own_filesystem(cfg, session_dir))["middleware"]
+
+    (own,) = _filesystems(helper)
+    assert isinstance(own, OwnFilesystem)
+    assert helper[0] is own
+
+
+@pytest.mark.filterwarnings("ignore:.*a name deepagents uses:UserWarning")
+def test_a_portable_helper_runs_the_agents_own_filesystem_middleware(cfg, session_dir):
+    """Since #1033 a portable helper runs the agent's middleware line, so an agent naming
+    its own `FilesystemMiddleware` failed at build every turn that reached one."""
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "surveyor.py").write_text(PORTABLE_HELPER, encoding="utf-8")
+    _define(cfg, REVIEWER.replace("[second-opinion]", "[surveyor]"))
+    an_agent(cfg, middlewares="[own-fs]", subagents="[reviewer, surveyor]", **EVERY_TOOL)
+
+    built = _built_with_own_filesystem(cfg, session_dir)
+    parent = {spec["name"]: spec for spec in built.subagents or ()}["reviewer"]
+    helper = _helper_specs(parent)["surveyor"]["middleware"]
+
+    (own,) = _filesystems(helper)
+    assert isinstance(own, OwnFilesystem)
+    assert helper[0] is own
+
+
+def test_a_helper_naming_no_filesystem_middleware_runs_kingfishers(cfg, session_dir):
+    """The control: with none named, a helper's one is kingfisher's own, which leaves a long
+    result for the recorder to save rather than offloading a copy of deepagents', and stays
+    among kingfisher's, behind the summariser clearing measures after."""
+    _define(cfg, REVIEWER, HELPER)
+
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
+    )
+
+    helper = _reviewers_helper(built)["middleware"]
+    (own,) = _filesystems(helper)
+    assert type(own) is FilesystemMiddleware
+    assert own._tool_token_limit_before_evict is None
+    assert helper[0].name == SUMMARIZER
