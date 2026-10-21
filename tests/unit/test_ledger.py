@@ -1691,15 +1691,58 @@ def test_once_a_turn_summarised_the_next_message_carries_the_index_and_not_the_d
     assert len(Scripted.heard) == 6
     assert _block_in(_asked(2), "ledger_delta") is not None, "the second turn had no delta"
     assert _block_in(_asked(2), "ledger_index") is None, "indexed before anything summarised"
-    for after in (4, 5):
-        assert _block_in(_asked(after), "ledger_delta") is None
-        assert [line.split()[0] for line in _block_in(_asked(after), "ledger_index") or ()] == [
-            "A-0001",
-            "A-0002",
-        ]
+    assert _block_in(_asked(4), "ledger_delta") is None
+    indexed = ["A-0001", "A-0002"]
+    assert [line.split()[0] for line in _block_in(_asked(4), "ledger_index") or ()] == indexed
+    # The turn after does not summarise again, so the message that carried the index is
+    # still in the conversation, and a second one would repeat it.
+    assert _block_in(_asked(5), "ledger_index") is None
+    assert _asked(4) in [message.text for message in Scripted.heard[5]]
     # The cached prefix, whichever block the message carried.
     assert {Scripted.heard[call][0].type for call in (0, 2, 4, 5)} == {"system"}
     assert len({Scripted.heard[call][0].text for call in (0, 2, 4, 5)}) == 1
+
+
+def test_a_summarised_conversation_is_not_summarised_again_the_next_turn(ledgered):
+    """The summary lived only in the turn's private state, so the next turn started from
+    every message again, past the trigger, and summarised the whole conversation once a
+    turn -- a summary call and a new history file repeating the early messages, each time.
+
+    Driven through deepagents' real summariser over turns, because the bug is in what
+    crosses from one turn to the next.
+    """
+    cfg = _windowed(ledgered)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    _say(kf, HALF, AIMessage(content="done"))
+    _say(kf, HALF, AIMessage(content="done"))
+    assert Scripted.summaries == 1, "the control: the summariser never fired"
+
+    _say(kf, "go", AIMessage(content="done"))
+    _say(kf, "go", AIMessage(content="done"))
+
+    assert Scripted.summaries == 1, "a conversation already summarised was summarised again"
+    history = _session(cfg) / SCRATCH / "conversation_history"
+    assert len(list(history.glob("*.md"))) == 1
+    saved = from_json((_session(cfg) / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8"))
+    assert saved[0].summary, "the transcript does not open on the summary"
+    assert HALF not in [message.content for message in saved[:1]]
+
+
+def test_a_saved_summary_is_still_a_summary_to_deepagents(ledgered):
+    """deepagents knows its earlier summary by a mark on the message, and leaves it out of
+    the next history file; read back unmarked, it is a user message like any other, and
+    every later summary copies it into its file.
+    """
+    cfg = _windowed(ledgered)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    _say(kf, HALF, AIMessage(content="done"))
+    _say(kf, HALF, AIMessage(content="done"))
+    _say(kf, "go", AIMessage(content="done"))
+    assert Scripted.summaries == 1, "summarised afresh, so this is not the saved summary"
+
+    first = Scripted.heard[-1][1]
+    assert first.type == "human"
+    assert first.additional_kwargs.get("lc_source") == "summarization"
 
 
 def _hand_written(cfg, *turns: tuple[str, tuple[str, ...]]) -> None:
