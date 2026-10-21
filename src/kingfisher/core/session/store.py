@@ -270,19 +270,19 @@ def _entry(row: Mapping[str, Any]) -> LedgerEntry | None:
 
 def expired(
     earlier: KeptLedger, rounds: int | None, *, turn: str, resumed: bool
-) -> tuple[KeptLedger, tuple[LedgerEntry, ...]]:
+) -> KeptLedger:
     """`earlier` with every kept result older than `rounds` exchanges marked expired in
-    `turn`, and those entries as they were, still naming their files.
+    `turn`.
 
     The current exchange counts as one of the `rounds`: a resume carries on the last kept one.
     """
     if rounds is None:
-        return earlier, ()
+        return earlier
     kept = rounds if resumed else rounds - 1
     old = earlier.exchanges[: max(len(earlier.exchanges) - kept, 0)]
     expiring = {entry for exchange in old for entry in exchange if entry.path is not None}
     if not expiring:
-        return earlier, ()
+        return earlier
     lines = []
     for line in earlier.lines:
         row = json.loads(line)
@@ -293,7 +293,7 @@ def expired(
             if _entry(row) in expiring
             else line
         )
-    return _kept("\n".join(lines)), tuple(sorted(expiring, key=lambda entry: entry.id))
+    return _kept("\n".join(lines))
 
 
 def write_ledger(  # noqa: PLR0913 -- three marks, by keyword so none is passed for another
