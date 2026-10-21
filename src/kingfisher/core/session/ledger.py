@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import threading
 from dataclasses import replace
 from pathlib import PurePosixPath
@@ -18,8 +19,6 @@ from .store import (
 from .unused import UnusedFiles, settle_unused
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from kingfisher.core.interfaces import UnusedResults
     from kingfisher.core.result import LedgerEntry, Listed
 
@@ -49,17 +48,33 @@ class Ledger:
         # Calls made together run on threads, each with its own recorder.
         self._lock = threading.Lock()
         self._entries: list[LedgerEntry] = []
+        #: How many numbers this turn has handed out, a row or not.
+        self._reserved = 0
 
-    def add(self, row: Callable[[str], LedgerEntry]) -> LedgerEntry:
-        """Number one result and keep its row, as one step.
+    def reserve(self) -> str:
+        """The id the next recorded call's result will have, taken as the call starts.
 
-        `row` builds the entry from the id it is given, under the lock, so two results
-        arriving together cannot take one number.
+        Never handed out again, though the call may fail and leave no row: a middleware
+        inside the recorder may already have named something after it.
         """
         with self._lock:
-            entry = row(entry_id(self.earlier.last + len(self._entries) + 1))
-            self._entries.append(entry)
-        return entry
+            self._reserved += 1
+            return entry_id(self.earlier.last + self._reserved)
+
+    def add(self, entry: LedgerEntry) -> None:
+        """Keep one result's row, under the id `reserve` gave its call.
+
+        In id order, not the order results arrive: calls made together finish in any
+        order, and a span of an exchange's ids is read off its first row and its last.
+        """
+        with self._lock:
+            bisect.insort(self._entries, entry, key=_number)
+
+    @property
+    def reserved(self) -> str | None:
+        """The highest id this turn handed out, or `None` if it handed out none."""
+        with self._lock:
+            return entry_id(self.earlier.last + self._reserved) if self._reserved else None
 
     def unkept(self, entry: LedgerEntry) -> None:
         """Mark one entry as having no file, because the backend would not take it."""
@@ -80,6 +95,11 @@ class Ledger:
             return tuple(self._entries)
 
 
+def _number(entry: LedgerEntry) -> int:
+    # By number, not as text: `A-10000` sorts before `A-9999` as a string.
+    return int(entry.id.removeprefix("A-"))
+
+
 def keep_ledger(
     harness: Any,
     ledger: Ledger,
@@ -95,6 +115,7 @@ def keep_ledger(
     row.
     """
     entries = ledger.entries
+    reserved = ledger.reserved
     yield from write_ledger(
         harness,
         ledger.earlier,
@@ -102,6 +123,9 @@ def keep_ledger(
         turn=ledger.turn,
         resumed=ledger.resumed,
         summarised=summarised,
+        # Said only where no row says it already: past every row, it is a number the next
+        # turn would otherwise hand out a second time.
+        reserved=None if entries and entries[-1].id == reserved else reserved,
     )
     return entries
 

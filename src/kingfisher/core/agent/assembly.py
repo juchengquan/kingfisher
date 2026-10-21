@@ -45,7 +45,11 @@ from kingfisher.core.agent.kinds.tools import (
     resolve_tools,
 )
 from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware, high_mark
-from kingfisher.core.agent.middlewares.recorder import Audiences, RecorderMiddleware
+from kingfisher.core.agent.middlewares.recorder import (
+    Audiences,
+    RecorderMiddleware,
+    result_id,
+)
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.config import Config
@@ -251,6 +255,7 @@ def _provisions(
         ),
         "backend": backend,
         "definition": definition,
+        "result_id": result_id,
     }
 
 

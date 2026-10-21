@@ -162,6 +162,10 @@ RESUMED = "resumed"
 #: On the closing line of a turn that ended on a summarised conversation, and only there.
 SUMMARISED = "summarised"
 
+#: On the closing line of a turn whose highest id is held by no row: the call that took it
+#: failed, or was paused and run again.
+RESERVED = "reserved"
+
 
 @dataclass(frozen=True)
 class KeptLedger:
@@ -169,7 +173,7 @@ class KeptLedger:
 
     #: Its rows and closing lines as written, which the turn writes back ahead of its own.
     lines: tuple[str, ...] = ()
-    #: The highest number an entry has had, so the next is one past it.
+    #: The highest number a call has been given, a row or not, so the next is one past it.
     last: int = 0
     #: Every file a row names, which the sweep keeps.
     paths: frozenset[str] = frozenset()
@@ -215,8 +219,9 @@ def _kept(text: str) -> KeptLedger:
         if not isinstance(row, dict):
             continue
         lines.append(line)
-        if isinstance(row.get("id"), str) and (number := ENTRY_ID.fullmatch(row["id"])):
-            last = max(last, int(number.group(1)))
+        for given in (row.get("id"), row.get(RESERVED)):
+            if isinstance(given, str) and (number := ENTRY_ID.fullmatch(given)):
+                last = max(last, int(number.group(1)))
         if isinstance(row.get("path"), str):
             paths.add(row["path"])
         if isinstance(row.get("run"), str) and isinstance(row.get("access"), list):
@@ -291,7 +296,7 @@ def expired(
     return _kept("\n".join(lines)), tuple(sorted(expiring, key=lambda entry: entry.id))
 
 
-def write_ledger(  # noqa: PLR0913 -- two marks, by keyword so neither is passed for the other
+def write_ledger(  # noqa: PLR0913 -- three marks, by keyword so none is passed for another
     harness: Any,
     earlier: KeptLedger,
     entries: Sequence[LedgerEntry],
@@ -299,17 +304,24 @@ def write_ledger(  # noqa: PLR0913 -- two marks, by keyword so neither is passed
     turn: str,
     resumed: bool = False,
     summarised: bool = False,
+    reserved: str | None = None,
 ) -> Steps[None]:
     """Replace the ledger with what it held, this turn's rows, and this turn's closing line.
 
     The closing line is written even with no rows: turn ids are not a sequence, so the
-    file's order is the only record of the turns' order.
+    file's order is the only record of the turns' order. `reserved` is the highest id
+    this turn gave a call, where no row holds it.
     """
     marks = {RESUMED: resumed, SUMMARISED: summarised}
+    closing = {
+        "turn": turn,
+        **{mark: True for mark, said in marks.items() if said},
+        **({RESERVED: reserved} if reserved is not None else {}),
+    }
     rows = [
         *earlier.lines,
         *(json.dumps(asdict(entry), ensure_ascii=False) for entry in entries),
-        json.dumps({"turn": turn, **{mark: True for mark, said in marks.items() if said}}),
+        json.dumps(closing),
     ]
     yield from harness.store(LEDGER_FILE, ("\n".join(rows) + "\n").encode("utf-8"))
 

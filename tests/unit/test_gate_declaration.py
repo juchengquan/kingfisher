@@ -333,8 +333,8 @@ def test_the_same_delegation_without_the_gate_runs_it(scripted):
 
     assert result.stop_reason != AWAITING
     assert [(entry.role, entry.tool) for entry in result.ledger] == [
-        ("working", "fetch"),
         ("main", "task"),
+        ("working", "fetch"),
     ]
 
 
@@ -373,8 +373,8 @@ def test_the_same_bundle_without_the_gate_runs_it(scripted):
 
     assert result.stop_reason != AWAITING
     assert [(entry.role, entry.tool) for entry in result.ledger] == [
-        ("working", "mask"),
         ("main", "task"),
+        ("working", "mask"),
     ]
 
 

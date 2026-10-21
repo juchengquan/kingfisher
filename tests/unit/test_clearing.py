@@ -112,15 +112,16 @@ class Talk:
         content = text
         if name not in UNRECORDED and status != "error":
             written = arguments(args)
-            entry = self.ledger.add(
-                lambda number: LedgerEntry(
+            number = self.ledger.reserve()
+            self.ledger.add(
+                LedgerEntry(
                     id=number, turn="t", call=at, run=None, role=MAIN, tool=name,
                     args=written, access=None, size=len(text.encode("utf-8")),
                     path=f"{TOOL_RESULTS_ROUTE}{number}-{name}.txt",
                     summary=summary(name, written, text),
                 )
             )
-            content = f"{text}{stamp(entry.id)}"
+            content = f"{text}{stamp(number)}"
         return ToolMessage(
             content=content, tool_call_id=at, name=name, status=status, id=self._id()
         )

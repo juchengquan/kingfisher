@@ -469,12 +469,15 @@ class _WantsEverything(AgentMiddleware):
     """A deployment's own, needing every object this build provides."""
 
     name = "_WantsEverything"
-    wants = frozenset({"model", "backend", "definition"})
+    wants = frozenset({"model", "backend", "definition", "result_id"})
 
-    def __init__(self, model: object, backend: object, definition: object) -> None:
+    def __init__(
+        self, model: object, backend: object, definition: object, result_id: object
+    ) -> None:
         self.model = model
         self.backend = backend
         self.definition = definition
+        self.result_id = result_id
         super().__init__()
 
 
