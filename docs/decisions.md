@@ -44,8 +44,8 @@ named twice with two audiences silently lost one -- an access restriction that
 disappears without a word, the failure this format exists to prevent. The list form
 refuses a duplicate in the shared loop, for every field at once. The mapping also made
 the common case pay for the rare one: adding one audience rewrote every entry in the
-field. The old form is refused, naming the entry to write; so is `all_of`, since a
-requirement is written as the set it is. *(2026-09-03.)*
+field. The old form is refused, naming the entry to write. `all_of` is refused as any
+mapping with a value is, no longer by name. *(2026-09-03.)*
 
 ## The catalogue
 
@@ -945,9 +945,9 @@ default audience for everything the definition holds, and the ceiling on what a
 and a skills entry is always an *and* with the definition's own line -- the only way to
 reach an entry is through the definition holding it, so naming a source id from outside
 that line adds a second requirement rather than replacing the first. A definition with
-no `source_ids:` line is reachable by everyone, and the report of every such definition
-is built at startup -- default-open must not also be silent. `kingfisher list` prints
-it; a plain start says nothing.
+no `source_ids:` line is reachable by everyone, and `kingfisher list` builds and prints
+the report of every such definition -- default-open must not also be silent. A plain
+start says nothing, and builds nothing for it.
 
 **A tool may say who may use it, in its own file.** `ToolSpec(tool, source_ids=[...])`
 is an **and** on every grant of that tool, and the tool's only lock: nothing an agent

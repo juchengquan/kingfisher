@@ -12,7 +12,7 @@ from kingfisher.core.access.checks import collected, held_by
 from kingfisher.core.access.reach import reaches, reaching
 from kingfisher.core.access.source_ids import (
     UNSCOPED,
-    AccessError,
+    CallerError,
     Datazone,
     Vocabulary,
     jointly,
@@ -176,7 +176,7 @@ def test_a_datazone_no_definition_requires_is_held_and_opens_nothing():
 def test_a_source_id_spelt_as_a_datazone_is_refused():
     """Held among the names it would put a caller in a datazone nobody passed, past the
     rule that a caller is in one -- the control beside it is the zone passed as one."""
-    with pytest.raises(AccessError, match="how a datazone is held"):
+    with pytest.raises(CallerError, match="how a datazone is held"):
         held_by(vocabulary(), ["A", "datazone=finance"])
     assert held_by(vocabulary(), ["A", Datazone("finance")]) == frozenset(
         {"A", "datazone=finance"}
@@ -188,7 +188,7 @@ def test_a_source_id_spelt_as_a_datazone_is_refused():
 )
 def test_naming_a_caller_where_nothing_is_locked_is_refused(named):
     """Nothing narrows, so the answer would be the unrestricted one read as the caller's."""
-    with pytest.raises(AccessError, match="no definition here carries a lock"):
+    with pytest.raises(CallerError, match="no definition here carries a lock"):
         held_by(None, named)
 
 

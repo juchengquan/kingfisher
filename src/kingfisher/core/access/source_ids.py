@@ -64,17 +64,10 @@ class Stated:
         return zoned(self.source_ids, self.datazone)
 
 
-class AccessError(ValueError):
-    """Who may reach what was asked in a way kingfisher refuses; raised as `CallerError`."""
-
-
-class CallerError(AccessError):
+class CallerError(ValueError):
     """A call said who is calling in a way this deployment cannot take: a bare string, two
     datazones, a source id spelt as a datazone, a caller named where nothing is locked, or
-    nobody named where something is.
-
-    An `AccessError` too, so a handler written against that still catches it.
-    """
+    nobody named where something is."""
 
 
 class _Unscoped:

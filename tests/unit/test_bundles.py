@@ -1761,7 +1761,7 @@ PYTHON_SUBAGENT = (
 def test_a_lock_only_a_bundle_carries_switches_checking_on(cfg, carrier):
     """A bundle is read apart from the catalogue, so a vocabulary collected from the
     catalogue alone would run a deployment whose only lock is in one unchecked."""
-    from kingfisher.core.access.source_ids import AccessError
+    from kingfisher.core.access.source_ids import CallerError
     from kingfisher.core.service import Kingfisher
     from kingfisher.plugins import LocalSessions
 
@@ -1779,5 +1779,5 @@ def test_a_lock_only_a_bundle_carries_switches_checking_on(cfg, carrier):
 
     assert kf.vocabulary is not None
     assert kf.vocabulary.source_ids == {"A": (where,)}
-    with pytest.raises(AccessError, match="must say who is calling"):
+    with pytest.raises(CallerError, match="must say who is calling"):
         agent_named(kf, "open_to_all")

@@ -19,8 +19,8 @@ from dotenv import load_dotenv
 import kingfisher
 from kingfisher import (
     UNSCOPED,
-    AccessError,
     ArtifactError,
+    CallerError,
     CapabilityError,
     ConfigError,
     Decision,
@@ -970,11 +970,12 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
 
 
 #: What a caller can put wrong, reported rather than raised: a traceback buries the one
-#: line that would help. `SessionBusyError`, `AccessError` and `ConfigError` have their
-#: own branches in `main`, each with more to say.
+#: line that would help. `SessionBusyError` and `ConfigError` have their own branches
+#: in `main`, each with more to say.
 REFUSALS = (
     AgentError,
     ArtifactError,
+    CallerError,
     CapabilityError,
     DecisionError,
     InputsError,
@@ -1036,10 +1037,6 @@ def main(argv: list[str] | None = None) -> int:
     except REFUSALS as exc:
         # Uncaught, one would exit 1, which the help gives a turn that ran and stopped.
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
-        return 2
-    except AccessError as exc:
-        # A traceback for a caller named wrong would bury the line saying how to name one.
-        print(f"access error: {exc}", file=sys.stderr)
         return 2
     except ConfigError as exc:
         # Anything not caught by now is a bug, and keeps its traceback.

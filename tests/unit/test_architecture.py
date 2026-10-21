@@ -2014,7 +2014,6 @@ WITNESSES: dict[str, dict[str, str]] = {
         "DecisionError": "embedder",
         # What they raise. A caller has to be able to catch, by name, what the
         # library raises at it without reaching past the door.
-        "AccessError": "embedder",
         "CallerError": "embedder",
         "CapabilityError": "embedder",
         "ConfigError": "embedder",
@@ -3545,8 +3544,7 @@ def test_every_record_this_package_hands_out_is_frozen():
 
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
-    "AccessError", "ArtifactError", "CallerError", "CapabilityError", "DecisionError",
-    "InputsError",
+    "ArtifactError", "CallerError", "CapabilityError", "DecisionError", "InputsError",
     "QuotaExceededError", "SessionBusyError", "SubagentError", "UnknownSessionError",
 })
 
@@ -5184,6 +5182,7 @@ PROSE_ATTR_GONE: dict[str, frozenset[str]] = {
     # What a release took away, and the replacements a later release took away too.
     "docs/upgrading.md": frozenset({
         "Config.access", "Config.access_source", "Kingfisher.access",
+        "Kingfisher.access_report",
         "Config.backend_factory", "Config.deployment_prompt", "Config.plugins_factory",
         "Config.session_backends_factory", "Config.session_id", "Config.sessions_factory",
         "Config.shell_path_extra", "Config.shell_sandbox", "Endpoint.adapter",

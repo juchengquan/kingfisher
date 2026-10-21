@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+from kingfisher import inventory
 from kingfisher.core.access.capabilities import CapabilityError
-from kingfisher.core.access.source_ids import UNSCOPED, AccessError
+from kingfisher.core.access.source_ids import UNSCOPED, CallerError
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.model import UnknownSessionError
@@ -126,7 +127,7 @@ def test_a_first_turn_naming_nobody_is_refused_for_that_before_its_agent_is_look
     """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="source_ids="):
+    with pytest.raises(CallerError, match="source_ids="):
         _first_event(kf, Request(task="t", agent=agent), None)
 
 
@@ -194,7 +195,7 @@ def test_a_turn_naming_nobody_is_refused_before_it_writes(two_agents, tmp_path):
     planted = tmp_path / "planted.csv"
     planted.write_text("somebody else's\n", encoding="utf-8")
 
-    with pytest.raises(AccessError, match="source_ids="):
+    with pytest.raises(CallerError, match="source_ids="):
         _first_event(kf, Request(task="again", session_id=session_id, inputs=(planted,)), None)
 
     assert not (two_agents.workspace / "sessions" / session_id / "inputs" / "planted.csv").exists()
@@ -231,7 +232,7 @@ def test_reading_a_session_without_saying_who_is_calling_is_refused(two_agents, 
     """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="source_ids="):
+    with pytest.raises(CallerError, match="source_ids="):
         Through(kf, way).session(_pinned_by_a(kf))
 
 
@@ -282,11 +283,11 @@ def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_a
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     session_id = _pinned_by_a(kf)
 
-    with pytest.raises(AccessError, match="not a string"):
+    with pytest.raises(CallerError, match="not a string"):
         agent_named(kf, "assistant", source_ids="B")
-    with pytest.raises(AccessError, match="not a string"):
+    with pytest.raises(CallerError, match="not a string"):
         Through(kf, way).session(session_id, source_ids="B")
-    with pytest.raises(AccessError, match="not a string"):
+    with pytest.raises(CallerError, match="not a string"):
         inventory(two_agents, source_ids="B")
 
 
@@ -338,7 +339,7 @@ def test_one_lock_is_in_force_with_nothing_else_written(cfg):
     an_agent(cfg, "analyst", source_ids="[analysts]")
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
-    with pytest.raises(AccessError, match="must say who is calling"):
+    with pytest.raises(CallerError, match="must say who is calling"):
         agent_named(kf, "analyst")
     with pytest.raises(CapabilityError, match="no agent named 'analyst'"):
         agent_named(kf, "analyst", source_ids=("auditors",))
@@ -367,10 +368,10 @@ def test_a_line_narrowing_past_its_definition_is_reported_not_refused(cfg):
         encoding="utf-8",
     )
 
-    kf = Kingfisher(cfg, sessions=LocalSessions())
+    report = inventory(cfg).access_report
 
-    assert kf.access_report.narrowed == (("agent analyst: skill tabular-qa", "auditors"),)
-    assert "reaches only callers holding both" in "\n".join(kf.access_report.lines())
+    assert report.narrowed == (("agent analyst: skill tabular-qa", "auditors"),)
+    assert "reaches only callers holding both" in "\n".join(report.lines())
 
 
 def test_a_subagent_cannot_reach_a_looser_middleware_than_its_agent_granted():

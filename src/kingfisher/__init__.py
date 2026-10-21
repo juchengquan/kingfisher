@@ -14,7 +14,6 @@ __version__ = "0.1.0"
 #: wheel; the command ships in it, and imports anything else from where it is defined.
 _EXPORTS = {
     "Held": "kingfisher.core.access.source_ids",
-    "AccessError": "kingfisher.core.access.source_ids",
     "CallerError": "kingfisher.core.access.source_ids",
     "ArtifactError": "kingfisher.core.result",
     "UNSCOPED": "kingfisher.core.access.source_ids",
@@ -79,7 +78,6 @@ __all__ = [
     "KINDS",
     "STOP_REASONS",
     "UNSCOPED",
-    "AccessError",
     "ArtifactError",
     "CallerError",
     "Capabilities",
@@ -134,7 +132,6 @@ if TYPE_CHECKING:
     from kingfisher.core.access.capabilities import Capabilities as Capabilities
     from kingfisher.core.access.capabilities import CapabilityError as CapabilityError
     from kingfisher.core.access.source_ids import UNSCOPED as UNSCOPED
-    from kingfisher.core.access.source_ids import AccessError as AccessError
     from kingfisher.core.access.source_ids import CallerError as CallerError
     from kingfisher.core.access.source_ids import Held as Held
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
