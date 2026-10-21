@@ -585,10 +585,10 @@ def test_what_the_shell_writes_beside_the_results_is_left_alone(ledgered):
     """
     _run(
         ledgered,
-        _calls(
-            ("web_search", {"query": "EV"}, "c1"),
-            ("execute", {"command": "printf mine > scratchpad/tool_results/notes.md"}, "c2"),
-        ),
+        # One call per message: asked together they run at once, and an id is taken as a
+        # call starts, so `execute` sometimes took `A-0001` and the names below did not hold.
+        _calls(("web_search", {"query": "EV"}, "c1")),
+        _calls(("execute", {"command": "printf mine > scratchpad/tool_results/notes.md"}, "c2")),
         AIMessage(content="done"),
         kf=Kingfisher(ledgered, sessions=LocalSessions(shell=ShellSettings(sandbox="off"))),
     )
