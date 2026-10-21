@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Any
 
 import pytest
 from deepagents.backends import CompositeBackend
+from deepagents.backends.protocol import GlobResult, GrepResult
 
 from kingfisher.core.agent.assembly import read_only_permissions
 from kingfisher.core.agent.host_paths import (
@@ -21,6 +23,11 @@ from kingfisher.core.layout import (
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from kingfisher.plugins.sessions.shell import shell_env
+from tests.unit.test_bundles import (
+    OWN_TOOL_AND_SKILL,
+    with_private_skill,
+    workspace_with_bundle,
+)
 
 
 def test_shell_env_carries_no_credentials(cfg, session_dir):
@@ -520,6 +527,164 @@ INSIDE_THE_ROOT = {
     "/inputs": ("inputs",),
     "/memory": ("memory",),
 }
+
+
+def _a_bundle_with_a_skill(cfg) -> None:
+    """A bundle shipping a skill, mounted two levels under `/skills/`, and one skill in
+    the catalogue beside it as the control.
+
+    `inside.md` sits at the bundle's own root, where a pattern anchored to `/skills`
+    cannot reach: without it, forwarding an anchored pattern to the route unchanged
+    matches nothing there anyway and the rule below passes either way.
+    """
+    workspace_with_bundle(cfg, definition=OWN_TOOL_AND_SKILL)
+    with_private_skill(cfg)
+    catalogue = cfg.definitions / "skills" / "tidying"
+    catalogue.mkdir(parents=True, exist_ok=True)
+    (catalogue / "SKILL.md").write_text(
+        "---\nname: tidying\ndescription: Tidies. Samples nothing.\n---\n", encoding="utf-8"
+    )
+    (cfg.definitions / "subagents" / "surveyor" / "skills" / "inside.md").write_text(
+        "at the bundle's root", encoding="utf-8"
+    )
+
+
+def test_a_scoped_search_reaches_a_route_below_the_path(cfg, session_dir, way):
+    """A bundle's skills are mounted under `/skills/subagents/<bundle>/`, and the
+    composite routes a scoped search to the one backend owning the longest matching
+    prefix -- so a search of `/skills`, which is where the prompt sends an agent looking
+    for a procedure, answered with the catalogue's skills and silently without any
+    bundle's. Measured: found by a search of the session, missed by one of `/skills`.
+
+    The catalogue's skill is the control, for two reasons: a search answering nothing
+    would pass the first half, and a search that reached only the bundle would pass it
+    too.
+    """
+    _a_bundle_with_a_skill(cfg)
+    backend = backend_at(cfg, session_dir)
+    bundled = "/skills/subagents/surveyor/sampling/SKILL.md"
+
+    found = _asked(backend, way, "glob", "**/SKILL.md", "/skills")
+    said = _asked(backend, way, "grep", "Samples rows", "/skills")
+    globbed = [one["path"] for one in found.matches]
+    grepped = [one["path"] for one in said.matches]
+
+    assert bundled in globbed, "a bundled skill is unfindable from the folder holding it"
+    assert "/skills/tidying/SKILL.md" in globbed, "and the control: the catalogue's too"
+    assert grepped == [bundled]
+
+
+def test_a_scoped_search_keeps_the_anchor_of_its_pattern(cfg, session_dir, way):
+    """A leading slash anchors a pattern to the directory searched, and a route nested
+    below it is deeper than the anchor allows -- so asking the routes below must not
+    answer with files the pattern does not reach. deepagents' own rule decides it; this
+    is what says kingfisher still asks it.
+    """
+    _a_bundle_with_a_skill(cfg)
+    (cfg.definitions / "skills" / "loose.md").write_text("top level", encoding="utf-8")
+    backend = backend_at(cfg, session_dir)
+
+    found = [one["path"] for one in _asked(backend, way, "glob", "/*.md", "/skills").matches]
+
+    assert found == ["/skills/loose.md"], "an anchored pattern reached past its anchor"
+    # Which is the file it would have reached, two levels deeper than `/*.md` allows.
+    assert (cfg.definitions / "subagents" / "surveyor" / "skills" / "inside.md").exists()
+
+
+def test_a_scoped_search_survives_a_route_whose_folder_is_not_there(cfg, session_dir, way):
+    """`/scratchpad/blobs/` and `/scratchpad/large_tool_results/` are mounted and never
+    made, and asking a route below the path searched now asks them too.
+
+    Measured, which is why nothing here skips an error: a missing root answers a search
+    with no matches and no error, where `ls` calls it `path_not_found`. This is what says
+    so from the agent's side, so a backend that starts failing a search of a folder it
+    does not have is caught here rather than in a deployment.
+    """
+    (session_dir / "scratchpad" / "notes.txt").write_text("a note", encoding="utf-8")
+    backend = backend_at(cfg, session_dir)
+
+    globbed = _asked(backend, way, "glob", "**/*", SCRATCH_ROUTE)
+    grepped = _asked(backend, way, "grep", "a note", SCRATCH_ROUTE)
+
+    assert globbed.error is None and grepped.error is None
+    assert [one["path"] for one in globbed.matches] == [f"{SCRATCH_ROUTE}notes.txt"]
+    assert [one["path"] for one in grepped.matches] == [f"{SCRATCH_ROUTE}notes.txt"]
+
+
+class _Failing:
+    """A route backend whose searches fail, which no backend kingfisher ships does.
+
+    Measured: a `FilesystemBackend` whose root was never made answers a search with no
+    matches and no error -- only `ls` calls it `path_not_found` -- so a deployment's own
+    route is the only thing that can fail one, and a stub is the only way to drive it.
+    """
+
+    def glob(self, pattern: str, path: str | None = None) -> Any:
+        return GlobResult(error="the sandbox is gone", matches=None)
+
+    async def aglob(self, pattern: str, path: str | None = None) -> Any:
+        return self.glob(pattern, path)
+
+    def grep(
+        self,
+        pattern: str,
+        path: str | None = None,
+        glob: str | None = None,
+        *,
+        max_count: int | None = None,
+    ) -> Any:
+        return GrepResult(error="the sandbox is gone", matches=None)
+
+    async def agrep(
+        self,
+        pattern: str,
+        path: str | None = None,
+        glob: str | None = None,
+        *,
+        max_count: int | None = None,
+    ) -> Any:
+        return self.grep(pattern, path, glob, max_count=max_count)
+
+
+def test_a_route_below_the_path_whose_search_fails_is_answered_not_swallowed(
+    cfg, session_dir, way
+):
+    """Asking the routes below a path means a route the caller never named can fail the
+    search, and the alternative is worse: an answer holding what the other routes
+    returned and no word of the one that did not is the partial answer `_listing` stopped
+    giving. deepagents' root search returns the error too.
+
+    Mounted into the backend the real builder made, so everything else about it is real.
+    """
+    backend = backend_at(cfg, session_dir)
+    backend.routes[f"{SCRATCH_ROUTE}theirs/"] = _Failing()
+    backend.sorted_routes = sorted(
+        backend.routes.items(), key=lambda one: len(one[0]), reverse=True
+    )
+
+    globbed = _asked(backend, way, "glob", "**/*", SCRATCH_ROUTE)
+    grepped = _asked(backend, way, "grep", "anything", SCRATCH_ROUTE)
+
+    assert globbed.error == "the sandbox is gone"
+    assert grepped.error == "the sandbox is gone"
+
+
+def test_a_file_under_a_route_inside_the_default_root_is_found_once(cfg, session_dir, way):
+    """The scoped half of what the overrides are for: a recorded result lives under a
+    route *and* under the default backend's own root, so asking both for it hands the
+    model the same file twice.
+    """
+    kept = session_dir / "scratchpad" / "tool_results" / "1-execute.txt"
+    kept.write_text("as written", encoding="utf-8")
+    backend = backend_at(cfg, session_dir)
+
+    found = _asked(backend, way, "glob", "**/*.txt", SCRATCH_ROUTE)
+    said = _asked(backend, way, "grep", "as written", SCRATCH_ROUTE)
+    globbed = [one["path"] for one in found.matches]
+    grepped = [one["path"] for one in said.matches]
+
+    assert globbed == [f"{DEFAULT_LAYOUT.tool_results_route}1-execute.txt"]
+    assert grepped == [f"{DEFAULT_LAYOUT.tool_results_route}1-execute.txt"]
 
 
 def test_a_routed_file_is_globbed_once(cfg, session_dir, way):
