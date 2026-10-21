@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -320,3 +321,82 @@ def test_the_rest_of_dev_stays_shut(fenced):
 
     assert result.exit_code != 0
     assert not Path("/dev/kingfisher-probe").exists()
+
+
+
+#: Each leaves its session -- `setsid` -- before it says it began, and the command waits
+#: for that, so it ends with the escape done: one killed before it called `setsid` proved
+#: nothing, which is what the first measurement mistook for a fence.
+SETSID_ESCAPES = {
+    "setsid(1)": "setsid sh -c 'touch \"$B\"; sleep 1.5; touch \"$M\"' >\"$M.log\" 2>&1 &",
+    "fork, setsid, fork": (
+        "python3 -c 'import os, pathlib, time\n"
+        "if os.fork() == 0:\n"
+        "    os.setsid()\n"
+        "    if os.fork() == 0:\n"
+        "        pathlib.Path(os.environ[\"B\"]).touch(); time.sleep(1.5)\n"
+        "        pathlib.Path(os.environ[\"M\"]).touch()\n"
+        "    os._exit(0)\n"
+        "os.wait()' >\"$M.log\" 2>&1"
+    ),
+}
+
+
+def _escaped(launch, session, escape: str, *, then: str = "", timeout: int = 20) -> bool:
+    """Whether what `escape` left behind wrote its mark after the command had returned."""
+    mark = session / "outputs" / f"mark-{time.monotonic_ns()}"
+    began = Path(f"{mark}-began")
+    launch(
+        f"export M={mark} B={began}\n{escape}\n"
+        f"while [ ! -e {began} ]; do sleep 0.05; done\n{then}",
+        timeout,
+    )
+    assert began.exists(), f"the escape never began: {Path(f'{mark}.log').read_text()!r}"
+    time.sleep(2.5)
+    return mark.exists()
+
+
+def _unreaped(runner):
+    """`runner`'s fence and group kill with no reaper: the control."""
+    import importlib
+
+    from kingfisher.plugins.sessions.sandbox.process import run_command
+
+    # By name: the wheel is Linux-only, and this file is type-checked on macOS too.
+    confine = importlib.import_module("sandlock").confine
+
+    def launch(command, timeout):
+        return run_command(
+            command,
+            env=runner.env,
+            timeout=timeout,
+            cwd=runner.cwd,
+            preexec_fn=lambda: confine(runner.policy),
+        )
+
+    return launch
+
+
+@needs_landlock
+@pytest.mark.parametrize("escape", SETSID_ESCAPES.values(), ids=SETSID_ESCAPES)
+def test_a_process_that_left_the_group_dies_with_its_command(fenced, two_sessions, escape):
+    """Measured on this job: a fork-setsid-fork outlived the group kill, as on macOS.
+    The control is the same fence and kill with no reaper, where it must survive."""
+    _, theirs = two_sessions
+
+    assert _escaped(_unreaped(fenced), theirs, escape), "the escape did not escape"
+    assert not _escaped(lambda c, t: fenced.run(c, timeout=t), theirs, escape)
+
+
+@needs_landlock
+@pytest.mark.parametrize("escape", SETSID_ESCAPES.values(), ids=SETSID_ESCAPES)
+def test_a_process_that_left_the_group_dies_when_its_command_times_out(
+    fenced, two_sessions, escape
+):
+    """Killed outright, the reaper hands what it adopted to init: measured, every escape
+    survived a timeout until the reaper was asked first."""
+    _, theirs = two_sessions
+
+    assert not _escaped(
+        lambda c, t: fenced.run(c, timeout=t), theirs, escape, then="sleep 30", timeout=2
+    )
