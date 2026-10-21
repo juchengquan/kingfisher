@@ -110,7 +110,9 @@ def refuse_linked_folders(session_dir: Path, layout: Layout) -> None:
     Refused rather than replaced: what the link points at may be someone's data.
     """
     real = Path(session_dir).resolve()
-    moved = [name for name in layout.made_dirs if (real / name).resolve() != real / name]
+    # Not `made_dirs` alone: a link the shell left where `scratchpad/blobs` was never made
+    # rooted the next turn's `/scratchpad/blobs/` on the host.
+    moved = [name for name in layout.unlinked_dirs if (real / name).resolve() != real / name]
     if moved:
         msg = (
             f"session directory {real}: {', '.join(moved)} is a link or reached through "

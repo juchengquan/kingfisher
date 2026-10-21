@@ -504,25 +504,48 @@ def test_a_walk_names_no_link_and_reads_through_none(cfg):
     assert listed == globbed == set(found) == {"/scratchpad/own.txt"}
 
 
-@pytest.mark.parametrize("folder", DEFAULT_LAYOUT.made_dirs)
-def test_a_session_whose_folder_is_a_link_is_refused_at_open(cfg, tmp_path, folder):
+@pytest.mark.parametrize("dangling", [False, True], ids=["to a folder", "to nothing"])
+@pytest.mark.parametrize("folder", DEFAULT_LAYOUT.unlinked_dirs)
+def test_a_session_whose_folder_is_a_link_is_refused_at_open(cfg, tmp_path, folder, dangling):
     """A `memory` replaced by a link rooted the `/memory/` route wherever it pointed, so
-    the file tools read and wrote the host and the scaffold wrote `AGENTS.md` there."""
+    the file tools read and wrote the host and the scaffold wrote `AGENTS.md` there; and a
+    link left where `scratchpad/blobs`, which nothing makes, would be let `read_file` read
+    the host the next turn. Dangling too: the route is rooted at the target, whatever later
+    makes it."""
     LocalSessions().open(cfg, DEFAULT)
     session = cfg.workspace / "sessions" / DEFAULT
     outside = tmp_path / "outside"
-    outside.mkdir()
+    if not dangling:
+        outside.mkdir()
     moved = session / folder
-    # `inputs` is read-only, and moving a folder to another parent rewrites its `..`.
-    moved.chmod(0o755)
-    moved.rename(tmp_path / "aside")
+    if moved.exists():
+        # `inputs` is read-only, and moving a folder to another parent rewrites its `..`.
+        moved.chmod(0o755)
+        moved.rename(tmp_path / "aside")
     moved.symlink_to(outside)
 
     with pytest.raises(ValueError, match="link"):
         LocalSessions().open(cfg, DEFAULT)
     with pytest.raises(ValueError, match="link"):
         backend_at(cfg, session)
-    assert list(outside.iterdir()) == []
+    assert not outside.exists() if dangling else list(outside.iterdir()) == []
+
+
+def test_every_folder_a_route_is_rooted_at_in_the_session_may_not_be_a_link(cfg):
+    """A route mounted inside the session but missing from `unlinked_dirs` is rooted through
+    whatever link the shell left there, as `scratchpad/blobs` was after #1036 mounted it.
+    Read off the routes the backend actually built, so a new one needs no one to remember."""
+    backend = LocalSessions().open(cfg, DEFAULT)
+    session = (cfg.workspace / "sessions" / DEFAULT).resolve()
+    rooted = {
+        Path(inner.cwd).relative_to(session).as_posix()
+        for inner in backend.routes.values()
+        if Path(inner.cwd).is_relative_to(session)
+    }
+
+    # The control: an unmade folder is among them, or the rule could not tell.
+    assert {"scratchpad/blobs", "memory"} <= rooted
+    assert rooted <= set(DEFAULT_LAYOUT.unlinked_dirs)
 
 
 @macos

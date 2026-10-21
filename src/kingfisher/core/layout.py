@@ -258,6 +258,13 @@ class Layout:
         return (*self.session_dirs, HARNESS, *self.saved_results, self.history)
 
     @property
+    def unlinked_dirs(self) -> tuple[str, ...]:
+        """Every folder in a session that may not be a link: the ones it is made with, and
+        the kept records whether made or not, since a route is rooted where its folder
+        resolves when the backend is built."""
+        return tuple(dict.fromkeys((*self.made_dirs, *self.kept_records)))
+
+    @property
     def shell_read_only(self) -> tuple[str, ...]:
         """What every fence keeps the shell from writing inside a session: the caller's
         inputs, what kingfisher keeps about the session, and the kept records."""
