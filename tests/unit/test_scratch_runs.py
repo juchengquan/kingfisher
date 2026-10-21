@@ -22,7 +22,7 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import ScratchRun, ToolContext
+from kingfisher import Kingfisher, Request, ScratchRun, ToolContext
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.scratch_runs import ScratchRunsMiddleware
@@ -34,7 +34,7 @@ from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.core.interfaces import MAX_SCRATCH_BYTES, MAX_SCRATCH_OUTPUTS, CommandResult
 from kingfisher.core.session import runtime
-from kingfisher.plugins import backend_at
+from kingfisher.plugins import LocalSessions, NoScratchRunLimit, Plugins, backend_at
 from tests.conftest import (
     EVERY_TOOL,
     FakeToolCallingModel,
@@ -43,6 +43,7 @@ from tests.conftest import (
     subagents_dir,
     tools_dir,
 )
+from tests.unit.scripted import Scripted
 from tests.unit.test_interpreter import _from_code
 
 if TYPE_CHECKING:
@@ -275,6 +276,239 @@ def test_an_async_tool_runs_on_an_async_graph(cfg, session_dir):
     assert result.content == "HI"
 
 
+# -- a deployment's limit -----------------------------------------------------
+
+
+class _Limit:
+    """A `ScratchRunLimit` refusing the graphs named in `refused`, keeping what it is asked."""
+
+    def __init__(self, *refused: str) -> None:
+        self.refused = refused
+        self.asked: list[tuple[str, str]] = []
+
+    def allows(self, name: str, kind: str) -> bool:
+        self.asked.append((name, kind))
+        return name not in self.refused
+
+
+def _answers(cfg, session_dir, *responses: AIMessage, **keywords: Any) -> list[str]:
+    """Every `shout` result in one turn, subagents' included, in the order they came."""
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=list(responses)),
+        **keywords,
+    )
+    found: list[str] = []
+    for _, chunk in built.graph.stream(
+        {"messages": [{"role": "user", "content": "go"}]},
+        config={"configurable": {"thread_id": "scratch"}},
+        stream_mode="updates",
+        subgraphs=True,
+        context=built.context,
+    ):
+        for update in chunk.values():
+            for message in runtime.messages_in(update):
+                if isinstance(message, ToolMessage) and message.name == "shout":
+                    found.append(str(message.content))
+    return found
+
+
+def _shouted_then_delegated(to: str) -> list[AIMessage]:
+    """The agent shouts, then hands `to` a task in which it shouts too."""
+    return [
+        _calls("shout", text="hi"),
+        _calls("task", description="shout it", subagent_type=to),
+        _calls("shout", text="hi"),
+        AIMessage(content="shouted"),
+        AIMessage(content="done"),
+    ]
+
+
+def _a_helper(cfg, builtins: str = "[execute]") -> None:
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(
+        HELPER.format(builtins=builtins), encoding="utf-8"
+    )
+
+
+def test_a_limit_refusing_a_subagent_leaves_the_agents_run_bound(cfg, session_dir):
+    """A limit asked about the wrong graph would refuse the agent with the subagent, or
+    neither; the agent's run in the same build is the control."""
+    _a_tool(cfg)
+    _a_helper(cfg)
+    limit = _Limit("helper")
+
+    found = _answers(
+        cfg,
+        session_dir,
+        *_shouted_then_delegated("helper"),
+        capabilities=Capabilities(subagents=("helper",)),
+        scratch_run_limit=limit,
+    )
+
+    assert found == ["HI", NOT_GRANTED]
+    # Each graph by its own name and kind; the agent, named by no definition, as empty.
+    assert set(limit.asked) == {
+        ("", "agent"),
+        ("helper", "subagent"),
+        ("general-purpose", "general-purpose"),
+    }
+
+
+def test_general_purpose_is_asked_by_that_name(cfg, session_dir):
+    """deepagents' own subagent is handed the agent's tools: asked as the agent, a
+    deployment refusing it would have refused the agent, and the other way round."""
+    _a_tool(cfg)
+
+    found = _answers(
+        cfg,
+        session_dir,
+        *_shouted_then_delegated("general-purpose"),
+        scratch_run_limit=_Limit("general-purpose"),
+    )
+
+    assert found == ["HI", NOT_GRANTED]
+
+
+@pytest.mark.parametrize(
+    ("builtins", "answer"), [("[read_file]", NOT_GRANTED), ("[execute]", "HI")]
+)
+def test_a_limit_allowing_a_graph_without_the_shell_binds_nothing(
+    cfg, session_dir, builtins, answer
+):
+    """The limit can only take away: joined to kingfisher's rule with `or`, it would hand a
+    subagent refused the shell a way round that, through its tools."""
+    _a_tool(cfg)
+    _a_helper(cfg, builtins)
+
+    found = _answers(
+        cfg,
+        session_dir,
+        *_shouted_then_delegated("helper"),
+        capabilities=Capabilities(subagents=("helper",)),
+        scratch_run_limit=_Limit(),
+    )
+
+    assert found == ["HI", answer]
+
+
+@pytest.mark.parametrize(
+    ("gates", "answer"), [("[execute]", NOT_GRANTED), ("[write_file]", "HI")]
+)
+def test_a_gated_shell_is_refused_whatever_the_limit_answers(cfg, session_dir, gates, answer):
+    """Nothing can pause for a person inside a tool, so no limit may hand a gated shell on."""
+    _a_tool(cfg)
+    an_agent(cfg, "gated", interrupt_on=gates, **EVERY_TOOL)
+    (agent,) = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs.values()
+    limit = _Limit()
+
+    found = _answers(
+        cfg,
+        session_dir,
+        _calls("shout", text="hi"),
+        AIMessage(content="done"),
+        agent=agent,
+        checkpointer=InMemorySaver(),
+        scratch_run_limit=limit,
+    )
+
+    assert found == [answer]
+    assert ("gated", "agent") in limit.asked
+
+
+def test_a_tool_called_from_code_is_refused_whatever_the_limit_answers(cfg, session_dir):
+    """`eval` hands its context to every tool its code calls, so a limit allowing the agent
+    must not reach them through it. The direct call under the same grant is the control."""
+    wired = replace(cfg, interpreter_enabled=True)
+    _a_tool(wired)
+    granted = Capabilities(builtin_tools=("eval", "execute"), tools=("shout",))
+
+    answered, _ = _from_code(
+        wired,
+        session_dir,
+        "(async () => await tools.shout({text: 'hi'}))()",
+        capabilities=granted,
+        scratch_run_limit=_Limit(),
+    )
+    direct = _answers(
+        wired,
+        session_dir,
+        _calls("shout", text="hi"),
+        AIMessage(content="done"),
+        capabilities=granted,
+        scratch_run_limit=_Limit(),
+    )
+
+    assert NOT_GRANTED in answered
+    assert direct == ["HI"]
+
+
+@pytest.mark.parametrize("limit", [None, NoScratchRunLimit()], ids=["left-out", "default"])
+def test_left_out_every_graph_binds_what_kingfisher_allows(cfg, session_dir, limit):
+    """A deployment that never heard of the plugin would otherwise lose, or gain, a run."""
+    _a_tool(cfg)
+    _a_helper(cfg)
+    wired = {} if limit is None else {"scratch_run_limit": limit}
+
+    found = _answers(
+        cfg,
+        session_dir,
+        *_shouted_then_delegated("helper"),
+        capabilities=Capabilities(subagents=("helper",)),
+        **wired,
+    )
+    withheld = _answers(
+        cfg,
+        session_dir,
+        _calls("shout", text="hi"),
+        AIMessage(content="done"),
+        capabilities=Capabilities(builtin_tools=("read_file",), tools=("shout",)),
+        **wired,
+    )
+
+    assert found == ["HI", "HI"]
+    assert withheld == [NOT_GRANTED]
+
+
+@pytest.mark.parametrize(("tool", "asked"), [(False, False), (True, True)])
+def test_a_graph_holding_no_offered_tool_is_not_asked(cfg, session_dir, tool, asked):
+    """There is nothing there to bind a run for, so a limit asked about it is told of a
+    graph its answer cannot change."""
+    if tool:
+        _a_tool(cfg)
+    limit = _Limit()
+
+    build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="done")]),
+        scratch_run_limit=limit,
+    )
+
+    assert bool(limit.asked) is asked
+
+
+@pytest.mark.parametrize(
+    ("refused", "answer"), [("only", NOT_GRANTED), ("other", "HI")], ids=["it", "another"]
+)
+def test_the_command_hands_the_limit_to_every_turn(scripted, refused, answer):
+    """A limit the service took and never passed to the build refused nothing. Through
+    `Plugins`, as the command hands it, with the agent asked by its own name."""
+    _a_tool(scripted)
+    an_agent(scripted, **EVERY_TOOL)
+    Scripted.script.extend([_calls("shout", text="hi"), AIMessage(content="done")])
+    wiring = Plugins(scratch_run_limit=_Limit(refused)).keywords()
+
+    Kingfisher(scripted, sessions=LocalSessions(), **wiring).run(
+        Request("go", agent="only", session_id="s")
+    )
+
+    (result,) = [m for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
+    # The recorded result's id follows on a line of its own.
+    assert str(result.content).split("\n")[0] == answer
+
+
 # -- the bound runner ---------------------------------------------------------
 
 
@@ -385,18 +619,24 @@ def _handed(middleware: ScratchRunsMiddleware, name: str, context: Any) -> Any:
 
 
 @pytest.mark.parametrize(
-    ("tools", "gated", "name", "bound"),
+    ("tools", "gated", "limit", "name", "bound"),
     [
-        (None, (), "shout", True),
-        (("execute", "shout"), (), "shout", True),
-        (("read_file", "shout"), (), "shout", False),
-        (("execute", "shout"), ("execute",), "shout", False),
-        (("execute", "eval"), (), "eval", False),
+        (None, (), True, "shout", True),
+        (("execute", "shout"), (), True, "shout", True),
+        (("read_file", "shout"), (), True, "shout", False),
+        (("execute", "shout"), ("execute",), True, "shout", False),
+        (("execute", "eval"), (), True, "eval", False),
+        (None, (), False, "shout", False),
     ],
 )
-def test_a_run_is_bound_only_by_name_and_only_under_the_shell(tools, gated, name, bound):
+def test_a_run_is_bound_only_by_name_and_only_under_the_shell(tools, gated, limit, name, bound):
     middleware = ScratchRunsMiddleware(
-        frozenset({"shout"}), backend=_Recording(), tools=tools, gated=gated, seconds=30
+        frozenset({"shout"}),
+        backend=_Recording(),
+        tools=tools,
+        gated=gated,
+        seconds=30,
+        limit_allows=limit,
     )
 
     handed = _handed(middleware, name, ToolContext(backend=None))
@@ -407,7 +647,12 @@ def test_a_run_is_bound_only_by_name_and_only_under_the_shell(tools, gated, name
 def test_a_context_kingfisher_did_not_make_is_passed_on_untouched():
     """`graph=` drives a graph with its builder's context, or none."""
     middleware = ScratchRunsMiddleware(
-        frozenset({"shout"}), backend=_Recording(), tools=None, gated=(), seconds=30
+        frozenset({"shout"}),
+        backend=_Recording(),
+        tools=None,
+        gated=(),
+        seconds=30,
+        limit_allows=True,
     )
 
     assert _handed(middleware, "shout", None) is None

@@ -413,6 +413,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
     backend = backend_at(cfg, session_dir)
     stack = standing_middleware(
         "agent",
+        name="",
         names=frozenset({"export_pdf"}),
         paths=None,
         layout=cfg.layout,
@@ -673,6 +674,7 @@ def _stacked(cfg, session_dir, pdfs) -> tuple[list, Ledger]:
     ledger = Ledger("t", KeptLedger())
     stack = standing_middleware(
         "agent",
+        name="",
         names=frozenset({"export_pdf", "export_two"}),
         paths=None,
         layout=cfg.layout,

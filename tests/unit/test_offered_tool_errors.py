@@ -458,6 +458,7 @@ def stack(cfg, session_dir, paths):
 
     return standing_middleware(
         "agent",
+        name="",
         names=frozenset({"probe"}),
         paths=paths,
         layout=cfg.layout,
@@ -513,6 +514,7 @@ def _stack_around(cfg, session_dir, paths, inner):
 
     return standing_middleware(
         "agent",
+        name="",
         names=frozenset({"probe"}),
         paths=paths,
         layout=cfg.layout,

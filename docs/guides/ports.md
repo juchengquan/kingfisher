@@ -454,6 +454,47 @@ Things to know:
   agent is built: once a turn. With no agent resolved there is nothing to inherit, and
   it is not asked.
 
+## `ScratchRunLimit` — which graphs' tools may run commands
+
+An offered tool is handed
+[`runtime.context.run`](tools.md#a-tool-that-runs-a-command) where the agent or subagent
+calling it holds `execute`, ungated. Yours may refuse it to some of those graphs: a
+subagent whose tools should never start a process, say, though it may use the shell
+itself.
+
+```python
+from typing import Literal
+
+from kingfisher.plugins import ScratchRunLimit
+
+class NoRunsForResearch:
+    def allows(self, name: str, kind: Literal["agent", "subagent", "general-purpose"]) -> bool:
+        return name != "researcher"
+
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(), scratch_run_limit=NoRunsForResearch())
+```
+
+For the command, return it from your `KINGFISHER_PLUGINS` factory as
+`Plugins(scratch_run_limit=NoRunsForResearch())`. Left out, it is `NoScratchRunLimit`,
+which allows every graph kingfisher would hand a run.
+
+`allows` is told the graph's `name` and its `kind`: `"agent"` with the agent's name,
+empty for a request naming none; `"subagent"` with the name a definition gives it; or
+`"general-purpose"`, by that name, for deepagents' own, which is handed the agent's
+tools.
+
+Things to know:
+
+- **It can only take away.** A run is bound where kingfisher allows it *and* yours does.
+  Answering `True` for a graph refused `execute` hands it nothing: a request refused the
+  shell stays refused through its tools.
+- **Kingfisher's own refusals stand whatever it answers.** A gated `execute` refuses,
+  a tool called from `eval`'s code is never handed a run, and `run_in_scratch` refuses
+  what it refuses.
+- **It is asked once per graph built**, when the agent is built for a turn, and only of
+  a graph holding offered tools. Not of a compiled subagent, whose tools are never
+  handed a run. An exception it raises fails the build, and with it the turn.
+
 ## The rest
 
 **The conversation is not for replacing either.** Kingfisher keeps it in the session,

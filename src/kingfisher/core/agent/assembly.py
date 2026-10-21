@@ -91,7 +91,11 @@ if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
-    from kingfisher.core.interfaces import PdfAttachments, SubagentMiddlewares
+    from kingfisher.core.interfaces import (
+        PdfAttachments,
+        ScratchRunLimit,
+        SubagentMiddlewares,
+    )
     from kingfisher.core.session.ledger import Ledger
 
 
@@ -344,13 +348,15 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     session_instructions: str | None = None,
     pdf_attachments: PdfAttachments | None = None,
     subagent_middlewares: SubagentMiddlewares | None = None,
+    scratch_run_limit: ScratchRunLimit | None = None,
 ) -> Assembled:
     """Wire model, backend and checkpointer into a deep agent, and say what was wired.
 
     `ledger` is the turn's, recorded into by every graph built here; `None` records nothing.
     `session_instructions` is the session's text for every graph but a compiled one, `None`
     where the deployment wired no `SessionInstructions`.
-    `pdf_attachments` is asked by every graph built here, as the ledger is recorded into.
+    `pdf_attachments` is asked by every graph built here, as the ledger is recorded into,
+    and `scratch_run_limit` by every one holding offered tools; `None` limits nothing.
     `subagent_middlewares` is asked of every portable subagent; `None` runs the agent's own.
     """
     # The agent file is the baseline and the request only subtracts from it. One
@@ -501,6 +507,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     ) -> list[Any]:
         return standing_middleware(
             "agent",
+            name="" if agent is None else agent.name,
             inner=inner,
             names=guarded,
             paths=paths,
@@ -512,6 +519,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             keep_results_rounds=cfg.keep_results_rounds,
             trigger=trigger,
             pdf_attachments=pdf_attachments,
+            scratch_run_limit=scratch_run_limit,
             recorder=recording(agent),
             clearing=clearing,
             tools=tools,
@@ -679,6 +687,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 instructions=instructions,
                 session_text=session_instructions,
                 pdf_attachments=pdf_attachments,
+                scratch_run_limit=scratch_run_limit,
                 backend=backend,
                 permissions=permissions,
                 gated=gated,
@@ -807,6 +816,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 # The agent's recorder: these are the agent's tools, under its audiences.
                 standing_middleware(
                     "general-purpose",
+                    name="general-purpose",
                     inner=general,
                     names=guarded,
                     paths=paths,
@@ -818,6 +828,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     keep_results_rounds=cfg.keep_results_rounds,
                     trigger=generals_trigger,
                     pdf_attachments=pdf_attachments,
+                    scratch_run_limit=scratch_run_limit,
                     recorder=recording(agent),
                     # The agent's model and its entry's mark, read against its own stack.
                     clearing=result_clearing(

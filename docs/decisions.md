@@ -2588,7 +2588,16 @@ sessions'. **On the backend, as an optional method**, `run_in_scratch`, found as
 assembled from `upload_files`, `execute` and `download_files`, which can promise neither
 the environment nor the kill. **Refused where a deployment supplied a runner**, which may
 run as another user or under limits a launch of kingfisher's own would go round. Not
-taken: a generic fallback, or a tool gated by name. *(2026-10-20.)*
+taken: a generic fallback, or a tool gated by name. *(2026-10-20.)* **A deployment may
+take a run away, never hand one out.** Asked for as a `ScratchRunGrant` deciding which
+graphs bind `run`, it is `ScratchRunLimit`, its answer one more term of the rule joined
+with *and*: a plugin that could bind a run for a graph refused `execute` would let the
+deployment's code overrule a caller who refused the shell, and the name says which half
+was built. It is asked per graph, told the agent's or subagent's name --
+`general-purpose` for deepagents' own -- and its kind, not the tool's, which is the gate
+by name already not taken; only where the graph holds offered tools. Left out, it allows
+everything, today's behaviour. Whatever it answers, a gated `execute` refuses, binding
+stays by name, and `run_in_scratch` keeps its own refusals. *(2026-10-21.)*
 
 **An output is not evidence the command wrote it.** The run's folder is in the session's
 scratchpad because the Linux fences grant one session and nothing else, so the agent's
