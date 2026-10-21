@@ -2618,7 +2618,9 @@ shaping is copied to the character** -- `[stderr]` on each line, `<no output>`, 
 code: N`, its timeout sentence -- and held to upstream itself by
 `test_a_finished_command_reads_as_upstream_reads_it`, so macOS turns see what they saw
 and Linux ones moved to match. `a_command_leaves_nothing_running` asks it of every runner,
-a deployment's included, driven against `sandbox-exec`, the unfenced shell and Landlock.
+a deployment's included, driven against `sandbox-exec`, the unfenced shell and Landlock --
+under Landlock, at first, without testing anything, for the reason the entry on
+`/dev/null` below gives.
 
 **Not reached: a process that calls `setsid()`**, which leaves the group. Measured on
 macOS under the profile, `setsid` from Perl, from Python, and a fork-setsid-fork all
@@ -2627,6 +2629,18 @@ process; on macOS and under Landlock they remain, recorded rather than closed. C
 them on Linux means a launcher that outlives the command as a subreaper and kills what
 comes back to it, a process per command, and is to be measured on the Linux job before
 it is built. macOS has no equivalent. *(2026-10-20.)*
+
+**Landlock refused `/dev/null`, and so every `2>/dev/null` a model typed.** The policy
+reads `/dev` and writes only the session's folders, so a redirection to it failed before
+the command ran: `cannot create /dev/null: Permission denied`, measured on the Linux job
+on 2026-10-21, while macOS and bubblewrap, which builds a `/dev` of its own, took it. No
+test drove a redirection under Landlock; `test_redirecting_to_dev_null_still_works` is
+macOS's. `WRITABLE_DEVICES` grants the device alone, never `/dev`, which holds the host's
+disks, and `test_the_rest_of_dev_stays_shut` is the control. It had hidden a second fault:
+`a_command_leaves_nothing_running` sent its background job to `/dev/null`, the job never
+started under Landlock, and the check passed with nothing to kill. The job now writes
+beside its mark and says it began, and a runner refusing its redirection is caught by
+`test_a_job_that_never_began_is_not_passed`. *(2026-10-21.)*
 
 **A scratch run's folder is held by descriptor, from the session down.** Kingfisher's own
 process writes a run's inputs and reads its outputs, outside every fence, in a folder the

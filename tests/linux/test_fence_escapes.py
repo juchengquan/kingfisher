@@ -300,3 +300,23 @@ def test_the_fenced_shell_keeps_the_runner_contract(two_sessions):
 
     for check in RUNNER_CHECKS:
         check(fenced_runner)
+
+
+@needs_landlock
+def test_a_command_may_throw_its_output_away(fenced):
+    """`2>/dev/null` is in half the commands a model writes, and Landlock refused it:
+    `cannot create /dev/null: Permission denied`, measured on the Linux job, so every
+    such command failed before it ran."""
+    result = fenced.run("echo gone > /dev/null && ls /nowhere 2>/dev/null; echo kept")
+
+    assert "kept" in result.output
+    assert "Permission denied" not in result.output
+
+
+@needs_landlock
+def test_the_rest_of_dev_stays_shut(fenced):
+    """The control: `/dev/null` is the one device opened, not `/dev`."""
+    result = fenced.run("touch /dev/kingfisher-probe")
+
+    assert result.exit_code != 0
+    assert not Path("/dev/kingfisher-probe").exists()

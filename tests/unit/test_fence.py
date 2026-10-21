@@ -87,7 +87,10 @@ def test_a_renamed_layout_is_fenced_by_its_own_names(sandlock, tmp_path):
 
     policy = a_policy(tmp_path, layout=moved)
 
-    assert set(policy.fs_writable) == {str(session / name) for name in ("out", "mem", "scratch")}
+    assert set(policy.fs_writable) == {
+        *(str(session / name) for name in ("out", "mem", "scratch")),
+        "/dev/null",
+    }
 
 
 def test_no_writable_rule_has_the_harness_underneath_it(sandlock, tmp_path):
@@ -117,8 +120,9 @@ def test_the_shell_may_write_exactly_these_places_in_a_session(sandlock, tmp_pat
     policy = a_policy(tmp_path)
 
     assert set(policy.fs_writable) == {
-        str(session / name)
-        for name in ("outputs", "memory", "scratchpad")
+        *(str(session / name) for name in ("outputs", "memory", "scratchpad")),
+        # The device alone, for `2>/dev/null`; never `/dev`.
+        "/dev/null",
     }
     # `inputs` is the caller's and is not among them. It was, with only its write bits
     # between the shell and the file -- and the shell owns those, so `chmod u+w` then a
