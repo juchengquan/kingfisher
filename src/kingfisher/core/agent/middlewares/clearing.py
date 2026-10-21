@@ -13,8 +13,8 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 from langgraph.types import Command
 
-from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.agent.prompting import EDIT_FILE, FILE_TOOLS, WRITE_FILE
+from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.session.runtime import with_call_args
@@ -73,15 +73,25 @@ _FAILED = re.compile(
 )
 
 
-def high_mark(model: Any, written: int | None) -> int:
-    """Where clearing starts on a graph running `model`.
+def high_mark(trigger: int, written: int | None, *, subject: str) -> int:
+    """Where clearing starts on `subject`, a graph whose summariser fires at `trigger`.
 
-    `written` is the entry's `clear_results_at`, used as written: `build_model` has refused
-    one the summariser would reach first. A model passed in has no entry and takes the default.
+    `written` is the entry's `clear_results_at`, used as written. A model passed in has no
+    entry and takes the default.
     """
-    if written is not None:
-        return written
-    return min(DEFAULT_MARK, int(TRIGGER_SHARE * summarizer_trigger(model)))
+    if written is None:
+        return min(DEFAULT_MARK, int(TRIGGER_SHARE * trigger))
+    # `build_model` refused one past deepagents' own summariser, and only this graph's
+    # middleware says whether a deployment's fires sooner.
+    if written >= trigger:
+        msg = (
+            f"{subject} runs a summariser of the deployment's that fires at {trigger} "
+            f"tokens, and its model sets clear_results_at: {written}, so the summariser "
+            f"would come first and nothing would be cleared. Lower clear_results_at below "
+            f"{trigger} in models.yaml, or leave it out for the default"
+        )
+        raise ConfigError(msg)
+    return written
 
 
 @dataclass(frozen=True)

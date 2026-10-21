@@ -747,18 +747,22 @@ def _anthropic(window: int | None, output: int = 4_096) -> ChatAnthropic:
 def test_the_default_high_mark_is_64k_or_half_the_summarisers_trigger():
     """64k alone would never fire before a small window's summariser; half its trigger
     alone would wait for 425k on the shipped MiniMax row."""
-    assert high_mark(_anthropic(1_000_000, 32_768), None) == DEFAULT_MARK
-    assert high_mark(_anthropic(None), None) == DEFAULT_MARK
+    assert _mark(_anthropic(1_000_000, 32_768), None) == DEFAULT_MARK
+    assert _mark(_anthropic(None), None) == DEFAULT_MARK
     small = _anthropic(128_000)
     assert summarizer_trigger(small) == 108_800
-    assert high_mark(small, None) == 54_400
+    assert _mark(small, None) == 54_400
+
+
+def _mark(model: Any, written: int | None) -> int:
+    return high_mark(summarizer_trigger(model), written, subject="agent 'a'")
 
 
 def test_a_written_mark_is_used_as_written():
     """Even where the default rule would set a lower one: the entry is the deployment
     saying where, and capping it would make the setting mean something else."""
-    assert high_mark(_anthropic(1_000_000, 32_768), 100_000) == 100_000
-    assert high_mark(_anthropic(128_000), 90_000) == 90_000
+    assert _mark(_anthropic(1_000_000, 32_768), 100_000) == 100_000
+    assert _mark(_anthropic(128_000), 90_000) == 90_000
 
 
 # -- through real turns --------------------------------------------------------------
@@ -985,5 +989,5 @@ def test_the_mark_is_the_one_written_beside_the_model_the_agent_runs(bulky):
     assert built(cfg).high == 100_000
     assert built(cfg, agent=_spec(cfg, "only")).high == 100_000
     assert built(cfg, agent=_spec(cfg, "pinned")).high == 30_000
-    assert built(cfg, model=injected).high == high_mark(injected, None) == DEFAULT_MARK
+    assert built(cfg, model=injected).high == _mark(injected, None) == DEFAULT_MARK
     assert built(bulky).high == DEFAULT_MARK, "an entry that sets none"

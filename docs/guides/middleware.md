@@ -313,6 +313,18 @@ the model looking at the wrong messages. `SummarizeByCount` takes that summarize
 place instead: the class keeps `summarize-by-count` for definitions to write, and the
 instance answers to `SummarizationMiddleware`, which is the name deepagents merges by.
 
+**What kingfisher keeps below the summarizer follows yours.** The PDFs a turn may hold
+open are half of where the graph's summarizer fires, and clearing starts at half of it
+unless the model entry sets `clear_results_at`. Both are read off the summarizer that
+answers to `SummarizationMiddleware` on that graph -- yours, where a definition names it,
+and deepagents' own elsewhere. A token count is taken as written, a fraction of the
+window as that share of it, several clauses by the earliest that can fire; a clause
+counting messages alone fires at any size, and is left out. So a summarizer firing at
+100,000 tokens holds a turn to about 146 KB of PDF and starts clearing at 50,000, and a
+`clear_results_at` at or past 100,000 is refused when the agent is built. A summarizer
+kingfisher cannot read -- neither deepagents' nor langchain's, or one counting only
+messages -- is sized as deepagents' own, and the notice it is built with says so.
+
 ## What your middleware sees
 
 **Already-narrowed capabilities.** A deployment's middleware runs after the

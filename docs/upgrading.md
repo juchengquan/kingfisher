@@ -18,6 +18,29 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Sized by the summarizer each graph runs, after #1027
+
+- **A summarizer of yours that fires sooner now shrinks what kingfisher keeps below
+  it.** Where a definition names middleware answering to `SummarizationMiddleware`, the
+  PDFs a turn may hold open and the default clearing mark are half of where *that*
+  summarizer fires, not deepagents' own. On a model with no profile, one firing at
+  100,000 tokens holds a turn to about 146 KB of PDF where 249 KB went before, and
+  starts clearing at 50,000 tokens rather than 64,000. Each graph reads its own: a
+  subagent the summarizer its definition names, `general-purpose` the agent's.
+  `summarize-by-count` fires at deepagents' own size, so an agent naming only it sees
+  no change.
+- **A `clear_results_at` at or past that point is refused when the agent is built.** It
+  was refused only past deepagents' own trigger, when the model was built, and one
+  between the two never cleared anything. The error names the agent and the trigger.
+- **A summarizer kingfisher cannot read is sized as deepagents' own**, as everything
+  was before: a class that is neither deepagents' summarizer nor langchain's, or a
+  trigger of message counts alone. The notice a replacement of deepagents' summarizer
+  is built with now says so.
+- **`high_mark` takes the trigger, not the model, and `summarizer_trigger` the graph's
+  middleware too.** Neither is exported. Code importing them from `kingfisher.core`
+  calls `high_mark(trigger, written, subject=...)`; `summarizer_trigger(model)` still
+  reads deepagents' own, and `summarizer_trigger(model, middleware)` the one that runs.
+
 ## A subagent's calls name its model, and `extra` refuses a class's own names, after #1022
 
 - **A `model_call` or `model_error` made by a subagent carries that subagent's
