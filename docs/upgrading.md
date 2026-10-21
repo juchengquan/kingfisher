@@ -18,13 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
-## A preview shows a result's ends however long its lines, after #9999
+## A preview shows a result's ends, and names only a file that is there, after #9999
 
 - **A long result on one line is previewed by its start and its end.** The preview kept
   whole lines only, so minified JSON, or a result whose every line was wider than half
   the preview, showed the model `... [1 lines truncated] ...` and the path and nothing
   else. A line too long to show at all is now cut and marked `... [N characters
   truncated] ...`; results whose lines fit read as before.
+- **A long result your backend would not keep is handed to the model whole.** It was
+  previewed with a `full result:` line naming the file the save had just failed to
+  write. A backend that refuses or raises on a save under `/scratchpad/tool_results/`
+  now sends the model the whole result, and its row still says it was not kept.
 
 ## A lone `datazone=` name is refused like a listed one, after #9999
 

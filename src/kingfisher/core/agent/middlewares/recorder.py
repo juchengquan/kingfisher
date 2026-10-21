@@ -161,7 +161,7 @@ class RecorderMiddleware(AgentMiddleware):
             answers = self._backend.upload_files([(entry.path, content)])
         except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
             answers = exc
-        self._unkept(entry, answers)
+        entry = self._unkept(entry, answers)
         return _stamped(result, answer, entry.id, _shown(answer, entry, text))
 
     async def awrap_tool_call(
@@ -182,7 +182,7 @@ class RecorderMiddleware(AgentMiddleware):
             answers = await self._backend.aupload_files([(entry.path, content)])
         except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
             answers = exc
-        self._unkept(entry, answers)
+        entry = self._unkept(entry, answers)
         return _stamped(result, answer, entry.id, _shown(answer, entry, text))
 
     def _reserved(self, call: Mapping[str, Any]) -> str | None:
@@ -242,22 +242,24 @@ class RecorderMiddleware(AgentMiddleware):
         read = (unlisted(one) for one in self._ledger.access_in(inside))
         return listed(jointly((offered, *read)))
 
-    def _unkept(self, entry: LedgerEntry, answers: Any) -> None:
-        """Take the path off an entry if the backend would not keep its file.
+    def _unkept(self, entry: LedgerEntry, answers: Any) -> LedgerEntry:
+        """The entry with its path taken off if the backend would not keep its file.
 
         Reported on the row and in the log, never raised: the tool has run, and a failed
-        call here is one the model may make again, running the tool twice.
+        call here is one the model may make again, running the tool twice. Handed back
+        because the preview reads it: one built from the entry as it was named a file
+        that was never written.
         """
         if isinstance(answers, Exception):
             why = f"{type(answers).__name__}: {answers}"
         elif answers and answers[0].error:
             why = str(answers[0].error)
         else:
-            return
+            return entry
         _log.warning(
             "the result of %s %s was not kept at %s: %s", entry.tool, entry.id, entry.path, why
         )
-        self._ledger.unkept(entry)
+        return self._ledger.unkept(entry)
 
 
 def _preview(text: str, path: str) -> str:
@@ -311,6 +313,7 @@ def _shown(answer: ToolMessage, entry: LedgerEntry, text: str) -> Any | None:
     A result made of blocks keeps every block that is not text -- an attachment is not
     something a preview can stand in for -- and its text becomes one preview block.
     """
+    # A result with no file has nowhere for a preview to point, so it goes whole.
     if len(text) <= PREVIEW_ABOVE or entry.path is None:
         return None
     shown = _preview(text, entry.path)

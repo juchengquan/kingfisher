@@ -808,6 +808,33 @@ class _Raising(LocalSessions):
         return opened
 
 
+@pytest.mark.parametrize(
+    ("sessions", "awaited"),
+    # `_Refusing` refuses the sync save only, so the awaited half goes through `_Raising`.
+    [(_Refusing, False), (_Raising, False), (_Raising, True)],
+    ids=["refused", "raised", "raised-arun"],
+)
+def test_a_long_result_the_backend_would_not_keep_is_handed_over_whole(
+    ledgered, sessions, awaited
+):
+    """The preview was built from the entry as it was before its path came off, so the
+    model got four thousand characters of a hundred thousand and a `full result:` line
+    naming a file that was never written.
+    """
+    kf = Kingfisher(ledgered, sessions=sessions())
+    request = Request("go", agent="only", session_id="s")
+    Scripted.script.extend([_calls(("loud", {}, "c1")), AIMessage(content="done")])
+
+    result = asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+
+    assert result.answer == "done", "the save failing failed the call"
+    shown = _handed("c1").text
+    assert _kept(ledgered) == [], "the control: the backend kept the file after all"
+    assert "full result:" not in shown, "the model was pointed at a file that is not there"
+    assert "row 00500 " in shown, "the middle of a result nothing kept was left out"
+    assert shown.rstrip().endswith("[A-0001]")
+
+
 @pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
 def test_a_save_that_raises_does_not_fail_the_call_the_model_is_about_to_read(
     ledgered, caplog, awaited
