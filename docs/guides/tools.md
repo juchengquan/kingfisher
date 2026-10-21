@@ -507,6 +507,13 @@ did not. `await runtime.context.arun(...)` is the same for an `async` tool.
 - **The folder is all it sees of the session.** Names are plain — no folder, no leading
   dot — and the folder is gone afterwards. Its environment is `PATH`, the locale, and
   `HOME` and `TMPDIR` pointing at the folder.
+- **An output is the session's, not the command's word.** The folder is in the
+  scratchpad, where the agent writes, and a turn's tool calls run at once: measured, one
+  message asking for the run and for `execute` had the shell drop a file into the live
+  folder and the run bring it back as an output the command never wrote. The folder
+  itself holds — an output is read through a descriptor, never from outside it, and a
+  link or a FIFO left under the name is refused — so what is open is the bytes. Trust
+  them as far as you trust the agent, and nowhere further.
 - **One clock for the call.** Every run in one call shares
   `KINGFISHER_EXECUTION_TIMEOUT_S`, each given what is left, and what a call was
   handed stops working when it returns.
@@ -538,8 +545,8 @@ A tool whose purpose is a file — a chart, a generated image, an export — sav
 file and returns where it went, never the file itself. Returned, a chart is its whole
 markup in the model's context and nothing the caller can open; saved, it is one line.
 A result that is only long is a different case and not the tool's to manage:
-deepagents already saves one over about 20,000 tokens under
-`/scratchpad/large_tool_results/` and hands the model a stub naming it.
+kingfisher records every result anyway, and one over about 20,000 tokens is shown to the
+model as a preview — its head, its tail, and where the whole of it is kept.
 
 There is no kingfisher helper for this. The tool saves through the backend above, in
 about ten lines, and keeps to one convention so that every such tool answers alike:

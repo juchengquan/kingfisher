@@ -503,6 +503,50 @@ def test_a_folder_swapped_for_a_link_mid_run_hands_back_nothing_from_where_it_po
             shutil.rmtree(one)
 
 
+def test_an_output_the_agent_planted_mid_run_comes_back_as_the_commands_own(
+    cfg, session_dir
+):
+    """What `tools.md` tells a tool author to distrust: the run's folder is in the
+    scratchpad the agent writes, so a file it plants under an output's name is brought
+    back as if the command had written it.
+
+    Planted while the command is still running, and through the backend the file tools
+    are given rather than by reaching for the host path: a test that wrote the file
+    afterwards, or around the backend, would pass with the folder beyond the agent's
+    reach, which is the claim being made.
+    """
+    backend = backend_at(cfg, session_dir)
+    waiting = (
+        "n=0; while [ ! -f ../release ] && [ $n -lt 200 ]; do sleep 0.05; n=$((n+1)); done; "
+        "printf wrote-nothing"
+    )
+    ran: list[ScratchRun] = []
+
+    def run() -> None:
+        ran.append(
+            backend.default.run_in_scratch(["/bin/sh", "-c", waiting], {}, outputs=["out.txt"])
+        )
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    try:
+        until = time.monotonic() + 10
+        while not _scratchpad_runs(session_dir) and time.monotonic() < until:
+            time.sleep(0.005)
+        live = _scratchpad_runs(session_dir)
+        planted = backend.write(f"/scratchpad/{live[0]}/out.txt", "PLANTED") if live else None
+    finally:
+        backend.write("/scratchpad/release", "go")
+        thread.join(30)
+
+    assert live, "the run never made its folder, so nothing was measured"
+    assert planted is not None and planted.error is None, f"not planted: {planted}"
+    # The control: with an output of its own the command would be the one answering.
+    assert ran[0].output == "wrote-nothing"
+    assert ran[0].files == {"out.txt": b"PLANTED"}
+    assert _scratchpad_runs(session_dir) == []
+
+
 def test_a_command_past_its_time_is_stopped_and_its_folder_still_goes(cfg, session_dir):
     ran = backend_at(cfg, session_dir).default.run_in_scratch(
         ["/bin/sleep", "30"], {}, outputs=[], timeout=1

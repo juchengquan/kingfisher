@@ -484,6 +484,12 @@ survives *re-wrapping* a tool, which nothing above needed to ask.
   succeeding tool and a raising one. Drive it inside a compiled graph instead, or the
   control passes the same way the case does and the measurement says nothing.
   *(2026-09-18.)*
+- **A message's tool calls run at once.** `ToolNode` maps them over a thread pool when
+  the graph is driven synchronously and `asyncio.gather`s them when it is async, so a
+  tool running a command and the agent's own `execute` or file tools are inside the
+  session together. Measured in one message asking for both: the shell found the live
+  scratch folder by glob and wrote a file into it, which the run brought back as its own
+  output. *(2026-10-21, langgraph 1.2.15.)*
 
 - **LangChain names a plain function by `__name__`**: `convert_to_openai_tool` calls one
   `shout`, and a lambda `<lambda>`. A `TOOLS = ["line_count"]` entry was advertised as
