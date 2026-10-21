@@ -10,13 +10,19 @@ import re
 import time
 import uuid
 import warnings
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from deepagents.backends import CompositeBackend, FilesystemBackend
+from deepagents.backends.composite import (
+    _remaining_grep_budget,
+    _remap_file_info_path,
+    _remap_grep_path,
+    _route_glob_pattern,
+)
 
 from kingfisher.core.agent.host_paths import reject_host_path
 from kingfisher.core.agent.prompting import ShellPrompt
@@ -119,6 +125,75 @@ def _listing(result: Any, path: str) -> Any:
     return _once(replace(result, entries=kept), key=_by_path, field="entries")
 
 
+def _below(routes: Iterable[tuple[str, Any]], path: str) -> list[tuple[str, str, Any]]:
+    """Each route nested strictly below `path`: its own prefix, that prefix relative to
+    `path`, and its backend."""
+    here = path if path.endswith("/") else f"{path}/"
+    return [
+        (prefix, prefix[len(here) :], backend)
+        for prefix, backend in routes
+        if prefix.startswith(here) and prefix.rstrip("/") != here.rstrip("/")
+    ]
+
+
+def _asks_below(path: str | None, result: Any) -> bool:
+    """Whether the routes below `path` are still to be asked.
+
+    `None` and `/` are the composite's own merge, which asks every route already, and a
+    search that failed is handed back as it is.
+    """
+    return path is not None and path != "/" and not getattr(result, "error", None)
+
+
+def _globbed_below(result: Any, pattern: str, path: str | None, routes: Any) -> Any:
+    """`result` with what every route nested below `path` matches as well.
+
+    The composite routes a scoped search to the one backend owning the longest matching
+    prefix and stops there, so a route nested deeper is never asked -- measured, a
+    bundled skill under `/skills/subagents/<bundle>/` was found by a search of the
+    session and missed by one of `/skills`, which is where the prompt sends an agent
+    looking for a procedure.
+
+    Built on deepagents' own helpers, as `PermittedBackend` is: which routes a pattern
+    can match is their anchoring rule to decide, and the path a route's result is named
+    by is their spelling, so a scoped search means what their root search means. A second
+    copy of either is the one that drifts.
+
+    An error comes back as an error, as it does from their root search: a search that
+    answered what it could and said nothing of the route that failed would be the partial
+    answer `_listing` stopped giving. A route whose folder nothing has made is not that
+    case -- measured, a missing root answers a search with no matches and no error, where
+    `ls` calls it `path_not_found` -- so the two mounted kept records nothing writes cost
+    a search nothing.
+    """
+    if not _asks_below(path, result):
+        return result
+    found = list(result.matches or [])
+    for prefix, relative, backend in _below(routes, str(path)):
+        if (adapted := _route_glob_pattern(pattern, relative)) is None:
+            continue
+        answer = backend.glob(adapted, "/")
+        if getattr(answer, "error", None):
+            return answer
+        found += [_remap_file_info_path(one, prefix) for one in (answer.matches or [])]
+    return replace(result, matches=found)
+
+
+async def _aglobbed_below(result: Any, pattern: str, path: str | None, routes: Any) -> Any:
+    """`_globbed_below` for an async turn, which asks each route the async way."""
+    if not _asks_below(path, result):
+        return result
+    found = list(result.matches or [])
+    for prefix, relative, backend in _below(routes, str(path)):
+        if (adapted := _route_glob_pattern(pattern, relative)) is None:
+            continue
+        answer = await backend.aglob(adapted, "/")
+        if getattr(answer, "error", None):
+            return answer
+        found += [_remap_file_info_path(one, prefix) for one in (answer.matches or [])]
+    return replace(result, matches=found)
+
+
 class WorkspaceScopedBackend(CompositeBackend):
     """A `CompositeBackend` that refuses host paths instead of re-rooting them.
 
@@ -135,10 +210,14 @@ class WorkspaceScopedBackend(CompositeBackend):
         return _listing(await super().als(path), path)
 
     def glob(self, pattern: str, path: str | None = None) -> Any:
-        return _once(super().glob(pattern, path), key=_by_path)
+        found = _globbed_below(super().glob(pattern, path), pattern, path, self.sorted_routes)
+        return _once(found, key=_by_path)
 
     async def aglob(self, pattern: str, path: str | None = None) -> Any:
-        return _once(await super().aglob(pattern, path), key=_by_path)
+        found = await _aglobbed_below(
+            await super().aglob(pattern, path), pattern, path, self.sorted_routes
+        )
+        return _once(found, key=_by_path)
 
     def grep(
         self,
@@ -148,7 +227,21 @@ class WorkspaceScopedBackend(CompositeBackend):
         *,
         max_count: int | None = None,
     ) -> Any:
-        return _once(super().grep(pattern, path, glob, max_count=max_count), key=_by_line)
+        found = super().grep(pattern, path, glob, max_count=max_count)
+        if _asks_below(path, found):
+            matches = list(found.matches or [])
+            truncated = found.truncated
+            for prefix, _relative, backend in _below(self.sorted_routes, str(path)):
+                if (left := _remaining_grep_budget(max_count, len(matches))) == 0:
+                    truncated = True
+                    break
+                answer = self._grep_backend(backend, pattern, "/", glob, left)
+                if answer.error:
+                    return answer
+                matches += [_remap_grep_path(one, prefix) for one in (answer.matches or [])]
+                truncated = truncated or answer.truncated
+            found = replace(found, matches=matches, truncated=truncated)
+        return _once(found, key=_by_line)
 
     async def agrep(
         self,
@@ -158,9 +251,21 @@ class WorkspaceScopedBackend(CompositeBackend):
         *,
         max_count: int | None = None,
     ) -> Any:
-        return _once(
-            await super().agrep(pattern, path, glob, max_count=max_count), key=_by_line
-        )
+        found = await super().agrep(pattern, path, glob, max_count=max_count)
+        if _asks_below(path, found):
+            matches = list(found.matches or [])
+            truncated = found.truncated
+            for prefix, _relative, backend in _below(self.sorted_routes, str(path)):
+                if (left := _remaining_grep_budget(max_count, len(matches))) == 0:
+                    truncated = True
+                    break
+                answer = await self._agrep_backend(backend, pattern, "/", glob, left)
+                if answer.error:
+                    return answer
+                matches += [_remap_grep_path(one, prefix) for one in (answer.matches or [])]
+                truncated = truncated or answer.truncated
+            found = replace(found, matches=matches, truncated=truncated)
+        return _once(found, key=_by_line)
 
     def __init__(
         self,

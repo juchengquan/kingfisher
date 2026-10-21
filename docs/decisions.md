@@ -2209,6 +2209,23 @@ reaches it -- driven in one turn with the refusals, since a turn that only check
 refusals would pass with the keeping broken. Not taken: denying reads, which is what the
 history is for. *(2026-10-21.)*
 
+**A scoped search asks the routes below the path as well.** The composite stops at the
+one route owning the path, so a search of `/skills` answered with the catalogue's skills
+and silently without any bundle's -- the folder an agent is told holds its procedures,
+answering less than a search of the whole session. Asked here rather than left to the
+library: the overrides for deduplicating `ls`, `glob` and `grep` are already kingfisher's,
+the routes below a path are the layout's own doing, and a deployment mounting a bundle
+should not have to know which of its skills a search can see. Built on deepagents' rules
+for which routes a pattern reaches and for naming a route's result, so a scoped search
+means what their root search means; `findings.md` records both. **An error is answered,
+not skipped**, as it is from their root search: holding what the other routes returned
+and saying nothing of the one that failed is the partial answer the entry above stopped
+giving. The first draft skipped it, for a case that does not exist -- measured, a
+`FilesystemBackend` whose root was never made answers a search with no matches and no
+error, where `ls` calls it `path_not_found`, so the two mounted kept records nothing
+writes cost a search nothing. What can fail one is a deployment's own route, and
+`_Failing` in `test_backend.py` is the only way to drive that. *(2026-10-21.)*
+
 **Corrected hours later: a mount makes no folder, and it did make a row.** The entry
 above weighed two empty folders in every session against two the file tools would deny,
 and chose not to make them -- while `_listing` moved deepagents' route row for each under

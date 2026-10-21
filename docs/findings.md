@@ -529,6 +529,19 @@ survives *re-wrapping* a tool, which nothing above needed to ask.
   instantiates it: the model gets `status="success"` and the repr of a `CallbackManager`, and
   the run carries on. *(Recorded in the code until 2026-10-17.)*
 
+- **A scoped search reaches one route and stops.** `CompositeBackend.glob` and `.grep`
+  send a call carrying a `path` to the backend owning the longest matching prefix, and
+  only `None` or `/` merges every route -- so a route nested below the path searched is
+  never asked. Measured: a bundle's skill at `/skills/subagents/<bundle>/<name>/SKILL.md`
+  came back from a search of the session and not from one of `/skills`, which is where
+  the prompt sends an agent looking for a procedure, while a catalogue skill beside it
+  came back from both. Their own helpers hold the two rules worth reading off them
+  rather than restating: `_route_glob_pattern` says which routes a pattern can match, a
+  leading slash anchoring it to the directory searched and a route being deeper than
+  that anchor allows, and `_remap_file_info_path`/`_remap_grep_path` name a route's
+  result as the agent asked for it. Their root search returns a route's error; kingfisher
+  skips it, because a mounted folder need not exist. *(2026-10-21, deepagents 0.7.22.)*
+
 ## The run context, and the permissions around a backend
 
 What `ToolContext` and `PermittedBackend` were built on.
