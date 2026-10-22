@@ -2103,6 +2103,14 @@ anything but ASCII, so previewing on bytes would cut a result deepagents left wh
 leave a row pointing at a file holding less than it says. Driven with 30,000 Japanese
 characters, 90,000 bytes: shown whole. *(2026-10-21.)*
 
+**A long result the backend would not keep is previewed all the same, and says so.** Its
+last line is `full result not kept; call <tool> again for less` where a kept one names its
+file -- not `full result:`, from which a reader takes a path. The row still says it was
+not kept. **Reversed: handing it over whole** (#1048), on the reasoning that a preview
+with no file to name left the model no way to the rest: an unsaved result can be any
+size, and handed whole it can overflow the window, where a narrower call gets the rest.
+*(2026-10-22.)*
+
 **An offloaded result was pointed at deepagents' copy, not kept twice. Reversed on
 2026-10-21**, above, with nothing offloaded left to point at; this and the two
 paragraphs after it are what went. Eviction ran outside the recorder, so at the end of

@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A long result your backend would not keep is previewed, after #9999
+
+- **The model is shown a preview, not the whole result**, when your backend refuses or
+  raises on a save under `/scratchpad/tool_results/`. #1048 handed such a result over
+  whole, and one can be any size, so it could overflow the window. The preview is cut as
+  a kept one is, and its last line is `full result not kept; call <tool> again for less`
+  where a kept one's is `full result: <path>`; a deployment that parses previews reads
+  both. The row still says it was not kept.
+
 ## A summarizer a helper's definition names runs where deepagents' would, after #9999
 
 - **It now runs outside the standing middleware**, where a helper's default summarizer

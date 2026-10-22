@@ -169,7 +169,8 @@ _Avoid_: entry number, row id, ledger id
 
 **Preview**:
 What stands in for a recorded result too long to show the model whole: its beginning and
-end, and where the whole of it is kept. The result itself is unchanged.
+end, and where the whole of it is kept, or that it was not. The result itself is
+unchanged.
 _Avoid_: stub, truncation, excerpt, elision
 
 **Cleared result**:
