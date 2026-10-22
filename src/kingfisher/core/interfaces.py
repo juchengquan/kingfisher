@@ -374,7 +374,8 @@ class ScratchRunLimit(Protocol):
     Asked once per graph built with offered tools: the agent, each subagent a definition
     declares, and `general-purpose`. Its answer only takes away. A graph refused the shell,
     or holding it behind a person, is refused a run whatever it says, and a tool called
-    from `eval`'s code is never handed one. An exception here fails the build.
+    from `eval`'s code is never handed one. An exception here is logged and refuses that
+    graph's tools their runs, naming it in each refusal; the other graphs are untouched.
     """
 
     def allows(self, name: str, kind: Literal["agent", "subagent", "general-purpose"]) -> bool:

@@ -11,6 +11,24 @@ from langchain.agents.middleware import AgentMiddleware
 from kingfisher.core.agent.prompting import EXECUTE
 from kingfisher.core.agent.scratch import ScratchRunner
 from kingfisher.core.agent.tool_context import ToolContext
+from kingfisher.core.interfaces import ScratchRun
+
+
+class RefusingRunner:
+    """Bound in place of a runner to refuse every run with `reason`, where the generic
+    refusal would hide the cause."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+
+    def run(self, *_: Any, **__: Any) -> ScratchRun:
+        return ScratchRun(error=self.reason)
+
+    async def arun(self, *_: Any, **__: Any) -> ScratchRun:
+        return ScratchRun(error=self.reason)
+
+    def close(self) -> None:
+        pass
 
 
 class ScratchRunsMiddleware(AgentMiddleware):
@@ -31,6 +49,7 @@ class ScratchRunsMiddleware(AgentMiddleware):
         gated: Collection[str],
         seconds: int,
         limit_allows: bool,
+        limit_refusal: str | None = None,
     ) -> None:
         super().__init__()
         self.names = names
@@ -38,21 +57,28 @@ class ScratchRunsMiddleware(AgentMiddleware):
         self.seconds = seconds
         #: `None` is an unnarrowed grant, which holds the shell like any other built-in.
         #: The deployment's `ScratchRunLimit` is joined with `and`, so it can only take away.
-        self.allowed = (
-            (tools is None or EXECUTE in tools) and EXECUTE not in gated and limit_allows
-        )
+        ruled = (tools is None or EXECUTE in tools) and EXECUTE not in gated
+        self.allowed = ruled and limit_allows
+        #: Only where kingfisher's own rule allowed the run, so the cause it names is the
+        #: one that took the run away.
+        self.refusal = limit_refusal if ruled and not self.allowed else None
 
-    def _bound(self, request: Any) -> tuple[Any, ScratchRunner | None]:
+    def _bound(self, request: Any) -> tuple[Any, ScratchRunner | RefusingRunner | None]:
         runtime = request.runtime
         context = None if runtime is None else runtime.context
         if (
-            not self.allowed
-            or request.tool_call.get("name") not in self.names
+            request.tool_call.get("name") not in self.names
             # A graph the caller built is driven with its own context, or none.
             or not isinstance(context, ToolContext)
         ):
             return request, None
-        runner = ScratchRunner(self.backend, seconds=self.seconds)
+        runner: ScratchRunner | RefusingRunner
+        if self.allowed:
+            runner = ScratchRunner(self.backend, seconds=self.seconds)
+        elif self.refusal is not None:
+            runner = RefusingRunner(self.refusal)
+        else:
+            return request, None
         bound = replace(runtime, context=replace(context, scratch=runner))
         return replace(request, runtime=bound), runner
 

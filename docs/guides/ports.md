@@ -520,7 +520,12 @@ Things to know:
   what it refuses.
 - **It is asked once per graph built**, when the agent is built for a turn, and only of
   a graph holding offered tools. Not of a compiled subagent, whose tools are never
-  handed a run. An exception it raises fails the build, and with it the turn.
+  handed a run.
+- **An exception it raises refuses that graph's runs, not the turn.** It is logged as a
+  warning, once per graph built, and each run a tool on that graph asks for comes back
+  with an `error` naming it -- `refused: this deployment's ScratchRunLimit raised
+  KeyError: 'researcher'`. The other graphs keep what they would have had. An error is
+  never taken as allowing a run.
 
 ## The rest
 

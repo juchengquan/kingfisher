@@ -370,6 +370,66 @@ def test_general_purpose_is_asked_by_that_name(cfg, session_dir):
     assert found == ["HI", NOT_GRANTED]
 
 
+class _Raising(_Limit):
+    """A `ScratchRunLimit` raising for the graphs named in `refused`, allowing the rest."""
+
+    def allows(self, name: str, kind: str) -> bool:
+        self.asked.append((name, kind))
+        if name in self.refused:
+            raise KeyError(name)
+        return True
+
+
+#: What a tool on a graph whose limit raised `KeyError('helper')` is told.
+RAISED = "refused: this deployment's ScratchRunLimit raised KeyError: 'helper'"
+
+
+@pytest.mark.parametrize(
+    ("limit", "answer"), [(_Raising, RAISED), (_Limit, NOT_GRANTED)], ids=["raised", "false"]
+)
+def test_a_limit_raising_for_a_subagent_refuses_only_its_tools_and_says_why(
+    cfg, session_dir, limit, answer
+):
+    """A raise that propagated failed every turn over a graph it never needed, one taken as
+    allowed handed a run out, and one refused generically left the agent nothing to say
+    why. A plain `False` keeps the generic refusal; the agent's run is the control."""
+    _a_tool(cfg)
+    _a_helper(cfg)
+
+    found = _answers(
+        cfg,
+        session_dir,
+        *_shouted_then_delegated("helper"),
+        capabilities=Capabilities(subagents=("helper",)),
+        scratch_run_limit=limit("helper"),
+    )
+
+    assert found == ["HI", answer]
+
+
+def test_a_limit_that_raises_is_logged_once_for_the_graph_it_raised_on(
+    cfg, session_dir, caplog
+):
+    """Refused without a word in the log, a deployment's bug reads as its policy."""
+    _a_tool(cfg)
+    _a_helper(cfg)
+
+    _answers(
+        cfg,
+        session_dir,
+        *_shouted_then_delegated("helper"),
+        capabilities=Capabilities(subagents=("helper",)),
+        scratch_run_limit=_Raising("helper"),
+    )
+
+    raised = [r for r in caplog.records if "the scratch run limit raised" in r.getMessage()]
+    assert [r.getMessage() for r in raised] == [
+        "the scratch run limit raised on subagent 'helper'; its tools are refused a run"
+    ]
+    assert raised[0].exc_info is not None
+    assert raised[0].exc_info[0] is KeyError
+
+
 @pytest.mark.parametrize(
     ("builtins", "answer"), [("[read_file]", NOT_GRANTED), ("[execute]", "HI")]
 )
@@ -392,15 +452,27 @@ def test_a_limit_allowing_a_graph_without_the_shell_binds_nothing(
     assert found == ["HI", answer]
 
 
+GATED_RAISED = RAISED.replace("'helper'", "'gated'")
+
+
 @pytest.mark.parametrize(
-    ("gates", "answer"), [("[execute]", NOT_GRANTED), ("[write_file]", "HI")]
+    ("gates", "limit", "answer"),
+    [
+        ("[execute]", _Limit, NOT_GRANTED),
+        ("[write_file]", _Limit, "HI"),
+        ("[execute]", _Raising, NOT_GRANTED),
+        ("[write_file]", _Raising, GATED_RAISED),
+    ],
 )
-def test_a_gated_shell_is_refused_whatever_the_limit_answers(cfg, session_dir, gates, answer):
-    """Nothing can pause for a person inside a tool, so no limit may hand a gated shell on."""
+def test_a_gated_shell_is_refused_whatever_the_limit_answers(
+    cfg, session_dir, gates, limit, answer
+):
+    """Nothing can pause for a person inside a tool, so no limit may hand a gated shell on;
+    and a limit raising there is not what refused it, so the refusal does not blame it."""
     _a_tool(cfg)
     an_agent(cfg, "gated", interrupt_on=gates, **EVERY_TOOL)
     (agent,) = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs.values()
-    limit = _Limit()
+    limit = limit("gated") if limit is _Raising else limit()
 
     found = _answers(
         cfg,
@@ -416,9 +488,17 @@ def test_a_gated_shell_is_refused_whatever_the_limit_answers(cfg, session_dir, g
     assert ("gated", "agent") in limit.asked
 
 
-def test_a_tool_called_from_code_is_refused_whatever_the_limit_answers(cfg, session_dir):
-    """`eval` hands its context to every tool its code calls, so a limit allowing the agent
-    must not reach them through it. The direct call under the same grant is the control."""
+@pytest.mark.parametrize(
+    ("limit", "direct_answer"),
+    [(_Limit(), "HI"), (_Raising(""), RAISED.replace("'helper'", "''"))],
+    ids=["allowing", "raising"],
+)
+def test_a_tool_called_from_code_is_refused_whatever_the_limit_answers(
+    cfg, session_dir, limit, direct_answer
+):
+    """`eval` hands its context to every tool its code calls, so neither a limit allowing
+    the agent nor the refusal bound for one raising may reach them through it. The direct
+    call under the same grant is the control."""
     wired = replace(cfg, interpreter_enabled=True)
     _a_tool(wired)
     granted = Capabilities(builtin_tools=("eval", "execute"), tools=("shout",))
@@ -428,7 +508,7 @@ def test_a_tool_called_from_code_is_refused_whatever_the_limit_answers(cfg, sess
         session_dir,
         "(async () => await tools.shout({text: 'hi'}))()",
         capabilities=granted,
-        scratch_run_limit=_Limit(),
+        scratch_run_limit=limit,
     )
     direct = _answers(
         wired,
@@ -436,11 +516,11 @@ def test_a_tool_called_from_code_is_refused_whatever_the_limit_answers(cfg, sess
         _calls("shout", text="hi"),
         AIMessage(content="done"),
         capabilities=granted,
-        scratch_run_limit=_Limit(),
+        scratch_run_limit=limit,
     )
 
     assert NOT_GRANTED in answered
-    assert direct == ["HI"]
+    assert direct == [direct_answer]
 
 
 @pytest.mark.parametrize("limit", [None, NoScratchRunLimit()], ids=["left-out", "default"])
