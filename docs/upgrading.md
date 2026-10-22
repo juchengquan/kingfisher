@@ -18,7 +18,7 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
-## A session is made with `scratchpad/large_tool_results/`, after #9999
+## A session is made with `scratchpad/large_tool_results/`, after #1062
 
 - **Every session has the folder, empty, from the next time it is opened.** deepagents'
   summariser writes there part-way through a turn, on a call refused for length that
