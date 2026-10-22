@@ -1,6 +1,8 @@
 Each of those files is under `/{{scratchpad}}/{{tool_results}}/`, however long the
 result was: one too long to show you whole is shown as its head and its tail, with the
-last line naming the file that holds all of it.
+last line naming the file that holds all of it. That folder is yours to read and not to
+write, for the same reason as the conversation kept aside: what a call answered is not
+something you made.
 {{reading}}
 {{expiring}}
 

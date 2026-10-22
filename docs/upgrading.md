@@ -18,6 +18,20 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The prompt says whose the kept records are, after #1057
+
+- **Two sentences of the system prompt have changed.** The clause #1036 added to the
+  `/scratchpad` bullet had no subject, so it read as a rule against writing the
+  scratchpad itself; it now names the folder it is about, and the results folder is said
+  to be read-only where the prompt sends the model to read a result back. If you cache
+  the prompt yourself, or diff it, the text is not the same.
+- **Nothing a deployment does changes.** The rules were already in force since #1036;
+  only what the model is told about them is new.
+- **`ports.md` now says the shell must stay out of the kept records.** `shell_denied`
+  still does not ask for it, for the reason the guide gives, so a backend of your own
+  that lets its shell write `/scratchpad/tool_results/` or
+  `/scratchpad/conversation_history/` passes the kit and lets the agent forge a result.
+
 ## A `ScratchRunLimit` that raises refuses runs instead of failing the turn, after #1054
 
 - **An exception from `allows` no longer fails the build.** It is logged as a warning by

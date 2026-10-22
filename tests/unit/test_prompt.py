@@ -120,10 +120,27 @@ def test_the_prompt_names_the_folder_deepagents_writes_on_its_own(cfg, session_d
 
     assert f"`{root}/conversation_history/`" in text
     assert "large_tool_results" not in text, "a folder nothing writes is still named"
-    # Said because the line above sends the model here: an agent tidying its scratchpad
-    # would otherwise learn the folder is not its own from a refusal, having deleted
-    # nothing only because the rule stopped it.
-    assert "Yours to read and not to write" in text
+
+
+def test_each_kept_record_is_said_to_be_the_models_to_read_and_not_to_write():
+    """Said because the prompt sends the model to both folders -- to search the
+    conversation kept aside, and to read a result back -- so an agent tidying its
+    scratchpad would otherwise learn whose they are from a refusal.
+
+    With a subject, which is the part that went wrong: the clause arrived at the end of
+    the `/scratchpad` bullet with none, and the bullet's own subject is the folder the
+    agent works in, so it read as a rule against writing the scratchpad at all -- against
+    which the paragraph below it says nothing else in the session is the agent's to
+    write. One sentence per folder, where that folder is introduced.
+    """
+    # Joined: the prompt wraps at 88 columns, so a sentence this long is never on one
+    # line and a plain `in` reads as an absence.
+    said = " ".join(shipped().split())
+
+    assert "That folder is yours to read and not to write -- it says what happened" in said
+    assert "That folder is yours to read and not to write, for the same reason" in said
+    # The control: the scratchpad itself is still the agent's, in the same breath.
+    assert "Anything genuinely throwaway goes in `/scratchpad`" in said
 
 
 def test_the_prompt_names_a_recorded_result_as_the_ledger_does():
