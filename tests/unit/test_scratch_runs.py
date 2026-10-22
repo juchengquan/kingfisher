@@ -1057,3 +1057,28 @@ def test_a_program_env_would_read_as_its_own_is_refused(cfg, session_dir, argv):
 
     assert ran.error is not None
     assert _scratchpad_runs(session_dir) == []
+
+
+@pytest.mark.parametrize(
+    ("files", "outputs"),
+    [({"../escaped.txt": b"written"}, []), ({}, ["../kept.txt"])],
+    ids=["file", "output"],
+)
+def test_a_caller_of_the_method_itself_cannot_name_a_file_beside_the_run(
+    cfg, session_dir, files, outputs
+):
+    """`ScratchRunner` refuses such a name first, but the method is the backend's, found by
+    `scratch_runs_of`, and the folder opens a name relative to itself with no check of its
+    own: `../` wrote into the scratchpad, and read a file there back as an output."""
+    scratchpad = session_dir / "scratchpad"
+    (scratchpad / "kept.txt").write_bytes(b"the session's")
+
+    ran = backend_at(cfg, session_dir).default.run_in_scratch(
+        ["/bin/true"], files, outputs=outputs
+    )
+
+    assert ran.error is not None
+    assert "plain name" in ran.error
+    assert ran.files == {}
+    assert not (scratchpad / "escaped.txt").exists()
+
