@@ -17,6 +17,11 @@ SERVED_BY = "kingfisher_served_by"
 #: The blocks a signature binds: Anthropic's two, and the Responses API's.
 THINKING = frozenset({"thinking", "redacted_thinking", "reasoning"})
 
+#: Where `ChatOpenAI` keeps a Responses reply's reasoning outside the content, under
+#: `output_version="v0"`, and sends it back from: the one key of `additional_kwargs` a
+#: chat class here sends on. `reasoning_content` and the like are never sent.
+KEPT_ASIDE = "reasoning"
+
 
 def signers_of(models: Models) -> dict[str, dict[str, str]]:
     """Who answers each catalogue model, by the id it is sent as.
@@ -54,6 +59,22 @@ def _thinking(block: Any) -> bool:
     return isinstance(block, dict) and block.get("type") in THINKING
 
 
+def _thought(reply: AIMessage) -> bool:
+    """Whether a reply carries reasoning a chat class would send back."""
+    return KEPT_ASIDE in reply.additional_kwargs or (
+        isinstance(reply.content, list) and any(_thinking(block) for block in reply.content)
+    )
+
+
+def _unsigned(reply: AIMessage) -> AIMessage:
+    """`reply` with its reasoning taken out, from the content and from beside it."""
+    content = reply.content
+    if isinstance(content, list):
+        content = [block for block in content if not _thinking(block)]
+    aside = {key: value for key, value in reply.additional_kwargs.items() if key != KEPT_ASIDE}
+    return reply.model_copy(update={"content": content, "additional_kwargs": aside})
+
+
 def kept_for(request: Any, signer: Mapping[str, str | None]) -> Any:
     """`request` with the thinking of every reply its model did not produce taken out,
     or `request` itself where there is none.
@@ -63,14 +84,8 @@ def kept_for(request: Any, signer: Mapping[str, str | None]) -> Any:
     """
     messages = list(request.messages)
     for at, one in enumerate(messages):
-        if (
-            isinstance(one, AIMessage)
-            and isinstance(one.content, list)
-            and any(_thinking(block) for block in one.content)
-            and not _readable(one, signer)
-        ):
-            kept = [block for block in one.content if not _thinking(block)]
-            messages[at] = one.model_copy(update={"content": kept})
+        if isinstance(one, AIMessage) and _thought(one) and not _readable(one, signer):
+            messages[at] = _unsigned(one)
     if all(new is old for new, old in zip(messages, request.messages, strict=True)):
         return request
     return request.override(messages=messages)

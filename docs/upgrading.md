@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Reasoning kept beside a reply goes back only to its signer, after #9999
+
+- **A Responses reply kept as `v0` loses its reasoning on a switch too.** A model built
+  with `output_version="v0"`, through `extra` or `LC_OUTPUT_VERSION`, keeps its reasoning
+  in `additional_kwargs["reasoning"]`, and `ChatOpenAI` sent it to whichever endpoint came
+  next. It now goes back only to the endpoint and model that produced it, as thinking in
+  the content has since #1048. The conversation keeps it.
+
 ## `seed` reads an audience held in a name, and holds back one it cannot read, after #9999
 
 - **A Python definition whose `source_ids=` or `datazone=` is a name is held back now.**

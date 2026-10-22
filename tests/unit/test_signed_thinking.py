@@ -11,6 +11,8 @@ from langchain.agents.middleware import ModelRequest
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_openai import ChatOpenAI
+from langchain_openai.chat_models.base import _construct_lc_result_from_responses_api
+from openai.types.responses import Response
 
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.caching import PromptCachingMiddleware
@@ -53,6 +55,27 @@ def _reply(**metadata: Any) -> AIMessage:
             {"type": "text", "text": "first answer"},
         ],
         response_metadata={"model_provider": "anthropic", **metadata},
+    )
+
+
+def _kept_as_v0(**metadata: Any) -> AIMessage:
+    """An earlier Responses answer that reasoned first, as `ChatOpenAI` keeps one under
+    `output_version="v0"`: built from the API's own response rather than by hand, so the
+    reasoning is wherever langchain puts it."""
+    response = Response.model_validate({
+        "id": "resp_1", "created_at": 0, "model": "fake-model", "object": "response",
+        "parallel_tool_calls": True, "tool_choice": "auto", "tools": [],
+        "output": [
+            {"id": "rs_SIGNED", "type": "reasoning", "summary": [], "encrypted_content": "SIGNED"},
+            {"id": "msg_1", "type": "message", "role": "assistant", "status": "completed",
+             "content": [{"type": "output_text", "text": "first answer", "annotations": []}]},
+        ],
+    })
+    result = _construct_lc_result_from_responses_api(response, output_version="v0")
+    reply = result.generations[0].message
+    assert isinstance(reply, AIMessage)
+    return reply.model_copy(
+        update={"response_metadata": {**reply.response_metadata, **metadata}}
     )
 
 
@@ -153,6 +176,27 @@ def test_each_wire_formats_model_is_known_by_the_id_it_sends(model, sent_as):
     """The two chat classes keep the id under different names; one read under the wrong
     name is no model at all, and every reply it made would lose its thinking."""
     assert model_id(model) == sent_as
+
+
+@pytest.mark.parametrize(
+    ("served", "sent"), [(ELSEWHERE, False), (HERE, True)], ids=["another-signer", "own"]
+)
+def test_a_v0_replys_reasoning_goes_back_only_to_its_signer(served, sent):
+    """A Responses reply kept as `v0` holds its reasoning in `additional_kwargs`, which
+    `ChatOpenAI` sends back as an input item, so a strip that read only the content sent
+    another endpoint's reasoning on. The signer's own going back is the control."""
+    model = ChatOpenAI(model="fake-model", api_key="x", use_responses_api=True)
+    earlier = _kept_as_v0(**{SERVED_BY: served})
+    assert "reasoning" in earlier.additional_kwargs, "and not in the content: the shape"
+    request = ModelRequest(
+        model=model, messages=[HumanMessage("first"), earlier, HumanMessage("second")]
+    )
+
+    payload = json.dumps(model._get_request_payload(kept_for(request, HERE).messages))
+
+    assert ("rs_SIGNED" in payload) is sent
+    assert "first answer" in payload
+    assert earlier.additional_kwargs["reasoning"]["id"] == "rs_SIGNED", "the conversation keeps it"
 
 
 def test_a_request_with_nothing_to_take_out_is_sent_as_it_came():

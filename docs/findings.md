@@ -77,6 +77,14 @@ wrong.*
   `SignedThinkingMiddleware` records who served each reply itself. Measured on the
   request each builds, no call made. *(2026-10-21, langchain-anthropic 1.7.6,
   langchain-openai 1.5.1.)*
+- **A Responses reply kept as `v0` carries its reasoning outside the content.** Under
+  `output_version="v0"`, by `extra` or `LC_OUTPUT_VERSION`, `ChatOpenAI` keeps the
+  reasoning item in `additional_kwargs["reasoning"]` and the content is text alone; building
+  a Responses request it puts that item back, but only for a reply whose content is a list,
+  which a `v0` reply's is. No chat class here sends `reasoning_content`,
+  `reasoning_details` or any other key of `additional_kwargs`, and `ChatAnthropic` sends
+  none of them. Measured on the request each builds, no call made. *(2026-10-22,
+  langchain-openai 1.5.1, langchain-anthropic 1.7.6.)*
 - **The summariser's model is handed the conversation as text.** langchain's
   `SummarizationMiddleware`, which deepagents' delegates to, renders the messages to
   summarise with `get_buffer_string(format="xml")`, so no signed block reaches it,
