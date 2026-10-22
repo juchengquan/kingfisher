@@ -2101,10 +2101,12 @@ anything but ASCII, so previewing on bytes would cut a result deepagents left wh
 leave a row pointing at a file holding less than it says. Driven with 30,000 Japanese
 characters, 90,000 bytes: shown whole. *(2026-10-21.)*
 
-**An offloaded result is pointed at deepagents' copy, not kept twice.** Eviction runs
-outside the recorder, so at the end of the turn one `ls` of `large_tool_results/`
-repoints each entry whose call id is there, and kingfisher's copy goes in the sweep. A
-nested helper has no eviction and keeps its own.
+**An offloaded result was pointed at deepagents' copy, not kept twice. Reversed on
+2026-10-21**, above, with nothing offloaded left to point at; this and the two
+paragraphs after it are what went. Eviction ran outside the recorder, so at the end of
+the turn one `ls` of `large_tool_results/` repointed each entry whose call id was there,
+and kingfisher's copy went in the sweep. A nested helper had no eviction and kept its
+own.
 
 **A name is not an identity, and the size is what settles it.** deepagents names an
 eviction after the call id alone, in a folder that outlasts the turn. Measured across two
@@ -2413,10 +2415,12 @@ written, so reading a handle cannot start another pass, and a handle is never cl
 again: read as what it replaced, an offloaded result's was pointed at a swept copy.
 *(2026-10-16, after the acceptance run.)*
 
-**An offloaded result is named by a search for its id, not by a path.** deepagents' copy
-is named by call id, and a later call with the same id overwrites it, so a path would
-name another call's result where a search finds nothing. A tool that offloads its own
-output hands the recorder the stub, and is named by our copy.
+**An offloaded result was named by a search for its id, not by a path. Reversed on
+2026-10-21**, when kingfisher began saving every result itself: a handle names the
+recorder's file, which no later call writes over. deepagents' copy was named by call id,
+and a later call with the same id overwrote it, so a path would have named another
+call's result where a search found nothing. A tool that offloads its own output still
+hands the recorder the stub, and is named by our copy.
 
 **A handle names only a tool its graph holds.** The path goes to an agent holding
 `read_file`, and any other is told to call the tool that made the result again. A model
