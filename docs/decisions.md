@@ -1027,7 +1027,7 @@ zone. *(2026-10-16.)*
 
 **The operator's listing prints both.** A tool's own audience is a line of its own,
 `tool sql_query  [sales_db]`; a subagent's own tool is named `counter::count`, because
-the file `audienced_tools` keys it by sits in a folder the key does not name. A datazone
+the file it lives in sits in a folder that does not name its subagent. A datazone
 is printed beside the source ids, not folded in, because a subagent writing only
 `datazone: finance` was listed as `[*]` -- everyone. Only skills get a roll-up: a tool's
 or subagent's lock is one line in its own file with nothing that could differ from it,
