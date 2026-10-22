@@ -14,6 +14,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import Field
 
 from kingfisher import Kingfisher, Request
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.caching import CACHING, PromptCachingMiddleware
 from kingfisher.core.config import ConfigError
@@ -256,6 +257,72 @@ def test_every_graph_kingfisher_builds_is_sent_it_and_a_compiled_one_is_not(
         "general-purpose": 3,
         "researcher": 0,
     }
+
+
+STAMP = "Every figure is checked twice."
+
+
+class _Stamps(AgentMiddleware):
+    """A deployment's middleware that writes the prompt, as a house rule added late does."""
+
+    name = "Stamps"
+
+    def _stamped(self, request: Any) -> Any:
+        system = request.system_message
+        blocks = [] if system is None else list(system.content_blocks)
+        return request.override(
+            system_message=SystemMessage(
+                content_blocks=[*blocks, {"type": "text", "text": f"\n\n{STAMP}"}]
+            )
+        )
+
+    def wrap_model_call(self, request: Any, handler: Any) -> Any:
+        return handler(self._stamped(request))
+
+    async def awrap_model_call(self, request: Any, handler: Any) -> Any:
+        return await handler(self._stamped(request))
+
+
+def test_a_helpers_session_text_follows_what_its_own_middleware_writes(
+    cfg, session_dir, way
+):
+    """A helper's stack meets no merge to put the session's text in a slot, so listed
+    ahead of the helper's own middleware it was followed by what that middleware wrote."""
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "reviewer.yaml").write_text(REVIEWER, encoding="utf-8")
+    (subagents_dir(cfg) / "checker.yaml").write_text(
+        CHECKER.replace("system_prompt:", "middlewares: [stamps]\nsystem_prompt:"),
+        encoding="utf-8",
+    )
+    model = _model(
+        _task("reviewer", "t1"),
+        _task("checker", "t2"),
+        AIMessage(content="checked"),
+        AIMessage(content="reviewed"),
+        AIMessage(content="done"),
+    )
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=model,
+        middleware_registry={"stamps": _Stamps},
+        capabilities=Capabilities(subagents=("reviewer", "checker")),
+        session_instructions=TEXT,
+    )
+
+    asked = {"messages": [{"role": "user", "content": "go"}]}
+    if way == "async":
+        asyncio.run(built.graph.ainvoke(asked, context=built.context))
+    else:
+        built.graph.invoke(asked, context=built.context)
+
+    (checking,) = [
+        payload
+        for payload in model.sent
+        if _system(payload) and _system(payload)[0]["text"].startswith("You check.")
+    ]
+    told = "".join(block["text"] for block in _system(checking))
+    assert told.index(STAMP) < told.index(TEXT)
 
 
 class _OwnCaching(AgentMiddleware):
