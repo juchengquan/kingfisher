@@ -2205,9 +2205,9 @@ refuses a session without them. Landlock cannot while it grants the scratchpad w
 read-only grant under a writable parent being stepped over (`_session_writable`), which
 is also why `shell_denied` does not ask a deployment's backend for it. Two of three is not
 a boundary, so nothing claims one. *(2026-10-16, before clearing results to handles.)*
-*Since 2026-10-21 a session is made without `large_tool_results/`, which only deepagents'
-summariser writes, on a refusal for length clearing could not answer; it stays denied with
-every other folder of kept records, below.*
+*Since 2026-10-21 only deepagents' summariser writes `large_tool_results/`, on a refusal
+for length clearing could not answer; it is made with the session and denied with every
+other folder of kept records, below.*
 
 **Every folder of kept records is denied, not only the ones a row names.** The question
 was always who reads the file back: a row's file is denied because the prompt tells the
@@ -2218,20 +2218,22 @@ the same calls against the results folder were refused. Nothing of kingfisher's 
 those files, which is what the backend's own comment said and why the gap lasted: the
 reader being protected is the next turn's model, and the person reading the session after
 it. So `Layout.kept_records` names the class -- the saved results, the conversation kept
-aside, and the two deepagents folders nothing writes -- and the routes, the deny rules and
+aside, and deepagents' other two folders -- and the routes, the deny rules and
 `shell_read_only` are all derived from it, because writing a rule per folder is how three
 of the four came to be missing one. **Mounted to be denied**, as `.harness` is:
 deepagents refuses `permissions=` for a rule whose path lies under no route. **The
 history is made with the session**, although deepagents makes it on the first eviction
 anyway, because `present` drops an absent path -- without it the shell could make the
-folder in one turn and have the next turn's fence bind the forgery read-only. **The other
-two are not made**, since nothing writes them and a mount does not make a folder; they
-are denied all the same, because a deployment that replaces `FilesystemMiddleware` back
-turns them on, and a rule written for today's writers would not be there on the day it
-did. The middleware that keeps a record writes through the backend, so none of this
+folder in one turn and have the next turn's fence bind the forgery read-only. **`blobs`
+is not made**, since nothing writes it and a mount does not make a folder; it is denied
+all the same, because a deployment that replaces `FilesystemMiddleware` back turns it on,
+and a rule written for today's writers would not be there on the day it did. The middleware that keeps a record writes through the backend, so none of this
 reaches it -- driven in one turn with the refusals, since a turn that only checked the
 refusals would pass with the keeping broken. Not taken: denying reads, which is what the
-history is for. *(2026-10-21.)*
+history is for. *(2026-10-21.)* *Since 2026-10-22 the offloads are made with the session
+too: deepagents' summariser writes there mid-turn, on a refusal for length clearing could
+not answer, and bubblewrap's fence is built once a turn, so a folder it made was the
+shell's to write until the next.*
 
 **What a failure says about a path is the path the model wrote.** Two spellings reached
 the model instead, both measured from its own seat. The composite strips a route before

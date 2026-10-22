@@ -71,7 +71,7 @@ def _with_loud(cfg) -> None:
 def _previewed_into_the_results_folder(model: _Shown, session_dir) -> None:
     """The preview the model was shown names the results folder, and the whole is there.
 
-    And deepagents' own folder is never made: `standing_middleware` turns its offloading
+    And nothing lands in deepagents' own folder: `standing_middleware` turns its offloading
     off in every stack kingfisher builds, so a long result is saved exactly where a short
     one is.
     """
@@ -84,7 +84,8 @@ def _previewed_into_the_results_folder(model: _Shown, session_dir) -> None:
     assert f"full result: {results}" in str(shown.text)
     (kept,) = (session_dir / SCRATCH / DEFAULT_LAYOUT.tool_results).iterdir()
     assert kept.read_text(encoding="utf-8").startswith("row 00000 ")
-    assert not (session_dir / SCRATCH / EVICTED).exists(), "deepagents offloaded it after all"
+    # Its contents, not whether it is there: every session is made with it.
+    assert not list((session_dir / SCRATCH / EVICTED).rglob("*")), "deepagents offloaded it"
     assert not (session_dir / EVICTED).exists(), "evicted to the session root"
 
 
@@ -261,4 +262,4 @@ def test_a_long_result_from_a_tool_we_do_not_record_is_not_offloaded(cfg, sessio
 
     (shown,) = [m for m in model.shown[-1] if isinstance(m, ToolMessage)]
     assert len(str(shown.text)) > 80_000, "the control: the read was not long enough to offload"
-    assert not (session_dir / SCRATCH / EVICTED).exists(), "offloaded to a folder nothing names"
+    assert not list((session_dir / SCRATCH / EVICTED).rglob("*")), "offloaded to a folder"

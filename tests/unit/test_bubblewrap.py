@@ -75,12 +75,16 @@ def test_the_harness_is_read_only_and_lands_over_the_session(session):
     again" -- each left the whole suite green.
     """
     argv = argv_for(session, DEFAULT_LAYOUT)
-    # The kept records a session is made with. `blobs` and `large_tool_results` are not
-    # made, nothing writes them, and `present` drops an absent path -- so they are
-    # deliberately absent from this set rather than missing from it.
+    # The kept records a session is made with. `blobs` is not made, nothing writes it,
+    # and `present` drops an absent path -- so it is deliberately absent from this set
+    # rather than missing from it. The offloads are in it: deepagents' summariser writes
+    # them mid-turn, after this fence is built.
     guarded = [
         str(session / p)
-        for p in (HARNESS, INPUTS, *DEFAULT_LAYOUT.saved_results, DEFAULT_LAYOUT.history)
+        for p in (
+            HARNESS, INPUTS, *DEFAULT_LAYOUT.saved_results, DEFAULT_LAYOUT.history,
+            DEFAULT_LAYOUT.offloads,
+        )
     ]
 
     # Every folder the shell may read and not write, as an exact set: one of them

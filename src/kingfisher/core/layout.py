@@ -230,32 +230,39 @@ class Layout:
         return f"{self.scratchpad}/{HISTORY}"
 
     @property
+    def offloads(self) -> str:
+        """Where deepagents puts a result it took out of a message, as a path inside the
+        session."""
+        return f"{self.scratchpad}/{OFFLOADS}"
+
+    @property
     def kept_records(self) -> tuple[str, ...]:
         """Every folder of kept records, as a path inside the session: what says what
         happened rather than what the agent made, so a write there is forgery.
 
         Wider than `saved_results`, which is the folder a ledger row names and the unused
-        results walk -- a history file is no row's, and the two deepagents folders nothing
-        writes hold no rows either. Those two are listed all the same: a deployment that
-        replaces `FilesystemMiddleware` back turns them on, and a rule written for what
-        writes today would not be there on the day it did.
+        results walk -- a history file is no row's, and deepagents' other two folders hold
+        no rows either. Both are listed though only its summariser writes the offloads, and
+        nothing `blobs`: a deployment that replaces `FilesystemMiddleware` back turns both
+        on, and a rule written for what writes today would not be there on the day it did.
         """
         return (*self.saved_results, self.history, f"{self.scratchpad}/{BLOBS}",
-                f"{self.scratchpad}/{OFFLOADS}")
+                self.offloads)
 
     @property
     def made_dirs(self) -> tuple[str, ...]:
         """Every directory a session is made with: the agent's, `.harness`, the saved
-        results, and the history.
+        results, the history and the offloads.
 
-        The history is made here although deepagents makes it on the first eviction
-        anyway, because a fence binds it read-only only if it is there when the fence is
-        built: `present` drops an absent path, so without this the shell could make the
-        folder itself in one turn and have the next turn's fence bind the forgery. The
-        other two kept records stay absent, since nothing writes them and a mount does not
-        make a folder.
+        The last two are made here although deepagents makes each on its first write
+        anyway, because a fence binds one read-only only if it is there when the fence is
+        built, once a turn: `present` drops an absent path, so a folder made after it --
+        by deepagents mid-turn, or by the shell itself -- is the shell's to write until
+        the next turn's fence binds what it wrote. `blobs` stays absent, since nothing
+        writes it and a mount does not make a folder.
         """
-        return (*self.session_dirs, HARNESS, *self.saved_results, self.history)
+        return (*self.session_dirs, HARNESS, *self.saved_results, self.history,
+                self.offloads)
 
     @property
     def unlinked_dirs(self) -> tuple[str, ...]:
