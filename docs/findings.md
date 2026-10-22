@@ -299,8 +299,13 @@ for the next reader who reaches for one.*
   `isinstance`.** A tool result over 20,000 tokens, counted at four characters each,
   is saved to `large_tool_results/<call id>` and the model is handed a head-and-tail
   stub naming the path. Every tool but the file tools is evicted, so `execute` and
-  each offered tool are; when a call overflows the context, the summarizer
-  offloads the large tool results it keeps there too. A user message over 50,000 tokens goes to
+  each offered tool are. When a call is refused for length, the summarizer writes
+  there too, whether or not that eviction is on: every result of the latest batch but
+  a `read_file`'s, whatever its size, since `_clip_overflow_tail` is called with
+  `keep=("tokens", 1)`; a `read_file` result is cut to its first 4,000 characters
+  instead. `test_a_turn_refused_for_length_goes_on_without_a_summary` finds
+  `large_tool_results/<call id>` written once clearing's answer to the refusal is taken
+  out. *(2026-10-21, deepagents 0.7.22.)* A user message over 50,000 tokens goes to
   `conversation_history/<uuid>.md`, beside the summarizer's history and its
   `media/`. Both folders hang off `CompositeBackend.artifacts_root`, `/` by default,
   which `FilesystemMiddleware` and `SummarizationMiddleware` read only when the

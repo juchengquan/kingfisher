@@ -32,6 +32,26 @@ replaced the four layers began.
   that lets its shell write `/scratchpad/tool_results/` or
   `/scratchpad/conversation_history/` passes the kit and lets the agent forge a result.
 
+## A call refused for length is answered by clearing, after #1056
+
+- **A refusal for length is asked once more, with everything clearable cleared.** It
+  used to reach deepagents' summariser, which summarised the conversation and wrote the
+  latest batch to `scratchpad/large_tool_results/` under each call's id. Now clearing
+  answers it first, by the summariser's own test for one, the latest batch and the three
+  most recent results included, and the summariser sees the refusal only if the retry is
+  refused too or there was nothing to clear. No setting turns it on or off.
+- **A handle can read two new ways**, for a result in the batch the refused call was to
+  show: `(N bytes, cleared before it was shown, the conversation being too long for it:
+  full result: <path>, read it a part at a time)`, and for a file tool's `... cleared
+  before it was shown, ...; call read_file again with offset and limit`, or `again
+  narrowed` for a search. A deployment that parses handles should read these too.
+- **A turn that ran into the refusal before** may still find
+  `scratchpad/large_tool_results/` in its session; it is read only through the stub
+  that names it.
+- **The summariser still summarises a request its own count puts over the input
+  budget**, before the call is sent, and clearing never sees that. A counter tuned to
+  your gateway's counts makes that the usual path for a very large batch.
+
 ## A `ScratchRunLimit` that raises refuses runs instead of failing the turn, after #1054
 
 - **An exception from `allows` no longer fails the build.** It is logged as a warning by
@@ -498,14 +518,17 @@ replaced the four layers began.
 - **`scratchpad/large_tool_results/` is gone.** A result too long to show the model
   whole is saved beside every other one, under `scratchpad/<tool_results>/`, and it is
   shown its head and tail with the last line naming the file. deepagents offloaded it
-  before, to a folder kingfisher did not name; nothing writes that folder now. Delete a
-  leftover one: it is read by nothing.
+  before, to a folder kingfisher did not name. That offloading is off, but deepagents'
+  summariser still writes there when it answers a call refused for length, which it
+  does now only where clearing could not (*after #1056*). A leftover one is read only
+  through the stub that names it.
 - **The `offloads_route` and `offloads` properties left `Layout`**, and its
   `saved_results` holds one path rather than two. A deployment that read either to find
   a result should read `tool_results_route` instead, which has not moved.
-- **`large_tool_results` is still a name a layout may not take.** Nothing writes it, but
-  a deployment that replaces `FilesystemMiddleware` can turn offloading back on, and a
-  layout holding the name would then overwrite the folder.
+- **`large_tool_results` is still a name a layout may not take.** deepagents'
+  summariser writes it on a refusal for length, and a deployment that replaces
+  `FilesystemMiddleware` can turn offloading back on; a layout holding the name would
+  overwrite the folder either way.
 - **If you replace `FilesystemMiddleware`**, leave `tool_token_limit_before_evict` unset
   or `None`. kingfisher saves every result itself, and a replacement that offloads
   writes a folder nothing names and no prompt sends the agent to. The warning such a

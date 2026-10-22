@@ -263,10 +263,11 @@ JOINED = (
     'for "foo" and for "bar", each literally, while'
 )
 
-#: deepagents' sentence on where a long result is kept, naming a folder nothing writes:
-#: `standing_middleware` turns its offloading off, so every result is under this layout's
-#: own folder whatever its length. Left to say nothing rather than reworded, because the
-#: section above already tells the model where results are and says it once.
+#: deepagents' sentence on where a long result is kept, naming a folder only its answer to
+#: a refusal for length writes, with a stub naming the path: `standing_middleware` turns
+#: its offloading off, so every other result is under this layout's own folder. Left to
+#: say nothing rather than reworded, because the section above already tells the model
+#: where results are and says it once.
 OFFLOADED_ELSEWHERE = (
     "Offloaded large tool results live under the artifacts root (`/large_tool_results/` by "
     "default); grep that directory to search them when you do not know the exact path."

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
+from deepagents.middleware.summarization import _is_context_overflow
 from langchain.agents.middleware import AgentMiddleware, ExtendedModelResponse
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
@@ -50,11 +51,17 @@ WORTH = 1 / 4
 #: The arguments that carry a file's text, by the file tool they belong to.
 FILE_TEXT = {WRITE_FILE: ("content",), EDIT_FILE: ("old_string", "new_string")}
 
+#: What a handle adds for a result the model was never shown, being in the batch a refused
+#: call was to hand it: told only to call the same tool again, it would make the same
+#: call and be refused again.
+UNSHOWN = " before it was shown, the conversation being too long for it"
+
 #: The handles this module writes, as each ends. Asked before clearing anything: a later pass
 #: would otherwise read a handle as what it replaced and clear it again, wrongly.
 _RESULT_HANDLE = re.compile(
-    rf"(?:\n\([\d,]+ bytes, cleared; [^\n]*\){STAMP_PATTERN}"
-    r"| -- (?:[\d,]+ chars, )?cleared; call \S+ again to see it as it is now)\Z"
+    rf"(?:\n\([\d,]+ bytes, cleared(?:;|{re.escape(UNSHOWN)}:) [^\n]*\){STAMP_PATTERN}"
+    r"| -- (?:[\d,]+ chars, )?cleared(?:; call \S+ again to see it as it is now"
+    rf"|{re.escape(UNSHOWN)}; call \S+ again [^\n]*))\Z"
 )
 _TEXT_HANDLE = re.compile(
     r"\A[\d,]+ chars(?: written)?, cleared(?:; .* holds the current text)?\Z", re.S
@@ -168,15 +175,46 @@ class ResultClearingMiddleware(AgentMiddleware):
     def _holds(self, name: str) -> bool:
         return self._granted is None or name in self._granted
 
+    # A refusal for length is answered here before deepagents' summariser sees it, which
+    # would summarise and write the batch to a folder of its own. Its first error is what it
+    # gets when this cannot help, as if this had not been here.
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         request, update = self._cleared(request)
-        return _with(handler(request), update)
+        try:
+            return _with(handler(request), update)
+        except Exception as exc:
+            if not _is_context_overflow(exc):
+                raise
+            refused = exc
+        forced = self._forced(request, update)
+        if forced is None:
+            raise refused
+        try:
+            return _with(handler(forced[0]), forced[1])
+        except Exception as exc:
+            if not _is_context_overflow(exc):
+                raise
+        raise refused
 
     async def awrap_model_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
         request, update = self._cleared(request)
-        return _with(await handler(request), update)
+        try:
+            return _with(await handler(request), update)
+        except Exception as exc:
+            if not _is_context_overflow(exc):
+                raise
+            refused = exc
+        forced = self._forced(request, update)
+        if forced is None:
+            raise refused
+        try:
+            return _with(await handler(forced[0]), forced[1])
+        except Exception as exc:
+            if not _is_context_overflow(exc):
+                raise
+        raise refused
 
     def _cleared(self, request: Any) -> tuple[Any, Command[Any] | None]:
         """The request with this pass's handles in it, and the state update carrying them,
@@ -214,14 +252,48 @@ class ResultClearingMiddleware(AgentMiddleware):
         cleared = request.override(messages=[replaced.get(one.id, one) for one in sent])
         return cleared, Command(update={"messages": list(replaced.values())})
 
+    def _forced(
+        self, request: Any, update: Command[Any] | None
+    ) -> tuple[Any, Command[Any]] | None:
+        """`request`, refused as too long, with everything clearable cleared and nothing
+        spared, and the state update carrying it with `update`'s, or `None` where nothing
+        more can be cleared.
+
+        `request` already sends `update`'s handles, so a message cleared again is built
+        from that one: built from state, a write the first pass cleared would come back
+        whole beside an edit this one clears.
+        """
+        sent = list(request.messages)
+        handed = None if update is None else update.update
+        earlier = {one.id: one for one in handed["messages"]} if handed else {}
+        messages = [earlier.get(one.id, one) for one in request.state.get("messages") or ()]
+        as_sent = {one.id: one for one in sent if one.id is not None}
+        changed: dict[int, Any] = {}
+        # Unscaled: it clears everything, so a count serves only to skip what frees nothing.
+        for item in self._items(messages, as_sent, self._each, spare=False):
+            changed[item.at] = item.clear(changed.get(item.at, messages[item.at]))
+        if not changed:
+            return None
+        replaced = {**earlier, **{messages[at].id: one for at, one in changed.items()}}
+        cleared = request.override(messages=[replaced.get(one.id, one) for one in sent])
+        return cleared, Command(update={"messages": list(replaced.values())})
+
+    def _each(self, message: Any) -> float:
+        return self.count.each([message])
+
     def _items(
-        self, messages: list[Any], as_sent: Mapping[str, Any], tokens: Callable[[Any], float]
+        self,
+        messages: list[Any],
+        as_sent: Mapping[str, Any],
+        tokens: Callable[[Any], float],
+        *,
+        spare: bool = True,
     ) -> list[_Item]:
         """Everything a pass may clear, oldest first, each freeing something.
 
-        Spared: the latest batch of calls with its results, the `KEEP_RECENT` most
-        recent clearable results with the text of the calls that made them, and what
-        this call no longer sends.
+        Spared unless `spare` is false: the latest batch of calls with its results, and the
+        `KEEP_RECENT` most recent clearable results with the text of the calls that made
+        them. Never: what this call no longer sends.
         """
         latest = max(
             (at for at, one in enumerate(messages) if isinstance(one, AIMessage)),
@@ -241,10 +313,10 @@ class ResultClearingMiddleware(AgentMiddleware):
             if not isinstance(one, ToolMessage) or one.name == TASK_TOOL or _failed(one):
                 continue
             succeeded.add(one.tool_call_id)
-            handle = self._handle(one, calls.get(one.tool_call_id), rows)
-            if at < latest and handle is not None:
+            handle = self._handle(one, calls.get(one.tool_call_id), rows, shown=at < latest)
+            if (at < latest or not spare) and handle is not None:
                 results.append((at, one.tool_call_id, handle))
-        kept = {call for _, call, _ in results[-KEEP_RECENT:]}
+        kept = {call for _, call, _ in results[-KEEP_RECENT:]} if spare else set()
 
         # A message with no id would be appended by the reducer rather than replaced, and
         # is in `as_sent` under none.
@@ -262,7 +334,7 @@ class ResultClearingMiddleware(AgentMiddleware):
             for at, call, handle in results
             if sending(at) is not None and call not in kept
         ]
-        for at in range(latest):
+        for at in range(latest if spare else len(messages)):
             one = messages[at]
             if not isinstance(one, AIMessage) or sending(at) is None:
                 continue
@@ -276,7 +348,12 @@ class ResultClearingMiddleware(AgentMiddleware):
         )
 
     def _handle(
-        self, result: ToolMessage, call: Mapping[str, Any] | None, rows: Mapping[str, LedgerEntry]
+        self,
+        result: ToolMessage,
+        call: Mapping[str, Any] | None,
+        rows: Mapping[str, LedgerEntry],
+        *,
+        shown: bool = True,
     ) -> str | None:
         """What one result would read as once cleared, or `None` where it has no
         handle: no saved copy, and not a file tool's. One already cleared reads as itself.
@@ -287,7 +364,7 @@ class ResultClearingMiddleware(AgentMiddleware):
         if (number := stamped_id(text)) is not None and (
             row := rows.get(number)
         ) is not None and row.call == result.tool_call_id:
-            return self._row_handle(row)
+            return self._row_handle(row, shown=shown)
         # What a file tool returned is a file's text or a listing of files, and calling it
         # again gets that back.
         if result.name in FILE_TOOLS:
@@ -295,21 +372,27 @@ class ResultClearingMiddleware(AgentMiddleware):
             called = f"{result.name} {arguments(args)}" if args else str(result.name)
             size = _size(result)
             what = f"{size:,} chars, cleared" if size is not None else "cleared"
+            if not shown:
+                how = "with offset and limit" if result.name == READ_FILE else "narrowed"
+                return f"{called} -- {what}{UNSHOWN}; call {result.name} again {how}"
             return f"{called} -- {what}; call {result.name} again to see it as it is now"
         return None
 
-    def _row_handle(self, row: LedgerEntry) -> str | None:
+    def _row_handle(self, row: LedgerEntry, *, shown: bool = True) -> str | None:
         """A recorded result's handle, naming where its whole text is kept to an agent
         holding the tool that reaches it there, and the call that made it to any other.
         """
-        again = f"call {row.tool} again to see it"
+        again = f"call {row.tool} again to see it" if shown else f"call {row.tool} again for less"
         if row.expired_in is not None:
             where = f"expired, {again}"
         elif row.path is not None:
             where = f"full result: {row.path}" if self._holds(READ_FILE) else again
+            if not shown and self._holds(READ_FILE):
+                where += ", read it a part at a time"
         else:
             return None
-        return f"{row.summary}\n({row.size:,} bytes, cleared; {where}){stamp(row.id)}"
+        cleared = "cleared;" if shown else f"cleared{UNSHOWN}:"
+        return f"{row.summary}\n({row.size:,} bytes, {cleared} {where}){stamp(row.id)}"
 
 
 def _with(response: Any, update: Command[Any] | None) -> Any:
