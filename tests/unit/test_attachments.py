@@ -743,6 +743,24 @@ def test_a_pdf_replaced_with_text_leaves_the_turn_room_for_the_next(cfg, session
     assert [one.held for one in asking.asked] == [0, 0]
 
 
+def test_the_plugin_is_told_of_a_pdf_that_passed_beside_it_in_the_same_batch(
+    cfg, session_dir, way
+):
+    """Asked beside what the turn held before the batch, the plugin was told the second of
+    two PDFs in one result passed with nothing open, while kingfisher refused it as the
+    turn already full."""
+    asking = _Asking()
+    stack, _ = _stacked(cfg, session_dir, asking)
+    call = {"name": "export_two", "args": {"note": "x"}, "id": "c1"}
+
+    answer = _through(stack, call, export_two, way)
+
+    assert len(_files([answer])) == 1, "the control: kingfisher let one of the two through"
+    first, _ = asking.asked
+    assert [one.verdict for one in asking.asked] == ["passes", "turn_full"]
+    assert [one.held for one in asking.asked] == [0, first.size]
+
+
 def test_a_refused_pdf_the_plugin_replaces_is_a_call_that_succeeded(cfg, session_dir, way):
     """Read as kingfisher's own advice, a deployment's replacement left the call failed
     and unrecorded: the model was told the call had not worked, and no later turn could
