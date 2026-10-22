@@ -81,14 +81,15 @@ Middleware a deployment makes available for its definitions to name.
 _Avoid_: middleware registry, deployment middleware
 
 **Instructions**:
-A deployment's standing text for every agent and subagent, read after kingfisher's own prompt
-and before the agent's, and the plugin that supplies it.
+A deployment's standing text for every agent and subagent but one that arrives already
+built, which wrote its own prompt, read after kingfisher's own prompt and before the
+agent's, and the plugin that supplies it.
 _Avoid_: deployment prompt, house rules, user prompt, PROMPT.md
 
 **Session instructions**:
-A deployment's text for one session, for every agent and subagent its turns run, read after
-the prompt they share with every other session, and the plugin that supplies it. Not a
-note, which a caller adds to one turn.
+A deployment's text for one session, for every agent and subagent its turns run but one
+that arrives already built, read after the prompt they share with every other session,
+and the plugin that supplies it. Not a note, which a caller adds to one turn.
 _Avoid_: session prompt, conversation prompt, dynamic prompt, per-session system text
 
 ### Definitions
