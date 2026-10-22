@@ -18,7 +18,7 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
-## A long result your backend would not keep is previewed, after #9999
+## A long result your backend would not keep is previewed, after #1064
 
 - **The model is shown a preview, not the whole result**, when your backend refuses or
   raises on a save under `/scratchpad/tool_results/`. #1048 handed such a result over
@@ -27,7 +27,7 @@ replaced the four layers began.
   where a kept one's is `full result: <path>`; a deployment that parses previews reads
   both. The row still says it was not kept.
 
-## A summarizer a helper's definition names runs where deepagents' would, after #9999
+## A summarizer a helper's definition names runs where deepagents' would, after #1064
 
 - **It now runs outside the standing middleware**, where a helper's default summarizer
   runs and where deepagents puts one a declared subagent names. It ran innermost, inside
@@ -37,7 +37,7 @@ replaced the four layers began.
   there was something to summarize. A helper naming none, and every other graph, is
   unchanged.
 
-## A switch sends no reasoning kept aside, and no reply left empty, after #9999
+## A switch sends no reasoning kept aside, and no reply left empty, after #1064
 
 - **A Responses reply kept as `v0` loses its reasoning on a switch too.** A model built
   with `output_version="v0"`, through `extra` or `LC_OUTPUT_VERSION`, keeps its reasoning
@@ -49,7 +49,7 @@ replaced the four layers began.
   as two in a row, or, last, sent it as an empty prefill the current Claude models refuse.
   A reply with tool calls still goes, as its calls. The conversation keeps it.
 
-## `seed` reads an audience held in a name, and holds back one it cannot read, after #9999
+## `seed` reads an audience held in a name, and holds back one it cannot read, after #1064
 
 - **A Python definition whose `source_ids=` or `datazone=` is a name is held back now.**
   Seed read only what was written out, so `ToolSpec(t, source_ids=IDS)` was copied as a
