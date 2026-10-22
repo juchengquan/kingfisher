@@ -5194,13 +5194,13 @@ PROSE_ATTR_GONE: dict[str, frozenset[str]] = {
         "Kingfisher.agent_named",
         "Kingfisher.artifact", "Kingfisher.held_for", "Kingfisher.pending",
         "Kingfisher.session_size", "Plugins.threads", "Request.data",
-        "RunResult.log_path", "RunResult.session_dir",
+        "RunResult.log_path", "RunResult.session_dir", "ShellPrompt.starts_in_session",
     }),
     # What a decision removed, or declined to build.
     "docs/decisions.md": frozenset({
         "Capabilities.including", "Config.paths", "Config.shell",
         "Kingfisher.remember_agent", "Plugins.threads", "Request.input_refs",
-        "Request.skill_refs",
+        "Request.skill_refs", "ShellPrompt.starts_in_session",
     }),
     # The wrong citations this rule was written against, quoted as such.
     "tests/unit/test_architecture.py": frozenset({

@@ -18,6 +18,25 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A deployment's shell can say where it sees the session, after #1049
+
+- **`LocalSessions(session_root=...)` teaches your runner's agent
+  `$KINGFISHER_SESSION_ROOT`.** A function of the session folder, as `runner` is; your
+  runner must export the same value in its shell's environment. Leaving it out changes
+  nothing: the agent is described neutrally and a missed path is not corrected. It is
+  refused without a runner. `backend_at` takes `session_root=` too, as the value.
+- **A shell of your own opts in with a `session_root` attribute**, a `str`, beside
+  `shell_prompt`. Anything else is refused when the agent is built.
+- **`ShellPrompt.starts_in_session` is gone.** It turned on the correction after a
+  missed path, which named a variable the flag did not make anyone export; the
+  correction now follows `session_root`. A `ShellPrompt(..., starts_in_session=True)`
+  fails with a `TypeError`: drop the argument and set `session_root` instead.
+  `BuiltinToolsMiddleware` takes `rooted=` for the same thing, which matters only to
+  code that builds it itself.
+- **Wording of your own that does not name `KINGFISHER_SESSION_ROOT` is followed by
+  kingfisher's sentence on it** wherever `session_root` is set; `""` still says
+  nothing.
+
 ## A preview shows a result's ends, and names only a file that is there, after #1048
 
 - **A long result on one line is previewed by its start and its end.** The preview kept

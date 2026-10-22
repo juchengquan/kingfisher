@@ -446,10 +446,10 @@ def _split(request: Any) -> list[str] | None:
 
 
 class BuiltinToolsMiddleware(AgentMiddleware):
-    """Put the shell's own line in `execute`'s description, on kingfisher's own shell say
-    how a missed path is spelt there, and keep deepagents' host paths from a shell that
-    is not on this host; have `read_file` read 1,000 lines unless told otherwise, and
-    `grep` search each string of `a|b`, and say so; say nothing of the shell or of
+    """Put the shell's own line in `execute`'s description, on a shell exporting the
+    session root say how a missed path is spelt there, and keep deepagents' host paths
+    from a shell that is not on this host; have `read_file` read 1,000 lines unless told
+    otherwise, and `grep` search each string of `a|b`, and say so; say nothing of the shell or of
     `write_todos` to a graph not holding it; have each built-in's description name only
     the tools the graph holds; and refuse a command asked to run longer than `longest`,
     and a `read_file` of audio, video or slides, which no model here is handed as they are.
@@ -464,12 +464,13 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     it, and a model told of a tool calls it, each call spent on a refusal.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 -- one keyword per thing said of the shell and the tools
         self,
         layout: Layout,
         shell: ShellPrompt | None = None,
         *,
         longest: int,
+        rooted: bool = False,
         here: bool = True,
         expires_after: int | None = None,
     ) -> None:
@@ -486,9 +487,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         # does not have.
         self._here = here
         self._rule = execute_line(shell, layout)
-        # Only where the shell says it starts in the session: the correction names the
-        # variable kingfisher's own shell exports.
-        self._corrects = shell is not None and shell.starts_in_session
+        # Only where the shell exports the session root, which the correction names.
+        self._corrects = rooted
         self._virtual = _virtual(layout.session_dirs)
 
     def _told(self, request: Any) -> Any:

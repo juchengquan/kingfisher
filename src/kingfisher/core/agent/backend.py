@@ -15,7 +15,7 @@ from kingfisher.core.layout import (
     Layout,
 )
 
-from .prompting import ShellPrompt
+from .prompting import ShellPrompt, rooted
 
 
 def _shell_of(backend: Any) -> Any:
@@ -38,6 +38,37 @@ def shell_prompt_of(backend: Any) -> ShellPrompt | None:
         )
         raise TypeError(msg)
     return said
+
+
+def session_root_of(backend: Any) -> str | None:
+    """Where the shell `backend` runs `execute` on sees the session folder, which it
+    exports as `KINGFISHER_SESSION_ROOT`, or `None` where it does not say.
+
+    Read off the shell, as `shell_prompt_of` is, and for the same reason.
+    """
+    shell = _shell_of(backend)
+    root = getattr(shell, "session_root", None)
+    if root is not None and not isinstance(root, str):
+        msg = (
+            f"{type(shell).__name__}.session_root is a {type(root).__name__}; it has to be "
+            "a str, the session folder's path as that shell sees it"
+        )
+        raise TypeError(msg)
+    if root == "":
+        # Expanded empty, `"$KINGFISHER_SESSION_ROOT/inputs/x"` is the host's `/inputs/x`.
+        msg = (
+            f"{type(shell).__name__}.session_root is empty; it has to be the session "
+            "folder's path as that shell sees it, or None where the shell does not export one"
+        )
+        raise ValueError(msg)
+    return root
+
+
+def shell_told(backend: Any) -> ShellPrompt | None:
+    """What the agent is told of the shell `backend` runs `execute` on: what it says of
+    itself, and of `$KINGFISHER_SESSION_ROOT` where it exports one."""
+    said = shell_prompt_of(backend)
+    return said if session_root_of(backend) is None else rooted(said)
 
 
 def shell_runs_here(backend: Any) -> bool:
