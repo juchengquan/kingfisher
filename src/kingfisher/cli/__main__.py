@@ -298,7 +298,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_caller(
         fetching,
         "who is calling: comma-separated source ids, or UNSCOPED to read "
-        "with no caller. Required where the workspace declares source ids",
+        "with no caller. Required where a definition carries a lock",
     )
     holding = sub.add_parser(
         "sessions",

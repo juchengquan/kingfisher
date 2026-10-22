@@ -22,7 +22,12 @@ from assets.middlewares.summarize_by_count import SummarizeByCount
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.attachments import AttachmentsMiddleware, pdf_allowance
 from kingfisher.core.agent.middlewares.clearing import DEFAULT_MARK, ResultClearingMiddleware
-from kingfisher.core.agent.models import summarizer_count, summarizer_trigger, supplied_trigger
+from kingfisher.core.agent.models import (
+    _earliest,
+    summarizer_count,
+    summarizer_trigger,
+    supplied_trigger,
+)
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.session.ledger import Ledger
@@ -242,6 +247,18 @@ def test_a_summarizer_with_no_size_to_read_is_sized_as_deepagents_own():
     for unread in (Foreign(), counting):
         assert supplied_trigger(unread) is None
         assert summarizer_trigger(model, [unread]) == summarizer_trigger(model) == 170_000
+
+
+def test_a_fraction_with_no_window_never_fires_as_langchain_counts_it():
+    """A clause needing a fraction of no window never fires in langchain's count, so it
+    must not be read as firing at its other parts: one counted at its token part alone
+    sized clearing and the PDFs by a summariser that never fires there."""
+    either = [{"fraction": 0.5, "tokens": 1000.0}, {"tokens": 4000.0}]
+
+    assert _earliest(either, None) == 4000
+    assert _earliest(either, 10_000) == 4000
+    assert _earliest([{"fraction": 0.5, "tokens": 1000.0}], 10_000) == 5000
+    assert _earliest([{"fraction": 0.5}], None) is None
 
 
 def test_of_two_summarizers_the_trigger_is_the_later_ones():

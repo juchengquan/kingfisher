@@ -661,8 +661,8 @@ def test_two_inputs_under_one_name_are_refused_through_the_command(
 
 
 def test_who_is_calling_reaches_the_library(cfg, monkeypatch):
-    """`--as` is not decoration: on a workspace that declares source ids the library refuses
-    a turn that names nobody, and names this flag when it does.
+    """`--as` is not decoration: where a definition carries a lock the library refuses a
+    turn that names nobody, and names this flag when it does.
     """
     stub = _ran(monkeypatch, [_finished()], cfg)
 

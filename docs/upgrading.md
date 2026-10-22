@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A caller's datazone of `"*"` is refused, after #1060
+
+- **`datazone="*"` is a `CallerError`**, on every door that takes one, `--datazone`
+  included. It was held as a datazone named `*`, which no definition may require since
+  a definition's `"*"` is refused (#1048), so it reached nothing zoned and pinned the
+  session a turn ran in to `*` for good. A caller names the one zone it is in, or passes
+  none, which still means none. A session already pinned to `*` keeps the pin, which no
+  caller can name now; `UNSCOPED` still reaches it.
+
 ## Every subagent is told what the session's folders are for, after #1058
 
 - **A subagent's prompt now opens with the session section.** Every declared subagent,
@@ -396,8 +405,9 @@ replaced the four layers began.
   subagent, a `SUBAGENTS` entry with no `build`, ran under kingfisher's standing
   middleware alone. It now runs the middleware the main agent's file names, in its order
   and with the settings written there for each, a summarizer included; a helper another
-  subagent consults gets the agent's, not its summoner's. A subagent written in your
-  definitions folder and a compiled one are unchanged.
+  subagent consults gets the agent's, not its summoner's. A subagent document (YAML or
+  Markdown) and a compiled one are unchanged; a `SUBAGENTS` entry with no `build` typed
+  into your definitions folder is portable, and changes too.
 - **To keep the old behaviour, wire a `SubagentMiddlewares` answering nothing**:
   `names(subagent, agent, middlewares)` returning `()`, passed as
   `Kingfisher(subagent_middlewares=...)` or `Plugins(subagent_middlewares=...)`.

@@ -464,9 +464,10 @@ Kingfisher's own, `AgentsMiddlewares`, returns `middlewares`.
 
 Things to know:
 
-- **Only a portable subagent is asked about.** One in your definitions folder writes its
-  own `middlewares:` line, and a compiled one is given no middleware at all; neither
-  changes.
+- **Only a portable subagent is asked about.** A subagent document (YAML or Markdown)
+  writes its own `middlewares:` line, and a compiled one is given no middleware at all;
+  neither changes. A `SUBAGENTS` entry with no `build` is portable wherever it is
+  written, your definitions folder included.
 - **It is told the agent's names at any depth.** A portable helper another subagent
   consults is told the main agent's, not its summoner's: the agent's line is the ceiling
   everything beneath it is held to, and a compiled summoner has no line.

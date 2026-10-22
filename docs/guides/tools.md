@@ -222,8 +222,9 @@ as a line saying what it was instead, and the rest of the result is kept; the ca
 reads as failed only when nothing else came back.
 
 - **a PDF past what the turn holds**, whatever block carries it: a `file` block, an
-  `image` block or a data URL. A turn holds PDFs up to half of where deepagents
-  summarises the model's conversation: 249 KB on a model with no profile, 130 to
+  `image` block or a data URL. A turn holds PDFs up to half of where the graph's own
+  summariser summarises its conversation -- deepagents', or one a definition names in
+  its place. Under deepagents' that is 249 KB on a model with no profile, 130 to
   159 KB on a 128k window by its `max_tokens`, 1.2 MB on a 1M one. Every PDF already
   open in the turn counts, so ten invoices of 200 KB are not ten passes. Sent whole,
   a PDF goes out again with every model call after it, and can end the turn.

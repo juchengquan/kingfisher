@@ -297,6 +297,8 @@ def _earliest(clauses: Sequence[Mapping[str, float]], window: int | None) -> int
             if kind == "tokens":
                 parts.append(int(value))
             elif kind == "fraction":
+                # As langchain's own count skips it, though its constructor refuses the
+                # shape today: dropped, this would crash where langchain never fires.
                 if window is None:
                     break
                 parts.append(max(1, int(window * value)))

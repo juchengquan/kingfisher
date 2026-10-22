@@ -9,7 +9,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from kingfisher.core.access import ALL, SEPARATOR, CapabilityError, Selection, collected
+from kingfisher.core.access import SEPARATOR, CapabilityError, Selection, collected
 from kingfisher.core.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.agents.spec import DIRECTORY as AGENT_DIRECTORY
@@ -113,21 +113,10 @@ class Definitions:
         }
 
     @property
-    def audienced_tools(self) -> Mapping[str, FoundTool]:
-        """Every tool that says who it admits, the catalogue's and each bundle's.
-
-        Keyed by where each lives, so a refusal names the file, not a name two may share.
-        """
-        found = (
-            *self.tools.found,
-            *(one for bundle in self.bundled_tools.values() for one in bundle.found),
-        )
-        return {one.reference: one for one in found if one.audience != ALL}
-
-    @property
     def locked_tools(self) -> dict[str, FoundTool]:
-        """The same tools, named as a listing names them: a subagent's own under its
-        subagent's name, since `audienced_tools` keys it by a file whose folder names none.
+        """Every tool that says who it admits, the catalogue's and each bundle's, named as a
+        listing names them: a subagent's own under its subagent's name, since the file it
+        lives in sits in a folder that names none.
 
         A part that will not load leaves its tools out rather than raising: `warm` refuses
         it, and a listing reports it under its own kind.

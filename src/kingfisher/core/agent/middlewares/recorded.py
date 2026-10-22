@@ -91,8 +91,8 @@ def stamp(number: str) -> str:
 #: What `stamp` writes, as a pattern a longer one may end in.
 STAMP_PATTERN = rf"\n\[{ENTRY_ID.pattern}\]"
 
-#: Not `STAMP_PATTERN`: a stub deepagents left numbers its lines, so the id is matched at
-#: the end of the text, not as a line of its own.
+#: Not `STAMP_PATTERN`: a `FilesystemMiddleware` a deployment puts in place may offload a
+#: result to deepagents' stub, which numbers its lines, so the id ends the text, not a line.
 _ENDING = re.compile(rf"\[(?P<id>{ENTRY_ID.pattern})\]\s*\Z")
 
 

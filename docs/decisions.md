@@ -454,8 +454,8 @@ agent's declared middleware, so "the agent's names" was an answer the code gave 
 On by default, since leaving it off is what a deployment asked to be rid of; one wanting
 the old behaviour wires a plugin answering nothing, and `upgrading.md` says so. The
 agent's settings come with each name, and a `wants` is still filled per subagent, its
-model its own. Portable subagents only: one in the definitions folder writes its own
-line, and a compiled one is given no middleware. A portable helper is told the *main*
+model its own. Portable subagents only: a subagent document writes its own line, and a
+compiled one is given no middleware. A portable helper is told the *main*
 agent's names, not its summoner's, because the agent's line is the ceiling everything
 beneath it is clamped by and a compiled summoner has none. A name past that line is
 refused, as a definition naming one is, and the refusal names the plugin, since the
@@ -463,8 +463,8 @@ subagent named nothing. The plugin is handed plain values -- the subagent's name
 agent's, the agent's names -- never a spec, as a plugin kingfisher ships takes only what
 an outsider could. *(2026-10-21.)*
 
-**`SubagentSpec.portable` is the mark, not a missing `build`.** A subagent file in the
-definitions folder has no `build` either, and nothing else on the spec said which reader
+**`SubagentSpec.portable` is the mark, not a missing `build`.** A subagent document in
+the definitions folder has no `build` either, and nothing else on the spec said which reader
 made it. A derived field set only by the reader of a `SUBAGENTS` entry, so it joins none
 of `KNOWN`, `PORTABLE` or `NOT_PORTABLE`. Not taken: inferring it from `carried`, which is
 empty for a portable entry that brought nothing. It is still a rule about shape, not
@@ -1027,7 +1027,7 @@ zone. *(2026-10-16.)*
 
 **The operator's listing prints both.** A tool's own audience is a line of its own,
 `tool sql_query  [sales_db]`; a subagent's own tool is named `counter::count`, because
-the file `audienced_tools` keys it by sits in a folder the key does not name. A datazone
+the file it lives in sits in a folder that does not name its subagent. A datazone
 is printed beside the source ids, not folded in, because a subagent writing only
 `datazone: finance` was listed as `[*]` -- everyone. Only skills get a roll-up: a tool's
 or subagent's lock is one line in its own file with nothing that could differ from it,
@@ -1691,8 +1691,10 @@ tools are on a real filesystem. `findings.md` has the measurement and
 
 **A tool that creates a file saves it and returns where it went, never its contents.**
 Returned, a chart or export is its whole body in the model's context and nothing the
-caller can open; saved, it is one line. Output that only runs long is middleware's, which
-deepagents evicts to `/scratchpad/large_tool_results/`. `guides/tools.md` has the recipe,
+caller can open; saved, it is one line. Output that only runs long is the recorder's,
+which previews it and keeps it whole under `/scratchpad/tool_results/` -- deepagents
+evicted it to `large_tool_results/` until that was turned off on 2026-10-21, with nothing
+for a tool to do either way. `guides/tools.md` has the recipe,
 and `bar_chart` and `csv_filter` follow it.
 
 **There is no kingfisher helper.** A tool calls `runtime.context.backend.upload_files`
@@ -2101,10 +2103,12 @@ anything but ASCII, so previewing on bytes would cut a result deepagents left wh
 leave a row pointing at a file holding less than it says. Driven with 30,000 Japanese
 characters, 90,000 bytes: shown whole. *(2026-10-21.)*
 
-**An offloaded result is pointed at deepagents' copy, not kept twice.** Eviction runs
-outside the recorder, so at the end of the turn one `ls` of `large_tool_results/`
-repoints each entry whose call id is there, and kingfisher's copy goes in the sweep. A
-nested helper has no eviction and keeps its own.
+**An offloaded result was pointed at deepagents' copy, not kept twice. Reversed on
+2026-10-21**, above, with nothing offloaded left to point at; this and the two
+paragraphs after it are what went. Eviction ran outside the recorder, so at the end of
+the turn one `ls` of `large_tool_results/` repointed each entry whose call id was there,
+and kingfisher's copy went in the sweep. A nested helper had no eviction and kept its
+own.
 
 **A name is not an identity, and the size is what settles it.** deepagents names an
 eviction after the call id alone, in a folder that outlasts the turn. Measured across two
@@ -2162,9 +2166,9 @@ remembering what a plugin kept, a second record of the folder beside the ledger,
 kept file is offered every turn; an async twin, since `settle` already runs off the
 loop and a twin is a second method to keep in step; a check in the contract kits,
 since the core itself holds what is chosen and what can be reached, leaving a plugin
-no promise to break; and deepagents' copies under `large_tool_results/`, which a row may
-still name and whose expired ones the sweep removes itself, while still that row's
-length. *(2026-10-21.)*
+no promise to break; and deepagents' copies under `large_tool_results/`, which no row
+names: its summariser writes them only on a refusal for length clearing could not answer,
+and the sweep lists only `tool_results/`. *(2026-10-21.)*
 
 **The recorder's own folder is refused, and that is not the same decision.** Only
 `tool_results/` is write-denied to the file tools, `delete` included. A row names its file
@@ -2185,7 +2189,9 @@ got in -- and the sweep cannot see an overwrite, since it skips every path a row
 **Left as it is:** rows from before the move name `results/`, and nothing denies that; a
 third permanent route to protect rows a version without this property wrote is not worth
 it, with no layout version to move, so they age out with their sessions. *(2026-10-14,
-from an architecture review.)*
+from an architecture review.)* *Since 2026-10-21 a row names only `tool_results/`, and
+only deepagents' summariser writes `large_tool_results/`, on a refusal for length clearing
+could not answer; both stay denied, with every other folder of kept records, below.*
 
 **Two fences of three now refuse the shell both folders a row can name.** Once older
 results are cleared to handles, the saved file is the only copy, so an overwrite is the
@@ -2199,6 +2205,9 @@ refuses a session without them. Landlock cannot while it grants the scratchpad w
 read-only grant under a writable parent being stepped over (`_session_writable`), which
 is also why `shell_denied` does not ask a deployment's backend for it. Two of three is not
 a boundary, so nothing claims one. *(2026-10-16, before clearing results to handles.)*
+*Since 2026-10-21 a session is made without `large_tool_results/`, which only deepagents'
+summariser writes, on a refusal for length clearing could not answer; it stays denied with
+every other folder of kept records, below.*
 
 **Every folder of kept records is denied, not only the ones a row names.** The question
 was always who reads the file back: a row's file is denied because the prompt tells the
@@ -2413,10 +2422,12 @@ written, so reading a handle cannot start another pass, and a handle is never cl
 again: read as what it replaced, an offloaded result's was pointed at a swept copy.
 *(2026-10-16, after the acceptance run.)*
 
-**An offloaded result is named by a search for its id, not by a path.** deepagents' copy
-is named by call id, and a later call with the same id overwrites it, so a path would
-name another call's result where a search finds nothing. A tool that offloads its own
-output hands the recorder the stub, and is named by our copy.
+**An offloaded result was named by a search for its id, not by a path. Reversed on
+2026-10-21**, when kingfisher began saving every result itself: a handle names the
+recorder's file, which no later call writes over. deepagents' copy was named by call id,
+and a later call with the same id overwrote it, so a path would have named another
+call's result where a search found nothing. A tool that offloads its own output still
+hands the recorder the stub, and is named by our copy.
 
 **A handle names only a tool its graph holds.** The path goes to an agent holding
 `read_file`, and any other is told to call the tool that made the result again. A model
@@ -2583,9 +2594,10 @@ noted under clearing. *(2026-10-20, from a grilled plan.)*
   compiled subagent's answer is recorded through `task`. Nor what the shell writes;
   `RunResult.artifacts` is the sound view of files.
 - **Finding an old entry by anything but its id.** Its file is found by `glob` for
-  `A-0042-*` under `/scratchpad/tool_results/` or `grep` for `[A-0042]` under
-  `/scratchpad/large_tool_results/`, as `system.md` says and
-  `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says` drives. A rolled-up
+  `A-0042-*` under `/scratchpad/tool_results/`, a long result's too, as the prompt says
+  and `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says` drives; the
+  `grep` for `[A-0042]` under `large_tool_results/` went on 2026-10-21 with the
+  offloading it searched. A rolled-up
   entry's arguments and summary are in the ledger, under `.harness`, out of reach; if
   that proves too little, the index could be written as a readable file.
 
@@ -3679,17 +3691,18 @@ the id comes from the request. The segment is required now, and
 deny over `inputs`, `.harness` and a name no rule mentions, so the half that remains is held
 by what actually holds it. *(2026-10-15, from an architecture review.)*
 
-**deepagents' own files are kept in the scratchpad.** deepagents writes two kinds of file
-unasked: a tool result over about 80,000 characters goes to `large_tool_results/` with a
-stub naming the path handed to the model, and the summarizer keeps what it replaced, and a
-user message too long to send, under `conversation_history/`. Both hang off
+**deepagents' own files are kept in the scratchpad.** deepagents writes unasked what its
+summarizer replaced, and a user message too long to send, under `conversation_history/`,
+and on a refusal for length clearing could not answer, the latest batch's results under
+`large_tool_results/`. Until 2026-10-21 it also evicted a tool result over about 80,000
+characters there, which is off now that kingfisher saves every result itself. Both
+hang off
 `CompositeBackend.artifacts_root`, which defaults to `/`, so they sat at the session root,
 in no folder the layout names and never returned. `WorkspaceScopedBackend` passes the
 layout's scratchpad route as `artifacts_root`: they are the agent's working material,
-returned to nobody, where `/outputs` would have handed every evicted result to the caller. `system.md` names both folders, because the agent sometimes searches
-rather than follows a stub, and deepagents' `grep` description puts offloads under
-`/large_tool_results/` "by default", which is no longer where they are.
-`test_the_prompt_names_the_folders_deepagents_writes_on_its_own` reads the root off the
+returned to nobody, where `/outputs` would have handed every evicted result to the caller. `session.md` names the history folder, because the agent searches
+there; a summariser's copy is read through the stub that names it.
+`test_the_prompt_names_the_folder_deepagents_writes_on_its_own` reads the root off the
 backend, so a rename cannot leave the line behind.
 
 *One setting, and one condition on it.* deepagents reads `artifacts_root` only off a
