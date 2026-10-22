@@ -2205,6 +2205,8 @@ refuses a session without them. Landlock cannot while it grants the scratchpad w
 read-only grant under a writable parent being stepped over (`_session_writable`), which
 is also why `shell_denied` does not ask a deployment's backend for it. Two of three is not
 a boundary, so nothing claims one. *(2026-10-16, before clearing results to handles.)*
+*Since 2026-10-21 nothing writes `large_tool_results/`, so a session is made without it;
+it stays denied with every other folder of kept records, below.*
 
 **Every folder of kept records is denied, not only the ones a row names.** The question
 was always who reads the file back: a row's file is denied because the prompt tells the
@@ -3688,17 +3690,17 @@ the id comes from the request. The segment is required now, and
 deny over `inputs`, `.harness` and a name no rule mentions, so the half that remains is held
 by what actually holds it. *(2026-10-15, from an architecture review.)*
 
-**deepagents' own files are kept in the scratchpad.** deepagents writes two kinds of file
-unasked: a tool result over about 80,000 characters goes to `large_tool_results/` with a
-stub naming the path handed to the model, and the summarizer keeps what it replaced, and a
-user message too long to send, under `conversation_history/`. Both hang off
+**deepagents' own files are kept in the scratchpad.** deepagents writes unasked what its
+summarizer replaced, and a user message too long to send, under `conversation_history/`.
+Until 2026-10-21 it also evicted a tool result over about 80,000 characters to
+`large_tool_results/`, which is off now that kingfisher saves every result itself. Both
+hang off
 `CompositeBackend.artifacts_root`, which defaults to `/`, so they sat at the session root,
 in no folder the layout names and never returned. `WorkspaceScopedBackend` passes the
 layout's scratchpad route as `artifacts_root`: they are the agent's working material,
-returned to nobody, where `/outputs` would have handed every evicted result to the caller. `system.md` names both folders, because the agent sometimes searches
-rather than follows a stub, and deepagents' `grep` description puts offloads under
-`/large_tool_results/` "by default", which is no longer where they are.
-`test_the_prompt_names_the_folders_deepagents_writes_on_its_own` reads the root off the
+returned to nobody, where `/outputs` would have handed every evicted result to the caller. `system.md` names the history folder, because the agent searches
+there rather than following a stub.
+`test_the_prompt_names_the_folder_deepagents_writes_on_its_own` reads the root off the
 backend, so a rename cannot leave the line behind.
 
 *One setting, and one condition on it.* deepagents reads `artifacts_root` only off a
