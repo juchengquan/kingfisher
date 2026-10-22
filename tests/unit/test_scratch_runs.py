@@ -107,7 +107,9 @@ def _calls(name: str, **args: Any) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call-{name}"}])
 
 
-def _results(cfg, session_dir, *responses: AIMessage, **keywords: Any) -> dict[str, str]:
+def _results(
+    cfg, session_dir, *responses: AIMessage, way: str = "sync", **keywords: Any
+) -> dict[str, str]:
     """Each tool's last result in one turn, subagents' included, by tool name."""
     built = build_agent(
         cfg,
@@ -116,17 +118,30 @@ def _results(cfg, session_dir, *responses: AIMessage, **keywords: Any) -> dict[s
         **keywords,
     )
     found: dict[str, str] = {}
-    for _, chunk in built.graph.stream(
-        {"messages": [{"role": "user", "content": "go"}]},
-        config={"configurable": {"thread_id": "scratch"}},
-        stream_mode="updates",
-        subgraphs=True,
-        context=built.context,
-    ):
+
+    def keep(chunk: Any) -> None:
         for update in chunk.values():
             for message in runtime.messages_in(update):
                 if isinstance(message, ToolMessage) and message.name:
                     found[message.name] = str(message.content)
+
+    start = {"messages": [{"role": "user", "content": "go"}]}
+    options: dict[str, Any] = {
+        "config": {"configurable": {"thread_id": "scratch"}},
+        "stream_mode": "updates",
+        "subgraphs": True,
+        "context": built.context,
+    }
+    if way == "sync":
+        for _, chunk in built.graph.stream(start, **options):
+            keep(chunk)
+        return found
+
+    async def drained() -> None:
+        async for _, chunk in built.graph.astream(start, **options):
+            keep(chunk)
+
+    asyncio.run(drained())
     return found
 
 
@@ -238,9 +253,10 @@ def test_a_compiled_subagents_tool_is_refused(cfg, session_dir):
     assert result.content == NOT_GRANTED
 
 
-def test_a_run_kept_past_its_call_runs_nothing(cfg, session_dir):
+def test_a_run_kept_past_its_call_runs_nothing(cfg, session_dir, way):
     """A tool that keeps what it was handed would otherwise hold the shell for every call
-    after, under another agent's grant or in another session's turn."""
+    after, under another agent's grant or in another session's turn. Both ways, since an
+    awaited turn closes the runner in `awrap_tool_call`, which nothing ran."""
     _a_tool(cfg)
 
     found = _results(
@@ -249,6 +265,7 @@ def test_a_run_kept_past_its_call_runs_nothing(cfg, session_dir):
         _calls("shout", text="hi"),
         _calls("shout_again", text="later"),
         AIMessage(content="done"),
+        way=way,
     )
 
     assert found["shout"] == "HI"
