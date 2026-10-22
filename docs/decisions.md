@@ -2070,6 +2070,18 @@ row and its last. A `task` answer now has a lower id than the work inside it, wh
 delta lists under it either way. A middleware asks for the id with `wants: result_id`;
 a tool is not handed it.
 
+**A batch is numbered in the order the model wrote it** *(2026-10-22)*. A message's
+calls run at once, so taken one at a time as each reaches the recorder, a batch's ids
+run in the order its threads started: `<ledger_delta>` lists the rows against the calls
+that did not make them, and two runs of one conversation number the same batch two ways
+-- which reddened `test_a_turn_refused_for_length_goes_on_without_a_summary` on CI's
+macOS runner and in no local run of 25. So whichever call of a batch arrives first
+numbers all of them, off the reply it reads out of the graph's state, and the rest read
+their own number there. Keyed by that reply as well as the call, because a model reuses
+a call id in a later one and each of the two is a result of its own. The whole block is
+taken at once, so a turn cut off part way through a batch leaves the numbers of the
+calls that never ran unused, as a failed call does.
+
 **Each result is a file in `/scratchpad/tool_results/`, `A-0042-<tool>.txt` or `.json`,**
 written as it arrives through the turn's backend. The scratchpad, because the agent reads
 one back with `read_file` and searches with `grep`, no new tool, and it is swept with the

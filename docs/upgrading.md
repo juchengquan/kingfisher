@@ -18,6 +18,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A batch's results are numbered as the model wrote them, after #1069
+
+- **Which id a call's result takes has changed**, where one message asked for more than
+  one call. A message's calls run at once, and each took its number as it reached the
+  recorder, so `A-0001` could name the second call's result; it now follows the call's
+  place in the message. Nothing else about a row moved. If you assert on the ids a batch
+  leaves, or on the file names they make -- `/scratchpad/tool_results/A-0001-<tool>.txt`
+  -- they read in the message's order now, as `<ledger_delta>` lists them.
+- **A batch's numbers are all taken when its first call starts.** A turn cut off part
+  way through a batch leaves the rest unused, as a call that fails already did, and the
+  next turn numbers past them.
+- **`Ledger.reserve` takes the call, its batch and the reply it was written in.** An
+  internal address, so this is for a deployment driving a recorder of its own:
+  `reserve(call_id, batch, message=message_id)`, where `batch` is the recorded calls of
+  that reply in the order the model wrote them. `made_together` in `recorder` reads both
+  off the graph's state.
+
 ## Every refusal of a write offers somewhere to write in one wording, after #1068
 
 - **The three refusals that offer somewhere to write now say it one way.** A deny rule's
