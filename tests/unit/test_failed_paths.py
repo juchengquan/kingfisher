@@ -185,8 +185,8 @@ def test_a_refused_write_says_where_a_write_may_go(cfg, session_dir, way, scope)
 
     Every scope the layout denies, read off `denied_scopes` rather than listed here: one
     sentence covers them all, and a scope the layout gains arrives with a case instead of
-    passing uncovered. Two of them -- `blobs` and `large_tool_results` -- are folders
-    nothing makes, and the rule refuses a write there all the same.
+    passing uncovered. `blobs` is a folder nothing makes, and the rule refuses a write
+    there all the same.
     """
     asked = scope.replace("**", "new.txt")
 
