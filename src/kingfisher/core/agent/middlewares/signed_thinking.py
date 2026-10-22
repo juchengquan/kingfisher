@@ -77,7 +77,8 @@ def _unsigned(reply: AIMessage) -> AIMessage:
 
 def kept_for(request: Any, signer: Mapping[str, str | None]) -> Any:
     """`request` with the thinking of every reply its model did not produce taken out,
-    or `request` itself where there is none.
+    and a reply that was nothing else left out with it, or `request` itself where there
+    is none.
 
     Out of the request alone: the conversation keeps every block, for the model that can
     read it again.
@@ -88,7 +89,15 @@ def kept_for(request: Any, signer: Mapping[str, str | None]) -> Any:
             messages[at] = _unsigned(one)
     if all(new is old for new, old in zip(messages, request.messages, strict=True)):
         return request
-    return request.override(messages=messages)
+    # A reply that was only thinking is left out, not sent empty: last, it is a prefill,
+    # which the current Claude models refuse, and `ChatAnthropic` skips an empty one only
+    # after joining its neighbours, so two user turns went out in a row.
+    sent = [
+        new
+        for new, old in zip(messages, request.messages, strict=True)
+        if new is old or new.content or new.tool_calls
+    ]
+    return request.override(messages=sent)
 
 
 def served(response: Any, signer: Mapping[str, str | None]) -> Any:

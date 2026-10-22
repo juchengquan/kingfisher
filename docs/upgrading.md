@@ -18,13 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
-## Reasoning kept beside a reply goes back only to its signer, after #9999
+## A switch sends no reasoning kept aside, and no reply left empty, after #9999
 
 - **A Responses reply kept as `v0` loses its reasoning on a switch too.** A model built
   with `output_version="v0"`, through `extra` or `LC_OUTPUT_VERSION`, keeps its reasoning
   in `additional_kwargs["reasoning"]`, and `ChatOpenAI` sent it to whichever endpoint came
   next. It now goes back only to the endpoint and model that produced it, as thinking in
   the content has since #1048. The conversation keeps it.
+- **A reply that was only another signer's thinking is left out of the request.**
+  Stripped, it went to `ChatAnthropic` empty, which sent the user turns either side of it
+  as two in a row, or, last, sent it as an empty prefill the current Claude models refuse.
+  A reply with tool calls still goes, as its calls. The conversation keeps it.
 
 ## `seed` reads an audience held in a name, and holds back one it cannot read, after #9999
 

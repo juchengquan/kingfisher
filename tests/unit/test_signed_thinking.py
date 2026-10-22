@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from langchain.agents.middleware import ModelRequest
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langchain_openai.chat_models.base import _construct_lc_result_from_responses_api
 from openai.types.responses import Response
@@ -54,6 +54,15 @@ def _reply(**metadata: Any) -> AIMessage:
             {"type": "thinking", "thinking": "plan A", "signature": "SIGNED"},
             {"type": "text", "text": "first answer"},
         ],
+        response_metadata={"model_provider": "anthropic", **metadata},
+    )
+
+
+def _only_thought(**metadata: Any) -> AIMessage:
+    """An earlier answer that was thinking and nothing else, as a turn cut short in its
+    thinking leaves one."""
+    return AIMessage(
+        content=[{"type": "thinking", "thinking": "plan A", "signature": "SIGNED"}],
         response_metadata={"model_provider": "anthropic", **metadata},
     )
 
@@ -197,6 +206,50 @@ def test_a_v0_replys_reasoning_goes_back_only_to_its_signer(served, sent):
     assert ("rs_SIGNED" in payload) is sent
     assert "first answer" in payload
     assert earlier.additional_kwargs["reasoning"]["id"] == "rs_SIGNED", "the conversation keeps it"
+
+
+def test_a_reply_that_was_only_another_signers_thinking_is_left_out(cfg, session_dir, way):
+    """Stripped to nothing, the reply went to `ChatAnthropic` empty, which skips it only
+    after joining its neighbours, so two user turns went out in a row. Left out first, the
+    two are one; the conversation keeps the reply."""
+    payload, state = _turn(cfg, session_dir, way, _only_thought(**{SERVED_BY: ELSEWHERE}))
+
+    assert [message["role"] for message in payload["messages"]] == ["user"]
+    assert "SIGNED" not in json.dumps(payload)
+    assert [block["type"] for block in state["messages"][1].content] == ["thinking"]
+
+
+def test_a_reply_stripped_to_nothing_is_no_prefill():
+    """Last in the request, an emptied reply is a prefill, which the current Claude models
+    refuse with a 400."""
+    model = ChatAnthropic(model="fake-model", api_key="x")
+    request = ModelRequest(
+        model=model, messages=[HumanMessage("first"), _only_thought(**{SERVED_BY: ELSEWHERE})]
+    )
+
+    payload = model._get_request_payload(kept_for(request, HERE).messages)
+
+    assert [message["role"] for message in payload["messages"]] == ["user"]
+
+
+def test_a_reply_stripped_to_its_tool_calls_still_goes():
+    """A reply that called a tool is not empty without its thinking: left out, the call's
+    result would answer nothing. Nor is a result that said nothing left out beside it."""
+    model = ChatAnthropic(model="fake-model", api_key="x")
+    called = _only_thought(**{SERVED_BY: ELSEWHERE}).model_copy(
+        update={"tool_calls": [{"name": "ls", "args": {}, "id": "toolu_1", "type": "tool_call"}]}
+    )
+    request = ModelRequest(
+        model=model,
+        messages=[HumanMessage("first"), called, ToolMessage("", tool_call_id="toolu_1")],
+    )
+
+    payload = model._get_request_payload(kept_for(request, HERE).messages)
+
+    assert [message["role"] for message in payload["messages"]] == ["user", "assistant", "user"]
+    assert [block["type"] for block in payload["messages"][1]["content"]] == ["tool_use"]
+    assert payload["messages"][2]["content"][0]["type"] == "tool_result"
+    assert "SIGNED" not in json.dumps(payload)
 
 
 def test_a_request_with_nothing_to_take_out_is_sent_as_it_came():
