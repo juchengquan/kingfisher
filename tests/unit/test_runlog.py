@@ -186,6 +186,22 @@ def test_a_failed_call_names_the_model_that_made_it():
     assert (event["model"], event["endpoint"]) == ("other", "elsewhere")
 
 
+def test_a_call_on_a_model_the_catalogue_does_not_hold_keeps_the_turns_stamp():
+    """Stamped with any name a call carried, one the catalogue does not hold was logged on
+    that model at endpoint "", half a stamp no route or price can be read from."""
+    sink = RecordedEvents()
+    logger = RunLogger(
+        sink, model="m", endpoint="gateway", session_id="s", turn_id="t1",
+        endpoints={"m": "gateway"},
+    )
+
+    logger.on_chat_model_start({}, [], run_id="r1", metadata={"ls_model_name": "not-in-catalogue"})
+    logger.on_llm_error(TimeoutError("slow"), run_id="r1")
+
+    (event,) = sink.named("model_error")
+    assert (event["model"], event["endpoint"]) == ("m", "gateway")
+
+
 def test_a_sink_that_is_empty_is_still_the_one_used(cfg):
     """`None` means the default, and nothing else does: a sink that keeps its events in
     a list of its own is falsy until the first one arrives, and was replaced by the
