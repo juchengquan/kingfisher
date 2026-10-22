@@ -472,40 +472,66 @@ def test_a_limit_allowing_a_graph_without_the_shell_binds_nothing(
     assert found == ["HI", answer]
 
 
-GATED_RAISED = RAISED.replace("'helper'", "'gated'")
+#: Where the shout runs, how the agent's model gets it there, and what the limit is asked.
+_SHOUTED_IN = {
+    "agent": ([_calls("shout", text="hi"), AIMessage(content="done")], ("gated", "agent")),
+    "subagent": (
+        [
+            _calls("task", description="shout it", subagent_type="helper"),
+            _calls("shout", text="hi"),
+            AIMessage(content="shouted"),
+            AIMessage(content="done"),
+        ],
+        ("helper", "subagent"),
+    ),
+    "general-purpose": (
+        [
+            _calls("task", description="shout it", subagent_type="general-purpose"),
+            _calls("shout", text="hi"),
+            AIMessage(content="shouted"),
+            AIMessage(content="done"),
+        ],
+        ("general-purpose", "general-purpose"),
+    ),
+}
 
 
+@pytest.mark.parametrize("graph", list(_SHOUTED_IN))
 @pytest.mark.parametrize(
     ("gates", "limit", "answer"),
     [
         ("[execute]", _Limit, NOT_GRANTED),
         ("[write_file]", _Limit, "HI"),
         ("[execute]", _Raising, NOT_GRANTED),
-        ("[write_file]", _Raising, GATED_RAISED),
+        ("[write_file]", _Raising, RAISED),
     ],
 )
 def test_a_gated_shell_is_refused_whatever_the_limit_answers(
-    cfg, session_dir, gates, limit, answer
+    cfg, session_dir, gates, limit, answer, graph
 ):
-    """Nothing can pause for a person inside a tool, so no limit may hand a gated shell on;
-    and a limit raising there is not what refused it, so the refusal does not blame it."""
+    """Nothing can pause for a person inside a tool, so no limit may hand a gated shell on,
+    on any graph the gate reaches: one not handed the agent's gate ran the command unasked.
+    A limit raising there is not what refused it, so the refusal does not blame it."""
     _a_tool(cfg)
-    an_agent(cfg, "gated", interrupt_on=gates, **EVERY_TOOL)
+    _a_helper(cfg)
+    an_agent(cfg, "gated", interrupt_on=gates, subagents="[helper]", **EVERY_TOOL)
     (agent,) = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs.values()
-    limit = limit("gated") if limit is _Raising else limit()
+    responses, asked = _SHOUTED_IN[graph]
+    name = asked[0]
+    limit = limit(name) if limit is _Raising else limit()
 
     found = _answers(
         cfg,
         session_dir,
-        _calls("shout", text="hi"),
-        AIMessage(content="done"),
+        *responses,
         agent=agent,
         checkpointer=InMemorySaver(),
         scratch_run_limit=limit,
     )
 
-    assert found == [answer]
-    assert ("gated", "agent") in limit.asked
+    # `RAISED` names the helper's graph; the limit here raised for this graph's.
+    assert found == [answer.replace("'helper'", repr(name))]
+    assert asked in limit.asked
 
 
 @pytest.mark.parametrize(
