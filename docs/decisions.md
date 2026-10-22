@@ -3183,10 +3183,17 @@ bare `KINGFISHER_SESSION`, which reads as an id beside the retired
 under the session root, so a skill's script is still reached from `$KINGFISHER_SKILLS`.
 A script reads it with `os.environ`, never a pasted path: a kept
 script must survive the session moving, and a pasted path writes the host's layout into
-what the caller gets back. A tool's `run` is not handed it: the tool decides what goes in
-and what comes out, and handed the session root a renderer fed a crafted PDF could read
-the caller's inputs or write into `/outputs` behind its back. That stays until a real
-tool needs to reach session files rather than be handed them. *(2026-10-21.)*
+what the caller gets back. A tool's `run` is not handed it, though not because the run
+is sealed: its folder is in the scratchpad and the command runs under the session's
+fence, so `../../inputs` already reaches the caller's files -- measured on macOS under
+`auto` and `off`, a run's `cat ../../inputs/secret.txt` printed it. A tool reaches
+session files through `runtime.context.backend`, which holds the session's rules --
+`/inputs` unwritable among them -- and a documented root would make the path around them
+look like the way in. Corrected 2026-10-22: the first reason given was that the folder
+kept a crafted file from the session, which it never did. Sealing the run to its own
+folder was not taken: it is a narrower fence per run on each of three kernels, worth
+building when a run reaching the session is shown to be a risk rather than a
+convenience. *(2026-10-21.)*
 
 **A deployment's shell is taught the variable where it says where it sees the session.**
 Every shell that can vouch for the root has it, and kingfisher never edits a command. A
