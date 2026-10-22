@@ -351,11 +351,13 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         skill_sources = [*(skill_sources or []), *own_sources]
     # A helper's stack is its spec's alone: `create_sub_agent` adds no summariser, where
     # `create_deep_agent` gives every other graph deepagents' own, and without one its
-    # conversation grows until the model refuses it. One its definition names runs instead.
+    # conversation grows until the model refuses it. One its definition names runs instead,
+    # in the same place: `create_sub_agent` merges nothing, so left among the definition's
+    # own it would sit innermost and hear a refusal for length before clearing could.
+    own = [one for one in extra_middleware or () if one.name == SUMMARIZER]
     summarizing = (
-        [create_summarization_middleware(runs, backend)]
+        (own or [create_summarization_middleware(runs, backend)])
         if default_model is not None
-        and not any(one.name == SUMMARIZER for one in extra_middleware or ())
         else []
     )
     summarizers = [*summarizing, *(extra_middleware or ())]
@@ -376,7 +378,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         # kingfisher's narrowing rather than running ahead of it.
         inner=[
             *([SubAgentMiddleware(backend=backend, subagents=helpers)] if helpers else []),
-            *(extra_middleware or []),
+            *(one for one in extra_middleware or [] if one not in summarizing),
         ],
         names=frozenset(entry.name for entry in (*catalogue, *private)),
         paths=paths,

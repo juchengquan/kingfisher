@@ -7,12 +7,13 @@ from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.summarization import (
     SummarizationMiddleware as DeepAgentsSummarization,
 )
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, ToolMessage
 
+from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.attachments import pdf_allowance
-from kingfisher.core.agent.middlewares.clearing import high_mark
+from kingfisher.core.agent.middlewares.clearing import UNSHOWN, high_mark
 from kingfisher.core.agent.middlewares.standing import FILESYSTEM
 from kingfisher.core.agent.models import SUMMARIZER, summarizer_trigger
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
@@ -20,8 +21,18 @@ from kingfisher.core.definitions.subagents.rules import refuse_cycles
 from kingfisher.core.definitions.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
-from kingfisher.plugins import backend_at
-from tests.conftest import EVERY_TOOL, FakeToolCallingModel, a_subagent, an_agent, subagents_dir
+from kingfisher.plugins import LocalSessions, backend_at
+from tests.conftest import (
+    EVERY_TOOL,
+    FakeToolCallingModel,
+    a_subagent,
+    an_agent,
+    middlewares_dir,
+    start,
+    subagents_dir,
+    tools_dir,
+)
+from tests.unit.scripted import Scripted
 
 REVIEWER = """name: reviewer
 description: Checks figures.
@@ -773,6 +784,100 @@ def test_a_helpers_history_is_kept_apart_from_its_summoners(cfg, session_dir):
         ("TASK-FOR-reviewer" in text, "TASK-FOR-second-opinion" in text) for text in histories
     )
     assert whose == [(False, True), (True, False)], "one history each, holding its own"
+
+
+@pytest.mark.filterwarnings("ignore:.*a name deepagents uses:UserWarning")
+def test_a_helpers_own_summarizer_stands_where_its_default_would(cfg, session_dir):
+    """A summariser a helper's definition named sat innermost, inside clearing and every
+    standing middleware, where `create_sub_agent` left it among the definition's own."""
+    from tests.unit.test_summarizer_trigger import Early
+
+    def helpers_stack(helper: str) -> list:
+        _define(cfg, REVIEWER, helper)
+        built = build_agent(
+            cfg,
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"early": Early},
+            agent=LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["only"],
+            ledger=Ledger("t", KeptLedger()),
+        )
+        return _reviewers_helper(built)["middleware"]
+
+    an_agent(cfg, middlewares="[early]", subagents="[reviewer, second-opinion]", **EVERY_TOOL)
+    default = helpers_stack(HELPER)
+    named = helpers_stack(HELPER.replace("system_prompt:", "middlewares: [early]\nsystem_prompt:"))
+
+    assert isinstance(named[0], Early)
+    # The whole stack by name, so the one named took deepagents' place and nothing moved.
+    assert [one.name for one in named] == [one.name for one in default]
+
+
+OWN_SUMMARIZER = """
+from deepagents.middleware.summarization import SummarizationMiddleware
+
+
+class Own(SummarizationMiddleware):
+    \"\"\"deepagents' summariser under a definition's own name, firing by size nowhere near.\"\"\"
+
+    name = "own"
+    wants = frozenset({"model", "backend"})
+
+    def __init__(self, model, backend):
+        super().__init__(model, backend=backend, trigger=("tokens", 150_000))
+        self.name = "SummarizationMiddleware"
+
+
+MIDDLEWARES = [Own]
+"""
+
+
+@pytest.mark.filterwarnings("ignore:.*a name deepagents uses:UserWarning")
+@pytest.mark.parametrize("named", [False, True], ids=["deepagents", "its-own"])
+def test_a_helpers_refusal_for_length_is_clearings_to_answer_first(scripted, named):
+    """A summariser a helper's definition named heard a call refused for length before
+    clearing did, and answered it itself, copying the batch under `large_tool_results/`.
+    Driven through a turn: only the stack a turn builds decides who hears the refusal, and
+    deepagents' own is the control."""
+    from tests.unit.test_clearing import TOOLS, _too_long
+
+    tools_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (tools_dir(scripted) / "probe.py").write_text(TOOLS, encoding="utf-8")
+    middlewares_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (middlewares_dir(scripted) / "own.py").write_text(OWN_SUMMARIZER, encoding="utf-8")
+    own = HELPER.replace("system_prompt:", "middlewares: [own]\nsystem_prompt:")
+    _define(scripted, REVIEWER, own if named else HELPER)
+    an_agent(scripted, middlewares="[own]", subagents="[reviewer, second-opinion]", **EVERY_TOOL)
+    start(scripted, "s")
+
+    def task(who: str) -> AIMessage:
+        asked = {"description": "go", "subagent_type": who}
+        return AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": who}])
+
+    batch = AIMessage(
+        content="",
+        tool_calls=[{"name": "bulky", "args": {"n": n}, "id": f"c{n}"} for n in (1, 2)],
+    )
+    Scripted.script.extend([
+        task("reviewer"),
+        task("second-opinion"),
+        batch,
+        _too_long(),
+        AIMessage(content="HELPER-DONE"),
+        AIMessage(content="REVIEWER-DONE"),
+        AIMessage(content="done"),
+    ])
+
+    result = Kingfisher(scripted, sessions=LocalSessions()).run(
+        Request("go", agent="only", session_id="s")
+    )
+
+    assert result.answer == "done"
+    assert Scripted.summaries == 0, "the refusal cost a summary"
+    session = scripted.workspace / "sessions" / "s"
+    assert not list(session.rglob("large_tool_results/*")), "the batch was copied aside"
+    retry = [m.content for m in Scripted.heard[4] if isinstance(m, ToolMessage)]
+    assert len(retry) == 2 and all(UNSHOWN in one for one in retry), retry
 
 
 class OwnFilesystem(FilesystemMiddleware):

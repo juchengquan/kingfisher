@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A summarizer a helper's definition names runs where deepagents' would, after #9999
+
+- **It now runs outside the standing middleware**, where a helper's default summarizer
+  runs and where deepagents puts one a declared subagent names. It ran innermost, inside
+  clearing: it counted each call after clearing had, and a call refused for length
+  reached it before clearing could answer it (#1056), so it answered the refusal itself,
+  copying the latest batch under `/scratchpad/large_tool_results/` and summarizing where
+  there was something to summarize. A helper naming none, and every other graph, is
+  unchanged.
+
 ## A switch sends no reasoning kept aside, and no reply left empty, after #9999
 
 - **A Responses reply kept as `v0` loses its reasoning on a switch too.** A model built

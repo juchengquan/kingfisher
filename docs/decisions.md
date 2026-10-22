@@ -2393,7 +2393,9 @@ job grew until the model refused it, while its clearing mark and PDF allowance w
 by a summariser that was not there. Saying so in the docs instead would have left that
 job to end at the window. It goes outside the standing middleware, where deepagents puts
 its own, so clearing measures what it counted; one the definition names runs instead.
-*(2026-10-21, from review.)*
+*(2026-10-21, from review.)* *Since 2026-10-22 in the same place: `create_sub_agent` merges
+nothing, so one the definition named stayed among its own middleware, innermost, and heard
+a refusal for length before clearing could answer it.*
 
 **The recorder and clearing stay two classes**, because they wrap different calls from
 different places: clearing each model call, first, where it measures what the summariser
