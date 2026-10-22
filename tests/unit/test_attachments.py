@@ -806,6 +806,27 @@ def test_a_plugin_that_raises_leaves_kingfishers_verdict(cfg, session_dir, caplo
     assert caplog.text.count("the PDF attachments plugin raised on read_file's result") == 2
 
 
+@pytest.mark.parametrize(
+    "nothing", ["", [], [{"type": "text", "text": "  "}]], ids=["empty", "no blocks", "blank"]
+)
+def test_a_plugin_handing_over_nothing_leaves_kingfishers_verdict(
+    cfg, session_dir, caplog, nothing
+):
+    """A plugin answering `""` was taken as a replacement that became no blocks, so the
+    model was handed an empty result marked failed, with no line saying why, in place of
+    a PDF kingfisher would have handed over or refused with a reason."""
+    reads = [_pdf_of(session_dir, "small.pdf", 10 * KB), {"file_path": "/inputs/big.pdf"}]
+    (session_dir / "inputs" / "big.pdf").write_bytes(LARGE)
+    model = _calls(*(("read_file", read) for read in reads))
+
+    _run(cfg, session_dir, model, pdfs=_Asking(lambda pdf: nothing))
+
+    assert _files([_answer(model, "c1")]), "the PDF that passes was not handed over"
+    assert _answer(model, "c2").text.startswith("/inputs/big.pdf is a 300 KB PDF, too large")
+    said = "the PDF attachments plugin handed over nothing for read_file's result"
+    assert caplog.text.count(said) == 2
+
+
 def test_every_graph_kingfisher_builds_asks_the_deployments_plugin(scripted):
     """A plugin the agent asked and its subagents did not left a declared subagent's PDFs,
     and `general-purpose`'s, judged by size alone. Through `Plugins`, as the command hands

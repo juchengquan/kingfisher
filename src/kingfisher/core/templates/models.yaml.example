@@ -111,9 +111,8 @@ default: MiniMax-M3
 #                64000 and half of where that graph's summarizer summarizes its
 #                conversation: deepagents' on this model, or one its definition's
 #                middleware puts in its place. Written, it is used as written, and
-#                one at or past that point is refused -- when the model is built,
-#                or when the agent is for a summarizer a definition names -- since
-#                clearing would never come first. There is no off: the highest it
+#                one at or past that point is refused when the agent is built,
+#                since clearing would never come first. There is no off: the highest it
 #                may be almost never clears.
 #   extra        forwarded as kwargs, for settings peculiar to one endpoint.
 #                Additive only -- it may not name any of the above, nor the chat

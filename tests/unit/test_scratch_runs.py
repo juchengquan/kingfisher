@@ -348,12 +348,11 @@ def test_a_limit_refusing_a_subagent_leaves_the_agents_run_bound(cfg, session_di
     )
 
     assert found == ["HI", NOT_GRANTED]
-    # Each graph by its own name and kind; the agent, named by no definition, as empty.
-    assert set(limit.asked) == {
-        ("", "agent"),
-        ("helper", "subagent"),
-        ("general-purpose", "general-purpose"),
-    }
+    # Each graph by its own name and kind, the agent, named by no definition, as empty --
+    # and once: the agent was asked again for a stack built only to be thrown away.
+    assert sorted(limit.asked) == sorted(
+        [("", "agent"), ("helper", "subagent"), ("general-purpose", "general-purpose")]
+    )
 
 
 def test_general_purpose_is_asked_by_that_name(cfg, session_dir):
@@ -486,7 +485,9 @@ def test_a_graph_holding_no_offered_tool_is_not_asked(cfg, session_dir, tool, as
         scratch_run_limit=limit,
     )
 
-    assert bool(limit.asked) is asked
+    # Counted rather than `bool`, which passes with the agent asked twice.
+    expected = [("", "agent"), ("general-purpose", "general-purpose")] if asked else []
+    assert sorted(limit.asked) == sorted(expected)
 
 
 @pytest.mark.parametrize(

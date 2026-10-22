@@ -111,7 +111,6 @@ def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
     )
     _refuse_what_did_not_land(model, wire_format, profile, endpoint)
     _refuse_an_output_reservation_that_fills_the_window(model, profile)
-    _refuse_a_clearing_mark_the_summarizer_reaches_first(model, profile)
     return model
 
 
@@ -315,16 +314,19 @@ def _summarised_window(model: Any) -> int | None:
     return window if isinstance(window, int) else None
 
 
-def _refuse_a_clearing_mark_the_summarizer_reaches_first(
-    model: BaseChatModel, profile: ModelProfile
+def refuse_a_mark_deepagents_reaches_first(
+    model: BaseChatModel, mark: int | None, named: Sequence[Any] = ()
 ) -> None:
-    """Refuse a `clear_results_at` at or past where this model's conversation is summarised.
+    """Refuse a `clear_results_at` at or past where deepagents' own summariser on `model`
+    fires, where `named`, the middleware a definition put on the graph, leaves it in place.
 
     The summariser counts each call before clearing does, so a mark it reaches first
-    would never clear anything and say nothing.
+    would never clear anything and say nothing. Not when the model is built: a
+    summariser a definition names may fire later, and `high_mark` holds the mark to it.
     """
-    mark = profile.clear_results_at
-    if mark is None or mark < (trigger := summarizer_trigger(model)):
+    if mark is None or any(getattr(one, "name", None) == SUMMARIZER for one in named):
+        return
+    if mark < (trigger := summarizer_trigger(model)):
         return
     window = _advertised_window(model)
     where = (
@@ -332,8 +334,9 @@ def _refuse_a_clearing_mark_the_summarizer_reaches_first(
         if window is not None
         else "no advertised input window"
     )
+    named_as = model._get_ls_params().get("ls_model_name")
     msg = (
-        f"model {profile.model!r} sets clear_results_at: {mark}, and deepagents summarises "
+        f"model {named_as!r} sets clear_results_at: {mark}, and deepagents summarises "
         f"its conversation at {trigger} tokens ({where}), before clearing would start. "
         f"Lower it below {trigger} in models.yaml, or leave it out for the default"
     )

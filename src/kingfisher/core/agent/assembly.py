@@ -77,7 +77,13 @@ from .backend import (
     skills_sources,
 )
 from .interpreter import interpreter
-from .models import deployment_default, model_named, summarizer_count, summarizer_trigger
+from .models import (
+    deployment_default,
+    model_named,
+    refuse_a_mark_deepagents_reaches_first,
+    summarizer_count,
+    summarizer_trigger,
+)
 from .permitted_backend import PermittedBackend
 from .prompting import behind_instructions, memory_guidelines, system_prompt
 from .session_paths import SessionPaths
@@ -420,6 +426,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     named = _deployment_middleware(
         agent, middlewares, capabilities.middlewares, provisions=agent_provisions
     )
+    # The agent's alone: `general-purpose` runs its own copies of these, so the same answer.
+    refuse_a_mark_deepagents_reaches_first(running, mark, named)
     trigger = summarizer_trigger(running, named)
     clearing = result_clearing(
         ledger,
@@ -505,6 +513,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         tools: tuple[str, ...] | None = None,
         reachable: tuple[str, ...] | None = None,
         inner: Sequence[Any] = (),
+        limit: ScratchRunLimit | None = None,
     ) -> list[Any]:
         return standing_middleware(
             "agent",
@@ -521,7 +530,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             keep_results_rounds=cfg.keep_results_rounds,
             trigger=trigger,
             pdf_attachments=pdf_attachments,
-            scratch_run_limit=scratch_run_limit,
+            scratch_run_limit=limit,
             recorder=recording(agent),
             clearing=clearing,
             tools=tools,
@@ -533,6 +542,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         )
 
     # What the probe below builds with: nothing narrowed yet, and no subagents to name.
+    # No limit either: this stack never runs, and a deployment's is asked once a graph.
     middleware[:] = agents_standing(inner=switched)
 
     if gated:
@@ -623,6 +633,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         # not told to save.
         switched[memory_at] = remembering(permitted)
 
+    # Outside the block below, which runs only where a subagent is granted: a request
+    # granted none is refused its `run_on` too, rather than having it ignored unsaid.
+    wanted = _wanted_endpoints(run_on, activated, capabilities.models)
+
     if capabilities.subagents is not None:
         # The registry rather than its `names`: a subagent's grant has to be
         # resolved to the skill it means, not merely recognised as a word.
@@ -638,8 +652,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             # After the unknown-name check, so a misspelt name is told it is wrong
             # rather than that it has moved.
             surface.offers.refuse_moved(defined[name].tool_sources, subject=subject)
-
-        wanted = _wanted_endpoints(run_on, activated, capabilities.models)
 
         # The agent's own, as `named` holds them: what a portable subagent's are chosen from.
         agents_names = (
@@ -856,6 +868,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         tools=permitted,
         reachable=tuple(spec["name"] for spec in supplied),
         inner=[*switched, *named],
+        limit=scratch_run_limit,
     )
 
     return assemble(surface.carried, permitted)

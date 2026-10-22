@@ -178,6 +178,54 @@ def test_every_turn_door_takes_the_datazone(zoned):
         asyncio.run(kf.arun("t", source_ids=UNSCOPED, datazone="finance"))
 
 
+#: Every door a caller's datazone comes in by, as a library call.
+ZONE_DOORS = {
+    "run": lambda kf, cfg, zone: kf.run("t", source_ids=("A",), datazone=zone),
+    "stream": lambda kf, cfg, zone: next(iter(kf.stream("t", source_ids=("A",), datazone=zone))),
+    "arun": lambda kf, cfg, zone: asyncio.run(kf.arun("t", source_ids=("A",), datazone=zone)),
+    "session": lambda kf, cfg, zone: kf.session("s", source_ids=("A",), datazone=zone),
+    "asession": lambda kf, cfg, zone: asyncio.run(
+        kf.asession("s", source_ids=("A",), datazone=zone)
+    ),
+    "sessions": lambda kf, cfg, zone: kf.sessions(source_ids=("A",), datazone=zone),
+    "asessions": lambda kf, cfg, zone: asyncio.run(
+        kf.asessions(source_ids=("A",), datazone=zone)
+    ),
+    "inventory": lambda kf, cfg, zone: inventory(cfg, source_ids=["A"], datazone=zone),
+}
+
+
+@pytest.mark.parametrize("zone", ["", "   "])
+@pytest.mark.parametrize("door", ZONE_DOORS.values(), ids=ZONE_DOORS.keys())
+def test_a_caller_s_blank_datazone_is_refused_at_every_door(zoned, door, zone):
+    """A blank datazone was held as one, a name no definition could require, and the
+    session a turn ran in was pinned to it for good; a definition's is refused blank.
+    """
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    with pytest.raises(CallerError, match="datazone is one name"):
+        door(kf, zoned, zone)
+
+
+def test_the_command_refuses_a_blank_datazone(zoned, at_the_command_line, capsys):
+    """The `--datazone` door, which a shell's quoting is the likeliest to leave blank."""
+    assert main(["list", "--as", "A", "--datazone", "  "]) == 2
+    assert "datazone is one name" in capsys.readouterr().err
+
+
+def test_a_caller_s_padded_datazone_is_the_one_it_names(turns):
+    """`" finance"` was held as given: it reached nothing zoned finance, and the session
+    the turn ran in was pinned to `' finance'`, which no finance caller could reach again.
+    """
+    kf = Kingfisher(turns, sessions=LocalSessions())
+
+    assert with_datazone(("A",), " finance ") == ("A", "finance")
+    _turn(kf, "s", " finance ")
+
+    assert kf.session("s", source_ids=("A",), datazone="finance") is not None
+    assert kf.session("s", source_ids=("A",)) is None
+
+
 # -- where a datazone may be written --------------------------------------------------
 
 

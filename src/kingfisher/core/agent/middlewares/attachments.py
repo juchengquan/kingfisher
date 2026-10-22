@@ -272,7 +272,19 @@ class AttachmentsMiddleware(AgentMiddleware):
             return None
         # Read as a tool's own result is, so text and blocks arrive as the blocks it makes.
         given = instead if isinstance(instead, str) else list(instead)
-        return ToolMessage(content=given, tool_call_id=pdf.call_id).content_blocks
+        blocks = ToolMessage(content=given, tool_call_id=pdf.call_id).content_blocks
+        if not any(
+            block.get("type") != "text" or block.get("text", "").strip() for block in blocks
+        ):
+            # Taken as handed over, nothing reached the model as an empty failed result
+            # with no word why: to withhold a PDF, a plugin says so in text.
+            _log.warning(
+                "the PDF attachments plugin handed over nothing for %s's result; "
+                "kingfisher's verdict stands",
+                pdf.tool,
+            )
+            return None
+        return blocks
 
     def _guarded(self, request: Any, result: Any) -> Any:
         call = request.tool_call

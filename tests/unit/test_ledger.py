@@ -2187,6 +2187,47 @@ def test_a_result_older_than_the_rounds_kept_loses_its_file_and_keeps_its_row(le
     assert second["expired_in"] is None
 
 
+def test_a_result_a_crash_left_unclosed_expires_with_the_turn_after_it(ledgered):
+    """A turn whose closing line a crash cut joins no exchange, and its results were
+    kept for good whatever the rounds said. Aged with the exchange that closed next,
+    they go no sooner than that turn's own."""
+    cfg = _rounds(ledgered, 2)
+    _searched(cfg, "c1")
+    ledger = _session(cfg) / HARNESS / LEDGER_FILE
+    ledger.write_text("\n".join(ledger.read_text().splitlines()[:-1]) + "\n")
+    _searched(cfg, "c2")
+
+    _run(cfg, AIMessage(content="nothing this time"))
+    assert _kept(cfg) == ["A-0001-web_search.txt", "A-0002-web_search.txt"]
+
+    fourth = _run(cfg, AIMessage(content="nothing again"))
+
+    assert _kept(cfg) == []
+    first = next(row for row in _rows(cfg) if row.get("id") == "A-0001")
+    assert (first["path"], first["expired_in"]) == (None, fourth.turn_id)
+
+
+def test_a_result_a_crash_left_unclosed_before_a_resume_expires_with_its_round(ledgered):
+    """A resume's closing line joins the round it answers, and so must what a crash
+    left open before it: aged with no round at all, it was kept for good."""
+    first = asdict(replace(_entry(1, "web_search"), turn="t1"))
+    cut = asdict(replace(_entry(2, "web_search"), turn="t2"))
+    _written(
+        ledgered,
+        [
+            *_closed(first),
+            json.dumps(cut),
+            json.dumps({"turn": "t3", "resumed": True}),
+        ],
+    )
+
+    asked = _run(_rounds(ledgered, 1), AIMessage(content="done"))
+
+    assert [row["id"] for row in _rows(ledgered) if row.get("expired_in") == asked.turn_id] == [
+        "A-0001", "A-0002",
+    ]
+
+
 def test_unset_every_result_keeps_its_file(ledgered):
     """The control beside expiry: a deployment that never set it must lose nothing."""
     for at in ("c1", "c2", "c3"):

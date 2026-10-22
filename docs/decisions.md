@@ -2376,10 +2376,10 @@ name another call's result where a search finds nothing. A tool that offloads it
 output hands the recorder the stub, and is named by our copy.
 
 **A handle names only a tool its graph holds.** The path goes to an agent holding
-`read_file`, the search to one holding `grep`, and any other is told to call the tool
-that made the result again. A model told to `grep` calls `grep` whatever it holds, and
-without it spends the step on a refusal. One holding `read_file` but not `grep` is not
-given an offloaded result's path, for the reason above. The grant is the one
+`read_file`, and any other is told to call the tool that made the result again. A model
+told to use a tool calls it whatever it holds, and without it spends the step on a
+refusal. The prompt says no more than the handle does: since every saved result is
+kingfisher's own, no handle names a search, so neither does the prompt. The grant is the one
 `GrantedOnlyMiddleware` filters by, so a handle never names a tool it takes away. A handle keeps its wording once written, so a later request on the
 session holding fewer tools may be pointed at one it lacks: it is refused once, told what
 it holds. Accepted rather than re-worded per call, for a grant that shrank between turns.
@@ -2398,10 +2398,11 @@ nears the low mark: at a 20k mark one session fired 40 times without it and 12 w
 
 **One setting, and no flag and no off switch.** The trigger moves with the model's
 window, so the mark sits beside the model, and a flag would be a second place to look. A
-mark at or past deepagents' own trigger is refused when the model is built, and one at or
-past a deployment's summariser that fires sooner when the agent is built, since only
-each graph's middleware says which runs; the highest allowed almost never clears, the nearest
-thing to off. The summariser also fires on the last reply's reported usage, which this
+mark at or past the trigger of the summariser a graph runs is refused when the agent is
+built, deepagents' own or a deployment's, since only each graph's middleware says which
+runs: held to deepagents' when the model was built, a mark under a deployment's firing
+later was refused for a summariser that never ran there. The highest allowed almost never
+clears, the nearest thing to off. The summariser also fires on the last reply's reported usage, which this
 does not read. A model the deployment passes in takes the default. The ledger is
 unchanged by clearing.
 

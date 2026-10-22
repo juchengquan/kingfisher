@@ -184,6 +184,10 @@ class KeptLedger:
     #: with a user message and the resumes after it, so a paused `task` and its answer
     #: share one.
     exchanges: tuple[tuple[LedgerEntry, ...], ...] = ()
+    #: Beside each exchange, the entries of turns a cut write left without a closing line
+    #: before it. Kept out of `exchanges`, which a message lists, and aged with the
+    #: exchange that closed next, so they expire no sooner than the turn after them.
+    unclosed: tuple[tuple[LedgerEntry, ...], ...] = ()
     #: Whether a turn of the last exchange ended on a summarised conversation.
     summarised: bool = False
 
@@ -205,6 +209,7 @@ def _kept(text: str) -> KeptLedger:
     paths: set[str] = set()
     runs: dict[str, list[Listed]] = {}
     exchanges: list[list[LedgerEntry]] = []
+    cut: list[list[LedgerEntry]] = []
     summarised = False
     # Each turn's entries, until its closing line says whether it was a resume.
     unclosed: dict[str, list[LedgerEntry]] = {}
@@ -232,11 +237,17 @@ def _kept(text: str) -> KeptLedger:
             # By the turn a row names, not where it sits: rows a crash left unclosed would
             # otherwise be counted as the next turn's.
             closed = unclosed.pop(row["turn"], [])
+            # Every write copies the lines before it and closes only its own turn, so a
+            # turn still open here never closes: its write was cut.
+            left = [entry for entries in unclosed.values() for entry in entries]
+            unclosed.clear()
             if row.get(RESUMED) and exchanges:
                 exchanges[-1].extend(closed)
+                cut[-1].extend(left)
                 summarised = summarised or bool(row.get(SUMMARISED))
             else:
                 exchanges.append(closed)
+                cut.append(left)
                 summarised = bool(row.get(SUMMARISED))
     return KeptLedger(
         lines=tuple(lines),
@@ -244,6 +255,7 @@ def _kept(text: str) -> KeptLedger:
         paths=frozenset(paths),
         runs={run: tuple(found) for run, found in runs.items()},
         exchanges=tuple(tuple(one) for one in exchanges),
+        unclosed=tuple(tuple(one) for one in cut),
         summarised=summarised,
     )
 
@@ -279,8 +291,13 @@ def expired(
     if rounds is None:
         return earlier
     kept = rounds if resumed else rounds - 1
-    old = earlier.exchanges[: max(len(earlier.exchanges) - kept, 0)]
-    expiring = {entry for exchange in old for entry in exchange if entry.path is not None}
+    old = max(len(earlier.exchanges) - kept, 0)
+    expiring = {
+        entry
+        for exchange in (*earlier.exchanges[:old], *earlier.unclosed[:old])
+        for entry in exchange
+        if entry.path is not None
+    }
     if not expiring:
         return earlier
     lines = []

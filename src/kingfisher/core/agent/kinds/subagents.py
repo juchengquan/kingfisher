@@ -21,6 +21,7 @@ from kingfisher.core.agent.models import (
     SUMMARIZER,
     deployment_default,
     model_named,
+    refuse_a_mark_deepagents_reaches_first,
     summarizer_count,
     summarizer_trigger,
 )
@@ -357,6 +358,8 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         else []
     )
     summarizers = [*summarizing, *(extra_middleware or ())]
+    # By its definition's middleware alone: a helper's added summariser is deepagents' own.
+    refuse_a_mark_deepagents_reaches_first(runs, clear_results_at, extra_middleware or ())
     # A summariser it names takes deepagents' place in its stack, so it is the one read.
     trigger = summarizer_trigger(runs, summarizers)
     # From `standing_middleware`, so the agent, this subagent and `general-purpose` cannot

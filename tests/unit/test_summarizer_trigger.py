@@ -52,6 +52,21 @@ class Early(SummarizationMiddleware):
         self.name = "SummarizationMiddleware"
 
 
+#: Where `Late` fires: past deepagents' 170,000 on a model with no profile.
+LATE = 400_000
+
+
+class Late(SummarizationMiddleware):
+    """deepagents' summariser in its own place, firing at `LATE` tokens."""
+
+    name = "late"
+    wants = frozenset({"model", "backend"})
+
+    def __init__(self, model: Any, backend: Any) -> None:
+        super().__init__(model, backend=backend, trigger=("tokens", LATE))
+        self.name = "SummarizationMiddleware"
+
+
 def calibrated(messages: Any, *, tools: Any = None) -> int:
     """A deployment's counter, calibrated against a gateway counting twice what langchain
     estimates."""
@@ -233,7 +248,12 @@ def _built(cfg: Any, session_dir: Any, **given: Any) -> Any:
     return build_agent(
         cfg,
         backend=backend_at(cfg, session_dir),
-        middleware_registry={"early": Early, "foreign": Foreign, "calibrated": Calibrated},
+        middleware_registry={
+            "early": Early,
+            "late": Late,
+            "foreign": Foreign,
+            "calibrated": Calibrated,
+        },
         ledger=Ledger("t", KeptLedger()),
         **given,
     )
@@ -365,6 +385,42 @@ def test_a_mark_the_deployments_summarizer_reaches_first_is_refused_at_build(
     assert _high(_built(at, session_dir, agent=_spec(at, "unnamed")).middleware) == EARLY
     below = _marked(cfg, clear_results_at=EARLY - 1)
     assert _high(_built(below, session_dir, agent=_spec(below)).middleware) == EARLY - 1
+
+
+def test_a_mark_past_deepagents_own_stands_under_a_summarizer_firing_later(
+    cfg, session_dir
+):
+    """`build_model` held every mark to deepagents' own summariser, which fires at 170,000
+    here, so one of 250,000 was refused under a summariser firing at `LATE`, though that
+    one runs in deepagents' place. A graph left with deepagents' own is still refused."""
+    an_agent(cfg, middlewares="[late]")
+    an_agent(cfg, "unnamed")
+    at = _marked(cfg, clear_results_at=250_000)
+
+    assert _high(_built(at, session_dir, agent=_spec(at)).middleware) == 250_000
+    with pytest.raises(ConfigError, match="deepagents summarises its conversation at 170000"):
+        _built(at, session_dir, agent=_spec(at, "unnamed"))
+
+
+def test_a_helper_left_with_deepagents_own_summarizer_is_held_to_it(cfg, session_dir):
+    """A helper's summariser is the one kingfisher adds, deepagents' own, so the mark it
+    inherits from a summoner under `LATE` is refused as past deepagents', not passed for
+    the summoner's."""
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "reviewer.yaml").write_text(
+        "name: reviewer\ndescription: Checks.\nmodel: cheap-model\nmiddlewares: [late]\n"
+        "builtin_tools: [task]\nsubagents: [second-opinion]\nsystem_prompt: |\n  You check.\n",
+        encoding="utf-8",
+    )
+    (subagents_dir(cfg) / "second-opinion.yaml").write_text(
+        "name: second-opinion\ndescription: Answers again.\nsystem_prompt: |\n  You answer.\n",
+        encoding="utf-8",
+    )
+    an_agent(cfg, middlewares="[late]", subagents="[reviewer, second-opinion]", **EVERY_TOOL)
+    at = _marked(cfg, "cheap-model", clear_results_at=250_000)
+
+    with pytest.raises(ConfigError, match="deepagents summarises its conversation at 170000"):
+        _built(at, session_dir, agent=_spec(at))
 
 
 def test_a_mark_a_subagents_own_summarizer_reaches_first_is_refused_at_build(

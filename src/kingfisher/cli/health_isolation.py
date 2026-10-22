@@ -109,8 +109,8 @@ def fence_of(cfg: Config, sessions: object) -> Confinement:
     """The confinement a run of `sessions` gives its shell, asked once for every row.
 
     Once, because each asking rewrites the macOS profile, and rows asking separately can
-    name different fences. Sessions doctor cannot see into get the environment's settings,
-    which only the `shell` row reads: every other row is quiet or warns for them.
+    name different fences. Sessions doctor cannot see into get the defaults, which no row
+    reads: every row is quiet or warns for them.
     """
     # Here, not at the top: it loads deepagents, as `LocalSessions` does.
     from kingfisher.plugins.sessions.shell import shell_skills  # noqa: PLC0415
@@ -121,16 +121,40 @@ def fence_of(cfg: Config, sessions: object) -> Confinement:
         # A mount a run refuses before it has a shell. Raised here, it would drop every
         # row between this one and the row that says why.
         skills = None
-    return shell_confinement(cfg, shell_of(sessions) or ShellSettings.from_env(), skills=skills)
+    # Not `from_env`: the variables reach such sessions only if they are built on
+    # `backend_at`, so a value they never read must not fail this deployment's doctor.
+    return shell_confinement(cfg, shell_of(sessions) or ShellSettings(), skills=skills)
 
 
-def _shell(confined: Confinement) -> Iterator[Check]:
+def _unseen_shell(sessions: object) -> Check:
+    """The `shell` row for sessions that fence their shell themselves."""
+    detail = (
+        f"the sessions in use are {named(sessions)}, and nothing here can see what "
+        "confines their shell"
+    )
+    try:
+        ShellSettings.from_env()
+    except ConfigError as exc:
+        # Said but not failed: it stops a run only of sessions built on `backend_at`.
+        detail += f"; {exc}, which refuses any built on backend_at"
+    return Check(
+        "shell",
+        "warn",
+        detail,
+        "confine it in your sessions -- shell_denied, in kingfisher's "
+        "tests/checks/backend.py, drives the shell at /.harness and /inputs",
+    )
+
+
+def _shell(sessions: object, confined: Confinement) -> Iterator[Check]:
     """What is keeping `execute` off the host, if anything.
 
     An unconfined shell is a warning, not a failure, because plenty of deployments mean it;
     but said, because silence would make it look exactly like a confined one.
     """
-    if confined.confined:
+    if shell_of(sessions) is None:
+        yield _unseen_shell(sessions)
+    elif confined.confined:
         yield Check("shell", "ok", f"confined by {_mechanism(confined)}{FROM_CONFIG}")
     elif confined.elsewhere:
         # `ok`, not the warning: a container mounting only the workspace must not
@@ -246,7 +270,7 @@ def _sessions_apart(sessions: object, confined: Confinement) -> Iterator[Check]:
 
 def checks(cfg: Config, sessions: object, confined: Confinement) -> Iterator[Check]:
     """These, in the order `examine` reports them, all of `fence_of`'s one answer."""
-    yield from _shell(confined)
+    yield from _shell(sessions, confined)
     yield from _session_files(sessions, confined)
     yield from _linked_sessions(cfg, sessions, confined)
     yield from _sessions_apart(sessions, confined)

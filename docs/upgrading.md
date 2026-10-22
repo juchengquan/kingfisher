@@ -18,6 +18,85 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A clearing mark is held to the summarizer the graph runs, after #1051
+
+- **A `clear_results_at` past deepagents' own trigger is accepted under a summarizer of
+  yours that fires later.** It was refused when the model was built, against deepagents'
+  170,000 on a model with no window, though a summarizer a definition names runs in its
+  place. A graph left with deepagents' own still refuses it, in the same words, now
+  when the agent is built rather than the model, which is the same moment for a turn.
+- **`build_model` no longer refuses one.** It is not exported, so this matters only to a
+  deployment that called it anyway.
+
+## A caller's datazone is read as a definition's is, after #1051
+
+- **A blank datazone is refused, and a padded one is the name inside it.**
+  `datazone=""` or `"  "`, on any door that takes one (`run`, `stream`, `session`,
+  `sessions`, `inventory` and `--datazone`), was held as a datazone no definition could
+  require, and a session a turn ran in was pinned to it for good. It is now a
+  `CallerError`, as a definition's blank datazone is refused at load. `" finance"` is
+  `finance`: it reached nothing zoned finance before, and pinned its session to
+  `' finance'`, which no finance caller could reach again. A session already pinned that
+  way keeps the pin, which no caller can name now; `UNSCOPED` still reaches it.
+
+## `seed` sees a requirement written `frozenset(...)`, after #1051
+
+- **A Python definition whose requirement is `frozenset({...})` or `set(...)` is left
+  behind by `seed`, as a set literal is.** The loader read either as the requirement it
+  is, but seed saw only the braces, so it copied the tool as an open one, and the copy
+  switched on access control in the workspace it landed in. Seed again with `--all` to
+  copy one anyway.
+
+## A PDF plugin that hands over nothing leaves kingfisher's verdict, after #1051
+
+- **`""`, no blocks, or blank text alone from `PdfAttachments.replacement` is read as
+  `None`**, and logged. It was taken as a replacement that became nothing, so the model
+  was handed an empty result marked failed, with no line saying why. Now a PDF that
+  passes is handed over and one past the limit is refused with kingfisher's reason. A
+  plugin that meant to withhold a PDF should hand over text saying so.
+
+## The prompt no longer sends the model to `grep` for a cleared result, after #1051
+
+- **The sentence on a cleared result names only what its handle offers.** An agent
+  holding `grep` was told to "`grep` for the id where the handle says to", which no handle
+  has said since #1018. One holding `read_file` is told to read the file or call the tool
+  again; any other, to call the tool again. Anything comparing the prompt against the old
+  wording sees it change; the paragraph on searching saved results with `grep` stands.
+
+## `doctor` names `KINGFISHER_SOURCE_IDS_FILE` as retired, after #1051
+
+- **A deployment still setting it is told so.** #983 stopped reading it and stopped
+  refusing it, and nothing said either: `doctor`'s *retired settings* row now names it,
+  as a warning, and `.env.example` lists it there instead of among the settings a start
+  refuses. A `source_ids.yaml` left in the definitions folder is still read by nothing
+  and still not reported; delete it, as #983's section says.
+
+## Doctor's `shell` row warns for sessions it cannot see into, after #1051
+
+- **With sessions of your own, the `shell` row is a warning naming them.** It reported
+  the fence kingfisher's own sessions would have run -- "confined by sandbox-exec" --
+  and with `KINGFISHER_SHELL_SANDBOX` set to a value it does not take, it failed and
+  dropped every row that asks the fence. Your sessions fence their shell themselves and
+  read the variable only if built on `backend_at`, so a bad value is now said in the
+  warning, and `doctor` no longer exits 1 on it. Kingfisher's own sessions refuse it as
+  before.
+
+## A `ScratchRunLimit` is asked about the agent once, after #1051
+
+- **The agent's question comes once a build, as the interface always said.** A stack
+  built only to learn the agent's tools, and thrown away, asked your limit about the
+  agent too, so a limit that counts or logs saw the agent twice and its first answer
+  was never used. Subagents and `general-purpose` were already asked once each.
+
+## A `run_on` is refused where no subagent is granted, after #1051
+
+- **A request naming a subagent in `run_on` is refused when it was granted none.** The
+  check that refuses a name the request did not activate ran only where some subagent
+  was granted, so with an agent whose file has no `subagents:` line, or a request
+  passing `subagents=None`, the override was accepted and ignored -- a model the caller
+  may not use included. It is now the `CapabilityError` the same name gets beside a
+  granted subagent: drop the `run_on`, or grant the subagent.
+
 ## A deployment's shell can say where it sees the session, after #1049
 
 - **`LocalSessions(session_root=...)` teaches your runner's agent

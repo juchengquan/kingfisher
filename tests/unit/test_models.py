@@ -15,6 +15,7 @@ from kingfisher.core.agent.models import (
     FILLABLE,
     WIRE_FORMATS,
     build_model,
+    refuse_a_mark_deepagents_reaches_first,
     summarizer_trigger,
 )
 from kingfisher.core.config import ConfigError, Endpoint, ModelProfile, WireFormat
@@ -280,25 +281,22 @@ def test_a_clearing_mark_the_summarizer_reaches_first_is_refused():
     the summariser's trigger would never clear anything, and the setting would read as
     working. Checked against the window the row declares."""
     window = {"profile": {"max_input_tokens": 1_000_000}}
+    model = build_model(_row("a-gateway-model", max_tokens=32_768, extra=window), ANTHROPIC)
 
     with pytest.raises(ConfigError, match=r"clear_results_at: 850000.* at 850000 tokens"):
-        build_model(
-            _row("a-gateway-model", max_tokens=32_768, clear_results_at=850_000, extra=window),
-            ANTHROPIC,
-        )
-    built = build_model(
-        _row("a-gateway-model", max_tokens=32_768, clear_results_at=849_999, extra=window),
-        ANTHROPIC,
-    )
-    assert built.max_tokens == 32_768, "the control: one token under is the highest there is"
+        refuse_a_mark_deepagents_reaches_first(model, 850_000)
+    # The control: one token under is the highest there is.
+    refuse_a_mark_deepagents_reaches_first(model, 849_999)
 
 
 def test_without_a_window_a_clearing_mark_is_held_to_170000():
     """A model with no profile -- every gateway row naming its own model -- summarises at
     deepagents' fixed 170,000 tokens, so that is the line, and the refusal says why."""
-    with pytest.raises(ConfigError, match="no advertised input window"):
-        build_model(_row("a-gateway-model", clear_results_at=170_000), ANTHROPIC)
-    build_model(_row("a-gateway-model", clear_results_at=169_999), ANTHROPIC)
+    model = build_model(_row("a-gateway-model"), ANTHROPIC)
+
+    with pytest.raises(ConfigError, match=r"'a-gateway-model' .*\(no advertised input window\)"):
+        refuse_a_mark_deepagents_reaches_first(model, 170_000)
+    refuse_a_mark_deepagents_reaches_first(model, 169_999)
 
 
 @dataclass
