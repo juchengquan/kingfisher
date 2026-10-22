@@ -835,12 +835,11 @@ class _Raising(LocalSessions):
     [(_Refusing, False), (_Raising, False), (_Raising, True)],
     ids=["refused", "raised", "raised-arun"],
 )
-def test_a_long_result_the_backend_would_not_keep_is_handed_over_whole(
+def test_a_long_result_the_backend_would_not_keep_is_previewed_saying_so(
     ledgered, sessions, awaited
 ):
-    """The preview was built from the entry as it was before its path came off, so the
-    model got four thousand characters of a hundred thousand and a `full result:` line
-    naming a file that was never written.
+    """Handed whole, a result nothing kept could overflow the window, being any size; and
+    previewed with a `full result:` line, it named a file that was never written.
     """
     kf = Kingfisher(ledgered, sessions=sessions())
     request = Request("go", agent="only", session_id="s")
@@ -851,9 +850,11 @@ def test_a_long_result_the_backend_would_not_keep_is_handed_over_whole(
     assert result.answer == "done", "the save failing failed the call"
     shown = _handed("c1").text
     assert _kept(ledgered) == [], "the control: the backend kept the file after all"
+    assert len(shown) < 80_000, "the model was handed the whole of a result nothing kept"
+    assert shown.startswith("row 00000 "), "the preview kept no head of the result"
+    assert "row 00999 " in shown, "the preview kept no tail of the result"
     assert "full result:" not in shown, "the model was pointed at a file that is not there"
-    assert "row 00500 " in shown, "the middle of a result nothing kept was left out"
-    assert shown.rstrip().endswith("[A-0001]")
+    assert shown.endswith("\nfull result not kept; call loud again for less\n[A-0001]")
 
 
 @pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])

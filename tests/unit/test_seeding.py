@@ -363,7 +363,7 @@ def test_a_star_datazone_is_left_behind_and_refused_where_it_loads(cfg, tmp_path
 #: Every way a definition says who reaches it *in Python*: the only place a tool can say
 #: it, and one of the two places a subagent can. Read by a tolerant reader of seeding's
 #: own, as the YAML above is, so a spelling it stops covering does not fail -- the
-#: definition reads as naming nobody and is copied into a workspace that cannot load it.
+#: definition is held back as one it cannot read, naming nobody.
 CODE_SPELLINGS = {
     "a subagent entry's list": (
         "subagents",
@@ -437,6 +437,52 @@ CODE_SPELLINGS = {
         ("A", "B"),
         (),
     ),
+    # Held in a name the module binds once: the loader reads the value, and seed read the
+    # name as naming nobody and copied the lock as an open definition.
+    "a tool spec's source ids held in a name": (
+        "tools",
+        "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\nIDS = ['A']\nTOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        ("A",),
+        (),
+    ),
+    "a tool spec's requirement held in a name": (
+        "tools",
+        "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\nPAIR = frozenset({'A', 'B'})\n"
+        "TOOLS = [ToolSpec(t, source_ids=[PAIR])]\n",
+        ("A", "B"),
+        (),
+    ),
+    "a tool spec's datazone held in a name": (
+        "tools",
+        "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\nZONE = 'emea'\nTOOLS = [ToolSpec(t, datazone=ZONE)]\n",
+        (),
+        ("emea",),
+    ),
+    "a name held in a name": (
+        "tools",
+        "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\nONE = 'A'\nIDS = [ONE]\nTOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        ("A",),
+        (),
+    ),
+    "a name bound in a chained assignment": (
+        "tools",
+        "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+        "    return ''\n\n\nIDS = ALSO = ['A']\nTOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        ("A",),
+        (),
+    ),
+    "a subagent entry's source ids held in an annotated name": (
+        "subagents",
+        'IDS: list[str] = ["A"]\n'
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+        '             "source_ids": IDS}]\n',
+        ("A",),
+        (),
+    ),
     # `"*"` is everyone in `source_ids`, but no "any" in a datazone, which refuses it.
     "a subagent entry's datazone written '*'": (
         "subagents",
@@ -476,6 +522,7 @@ def test_every_way_python_names_an_audience_is_left_behind(spelling, cfg, tmp_pa
         sorted(datazones),
     )
     assert left[0].wants == "source_ids"
+    assert not left[0].unread, f"{spelling} is written out, and was reported as computed"
 
 
 @pytest.mark.parametrize(
@@ -490,6 +537,11 @@ def test_every_way_python_names_an_audience_is_left_behind(spelling, cfg, tmp_pa
             "tools",
             "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
             "    return ''\n\n\nTOOLS = [ToolSpec(t, source_ids=['*'])]\n",
+        ),
+        (
+            "tools",
+            "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n"
+            "    return ''\n\n\nEVERYONE = ['*']\nTOOLS = [ToolSpec(t, source_ids=EVERYONE)]\n",
         ),
     ],
 )
@@ -523,6 +575,185 @@ def test_an_empty_frozenset_is_the_loaders_to_refuse_not_seeds_to_crash_on(cfg, 
     done = seeding.seed(cfg, source)
 
     assert "tools/empty.py" in done.written
+
+
+#: The head of a tool module, for the rows below that differ only after it.
+_TOOL = "from kingfisher import ToolSpec\n\n\ndef t() -> str:\n    'A tool.'\n    return ''\n\n\n"
+
+#: Every way a Python audience can be written that seed cannot read without running the
+#: file, and how the line names it. One row per way a name is bound, since each is a
+#: separate reason a name may not hold the value its one assignment gives it.
+UNREAD = {
+    "an imported name": (
+        "tools",
+        "from shared import IDS\n" + _TOOL + "TOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "a name bound twice": (
+        "tools",
+        _TOOL + "IDS = ['A']\nIDS = ['B']\nTOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "a name imported over its assignment": (
+        "tools",
+        _TOOL + "IDS = ['A']\nfrom shared import IDS\nTOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "a name a function binds": (
+        "tools",
+        _TOOL + "def build():\n    ids = ['A']\n    return ToolSpec(t, source_ids=ids)\n\n\n"
+        "TOOLS = [build()]\n",
+        "t: source_ids=ids",
+    ),
+    "a name a function rebinds": (
+        "tools",
+        _TOOL + "IDS = ['A']\n\n\ndef widen():\n    IDS = ['B']\n    return IDS\n\n\n"
+        "TOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "a name a parameter shadows": (
+        "tools",
+        _TOOL + "IDS = ['A']\n\n\ndef build(IDS):\n    return ToolSpec(t, source_ids=IDS)\n\n\n"
+        "TOOLS = [build(['B'])]\n",
+        "t: source_ids=IDS",
+    ),
+    "a name a function definition takes": (
+        "tools",
+        _TOOL + "IDS = ['A']\n\n\ndef IDS():\n    return ['B']\n\n\n"
+        "TOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "a name an exception binds": (
+        "tools",
+        _TOOL + "IDS = ['A']\ntry:\n    pass\nexcept ValueError as IDS:\n    pass\n"
+        "TOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "a name a pattern captures": (
+        "tools",
+        _TOOL + "IDS = ['A']\nmatch ['B']:\n    case [IDS]:\n        pass\n"
+        "TOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "a name a starred pattern captures": (
+        "tools",
+        _TOOL + "IDS = ['A']\nmatch ['B']:\n    case [*IDS]:\n        pass\n"
+        "TOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "a name a mapping pattern captures": (
+        "tools",
+        _TOOL + "IDS = ['A']\nmatch {'k': 1}:\n    case {**IDS}:\n        pass\n"
+        "TOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "two names bound to each other": (
+        "tools",
+        _TOOL + "ONE = OTHER\nOTHER = ONE\nTOOLS = [ToolSpec(t, source_ids=ONE)]\n",
+        "t: source_ids=ONE",
+    ),
+    "a list the module computes": (
+        "tools",
+        _TOOL + "MORE = ['B']\nTOOLS = [ToolSpec(t, source_ids=['A'] + MORE)]\n",
+        "t: source_ids=['A'] + MORE",
+    ),
+    "a datazone a call returns": (
+        "tools",
+        _TOOL + "TOOLS = [ToolSpec(t, datazone=zone())]\n",
+        "t: datazone=zone()",
+    ),
+    "a starred name": (
+        "tools",
+        _TOOL + "IDS = ['A']\nTOOLS = [ToolSpec(t, source_ids=[*IDS])]\n",
+        "t: source_ids=[*IDS]",
+    ),
+    "a requirement unpacked into braces": (
+        "tools",
+        _TOOL + "BASE = {'A': None}\nTOOLS = [ToolSpec(t, source_ids=[{**BASE}])]\n",
+        "t: source_ids=[{**BASE}]",
+    ),
+    "a subagent entry's imported name": (
+        "subagents",
+        "from shared import IDS\n"
+        'SUBAGENTS = [{"name": "s", "description": "d", "system_prompt": "Hi.",\n'
+        '             "source_ids": IDS}]\n',
+        "s: source_ids=IDS",
+    ),
+}
+
+
+@pytest.mark.parametrize("spelling", sorted(UNREAD))
+def test_an_audience_seed_cannot_read_is_left_behind_as_written(spelling, cfg, tmp_path):
+    """Seed took a value it could not walk for naming nobody, so a lock held in an imported
+    name, or computed, was copied into a workspace as an open definition.
+    """
+    kind, written, unread = UNREAD[spelling]
+    source = tmp_path / "presets"
+    (source / kind).mkdir(parents=True)
+    (source / kind / "computed.py").write_text(written, encoding="utf-8")
+
+    done = seeding.seed(cfg, source)
+
+    assert f"{kind}/computed.py" not in done.written, f"{spelling} was copied as naming nobody"
+    (left,) = done.skipped
+    assert (left.wants, left.names, left.datazones, left.unread) == (
+        "source_ids",
+        (),
+        (),
+        (unread,),
+    )
+
+
+def test_the_skip_line_names_an_audience_seed_cannot_read_by_its_tool(cfg, tmp_path):
+    """A line naming no source id would leave a reader nothing to look for before `--all`:
+    it names the tool and the value as the file writes it.
+    """
+    source = tmp_path / "presets"
+    (source / "tools").mkdir(parents=True)
+    (source / "tools" / "computed.py").write_text(UNREAD["an imported name"][1], encoding="utf-8")
+
+    (line,) = seeding.seed(cfg, source).report()
+
+    assert line.startswith(
+        "skipped tools/computed.py — names an audience seed cannot read without running it "
+        "(t: source_ids=IDS), and a lock switches on access control"
+    ), line
+
+
+def test_a_tool_package_computing_its_audience_is_left_behind_whole(cfg, tmp_path):
+    """A package is decided by every module in it, so the one importing its audience must
+    hold the package back, not leave the rest to be copied as a tool naming nobody.
+    """
+    source = tmp_path / "presets"
+    package = source / "tools" / "profiler"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "profile.py").write_text(UNREAD["an imported name"][1], encoding="utf-8")
+
+    done = seeding.seed(cfg, source)
+
+    assert [(one.label, one.unread) for one in done.skipped] == [
+        ("tools/profiler", ("t: source_ids=IDS",))
+    ]
+    assert not (tools_dir(cfg) / "profiler").exists(), "half a package is not a tool"
+
+
+def test_an_audience_seed_cannot_read_is_named_below_the_top_level(cfg, tmp_path):
+    """A grouping folder is judged file by file through another path, which must carry what
+    the file computes into the line as the top level does.
+    """
+    source = tmp_path / "presets"
+    (source / "tools" / "group").mkdir(parents=True)
+    (source / "tools" / "group" / "computed.py").write_text(
+        UNREAD["an imported name"][1], encoding="utf-8"
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert [(one.label, one.unread) for one in done.skipped] == [
+        ("tools/group/computed.py", ("t: source_ids=IDS",))
+    ]
+    assert not (tools_dir(cfg) / "group" / "computed.py").exists()
 
 
 def test_a_module_that_only_mentions_an_audience_is_copied(cfg, tmp_path):

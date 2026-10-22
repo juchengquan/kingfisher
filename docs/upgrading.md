@@ -18,6 +18,51 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A long result your backend would not keep is previewed, after #1064
+
+- **The model is shown a preview, not the whole result**, when your backend refuses or
+  raises on a save under `/scratchpad/tool_results/`. #1048 handed such a result over
+  whole, and one can be any size, so it could overflow the window. The preview is cut as
+  a kept one is, and its last line is `full result not kept; call <tool> again for less`
+  where a kept one's is `full result: <path>`; a deployment that parses previews reads
+  both. The row still says it was not kept.
+
+## A summarizer a helper's definition names runs where deepagents' would, after #1064
+
+- **It now runs outside the standing middleware**, where a helper's default summarizer
+  runs and where deepagents puts one a declared subagent names. It ran innermost, inside
+  clearing: it counted each call after clearing had, and a call refused for length
+  reached it before clearing could answer it (#1056), so it answered the refusal itself,
+  copying the latest batch under `/scratchpad/large_tool_results/` and summarizing where
+  there was something to summarize. A helper naming none, and every other graph, is
+  unchanged.
+
+## A switch sends no reasoning kept aside, and no reply left empty, after #1064
+
+- **A Responses reply kept as `v0` loses its reasoning on a switch too.** A model built
+  with `output_version="v0"`, through `extra` or `LC_OUTPUT_VERSION`, keeps its reasoning
+  in `additional_kwargs["reasoning"]`, and `ChatOpenAI` sent it to whichever endpoint came
+  next. It now goes back only to the endpoint and model that produced it, as thinking in
+  the content has since #1048. The conversation keeps it.
+- **A reply that was only another signer's thinking is left out of the request.**
+  Stripped, it went to `ChatAnthropic` empty, which sent the user turns either side of it
+  as two in a row, or, last, sent it as an empty prefill the current Claude models refuse.
+  A reply with tool calls still goes, as its calls. The conversation keeps it.
+
+## `seed` reads an audience held in a name, and holds back one it cannot read, after #1064
+
+- **A Python definition whose `source_ids=` or `datazone=` is a name is held back now.**
+  Seed read only what was written out, so `ToolSpec(t, source_ids=IDS)` was copied as a
+  tool naming nobody, and switched on access control where it landed. A name the module
+  binds once at its top level is read through, and the line names what it holds.
+- **Anything else seed cannot read is held back too**, named as the file writes it:
+  `skipped tools/x.py — names an audience seed cannot read without running it (t:
+  source_ids=IDS), ...`. That is an imported name, one bound more than once or inside a
+  function, and a computed value such as `['A'] + MORE` or `zone()`. `--all` copies it.
+- **A tool module that passes `source_ids=` to a call of its own** with a value from a
+  parameter is held back the same way, since seed cannot tell it from a `ToolSpec`.
+- **`Skipped.unread`** is new: what a held-back file computes, one entry per value.
+
 ## A refused write says where a write may go, after #1063
 
 - **A refused write's message is longer.** A write, edit or delete a deny rule refuses

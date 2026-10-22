@@ -68,6 +68,10 @@ OMITTED = "... [{lines} lines truncated] ..."
 #: Said where part of one line was left out, so a cut line is not read as all of it.
 CUT = "... [{chars} characters truncated] ..."
 
+#: A preview's last line where the backend would not keep the whole: the call is the way
+#: back to the rest. Not `full result: ...`, from which a reader takes the path.
+NOT_KEPT = "full result not kept; call {tool} again for less"
+
 
 @dataclass(frozen=True)
 class Audiences:
@@ -262,8 +266,8 @@ class RecorderMiddleware(AgentMiddleware):
         return self._ledger.unkept(entry)
 
 
-def _preview(text: str, path: str) -> str:
-    """A long result as its head and its tail, with a last line saying where the whole is.
+def _preview(text: str, last: str) -> str:
+    """A long result as its head and its tail, with `last` saying where the whole is.
 
     Lines rather than characters: a result cut mid-line reads as corrupt, and the head and
     tail of a table or a log are what a reader judges it by. Only a line too long to show
@@ -276,7 +280,7 @@ def _preview(text: str, path: str) -> str:
     tail = _whole(lines[len(head) :][::-1], half)[::-1]
     left = lines[len(head) : len(lines) - len(tail)]
     if not left:
-        return "\n".join([*head, *tail, f"full result: {path}"])
+        return "\n".join([*head, *tail, last])
     starts = left[0][:half] if not head else ""
     ends = left[-1][-half:] if not tail else ""
     if len(left) == 1 and starts and ends:
@@ -289,7 +293,7 @@ def _preview(text: str, path: str) -> str:
             *([OMITTED.format(lines=omitted)] if omitted > 0 else []),
             *([CUT.format(chars=len(left[-1]) - len(ends)), ends] if ends else []),
         ]
-    return "\n".join([*head, *middle, *tail, f"full result: {path}"])
+    return "\n".join([*head, *middle, *tail, last])
 
 
 def _whole(lines: list[str], room: int) -> list[str]:
@@ -313,10 +317,14 @@ def _shown(answer: ToolMessage, entry: LedgerEntry, text: str) -> Any | None:
     A result made of blocks keeps every block that is not text -- an attachment is not
     something a preview can stand in for -- and its text becomes one preview block.
     """
-    # A result with no file has nowhere for a preview to point, so it goes whole.
-    if len(text) <= PREVIEW_ABOVE or entry.path is None:
+    if len(text) <= PREVIEW_ABOVE:
         return None
-    shown = _preview(text, entry.path)
+    # Previewed though nothing was kept: an unsaved result can be any size, and handed
+    # whole it can overflow the window.
+    if entry.path is None:
+        shown = _preview(text, NOT_KEPT.format(tool=entry.tool))
+    else:
+        shown = _preview(text, f"full result: {entry.path}")
     content = answer.content
     if isinstance(content, str):
         return shown

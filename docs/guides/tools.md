@@ -552,7 +552,8 @@ file and returns where it went, never the file itself. Returned, a chart is its 
 markup in the model's context and nothing the caller can open; saved, it is one line.
 A result that is only long is a different case and not the tool's to manage:
 kingfisher records every result anyway, and one over about 20,000 tokens is shown to the
-model as a preview — its head, its tail, and where the whole of it is kept.
+model as a preview — its head, its tail, and where the whole of it is kept, or that
+the backend would not keep it.
 
 There is no kingfisher helper for this. The tool saves through the backend above, in
 about ten lines, and keeps to one convention so that every such tool answers alike:
