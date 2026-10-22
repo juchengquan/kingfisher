@@ -7,7 +7,7 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
-from kingfisher.core.layout import INPUTS_ROUTE, OUTPUTS_ROUTE, Layout
+from kingfisher.core.layout import INPUTS_ROUTE, OUTPUTS_ROUTE, SCRATCH_ROUTE, Layout
 
 from .host_paths import HOST_ROOTS, HostPathError
 
@@ -45,10 +45,12 @@ class SessionPaths:
 
     def __init__(self, permitted: Any, sessions: Path, layout: Layout) -> None:
         self._permitted = permitted
-        #: The example routes `refusal_text` offers, from this layout so a renamed
-        #: session's paths are the ones named.
+        #: The example routes a refusal offers, from this layout so a renamed session's
+        #: paths are the ones named. `refusal_text` offers the first two, `where_to_write`
+        #: the last two, which are the folders a write may actually land in.
         self.inputs_route = layout.inputs_route
         self.outputs_route = layout.outputs_route
+        self.scratch_route = layout.scratch_route
         # Every session's folder, spelled both ways: in a container the workspace is
         # `/workspace`, which no host root names.
         self._refused = (
@@ -128,4 +130,33 @@ def refusal_text(escaped: ValueError, paths: SessionPaths | None = None) -> str:
         f"Error: {escaped}. Tool paths are the same virtual paths the file "
         f"tools take, rooted at this session -- `{inputs_route}<name>`, "
         f"`{outputs_route}<name>` -- and cannot climb out of it."
+    )
+
+
+#: How deepagents reports a write its own deny rules refused, which is the only sign
+#: kingfisher gets: the check runs inside each file tool's body and the helpers around it
+#: are private. `test_a_refused_write_says_where_a_write_may_go` drives a real refusal, so
+#: a deepagents that rewords this goes red rather than quietly dropping the sentence.
+_REFUSED_WRITE = "permission denied for write on "
+
+
+def where_to_write(text: str, paths: SessionPaths | None = None) -> str:
+    """`text` with the folders a write may land in, where a deny rule refused one.
+
+    One sentence for every scope in `denied_scopes`, naming neither the rule nor what the
+    folder holds: `/.harness` is denied too and the agent is shown nothing of it, and why
+    a folder is kept is the prompt's to say before the call rather than this message's
+    after it. Beside `refusal_text` so the pair offers the model the same folders.
+
+    The default is unreached rather than a fallback -- a deny rule comes from a session's
+    layout, so a build with none raises no refusal to rewrite -- and is here only so the
+    pair is called the same way. Measured; not worth a case of its own.
+    """
+    if _REFUSED_WRITE not in text:
+        return text
+    outputs_route = paths.outputs_route if paths is not None else OUTPUTS_ROUTE
+    scratch_route = paths.scratch_route if paths is not None else SCRATCH_ROUTE
+    return (
+        f"{text} -- that path is not yours to write. What you make goes under "
+        f"`{outputs_route}<name>` or `{scratch_route}<name>`."
     )

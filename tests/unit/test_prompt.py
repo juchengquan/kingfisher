@@ -145,6 +145,27 @@ def test_each_kept_record_is_said_to_be_the_models_to_read_and_not_to_write():
     assert "Anything genuinely throwaway goes in `/scratchpad`" in said
 
 
+def test_the_catalogue_is_said_to_be_the_models_to_read_and_not_to_write():
+    """The skills section hands the model the catalogue, says how to run a script a skill
+    ships and tells it to prefer an existing procedure over inventing one -- which invites
+    editing one -- and said nothing about writing, while `/skills/**` is denied. Of the
+    folders the prompt names it was the only one refused without saying so, and a model
+    not told a place is read-only spends a call finding out.
+
+    What to do instead is an answer and not a file: the refusal names the two folders a
+    write may land in, and *Finishing* tells the model not to manufacture files nobody
+    asked for, which a corrected copy of a skill would be.
+    """
+    # Joined: the prompt wraps at 88 columns, so a sentence this long is never on one line
+    # and a plain `in` reads as an absence.
+    said = " ".join(shipped(skills_enabled=True).split())
+
+    assert "The catalogue is yours to read and not to write" in said
+    assert "Say what a procedure should say differently in your answer" in said
+    # The control: the section still says what the catalogue is for, in the same breath.
+    assert "prefer an existing procedure over inventing a new one" in said
+
+
 def test_the_prompt_names_a_recorded_result_as_the_ledger_does():
     """The folder, the id and the tag are each the recorder's or the delta's spelling;
     renamed on one side alone, the agent is told to look for something never written.

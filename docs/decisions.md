@@ -2780,6 +2780,25 @@ runtime's -- `guides/tools.md` says to trust an output as far as the agent, and
 `test_an_output_the_agent_planted_mid_run_comes_back_as_the_commands_own` holds the
 measurement. *(2026-10-21.)*
 
+**A refused write says where a write may go, and the prompt says it first.** deepagents
+answers its own deny rules from inside each file tool with `permission denied for write
+on <path>` and nothing else, while kingfisher's refusal of a path *outside* the session
+already named what to write instead -- so the ordinary case, a path inside the session
+that is kept, was the one taught nothing, and a model refused there spends the next call
+finding out. One sentence for all of `denied_scopes`, appended by `where_to_write` beside
+`refusal_text` so both refusals offer the same two folders, and naming neither the rule
+nor what the folder holds: `/.harness` is denied too and the agent is shown nothing of
+it. **The prompt is the half that matters**, since a refusal is a call already spent --
+and of the folders the prompt named, `/skills` was the only one refused without saying
+so, in a section that tells the model to prefer an existing procedure over inventing one.
+What to do instead is an answer rather than a file, since *Finishing* tells the model not
+to manufacture files nobody asked for and a corrected copy of a skill would be one. Not
+taken: a reason per scope, which belongs where the folder is introduced; or matching the
+rule that refused, which deepagents reports on `delete` alone. The coupling is
+deepagents' wording, which `test_a_refused_write_says_where_a_write_may_go` drives for
+every denied scope, so an upgrade that rewords it goes red rather than quietly dropping
+the sentence. *(2026-10-22.)*
+
 ## Confining the shell
 
 **The two fences share a toolchain and not a workspace**, and the asymmetry is the

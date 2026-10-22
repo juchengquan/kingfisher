@@ -22,11 +22,12 @@ from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.session_paths import as_asked
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, paths_in, tools_dir
 
 #: Every builtin these rules call, granted together so one agent can be driven once.
-TOOLS = ("read_file", "write_file", "ls", "execute")
+TOOLS = ("read_file", "write_file", "delete", "ls", "execute")
 
 
 @pytest.fixture(params=["sync", "async"])
@@ -170,6 +171,71 @@ def test_a_shell_message_is_what_the_rewrite_would_spoil():
 
     assert f"'{command}'" in spoiled
     assert "'/scratchpad/missing.py'" not in spoiled
+
+
+# -- a write a deny rule refused -----------------------------------------------
+
+
+@pytest.mark.parametrize("scope", DEFAULT_LAYOUT.denied_scopes())
+def test_a_refused_write_says_where_a_write_may_go(cfg, session_dir, way, scope):
+    """deepagents answers a deny rule with the code and the path and nothing else, while
+    kingfisher's own refusal of a path *outside* the session names what to write instead
+    -- so the ordinary case, a path inside the session that is kept, was the one taught
+    nothing, and a model refused there spends the next call finding out where to go.
+
+    Every scope the layout denies, read off `denied_scopes` rather than listed here: one
+    sentence covers them all, and a scope the layout gains arrives with a case instead of
+    passing uncovered. `blobs` is a folder nothing makes, and the rule refuses a write
+    there all the same.
+    """
+    asked = scope.replace("**", "new.txt")
+
+    said = _answers(cfg, session_dir, way, ("write_file", {"file_path": asked, "content": "x"}))
+
+    answer = said["0:write_file"]
+    assert f"on {asked}" in answer, answer
+    assert "that path is not yours to write" in answer, answer
+    assert "`/outputs/<name>`" in answer, answer
+    assert "`/scratchpad/<name>`" in answer, answer
+
+
+def test_a_refused_delete_says_it_too(cfg, session_dir, way):
+    """`delete` is refused in its own words -- alone of the four it names the rule that
+    refused it -- so the sentence cannot be a rewrite of one tool's message.
+    """
+    (session_dir / "inputs").mkdir(exist_ok=True)
+    (session_dir / "inputs" / "given.txt").write_text("data", encoding="utf-8")
+
+    said = _answers(cfg, session_dir, way, ("delete", {"file_path": "/inputs/given.txt"}))
+
+    answer = said["0:delete"]
+    assert "matches deny rule(s)" in answer, answer
+    assert "that path is not yours to write" in answer, answer
+    assert (session_dir / "inputs" / "given.txt").is_file(), "the file went anyway"
+
+
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [
+        # A write that lands. Told where to write after writing there, a model reads the
+        # sentence as a correction and moves the file.
+        ("write_file", {"file_path": "/outputs/made.txt", "content": "x"}),
+        # A read a rule refused, not a write: `/.harness` is denied both ways, and the two
+        # folders a write may land in are no answer to a read.
+        ("read_file", {"file_path": "/.harness/agent.yaml"}),
+        # A failure that is no refusal: a path that is missing is not a path that is kept,
+        # and the two want different next calls.
+        ("read_file", {"file_path": "/inputs/nope.txt"}),
+    ],
+)
+def test_nothing_but_a_refused_write_is_told_where_to_write(cfg, session_dir, way, tool, args):
+    """The controls, one per message the rule must leave alone: a rule that appended the
+    sentence to every error would pass the ones above.
+    """
+    said = _answers(cfg, session_dir, way, (tool, args))
+
+    answer = said[f"0:{tool}"]
+    assert "not yours to write" not in answer, answer
 
 
 #: A tool that opens what it is given with Python's own `open`, which is handed the host

@@ -614,6 +614,14 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
   else**, so a backend called directly keeps none of them. The functions it uses
   are private -- `_check_fs_permission`, `_find_delete_deny_patterns`, the two
   result filters -- and `PermittedBackend` calls the same ones.
+- **A refused write reports `permission denied for write on <path>` and no more.**
+  `write_file`, `edit_file` and the rest say exactly that; `delete` alone appends
+  `(matches deny rule(s): /inputs/**)`, since it reaches a second private helper. A
+  refused *read* says `for read on` instead, and `ls`, `glob` and `grep` filter the
+  denied entries out and answer `No files found`. So the only sign a rule and not the
+  filesystem answered is that wording, which `where_to_write` keys on. Measured against
+  deepagents 0.7.22, not the 0.7.6 above: the wording is what the coupling rests on, so
+  the version it was read from is worth the line. *(2026-10-22.)*
 - **Its result filters pass `interrupt` entries through**, and so does its delete
   check for a confirmed leaf. Correct for a file tool, where the person has
   answered before the tool body runs, and a hole for any other caller.

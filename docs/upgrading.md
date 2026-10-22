@@ -18,6 +18,25 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A refused write says where a write may go, after #1063
+
+- **A refused write's message is longer.** A write, edit or delete a deny rule refuses
+  now reads:
+
+  ```
+  Error: permission denied for write on /inputs/x.txt -- that path is not yours to
+  write. What you make goes under `/outputs/<name>` or `/scratchpad/<name>`.
+  ```
+
+  in your layout's names, where before it was deepagents' code and the path alone. If you
+  assert on a refused tool result's text, or diff tool messages between runs, they are not
+  the same.
+- **The skills section of the prompt gained a sentence**, saying the catalogue is shared
+  and read-only and that what a procedure should say differently belongs in the answer.
+  It appears only where skills are wired. If you cache the system prompt or diff it, the
+  text has changed.
+- **Nothing a rule allows or refuses has moved.** The scopes are the same, the deny rules
+  are the same, and a refusal is still a failed result the turn goes on past.
 ## A session is made with `scratchpad/large_tool_results/`, after #1062
 
 - **Every session has the folder, empty, from the next time it is opened.** deepagents'
