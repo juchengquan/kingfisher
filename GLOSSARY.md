@@ -96,8 +96,9 @@ _Avoid_: session prompt, conversation prompt, dynamic prompt, per-session system
 **Portable subagent**:
 A subagent written to travel between deployments, usually in a package, that kingfisher
 builds from its description. It cannot name anything only one deployment knows: its own
-middleware, its helpers, or its model. Not one that arrives already built, and not one
-written in a deployment's own definitions folder.
+middleware, its helpers, or its model. Not one that arrives already built, and not a
+subagent document in YAML or Markdown. Its shape decides, not where it is written: one
+typed into a deployment's own definitions folder is portable too.
 _Avoid_: packaged subagent, Python subagent, external subagent
 
 ### Access

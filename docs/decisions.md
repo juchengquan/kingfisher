@@ -454,8 +454,8 @@ agent's declared middleware, so "the agent's names" was an answer the code gave 
 On by default, since leaving it off is what a deployment asked to be rid of; one wanting
 the old behaviour wires a plugin answering nothing, and `upgrading.md` says so. The
 agent's settings come with each name, and a `wants` is still filled per subagent, its
-model its own. Portable subagents only: one in the definitions folder writes its own
-line, and a compiled one is given no middleware. A portable helper is told the *main*
+model its own. Portable subagents only: a subagent document writes its own line, and a
+compiled one is given no middleware. A portable helper is told the *main*
 agent's names, not its summoner's, because the agent's line is the ceiling everything
 beneath it is clamped by and a compiled summoner has none. A name past that line is
 refused, as a definition naming one is, and the refusal names the plugin, since the
@@ -463,8 +463,8 @@ subagent named nothing. The plugin is handed plain values -- the subagent's name
 agent's, the agent's names -- never a spec, as a plugin kingfisher ships takes only what
 an outsider could. *(2026-10-21.)*
 
-**`SubagentSpec.portable` is the mark, not a missing `build`.** A subagent file in the
-definitions folder has no `build` either, and nothing else on the spec said which reader
+**`SubagentSpec.portable` is the mark, not a missing `build`.** A subagent document in
+the definitions folder has no `build` either, and nothing else on the spec said which reader
 made it. A derived field set only by the reader of a `SUBAGENTS` entry, so it joins none
 of `KNOWN`, `PORTABLE` or `NOT_PORTABLE`. Not taken: inferring it from `carried`, which is
 empty for a portable entry that brought nothing. It is still a rule about shape, not
