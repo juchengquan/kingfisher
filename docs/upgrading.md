@@ -26,6 +26,22 @@ replaced the four layers began.
   KeyError: 'auditor'`. Every other graph in the turn keeps what it would have had. A
   deployment that relied on a raise to stop a turn should refuse the request itself.
 
+## A failure names the path the call named, after #1053
+
+- **A failed file-tool call now answers with the path the model wrote.** Under a route it
+  used to answer with that route stripped off -- `/inputs/nope.txt` came back as
+  `File '/nope.txt' not found` -- and a refused write answered with the host path the
+  `OSError` carried. A deployment matching on the text of a failure, or testing against
+  it, sees the virtual path now.
+- **An offered tool's failure says it too.** Its `path` argument is still made real
+  before the tool runs; only what a failure *says* changes, so a tool whose own
+  `open()` fails no longer hands the model the host spelling.
+- **Nothing else is rewritten.** Only a result marked `status="error"`, so file contents
+  are untouched, and a command's output is untouched with them -- a command that fails
+  is a tool call that succeeded.
+- **`as_asked` is new in `kingfisher.core.agent.session_paths`**, beside `refusal_text`.
+  Neither is exported; a deployment calling `GuardedTool._failed` directly passes the
+  call's own arguments as its second argument.
 ## A clearing mark is held to the summarizer the graph runs, after #1051
 
 - **A `clear_results_at` past deepagents' own trigger is accepted under a summarizer of
