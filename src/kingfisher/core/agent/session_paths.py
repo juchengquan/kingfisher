@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
@@ -78,6 +79,41 @@ class SessionPaths:
         if not isinstance(value, str) or not value.strip():
             return value
         return str(self._permitted.on_this_host(value))
+
+
+#: A path a failure quotes. Every backend quotes one the same way, and quoting is what
+#: tells a path in a message from the prose around it.
+_QUOTED = re.compile(r"'(/[^']*)'")
+
+
+def as_asked(text: str, args: Mapping[str, Any]) -> str:
+    """`text` with every path it quotes spelled the way the call spelled it.
+
+    What a failure says about a path has to be the path the model wrote, and twice over
+    it was not. The composite strips a route before calling the backend that holds it,
+    and that backend reports its own root: a miss under `/inputs/nope.txt` came back as
+    `File '/nope.txt' not found`, a path in a different place, which a model is left to
+    retry or write. And an `OSError` carries the host path it failed on, so a refused
+    write answered with `/private/.../sessions/<id>/scratchpad/...` -- the spelling the
+    file tools exist not to have, and `reject_host_path` refuses when a model writes one.
+
+    One rule for both, because both are the asked-for path with a prefix taken off or
+    put on: a quoted path that ends with one the call named, or that one ends with, is
+    that path said another way. Longest first, so a call naming two paths rewrites each
+    against the one it is really a tail of.
+    """
+    asked = sorted(
+        (one for one in _strings_in(args) if one.startswith("/")), key=len, reverse=True
+    )
+
+    def _said(match: re.Match[str]) -> str:
+        named = match.group(1)
+        for one in asked:
+            if named != one and (named.endswith(one) or one.endswith(named)):
+                return f"'{one}'"
+        return match.group(0)
+
+    return _QUOTED.sub(_said, text)
 
 
 def refusal_text(escaped: ValueError, paths: SessionPaths | None = None) -> str:

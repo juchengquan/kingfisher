@@ -2209,6 +2209,33 @@ reaches it -- driven in one turn with the refusals, since a turn that only check
 refusals would pass with the keeping broken. Not taken: denying reads, which is what the
 history is for. *(2026-10-21.)*
 
+**What a failure says about a path is the path the model wrote.** Two spellings reached
+the model instead, both measured from its own seat. The composite strips a route before
+calling the backend holding it and that backend reports its own root, so a miss at
+`/inputs/nope.txt` came back as `File '/nope.txt' not found` -- a path in another place,
+which a model is left to retry or to write, while the same call succeeding named
+`/inputs/notes.txt` correctly. And an `OSError` carries the path it failed on, which is
+the host's: a refused write answered with `/private/.../sessions/<id>/scratchpad/...`, and
+an offered tool's own `open()` does it on every miss, since `translated` makes its `path`
+real by design.
+
+One rule for both, in `as_asked`: a path a failure quotes that ends with one the call
+named, or that one ends with, is that path said another way, so it is replaced by what
+the model wrote. Both symptoms are the asked-for path with a prefix taken off or put on,
+and neither needs a route table or a session directory to undo. **Only a failure**,
+`status == "error"`, which turned out to be two rules in one: a file read whole is
+content, and a file whose text says `/notes.txt` is not a tool talking about a path; and
+the shell keeps its own spelling, the host's by design, because a command that fails is
+a tool call that succeeded. A check on the shell's name went in first and was deleted as
+unreachable once that was measured -- the rule it would have enforced is held by the
+status instead, and a rewritten shell message would be visibly wrong, since the string a
+shell call names is a command rather than a path and `<python> /scratchpad/missing.py`
+ends with the path its own error quotes. Said in `GuardedCallsMiddleware` for a graph
+kingfisher builds and in `GuardedTool` for a compiled subagent's tools and `eval`'s code,
+which its docstring already said must answer alike and nothing held. Not taken: mapping a
+host path through the routes, which would need to know which backend answered, when the
+call already says what the model meant. *(2026-10-22.)*
+
 **A scoped search asks the routes below the path as well.** The composite stops at the
 one route owning the path, so a search of `/skills` answered with the catalogue's skills
 and silently without any bundle's -- the folder an agent is told holds its procedures,
