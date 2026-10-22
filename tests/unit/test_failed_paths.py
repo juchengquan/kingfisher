@@ -18,8 +18,10 @@ from langchain_core.messages import AIMessage, ToolMessage
 from kingfisher import ToolContext
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.middlewares.builtin_tools import kept_note
 from kingfisher.core.agent.permitted_backend import PermittedBackend
-from kingfisher.core.agent.session_paths import as_asked
+from kingfisher.core.agent.prompting import stray_save, what_you_make_goes
+from kingfisher.core.agent.session_paths import as_asked, where_to_write
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.core.layout import DEFAULT_LAYOUT
@@ -171,6 +173,40 @@ def test_a_shell_message_is_what_the_rewrite_would_spoil():
 
     assert f"'{command}'" in spoiled
     assert "'/scratchpad/missing.py'" not in spoiled
+
+
+# -- the one sentence every refusal of a write closes with ---------------------
+
+
+def test_the_one_sentence_says_what_each_folder_is_for():
+    """Naming the two folders is not the point; choosing between them is. The wording that
+    only named them is the one this replaced, and a sentence that lost the purposes again
+    would pass every rule below, which look for the paths.
+    """
+    said = what_you_make_goes(DEFAULT_LAYOUT.outputs_route, DEFAULT_LAYOUT.scratch_route)
+
+    assert "`/outputs/<name>` to hand it back" in said
+    assert "`/scratchpad/<name>` to work on it" in said
+
+
+def test_every_refusal_that_offers_somewhere_to_write_ends_with_the_one_sentence():
+    """Three refusals offered it in three wordings -- a deny rule's, a fence's, and a save
+    outside the session's folders -- and a model reading three wordings for one rule reads
+    three rules. Each refusal's own rule compares against the function that words it, so
+    one reworded in place reddens nothing: this is what notices.
+
+    Driven over all three rather than asserted of the helper, since the helper having one
+    wording is not the claim -- the claim is that nothing says it any other way.
+    """
+    one = what_you_make_goes(DEFAULT_LAYOUT.outputs_route, DEFAULT_LAYOUT.scratch_route)
+    offered = {
+        "a deny rule": where_to_write("Error: permission denied for write on /inputs/x.txt"),
+        "a fence": kept_note("inputs", DEFAULT_LAYOUT),
+        "a save outside the folders": stray_save("/cleaned.csv", DEFAULT_LAYOUT),
+    }
+
+    for whose, said in offered.items():
+        assert said.endswith(one), f"{whose} words it its own way: {said}"
 
 
 # -- a write a deny rule refused -----------------------------------------------

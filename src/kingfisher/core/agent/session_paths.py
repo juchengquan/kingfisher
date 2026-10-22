@@ -10,6 +10,7 @@ from typing import Any
 from kingfisher.core.layout import INPUTS_ROUTE, OUTPUTS_ROUTE, SCRATCH_ROUTE, Layout
 
 from .host_paths import HOST_ROOTS, HostPathError
+from .prompting import what_you_make_goes
 
 #: Which arguments name a file: a convention `tools.md` documents, so widening it
 #: means a sentence there too.
@@ -160,13 +161,3 @@ def where_to_write(text: str, paths: SessionPaths | None = None) -> str:
         f"{text} -- that path is not yours to write. "
         f"{what_you_make_goes(outputs_route, scratch_route)}"
     )
-
-
-def what_you_make_goes(outputs_route: str, scratch_route: str) -> str:
-    """Where the agent's own files go, worded once.
-
-    Two refusals offer it -- a deny rule's, above, and a fence's, which `builtin_tools`
-    reads out of the shell's own output -- and a model reading two wordings for one rule
-    reads two rules.
-    """
-    return f"What you make goes under `{outputs_route}<name>` or `{scratch_route}<name>`."

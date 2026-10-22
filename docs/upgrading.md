@@ -18,6 +18,27 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Every refusal of a write offers somewhere to write in one wording, after #1068
+
+- **The three refusals that offer somewhere to write now say it one way.** A deny rule's
+  refusal (#1063), the note on a shell command the fence refused (#1065), and a save
+  outside the session's folders (#1066) each worded the offer themselves, the last two
+  on the same day. All three now close with `what_you_make_goes`, in `prompting`, which
+  is #1066's wording:
+
+  ```
+  Save what you make under `/outputs/<name>` to hand it back, or under
+  `/scratchpad/<name>` to work on it.
+  ```
+
+  in your layout's names -- it says what each folder is *for*, which is what choosing
+  between them needs. The three sections below quote what each refusal said before, so
+  if you assert on a refused write's text, re-read it.
+- **A path that climbed out of the session reads as it did.** That refusal answers with
+  the shape a tool path has, and names an inputs path as a spelling rather than a
+  destination, so it is not a fourth: offering it as somewhere to write would make it
+  wrong.
+
 ## A save outside every folder of the session is refused, after #1066
 
 - **`write_file` and `edit_file` refuse a path whose top folder your layout does not
@@ -54,6 +75,7 @@ replaced the four layers began.
   building the middleware itself passes the root, and `None` keeps both corrections off.
 - **Nothing a fence allows or refuses has moved.** The profiles are the same and the
   folders are the same; only what the model is told afterwards changed.
+
 ## A long result your backend would not keep is previewed, after #1064
 
 - **The model is shown a preview, not the whole result**, when your backend refuses or
