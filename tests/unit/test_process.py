@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 import tracemalloc
@@ -9,6 +10,7 @@ import tracemalloc
 import pytest
 from deepagents.backends import LocalShellBackend
 
+from kingfisher.plugins.sessions.sandbox import process
 from kingfisher.plugins.sessions.sandbox.process import run_command
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX process groups")
@@ -81,6 +83,41 @@ def test_a_process_holding_the_output_open_does_not_hold_the_command():
 
     assert result.output.strip() == "started"
     assert time.monotonic() - started < 5
+
+
+#: The watch `run_command` arms, kept before a test replaces it.
+_WATCH = process._ExitWatch
+
+
+class _ArmedTooLate(_WATCH):
+    """A watch armed only once the shell has exited, which macOS refuses to arm at all.
+
+    It waits for the exit without collecting it, so the group still has its id to be
+    killed by: `waitid` where there is one, else the real watch's own event.
+    """
+
+    def __init__(self, pid: int) -> None:
+        if sys.platform == "linux":
+            os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT)
+        else:
+            watching = _WATCH(pid)
+            if watching.source is not None:
+                watching.source.control(None, 1, 10)
+            watching.close()
+        self.source = None
+        self.happened = True
+
+
+def test_a_shell_gone_before_its_watch_still_has_its_background_killed(monkeypatch):
+    """Where the host would not watch a shell that had already exited, what it left in the
+    background held the pipe until the timeout, so a finished command read as timed out.
+    The watch is armed late on purpose; the test above is the same command armed in time.
+    """
+    monkeypatch.setattr(process, "_ExitWatch", _ArmedTooLate)
+
+    result = run_command("sleep 30 & echo started", env=ENV, timeout=3)
+
+    assert (result.exit_code, result.output.strip()) == (0, "started")
 
 
 def test_the_environment_is_only_what_was_given(monkeypatch):

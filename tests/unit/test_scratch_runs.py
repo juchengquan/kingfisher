@@ -8,7 +8,9 @@ real folder that a real shell can swap.
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
+import stat
 import sys
 import threading
 import time
@@ -35,6 +37,7 @@ from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.core.interfaces import MAX_SCRATCH_BYTES, MAX_SCRATCH_OUTPUTS, CommandResult
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions, NoScratchRunLimit, Plugins, backend_at
+from kingfisher.plugins.sessions.scratch import ScratchFolder
 from tests.conftest import (
     EVERY_TOOL,
     FakeToolCallingModel,
@@ -107,7 +110,9 @@ def _calls(name: str, **args: Any) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call-{name}"}])
 
 
-def _results(cfg, session_dir, *responses: AIMessage, **keywords: Any) -> dict[str, str]:
+def _results(
+    cfg, session_dir, *responses: AIMessage, way: str = "sync", **keywords: Any
+) -> dict[str, str]:
     """Each tool's last result in one turn, subagents' included, by tool name."""
     built = build_agent(
         cfg,
@@ -116,17 +121,30 @@ def _results(cfg, session_dir, *responses: AIMessage, **keywords: Any) -> dict[s
         **keywords,
     )
     found: dict[str, str] = {}
-    for _, chunk in built.graph.stream(
-        {"messages": [{"role": "user", "content": "go"}]},
-        config={"configurable": {"thread_id": "scratch"}},
-        stream_mode="updates",
-        subgraphs=True,
-        context=built.context,
-    ):
+
+    def keep(chunk: Any) -> None:
         for update in chunk.values():
             for message in runtime.messages_in(update):
                 if isinstance(message, ToolMessage) and message.name:
                     found[message.name] = str(message.content)
+
+    start = {"messages": [{"role": "user", "content": "go"}]}
+    options: dict[str, Any] = {
+        "config": {"configurable": {"thread_id": "scratch"}},
+        "stream_mode": "updates",
+        "subgraphs": True,
+        "context": built.context,
+    }
+    if way == "sync":
+        for _, chunk in built.graph.stream(start, **options):
+            keep(chunk)
+        return found
+
+    async def drained() -> None:
+        async for _, chunk in built.graph.astream(start, **options):
+            keep(chunk)
+
+    asyncio.run(drained())
     return found
 
 
@@ -238,9 +256,10 @@ def test_a_compiled_subagents_tool_is_refused(cfg, session_dir):
     assert result.content == NOT_GRANTED
 
 
-def test_a_run_kept_past_its_call_runs_nothing(cfg, session_dir):
+def test_a_run_kept_past_its_call_runs_nothing(cfg, session_dir, way):
     """A tool that keeps what it was handed would otherwise hold the shell for every call
-    after, under another agent's grant or in another session's turn."""
+    after, under another agent's grant or in another session's turn. Both ways, since an
+    awaited turn closes the runner in `awrap_tool_call`, which nothing ran."""
     _a_tool(cfg)
 
     found = _results(
@@ -249,6 +268,7 @@ def test_a_run_kept_past_its_call_runs_nothing(cfg, session_dir):
         _calls("shout", text="hi"),
         _calls("shout_again", text="later"),
         AIMessage(content="done"),
+        way=way,
     )
 
     assert found["shout"] == "HI"
@@ -452,40 +472,66 @@ def test_a_limit_allowing_a_graph_without_the_shell_binds_nothing(
     assert found == ["HI", answer]
 
 
-GATED_RAISED = RAISED.replace("'helper'", "'gated'")
+#: Where the shout runs, how the agent's model gets it there, and what the limit is asked.
+_SHOUTED_IN = {
+    "agent": ([_calls("shout", text="hi"), AIMessage(content="done")], ("gated", "agent")),
+    "subagent": (
+        [
+            _calls("task", description="shout it", subagent_type="helper"),
+            _calls("shout", text="hi"),
+            AIMessage(content="shouted"),
+            AIMessage(content="done"),
+        ],
+        ("helper", "subagent"),
+    ),
+    "general-purpose": (
+        [
+            _calls("task", description="shout it", subagent_type="general-purpose"),
+            _calls("shout", text="hi"),
+            AIMessage(content="shouted"),
+            AIMessage(content="done"),
+        ],
+        ("general-purpose", "general-purpose"),
+    ),
+}
 
 
+@pytest.mark.parametrize("graph", list(_SHOUTED_IN))
 @pytest.mark.parametrize(
-    ("gates", "limit", "answer"),
+    "case",
     [
         ("[execute]", _Limit, NOT_GRANTED),
         ("[write_file]", _Limit, "HI"),
         ("[execute]", _Raising, NOT_GRANTED),
-        ("[write_file]", _Raising, GATED_RAISED),
+        ("[write_file]", _Raising, RAISED),
     ],
+    ids=["gated-allowing", "ungated-allowing", "gated-raising", "ungated-raising"],
 )
-def test_a_gated_shell_is_refused_whatever_the_limit_answers(
-    cfg, session_dir, gates, limit, answer
-):
-    """Nothing can pause for a person inside a tool, so no limit may hand a gated shell on;
-    and a limit raising there is not what refused it, so the refusal does not blame it."""
+def test_a_gated_shell_is_refused_whatever_the_limit_answers(cfg, session_dir, case, graph):
+    """Nothing can pause for a person inside a tool, so no limit may hand a gated shell on,
+    on any graph the gate reaches: one not handed the agent's gate ran the command unasked.
+    A limit raising there is not what refused it, so the refusal does not blame it."""
+    gates, limit, answer = case
     _a_tool(cfg)
-    an_agent(cfg, "gated", interrupt_on=gates, **EVERY_TOOL)
+    _a_helper(cfg)
+    an_agent(cfg, "gated", interrupt_on=gates, subagents="[helper]", **EVERY_TOOL)
     (agent,) = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs.values()
-    limit = limit("gated") if limit is _Raising else limit()
+    responses, asked = _SHOUTED_IN[graph]
+    name = asked[0]
+    limit = limit(name) if limit is _Raising else limit()
 
     found = _answers(
         cfg,
         session_dir,
-        _calls("shout", text="hi"),
-        AIMessage(content="done"),
+        *responses,
         agent=agent,
         checkpointer=InMemorySaver(),
         scratch_run_limit=limit,
     )
 
-    assert found == [answer]
-    assert ("gated", "agent") in limit.asked
+    # `RAISED` names the helper's graph; the limit here raised for this graph's.
+    assert found == [answer.replace("'helper'", repr(name))]
+    assert asked in limit.asked
 
 
 @pytest.mark.parametrize(
@@ -843,6 +889,80 @@ def test_a_folder_swapped_for_a_link_mid_run_hands_back_nothing_from_where_it_po
             shutil.rmtree(one)
 
 
+def test_a_scratchpad_swapped_for_a_link_gets_no_run_where_it_points(
+    cfg, session_dir, tmp_path
+):
+    """The session is checked for links when it opens, not between runs: followed, a
+    scratchpad the shell swapped for a link since had the run's folder made, and its
+    inputs written, wherever the link pointed."""
+    backend = backend_at(cfg, session_dir)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    scratchpad = session_dir / cfg.layout.scratchpad
+    scratchpad.rename(scratchpad.with_name("scratchpad.aside"))
+    scratchpad.symlink_to(elsewhere)
+
+    with pytest.raises(OSError):
+        backend.default.run_in_scratch(["/bin/true"], {"in.txt": b"x"}, outputs=[])
+
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_an_input_is_never_written_through_a_file_already_under_its_name(
+    cfg, session_dir, tmp_path
+):
+    """Opened without `O_EXCL`, an input written over a hard link planted under its name
+    went into the file the link shares, wherever that is."""
+    shared = tmp_path / "shared.txt"
+    shared.write_bytes(b"KEPT")
+
+    with ScratchFolder(session_dir, cfg.layout.scratchpad) as folder:
+        os.link(shared, folder.path / "in.txt")
+        with pytest.raises(FileExistsError):
+            folder.write({"in.txt": b"WRITTEN THROUGH"})
+
+    assert shared.read_bytes() == b"KEPT"
+
+
+def test_a_runs_folder_is_its_owners_alone(cfg, session_dir):
+    """Made by the umask's leave, the folder holding a run's inputs could be read, and an
+    output planted in it, by anyone else on the machine. The umask is opened up so it
+    cannot be what keeps the folder private."""
+    opened = os.umask(0)
+    try:
+        with ScratchFolder(session_dir, cfg.layout.scratchpad) as folder:
+            mode = stat.S_IMODE(folder.path.stat().st_mode)
+    finally:
+        os.umask(opened)
+
+    assert mode == 0o700
+
+
+def test_outputs_past_what_one_run_may_bring_back_are_left_where_they_are(
+    cfg, session_dir, monkeypatch
+):
+    """Read into kingfisher's own process: past the cap an output came back cut short as
+    though whole, and each one after it came back empty. The cap is lowered so a run of
+    a few bytes can cross it; the whole of it is what one run may bring back."""
+    monkeypatch.setattr("kingfisher.plugins.sessions.scratch.MAX_BROUGHT_BACK", 1000)
+
+    ran = backend_at(cfg, session_dir).default.run_in_scratch(
+        [
+            "/bin/sh",
+            "-c",
+            "printf '%600s' '' > a; printf '%600s' '' > b; printf '%10s' '' > c",
+        ],
+        {},
+        outputs=["a", "b", "c"],
+    )
+
+    assert ran.exit_code == 0, ran.output
+    # `c` still fits in what `b` would have used: only the one past the cap stays behind.
+    assert ran.files == {"a": b" " * 600, "c": b" " * 10}
+    assert set(ran.missing) == {"b"}
+    assert "past the 1000 bytes" in ran.missing["b"]
+
+
 def test_an_output_the_agent_planted_mid_run_comes_back_as_the_commands_own(
     cfg, session_dir
 ):
@@ -911,6 +1031,32 @@ def test_a_run_its_caller_stops_ends_at_once(cfg, session_dir):
     assert _scratchpad_runs(session_dir) == []
 
 
+def test_a_cancelled_async_run_stops_its_command_before_it_lets_go(cfg, session_dir):
+    """Every async run on kingfisher's own backend goes through the thread fallback: not
+    told to stop, its command ran to its end after the cancel, and let go of first, its
+    folder outlived the call that made it."""
+    runner = ScratchRunner(backend_at(cfg, session_dir), seconds=30)
+
+    async def cancelled() -> float:
+        call = asyncio.ensure_future(
+            runner.arun(["/bin/sleep", "10"], {}, outputs=[], timeout=None)
+        )
+        until = time.monotonic() + 10
+        while not _scratchpad_runs(session_dir) and time.monotonic() < until:
+            await asyncio.sleep(0.01)
+        assert _scratchpad_runs(session_dir), "the run never made its folder"
+        started = time.monotonic()
+        call.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await call
+        return time.monotonic() - started
+
+    took = asyncio.run(cancelled())
+
+    assert _scratchpad_runs(session_dir) == []
+    assert took < 5
+
+
 def test_a_deployments_own_runner_is_not_gone_round(cfg, session_dir):
     """A runner a deployment supplied may run as another user or under limits; a scratch
     run launching its own process would skip all of it."""
@@ -937,3 +1083,38 @@ def test_a_program_env_would_read_as_its_own_is_refused(cfg, session_dir, argv):
 
     assert ran.error is not None
     assert _scratchpad_runs(session_dir) == []
+
+
+@pytest.mark.parametrize(
+    ("files", "outputs"),
+    [({"../escaped.txt": b"written"}, []), ({}, ["../kept.txt"])],
+    ids=["file", "output"],
+)
+def test_a_caller_of_the_method_itself_cannot_name_a_file_beside_the_run(
+    cfg, session_dir, files, outputs
+):
+    """`ScratchRunner` refuses such a name first, but the method is the backend's, found by
+    `scratch_runs_of`, and the folder opens a name relative to itself with no check of its
+    own: `../` wrote into the scratchpad, and read a file there back as an output."""
+    scratchpad = session_dir / "scratchpad"
+    (scratchpad / "kept.txt").write_bytes(b"the session's")
+
+    ran = backend_at(cfg, session_dir).default.run_in_scratch(
+        ["/bin/true"], files, outputs=outputs
+    )
+
+    assert ran.error is not None
+    assert "plain name" in ran.error
+    assert ran.files == {}
+    assert not (scratchpad / "escaped.txt").exists()
+
+
+def test_a_caller_of_the_method_itself_is_held_to_the_shells_time(cfg, session_dir):
+    """`ScratchRunner` hands a run only what its call has left, but a caller of the method
+    asking for more ran past `execution_timeout_s`, which the claim's grace counts on no
+    command outliving."""
+    backend = backend_at(replace(cfg, execution_timeout_s=1), session_dir)
+
+    ran = backend.default.run_in_scratch(["/bin/sleep", "5"], {}, outputs=[], timeout=60)
+
+    assert ran.exit_code == 124

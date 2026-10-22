@@ -702,6 +702,27 @@ def test_a_supersede_that_cannot_drop_the_pause_lets_go_of_the_built_turn(cfg, m
     assert kf.run(Request("again", session_id=paused.session_id)).stop_reason == END_TURN
 
 
+def test_a_report_failing_after_the_build_lets_go_of_the_built_graph(cfg, monkeypatch):
+    """What setup reports of a graph is read after the build and before the turn holds
+    it, so a failure there left a graph no ending would release, its interpreter held."""
+    from kingfisher.core.session import preparation
+
+    kf = Kingfisher(cfg, graph=_gated(calls=[], after="ok"), sessions=LocalSessions())
+    released: list[Any] = []
+
+    def failing(*_: Any, **__: Any) -> Any:
+        msg = "the graph's tools could not be read"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(preparation, "withheld_by_kind", failing)
+    monkeypatch.setattr(preparation, "release_interpreter", lambda _, graph: released.append(graph))
+    with pytest.raises(RuntimeError, match="could not be read"):
+        kf.run(Request("hi"))
+    monkeypatch.undo()
+
+    assert len(released) == 1, "the graph was built and never let go of"
+
+
 def test_a_refused_request_leaves_the_inputs_it_would_replace(cfg, tmp_path):
     """Setup copied a request's files into the session before the build's refusals had run,
     so a refused request overwrote the caller's earlier file and ran no turn.

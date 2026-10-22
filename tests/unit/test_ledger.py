@@ -2253,6 +2253,19 @@ def test_a_resume_carries_on_the_round_it_answers(ledgered):
     assert _expired_in(asked) == ["A-0001", "A-0002"]
 
 
+def test_a_result_the_backend_refused_is_never_relabelled_expired():
+    """Expired with the rest, a row whose file the backend refused was listed as expired,
+    which sends a reader to the rounds kept rather than to the backend that refused it."""
+    refused, saved = _entry(1, "web_search", kept=False), _entry(2, "web_search")
+    lines = tuple(json.dumps(asdict(one)) for one in (refused, saved))
+    closed = KeptLedger(lines=lines, exchanges=((refused, saved),))
+    # The rows of a turn a crash left without its closing line, aged with the next.
+    cut = KeptLedger(lines=lines, exchanges=((),), unclosed=((refused, saved),))
+
+    assert _expired_in(Ledger("t2", closed, keep_rounds=1)) == ["A-0002"]
+    assert _expired_in(Ledger("t2", cut, keep_rounds=1)) == ["A-0002"]
+
+
 def _expired_in(ledger: Ledger) -> list[str]:
     rows = (json.loads(line) for line in ledger.earlier.lines)
     return [row["id"] for row in rows if row.get("expired_in") == ledger.turn]
@@ -2312,6 +2325,21 @@ def test_a_miss_is_not_explained_where_results_do_not_expire(ledgered):
     missing = f"{TOOL_RESULTS_ROUTE}A-0042-web_search.txt"
 
     _run(ledgered, _calls(("read_file", {"file_path": missing}, "c1")), AIMessage(content="done"))
+
+    assert "not found" in _handed("c1").text
+    assert "expired" not in _handed("c1").text
+
+
+def test_a_miss_outside_the_results_folder_is_not_explained_as_expired(ledgered):
+    """The other control, with results expiring: told a saved result expired for a path
+    that was never one, the model gives up on an input it merely mistyped."""
+    cfg = _rounds(ledgered, 1)
+
+    _run(
+        cfg,
+        _calls(("read_file", {"file_path": "/inputs/x.csv"}, "c1")),
+        AIMessage(content="done"),
+    )
 
     assert "not found" in _handed("c1").text
     assert "expired" not in _handed("c1").text

@@ -602,6 +602,21 @@ def test_kingfishers_shell_hands_no_runner_more_than_the_setting(cfg):
     assert runner.handed == [cfg.execution_timeout_s, cfg.execution_timeout_s, 1]
 
 
+@pytest.mark.parametrize("asked", [0, -1])
+def test_kingfishers_shell_refuses_a_timeout_that_is_not_positive(cfg, asked):
+    """Handed on, a zero timeout came back "timed out after 0 seconds" from a command
+    that never ran, where deepagents' own shell is refused and its tool says "Invalid
+    parameter"."""
+    runner = Timed()
+    start(cfg, "s")
+    shell = LocalSessions(runner=lambda _where: runner).open(cfg, "s").default
+
+    with pytest.raises(ValueError, match="timeout must be positive"):
+        shell.execute("true", timeout=asked)
+
+    assert runner.handed == []
+
+
 # -- a runner's shell that exports the session root ------------------------
 
 
