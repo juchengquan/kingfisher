@@ -11,13 +11,14 @@ from functools import cache
 from pathlib import PurePosixPath
 from typing import Any
 
-from deepagents.backends.utils import _get_backend_read_file_type
+from deepagents.backends.utils import _get_backend_read_file_type, validate_path
 from deepagents.middleware.filesystem import DEFAULT_READ_LIMIT, FilesystemMiddleware
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.todo import WRITE_TODOS_SYSTEM_PROMPT
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
+from kingfisher.core.agent.backend import folders_of, strays
 from kingfisher.core.agent.prompting import (
     EDIT_FILE,
     EXECUTE,
@@ -28,6 +29,7 @@ from kingfisher.core.agent.prompting import (
     WRITE_TODOS,
     ShellPrompt,
     execute_line,
+    stray_save,
 )
 from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import Layout
@@ -201,6 +203,25 @@ def _unreadable(request: Any) -> ToolMessage | None:
         f"tool that can read {reads}, call it on {path}; otherwise say that this part "
         "could not be done.",
     )
+
+
+def _stray(request: Any, folders: frozenset[str], layout: Layout) -> ToolMessage | None:
+    """The refusal of a `write_file` or `edit_file` outside every folder of the session;
+    `None` for any other call."""
+    call = request.tool_call
+    if call.get("name") not in (WRITE_FILE, EDIT_FILE):
+        return None
+    path = (call.get("args") or {}).get("file_path")
+    if not isinstance(path, str):
+        return None
+    try:
+        where = validate_path(path)
+    except ValueError:
+        # Left to the tool, which says what is wrong with the path.
+        return None
+    if not strays(where, folders):
+        return None
+    return failed(call, f"Error: {stray_save(where, layout)}")
 
 
 def _ruled(description: str, rule: str | None) -> str:
@@ -453,7 +474,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     otherwise, and `grep` search each string of `a|b`, and say so; say nothing of the shell or of
     `write_todos` to a graph not holding it; have each built-in's description name only
     the tools the graph holds; and refuse a command asked to run longer than `longest`,
-    and a `read_file` of audio, video or slides, which no model here is handed as they are.
+    a `read_file` of audio, video or slides, which no model here is handed as they are,
+    and a save outside every folder of the session.
 
     The shell's line goes in the description, not the system prompt: a subagent gets none
     of `system.md`, and the description reaches every graph holding the shell. At
@@ -474,9 +496,12 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         rooted: bool = False,
         here: bool = True,
         expires_after: int | None = None,
+        folders: frozenset[str] | None = None,
     ) -> None:
         super().__init__()
         self._longest = longest
+        self._layout = layout
+        self._folders = folders_of(layout) if folders is None else folders
         # The folder a ledger row names, as the file tools spell it, where results expire.
         self._expiring = (
             () if expires_after is None else (layout.tool_results_route.rstrip("/"),)
@@ -545,10 +570,15 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     ) -> Any:
         return await handler(self._told(request))
 
+    def _refused(self, request: Any) -> ToolMessage | None:
+        return (
+            _overlong(request, self._longest)
+            or _unreadable(request)
+            or _stray(request, self._folders, self._layout)
+        )
+
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        if (refused := _overlong(request, self._longest)) is not None:
-            return refused
-        if (refused := _unreadable(request)) is not None:
+        if (refused := self._refused(request)) is not None:
             return refused
         if (parts := _split(request)) is None:
             return self._explained(request, self._corrected(request, handler(_limited(request))))
@@ -562,9 +592,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        if (refused := _overlong(request, self._longest)) is not None:
-            return refused
-        if (refused := _unreadable(request)) is not None:
+        if (refused := self._refused(request)) is not None:
             return refused
         if (parts := _split(request)) is None:
             result = await handler(_limited(request))

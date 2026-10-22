@@ -463,6 +463,7 @@ wrapper the same paths are refused the same way:
 | Asked for | Comes back as |
 | --- | --- |
 | a path the turn may not read or write | the result's `error` — `permission denied for read on /.harness/transcript.jsonl` |
+| a save outside every folder of the session, such as `/table.csv` | the result's `error`, naming where it belongs — `/table.csv is outside the session's folders, so a file saved there is neither kept nor handed back. …` |
 | a path that climbs out with `..` | the result's `error`, the same way |
 | `ls`, `glob` or `grep` over a folder | the entries that may be read, and no sign of the rest |
 | `delete` on a folder | refused if anything under it may not be written, not only the folder |

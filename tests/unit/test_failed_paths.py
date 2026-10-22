@@ -319,7 +319,7 @@ def test_a_carried_guard_says_it_the_same_way(cfg, session_dir):
 
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
-        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [])),
+        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [], cfg.layout)),
     )
 
     (answer,) = [one for one in out["messages"] if isinstance(one, ToolMessage)]

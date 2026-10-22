@@ -42,10 +42,9 @@ def _session_writable(session_dir: Path, layout: Layout) -> list[Path]:
     Never the session itself: a Landlock rule only grants, and a write walks up to the
     first rule allowing it, so a writable session would step over a read-only `.harness`.
     The cost, a shell that cannot write into its working directory, is held by
-    `tests/linux/test_fence_escapes.py`. `inputs` is left out because it is the caller's,
-    and a grant here is the only thing that would let the shell change it.
+    `tests/linux/test_fence_escapes.py`.
     """
-    return [Path(session_dir) / name for name in layout.session_dirs if name != layout.inputs]
+    return [Path(session_dir) / name for name in layout.shell_writable]
 
 
 def policy_for(

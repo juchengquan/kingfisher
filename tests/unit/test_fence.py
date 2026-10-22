@@ -496,19 +496,22 @@ def _fenced_by(monkeypatch, mechanism: str) -> None:
 
 
 def test_bubblewrap_binds_an_opened_session_s_harness_read_only(cfg, monkeypatch):
-    """Driven through `LocalSessions`, which decides where a session is: its folder
-    bind is writable over `.harness` too, and only a read-only bind laid after it takes
-    that back."""
+    """Driven through `LocalSessions`, which decides where a session is: the scratchpad's
+    bind is writable over the saved results beneath it, and only a read-only bind laid
+    after it takes that back. The session itself is bound read-only."""
     _fenced_by(monkeypatch, confinement.BUBBLEWRAP)
     session = str(cfg.workspace.resolve() / "sessions" / "the-one")
     harness = f"{session}/{HARNESS}"
+    scratch = f"{session}/{cfg.layout.scratchpad}"
+    saved = f"{session}/{cfg.layout.saved_results[0]}"
 
     argv = LocalSessions().open(cfg, "the-one").default.runner.argv
 
     bound = [(argv[i], argv[i + 1]) for i in range(len(argv) - 1)]
-    assert ("--bind", session) in bound
+    assert ("--ro-bind", session) in bound
+    assert ("--bind", session) not in bound
     assert ("--ro-bind", harness) in bound
-    assert bound.index(("--ro-bind", harness)) > bound.index(("--bind", session))
+    assert bound.index(("--ro-bind", saved)) > bound.index(("--bind", scratch))
 
 
 def test_landlock_grants_no_rule_above_an_opened_session_s_harness(cfg, monkeypatch, sandlock):

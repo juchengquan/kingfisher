@@ -562,6 +562,30 @@ def test_the_shell_cannot_write_outside_the_workspace(cfg, session_dir):
 
 
 @macos
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo x > stray.csv",
+        'cp outputs/kept.csv "$PWD/stray.csv"',
+        "mkdir results",
+        "mv outputs gone",
+    ],
+)
+def test_the_shell_cannot_save_at_the_top_of_a_session(cfg, session_dir, command):
+    """Refused by `write_file`, a model saved there with `cp` instead, and the turn
+    handed back neither file. `test_the_agent_can_still_write_everything_it_is_meant_to`
+    is the bound: the folders stay the shell's."""
+    (session_dir / "outputs" / "kept.csv").write_text("a,b\n")
+    before = sorted(path.name for path in session_dir.iterdir())
+    backend = backend_at(cfg, session_dir)
+
+    result = backend.execute(command)
+
+    assert result.exit_code != 0, f"{command!r} went through: {result.output}"
+    assert sorted(path.name for path in session_dir.iterdir()) == before
+
+
+@macos
 def test_a_literal_tmp_write_is_refused(cfg, session_dir):
     """The prompt says to write scratch under `$TMPDIR`, never a literal `/tmp`."""
     target = Path("/tmp/kingfisher-write-probe")
@@ -1164,13 +1188,14 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
     )
 
     read = [_as_sbpl_reads_it(line) for line in text.splitlines() if "(regex " in line]
-    assert len(read) == 9, f"nine rules are written as patterns; this found {len(read)}"
+    assert len(read) == 10, f"ten rules are written as patterns; this found {len(read)}"
     for _, after in read:
         assert after == "))", f"the literal ends early, and sbpl reads {after!r} as code"
     denied = [re.compile(pattern) for pattern, _ in read]
     one = sessions / "s1"
     for path in (
         sessions,
+        one / "stray.csv",
         one / "inputs" / "given.txt",
         one / HARNESS,
         one / "scratchpad",

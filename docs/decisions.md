@@ -2204,7 +2204,7 @@ could not answer; both stay denied, with every other folder of kept records, bel
 **Two fences of three now refuse the shell both folders a row can name.** Once older
 results are cleared to handles, the saved file is the only copy, so an overwrite is the
 record rather than a forgery. `sandbox-exec` refuses both with the regex it writes for
-`.harness`, and bubblewrap binds them read-only after the session. macOS needed one rule
+`.harness`, and bubblewrap binds them read-only after the scratchpad. macOS needed one rule
 more: renaming the scratchpad away, writing through the new name and renaming it back
 beat a rule that finds the folders by position -- measured, `FORGED` and exit 0 -- so the
 scratchpad's own node is refused writes, as `sessions/<id>` is for `.harness`. bubblewrap
@@ -2900,7 +2900,7 @@ the scaffold wrote `AGENTS.md` there. `refuse_linked_folders` runs before anythi
 or written, and again in `backend_at`; what the link points at may be someone's data, so
 nothing deletes it. The macOS profile also denies the `memory` node, as it does the
 scratchpad's. Linux was not measured: by the policy below Landlock grants no write to the
-session folder, which removing `memory` needs, and bubblewrap's writable session does; the
+session folder, which removing `memory` needs, and bubblewrap binds it read-only; the
 refusal at open covers either. *(2026-10-20.)* Every kept-records folder is checked too,
 made or not (`Layout.unlinked_dirs`): #1036 mounted `scratchpad/blobs`, which nothing
 makes, and a link the shell left there rooted the next turn's route on the host, where
@@ -2914,8 +2914,9 @@ and a write walks up until one answers, so on the first run of
 `tests/linux/test_fence_escapes.py` the shell overwrote the agent its session was pinned
 to. `policy_for` grants the session's folders one at a time, never the session; `inputs`
 is left out. The price is that the shell cannot write into the directory it starts in,
-where bubblewrap and macOS can carve one out; the alternative left the pinned agent, the
-conversation, the turn lock and the run log writable by the shell. *(2026-09-08.)*
+which every fence now pays (*A save outside every folder of the session is refused*); the
+alternative left the pinned agent, the conversation, the turn lock and the run log
+writable by the shell. *(2026-09-08.)*
 
 **The two Linux fences share one front door.** They differ in the middle -- Landlock
 confines between `fork` and `exec`, bubblewrap prepends to the argv -- and `sandbox/linux.py`
@@ -3749,18 +3750,34 @@ root-level ones; they are working material nothing kingfisher reads back trusts,
 accepted rather than fenced. *No migration*: an older session keeps its root-level folders
 until it is reaped. *(2026-10-11.)*
 
-**Not built: refusing a save outside the session's folders.** A file tool handed a bare
-`result.json` saves it at the top of the session, where nothing is returned, and the turn
-reports success. A guard refusing such a save was built once, beside a layout change closed
-unmerged, and measured before being rebuilt: two tasks that never said where to save, 21
-turns, 68 file-tool saves -- 16 in `/outputs`, 51 in `/scratchpad`, one host path refused
-and corrected, none anywhere else -- and nothing at the top of any session from the shell.
-The one turn that delivered nothing ran out of tool calls with its result in `/scratchpad`,
-which no guard would have changed. The occurrence that prompted it predated `system.md`
-saying nothing else in the session is the agent's to write, and the reason it was a
-middleware rather than a backend refusal is gone: deepagents' own files are in the
-scratchpad, so nothing kingfisher runs writes the session's top. Reopen it on a turn that
-strays, not on the argument. *(2026-10-17.)*
+**A save outside every folder of the session is refused.** A file saved at the top of a
+session, or in a folder the layout does not name, is handed back to nobody, and the tool
+that saved it says it succeeded. Measured first under the default layout -- 68 file-tool
+saves over 21 turns, none outside the folders -- it was not built. Then, with `outputs`
+renamed to `results`, 3 of 4 subagents handed a request word for word saved their
+deliverables to an `/outputs` they made up, and the turn reported none of them. Telling
+subagents the session's folders brought that to none in four, but a stray is silent when
+it happens, and a refusal costs a call only where the file would have been lost.
+
+`BuiltinToolsMiddleware` refuses a `write_file` or `edit_file` whose top folder is none
+the layout names and none the backend mounts, on every graph, naming where the file
+belongs; a mount is a folder a deployment gives, so its saves go through. `PermittedBackend`
+refuses the same saves to a tool handed the backend, from the same check (`strays`). A
+host path is left to the backend's refusal, which names the virtual path meant. Not a deny
+rule: deepagents refuses a rule outside every route on a backend that runs a shell, and
+`/outputs` and `/scratchpad` are the shell's, unrouted.
+
+The file tools alone were not enough. Told to save at exactly `/cleaned.csv`, a model
+refused by `write_file` wrote to the scratchpad and `cp`'d both files to the top through
+the shell, 2 turns of 2, handing back neither; one answer said the files were where
+asked. Only Landlock denied the shell the session's top. So bubblewrap binds the session
+read-only beneath its folders, and the macOS profile denies whatever sits directly in a
+session (`_session_top_denial`), which also stops a folder being renamed away. Rerun, 2
+turns of 2 saved to `/outputs`, were handed back both files, and said they had not put
+them where asked. Told only "save as `/cleaned.csv`", 3 turns of 3 chose `/outputs`
+themselves and were refused nothing. The cost is Landlock's: no fence lets the shell
+write into the directory it starts in. An unfenced shell can still save anywhere, and
+that is accepted. *(2026-10-22.)*
 
 ## Wiring a store
 

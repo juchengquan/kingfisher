@@ -33,6 +33,8 @@ from deepagents.middleware.filesystem import (
     _grep_backend,
 )
 
+from .backend import folders_of, strays
+from .prompting import stray_save
 from .references import UnsafeReferenceError
 
 if TYPE_CHECKING:
@@ -40,6 +42,8 @@ if TYPE_CHECKING:
 
     from deepagents import FilesystemPermission
     from deepagents.middleware.filesystem import FilesystemOperation
+
+    from kingfisher.core.layout import Layout
 
 
 class PermittedBackend(BackendProtocol):
@@ -58,11 +62,17 @@ class PermittedBackend(BackendProtocol):
     """
 
     def __init__(
-        self, backend: BackendProtocol, permissions: Sequence[FilesystemPermission]
+        self,
+        backend: BackendProtocol,
+        permissions: Sequence[FilesystemPermission],
+        layout: Layout,
     ) -> None:
         self._inner = backend
         # Held, not copied: `build_agent` adds the turn's rules after building this.
         self._permissions = permissions
+        # A tool saves where the model pointed it, so it strays as `write_file` would.
+        self._layout = layout
+        self._folders = folders_of(layout, backend)
 
     @property
     def _rules(self) -> list[FilesystemPermission]:
@@ -113,6 +123,8 @@ class PermittedBackend(BackendProtocol):
             return path, str(malformed)
         if _check_fs_permission(self._rules, operation, where) != "allow":
             return where, f"permission denied for {operation} on {where}"
+        if operation == "write" and strays(where, self._folders):
+            return where, stray_save(where, self._layout)
         return where, None
 
     def _listed(self, result: LsResult) -> LsResult:
@@ -288,7 +300,9 @@ class PermittedBackend(BackendProtocol):
             except ValueError:
                 refused[at] = INVALID_PATH
                 continue
-            if _check_fs_permission(self._rules, operation, where) != "allow":
+            if _check_fs_permission(self._rules, operation, where) != "allow" or (
+                operation == "write" and strays(where, self._folders)
+            ):
                 refused[at] = PERMISSION_DENIED
             else:
                 through.append((at, where))

@@ -150,6 +150,18 @@ def test_the_session_itself_stays_usable(fenced):
 
 
 @needs_bubblewrap
+def test_the_shell_cannot_save_at_the_top_of_its_session(fenced, two_sessions):
+    """Refused by `write_file`, a model saved there with `cp` instead, and the turn
+    handed back neither file. `test_the_session_itself_stays_usable` is the bound."""
+    _, theirs = two_sessions
+
+    result = fenced.run("echo scratch > note.txt")
+
+    assert result.exit_code != 0
+    assert not (theirs / "note.txt").exists()
+
+
+@needs_bubblewrap
 def test_an_interpreter_still_works_without_proc(fenced):
     """`/proc` is deliberately absent, and Python reads it at startup on some platforms."""
     result = fenced.run("python3 -c 'print(6*7)'")

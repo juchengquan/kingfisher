@@ -10,11 +10,14 @@ from deepagents.backends import CompositeBackend
 from kingfisher.core.config import ConfigError
 from kingfisher.core.layout import (
     BUNDLED_SKILLS_ROUTE,
+    HARNESS,
     RESERVED_SKILL_FOLDER,
+    SKILLS,
     SKILLS_ROUTE,
     Layout,
 )
 
+from .host_paths import HOST_ROOTS
 from .prompting import ShellPrompt, rooted
 
 
@@ -79,6 +82,23 @@ def shell_runs_here(backend: Any) -> bool:
     shell is not known to run here.
     """
     return getattr(_shell_of(backend), "runs_here", False) is True
+
+
+def folders_of(layout: Layout, backend: Any = None) -> frozenset[str]:
+    """Every folder at the top of a session a file tool may save in: the layout's, and
+    any `backend` mounts of its own, which a deployment's prompt says are the agent's."""
+    routes = backend.routes if isinstance(backend, CompositeBackend) else {}
+    mounted = (route.strip("/").split("/", 1)[0] for route in routes)
+    return frozenset({*layout.session_dirs, SKILLS, HARNESS, *mounted})
+
+
+def strays(where: str, folders: frozenset[str]) -> bool:
+    """Whether a save at `where`, a path `validate_path` returned, lands in none of
+    `folders`: nothing keeps or returns it, and the tool that saved it says it succeeded."""
+    # A host path is the backend's to refuse, naming the virtual path it meant.
+    if where.startswith(HOST_ROOTS):
+        return False
+    return where.lstrip("/").split("/", 1)[0] not in folders
 
 
 def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:

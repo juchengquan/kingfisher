@@ -26,6 +26,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.request import Decision, Request, Resume
 from kingfisher.core.result import AWAITING
 from kingfisher.core.session import runtime
@@ -76,7 +77,7 @@ def test_a_denied_read_is_refused_where_the_bare_backend_answers(backend):
     """A tool handed the backend itself reads what `read_file` refuses: deepagents
     applies the rules in its file tools, and the backend keeps none of them.
     """
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
 
     # The control. Without it this passes against a backend that cannot read the
     # file at all, and says nothing about who refused.
@@ -92,7 +93,7 @@ def test_a_denied_write_or_edit_leaves_the_file_as_it_was(backend, session_dir):
     """An error on the result with the write already made would read as a refusal
     and be the opposite.
     """
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
     private = session_dir / "outputs" / "private"
 
     written = handed.write("/outputs/private/new.txt", "x")
@@ -166,7 +167,7 @@ def test_a_call_that_changes_a_file_hands_on_the_spelling_the_rules_read(call, w
     inner = _Recording()
     # Not a `BackendProtocol`, and that is the test: it implements the six calls under
     # test and records what each was handed.
-    handed = PermittedBackend(inner, [])  # ty: ignore[invalid-argument-type]
+    handed = PermittedBackend(inner, [], DEFAULT_LAYOUT)  # ty: ignore[invalid-argument-type]
     name = call if way == "sync" else f"a{call}"
 
     asked = getattr(handed, name)("skills/x", **CHANGES_A_FILE[call])
@@ -180,7 +181,7 @@ def test_a_listing_leaves_out_what_may_not_be_read(backend):
     """A refused `read` is little use if `ls`, `glob` and `grep` still say the file is
     there and quote it: `grep` returns the matching line.
     """
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
 
     def seen(found: Any) -> list[str]:
         return sorted(one["path"] for one in found)
@@ -203,7 +204,7 @@ def test_a_listing_of_a_denied_path_is_refused_rather_than_empty(backend):
     """Filtering alone answers "nothing here", which tells a model the folder is
     empty and sends it looking elsewhere for a file it was never going to be shown.
     """
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
     inside = "/outputs/private/inner"
     refusal = f"permission denied for read on {inside}"
 
@@ -222,7 +223,7 @@ def test_a_rule_that_asks_a_person_is_a_refusal_here(backend, session_dir):
     for a call made inside a tool, so the same rule would let everything through.
     """
     ask = replace(PRIVATE, mode="interrupt")
-    handed = PermittedBackend(backend, [ask])
+    handed = PermittedBackend(backend, [ask], DEFAULT_LAYOUT)
 
     assert handed.read(KEY).error == f"permission denied for read on {KEY}"
     assert [one["path"] for one in handed.ls("/outputs").entries or []] == [OPEN]
@@ -236,7 +237,7 @@ def test_deleting_a_folder_is_refused_for_what_is_under_it(backend, session_dir)
     """`/outputs` matches no rule and holds a path that does. Checked the way a write
     is, the delete goes through and takes the denied file with it.
     """
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
 
     refused = _refusal(handed.delete("/outputs"))
 
@@ -253,7 +254,7 @@ def test_a_batch_marks_what_it_refused_and_keeps_each_answer_in_its_place(backen
     """A refused path in the middle of a batch must not move the answers after it up
     by one: the fourth file would be reported under the third path.
     """
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
     outputs = session_dir / "outputs"
 
     sent = handed.upload_files(
@@ -292,7 +293,7 @@ def test_a_batch_that_is_refused_whole_never_reaches_the_backend(backend):
     away it is a round trip.
     """
     calls: list[Any] = []
-    handed = PermittedBackend(_Spy(backend, calls), [PRIVATE])
+    handed = PermittedBackend(_Spy(backend, calls), [PRIVATE], DEFAULT_LAYOUT)
 
     assert [one.error for one in handed.download_files([KEY])] == ["permission_denied"]
     assert [one.error for one in handed.upload_files([(KEY, b"x")])] == ["permission_denied"]
@@ -319,7 +320,7 @@ def test_the_shell_is_not_on_the_backend_a_tool_is_handed(backend):
     """No rule reaches `execute`. A tool holding it has a way round every one of
     them, and runs commands for a request that was refused the shell.
     """
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
 
     assert hasattr(backend, "execute"), "the backend underneath has no shell to withhold"
     assert not hasattr(handed, "execute")
@@ -337,7 +338,7 @@ def test_another_spelling_of_a_denied_path_is_the_same_path(backend, spelling):
     """The rules are globs, and a path the backend resolves to the denied file while
     no glob matches it as written is read straight past them.
     """
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
 
     assert "needle" in backend.read(spelling).file_data["content"], "the spelling resolves"
     assert handed.read(spelling).error == f"permission denied for read on {KEY}"
@@ -355,7 +356,7 @@ def test_the_backend_is_asked_for_the_spelling_the_rules_were(cfg, backend, way)
     skill = cfg.catalogue_roots["skills"] / "probe"
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("in the catalogue\n")
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
     asked = "skills/probe/SKILL.md"
 
     assert backend.read(asked).error, "the two spellings are one file"
@@ -375,7 +376,7 @@ def test_a_path_that_climbs_out_is_an_error_on_the_result(backend, way):
     halves with well-formed paths only, so the deny rule was driven on both and the
     traversal branch on one.
     """
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
     read, write, delete = (
         (handed.read, handed.write, handed.delete)
         if way == "sync"
@@ -396,7 +397,7 @@ def test_the_async_calls_keep_the_same_rules(backend, session_dir):
     with an async path of its own is not driven through its blocking one -- and a
     second body is a second place for the check to be missing.
     """
-    handed = PermittedBackend(backend, [PRIVATE])
+    handed = PermittedBackend(backend, [PRIVATE], DEFAULT_LAYOUT)
 
     async def ask() -> dict[str, Any]:
         return {
@@ -737,7 +738,7 @@ def test_the_wrapper_a_compiled_subagents_tools_wear_passes_the_runtime_on(cfg, 
 
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
-        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [])),
+        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [], cfg.layout)),
     )
 
     (result,) = [m for m in out["messages"] if isinstance(m, ToolMessage)]

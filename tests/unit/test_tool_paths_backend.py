@@ -117,7 +117,8 @@ class Remote(BackendProtocol):
 
 def _paths(backend, tmp_path, permissions=None) -> SessionPaths:
     rules = read_only_permissions(DEFAULT_LAYOUT) if permissions is None else permissions
-    return SessionPaths(PermittedBackend(backend, rules), tmp_path / "sessions", DEFAULT_LAYOUT)
+    handed = PermittedBackend(backend, rules, DEFAULT_LAYOUT)
+    return SessionPaths(handed, tmp_path / "sessions", DEFAULT_LAYOUT)
 
 
 def test_a_backend_with_some_routes_here_serves_those_and_refuses_the_rest(tmp_path):
