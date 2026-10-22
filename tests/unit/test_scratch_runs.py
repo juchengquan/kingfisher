@@ -928,6 +928,32 @@ def test_a_run_its_caller_stops_ends_at_once(cfg, session_dir):
     assert _scratchpad_runs(session_dir) == []
 
 
+def test_a_cancelled_async_run_stops_its_command_before_it_lets_go(cfg, session_dir):
+    """Every async run on kingfisher's own backend goes through the thread fallback: not
+    told to stop, its command ran to its end after the cancel, and let go of first, its
+    folder outlived the call that made it."""
+    runner = ScratchRunner(backend_at(cfg, session_dir), seconds=30)
+
+    async def cancelled() -> float:
+        call = asyncio.ensure_future(
+            runner.arun(["/bin/sleep", "10"], {}, outputs=[], timeout=None)
+        )
+        until = time.monotonic() + 10
+        while not _scratchpad_runs(session_dir) and time.monotonic() < until:
+            await asyncio.sleep(0.01)
+        assert _scratchpad_runs(session_dir), "the run never made its folder"
+        started = time.monotonic()
+        call.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await call
+        return time.monotonic() - started
+
+    took = asyncio.run(cancelled())
+
+    assert _scratchpad_runs(session_dir) == []
+    assert took < 5
+
+
 def test_a_deployments_own_runner_is_not_gone_round(cfg, session_dir):
     """A runner a deployment supplied may run as another user or under limits; a scratch
     run launching its own process would skip all of it."""
