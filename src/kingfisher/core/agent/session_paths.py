@@ -157,6 +157,16 @@ def where_to_write(text: str, paths: SessionPaths | None = None) -> str:
     outputs_route = paths.outputs_route if paths is not None else OUTPUTS_ROUTE
     scratch_route = paths.scratch_route if paths is not None else SCRATCH_ROUTE
     return (
-        f"{text} -- that path is not yours to write. What you make goes under "
-        f"`{outputs_route}<name>` or `{scratch_route}<name>`."
+        f"{text} -- that path is not yours to write. "
+        f"{what_you_make_goes(outputs_route, scratch_route)}"
     )
+
+
+def what_you_make_goes(outputs_route: str, scratch_route: str) -> str:
+    """Where the agent's own files go, worded once.
+
+    Two refusals offer it -- a deny rule's, above, and a fence's, which `builtin_tools`
+    reads out of the shell's own output -- and a model reading two wordings for one rule
+    reads two rules.
+    """
+    return f"What you make goes under `{outputs_route}<name>` or `{scratch_route}<name>`."

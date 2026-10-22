@@ -213,6 +213,22 @@ def test_a_refused_write_points_at_the_renamed_folders():
     assert "/in/<name>" not in text
 
 
+def test_a_fence_refusal_note_points_at_the_renamed_folders():
+    """The third of the corrections, and the one that names a folder as well as offering
+    two: a renamed layout that reached the fence and not the note would have the shell
+    refuse `/in/` and the note call it `/inputs/`.
+    """
+    from kingfisher.core.agent.middlewares.builtin_tools import kept_note
+
+    kept, *_ = MOVED.shell_read_only
+    said = kept_note(kept, MOVED)
+
+    assert f"`/{kept}/` is not yours to write" in said
+    assert "`/out/<name>`" in said
+    assert "`/scratch/<name>`" in said
+    assert "/outputs/" not in said
+
+
 def test_a_refused_host_path_suggests_the_renamed_scratch(tmp_path):
     from kingfisher.core.agent.host_paths import HostPathError, reject_host_path
 

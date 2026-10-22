@@ -2809,6 +2809,33 @@ deepagents' wording, which `test_a_refused_write_says_where_a_write_may_go` driv
 every denied scope, so an upgrade that rewords it goes red rather than quietly dropping
 the sentence. *(2026-10-22.)*
 
+**A shell command a fence refused says which folder it is, and that one is kept.** The
+help went to the mistake and not to the rule: a path spelt the file tools' way got
+`hint`, naming the spelling that would have worked, while a command written exactly as
+the prompt says to write one -- `echo x > inputs/f`, or with `$KINGFISHER_SESSION_ROOT`
+in front -- was refused with the kernel's `Operation not permitted` and nothing else,
+which is the same message a broken sandbox gives. `kept_under` reads the folder out of
+the shell's own output and `kept_note` names it as the file tools spell it, closing with
+the sentence a deny rule's refusal already offers, from `what_you_make_goes` so the two
+cannot word one rule twice.
+
+**Against the session root, not the folder's name.** A fence refuses everything outside
+the session too, and measured, a `python3` in a refused command reports failing to write
+its own cache file in the host's temp folder, with the same words -- so the name alone
+would send the model to correct a path it never wrote. The root comes from
+`session_root_of`, which already gated the spelling correction, so `rooted=` went: it
+said `root is not None` twice. A relative path is resolved against the root rather than
+skipped, because the shell's working directory *is* the session and the short command is
+the one a model writes.
+
+**The spelling first where both apply.** A command writing twice, once each way, has a
+first write that was never going to run wherever the folder was. Not taken: a reason per
+folder, which is the prompt's to give, as in *A refused write says where a write may go*;
+or saying this in the prompt, where it would be false with no fence at all -- `/inputs`
+is read-only to *every file tool* whether or not a fence runs, and claiming the shell in a
+fixed sentence would lie in the unconfined case. Reacting to a refusal that happened is
+what holds either way. *(2026-10-22.)*
+
 ## Confining the shell
 
 **The two fences share a toolchain and not a workspace**, and the asymmetry is the

@@ -18,6 +18,27 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A refused shell command says which folder is kept, after #1065
+
+- **A shell result the fence refused gains a note.** Where a command was refused for
+  writing under a folder kingfisher keeps -- the caller's inputs, `.harness`, or any of
+  the kept records -- the result now ends with:
+
+  ```
+  `/inputs/` is not yours to write: the shell is refused there, as the file tools are.
+  What you make goes under `/outputs/<name>` or `/scratchpad/<name>`.
+  ```
+
+  in your layout's names. Nothing is appended to a command that ran, to one refused for a
+  path outside the session, or to one whose path was spelt the file tools' way, which
+  keeps the correction it already got. If you assert on `execute` results' text, they are
+  not the same.
+- **`BuiltinToolsMiddleware` takes `root=` instead of `rooted=`.** The session root as the
+  shell sees it, which is what `rooted=True` was standing in for; `standing_middleware`
+  passes `session_root_of(backend)`, as it already did to compute the flag. A deployment
+  building the middleware itself passes the root, and `None` keeps both corrections off.
+- **Nothing a fence allows or refuses has moved.** The profiles are the same and the
+  folders are the same; only what the model is told afterwards changed.
 ## A save outside every folder of the session is refused, after #1066
 
 - **`write_file` and `edit_file` refuse a path whose top folder your layout does not

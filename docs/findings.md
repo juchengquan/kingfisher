@@ -670,6 +670,17 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
   reported on every run by `tests/linux/test_a_fence_was_exercised.py`.
   *(2026-08-27.)*
 
+- **Each fence refuses a write in the kernel's words, and they differ.** `sandbox-exec`
+  says `Operation not permitted`, the Linux fence `Permission denied` (measured on the
+  Linux job, in `tests/linux/test_fence_escapes.py`), and bubblewrap binds the folder so
+  it would say `Read-only file system` -- not measured, since no job runs it. None of
+  them names the folder or the rule, and a path refused for being *outside* the session
+  reads the same, which is why `kept_under` resolves against the session root.
+  *(2026-10-22.)*
+- **The shell's working directory is the session root, and `$HOME` is its scratchpad.**
+  So `echo x > inputs/f` is a complete command, and a refusal of it names the path with
+  no root in front; after a `cd`, the message names only the file, and nothing can say
+  which folder it was. *(2026-10-22.)*
 - **`sandlock`'s own quick-start fails in a container where `confine` works.** Linux 6.12, ABI 6,
   `SYS_ADMIN` available: `sandlock_create failed`, while `confine` in the same container works
   in both directions. *(Recorded in the code until 2026-10-17.)*

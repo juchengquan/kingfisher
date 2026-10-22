@@ -22,6 +22,8 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
     BuiltinToolsMiddleware,
     _virtual,
     hint,
+    kept_note,
+    kept_under,
     missed,
     timeout_line,
 )
@@ -205,6 +207,93 @@ def test_a_miss_is_read_off_the_line_naming_the_path(output, path):
     correct command was told to drop a slash it never had.
     """
     assert missed(output, _virtual(DEFAULT_LAYOUT.session_dirs)) == path
+
+
+#: Where a shell says it sees the session, which the corrections are named against.
+SESSION = "/host/sessions/s"
+
+
+# -- a folder the fence keeps read-only ------------------------------------
+#
+# The other half of the same problem. `missed` answers a path spelt the file tools' way,
+# which is a command that was never going to run; these answer a command written exactly
+# as the prompt says to write one, refused because the folder it names is kept.
+
+
+@pytest.mark.parametrize(
+    ("output", "folder"),
+    [
+        # The shell's own spelling, which is what the prompt asks for.
+        (f"/bin/sh: {SESSION}/inputs/new.txt: Operation not permitted", "inputs"),
+        # The shell starts in the session, so the shorter command is the one models write.
+        ("/bin/sh: inputs/new.txt: Operation not permitted", "inputs"),
+        ("/bin/sh: ./inputs/new.txt: Operation not permitted", "inputs"),
+        (
+            f"/bin/sh: {SESSION}/scratchpad/conversation_history/f.md: Operation not permitted",
+            "scratchpad/conversation_history",
+        ),
+        # The Linux fence's word, and bubblewrap's.
+        ("bash: inputs/new.txt: Permission denied", "inputs"),
+        ("bash: inputs/new.txt: Read-only file system", "inputs"),
+        # A program that opened the file itself rather than the shell redirecting into it.
+        ("PermissionError: [Errno 1] Operation not permitted: 'inputs/new.txt'", "inputs"),
+        # The folder itself, not a file under it.
+        (f"rmdir: {SESSION}/inputs: Operation not permitted", "inputs"),
+        # Measured, and the reason the session root is checked rather than the folder name:
+        # `python3` reports its own cache file, in the host's temp folder, with the same
+        # words -- and the model would be sent to correct a path it never wrote.
+        (
+            "python3: error: couldn't create cache file '/var/folders/x/T/xcrun_db-A' "
+            "(errno=Operation not permitted)",
+            None,
+        ),
+        # A kept folder's name outside the session: refused for being outside it.
+        ("/bin/sh: /elsewhere/inputs/new.txt: Operation not permitted", None),
+        # A folder the fence does not keep.
+        (f"/bin/sh: {SESSION}/outputs/ok.txt: Operation not permitted", None),
+        # The words, and no path in the line to hang them on.
+        ("/bin/sh: Operation not permitted", None),
+        # A miss rather than a refusal: `missed` answers this one, and saying a folder is
+        # kept would be false as well as unhelpful.
+        (f"cat: {SESSION}/inputs/given.txt: No such file or directory", None),
+        # Both on one line is the rule; on two lines, the path a command printed and a
+        # refusal of something else are not one refusal.
+        (f"wrote {SESSION}/inputs/a\nsh: /elsewhere: Operation not permitted", None),
+    ],
+)
+def test_a_fence_refusal_is_read_off_the_line_naming_the_kept_folder(output, folder):
+    """A command following the prompt exactly, refused because its folder is kept, said
+    `Operation not permitted` about a host path and nothing else -- the same message a
+    broken sandbox gives, and the model had no way to tell the two apart.
+    """
+    assert kept_under(output, SESSION, DEFAULT_LAYOUT.shell_read_only) == folder
+
+
+def test_every_folder_the_note_can_name_is_denied_to_the_file_tools_too():
+    """The note says the shell is refused `as the file tools are`, which is a claim about
+    the rules and not about the fence: a folder the fence kept while the rules allowed it
+    would make the sentence false, and nothing else would notice.
+    """
+    denied = {
+        scope.removeprefix("/").removesuffix("/**") for scope in DEFAULT_LAYOUT.denied_scopes()
+    }
+
+    assert set(DEFAULT_LAYOUT.shell_read_only) <= denied, (
+        f"kept from the shell and not from the file tools: "
+        f"{set(DEFAULT_LAYOUT.shell_read_only) - denied}"
+    )
+
+
+def test_the_note_names_the_folder_as_the_file_tools_spell_it():
+    """What the shell reported was a host path, or a relative one; the note's whole job is
+    that the two are the folder the prompt named.
+    """
+    said = kept_note("scratchpad/conversation_history", DEFAULT_LAYOUT)
+
+    assert "`/scratchpad/conversation_history/` is not yours to write" in said
+    # The same closing sentence a deny rule's refusal offers, from the one place that
+    # words it: two wordings for one rule read as two rules.
+    assert "What you make goes under `/outputs/<name>` or `/scratchpad/<name>`." in said
 
 
 THEIRS = ShellPrompt(execute="- The shell holds this session at `/workspace/{{inputs}}`.")
@@ -417,6 +506,7 @@ class Call:
 MISSED = "tail: /inputs/api.log: No such file or directory"
 
 
+
 def _answered(way: str, name: str, result: Any) -> Any:
     """What `BuiltinToolsMiddleware` hands back for one tool's result, through the hook `way` names.
 
@@ -424,7 +514,9 @@ def _answered(way: str, name: str, result: Any) -> Any:
     nothing: making `awrap_tool_call` return the result uncorrected left the whole suite
     green, while the same change to its sync twin reddened the rules above.
     """
-    middleware = BuiltinToolsMiddleware(Layout(), kingfishers_shell(), longest=120, rooted=True)
+    middleware = BuiltinToolsMiddleware(
+        Layout(), kingfishers_shell(), longest=120, root=SESSION
+    )
     request = Call(tool_call={"name": name, "args": {}, "id": "c1"})
     if way == "sync":
         return middleware.wrap_tool_call(request, lambda _: result)
@@ -505,6 +597,46 @@ def test_a_correction_reaches_the_shells_result_and_no_other_tools(way):
 
     left = _answered(way, "line_count", ToolMessage(MISSED, tool_call_id="c1"))
     assert left.text == MISSED
+
+
+#: A fence's refusal of a write to a folder it keeps, as a command following the prompt
+#: produces one.
+KEPT = f"/bin/sh: {SESSION}/inputs/new.txt: Operation not permitted"
+
+
+def test_a_fence_refusal_tells_the_shells_result_which_folder_is_kept(way):
+    """Both hooks, as the spelling correction needs: the async one was once reached by
+    nothing at all, and a note added on one of them is invisible to a suite driving the
+    other.
+    """
+    corrected = _answered(way, "execute", ToolMessage(KEPT, tool_call_id="c1"))
+    assert kept_note("inputs", Layout()) in corrected.text
+
+    left = _answered(way, "line_count", ToolMessage(KEPT, tool_call_id="c1"))
+    assert left.text == KEPT
+
+
+def test_a_misspelt_path_is_told_the_spelling_rather_than_which_folder_is_kept(way):
+    """Where a command writes twice, once with the file tools' spelling and once with the
+    shell's -- `echo x > /inputs/a; echo y > inputs/b` -- both corrections have something
+    to say and only the spelling is worth saying: the first write was never going to run
+    wherever the folder was, and two notes at once read as two separate problems.
+    """
+    both = f"sh: /inputs/a: Operation not permitted\n{KEPT}"
+
+    corrected = _answered(way, "execute", ToolMessage(both, tool_call_id="c1"))
+
+    assert hint("/inputs/a") in corrected.text
+    assert "is not yours to write" not in corrected.text
+
+
+def test_a_command_that_ran_is_told_nothing(way):
+    """The control: a note on a command that worked reads as a correction, and the rules
+    above would pass a middleware that appended it to everything.
+    """
+    ran = ToolMessage("wrote 3 rows", tool_call_id="c1")
+
+    assert _answered(way, "execute", ran).text == "wrote 3 rows"
 
 
 def test_a_result_the_shell_could_not_have_returned_is_handed_back_untouched(way):
