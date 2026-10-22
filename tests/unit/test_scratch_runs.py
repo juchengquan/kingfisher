@@ -8,7 +8,9 @@ real folder that a real shell can swap.
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
+import stat
 import sys
 import threading
 import time
@@ -35,6 +37,7 @@ from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.core.interfaces import MAX_SCRATCH_BYTES, MAX_SCRATCH_OUTPUTS, CommandResult
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions, NoScratchRunLimit, Plugins, backend_at
+from kingfisher.plugins.sessions.scratch import ScratchFolder
 from tests.conftest import (
     EVERY_TOOL,
     FakeToolCallingModel,
@@ -858,6 +861,80 @@ def test_a_folder_swapped_for_a_link_mid_run_hands_back_nothing_from_where_it_po
             one.unlink()
         else:
             shutil.rmtree(one)
+
+
+def test_a_scratchpad_swapped_for_a_link_gets_no_run_where_it_points(
+    cfg, session_dir, tmp_path
+):
+    """The session is checked for links when it opens, not between runs: followed, a
+    scratchpad the shell swapped for a link since had the run's folder made, and its
+    inputs written, wherever the link pointed."""
+    backend = backend_at(cfg, session_dir)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    scratchpad = session_dir / cfg.layout.scratchpad
+    scratchpad.rename(scratchpad.with_name("scratchpad.aside"))
+    scratchpad.symlink_to(elsewhere)
+
+    with pytest.raises(OSError):
+        backend.default.run_in_scratch(["/bin/true"], {"in.txt": b"x"}, outputs=[])
+
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_an_input_is_never_written_through_a_file_already_under_its_name(
+    cfg, session_dir, tmp_path
+):
+    """Opened without `O_EXCL`, an input written over a hard link planted under its name
+    went into the file the link shares, wherever that is."""
+    shared = tmp_path / "shared.txt"
+    shared.write_bytes(b"KEPT")
+
+    with ScratchFolder(session_dir, cfg.layout.scratchpad) as folder:
+        os.link(shared, folder.path / "in.txt")
+        with pytest.raises(FileExistsError):
+            folder.write({"in.txt": b"WRITTEN THROUGH"})
+
+    assert shared.read_bytes() == b"KEPT"
+
+
+def test_a_runs_folder_is_its_owners_alone(cfg, session_dir):
+    """Made by the umask's leave, the folder holding a run's inputs could be read, and an
+    output planted in it, by anyone else on the machine. The umask is opened up so it
+    cannot be what keeps the folder private."""
+    opened = os.umask(0)
+    try:
+        with ScratchFolder(session_dir, cfg.layout.scratchpad) as folder:
+            mode = stat.S_IMODE(folder.path.stat().st_mode)
+    finally:
+        os.umask(opened)
+
+    assert mode == 0o700
+
+
+def test_outputs_past_what_one_run_may_bring_back_are_left_where_they_are(
+    cfg, session_dir, monkeypatch
+):
+    """Read into kingfisher's own process: past the cap an output came back cut short as
+    though whole, and each one after it came back empty. The cap is lowered so a run of
+    a few bytes can cross it; the whole of it is what one run may bring back."""
+    monkeypatch.setattr("kingfisher.plugins.sessions.scratch.MAX_BROUGHT_BACK", 1000)
+
+    ran = backend_at(cfg, session_dir).default.run_in_scratch(
+        [
+            "/bin/sh",
+            "-c",
+            "printf '%600s' '' > a; printf '%600s' '' > b; printf '%10s' '' > c",
+        ],
+        {},
+        outputs=["a", "b", "c"],
+    )
+
+    assert ran.exit_code == 0, ran.output
+    # `c` still fits in what `b` would have used: only the one past the cap stays behind.
+    assert ran.files == {"a": b" " * 600, "c": b" " * 10}
+    assert set(ran.missing) == {"b"}
+    assert "past the 1000 bytes" in ran.missing["b"]
 
 
 def test_an_output_the_agent_planted_mid_run_comes_back_as_the_commands_own(
