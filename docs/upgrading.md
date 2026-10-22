@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A save outside every folder of the session is refused, after #1066
+
+- **`write_file` and `edit_file` refuse a path whose top folder your layout does not
+  name**, such as `/report.md`, or `/outputs/x` where you renamed `outputs`. The error
+  names your outputs and scratchpad folders. A folder your backend mounts as a route of
+  its own is still saved in. If your instructions send the agent to save anywhere else,
+  point them at the outputs folder or mount the folder.
+- **A tool handed `runtime.context.backend` is refused the same saves.** `write` and
+  `edit` return the message as `error`, and `upload_files` returns
+  `error="permission_denied"` for that path.
+- **The shell cannot write at a session's top** on macOS or under bubblewrap, as it
+  already could not under Landlock. A command that writes into its working directory,
+  such as `python script.py > out.csv` run from the session, now fails. Write under the
+  outputs folder or `$TMPDIR` instead. An unfenced shell is unchanged.
+
 ## A refused shell command says which folder is kept, after #1065
 
 - **A shell result the fence refused gains a note.** Where a command was refused for
@@ -39,21 +54,6 @@ replaced the four layers began.
   building the middleware itself passes the root, and `None` keeps both corrections off.
 - **Nothing a fence allows or refuses has moved.** The profiles are the same and the
   folders are the same; only what the model is told afterwards changed.
-## A save outside every folder of the session is refused, after #1066
-
-- **`write_file` and `edit_file` refuse a path whose top folder your layout does not
-  name**, such as `/report.md`, or `/outputs/x` where you renamed `outputs`. The error
-  names your outputs and scratchpad folders. A folder your backend mounts as a route of
-  its own is still saved in. If your instructions send the agent to save anywhere else,
-  point them at the outputs folder or mount the folder.
-- **A tool handed `runtime.context.backend` is refused the same saves.** `write` and
-  `edit` return the message as `error`, and `upload_files` returns
-  `error="permission_denied"` for that path.
-- **The shell cannot write at a session's top** on macOS or under bubblewrap, as it
-  already could not under Landlock. A command that writes into its working directory,
-  such as `python script.py > out.csv` run from the session, now fails. Write under the
-  outputs folder or `$TMPDIR` instead. An unfenced shell is unchanged.
-
 ## A long result your backend would not keep is previewed, after #1064
 
 - **The model is shown a preview, not the whole result**, when your backend refuses or
