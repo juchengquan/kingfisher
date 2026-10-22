@@ -30,8 +30,8 @@ from kingfisher.core.agent.prompting import (
     ShellPrompt,
     execute_line,
     stray_save,
+    what_you_make_goes,
 )
-from kingfisher.core.agent.session_paths import what_you_make_goes
 from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import Layout
 

@@ -27,7 +27,7 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
     missed,
     timeout_line,
 )
-from kingfisher.core.agent.prompting import execute_line
+from kingfisher.core.agent.prompting import execute_line, what_you_make_goes
 from kingfisher.core.interfaces import CommandResult
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import LocalSessions, ShellPrompt, backend_at
@@ -291,9 +291,9 @@ def test_the_note_names_the_folder_as_the_file_tools_spell_it():
     said = kept_note("scratchpad/conversation_history", DEFAULT_LAYOUT)
 
     assert "`/scratchpad/conversation_history/` is not yours to write" in said
-    # The same closing sentence a deny rule's refusal offers, from the one place that
-    # words it: two wordings for one rule read as two rules.
-    assert "What you make goes under `/outputs/<name>` or `/scratchpad/<name>`." in said
+    # The same closing sentence every other refusal of a write offers, from the one place
+    # that words it: three wordings for one rule read as three rules.
+    assert what_you_make_goes("/outputs/", "/scratchpad/") in said
 
 
 THEIRS = ShellPrompt(execute="- The shell holds this session at `/workspace/{{inputs}}`.")

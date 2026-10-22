@@ -2836,6 +2836,24 @@ is read-only to *every file tool* whether or not a fence runs, and claiming the 
 fixed sentence would lie in the unconfined case. Reacting to a refusal that happened is
 what holds either way. *(2026-10-22.)*
 
+**Every refusal of a write closes with one sentence, and it is #1066's.** Three refusals
+offer the model somewhere to write -- a deny rule's (*A refused write says where a write
+may go*), a fence's (above), and a save outside the session's folders (*A save outside
+every folder of the session is refused*) -- and each worded it itself, the third landing
+the same day as the second. A model reading three wordings for one rule reads three rules.
+`what_you_make_goes` is the one wording, in `prompting`: **"Save what you make under
+`/outputs/<name>` to hand it back, or under `/scratchpad/<name>` to work on it."** #1066's,
+because it says what each folder is *for*, and choosing between them is the whole use of
+the sentence; the two that only named the folders were mine, written first and worse.
+
+In `prompting` rather than beside the first of the three, since it already holds the prose
+a model reads on a misstep and is the module the other two may import: it takes nothing but
+`Config`, the layout and `READ_FILE`, which is what keeps anything naming it from loading
+the provider SDKs. **Not `refusal_text`**, which reads as a fourth and is not one: a path
+that climbed out of the session is answered with the shape a tool path has, and it names
+`/inputs/<name>` as a spelling -- a folder no write may land in. Offering it as a
+destination would make it wrong. *(2026-10-22.)*
+
 ## Confining the shell
 
 **The two fences share a toolchain and not a workspace**, and the asymmetry is the
