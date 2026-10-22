@@ -1082,3 +1082,13 @@ def test_a_caller_of_the_method_itself_cannot_name_a_file_beside_the_run(
     assert ran.files == {}
     assert not (scratchpad / "escaped.txt").exists()
 
+
+def test_a_caller_of_the_method_itself_is_held_to_the_shells_time(cfg, session_dir):
+    """`ScratchRunner` hands a run only what its call has left, but a caller of the method
+    asking for more ran past `execution_timeout_s`, which the claim's grace counts on no
+    command outliving."""
+    backend = backend_at(replace(cfg, execution_timeout_s=1), session_dir)
+
+    ran = backend.default.run_in_scratch(["/bin/sleep", "5"], {}, outputs=[], timeout=60)
+
+    assert ran.exit_code == 124
