@@ -12,7 +12,12 @@ from langchain_core.tools import ToolException
 
 from kingfisher.core.agent.host_paths import HostPathError
 from kingfisher.core.agent.references import UnsafeReferenceError
-from kingfisher.core.agent.session_paths import SessionPaths, as_asked, refusal_text
+from kingfisher.core.agent.session_paths import (
+    SessionPaths,
+    as_asked,
+    refusal_text,
+    where_to_write,
+)
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.session.runtime import unavailable
 
@@ -87,24 +92,27 @@ class GuardedCallsMiddleware(AgentMiddleware):
             return failed(call, f"Error: {exc}")
         return _handed_back(call, exc)
 
-    def _as_asked(self, request: Any, result: Any) -> Any:
-        """`result` with the paths a failure quotes spelled as the call spelled them.
+    def _told_to_the_model(self, request: Any, result: Any) -> Any:
+        """`result` with the paths a failure quotes spelled as the call spelled them, and
+        with where a write may go where a deny rule refused one.
 
-        Only a failure, which is two rules in one. A file read whole is content, and a
-        file whose text says `/notes.txt` is not a tool talking about a path. And the
-        shell keeps its own spelling: its paths are the host's by design, with
-        `KINGFISHER_SESSION_ROOT` exported to it, and a command's own spelling is the one
-        that would work again -- measured, a command that fails is a tool call that
-        succeeded, `status` included, so no shell result arrives here at all. Rewriting
-        one would mangle it, since the string a shell call names is a command rather than
-        a path: `<python> /scratchpad/missing.py` ends with the path its own error quotes.
+        Only a failure, which is two rules in one and holds for both rewrites. A file read
+        whole is content, and a file whose text says `/notes.txt` is not a tool talking
+        about a path. And the shell keeps its own spelling: its paths are the host's by
+        design, with `KINGFISHER_SESSION_ROOT` exported to it, and a command's own
+        spelling is the one that would work again -- measured, a command that fails is a
+        tool call that succeeded, `status` included, so no shell result arrives here at
+        all. Rewriting one would mangle it, since the string a shell call names is a
+        command rather than a path: `<python> /scratchpad/missing.py` ends with the path
+        its own error quotes.
         """
         call = request.tool_call
         answer = answer_in(result, call.get("id"))
         if answer is None or answer.status != "error":
             return result
         text = str(answer.text)
-        if (said := as_asked(text, call.get("args") or {})) == text:
+        said = where_to_write(as_asked(text, call.get("args") or {}), self.paths)
+        if said == text:
             return result
         return answered(result, answer, answer.model_copy(update={"content": said}))
 
@@ -116,7 +124,7 @@ class GuardedCallsMiddleware(AgentMiddleware):
         except (UnsafeReferenceError, HostPathError) as escaped:
             return self._refusal(request, escaped)
         try:
-            return self._as_asked(request, handler(translated))
+            return self._told_to_the_model(request, handler(translated))
         except Exception as exc:
             if (result := self._failed(request, exc)) is None:
                 raise
@@ -130,7 +138,7 @@ class GuardedCallsMiddleware(AgentMiddleware):
         except (UnsafeReferenceError, HostPathError) as escaped:
             return self._refusal(request, escaped)
         try:
-            return self._as_asked(request, await handler(translated))
+            return self._told_to_the_model(request, await handler(translated))
         except Exception as exc:
             if (result := self._failed(request, exc)) is None:
                 raise
