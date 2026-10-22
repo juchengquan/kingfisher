@@ -40,10 +40,10 @@ SCRATCH = "scratchpad"
 #: recorder's.
 TOOL_RESULTS = "tool_results"
 
-#: deepagents' own folder for a result too long to show the model whole. Nothing writes
-#: it: `standing_middleware` replaces the middleware that would, so a long result is
-#: previewed and kept where every other one is. Still reserved below, because a deployment
-#: may replace that middleware back and a layout holding the name would overwrite it.
+#: deepagents' own folder for a result too long to show the model whole. Its offloading is
+#: off -- `standing_middleware` replaces the middleware that would -- but its summariser
+#: still writes here on a refusal for length that clearing could not answer. Reserved
+#: below, so a layout holding the name cannot overwrite either.
 OFFLOADS = "large_tool_results"
 
 #: The conversation deepagents keeps aside: what a summary left behind, and a message too

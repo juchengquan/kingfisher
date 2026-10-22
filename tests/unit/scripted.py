@@ -33,7 +33,8 @@ class Scripted(BaseChatModel):
     max_tokens: int
     timeout: float
 
-    script: ClassVar[deque[AIMessage]] = deque()
+    #: A reply, or an error the call raises in its place, as a provider's refusal is raised.
+    script: ClassVar[deque[AIMessage | Exception]] = deque()
     #: What each call was handed, in order: what the model saw, after every middleware.
     heard: ClassVar[list[list[BaseMessage]]] = []
     #: How many times deepagents' summariser asked for a summary.
@@ -54,7 +55,10 @@ class Scripted(BaseChatModel):
             type(self).summaries += 1
             return ChatResult(generations=[ChatGeneration(message=AIMessage("a summary"))])
         self.heard.append(list(messages))
-        return ChatResult(generations=[ChatGeneration(message=self.script.popleft())])
+        reply = self.script.popleft()
+        if isinstance(reply, Exception):
+            raise reply
+        return ChatResult(generations=[ChatGeneration(message=reply)])
 
 
 class Streamed(Scripted):

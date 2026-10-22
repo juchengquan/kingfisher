@@ -25,6 +25,7 @@ from deepagents.middleware._message_eviction import (
 from langchain.agents.middleware import ExtendedModelResponse, ModelRequest, ModelResponse
 from langchain_anthropic import ChatAnthropic
 from langchain_anthropic.chat_models import _format_messages
+from langchain_core.exceptions import ContextOverflowError
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 
@@ -32,6 +33,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.clearing import (
     DEFAULT_MARK,
+    UNSHOWN,
     ResultClearingMiddleware,
     high_mark,
 )
@@ -783,6 +785,238 @@ def test_after_a_summary_only_what_is_still_sent_is_counted_or_cleared():
     assert talk.cleared(high=size + 1, sent=view) == talk.messages
 
 
+# -- a call refused for length -------------------------------------------------------
+
+
+class BadRequestError(Exception):
+    """A provider's 400, as an SDK raises one that langchain does not translate."""
+
+    status_code = 400
+
+
+def _too_long() -> Exception:
+    return ContextOverflowError("prompt is too long: 210000 tokens > 200000 maximum")
+
+
+def _overflowing(
+    talk: Talk,
+    *errors: Exception,
+    high: int = 1_000_000,
+    tools: tuple[str, ...] | None = None,
+    way: str = "sync",
+) -> tuple[list[list[Any]], Exception | dict[str, Any] | None]:
+    """What each model call was sent while the model raised `errors` in turn and then
+    answered, and the error that came out or the state update that came back.
+
+    The high mark is past the conversation unless a test says otherwise, so only the
+    refusal starts a pass.
+    """
+    request = ModelRequest(
+        model=FakeToolCallingModel(responses=[]),
+        messages=list(talk.messages),
+        system_message=None,
+        tools=[],
+        state={"messages": list(talk.messages)},
+    )
+    heard: list[list[Any]] = []
+    pending = list(errors)
+
+    def model(request: Any) -> ModelResponse:
+        heard.append(list(request.messages))
+        if pending:
+            raise pending.pop(0)
+        return ModelResponse(result=[AIMessage("ok")])
+
+    async def amodel(request: Any) -> ModelResponse:
+        return model(request)
+
+    clearing = ResultClearingMiddleware(talk.ledger, high, tools, count=FAKE_COUNT)
+    try:
+        if way == "async":
+            returned = asyncio.run(clearing.awrap_model_call(request, amodel))
+        else:
+            returned = clearing.wrap_model_call(request, model)
+    except Exception as exc:  # noqa: BLE001 -- the error is what the test reads
+        return heard, exc
+    if isinstance(returned, ExtendedModelResponse):
+        assert returned.command is not None
+        return heard, returned.command.update
+    return heard, None
+
+
+def _update(outcome: Exception | dict[str, Any] | None) -> dict[str, Any]:
+    assert isinstance(outcome, dict), outcome
+    return outcome
+
+
+def _latest_heavy() -> tuple[Talk, list[str], str]:
+    """A conversation whose latest batch is a recorded result and a read, with one older
+    result before them: everything a pass spares."""
+    talk = Talk()
+    older = talk.call("web_search", {"query": "older"}, _text("older"))
+    latest = talk.batch(
+        ("execute", {"command": "python3 dump.py"}, _text("rows: 86")),
+        ("read_file", {"file_path": "/inputs/a.csv"}, "a" * 9_000),
+    )
+    return talk, latest, older
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        _too_long(),
+        BadRequestError("Error code: 400 - prompt is too long: 210000 tokens > 200000 maximum"),
+        type("Unprocessable", (BadRequestError,), {"status_code": 422})("context_length_exceeded"),
+    ],
+    ids=["langchain", "sdk-400", "gateway-422"],
+)
+@pytest.mark.parametrize("way", ["sync", "async"])
+def test_a_refusal_for_length_is_asked_once_more_with_the_latest_batch_cleared(error, way):
+    """Refused, the call went to deepagents' summariser, which summarises the conversation
+    and writes the batch to `large_tool_results/` under a call id. The errors are the ones
+    deepagents itself takes for a refusal for length, so the two cannot disagree."""
+    talk, latest, older = _latest_heavy()
+
+    heard, update = _overflowing(talk, error, way=way)
+
+    first, retry = heard
+    assert first == talk.messages
+    assert isinstance(update, dict), update
+    after = _applied(talk.messages, update)
+    assert retry == after, "the retry sends what the state now holds"
+    for call in (*latest, older):
+        assert _of(after, call) != talk.result(call), call
+
+
+def test_a_result_the_model_never_saw_is_not_handed_back_by_the_call_that_made_it():
+    """The latest batch is what the refused call was to show the model. Told to make the
+    same call again to see it, the model makes it, and is refused again."""
+    talk, (run, read), _ = _latest_heavy()
+
+    _, update = _overflowing(talk, _too_long())
+    after = _applied(talk.messages, _update(update))
+
+    assert _of(after, run).content == (
+        "execute command='python3 dump.py' -- rows: 86\n(8,009 bytes, cleared before it was "
+        "shown, the conversation being too long for it: full result: "
+        f"{TOOL_RESULTS_ROUTE}A-0002-execute.txt, read it a part at a time)\n[A-0002]"
+    )
+    assert _of(after, read).content == (
+        "read_file file_path='/inputs/a.csv' -- 9,000 chars, cleared before it was shown, "
+        "the conversation being too long for it; call read_file again with offset and limit"
+    )
+
+
+def test_an_unseen_result_names_only_a_tool_its_graph_holds():
+    """Without `read_file` the saved copy cannot be reached, so the agent is told to make
+    the call again for less, and a search tool's result is to be narrowed."""
+    talk = Talk()
+    run, found = talk.batch(
+        ("execute", {"command": "python3 dump.py"}, _text("rows: 86")),
+        ("grep", {"pattern": "x"}, "x" * 9_000),
+    )
+
+    _, update = _overflowing(talk, _too_long(), tools=("execute", "grep"))
+    after = _applied(talk.messages, _update(update))
+
+    assert _of(after, run).content.endswith(
+        "too long for it: call execute again for less)\n[A-0001]"
+    )
+    assert _of(after, found).content.endswith("too long for it; call grep again narrowed")
+
+
+def test_a_second_refusal_hands_deepagents_the_first():
+    """One retry: refused again, clearing can do no more, and deepagents is handed what it
+    would have been handed without it, to summarise as before."""
+    talk, _, _ = _latest_heavy()
+    first, second = _too_long(), _too_long()
+
+    heard, raised = _overflowing(talk, first, second)
+
+    assert raised is first
+    assert len(heard) == 2
+
+
+def test_a_retry_failing_otherwise_raises_its_own_error():
+    """A retry refused for something else -- a rate limit, a dropped connection -- is that
+    failure, which the turn reports as it would any other; the refusal for length is past."""
+    talk, _, _ = _latest_heavy()
+    other = BadRequestError("tools.0: invalid schema")
+
+    _, raised = _overflowing(talk, _too_long(), other)
+
+    assert raised is other
+
+
+def test_an_error_not_about_length_is_never_asked_again():
+    """A 400 for anything else, or an error with no status, is not the conversation's
+    size: asked again, it fails again and the turn spends a model call on it."""
+    for error in (BadRequestError("tools.0: invalid schema"), RuntimeError("prompt is too long")):
+        talk, _, _ = _latest_heavy()
+
+        heard, raised = _overflowing(talk, error)
+
+        assert raised is error
+        assert len(heard) == 1
+
+
+def test_with_nothing_left_to_clear_the_refusal_is_handed_on_unasked():
+    """A refusal on a conversation already all handles: a retry would send the same
+    request, and a handle is never cleared again."""
+    talk, _, _ = _latest_heavy()
+    _, update = _overflowing(talk, _too_long())
+    talk.messages = _applied(talk.messages, _update(update))
+    refusal = _too_long()
+
+    heard, raised = _overflowing(talk, refusal)
+
+    assert raised is refusal
+    assert len(heard) == 1
+
+
+def test_a_handle_for_a_result_never_shown_is_never_cleared_again():
+    """Once a later reply has seen it, a pass not recognising it would read the handle as
+    what it replaced: a recorded one rewritten as if shown, a read named by its own length."""
+    talk, latest, _ = _latest_heavy()
+    _, update = _overflowing(talk, _too_long())
+    talk.messages = _applied(talk.messages, _update(update))
+    handles = [_of(talk.messages, call) for call in latest]
+    talk.call("web_search", {"query": "next"}, _text("next"))
+
+    _, update = _overflowing(talk, _too_long())
+
+    after = _applied(talk.messages, _update(update))
+    assert [_of(after, call) for call in latest] == handles
+    assert _changed(talk.messages, after), "the control: the pass ran"
+
+
+def test_a_pass_that_already_ran_on_the_call_keeps_its_handles_in_the_retry():
+    """Built from state rather than from what the first pass sent, the second gave back
+    whole a write the first had cleared, beside another in the same reply it cleared, and
+    dropped from the update a result the first had cleared and it left alone."""
+    talk = Talk()
+    older = talk.call("web_search", {"query": "older"}, _text("older"))
+    first, second = talk.batch(
+        ("write_file", {"file_path": "/outputs/a.md", "content": BIG}, "Updated file a"),
+        ("write_file", {"file_path": "/outputs/b.md", "content": BIG}, "Updated file b"),
+    )
+    talk.call("web_search", {"query": "r1"}, "r1")
+    talk.call("web_search", {"query": "r2"}, "r2")
+    latest = talk.write("/outputs/c.md")
+
+    heard, update = _overflowing(talk, _too_long(), high=1_000)
+
+    before, retry = heard
+    assert _call_in(before, first)["args"]["content"] != BIG, "the control: a pass ran first"
+    assert _call_in(before, second)["args"]["content"] == BIG
+    assert isinstance(update, dict), update
+    after = _applied(talk.messages, update)
+    assert retry == after
+    assert _of(after, older) != talk.result(older)
+    for call in (first, second, latest):
+        assert _call_in(after, call)["args"]["content"].endswith("holds the current text")
+
+
 # -- the marks -----------------------------------------------------------------------
 
 
@@ -848,7 +1082,7 @@ def _marked(cfg: Any, model: str | None = None, **fields: Any) -> Any:
     return replace(cfg, models=replace(models, models={**models.models, name: entry}))
 
 
-def _turn(cfg: Any, *script: AIMessage, way: str = "sync") -> Any:
+def _turn(cfg: Any, *script: AIMessage | Exception, way: str = "sync") -> Any:
     """One turn, through `run` or `arun`: the two loops call different hooks."""
     Scripted.script.extend(script)
     service = Kingfisher(cfg, sessions=LocalSessions())
@@ -863,6 +1097,30 @@ def _one(name: str, at: int, **args: Any) -> AIMessage:
 def _transcript(cfg: Any) -> list[Any]:
     session = cfg.workspace / "sessions" / "s"
     return list(from_json((session / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8")))
+
+
+def test_a_turn_refused_for_length_goes_on_without_a_summary(bulky, way):
+    """Left to deepagents' summariser, the refusal summarised the conversation and wrote
+    each result of the latest batch to `large_tool_results/` under its call id, a folder
+    no row names. Driven through a turn, because only the stack deepagents assembles puts
+    clearing inside the summariser, where it hears the refusal first."""
+    batch = AIMessage(
+        content="",
+        tool_calls=[{"name": "bulky", "args": {"n": n}, "id": f"c{n}"} for n in (1, 2)],
+    )
+
+    result = _turn(bulky, batch, _too_long(), AIMessage(content="done"), way=way)
+
+    assert result.answer == "done"
+    assert Scripted.summaries == 0
+    refused, retry = Scripted.heard[1:]
+    assert len(refused) == len(retry), "a message was added or removed"
+    session = bulky.workspace / "sessions" / "s"
+    assert not list(session.rglob("large_tool_results/*"))
+    said = {one.call_id: one.content for one in _transcript(bulky) if one.role == "tool"}
+    for call, number in (("c1", "A-0001"), ("c2", "A-0002")):
+        assert UNSHOWN in said[call], said[call]
+        assert f"/scratchpad/tool_results/{number}-bulky.txt" in said[call]
 
 
 def test_a_long_turn_clears_and_the_transcript_carries_the_handles(bulky, way):

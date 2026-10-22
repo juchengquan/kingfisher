@@ -2342,8 +2342,9 @@ of it could be freed, the oldest saved results, file tools' results and the text
 `write_file` and `edit_file` calls become handles until it is under half the mark. A
 recorded result keeps its summary, size and id and names its file; a file tool's names
 the call that gets it back; a write or edit says the file holds the current text. The
-latest batch and the three most recent clearable results stay whole. Settled with the
-owner after four real sessions were measured. *(2026-10-16.)*
+latest batch and the three most recent clearable results stay whole, except on a call
+refused for length (*A refusal for length is clearing's to answer first*). Settled with
+the owner after four real sessions were measured. *(2026-10-16.)*
 
 **Every graph kingfisher builds clears, not the agent alone.** It was the agent's, on the
 reasoning that a subagent's conversation ends with its answer. One handed a long job
@@ -2464,6 +2465,27 @@ mark stays 64,000, now in those tokens, a sixth to a third fewer characters on t
 rows; the approximation ran some 16% under MiniMax's own count in the trials that chose
 it, so the new unit is the nearer to what was meant, kept on the owner's word until the
 trials are re-run under it. *(2026-10-21, from a downstream request.)*
+
+**A refusal for length is clearing's to answer first.** Clearing sits inside deepagents'
+summariser, so a call the provider refuses as too long reaches it first. Left to the
+summariser, the refusal cost a summary -- a model call over nearly everything and a new
+history file -- and every result of the latest batch but a read written to
+`large_tool_results/` under its call id, the second store and the identity by call id
+that saving every result ourselves had removed. So clearing takes the refusals the
+summariser itself takes for one, by its own test, so the two cannot disagree; clears
+everything it can, the latest batch and the three most recent included; and asks once
+more. The count that let the call be sent was wrong, so a low mark measured by it means
+nothing, and the one retry is best spent with nothing spared. Refused again, or with
+nothing to clear, the summariser is handed the first error and answers as before: a
+second retry would send what is already refused, and a turn ended where a summary could
+have saved it is worse. A result in the latest batch was never shown, so its handle does
+not send the model back to the call that made it, which would be refused the same way:
+it names the saved copy to be read a part at a time, a read to be made again with
+`offset` and `limit`, a search to be narrowed, and to a graph without `read_file` the
+call to be made again for less. Accepted: the summariser also summarises a request its
+own count puts over the input budget, before the call is sent, and clearing never sees
+that. A counter calibrated to the gateway moves refusals there, which is the case
+already accepted for a very large batch. *(2026-10-21, from a downstream request.)*
 
 **A summarised turn is kept as the model last saw it: the summary, then the messages after
 its cut.** deepagents keeps every message in state and the summary beside them as private
