@@ -207,6 +207,24 @@ def test_a_caller_s_blank_datazone_is_refused_at_every_door(zoned, door, zone):
         door(kf, zoned, zone)
 
 
+#: The doors where naming nobody means the operator, who sees everything.
+NOBODY_DOORS = {
+    "sessions": lambda kf, cfg: kf.sessions(datazone="finance"),
+    "asessions": lambda kf, cfg: asyncio.run(kf.asessions(datazone="finance")),
+    "inventory": lambda kf, cfg: inventory(cfg, datazone="finance"),
+}
+
+
+@pytest.mark.parametrize("door", NOBODY_DOORS.values(), ids=NOBODY_DOORS.keys())
+def test_a_datazone_with_no_caller_is_refused_where_nobody_is_the_operator(zoned, door):
+    """Let through, a datazone with no source ids was dropped, and the call read as the
+    operator's: every session there is, the listing no caller is scoped to."""
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    with pytest.raises(CallerError, match="names no caller"):
+        door(kf, zoned)
+
+
 def test_the_command_refuses_a_blank_datazone(zoned, at_the_command_line, capsys):
     """The `--datazone` door, which a shell's quoting is the likeliest to leave blank."""
     assert main(["list", "--as", "A", "--datazone", "  "]) == 2
