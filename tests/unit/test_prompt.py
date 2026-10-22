@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import Capabilities
@@ -14,6 +14,7 @@ from kingfisher.core.agent.kinds.subagents import as_subagent
 from kingfisher.core.agent.middlewares.builtin_tools import MAPPINGS, TODOS
 from kingfisher.core.agent.prompting import (
     render_system_prompt,
+    session_section,
     system_prompt,
 )
 from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS, OUTPUTS, SCRATCH, Layout
@@ -325,23 +326,47 @@ def _subagent_prompt(cfg, instructions: str = ""):
 
 
 def test_a_subagent_is_given_the_deployments_instructions(cfg):
-    """A subagent does not get the harness prompt, but it does get the house rules."""
+    """A house rule that reached the agent and not the work it handed on is one delegated
+    work escapes."""
     prompt = _subagent_prompt(cfg, "Always cite the file.")
 
     assert prompt.index("Always cite the file.") < prompt.index("You review analyses")
 
 
-def test_a_deployment_with_no_instructions_changes_nothing(cfg):
-    """The definition's own text, byte for byte -- no separator, no blank tail."""
-    assert _subagent_prompt(cfg) == "You review analyses for arithmetic errors."
+def test_a_deployment_with_no_instructions_adds_no_empty_part(cfg):
+    """The session's folders, then the definition's own text, byte for byte -- no second
+    separator where the instructions would be, no blank tail."""
+    assert _subagent_prompt(cfg) == (
+        f"{session_section(cfg.layout)}\n\n---\n\nYou review analyses for arithmetic errors."
+    )
 
 
-def test_a_subagent_is_not_given_the_harnesss_own_prompt(cfg):
-    """The part that must *not* be inherited."""
+#: Each part of `system.md` a subagent is not handed, by its heading or opening line.
+AGENTS_ALONE = (
+    "You are kingfisher",
+    "## The file tools",
+    "## The shell",
+    "## What your tools returned",
+    "## Deciding when to act",
+    "## Finishing",
+)
+
+
+def test_a_subagent_is_given_the_sessions_folders_and_nothing_else_of_the_harness(cfg):
+    """The shell table would sit beside `execute`'s own statement of the same rule, and
+    the ledger paragraphs describe messages a subagent never receives."""
     prompt = _subagent_prompt(cfg, "Always cite the file.")
 
-    assert len(prompt) < 200
-    assert "/inputs" not in prompt
+    assert prompt.startswith(session_section(cfg.layout))
+    assert prompt.index("## The session") < prompt.index("Always cite the file.")
+    told = [part for part in AGENTS_ALONE if part in prompt]
+    assert told == []
+
+
+def test_the_agent_and_its_subagents_are_told_the_same_folders(cfg):
+    """Two copies of the section would drift, and a subagent would be told a folder the
+    agent was not."""
+    assert session_section(cfg.layout) in system_prompt(cfg)
 
 
 def test_both_levels_separate_the_addition_the_same_way(cfg):
@@ -594,6 +619,71 @@ def test_every_subagent_is_given_the_deployments_instructions(scripted, subagent
 
     assert len(systems) == 3
     assert "House rule: never delete anything." in systems[1]
+
+
+#: A subagent that consults `reader` itself, so a helper, built through its parent's own
+#: `SubAgentMiddleware`, is driven as well as the two the agent's build makes.
+CONSULTING = """name: consulting
+description: Asks.
+builtin_tools: [read_file, task]
+subagents: [reader]
+system_prompt: |
+  You ask.
+"""
+
+
+def _asking(description: str, subagent: str, at: str) -> AIMessage:
+    task = {"description": description, "subagent_type": subagent}
+    return AIMessage(content="", tool_calls=[{"name": "task", "args": task, "id": at}])
+
+
+@pytest.mark.parametrize(
+    ("asked", "agent", "script"),
+    [
+        (
+            "read",
+            {"subagents": "[reader]", "builtin_tools": '["*"]'},
+            (_asking("read", "reader", "t"), AIMessage("read"), AIMessage("done")),
+        ),
+        (
+            "read",
+            {"builtin_tools": "[read_file, task]"},
+            (_asking("read", "general-purpose", "t"), AIMessage("read"), AIMessage("done")),
+        ),
+        (
+            "read deeper",
+            {"subagents": "[consulting, reader]", "builtin_tools": '["*"]'},
+            (
+                _asking("ask", "consulting", "t"),
+                _asking("read deeper", "reader", "u"),
+                AIMessage("read"),
+                AIMessage("asked"),
+                AIMessage("done"),
+            ),
+        ),
+    ],
+    ids=["declared", "general-purpose", "helper"],
+)
+def test_every_subagent_is_told_the_sessions_folders_in_its_layouts_names(
+    scripted, asked, agent, script
+):
+    """Left to guess, three subagents in four saved their deliverables to an `/outputs`
+    the renamed layout did not have, and the turn reported none of them."""
+    renamed = replace(scripted, layout=Layout(outputs="results"))
+    subagents_dir(renamed).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(renamed) / "reader.yaml").write_text(READER, encoding="utf-8")
+    (subagents_dir(renamed) / "consulting.yaml").write_text(CONSULTING, encoding="utf-8")
+
+    systems = _told(renamed, *script, **agent)
+
+    (system,) = [
+        system
+        for system, heard in zip(systems, Scripted.heard, strict=True)
+        if any(isinstance(m, HumanMessage) and m.text == asked for m in heard)
+    ]
+    assert system.startswith(session_section(renamed.layout))
+    assert "`/results`" in system
+    assert "/outputs" not in system
 
 
 # -- told to read back and save only with the tools it holds ------------------------

@@ -475,9 +475,24 @@ origin: the reader sets it for every entry without a `build`, imported or typed 
 kingfisher supplies it, to carry the standing middleware, and supplied it with deepagents'
 bare prompt, so a turn delegated to it escaped every house rule a declared subagent was
 held to while the `Instructions` contract promised every subagent. It now gets the
-instructions ahead of deepagents' text, joined as a declared subagent's are, and still
-nothing of the harness's prompt. A compiled subagent stays outside: its `build` writes its
-prompt, and that is said in the contract. *(2026-10-20.)*
+instructions ahead of deepagents' text, joined as a declared subagent's are, and of the
+harness's prompt only what the session's folders are for, as the next entry says. A
+compiled subagent stays outside: its `build` writes its prompt, and that is said in the
+contract. *(2026-10-20.)*
+
+**Every subagent kingfisher builds is told what the session's folders are for.** It was
+told nothing of the harness, on the reasoning that its parent's handoff says where work
+goes, and the shell table would contradict `execute`'s description beside it. Over 17
+real turns the parent did name `/outputs` in 14 of 15 handoffs, and a subagent handed a
+request word for word still saved there, by guessing from `inputs`. With `outputs`
+renamed to `results`, 3 of 4 such subagents saved to an `/outputs` they made up, one after
+`ls` said it did not exist, and the turn reported none of it. So `system.md`'s session
+section moved to `prompts/session.md`, which the agent's prompt and every declared
+subagent's, helper's and `general-purpose`'s include, ahead of the deployment's
+instructions. The rest stays the agent's: the agent, which holds the shell table, missed
+shell paths as often as subagents did (6 in 26 calls against 12 in 60), and the ledger
+paragraphs describe messages a subagent never receives. A compiled subagent runs as it
+was built. *(2026-10-22.)*
 
 **A session's own text is sent after the cached part, from deepagents' caching slot.** A
 deployment telling each session something of its own -- its caller, its case -- replaced
@@ -2309,7 +2324,7 @@ replayed as sent rather than repeated on every turn or lost from the history.
 **A subagent reads the id on its results and is told nothing about it, and that is left
 as it is.** Measured, the agent's prompt is 9,543 characters and explains the id; a
 subagent's is 1,902 and does not. Two deliberate rules meet: every graph is stamped, and a
-subagent gets its own text and nothing of the harness's, asserted byte for byte. The
+subagent gets its own text and, of the harness's, only the session's folders. The
 stamp is the agent's handle on delegated work. Explaining it to a subagent puts harness
 prose in every subagent's prompt, half of it about blocks a subagent never receives; not
 stamping leaves an evicted subagent result nothing can find, since grepping for the
@@ -2357,7 +2372,7 @@ helper it consults and `general-purpose` clear too, each by the summariser it ru
 by the mark beside the model it runs -- its own entry's where it names one, else its
 summoner's -- and a mark that summariser reaches first is refused naming that graph. A
 compiled subagent runs as it was built. The handles need no prompt to explain them, so a
-subagent is still told nothing of the harness: each says what was left out, where the
+subagent is told nothing about them: each says what was left out, where the
 whole is, and names only a tool that graph holds. *(2026-10-21, from a downstream
 request.)*
 
@@ -3068,9 +3083,10 @@ are renamed rather than given prettier virtual names. *(2026-09-21.)*
 **`execute`'s own description states the shell's path rule, and a miss is answered
 with it.** deepagents' description says "Use absolute paths", and the only absolute paths
 a model knows are the file tools', which the shell reads from the host's root. `system.md`
-says otherwise, but a subagent never sees it, while the description reaches every graph
-holding the shell. So `BuiltinToolsMiddleware`, in `standing_middleware`, replaces that
-line with the rule -- appending it where deepagents has reworded the line, which
+says otherwise, but a subagent never sees its shell section, while the description
+reaches every graph holding the shell. So `BuiltinToolsMiddleware`, in
+`standing_middleware`, replaces that line with the rule -- appending it where deepagents
+has reworded the line, which
 `test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_ones` then
 fails on -- and appends a correction to an `execute` error naming a session folder spelt
 the file tools' way. A correction rather than a rewrite of the command, because the miss

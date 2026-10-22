@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Every subagent is told what the session's folders are for, after #1058
+
+- **A subagent's prompt now opens with the session section.** Every declared subagent,
+  helper and `general-purpose` is sent what `/inputs`, `/outputs` and `/scratchpad` are
+  for, in your layout's names, then your instructions, then its own `system_prompt`.
+  Before, its prompt began with your instructions. If you cache a subagent's prompt, diff
+  it, or tell subagents apart by how their prompt opens, the text is not the same.
+- **The agent's prompt is unchanged.** The section moved to `prompts/session.md`, and
+  `system.md` includes it where it was.
+- **A compiled subagent is untouched.** Its `build` still writes its whole prompt.
+
 ## The prompt says whose the kept records are, after #1057
 
 - **Two sentences of the system prompt have changed.** The clause #1036 added to the

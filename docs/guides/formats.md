@@ -141,8 +141,9 @@ same agent again; naming a different one is refused.
 ### The prompt is added to, not replaced
 
 `system_prompt` is the same word a subagent file uses, doing a different job. A
-subagent's is the whole of its prompt but for the deployment's instructions ahead of
-it. An agent's is the last of three parts:
+subagent's comes after two parts: what the session's folders are for, from
+`prompts/session.md`, and the deployment's instructions. Nothing else of the harness
+reaches it. An agent's is the last of three parts:
 
     prompts/system.md    what the harness is — /inputs is read-only, /skills is
                          loadable, where memory lives. Ships with kingfisher
@@ -624,7 +625,7 @@ on the spot, so every entry after the first would be unreachable.
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
-| `system_prompt` | required | The subagent's whole instruction, written after `\|` |
+| `system_prompt` | required | The subagent's own instruction, written after `\|`. It is sent behind the session's folders and the deployment's instructions |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table above. `["*"]` is all of them. Unset grants **none**, as `[]` does. `eval` is refused here: the code sandbox is the agent's alone, and no subagent is handed it |
 | `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
