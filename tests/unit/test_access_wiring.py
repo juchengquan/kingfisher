@@ -201,6 +201,7 @@ CALLERS_NAMED_WRONG = {
     "a datazone with nobody named": lambda zoned: caller_holds(zoned, with_datazone(None, "hr")),
     "a bare string with a datazone": lambda zoned: caller_holds(zoned, with_datazone("AB", "hr")),
     "a blank datazone": lambda zoned: caller_holds(zoned, with_datazone(("A",), " ")),
+    "a datazone of '*'": lambda zoned: caller_holds(zoned, with_datazone(("A",), "*")),
     "a datazone that is no string": lambda zoned: caller_holds(
         zoned, with_datazone(("A",), 5)  # ty: ignore[invalid-argument-type]
     ),

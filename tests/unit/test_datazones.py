@@ -207,6 +207,19 @@ def test_a_caller_s_blank_datazone_is_refused_at_every_door(zoned, door, zone):
         door(kf, zoned, zone)
 
 
+@pytest.mark.parametrize("zone", ["*", " * "])
+@pytest.mark.parametrize("door", ZONE_DOORS.values(), ids=ZONE_DOORS.keys())
+def test_a_caller_s_star_datazone_is_refused_at_every_door(zoned, door, zone):
+    """A caller's `"*"` was held as a zone of that name, which no definition may require
+    since a definition's `"*"` is refused, so it reached nothing zoned and pinned the
+    session it ran in to `*` for good; a datazone is passed by name or not at all.
+    """
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    with pytest.raises(CallerError, match=r"'\*' is not 'any'"):
+        door(kf, zoned, zone)
+
+
 #: The doors where naming nobody means the operator, who sees everything.
 NOBODY_DOORS = {
     "sessions": lambda kf, cfg: kf.sessions(datazone="finance"),
@@ -229,6 +242,12 @@ def test_the_command_refuses_a_blank_datazone(zoned, at_the_command_line, capsys
     """The `--datazone` door, which a shell's quoting is the likeliest to leave blank."""
     assert main(["list", "--as", "A", "--datazone", "  "]) == 2
     assert "datazone is one name" in capsys.readouterr().err
+
+
+def test_the_command_refuses_a_star_datazone(zoned, at_the_command_line, capsys):
+    """The `--datazone` door: a quoted `'*'` reaches it as itself, and is refused there too."""
+    assert main(["list", "--as", "A", "--datazone", "*"]) == 2
+    assert "'*' is not 'any'" in capsys.readouterr().err
 
 
 def test_a_caller_s_padded_datazone_is_the_one_it_names(turns):

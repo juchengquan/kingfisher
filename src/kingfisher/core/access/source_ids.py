@@ -121,6 +121,14 @@ def with_datazone[Caller: Iterable[str] | _Unscoped | None](
             f"line --datazone finance -- got {datazone!r}"
         )
         raise CallerError(msg)
+    # Not "any", as `"*"` is in an audience: a caller is in one named zone or none, and held
+    # as a name it reached no zoned definition and pinned the session to a zone of `*`.
+    if zone == ALL:
+        msg = (
+            "a caller's datazone is one name, and '*' is not 'any' -- pass "
+            "datazone='finance', from the command line --datazone finance, or leave it out"
+        )
+        raise CallerError(msg)
     if isinstance(source_ids, _Unscoped):
         msg = (
             "UNSCOPED runs with no caller, so it has no datazone -- pass the caller's "
