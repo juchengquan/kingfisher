@@ -147,6 +147,24 @@ def test_an_expired_result_is_handed_over_and_kept_if_the_plugin_keeps_it(worksp
     assert "A-0001-web_search.txt" in _kept(workspace)
 
 
+def test_a_stray_past_four_digits_is_swept_and_a_prefixed_name_is_not(workspace):
+    """The sweep reads an id as `A-` and any number of digits, so the 10,000th result's
+    leftover is dropped like any other; a name that does not begin with the id is not a
+    recorder's, and is left alone."""
+    folder = _folder(workspace)
+    (folder / "A-10000-web_search.txt").write_bytes(LEFT)
+    (folder / "data-A-0007-web_search.json").write_bytes(LEFT)
+    keeping = Keeping()
+    kf = Kingfisher(workspace, sessions=LocalSessions(), unused_results=keeping)
+
+    _turn(kf, *_searched())
+
+    assert sorted(path for path, *_ in keeping.handed[0]) == [
+        f"{ROUTE}{STRAY}", f"{ROUTE}A-10000-web_search.txt",
+    ]
+    assert "data-A-0007-web_search.json" in _kept(workspace)
+
+
 def test_a_turn_with_nothing_unused_does_not_ask(workspace):
     """Asked with nothing, a plugin that does slow setup per call pays it every turn."""
     keeping = Keeping()
