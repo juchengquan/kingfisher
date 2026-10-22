@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import stat
-import sys
 from typing import Any
 
 import pytest
@@ -141,21 +140,36 @@ def test_a_file_whose_contents_name_a_path_comes_back_whole(cfg, session_dir, wa
 
 def test_the_shell_keeps_its_own_spelling(cfg, session_dir, way):
     """The shell's paths are the host's by design, so a command's own spelling is the one
-    that would work again. What keeps them is the rule above and nothing else: measured,
-    a command that fails is a tool call that succeeded, so no shell result reaches the
-    rewrite -- and this is what fails if that ever stops being true.
+    that would work again, and the model is handed what the shell said.
 
-    Driven with the command named by an absolute path, which is what makes the case bite:
-    the string a shell call names is a command, not a path, and `<python>
-    /scratchpad/missing.py` ends with the very path its own error quotes, so a rewrite
-    would put the whole command line where the path belongs.
+    `/bin/cat`, not this interpreter: the venv sits inside `$HOME` on a macOS runner,
+    which the profile denies, so a command naming `sys.executable` never ran there and
+    the rule passed on a message about permissions. A program both fences allow keeps the
+    case the same on every machine.
     """
-    command = f"{sys.executable} /scratchpad/missing.py"
+    said = _answers(
+        cfg, session_dir, way, ("execute", {"command": "/bin/cat /scratchpad/missing.py"})
+    )
 
-    said = _answers(cfg, session_dir, way, ("execute", {"command": command}))
+    assert "/scratchpad/missing.py" in said["0:execute"], said["0:execute"]
+    # Unquoted, as the shell wrote it: nothing here has turned it into a tool's spelling.
+    assert "'/scratchpad/missing.py'" not in said["0:execute"], said["0:execute"]
 
-    assert "'/scratchpad/missing.py'" in said["0:execute"], said["0:execute"]
-    assert f"'{command}'" not in said["0:execute"], said["0:execute"]
+
+def test_a_shell_message_is_what_the_rewrite_would_spoil():
+    """Why the shell is kept out, pinned where no fence can refuse it: the string a shell
+    call names is a command rather than a path, so a quoted path in its output is a tail
+    of the whole command line. Applied to one, the rewrite puts the command where the
+    path belongs -- which is what `status` keeps from happening, since a command that
+    fails is a tool call that succeeded.
+    """
+    command = "/usr/bin/python3 /scratchpad/missing.py"
+    said = "python3: can't open file '/scratchpad/missing.py': [Errno 2]"
+
+    spoiled = as_asked(said, {"command": command})
+
+    assert f"'{command}'" in spoiled
+    assert "'/scratchpad/missing.py'" not in spoiled
 
 
 #: A tool that opens what it is given with Python's own `open`, which is handed the host
