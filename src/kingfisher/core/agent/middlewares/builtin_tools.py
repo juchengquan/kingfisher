@@ -31,6 +31,7 @@ from kingfisher.core.agent.prompting import (
     execute_line,
     stray_save,
 )
+from kingfisher.core.agent.session_paths import what_you_make_goes
 from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import Layout
 
@@ -117,6 +118,60 @@ def hint(path: str) -> str:
         f"`{path}` is a file-tool path, which the shell reads from the host's root. The "
         f'shell exports the session root, so there it is `"$KINGFISHER_SESSION_ROOT{path}"` '
         '-- in the command, and in a script as `os.environ["KINGFISHER_SESSION_ROOT"]`.'
+    )
+
+
+#: What a fence says of a write to a folder it keeps read-only. Each is the kernel's word,
+#: not kingfisher's: `sandbox-exec` denies the operation, the Linux fence denies the
+#: permission -- measured on the Linux job, in `tests/linux/test_fence_escapes.py` -- and
+#: bubblewrap mounts the folder read-only, which no job runs, so that one follows `_MISSING`
+#: rather than a measurement. Narrower than `_MISSING` on purpose: a file that is merely
+#: absent is not a folder that is kept, and the note would send the model somewhere else.
+_REFUSED = ("Operation not permitted", "Permission denied", "Read-only file system")
+
+#: A path a message names: anything carrying a slash, up to the punctuation around it. The
+#: slash is what tells a path from a word -- without it `grep: inputs: ...` and a command
+#: that merely printed the word `inputs` are the same line.
+_TOKEN = re.compile(r"[^\s'\"`:,;()]*/[^\s'\"`:,;()]*")
+
+
+def kept_under(output: str, root: str, folders: Collection[str]) -> str | None:
+    """The first folder of `folders` a fence refused a write under in `output`, or `None`.
+
+    Against `root` and not the folder name alone, because a fence refuses everything
+    outside the session too: a `python3` whose cache file sits in the host's temp folder
+    reports `Operation not permitted` about a path ending in a name of its own, and
+    blaming a session folder there would send the model to correct a path that was never
+    the problem. The shell's working directory *is* the session, so a relative path is
+    resolved against `root` rather than skipped -- `echo x > inputs/f` is the shorter
+    command and the one a model writes.
+
+    Both on one line, as `missed` is, so a path a command printed and an unrelated refusal
+    elsewhere in its output are not read as one.
+    """
+    here = PurePosixPath(root)
+    kept = [(folder, here / folder) for folder in folders]
+    for line in output.splitlines():
+        if not any(said in line for said in _REFUSED):
+            continue
+        for token in _TOKEN.findall(line):
+            named = PurePosixPath(token)
+            where = named if named.is_absolute() else here / named
+            for folder, under in kept:
+                if where.is_relative_to(under):
+                    return folder
+    return None
+
+
+def kept_note(folder: str, layout: Layout) -> str:
+    """The note appended to a shell result a fence refused for a kept folder.
+
+    The folder as the file tools spell it, which is the name the prompt gave it: what the
+    shell reported is a host path, and the point of the note is that the two are one place.
+    """
+    return (
+        f"`/{folder}/` is not yours to write: the shell is refused there, as the file "
+        f"tools are. {what_you_make_goes(layout.outputs_route, layout.scratch_route)}"
     )
 
 
@@ -493,7 +548,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         shell: ShellPrompt | None = None,
         *,
         longest: int,
-        rooted: bool = False,
+        root: str | None = None,
         here: bool = True,
         expires_after: int | None = None,
         folders: frozenset[str] | None = None,
@@ -512,9 +567,10 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         # does not have.
         self._here = here
         self._rule = execute_line(shell, layout)
-        # Only where the shell exports the session root, which the correction names.
-        self._corrects = rooted
         self._virtual = _virtual(layout.session_dirs)
+        # Where the shell sees the session, or `None` where it does not say -- which is
+        # also where neither correction has anything to name, so it gates both.
+        self._root = root
 
     def _told(self, request: Any) -> Any:
         # Inside `GrantedOnlyMiddleware`, so the request holds only what was granted.
@@ -534,15 +590,23 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         return _without(request, tuple(untold))
 
     def _corrected(self, request: Any, result: Any) -> Any:
-        if not self._corrects:
+        if self._root is None:
             return result
         if request.tool_call.get("name") != EXECUTE or not isinstance(result, ToolMessage):
             return result
         if not isinstance(result.content, str):
             return result
-        if (path := missed(result.content, self._virtual)) is None:
+        # The spelling first: where the path is the file tools' and not the shell's,
+        # saying which folder is kept would answer a command that was never going to run.
+        if (path := missed(result.content, self._virtual)) is not None:
+            said = hint(path)
+        elif folder := kept_under(
+            result.content, self._root, self._layout.shell_read_only
+        ):
+            said = kept_note(folder, self._layout)
+        else:
             return result
-        return result.model_copy(update={"content": f"{result.content}\n\n{hint(path)}"})
+        return result.model_copy(update={"content": f"{result.content}\n\n{said}"})
 
     def _explained(self, request: Any, result: Any) -> Any:
         """`result`, saying results expire where a file tool looked for one and found nothing.

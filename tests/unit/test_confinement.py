@@ -1008,6 +1008,43 @@ def test_the_shell_cannot_change_the_files_a_deployment_authors(cfg, session_dir
 
 
 @macos
+@pytest.mark.parametrize(
+    "command",
+    [
+        'echo x > "$KINGFISHER_SESSION_ROOT/inputs/new.txt"',
+        # The shell starts in the session, so this is the shorter command and the one a
+        # model writes; the fence then reports the path with no root in front of it.
+        "echo x > inputs/new.txt",
+        f"echo x > scratchpad/{HISTORY}/forged.md",
+    ],
+)
+def test_what_the_fence_says_is_a_message_the_note_can_read(cfg, session_dir, command):
+    """`kept_under` keys on the kernel's wording, which only a fence produces -- so it is
+    driven against the real one here rather than against text this file wrote, and a
+    macOS that reworded `Operation not permitted` reddens this instead of silently
+    dropping the note from every refused command.
+
+    Not through a graph: that `BuiltinToolsMiddleware` appends what this finds is
+    `test_a_fence_refusal_tells_the_shells_result_which_folder_is_kept`'s, and driving
+    both here would tie the fence's wording to the middleware's wiring.
+    """
+    from kingfisher.core.agent.backend import session_root_of
+    from kingfisher.core.agent.middlewares.builtin_tools import kept_under
+
+    backend = backend_at(cfg, session_dir)
+    root = session_root_of(backend)
+    assert root is not None, "kingfisher's own shell says where the session is"
+
+    refused = backend.execute(command)
+
+    assert refused.exit_code != 0, f"the fence allowed {command!r}: {refused.output}"
+    assert kept_under(refused.output, root, DEFAULT_LAYOUT.shell_read_only) is not None, (
+        f"the fence refused {command!r} and the note cannot read its message: "
+        f"{refused.output}"
+    )
+
+
+@macos
 def test_the_shell_cannot_lift_the_bits_on_the_callers_inputs(cfg, session_dir):
     """`/inputs` was kept from the shell by dropping its write bits, and the shell runs
     as the uid that owns them -- so `chmod u+w` and the same write replaced the

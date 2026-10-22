@@ -215,7 +215,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         BuiltinToolsMiddleware(
             layout,
             shell_told(backend),
-            rooted=session_root_of(backend) is not None,
+            root=session_root_of(backend),
             longest=longest_command(execution_timeout_s),
             here=shell_runs_here(backend),
             expires_after=keep_results_rounds,
