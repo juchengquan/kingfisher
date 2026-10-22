@@ -17,6 +17,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.caching import CACHING, PromptCachingMiddleware
+from kingfisher.core.agent.prompting import session_section
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.layout import MEMORY
@@ -177,6 +178,14 @@ SUBAGENTS = [
 '''
 
 
+def _own_text(cfg, payload: dict[str, Any]) -> str:
+    """How a call's system prompt opens, past the session's folders every subagent
+    kingfisher builds opens on, so a graph is told apart by its own text."""
+    blocks = _system(payload)
+    shared = f"{session_section(cfg.layout)}\n\n---\n\n"
+    return blocks[0]["text"].removeprefix(shared) if blocks else ""
+
+
 def _every_kind(cfg) -> Kingfisher:
     """An agent consulting a declared subagent, its helper and a compiled subagent."""
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -224,7 +233,7 @@ def test_every_graph_kingfisher_builds_is_sent_it_and_a_compiled_one_is_not(
     by_graph: dict[str, list[dict[str, Any]]] = {}
     for payload in model.sent:
         blocks = _system(payload)
-        opening = blocks[0]["text"] if blocks else ""
+        opening = _own_text(cfg, payload)
         graph = next(
             (
                 name
@@ -319,7 +328,7 @@ def test_a_helpers_session_text_follows_what_its_own_middleware_writes(
     (checking,) = [
         payload
         for payload in model.sent
-        if _system(payload) and _system(payload)[0]["text"].startswith("You check.")
+        if _own_text(cfg, payload).startswith("You check.")
     ]
     told = "".join(block["text"] for block in _system(checking))
     assert told.index(STAMP) < told.index(TEXT)

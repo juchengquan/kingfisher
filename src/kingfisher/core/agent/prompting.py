@@ -43,6 +43,11 @@ CAPABILITY_FILES = {
 #: What follows the memory section where the agent holds a tool to save with.
 MEMORY_RECORDING = "capability_memory_recording.md"
 
+#: Where the session's folders are described: the one part of the harness every subagent
+#: kingfisher builds is handed too, from this one file, so the two cannot drift apart.
+SESSION_MARKER = "<!-- session -->"
+SESSION_FILE = "session.md"
+
 #: Where the shell's own section is spliced in. The rest of `system.md` says nothing
 #: about the shell, because what is true of one depends on what runs it.
 SHELL_MARKER = "<!-- shell -->"
@@ -340,7 +345,12 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     """
     base = _filled(BASE_PROMPT, layout)
     for marker in (
-        CAPABILITY_MARKER, FILE_TOOLS_MARKER, SHELL_MARKER, CITING_MARKER, TOOL_RESULTS_MARKER
+        SESSION_MARKER,
+        CAPABILITY_MARKER,
+        FILE_TOOLS_MARKER,
+        SHELL_MARKER,
+        CITING_MARKER,
+        TOOL_RESULTS_MARKER,
     ):
         if marker not in base:  # pragma: no cover -- guards a silent edit
             msg = f"{BASE_PROMPT} is missing the {marker} marker"
@@ -360,7 +370,8 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     sections = "\n\n".join(part for part in parts if part)
 
     assembled = _joined(
-        base.replace(FILE_TOOLS_MARKER, _file_tools(held, layout))
+        base.replace(SESSION_MARKER, session_section(layout))
+        .replace(FILE_TOOLS_MARKER, _file_tools(held, layout))
         .replace(SHELL_MARKER, _said(shell, "prompt", layout) if shelled else "")
         .replace(CITING_MARKER, _CITING if cite_results else "")
         .replace(TOOL_RESULTS_MARKER, _tool_results(
@@ -413,6 +424,21 @@ def behind_instructions(prompt: str, instructions: str) -> str:
     *trailing* part, and this one leads.
     """
     return _joined(instructions, prompt) if instructions.strip() else prompt
+
+
+def session_section(layout: Layout) -> str:
+    """What the session's folders are for, in this layout's names."""
+    return _filled(SESSION_FILE, layout).strip()
+
+
+def subagent_prompt(prompt: str, instructions: str, layout: Layout) -> str:
+    """A subagent's prompt, in the agent's order: the session's folders, the deployment's
+    instructions, then its own.
+
+    Left to guess, a subagent saves to `/outputs` whatever the layout calls it, and nothing
+    reports what lands there. The rest of `system.md` stays the agent's: `decisions.md` says why.
+    """
+    return _joined(session_section(layout), behind_instructions(prompt, instructions))
 
 
 def system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describes

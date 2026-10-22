@@ -25,7 +25,7 @@ from kingfisher.core.agent.models import (
     summarizer_count,
     summarizer_trigger,
 )
-from kingfisher.core.agent.prompting import behind_instructions
+from kingfisher.core.agent.prompting import subagent_prompt
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.agents.spec import AgentSpec
@@ -316,8 +316,9 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     subagent: dict[str, Any] = {
         "name": spec.name,
         "description": spec.description,
-        # The deployment's instructions first, so delegated work cannot escape a house rule.
-        "system_prompt": behind_instructions(spec.system_prompt, instructions),
+        # The deployment's instructions ahead of its own, so delegated work cannot escape a
+        # house rule.
+        "system_prompt": subagent_prompt(spec.system_prompt, instructions, cfg.layout),
     }
     # A subagent inherits none of the parent's `GrantedOnlyMiddleware`, so the ceiling is applied
     # here or a withheld `execute` reaches every subagent. What it is stays `ceiling`'s call.

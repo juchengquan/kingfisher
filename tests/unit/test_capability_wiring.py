@@ -29,7 +29,7 @@ from kingfisher.core.agent.middlewares.narrowing import (
     GrantedOnlyMiddleware,
     NarrowedSkillsMiddleware,
 )
-from kingfisher.core.agent.prompting import memory_guidelines
+from kingfisher.core.agent.prompting import memory_guidelines, subagent_prompt
 from kingfisher.core.layout import DEFAULT_LAYOUT, MEMORY
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
@@ -277,7 +277,7 @@ def test_activating_a_subagent_passes_its_definition_through(cfg, session_dir):
 
     (subagent,) = declared_subagents(built)
     assert subagent["name"] == "reviewer"
-    assert subagent["system_prompt"] == "You review analyses."
+    assert subagent["system_prompt"] == subagent_prompt("You review analyses.", "", cfg.layout)
     # Set though empty: absent, deepagents would hand the subagent the agent's own tools.
     assert subagent["tools"] == []
     assert "model" not in subagent

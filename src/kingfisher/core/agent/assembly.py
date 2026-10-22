@@ -85,7 +85,7 @@ from .models import (
     summarizer_trigger,
 )
 from .permitted_backend import PermittedBackend
-from .prompting import behind_instructions, memory_guidelines, system_prompt
+from .prompting import memory_guidelines, subagent_prompt, system_prompt
 from .session_paths import SessionPaths
 from .tool_context import ToolContext
 from .tool_guards import guarded_tools
@@ -822,8 +822,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     supplied.append(
         {
             **GENERAL_PURPOSE_SUBAGENT,
-            "system_prompt": behind_instructions(
-                GENERAL_PURPOSE_SUBAGENT["system_prompt"], instructions
+            "system_prompt": subagent_prompt(
+                GENERAL_PURPOSE_SUBAGENT["system_prompt"], instructions, cfg.layout
             ),
             # deepagents hands it the agent's own tool objects, so it needs the same guards.
             "middleware": (
