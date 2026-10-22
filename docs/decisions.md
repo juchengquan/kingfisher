@@ -2166,9 +2166,9 @@ remembering what a plugin kept, a second record of the folder beside the ledger,
 kept file is offered every turn; an async twin, since `settle` already runs off the
 loop and a twin is a second method to keep in step; a check in the contract kits,
 since the core itself holds what is chosen and what can be reached, leaving a plugin
-no promise to break; and deepagents' copies under `large_tool_results/`, of which there
-are no new ones: nothing has written there since its offloading was turned off on
-2026-10-21, and the sweep lists only `tool_results/`. *(2026-10-21.)*
+no promise to break; and deepagents' copies under `large_tool_results/`, which no row
+names: its summariser writes them only on a refusal for length clearing could not answer,
+and the sweep lists only `tool_results/`. *(2026-10-21.)*
 
 **The recorder's own folder is refused, and that is not the same decision.** Only
 `tool_results/` is write-denied to the file tools, `delete` included. A row names its file
@@ -2190,8 +2190,8 @@ got in -- and the sweep cannot see an overwrite, since it skips every path a row
 third permanent route to protect rows a version without this property wrote is not worth
 it, with no layout version to move, so they age out with their sessions. *(2026-10-14,
 from an architecture review.)* *Since 2026-10-21 a row names only `tool_results/`, and
-nothing writes `large_tool_results/`; both stay denied, with every other folder of kept
-records, below.*
+only deepagents' summariser writes `large_tool_results/`, on a refusal for length clearing
+could not answer; both stay denied, with every other folder of kept records, below.*
 
 **Two fences of three now refuse the shell both folders a row can name.** Once older
 results are cleared to handles, the saved file is the only copy, so an overwrite is the
@@ -2205,8 +2205,9 @@ refuses a session without them. Landlock cannot while it grants the scratchpad w
 read-only grant under a writable parent being stepped over (`_session_writable`), which
 is also why `shell_denied` does not ask a deployment's backend for it. Two of three is not
 a boundary, so nothing claims one. *(2026-10-16, before clearing results to handles.)*
-*Since 2026-10-21 nothing writes `large_tool_results/`, so a session is made without it;
-it stays denied with every other folder of kept records, below.*
+*Since 2026-10-21 a session is made without `large_tool_results/`, which only deepagents'
+summariser writes, on a refusal for length clearing could not answer; it stays denied with
+every other folder of kept records, below.*
 
 **Every folder of kept records is denied, not only the ones a row names.** The question
 was always who reads the file back: a row's file is denied because the prompt tells the
@@ -3691,15 +3692,16 @@ deny over `inputs`, `.harness` and a name no rule mentions, so the half that rem
 by what actually holds it. *(2026-10-15, from an architecture review.)*
 
 **deepagents' own files are kept in the scratchpad.** deepagents writes unasked what its
-summarizer replaced, and a user message too long to send, under `conversation_history/`.
-Until 2026-10-21 it also evicted a tool result over about 80,000 characters to
-`large_tool_results/`, which is off now that kingfisher saves every result itself. Both
+summarizer replaced, and a user message too long to send, under `conversation_history/`,
+and on a refusal for length clearing could not answer, the latest batch's results under
+`large_tool_results/`. Until 2026-10-21 it also evicted a tool result over about 80,000
+characters there, which is off now that kingfisher saves every result itself. Both
 hang off
 `CompositeBackend.artifacts_root`, which defaults to `/`, so they sat at the session root,
 in no folder the layout names and never returned. `WorkspaceScopedBackend` passes the
 layout's scratchpad route as `artifacts_root`: they are the agent's working material,
-returned to nobody, where `/outputs` would have handed every evicted result to the caller. `system.md` names the history folder, because the agent searches
-there rather than following a stub.
+returned to nobody, where `/outputs` would have handed every evicted result to the caller. `session.md` names the history folder, because the agent searches
+there; a summariser's copy is read through the stub that names it.
 `test_the_prompt_names_the_folder_deepagents_writes_on_its_own` reads the root off the
 backend, so a rename cannot leave the line behind.
 
