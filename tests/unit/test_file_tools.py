@@ -365,8 +365,8 @@ def test_an_unrestricted_graph_is_told_what_deepagents_says_but_the_false_claim(
         said = {getattr(tool, "name", None): tool.description for tool in tools}
         timed = timeout_line(cfg.execution_timeout_s)
         assert said[EXECUTE] == f"{EXECUTE_TOOL_DESCRIPTION.replace(ABSOLUTE, rule)}\n{timed}"
-        # And deepagents' sentence on the offload folder is dropped, not reworded:
-        # nothing writes that folder now, so it would send a search nowhere.
+        # And deepagents' sentence on the offload folder is dropped, not reworded: the
+        # offloading it describes is off, so it would send a search to an empty folder.
         assert said[GREP] == (
             GREP_TOOL_DESCRIPTION.replace(SEPARATELY, JOINED)
             .replace(OFFLOADED_ELSEWHERE, "")

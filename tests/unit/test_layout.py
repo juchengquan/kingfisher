@@ -57,8 +57,12 @@ def test_the_default_layout_is_the_module_constants():
         "scratchpad/large_tool_results",
     )
     assert default.history == "scratchpad/conversation_history"
-    # Made, unlike the other two: a fence binds only a folder that is already there.
-    assert default.made_dirs[-1] == "scratchpad/conversation_history"
+    assert default.offloads == "scratchpad/large_tool_results"
+    # Made, unlike `blobs`: a fence binds only a folder that is already there.
+    assert default.made_dirs[-2:] == (
+        "scratchpad/conversation_history",
+        "scratchpad/large_tool_results",
+    )
     assert "scratchpad/blobs" not in default.made_dirs
 
 
@@ -80,6 +84,7 @@ def test_a_renamed_layout_spells_every_route_from_its_leaves():
         "scratch/large_tool_results",
     )
     assert MOVED.history == "scratch/conversation_history"
+    assert MOVED.offloads == "scratch/large_tool_results"
     assert MOVED.session_dirs == ("in", "out", "mem", "scratch")
     assert MOVED.artifact_dirs == ("out", "mem")
 

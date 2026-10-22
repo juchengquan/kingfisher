@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session is made with `scratchpad/large_tool_results/`, after #9999
+
+- **Every session has the folder, empty, from the next time it is opened.** deepagents'
+  summariser writes there part-way through a turn, on a call refused for length that
+  clearing could not answer (#1056), and bubblewrap binds a folder read-only only if it
+  is there when the turn's fence is built, so the shell could rewrite what it wrote until
+  the turn ended. `ls /scratchpad` names the folder now.
+- **A deployment that calls `backend_at` on a session directory itself** calls
+  `ensure_session_layout` on one made before this first, or is refused with a message
+  saying so. `LocalSessions.open` does that on every open.
+- **`Layout.offloads` is new**: the folder as a path inside the session, beside
+  `Layout.history`.
+
 ## A caller's datazone of `"*"` is refused, after #1060
 
 - **`datazone="*"` is a `CallerError`**, on every door that takes one, `--datazone`

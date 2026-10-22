@@ -110,9 +110,10 @@ def test_the_prompt_names_the_folder_deepagents_writes_on_its_own(cfg, session_d
     """A prompt naming a folder the backend no longer has deepagents write sends the
     agent's search somewhere empty, as deepagents' own `grep` description did.
 
-    One folder, not two: its offloading is off, so `conversation_history` is all it
-    writes here. The root is read off what `backend_at` builds rather than spelled here,
-    so moving the setting or renaming the scratchpad fails this until the prompt follows.
+    One folder, not two: its offloading is off, and what its summariser still writes to
+    `large_tool_results` is read through the stub that names it. The root is read off what
+    `backend_at` builds rather than spelled here, so moving the setting or renaming the
+    scratchpad fails this until the prompt follows.
     """
     from kingfisher.plugins.sessions.backend import backend_at
 
@@ -120,7 +121,7 @@ def test_the_prompt_names_the_folder_deepagents_writes_on_its_own(cfg, session_d
     text = shipped()
 
     assert f"`{root}/conversation_history/`" in text
-    assert "large_tool_results" not in text, "a folder nothing writes is still named"
+    assert "large_tool_results" not in text, "a folder read through its stubs is named"
 
 
 def test_each_kept_record_is_said_to_be_the_models_to_read_and_not_to_write():

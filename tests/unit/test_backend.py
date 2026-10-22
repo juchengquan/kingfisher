@@ -75,7 +75,8 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
 
     wanted = (
         r"missing outputs, memory, scratchpad, \.harness, "
-        r"scratchpad/tool_results, scratchpad/conversation_history;"
+        r"scratchpad/tool_results, scratchpad/conversation_history, "
+        r"scratchpad/large_tool_results;"
     )
     with pytest.raises(ValueError, match=wanted):
         backend_at(cfg, bare)
@@ -839,9 +840,9 @@ def test_a_route_below_another_is_listed_under_the_one_above_it(cfg, session_dir
 
 
 def test_a_route_whose_folder_is_not_there_is_not_listed(cfg, session_dir, way):
-    """A mounted route is no folder. #1036 mounted the two kept records nothing writes,
-    and `ls /scratchpad` then named four folders where two existed, the model being told
-    `path_not_found` about either of the others when it opened one.
+    """A mounted route is no folder. #1036 mounted two kept records no session was made
+    with, and `ls /scratchpad` then named four folders where two existed, the model being
+    told `path_not_found` about either of the others when it opened one.
 
     Driven through the backend a turn gets, with the write as the control: a listing that
     answered nothing at all under the scratchpad would pass the first half.

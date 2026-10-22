@@ -163,8 +163,8 @@ def _globbed_below(result: Any, pattern: str, path: str | None, routes: Any) -> 
     answered what it could and said nothing of the route that failed would be the partial
     answer `_listing` stopped giving. A route whose folder nothing has made is not that
     case -- measured, a missing root answers a search with no matches and no error, where
-    `ls` calls it `path_not_found` -- so the two mounted kept records nothing writes cost
-    a search nothing.
+    `ls` calls it `path_not_found` -- so `blobs`, mounted and never made, costs a search
+    nothing.
     """
     if not _asks_below(path, result):
         return result
@@ -417,7 +417,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     }
     # Each kept record for the same reason, readable: the agent reads a result and the
     # conversation kept aside back from them, and only writing is denied. A mount does not
-    # make the folder, so the two nothing writes stay absent until something does.
+    # make the folder, so `blobs`, which nothing writes, stays absent until something does.
     backing.update({
         route: (lambda folder=folder: FilesystemBackend(root_dir=str(session_dir / folder)))
         for route, folder in zip(layout.kept_record_routes, layout.kept_records, strict=True)

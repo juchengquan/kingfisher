@@ -1063,7 +1063,7 @@ def test_the_shell_cannot_rewrite_the_conversation_kept_aside(cfg):
     Through `open`, as a turn gets its backend. Reads stay and the scratchpad stays
     writable, both asserted, so a rule refusing everything would not pass this. The
     folder is `ensure_session_layout`'s to make: a fence binds only what is there, which
-    is why the layout makes this one and not the two nothing writes.
+    is why the layout makes this one and not `blobs`, which nothing writes.
     """
     backend = LocalSessions().open(cfg, "history")
     folder, route = DEFAULT_LAYOUT.history, f"{DEFAULT_LAYOUT.scratch_route}{HISTORY}/"
