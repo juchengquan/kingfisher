@@ -18,7 +18,7 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
-## A caller's datazone of `"*"` is refused, after #9999
+## A caller's datazone of `"*"` is refused, after #1060
 
 - **`datazone="*"` is a `CallerError`**, on every door that takes one, `--datazone`
   included. It was held as a datazone named `*`, which no definition may require since
