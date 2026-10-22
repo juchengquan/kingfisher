@@ -1691,8 +1691,10 @@ tools are on a real filesystem. `findings.md` has the measurement and
 
 **A tool that creates a file saves it and returns where it went, never its contents.**
 Returned, a chart or export is its whole body in the model's context and nothing the
-caller can open; saved, it is one line. Output that only runs long is middleware's, which
-deepagents evicts to `/scratchpad/large_tool_results/`. `guides/tools.md` has the recipe,
+caller can open; saved, it is one line. Output that only runs long is the recorder's,
+which previews it and keeps it whole under `/scratchpad/tool_results/` -- deepagents
+evicted it to `large_tool_results/` until that was turned off on 2026-10-21, with nothing
+for a tool to do either way. `guides/tools.md` has the recipe,
 and `bar_chart` and `csv_filter` follow it.
 
 **There is no kingfisher helper.** A tool calls `runtime.context.backend.upload_files`
@@ -2164,9 +2166,9 @@ remembering what a plugin kept, a second record of the folder beside the ledger,
 kept file is offered every turn; an async twin, since `settle` already runs off the
 loop and a twin is a second method to keep in step; a check in the contract kits,
 since the core itself holds what is chosen and what can be reached, leaving a plugin
-no promise to break; and deepagents' copies under `large_tool_results/`, which a row may
-still name and whose expired ones the sweep removes itself, while still that row's
-length. *(2026-10-21.)*
+no promise to break; and deepagents' copies under `large_tool_results/`, of which there
+are no new ones: nothing has written there since its offloading was turned off on
+2026-10-21, and the sweep lists only `tool_results/`. *(2026-10-21.)*
 
 **The recorder's own folder is refused, and that is not the same decision.** Only
 `tool_results/` is write-denied to the file tools, `delete` included. A row names its file
@@ -2187,7 +2189,9 @@ got in -- and the sweep cannot see an overwrite, since it skips every path a row
 **Left as it is:** rows from before the move name `results/`, and nothing denies that; a
 third permanent route to protect rows a version without this property wrote is not worth
 it, with no layout version to move, so they age out with their sessions. *(2026-10-14,
-from an architecture review.)*
+from an architecture review.)* *Since 2026-10-21 a row names only `tool_results/`, and
+nothing writes `large_tool_results/`; both stay denied, with every other folder of kept
+records, below.*
 
 **Two fences of three now refuse the shell both folders a row can name.** Once older
 results are cleared to handles, the saved file is the only copy, so an overwrite is the
@@ -2587,9 +2591,10 @@ noted under clearing. *(2026-10-20, from a grilled plan.)*
   compiled subagent's answer is recorded through `task`. Nor what the shell writes;
   `RunResult.artifacts` is the sound view of files.
 - **Finding an old entry by anything but its id.** Its file is found by `glob` for
-  `A-0042-*` under `/scratchpad/tool_results/` or `grep` for `[A-0042]` under
-  `/scratchpad/large_tool_results/`, as `system.md` says and
-  `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says` drives. A rolled-up
+  `A-0042-*` under `/scratchpad/tool_results/`, a long result's too, as the prompt says
+  and `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says` drives; the
+  `grep` for `[A-0042]` under `large_tool_results/` went on 2026-10-21 with the
+  offloading it searched. A rolled-up
   entry's arguments and summary are in the ledger, under `.harness`, out of reach; if
   that proves too little, the index could be written as a readable file.
 
