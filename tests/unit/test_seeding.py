@@ -721,6 +721,32 @@ def test_a_grouping_folder_is_judged_file_by_file(cfg, tmp_path):
     ]
 
 
+def test_a_tools_grouping_folder_is_judged_file_by_file(cfg, tmp_path):
+    """Every grouping-folder case was under `subagents/`, so seed could have copied a
+    locked tool from `tools/<group>/` and switched access control on with nothing red."""
+    source = tmp_path / "presets"
+    group = source / "tools" / "warehouse"
+    group.mkdir(parents=True)
+    (group / "sql_query.py").write_text(
+        "from kingfisher import ToolSpec\n\n\ndef sql_query(q: str) -> str:\n"
+        "    'Run a query.'\n    return q\n\n\n"
+        "TOOLS = [ToolSpec(sql_query, source_ids=['sales_db'])]\n",
+        encoding="utf-8",
+    )
+    (group / "echo.py").write_text(
+        "def echo(q: str) -> str:\n    'Echo.'\n    return q\n\n\nTOOLS = [echo]\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert (tools_dir(cfg) / "warehouse" / "echo.py").is_file()
+    assert not (tools_dir(cfg) / "warehouse" / "sql_query.py").exists()
+    assert [(one.label, one.names) for one in done.skipped] == [
+        ("tools/warehouse/sql_query.py", ("sales_db",))
+    ]
+
+
 def test_the_skip_line_names_both_fields_a_definition_wrote(cfg, tmp_path):
     """Named only by its source ids, a file locked to a datazone as well would be read
     as open to any zone by whoever copies it with `--all`."""
