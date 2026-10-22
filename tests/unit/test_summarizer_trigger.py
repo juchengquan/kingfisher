@@ -244,6 +244,35 @@ def test_a_summarizer_with_no_size_to_read_is_sized_as_deepagents_own():
         assert summarizer_trigger(model, [unread]) == summarizer_trigger(model) == 170_000
 
 
+def test_of_two_summarizers_the_trigger_is_the_later_ones():
+    """Read off the first of two answering to the summariser's name, clearing and PDFs
+    were sized by the one deepagents' merge drops, since it keeps the later.
+
+    Both orders, so a reading that picked by firing size rather than place is caught.
+    """
+    model = _anthropic(None)
+    early, late = Early(model, None), Late(model, None)
+
+    assert summarizer_trigger(model, [early, late]) == LATE
+    assert summarizer_trigger(model, [late, early]) == EARLY
+
+
+def _decided(summarizer: Any) -> int:
+    """What deepagents' `summarizer` decides on for `REPORTED` with `TOOLS`."""
+    return summarizer._count_tokens(REPORTED, None, TOOLS)
+
+
+def test_of_two_summarizers_the_count_is_the_later_ones():
+    """Counted by the first of two answering to the summariser's name, clearing measured
+    in the unit of the one deepagents' merge drops, since it keeps the later."""
+    model = _anthropic(200_000)
+    early, recounting = Early(model, None), Calibrated(model, None)
+
+    for stack, kept in (([early, recounting], recounting), ([recounting, early], early)):
+        assert summarizer_count(model, stack).request(REPORTED, TOOLS) == _decided(kept)
+    assert _decided(early) != _decided(recounting), "the control: the two count differently"
+
+
 def _built(cfg: Any, session_dir: Any, **given: Any) -> Any:
     return build_agent(
         cfg,
