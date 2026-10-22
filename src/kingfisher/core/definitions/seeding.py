@@ -384,8 +384,8 @@ def _left_out(
     """Debris, and the deployment-specific definitions seed holds back."""
     left: dict[str, Skipped | None] = dict.fromkeys(filter(importing.skipped, names))
     # Every kind that can say who reaches it, not only the two written as documents: a
-    # tool says it in Python, which is the one place it can, and seeding one a deployment
-    # has not declared for stops the whole catalogue loading.
+    # tool says it in Python, which is the one place it can, and seeding a locked one
+    # switches on access control for every call the deployment takes.
     if everything or (kind not in DOCUMENT_KINDS and kind not in AUDIENCED_KINDS):
         return left
     for name in names:
