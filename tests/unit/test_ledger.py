@@ -318,6 +318,27 @@ def test_the_next_turn_numbers_on_from_the_ledger_it_found(ledgered):
     assert "one" in _read(ledgered, first.ledger[0].path)
 
 
+def test_numbering_goes_on_past_four_digits(ledgered):
+    """`A-{n:04d}` is a minimum width: a matcher fixed at four digits would restart or
+    reuse ids at the 10,000th result, and the new file would replace an old one's."""
+    _run(ledgered, _calls(("web_search", {"query": "one"}, "c1")), AIMessage(content="done"))
+    ledger = _session(ledgered) / HARNESS / LEDGER_FILE
+    ledger.write_text(ledger.read_text().replace('"A-0001"', '"A-9999"', 1))
+
+    second = _run(
+        ledgered, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done")
+    )
+    third = _run(
+        ledgered, _calls(("web_search", {"query": "three"}, "c3")), AIMessage(content="done")
+    )
+
+    assert [e.id for e in second.ledger] == ["A-10000"]
+    assert [e.id for e in third.ledger] == ["A-10001"]
+    assert _kept(ledgered) == [
+        "A-0001-web_search.txt", "A-10000-web_search.txt", "A-10001-web_search.txt",
+    ]
+
+
 def test_a_ledger_cut_short_by_a_crash_does_not_stop_the_session(ledgered):
     """A backend has no rename, so a turn that died writing the ledger can leave half a
     line; refused, every later turn in the session would be refused with it.
