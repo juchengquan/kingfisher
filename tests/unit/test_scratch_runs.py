@@ -693,9 +693,9 @@ def test_the_command_sees_only_its_own_environment(cfg, session_dir, monkeypatch
 
 
 def test_a_tools_run_is_not_handed_the_session_root(cfg, session_dir):
-    """The tool decides what goes in and comes out: handed the session root, a renderer fed
-    a crafted file could read the caller's inputs behind its back. The shell's own command
-    beside it is the control, or a variable nobody exported would pass.
+    """A documented root would make reaching session files by path, around the rules the
+    tool's backend keeps, look like the way in. The shell's own command beside it is the
+    control, or a variable nobody exported would pass.
     """
     backend = backend_at(cfg, session_dir)
 

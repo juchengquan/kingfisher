@@ -230,8 +230,8 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         bounded = self.timeout if timeout is None else min(timeout, self.timeout)
         with ScratchFolder(Path(self.cwd), scratchpad) as folder:
             folder.write(files)
-            # Not `KINGFISHER_SESSION_ROOT`: the tool decides what goes in and comes out, and
-            # handed the session a renderer fed a crafted file could read or write behind it.
+            # Not `KINGFISHER_SESSION_ROOT`, though the fence reaches the session anyway: a tool
+            # takes session files through its backend, which keeps the rules a path skips.
             env = {key: self._env[key] for key in ("PATH", "LANG", "LC_ALL") if key in self._env}
             # Its own home and temporary folder, so nothing it caches outlives it.
             env |= {"HOME": str(folder.path), "TMPDIR": str(folder.path)}
