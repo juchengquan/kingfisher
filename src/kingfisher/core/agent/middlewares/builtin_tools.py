@@ -477,10 +477,9 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     ) -> None:
         super().__init__()
         self._longest = longest
-        # The folders a ledger row names, as the file tools spell them, where results expire.
-        routes = (layout.tool_results_route,)
+        # The folder a ledger row names, as the file tools spell it, where results expire.
         self._expiring = (
-            () if expires_after is None else tuple(route.rstrip("/") for route in routes)
+            () if expires_after is None else (layout.tool_results_route.rstrip("/"),)
         )
         self._expired = "" if expires_after is None else expired_note(expires_after)
         self._timed = timeout_line(longest)
