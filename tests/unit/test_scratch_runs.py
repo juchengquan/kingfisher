@@ -11,6 +11,7 @@ import asyncio
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import threading
 import time
@@ -1075,6 +1076,38 @@ def test_a_deployments_own_runner_is_not_gone_round(cfg, session_dir):
 
     assert ran.error is not None
     assert "runner of its own" in ran.error
+
+
+def test_the_shell_imports_on_a_host_without_the_folder_flags():
+    """Windows has no `O_DIRECTORY`, `O_NOFOLLOW`, `O_NONBLOCK` or `O_CLOEXEC`, and no
+    `dir_fd`: the scratch folder's flags, read at import, broke importing the whole shell
+    there. Run with those taken out of `os`, since no Windows host runs this suite."""
+    probe = (
+        "import os;"
+        "[delattr(os, f) for f in ('O_DIRECTORY', 'O_NOFOLLOW', 'O_NONBLOCK', 'O_CLOEXEC')];"
+        "os.supports_dir_fd = set();"
+        "import kingfisher.plugins.sessions.shell as shell;"
+        "print(shell.HELD)"
+    )
+    out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    )
+
+    assert out.stdout.strip() == "False"
+
+
+def test_a_host_that_cannot_hold_the_folder_runs_nothing(cfg, session_dir, monkeypatch):
+    """Without `dir_fd` every guard on the folder is gone, so the run is refused, not run
+    on paths a swap could redirect."""
+    monkeypatch.setattr("kingfisher.plugins.sessions.shell.HELD", False)
+
+    ran = backend_at(cfg, session_dir).default.run_in_scratch(
+        ["/bin/true"], {"in.txt": b"x"}, outputs=[]
+    )
+
+    assert ran.error is not None
+    assert "held folder" in ran.error
+    assert _scratchpad_runs(session_dir) == []
 
 
 @pytest.mark.parametrize("argv", [["-u", "x"], ["A=b"]])

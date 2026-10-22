@@ -23,7 +23,17 @@ if TYPE_CHECKING:
 
 _LOG = logging.getLogger(__name__)
 
-_FOLDER = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+#: Whether this host opens a name relative to a held folder, which every step below rests
+#: on. Windows does not, and `run_in_scratch` refuses there.
+HELD = os.open in os.supports_dir_fd
+
+# 0 where the host lacks one, which is only where `HELD` is false and no open below runs.
+_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_CLOEXEC = getattr(os, "O_CLOEXEC", 0)
+_FOLDER = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | _NOFOLLOW | _CLOEXEC
+_INPUT = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW | _CLOEXEC
+# Not blocking, or a FIFO left under an output's name would hold the turn on its read.
+_OUTPUT = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | _NOFOLLOW | _CLOEXEC
 
 #: What one run's outputs may come to, read into kingfisher's own process.
 MAX_BROUGHT_BACK = 32 * 1024 * 1024
@@ -73,12 +83,7 @@ class ScratchFolder:
     def write(self, files: Mapping[str, bytes]) -> None:
         """Each file as new, so nothing the shell put there first is written through."""
         for name, data in files.items():
-            fd = os.open(
-                name,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
-                0o600,
-                dir_fd=self._fd,
-            )
+            fd = os.open(name, _INPUT, 0o600, dir_fd=self._fd)
             with os.fdopen(fd, "wb") as written:
                 written.write(data)
 
@@ -89,11 +94,7 @@ class ScratchFolder:
         left = MAX_BROUGHT_BACK
         for name in outputs:
             try:
-                # Not blocking, or a FIFO left under the name would hold the turn here.
-                fd = os.open(
-                    name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC,
-                    dir_fd=self._fd,
-                )
+                fd = os.open(name, _OUTPUT, dir_fd=self._fd)
             except FileNotFoundError:
                 missing[name] = "the command did not make it"
                 continue
