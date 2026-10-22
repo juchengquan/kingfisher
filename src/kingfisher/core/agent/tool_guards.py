@@ -10,7 +10,7 @@ from langchain_core.tools import BaseTool, StructuredTool, ToolException
 
 from .host_paths import HostPathError
 from .references import UnsafeReferenceError
-from .session_paths import SessionPaths, refusal_text
+from .session_paths import SessionPaths, as_asked, refusal_text
 
 
 class GuardedTool(BaseTool):
@@ -44,11 +44,15 @@ class GuardedTool(BaseTool):
         """
         return {"type": "tool_call", "id": "guarded", "name": self.inner.name, "args": args}
 
-    def _failed(self, exc: Exception) -> ToolException:
+    def _failed(self, exc: Exception, asked: dict[str, Any]) -> ToolException:
         # The type as well as the message: `FileNotFoundError: /inputs/x.csv` tells a
         # model far more than the path.
+        #
+        # `asked` is what the model wrote, not what `_translated` made of it: a tool is
+        # handed the host path by design, so its own `OSError` names one, and
+        # `GuardedCallsMiddleware` says the same thing for a graph kingfisher builds.
         msg = f"Error: {type(exc).__name__}: {exc}"
-        return ToolException(msg)
+        return ToolException(as_asked(msg, asked))
 
     def _run(self, **kwargs: Any) -> Any:
         args = self._translated(kwargs)
@@ -60,7 +64,7 @@ class GuardedTool(BaseTool):
         except ToolException:
             raise
         except Exception as exc:
-            raise self._failed(exc) from exc
+            raise self._failed(exc, kwargs) from exc
 
     async def _arun(self, **kwargs: Any) -> Any:
         args = self._translated(kwargs)
@@ -72,7 +76,7 @@ class GuardedTool(BaseTool):
         except ToolException:
             raise
         except Exception as exc:
-            raise self._failed(exc) from exc
+            raise self._failed(exc, kwargs) from exc
 
 
 def guarded_tools(tools: Sequence[Any], paths: SessionPaths | None) -> list[Any]:
