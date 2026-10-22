@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Collection, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -36,6 +37,8 @@ from .step_budget import StepBudget, StepBudgetMiddleware
 if TYPE_CHECKING:
     from kingfisher.core.config import Models
     from kingfisher.core.interfaces import PdfAttachments, ScratchRunLimit
+
+_log = logging.getLogger(__name__)
 
 #: The graphs kingfisher builds itself: the agent, a subagent a definition declares, and
 #: deepagents' `general-purpose`, which is handed the agent's own tools. A compiled
@@ -158,6 +161,22 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # Only where the graph holds offered tools: theirs are the only calls it binds.
     if names:
         limit = NoScratchRunLimit() if scratch_run_limit is None else scratch_run_limit
+        refusal = None
+        try:
+            allows = limit.allows(name, kind)
+        except Exception as error:  # noqa: BLE001 -- a plugin's bug costs this graph its
+            # runs, never the turn, and never grants one.
+            _log.warning(
+                "the scratch run limit raised on %s %r; its tools are refused a run",
+                kind,
+                name,
+                exc_info=True,
+            )
+            allows = False
+            refusal = (
+                f"refused: this deployment's ScratchRunLimit raised "
+                f"{type(error).__name__}: {error}"
+            )
         standing.append(
             ScratchRunsMiddleware(
                 names,
@@ -165,7 +184,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
                 tools=granted,
                 gated=gated,
                 seconds=execution_timeout_s,
-                limit_allows=limit.allows(name, kind),
+                limit_allows=allows,
+                limit_refusal=refusal,
             )
         )
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.

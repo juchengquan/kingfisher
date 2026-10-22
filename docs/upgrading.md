@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A `ScratchRunLimit` that raises refuses runs instead of failing the turn, after #1054
+
+- **An exception from `allows` no longer fails the build.** It is logged as a warning by
+  `kingfisher.core.agent.middlewares.standing`, and that graph's tools are refused every
+  run with an `error` naming it: `refused: this deployment's ScratchRunLimit raised
+  KeyError: 'auditor'`. Every other graph in the turn keeps what it would have had. A
+  deployment that relied on a raise to stop a turn should refuse the request itself.
+
 ## A clearing mark is held to the summarizer the graph runs, after #1051
 
 - **A `clear_results_at` past deepagents' own trigger is accepted under a summarizer of

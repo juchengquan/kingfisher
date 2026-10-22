@@ -2679,7 +2679,14 @@ was built. It is asked per graph, told the agent's or subagent's name --
 `general-purpose` for deepagents' own -- and its kind, not the tool's, which is the gate
 by name already not taken; only where the graph holds offered tools. Left out, it allows
 everything, today's behaviour. Whatever it answers, a gated `execute` refuses, binding
-stays by name, and `run_in_scratch` keeps its own refusals. *(2026-10-21.)*
+stays by name, and `run_in_scratch` keeps its own refusals. *(2026-10-21.)* **An
+exception from it refuses that graph's runs, and does not fail the build.** It is
+logged once where it is asked, and each run on that graph is refused naming the
+exception, so the agent and the run's record see why. A narrowing plugin's bug should
+not take down turns that never needed what it guards, and refusing is the safe
+direction, as a `PdfAttachments` that raises leaves kingfisher's verdict. Not taken:
+treating an error as allowed, which would let a broken limit hand out the run it exists
+to take away. *(2026-10-22.)*
 
 **An output is not evidence the command wrote it.** The run's folder is in the session's
 scratchpad because the Linux fences grant one session and nothing else, so the agent's
