@@ -498,20 +498,20 @@ _SHOUTED_IN = {
 
 @pytest.mark.parametrize("graph", list(_SHOUTED_IN))
 @pytest.mark.parametrize(
-    ("gates", "limit", "answer"),
+    "case",
     [
         ("[execute]", _Limit, NOT_GRANTED),
         ("[write_file]", _Limit, "HI"),
         ("[execute]", _Raising, NOT_GRANTED),
         ("[write_file]", _Raising, RAISED),
     ],
+    ids=["gated-allowing", "ungated-allowing", "gated-raising", "ungated-raising"],
 )
-def test_a_gated_shell_is_refused_whatever_the_limit_answers(
-    cfg, session_dir, gates, limit, answer, graph
-):
+def test_a_gated_shell_is_refused_whatever_the_limit_answers(cfg, session_dir, case, graph):
     """Nothing can pause for a person inside a tool, so no limit may hand a gated shell on,
     on any graph the gate reaches: one not handed the agent's gate ran the command unasked.
     A limit raising there is not what refused it, so the refusal does not blame it."""
+    gates, limit, answer = case
     _a_tool(cfg)
     _a_helper(cfg)
     an_agent(cfg, "gated", interrupt_on=gates, subagents="[helper]", **EVERY_TOOL)
