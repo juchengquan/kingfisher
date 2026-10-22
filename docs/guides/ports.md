@@ -911,6 +911,18 @@ another beside it. `LocalSessions` passes on the strength of its sandbox; with t
 sandbox off it fails on `/.harness`, which is exactly the deployment it is there
 to catch.
 
+**And the kept records, which the kit does not ask about.** `/scratchpad/tool_results/`,
+`/scratchpad/conversation_history/` and the two folders beside them hold what happened
+rather than what the agent made, and the prompt sends the model to read both of the first
+two back — so a shell that can write them lets the agent forge a result or a conversation
+for a later turn to find. The file tools are refused by the rules kingfisher builds from
+`Layout.kept_records`, whatever backend is underneath; the shell is yours to keep out,
+and `Layout.shell_read_only` lists the folders. It is not in `shell_denied` because
+kingfisher's own Landlock fence cannot satisfy it — Landlock grants, so a read-only hole
+inside a scratchpad it grants whole cannot be expressed, and a kit kingfisher's own
+backend fails would be a wrong kit. *Every folder of kept records is denied, not only
+the ones a row names* in `decisions.md` has the measurements.
+
 The last is ordinary: if you refuse host paths, refuse them with `HostPathError`
 (`from kingfisher.plugins import HostPathError`),
 because that is the type `GuardedCallsMiddleware` turns into a correction the model can act
