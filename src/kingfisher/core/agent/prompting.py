@@ -431,6 +431,15 @@ def session_section(layout: Layout) -> str:
     return _filled(SESSION_FILE, layout).strip()
 
 
+def stray_save(where: str, layout: Layout) -> str:
+    """Why a save at `where` is refused, naming where it belongs in this layout."""
+    return (
+        f"{where} is outside the session's folders, so a file saved there is neither kept "
+        f"nor handed back. Save it under {layout.outputs_route} to hand it back, or under "
+        f"{layout.scratch_route} to work on it."
+    )
+
+
 def subagent_prompt(prompt: str, instructions: str, layout: Layout) -> str:
     """A subagent's prompt, in the agent's order: the session's folders, the deployment's
     instructions, then its own.

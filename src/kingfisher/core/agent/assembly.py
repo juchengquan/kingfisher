@@ -383,7 +383,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     # What a tool is handed as `runtime.context.backend` and its `path` resolves through.
     # It reads the rules when it checks, so those added below -- memory declined, skills
     # narrowed -- apply to it too.
-    under_rules = PermittedBackend(backend, permissions)
+    under_rules = PermittedBackend(backend, permissions, cfg.layout)
     paths = SessionPaths(under_rules, cfg.sessions_root, cfg.layout)
 
     bundled = bundled_tools_in(roots)

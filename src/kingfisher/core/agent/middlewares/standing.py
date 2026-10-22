@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Any, Literal
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 
-from kingfisher.core.agent.backend import session_root_of, shell_runs_here, shell_told
+from kingfisher.core.agent.backend import (
+    folders_of,
+    session_root_of,
+    shell_runs_here,
+    shell_told,
+)
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import NoScratchRunLimit
@@ -214,6 +219,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             longest=longest_command(execution_timeout_s),
             here=shell_runs_here(backend),
             expires_after=keep_results_rounds,
+            folders=folders_of(layout, backend),
         )
     )
     if skills is not None:

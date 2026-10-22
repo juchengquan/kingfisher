@@ -177,6 +177,7 @@ fences' code -- and for the definitions folder on 2026-10-13, the same way:
 | The workspace | readable | hidden | hidden | readable |
 | The definitions folder, `models.yaml` included | under the home folder, hidden but for `skills/`; elsewhere readable; never writable | `skills/` only, read-only | `skills/` only, read-only | readable |
 | Other sessions' folders | readable and writable | hidden | hidden | readable and writable |
+| A session's top, beside its folders | readable, not writable | readable, not writable | readable, not writable | readable and writable |
 | Anywhere else -- `/tmp`, `/Users/Shared`, `/opt` | readable | hidden | hidden | readable |
 | `/etc`, `/usr` | readable | readable | readable | readable |
 | A process's environment as it started | readable | hidden | not settled | readable |

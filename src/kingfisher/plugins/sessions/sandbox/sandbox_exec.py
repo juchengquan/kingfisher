@@ -73,6 +73,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name
     # paths. Without the node denies the shell could rename a folder above `.harness`,
     # write where the pattern no longer reaches, and rename it back.
     lines.append(_sessions_denial(sessions_root))
+    lines.append(_session_top_denial(sessions_root))
     lines += [
         _enclosing_denial(sessions_root, folder) for folder in _enclosing(layout.saved_results)
     ]
@@ -108,6 +109,16 @@ def _sessions_denial(sessions_root: Path) -> str:
     """
     root = re.escape(str(fenced_sessions(sessions_root)))
     return f"(deny file-write* (regex {_sb_regex(f'^{root}(/[^/]+)?$')}))"
+
+
+def _session_top_denial(sessions_root: Path) -> str:
+    """Deny writes to whatever sits directly in a session, not to what its folders hold.
+
+    A file the shell leaves there is handed back to nobody, and the command
+    said it succeeded. The folders' own nodes match too, so none can be renamed away.
+    """
+    root = re.escape(f"{fenced_sessions(sessions_root)}/")
+    return f"(deny file-write* (regex {_sb_regex(f'^{root}[^/]+/[^/]+$')}))"
 
 
 def _enclosing(saved_results: tuple[str, ...]) -> tuple[str, ...]:

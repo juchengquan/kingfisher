@@ -272,6 +272,13 @@ class Layout:
         return tuple(dict.fromkeys((*self.made_dirs, *self.kept_records)))
 
     @property
+    def shell_writable(self) -> tuple[str, ...]:
+        """What every fence lets the shell write inside a session: its folders one by one,
+        never the session itself, where a file is handed back to nobody.
+        `inputs` is the caller's."""
+        return tuple(name for name in self.session_dirs if name != self.inputs)
+
+    @property
     def shell_read_only(self) -> tuple[str, ...]:
         """What every fence keeps the shell from writing inside a session: the caller's
         inputs, what kingfisher keeps about the session, and the kept records."""

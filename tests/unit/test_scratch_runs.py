@@ -250,7 +250,7 @@ def test_a_compiled_subagents_tool_is_refused(cfg, session_dir):
 
     out = graph.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
-        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [])),
+        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [], cfg.layout)),
     )
 
     (result,) = [m for m in out["messages"] if isinstance(m, ToolMessage)]

@@ -44,9 +44,10 @@ def index_of(argv: list[str], flag: str, source: str) -> int:
     return next(i for i, word in enumerate(argv) if word == flag and argv[i + 1] == source)
 
 
-def test_the_session_is_the_only_thing_written_to(session):
+def test_the_sessions_folders_are_the_only_things_written_to(session):
     """The claim the fence exists to make, and the one a stray `--bind` would quietly
-    undo.
+    undo. The folders, not the session: a file the shell left at its top was handed back
+    to nobody.
 
     The whole writable set, not a list of paths that must be absent from it. Written
     the second way this named `tmp_path` and the sibling session, and passed while
@@ -55,7 +56,19 @@ def test_the_session_is_the_only_thing_written_to(session):
     """
     argv = argv_for(session, DEFAULT_LAYOUT)
 
-    assert pairs(argv, "--bind") == {(str(session), str(session))}
+    assert pairs(argv, "--bind") == {
+        (str(session / name), str(session / name)) for name in DEFAULT_LAYOUT.shell_writable
+    }
+
+
+def test_the_session_is_read_only_beneath_its_folders(session):
+    """Laid after them, the read-only bind would cover the folders and break every save;
+    left out, the session's top is writable again."""
+    argv = argv_for(session, DEFAULT_LAYOUT)
+
+    top = index_of(argv, "--ro-bind", str(session))
+    for name in DEFAULT_LAYOUT.shell_writable:
+        assert index_of(argv, "--bind", str(session / name)) > top
 
 
 def test_another_session_is_not_bound_at_all(session):
@@ -66,7 +79,7 @@ def test_another_session_is_not_bound_at_all(session):
     assert not any(sibling in word for word in argv)
 
 
-def test_the_harness_is_read_only_and_lands_over_the_session(session):
+def test_the_harness_is_read_only_and_lands_over_the_folders(session):
     """What kingfisher keeps about a session is the shell's to read and not to write,
     and the bind that says so only works where it falls *after* the session's own.
 
@@ -89,9 +102,12 @@ def test_the_harness_is_read_only_and_lands_over_the_session(session):
 
     # Every folder the shell may read and not write, as an exact set: one of them
     # arriving without the others is the shape this is written against.
-    assert chosen(argv) == {(path, path) for path in guarded}
+    assert chosen(argv) == {(path, path) for path in (*guarded, str(session))}
+    last_writable = max(
+        index_of(argv, "--bind", str(session / name)) for name in DEFAULT_LAYOUT.shell_writable
+    )
     for path in guarded:
-        assert index_of(argv, "--ro-bind", path) > index_of(argv, "--bind", str(session))
+        assert index_of(argv, "--ro-bind", path) > last_writable
 
 
 def test_a_renamed_layout_binds_its_own_saved_results(tmp_path):

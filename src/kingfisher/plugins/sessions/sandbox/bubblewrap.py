@@ -66,9 +66,14 @@ def argv_for(
         argv += ["--ro-bind", path, path]
     for path in present(readable):
         argv += ["--ro-bind", str(path), str(path)]
-    for path in present([session_dir, *writable]):
+    # Read-only beneath its folders: a file the shell leaves at the session's top is
+    # handed back to nobody, and the command said it succeeded.
+    for path in present([session_dir]):
+        argv += ["--ro-bind", str(path), str(path)]
+    shell_writes = [Path(session_dir) / name for name in layout.shell_writable]
+    for path in present([*shell_writes, *writable]):
         argv += ["--bind", str(path), str(path)]
-    # After the session's own bind, and that order is the mechanism: bwrap applies binds
+    # After the folders' own binds, and that order is the mechanism: bwrap applies binds
     # in sequence, so a read-only subpath bind lands on top of the writable one. `present`
     # drops an absent one, which is why `ensure_session_layout` makes them first. `inputs`
     # is the caller's, and its write bits are the shell's to lift; a saved result is what

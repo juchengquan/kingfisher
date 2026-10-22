@@ -564,11 +564,13 @@ def test_the_shell_cannot_replace_memory_with_a_link(cfg, tmp_path):
 
 
 @macos
-def test_a_session_can_reorganize_its_own_folders(cfg):
-    """The rule names the session's folder node and not what it holds, so the session's
-    own directories -- the harness aside -- can still be made, renamed and removed."""
+def test_a_session_can_reorganize_what_its_folders_hold(cfg):
+    """The rules name the session's node and what sits directly in it, not what its
+    folders hold, so directories inside them can still be made, renamed and removed."""
     backend = LocalSessions().open(cfg, DEFAULT)
 
-    out = backend.execute("mkdir work && mv work renamed && rmdir renamed && echo ok")
+    out = backend.execute(
+        "mkdir outputs/work && mv outputs/work outputs/renamed && rmdir outputs/renamed && echo ok"
+    )
 
     assert out.exit_code == 0 and "ok" in out.output
