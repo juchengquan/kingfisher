@@ -2317,6 +2317,21 @@ def test_a_miss_is_not_explained_where_results_do_not_expire(ledgered):
     assert "expired" not in _handed("c1").text
 
 
+def test_a_miss_outside_the_results_folder_is_not_explained_as_expired(ledgered):
+    """The other control, with results expiring: told a saved result expired for a path
+    that was never one, the model gives up on an input it merely mistyped."""
+    cfg = _rounds(ledgered, 1)
+
+    _run(
+        cfg,
+        _calls(("read_file", {"file_path": "/inputs/x.csv"}, "c1")),
+        AIMessage(content="done"),
+    )
+
+    assert "not found" in _handed("c1").text
+    assert "expired" not in _handed("c1").text
+
+
 def test_the_prompt_says_results_expire_only_where_they_do():
     """Unsaid, the prompt promises every result stays findable; said everywhere, a
     deployment keeping all of them tells the model to call tools again for nothing."""
