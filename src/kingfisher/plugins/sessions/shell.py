@@ -27,7 +27,7 @@ from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.process import run_command
 
 from .links import UnlinkedBackend
-from .scratch import ScratchFolder, plain, scratch_command
+from .scratch import HELD, ScratchFolder, plain, scratch_command
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -257,6 +257,11 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         )
 
     def _scratch_refused(self, argv: Sequence[str], names: Sequence[str]) -> str | None:
+        if not HELD:
+            return (
+                "refused: this host cannot open files relative to a held folder, which "
+                "keeps a scratch run inside its own"
+            )
         if self.runner is not None and self.runner is not self.fence:
             return (
                 "refused: this deployment runs commands through a runner of its own, which "
