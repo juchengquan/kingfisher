@@ -4241,7 +4241,13 @@ in its docstring: a reader matching the words leaves a worked example behind. A 
 the rest leaves a folder that is not a tool. And the line names a datazone beside the source
 ids, each in the field it was written in. The tolerant-reader limit is unchanged and still
 stated -- a name computed rather than written out is invisible, as a value the YAML reader
-cannot walk is. *(2026-10-19, from an architecture review.)*
+cannot walk is. *(2026-10-19, from an architecture review.)* *Since 2026-10-22 it is not
+invisible: a name the module binds once, by a plain assignment at its top level, is read
+through to its value, and any other value the reader cannot walk holds the definition back,
+named as written. Taken for naming nobody, `source_ids=IDS` copied a lock as an open tool --
+measured, an imported `IDS` and a module-level `ZONE` alike -- and not knowing is the case
+`--all` is for. Not read: a `**` spread into a call or an entry, which would hold back every
+tool module that forwards keyword arguments.*
 
 **Only a package or a bundle is decided whole, and by everything in it.** Every folder was,
 by its `.py` alone: a bundle whose definition named a source id was reported seeded with

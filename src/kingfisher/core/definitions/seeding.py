@@ -5,7 +5,8 @@ from __future__ import annotations
 import ast
 import os
 import shutil
-from collections.abc import Callable, Mapping
+from collections import Counter
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -88,6 +89,9 @@ class Skipped:
     #: Datazones the same file names, kept apart from `names` so the line says each in the
     #: field it was written in.
     datazones: tuple[str, ...] = ()
+    #: An audience the file computes, as it is written there: what it names is known only
+    #: by running the file, so it is held back as a lock would be.
+    unread: tuple[str, ...] = ()
 
     @property
     def asked_for(self) -> str:
@@ -95,6 +99,10 @@ class Skipped:
         named = [f"{self.wants} ({', '.join(self.names)})"] if self.names else []
         if self.datazones:
             named.append(f"datazone ({', '.join(self.datazones)})")
+        if self.unread:
+            named.append(
+                f"an audience seed cannot read without running it ({'; '.join(self.unread)})"
+            )
         return " and ".join(named)
 
 
@@ -181,8 +189,9 @@ def datazones_named(fields: Mapping[str, object]) -> tuple[str, ...]:
     return ()
 
 
-def audiences_in_code(text: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """The source ids and datazones a Python definition names, as its source says them.
+def audiences_in_code(text: str) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """The source ids and datazones a Python definition names, as its source says them,
+    and each audience it computes instead, as written.
 
     The two shapes a definition has in Python: a `"source_ids":` key, which is how a
     subagent entry says it, and a `source_ids=` argument, which is how a `ToolSpec` does.
@@ -191,55 +200,138 @@ def audiences_in_code(text: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
 
     Parsed rather than imported: seeding runs before there is a catalogue, and importing
     a definition to find out whether to copy it would run a deployment's code to decide.
-    A name computed rather than written out is invisible to this, as a value the reader
-    above cannot walk is to that one.
+    A name the module binds once, at its top level, is read through to its value; any
+    other value this cannot walk is returned as unread, never taken for naming nobody,
+    which copied a lock as an open definition.
     """
     try:
         tree = ast.parse(text)
     except (SyntaxError, ValueError):
         # Copied anyway, as an unparseable document is: the loader reports it in its own
         # words, and this is not the place to refuse a file.
-        return (), ()
+        return (), (), ()
+    bound = _bound_once(tree)
     found: dict[str, list[str]] = {"source_ids": [], "datazone": []}
+    unread: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Dict):
+            owner = _named_in(node)
             for key, value in zip(node.keys, node.values, strict=True):
                 field_name = key.value if isinstance(key, ast.Constant) else None
-                if isinstance(field_name, str) and field_name in found:
-                    _written(value, into=found[field_name], field=field_name)
+                if (
+                    isinstance(field_name, str)
+                    and field_name in found
+                    and not _written(value, into=found[field_name], field=field_name, bound=bound)
+                ):
+                    unread.append(_as_written(owner, field_name, value))
         elif isinstance(node, ast.Call):
+            # A `ToolSpec`'s tool is its first argument.
+            first = node.args[0] if node.args else None
+            owner = first.id if isinstance(first, ast.Name) else None
             for keyword in node.keywords:
-                if keyword.arg in found:
-                    _written(keyword.value, into=found[keyword.arg], field=keyword.arg)
-    return tuple(dict.fromkeys(found["source_ids"])), tuple(dict.fromkeys(found["datazone"]))
+                if keyword.arg in found and not _written(
+                    keyword.value, into=found[keyword.arg], field=keyword.arg, bound=bound
+                ):
+                    unread.append(_as_written(owner, keyword.arg, keyword.value))
+    return (
+        tuple(dict.fromkeys(found["source_ids"])),
+        tuple(dict.fromkeys(found["datazone"])),
+        tuple(dict.fromkeys(unread)),
+    )
 
 
-def _written(node: ast.expr, *, into: list[str], field: str) -> None:
-    """Every name one audience spells out, by any of the shapes the field takes."""
+def _named_in(entry: ast.Dict) -> str | None:
+    """The `name` a subagent entry gives itself, where it is written out."""
+    for key, value in zip(entry.keys, entry.values, strict=True):
+        if isinstance(key, ast.Constant) and key.value == "name":
+            written = value.value if isinstance(value, ast.Constant) else None
+            return written if isinstance(written, str) else None
+    return None
+
+
+def _as_written(owner: str | None, field: str, value: ast.expr) -> str:
+    """An audience this cannot read, as the line reporting it names it."""
+    written = f"{field}={ast.unparse(value)}"
+    return f"{owner}: {written}" if owner else written
+
+
+def _bound_once(tree: ast.Module) -> dict[str, ast.expr]:
+    """Each name the module binds exactly once, by a plain assignment at its top level.
+
+    Counted over the whole module, a function's own bindings included: a name bound
+    twice, or bound again inside a function, may be either value where it is used.
+    """
+    times = Counter(name for node in ast.walk(tree) for name in _binds(node))
+    values: dict[str, ast.expr] = {}
+    for statement in tree.body:
+        if isinstance(statement, ast.Assign):
+            for target in statement.targets:
+                if isinstance(target, ast.Name):
+                    values[target.id] = statement.value
+        elif (
+            isinstance(statement, ast.AnnAssign)
+            and isinstance(statement.target, ast.Name)
+            and statement.value is not None
+        ):
+            values[statement.target.id] = statement.value
+    return {name: value for name, value in values.items() if times[name] == 1}
+
+
+def _binds(node: ast.AST) -> Iterator[str]:
+    """The names one node binds, an import's, a parameter's and a pattern's included."""
+    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+        yield node.id
+    elif isinstance(node, ast.alias):
+        yield (node.asname or node.name).split(".")[0]
+    elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        yield node.name
+    elif isinstance(node, ast.arg):
+        yield node.arg
+    elif isinstance(node, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name:
+        yield node.name
+    elif isinstance(node, ast.MatchMapping) and node.rest:
+        yield node.rest
+
+
+def _written(
+    node: ast.expr,
+    *,
+    into: list[str],
+    field: str,
+    bound: Mapping[str, ast.expr],
+    seen: frozenset[str] = frozenset(),
+) -> bool:
+    """Every name one audience spells out, by any of the shapes the field takes, and
+    whether all of it could be walked."""
     if isinstance(node, ast.Constant):
         name = node.value.strip() if isinstance(node.value, str) else ""
         # `"*"` is everyone in `source_ids` and no one's name; a datazone has no such word.
         if name and not (name == "*" and field == "source_ids"):
             into.append(name)
-    elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-        for one in node.elts:
-            _written(one, into=into, field=field)
-    elif isinstance(node, ast.Dict):
+        return True
+    read = partial(_written, into=into, field=field, bound=bound, seen=seen)
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return all(read(one) for one in node.elts)
+    if isinstance(node, ast.Dict):
         # A requirement, which is a set: written in Python it is `{"a", "b"}`, and a
         # reader that walked only `ast.Set` would miss the mapping YAML's `{a, b}` becomes
-        # when somebody copies it across.
-        for key in node.keys:
-            if key is not None:
-                _written(key, into=into, field=field)
-    elif (
+        # when somebody copies it across. A `None` key is `**`, which this cannot see into.
+        return all(key is not None and read(key) for key in node.keys)
+    if (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id in ("frozenset", "set")
-        and len(node.args) == 1
+        and len(node.args) <= 1
     ):
         # The loader takes a `frozenset({...})` as the requirement it is, so a reader that
-        # saw only the braces copied a locked tool as an open one.
-        _written(node.args[0], into=into, field=field)
+        # saw only the braces copied a locked tool as an open one. `frozenset()` names
+        # nobody, and is the loader's to refuse.
+        return all(read(one) for one in node.args)
+    if isinstance(node, ast.Name) and node.id in bound and node.id not in seen:
+        return _written(
+            bound[node.id], into=into, field=field, bound=bound, seen=seen | {node.id}
+        )
+    return False
 
 
 def _collect(written: object, *, into: list[str]) -> None:
@@ -285,18 +377,21 @@ def _read(path: Path) -> str | None:
         return None
 
 
+#: Why a definition is held back: `Skipped.wants`, the names, the datazones, and what
+#: the file computes.
+_Wanted = tuple[str, tuple[str, ...], tuple[str, ...], tuple[str, ...]]
+
+
 def _audienced(
-    source_ids: tuple[str, ...], datazones: tuple[str, ...]
-) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
+    source_ids: tuple[str, ...], datazones: tuple[str, ...], unread: tuple[str, ...] = ()
+) -> _Wanted | None:
     """One audience answer, or `None` where a file names nobody."""
-    if not source_ids and not datazones:
+    if not source_ids and not datazones and not unread:
         return None
-    return "source_ids", source_ids, datazones
+    return "source_ids", source_ids, datazones, unread
 
 
-def _deployment_specific(
-    path: Path, *, kind: str
-) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
+def _deployment_specific(path: Path, *, kind: str) -> _Wanted | None:
     """What this file needs that a workspace may not have, or `None` for nothing."""
     if path.is_dir():
         # A package or a bundle is one definition, so it is decided as one: dropping the
@@ -310,7 +405,7 @@ def _deployment_specific(
         # Naming nothing, so it is copied and the loader reports it in its own words.
         fields = {} if isinstance(decoded, str) else decoded
         if named := middleware_named(fields):
-            return "middlewares", named, ()
+            return "middlewares", named, (), ()
         return _audienced(source_ids_named(fields), datazones_named(fields))
     if path.suffix == ".py" and kind in AUDIENCED_KINDS:
         return _audienced(*audiences_in_code(text))
@@ -355,7 +450,7 @@ def _names_declared(path: Path) -> tuple[str, ...]:
     )
 
 
-def _as_one(folder: Path, *, kind: str) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
+def _as_one(folder: Path, *, kind: str) -> _Wanted | None:
     """What a package or bundle needs, read as the one definition it is."""
     answers = [
         wanted
@@ -365,12 +460,21 @@ def _as_one(folder: Path, *, kind: str) -> tuple[str, tuple[str, ...], tuple[str
         and not any(map(importing.skipped, path.relative_to(folder).parts))
         and (wanted := _deployment_specific(path, kind=kind)) is not None
     ]
-    middlewares = [name for wants, names, _ in answers if wants == "middlewares" for name in names]
+    middlewares = [
+        name for wants, names, _, _ in answers if wants == "middlewares" for name in names
+    ]
     if middlewares:
-        return "middlewares", tuple(dict.fromkeys(middlewares)), ()
-    source_ids = [name for wants, names, _ in answers if wants == "source_ids" for name in names]
-    datazones = [zone for _, _, zones in answers for zone in zones]
-    return _audienced(tuple(dict.fromkeys(source_ids)), tuple(dict.fromkeys(datazones)))
+        return "middlewares", tuple(dict.fromkeys(middlewares)), (), ()
+    source_ids = [
+        name for wants, names, _, _ in answers if wants == "source_ids" for name in names
+    ]
+    datazones = [zone for _, _, zones, _ in answers for zone in zones]
+    unread = [one for _, _, _, computed in answers for one in computed]
+    return _audienced(
+        tuple(dict.fromkeys(source_ids)),
+        tuple(dict.fromkeys(datazones)),
+        tuple(dict.fromkeys(unread)),
+    )
 
 
 #: What a copy of one directory leaves out of it: each name, with the `Skipped` it is
@@ -392,7 +496,9 @@ def _left_out(
         wanted = None if name in left else _deployment_specific(directory / name, kind=kind)
         if wanted is not None:
             label = f"{kind}/{(directory / name).relative_to(root)}"
-            left[name] = Skipped(label, wanted[1], wants=wanted[0], datazones=wanted[2])
+            left[name] = Skipped(
+                label, wanted[1], wants=wanted[0], datazones=wanted[2], unread=wanted[3]
+            )
     return left
 
 
@@ -484,7 +590,10 @@ def _copy(
             if not everything and (
                 wanted := _deployment_specific(item, kind=kind)
             ) is not None:
-                skipped.append(Skipped(label, wanted[1], wants=wanted[0], datazones=wanted[2]))
+                wants, names, datazones, unread = wanted
+                skipped.append(
+                    Skipped(label, names, wants=wants, datazones=datazones, unread=unread)
+                )
                 continue
             # Before the copy: afterwards there is nothing left to compare.
             overwritten += _overwritten(item, target, label, left_out)

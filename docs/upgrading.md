@@ -18,6 +18,20 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `seed` reads an audience held in a name, and holds back one it cannot read, after #9999
+
+- **A Python definition whose `source_ids=` or `datazone=` is a name is held back now.**
+  Seed read only what was written out, so `ToolSpec(t, source_ids=IDS)` was copied as a
+  tool naming nobody, and switched on access control where it landed. A name the module
+  binds once at its top level is read through, and the line names what it holds.
+- **Anything else seed cannot read is held back too**, named as the file writes it:
+  `skipped tools/x.py — names an audience seed cannot read without running it (t:
+  source_ids=IDS), ...`. That is an imported name, one bound more than once or inside a
+  function, and a computed value such as `['A'] + MORE` or `zone()`. `--all` copies it.
+- **A tool module that passes `source_ids=` to a call of its own** with a value from a
+  parameter is held back the same way, since seed cannot tell it from a `ToolSpec`.
+- **`Skipped.unread`** is new: what a held-back file computes, one entry per value.
+
 ## A refused write says where a write may go, after #1063
 
 - **A refused write's message is longer.** A write, edit or delete a deny rule refuses
