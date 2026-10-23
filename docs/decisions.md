@@ -2983,6 +2983,13 @@ made or not (`Layout.unlinked_dirs`): #1036 mounted `scratchpad/blobs`, which no
 makes, and a link the shell left there rooted the next turn's route on the host, where
 `read_file` read the operator's credentials. Within the turn the link was made in, the
 route was rooted before it and upstream refuses the path out. *(2026-10-21.)*
+*A link, a folder or anything but a regular file at `memory/AGENTS.md` is left, not
+refused: the scaffold writes only a missing file or an empty regular one, never through a
+link, where it had made a file outside the workspace and in `.harness` from kingfisher's
+own process. A file roots nothing, unlike a folder -- the route answers the path out with
+`invalid_path` -- so refusing would stop a session that, with memory off, nothing reads the
+file in. With memory on, deepagents fails each turn naming it (`Failed to download
+/memory/AGENTS.md: is_directory`). (2026-10-23.)*
 
 **Landlock cannot take back what it has granted, and the Linux job is what
 established that.** The first policy granted the session writable and its `.harness`

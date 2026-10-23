@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The memory scaffold writes through no link, after #9999
+
+- **`memory/AGENTS.md` is filled only when it is missing or an empty regular file.** It was
+  written through whatever stood there, so a link the shell left made or filled a file
+  outside the session, or in `.harness`, from kingfisher's own process. A link, a folder or
+  anything else there is left as it is, and the session opens.
+- **A folder there no longer stops a session opening.** `read_text` on it raised
+  `IsADirectoryError` at every open, and the file tools alone can make one. With memory on,
+  each turn still fails, in deepagents' memory load, naming the file: move the folder aside
+  to use memory again.
+
 ## A link out of a route is the operation's error, after #9999
 
 - **`read_file`, `write_file`, `edit_file`, `delete` and `ls` on a link out of a route's

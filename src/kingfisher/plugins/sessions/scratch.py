@@ -28,12 +28,12 @@ _LOG = logging.getLogger(__name__)
 HELD = os.open in os.supports_dir_fd
 
 # 0 where the host lacks one, which is only where `HELD` is false and no open below runs.
-_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _CLOEXEC = getattr(os, "O_CLOEXEC", 0)
-_FOLDER = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | _NOFOLLOW | _CLOEXEC
-_INPUT = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW | _CLOEXEC
+_FOLDER = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | NOFOLLOW | _CLOEXEC
+_INPUT = os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW | _CLOEXEC
 # Not blocking, or a FIFO left under an output's name would hold the turn on its read.
-_OUTPUT = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | _NOFOLLOW | _CLOEXEC
+_OUTPUT = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | NOFOLLOW | _CLOEXEC
 
 #: What one run's outputs may come to, read into kingfisher's own process.
 MAX_BROUGHT_BACK = 32 * 1024 * 1024

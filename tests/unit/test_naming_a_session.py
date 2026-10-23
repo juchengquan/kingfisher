@@ -531,6 +531,141 @@ def test_a_session_whose_folder_is_a_link_is_refused_at_open(cfg, tmp_path, fold
     assert not outside.exists() if dangling else list(outside.iterdir()) == []
 
 
+@pytest.mark.parametrize(
+    "target", ["outside, missing", "outside, empty", "into .harness"],
+)
+def test_the_scaffold_writes_through_no_link_left_at_agents_md(cfg, tmp_path, target):
+    """The scaffold runs in kingfisher's process, outside every fence, and followed a link
+    the shell left at `memory/AGENTS.md`: it made a file outside the workspace, filled an
+    empty one, and planted `paused.state` in `.harness`. The session still opens."""
+    LocalSessions().open(cfg, DEFAULT)
+    session = cfg.workspace / "sessions" / DEFAULT
+    pointed = {
+        "outside, missing": tmp_path / "planted.txt",
+        "outside, empty": tmp_path / "empty.txt",
+        "into .harness": session / HARNESS / "paused.state",
+    }[target]
+    if target == "outside, empty":
+        pointed.write_text("", encoding="utf-8")
+    agents_md = session / "memory" / "AGENTS.md"
+    agents_md.unlink()
+    agents_md.symlink_to(pointed)
+
+    LocalSessions().open(cfg, DEFAULT)
+
+    assert agents_md.is_symlink(), "the link is left where it is"
+    if target == "outside, empty":
+        assert pointed.read_text(encoding="utf-8") == ""
+    else:
+        assert not pointed.exists()
+
+
+@pytest.mark.parametrize("by", ["the shell", "the file tools"])
+def test_a_folder_at_agents_md_is_left_and_the_session_still_opens(cfg, by):
+    """`read_text` on a folder there raised at every open, so a session whose agent filed its
+    memory under `/memory/AGENTS.md/` -- the file tools alone can -- never ran again. Left,
+    not removed: what is in it is the agent's."""
+    backend = LocalSessions().open(cfg, DEFAULT)
+    session = cfg.workspace / "sessions" / DEFAULT
+    agents_md = session / "memory" / "AGENTS.md"
+    if by == "the shell":
+        agents_md.unlink()
+        agents_md.mkdir()
+        (agents_md / "notes.md").write_text("filed by topic", encoding="utf-8")
+    else:
+        assert backend.delete("/memory/AGENTS.md").error is None
+        assert backend.write("/memory/AGENTS.md/notes.md", "filed by topic").error is None
+
+    LocalSessions().open(cfg, DEFAULT)
+    LocalSessions().open(cfg, DEFAULT)
+
+    assert (agents_md / "notes.md").read_text(encoding="utf-8") == "filed by topic"
+
+
+@pytest.mark.parametrize("seen", ["missing", "a regular file"])
+def test_an_agents_md_swapped_for_a_link_after_the_check_is_not_written_through(
+    cfg, tmp_path, monkeypatch, seen
+):
+    """The check and the write are two calls, and the shell runs beside the open: the flags
+    refuse a link themselves, so one made in between is not followed. Driven by having the
+    check see what was there a moment before."""
+    LocalSessions().open(cfg, DEFAULT)
+    session = cfg.workspace / "sessions" / DEFAULT
+    agents_md = session / "memory" / "AGENTS.md"
+    pointed = tmp_path / "pointed.txt"
+    if seen == "a regular file":
+        pointed.write_text("", encoding="utf-8")
+    regular = tmp_path / "regular.md"
+    regular.write_text("", encoding="utf-8")
+    agents_md.unlink()
+    agents_md.symlink_to(pointed)
+    lstat = Path.lstat
+
+    def before_the_swap(path: Path) -> os.stat_result:
+        if path != agents_md:
+            return lstat(path)
+        if seen == "missing":
+            raise FileNotFoundError(path)
+        return lstat(regular)
+
+    monkeypatch.setattr(Path, "lstat", before_the_swap)
+    LocalSessions().open(cfg, DEFAULT)
+
+    if seen == "a regular file":
+        assert pointed.read_text(encoding="utf-8") == ""
+    else:
+        assert not pointed.exists()
+
+
+def test_an_agents_md_made_after_the_check_is_not_written_over(cfg, monkeypatch):
+    """The agent saving memory between the check and the create: without `O_EXCL` the
+    scaffold opened its file and wrote over the first of what it held."""
+    LocalSessions().open(cfg, DEFAULT)
+    agents_md = cfg.workspace / "sessions" / DEFAULT / "memory" / "AGENTS.md"
+    agents_md.write_text("- the build runs on Fridays\n", encoding="utf-8")
+    lstat = Path.lstat
+
+    def before_it_was_made(path: Path) -> os.stat_result:
+        if path == agents_md:
+            raise FileNotFoundError(path)
+        return lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", before_it_was_made)
+    LocalSessions().open(cfg, DEFAULT)
+
+    assert agents_md.read_text(encoding="utf-8") == "- the build runs on Fridays\n"
+
+
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root reads it")
+def test_an_agents_md_the_open_cannot_read_is_left_alone(cfg):
+    """`chmod 000 memory/AGENTS.md` is the shell's to run, and a scaffold that took a file
+    it could not read for an empty one raised at every open after."""
+    LocalSessions().open(cfg, DEFAULT)
+    agents_md = cfg.workspace / "sessions" / DEFAULT / "memory" / "AGENTS.md"
+    agents_md.chmod(0)
+    try:
+        LocalSessions().open(cfg, DEFAULT)
+    finally:
+        agents_md.chmod(0o644)
+
+    assert agents_md.read_text(encoding="utf-8").startswith("# Project memory")
+
+
+def test_an_empty_agents_md_is_scaffolded_and_one_with_text_is_kept(cfg):
+    """The control for the link, folder and swap tests: refusing every file but a missing
+    one would pass them, and leave an emptied memory with no text for `edit_file` to
+    anchor against."""
+    LocalSessions().open(cfg, DEFAULT)
+    agents_md = cfg.workspace / "sessions" / DEFAULT / "memory" / "AGENTS.md"
+    agents_md.write_text("  \n", encoding="utf-8")
+    LocalSessions().open(cfg, DEFAULT)
+    assert agents_md.read_text(encoding="utf-8").startswith("# Project memory")
+
+    agents_md.write_text("- the build runs on Fridays\n", encoding="utf-8")
+    LocalSessions().open(cfg, DEFAULT)
+    assert agents_md.read_text(encoding="utf-8") == "- the build runs on Fridays\n"
+
+
 def test_every_folder_a_route_is_rooted_at_in_the_session_may_not_be_a_link(cfg):
     """A route mounted inside the session but missing from `unlinked_dirs` is rooted through
     whatever link the shell left there, as `scratchpad/blobs` was after #1036 mounted it.
