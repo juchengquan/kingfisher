@@ -187,8 +187,8 @@ Things to know:
   section on the shell, in place of kingfisher's. `skills` follows the skills section,
   so it is shown only where skills are on. `execute` replaces deepagents' "Use absolute
   paths…" line in the tool's description, and is the only part a subagent sees: a
-  subagent is built without the system prompt. An agent not granted `execute` is
-  told none of the three. Kingfisher's own are
+  subagent is handed the system prompt's session section and none of its shell section.
+  An agent not granted `execute` is told none of the three. Kingfisher's own are
   `src/kingfisher/plugins/sessions/prompts/shell_here.md`, `shell_here_skills.md` and
   `shell_here_execute.md`.
 - **A part left `None` is said the neutral way**, claiming only what holds wherever a

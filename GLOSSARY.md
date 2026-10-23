@@ -73,7 +73,7 @@ _Avoid_: adapter, provider
 **Standing middleware**:
 Middleware kingfisher puts around every agent it builds because it keeps a promise kingfisher
 makes to every caller; no definition can name it or take it out, save the filesystem
-middleware, which a deployment's own of that name replaces.
+middleware and the prompt caching, each of which a deployment's own of that name replaces.
 _Avoid_: built-in middleware, guards, kingfisher's middleware
 
 **Offered middleware**:
