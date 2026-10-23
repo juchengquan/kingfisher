@@ -3606,7 +3606,7 @@ resume ran on a copy read from that file, so the deployment's saver never saw th
 finished. A turn needs a saver only for its own length -- its end reads the final state
 once, to write the transcript -- so a deployment's saver bought nothing, and the pause
 file already keeps a paused turn in the session. Removed with `checkpointer=` on `run` and
-`stream`, `Plugins.threads`, `SharedThreads` and `reap`'s sweep of threads no session
+`stream`, `threads` on the command's plugin record, `SharedThreads` and `reap`'s sweep of threads no session
 owned; `test_a_follow_up_turn_hands_the_model_the_earlier_exchange_once` holds the
 doubling.
 
@@ -5100,15 +5100,23 @@ it to avoid. The command names `LocalSessions` in `cli/configured.py` unless
 `KINGFISHER_SESSIONS` names others. `graph=` is kept and never stands in for sessions,
 since a turn's inputs, leavings and lock go through them whatever runs the agent.
 
-**`Plugins` is a record for `KINGFISHER_PLUGINS` alone.** The command builds its own
-`Kingfisher`, so the setting names a callable returning one; in the library the plugins
-stay keywords. **Not taken: one `Plugins` object as the argument.** It would change more
-than a hundred places to say the same thing one level down, and wire formats do not fit:
-they apply as the configuration loads, where `doctor` checks every endpoint's `api:`.
+**The command takes no plugins but its sessions.** `KINGFISHER_PLUGINS` named a function
+returning a `Plugins` record, because the command builds its own `Kingfisher` and has no
+call a deployment could pass keywords through; code building its own passed them as
+keywords all along. It went when a deployment needed per-turn text from the command: the
+setting asked for a module on the import path for what is a sentence, and the record read
+as the way to wire any plugin, which it never was. The command now runs every port but its
+sessions as kingfisher's own, with a turn hook of its own that sends what it is given, and a
+deployment needing another plugin builds `Kingfisher` in its own code. A leftover setting
+is refused rather than ignored, since what it named would silently stop applying. **Not
+taken: one setting per plugin**, which kept the command's reach at the price of seven
+settings and lost the factory that builds plugins sharing a connection. **Not taken:
+per-turn text on `Request`**, a second source beside a wired hook, which raised which of the
+two an agent saw. *(2026-10-23.)*
 
 **`Config` holds what the core reads.** The shell's fence and `PATH` additions are
 `LocalSessions`' settings, as `ShellSettings`, and `KINGFISHER_SESSIONS` and
-`KINGFISHER_PLUGINS` are the command's: nothing in the core read any of the four.
+`KINGFISHER_PLUGINS` were the command's: nothing in the core read any of the four.
 `LocalSessions()` reads `KINGFISHER_SHELL_SANDBOX` and `KINGFISHER_SHELL_PATH_EXTRA`, so
 one `.env` fences the command and a library deployment alike, and `shell=` decides in
 code. `doctor` and `kingfisher list` ask the sessions how they are fenced, as

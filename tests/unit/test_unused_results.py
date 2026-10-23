@@ -20,7 +20,6 @@ from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH, TOOL_RESULTS, TRANSC
 from kingfisher.plugins import (
     DeleteUnusedResults,
     LocalSessions,
-    Plugins,
     UnusedFile,
     UnusedFiles,
 )
@@ -299,9 +298,8 @@ def test_the_command_hands_the_plugin_named_in_its_plugins_on(workspace):
     """A deployment that archives its results had every command turn delete them, with
     nothing to say the setting did not reach."""
     keeping = Keeping()
-    wiring = Plugins(unused_results=keeping).keywords()
 
-    _turn(Kingfisher(workspace, sessions=LocalSessions(), **wiring), *_searched())
+    _turn(Kingfisher(workspace, sessions=LocalSessions(), unused_results=keeping), *_searched())
 
     assert [[path for path, _, _ in handed] for handed in keeping.handed] == [
         [f"{ROUTE}{STRAY}"]

@@ -42,9 +42,9 @@ that collide are reported.
 
 `plugins/desk.py` is not a definition, and `seed` does not copy it: it is an
 example `TurnInstructions`, telling every graph of a turn today's date and who it
-is working with. No shipped definition needs it; to try it with the command:
-
-    PYTHONPATH=. KINGFISHER_PLUGINS=assets.plugins.desk:build_plugins
+is working with. No shipped definition needs it. Code that builds its own
+`Kingfisher` passes it as `turn_instructions=`; the `kingfisher` command takes no
+plugins and runs a hook of its own.
 
 ## Middleware
 

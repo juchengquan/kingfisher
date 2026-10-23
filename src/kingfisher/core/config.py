@@ -194,6 +194,10 @@ REMOVED_SETTINGS: Mapping[str, str] = MappingProxyType({
         "name the session in each request instead; a request naming none runs in "
         "'default'"
     ),
+    "KINGFISHER_PLUGINS": (
+        "the kingfisher command takes no plugins now. Code that needs one builds its own "
+        "Kingfisher(...) and passes each as a keyword"
+    ),
 })
 
 #: Settings that changed name, refused under the old one: one still set is one the

@@ -14,6 +14,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import Field
 
 from kingfisher import Kingfisher, Request
+from kingfisher.cli.configured import CommandTurnInstructions
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.caching import CACHING, PromptCachingMiddleware
@@ -21,7 +22,7 @@ from kingfisher.core.agent.prompting import session_section
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.layout import MEMORY
-from kingfisher.plugins import LocalSessions, Plugins, backend_at
+from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
     EVERY_TOOL,
     FakeToolCallingModel,
@@ -401,8 +402,7 @@ def test_the_plugin_is_asked_once_a_turn_for_its_session(scripted, awaited):
     loop, a plugin that reads a database would hold up every other turn."""
     an_agent(scripted, **EVERY_TOOL)
     asked = Asked()
-    wiring = Plugins(turn_instructions=asked).keywords()
-    kf = Kingfisher(scripted, sessions=LocalSessions(), **wiring)
+    kf = Kingfisher(scripted, sessions=LocalSessions(), turn_instructions=asked)
 
     for task in ("go", "again"):
         Scripted.script.append(AIMessage(content="done"))
@@ -427,3 +427,19 @@ def test_a_hook_answering_anything_but_text_is_refused(scripted):
 
     with pytest.raises(TypeError, match="answered dict; it answers the turn's text as a str"):
         kf.run(Request("go", agent="only", session_id="s"))
+
+
+def test_the_commands_hook_sends_every_graph_what_it_was_given(scripted):
+    """The hook the command builds every `Kingfisher` with, which `--tell` fills."""
+    an_agent(scripted, **EVERY_TOOL)
+    kf = Kingfisher(
+        scripted,
+        sessions=LocalSessions(),
+        turn_instructions=CommandTurnInstructions("Today is Friday 23 October 2026."),
+    )
+    Scripted.heard.clear()
+    Scripted.script.extend([AIMessage(content="done")])
+
+    kf.run(Request("go", agent="only", session_id="s"))
+
+    assert "Today is Friday 23 October 2026." in str(Scripted.heard[0][0].content)

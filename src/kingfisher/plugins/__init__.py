@@ -27,7 +27,6 @@ _EXPORTS = {
     "Definitions": "kingfisher.core.definitions.catalogue",
     "list_skills": "kingfisher.core.definitions.skills.registry",
     "WireFormat": "kingfisher.core.config",
-    "Plugins": "kingfisher.core.plugins",
     "ShellPrompt": "kingfisher.core.agent.prompting",
     "Layout": "kingfisher.core.layout",
     "DEFAULT_LAYOUT": "kingfisher.core.layout",
@@ -64,7 +63,6 @@ __all__ = [
     "LocalSessions",
     "NoScratchRunLimit",
     "PdfAttachments",
-    "Plugins",
     "ReturnedPdf",
     "RunEvents",
     "ScratchRun",
@@ -116,7 +114,6 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import UnusedResults as UnusedResults
     from kingfisher.core.layout import DEFAULT_LAYOUT as DEFAULT_LAYOUT
     from kingfisher.core.layout import Layout as Layout
-    from kingfisher.core.plugins import Plugins as Plugins
     from kingfisher.core.session.unused import DeleteUnusedResults as DeleteUnusedResults
     from kingfisher.core.session.unused import UnusedFile as UnusedFile
     from kingfisher.core.session.unused import UnusedFiles as UnusedFiles

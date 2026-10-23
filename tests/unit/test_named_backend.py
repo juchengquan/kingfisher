@@ -163,6 +163,16 @@ def test_a_removed_setting_is_refused_rather_than_ignored(tmp_path: Path, remove
     assert instead in str(refused.value)
 
 
+def test_the_command_plugin_setting_is_refused_rather_than_ignored(tmp_path: Path):
+    """Its run events, unused results and PDF handling would stop applying with nothing
+    said: the command takes no plugins now. Named, since the rule above passes for
+    whatever the table holds."""
+    read = Environment({"KINGFISHER_WORKSPACE": str(tmp_path), "KINGFISHER_PLUGINS": "a.b:c"})
+
+    with pytest.raises(ConfigError, match=r"KINGFISHER_PLUGINS was removed.*takes no plugins"):
+        read.config()
+
+
 @pytest.mark.parametrize(("old", "new"), RENAMED_SETTINGS.items())
 def test_a_renamed_setting_is_refused_under_its_old_name(tmp_path: Path, old, new):
     """Ignored, the command line ran on the local sessions instead of the ones

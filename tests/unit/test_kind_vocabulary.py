@@ -168,8 +168,8 @@ def test_a_ninth_axis_cannot_be_added_in_silence():
 #: there in spite of that.
 NOT_A_KIND: dict[str, str] = {
     "plugins": (
-        "Python a deployment imports through KINGFISHER_PLUGINS, not a definition: the "
-        "shipped analyst receives a label only a plugin offers, so the plugin ships beside it"
+        "Python that code embedding kingfisher imports, not a definition: the "
+        "turn hook kept as an example, to copy rather than seed"
     ),
 }
 

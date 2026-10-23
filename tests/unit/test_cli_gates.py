@@ -21,13 +21,12 @@ import kingfisher
 import kingfisher.plugins
 from kingfisher.cli import __main__ as cli
 from kingfisher.core.access.source_ids import UNSCOPED, Datazone, ExtraDatazone
-from kingfisher.core.plugins import Plugins
 from kingfisher.core.request import Resume
 from kingfisher.core.result import AWAITING, RunResult
 from kingfisher.core.result import PendingDecision as Pending
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions
-from tests.conftest import RecordedEvents, Through
+from tests.conftest import Through
 
 PAUSED = RunResult(
     session_id="s-1",
@@ -73,11 +72,6 @@ def _drive(monkeypatch, result: RunResult) -> None:
         importlib.import_module("kingfisher.cli.configured"),
         "configured_sessions",
         lambda: None,
-    )
-    monkeypatch.setattr(
-        importlib.import_module("kingfisher.cli.configured"),
-        "configured_plugins",
-        Plugins,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Nothing())
     monkeypatch.setattr(cli, "show", lambda *a, **k: result)
@@ -207,11 +201,6 @@ def test_the_three_decisions_reach_the_library_as_written(monkeypatch):
         importlib.import_module("kingfisher.cli.configured"),
         "configured_sessions",
         lambda: None,
-    )
-    monkeypatch.setattr(
-        importlib.import_module("kingfisher.cli.configured"),
-        "configured_plugins",
-        Plugins,
     )
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: _Recording())
 
@@ -553,11 +542,6 @@ def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, m
         "configured_sessions",
         lambda: None,
     )
-    monkeypatch.setattr(
-        importlib.import_module("kingfisher.cli.configured"),
-        "configured_plugins",
-        Plugins,
-    )
     monkeypatch.setattr(kingfisher, "Kingfisher", Recording)
     monkeypatch.setattr(cli, "show", lambda *a, **k: None)
     log = tmp_path / "turns.jsonl"
@@ -572,13 +556,15 @@ def test_log_reaches_the_service_on_both_verbs_that_run_a_turn(verb, tmp_path, m
     assert sink.path == log
 
 
-def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_path, monkeypatch):
-    """What `KINGFISHER_PLUGINS` names is handed to every `Kingfisher` the command builds,
-    and `--log`, the narrower ask, takes the place of the run events it names."""
+def test_the_command_hands_every_service_its_own_turn_text_and_logs_where_asked(
+    tmp_path, monkeypatch
+):
+    """The command takes no plugins, so what it hands each `Kingfisher` is all its own: the
+    turn hook every verb builds with, and `--log`'s run events where it was given."""
+    from kingfisher.cli.configured import CommandTurnInstructions
     from kingfisher.plugins.events import JsonlRunEvents
 
     handed: list[dict[str, object]] = []
-    events = RecordedEvents()
 
     class Recording(_Nothing):
         def __init__(self, *args, **kwargs) -> None:
@@ -587,7 +573,6 @@ def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_pat
     monkeypatch.setattr(cli, "config_from_env", object)
     run = importlib.import_module("kingfisher.cli.configured")
     monkeypatch.setattr(run, "configured_sessions", lambda: None)
-    monkeypatch.setattr(run, "configured_plugins", lambda: Plugins(run_events=events))
     monkeypatch.setattr(kingfisher, "Kingfisher", Recording)
     monkeypatch.setattr(cli, "show", lambda *a, **k: None)
 
@@ -595,7 +580,8 @@ def test_the_plugins_reach_the_service_and_log_replaces_their_run_events(tmp_pat
     cli._run(_args(log=tmp_path / "turns.jsonl"))
 
     plain, logged = handed
-    assert plain["run_events"] is events
+    assert isinstance(plain["turn_instructions"], CommandTurnInstructions)
+    assert plain["run_events"] is None, "kingfisher's own, as nothing else was asked for"
     assert isinstance(logged["run_events"], JsonlRunEvents)
 
 

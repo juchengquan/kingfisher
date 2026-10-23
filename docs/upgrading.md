@@ -25,6 +25,16 @@ replaced the four layers began.
   definition still writing `receives:` is refused as an unknown key, so delete the line,
   and put what it received into the hook's one text. There is no alias.
 
+## `KINGFISHER_PLUGINS` is removed, after #1081
+
+- **The `kingfisher` command takes no plugins but its sessions.** `KINGFISHER_PLUGINS` is
+  refused if still set, and `Plugins` is gone from `kingfisher.plugins`. The command runs
+  kingfisher's own run events (or `--log`'s), unused results, PDF handling, subagent
+  middleware and scratch-run limit, and only the middleware in the definitions folder. A
+  deployment that wired any of these through the command builds `Kingfisher` in its own
+  code and passes each as a keyword, as embedding code always has.
+- **The command runs a turn hook of its own**, which sends nothing yet.
+
 ## `SessionInstructions` is `TurnInstructions`, after #1077
 
 - **The plugin is renamed and asked with the turn's caller.** `session_instructions=` on
@@ -1567,7 +1577,7 @@ not read out of `Config`. Every change refuses the old spelling rather than read
 | `backends=` on `Kingfisher`, `run()` and `stream()` | `sessions=`, required on all three, with a graph or without |
 | `claim(name, ...)`, `release(name)`, `held(name, ...)` on the backend `open` returns | `claim(cfg, session_id, ...)`, `release(cfg, session_id)`, `held(cfg, session_id, ...)` on your `Sessions`, one lock per session |
 | `KINGFISHER_SESSION_BACKENDS_FACTORY` | `KINGFISHER_SESSIONS` |
-| No way to hand the command its run events, conversation store or middleware | `KINGFISHER_PLUGINS`, naming something that returns a `kingfisher.plugins.Plugins` |
+| No way to hand the command its run events, conversation store or middleware | `KINGFISHER_PLUGINS`, since removed: build `Kingfisher` in your own code instead |
 | `Adapter`, `ADAPTERS`, `Endpoint.adapter`, `KINGFISHER_ADAPTERS_FACTORY` | `WireFormat`, `WIRE_FORMATS`, `Endpoint.wire_format`, `KINGFISHER_WIRE_FORMATS` |
 | `Config.deployment_prompt`, and `PROMPT.md` in the workspace | `INSTRUCTIONS.md` beside the definitions, or `instructions=` on `Kingfisher`: an object with `text(cfg) -> str` |
 | The repository Protocols in `core/interfaces.py` | Gone. Definitions are read from a directory; stage yours into one |
@@ -1578,7 +1588,7 @@ not read out of `Config`. Every change refuses the old spelling rather than read
 | `COMMAND_RUNNER_CONTRACT`, `BACKEND_CONTRACT`, `SESSION_BACKENDS_CONTRACT` from `kingfisher` | Gone from the package. The same checks are in this repository's `tests/checks/`, to copy; the promises they hold are on each interface's docstring |
 | `kf.pending(id)`, `kf.artifact(id, name)`, `kf.files_for(id)`, `kf.session_size(id)`, `kf.delete_session(id)` and their `a` twins; `SessionInfo` | On the `Session` that `kf.session(id, source_ids=...)` hands out: `.pending()`, `.artifact(name)`, `.files()`, `.size()` and `.delete()`, each with an `a` twin. `kf.session` answers `None` for a session that is not there or not this caller's, and `create=True` makes one, which is what `files_for` did. `kf.sessions(source_ids=...)` lists only what a caller reaches. `Session` replaces `SessionInfo`, with the same `id` and `last_used` |
 | `Kingfisher.held_for`, `Kingfisher.agent_named` | Private: they were the service's own helpers |
-| `threads=` on `Kingfisher`, `checkpointer=` on `run()` and `stream()`, `Plugins.threads`, `SweepResult.orphans` | Gone, with nothing in their place: drop the argument. The conversation is the session's transcript, and every turn runs on a store of kingfisher's own that holds nothing after it. A store of your own showed the model every earlier exchange twice, crashed a turn that stopped for approval unless it was an `InMemorySaver`, and on a shared one copied every session into the paused one's folder |
+| `threads=` on `Kingfisher`, `checkpointer=` on `run()` and `stream()`, `threads` on the command's plugin record, `SweepResult.orphans` | Gone, with nothing in their place: drop the argument. The conversation is the session's transcript, and every turn runs on a store of kingfisher's own that holds nothing after it. A store of your own showed the model every earlier exchange twice, crashed a turn that stopped for approval unless it was an `InMemorySaver`, and on a shared one copied every session into the paused one's folder |
 | `LocalSessions`, `backend_at`, `Plugins`, `ShellPrompt`, `CommandResult`, `HostPathError` and `WireFormat` from `kingfisher` | From `kingfisher.plugins`, the address for writing a plugin. `Sessions`, `RunEvents`, `Instructions`, `CommandRunner`, `JsonlRunEvents`, `InstructionsFile` and `WIRE_FORMATS` are public there too, where they were not public anywhere |
 
 ## deepagents' host paths only where they are this host's, after #760
