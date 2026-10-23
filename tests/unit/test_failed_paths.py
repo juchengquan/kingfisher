@@ -385,10 +385,11 @@ def test_an_offered_tools_failure_names_the_path_the_model_wrote(cfg, session_di
     assert "'/inputs/missing.csv'" in str(answer.content), answer.content
 
 
-def test_a_carried_guard_says_it_the_same_way(cfg, session_dir):
+def test_a_carried_guard_says_it_the_same_way(cfg, session_dir, way):
     """`GuardedTool` is what answers where no middleware reaches -- a compiled subagent's
     tools and a call from `eval`'s code -- and the two must answer alike, which is what
-    its own docstring claims and nothing held.
+    its own docstring claims and nothing held. Both ways: `_arun` reporting the host path
+    left every test green while `_run` was held.
     """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "opener.py").write_text(OPENS, encoding="utf-8")
@@ -410,9 +411,12 @@ def test_a_carried_guard_says_it_the_same_way(cfg, session_dir):
         context_schema=ToolContext,
     )
 
-    out = graph.invoke(
-        {"messages": [{"role": "user", "content": "go"}]},
-        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [], cfg.layout)),
+    sent = {"messages": [{"role": "user", "content": "go"}]}
+    context = ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [], cfg.layout))
+    out = (
+        graph.invoke(sent, context=context)
+        if way == "sync"
+        else asyncio.run(graph.ainvoke(sent, context=context))
     )
 
     (answer,) = [one for one in out["messages"] if isinstance(one, ToolMessage)]

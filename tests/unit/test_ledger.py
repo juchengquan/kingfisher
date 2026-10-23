@@ -2439,6 +2439,19 @@ def test_a_search_for_an_expired_result_says_why_it_found_nothing(ledgered):
     assert "older than 1 rounds of this conversation has expired" in _handed("c2").text
 
 
+def test_a_read_that_found_its_saved_result_is_not_told_it_expired(ledgered):
+    """The control the miss needs from the other side: with results expiring, a read of
+    a live one was told it "has expired and its file is gone" once the check that the
+    read found nothing went, and the model drops a result it is holding."""
+    cfg = _rounds(ledgered, 1)
+    (entry,) = _searched(cfg, "c1").ledger
+
+    _run(cfg, _calls(("read_file", {"file_path": entry.path}, "c2")), AIMessage(content="done"))
+
+    assert "not found" not in _handed("c2").text, _handed("c2").text
+    assert "expired" not in _handed("c2").text, _handed("c2").text
+
+
 def test_a_miss_is_not_explained_where_results_do_not_expire(ledgered):
     """The control: told results expire where none do, the model gives up on a path it
     merely mistyped."""
