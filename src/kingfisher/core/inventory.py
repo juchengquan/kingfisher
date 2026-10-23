@@ -171,6 +171,12 @@ class Inventory:
     #: Whether `unresolved_subagents` was asked at all; `False` is not "none".
     unresolved_subagents_checked: bool = True
 
+    #: Definition -> the tools it names, on either line, that nothing offers there as
+    #: written, keyed as `moved_tools` is. Startup loads it; every run reaching it refuses.
+    unresolved_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    #: Whether `unresolved_tools` was asked at all; `False` is not "none".
+    unresolved_tools_checked: bool = True
+
     #: Definition -> how it names one skill twice, keyed as `moved_tools` is. Startup
     #: refuses this, and `doctor` promises to say in advance what startup refuses.
     doubled_skills: Mapping[str, str] = _NOTHING
@@ -477,6 +483,30 @@ def _unresolved_subagents(
         return None
 
 
+def _unresolved_tools(
+    resolved: Definitions, builtin: tuple[str, ...]
+) -> Mapping[str, tuple[str, ...]] | None:
+    """Definitions naming a tool their line does not offer, or `None` when that could
+    not be asked.
+
+    As written, not as a caller reaches them: a run refuses the file's own names whoever
+    is asking. The caller decides only which definitions are reported.
+    """
+    try:
+        offers = Offering.of(resolved.tools.found, builtin=builtin)
+        return MappingProxyType({
+            _subject(kind, name): missing
+            for kind, specs in (
+                ("agent", resolved.agents.specs),
+                ("subagent", resolved.subagents.specs),
+            )
+            for name, spec in specs.items()
+            if (missing := offers.unknown(spec.builtin_tools, spec.tools))
+        })
+    except (ToolError, AgentError, SubagentError):
+        return None
+
+
 def _doubled_skills(resolved: Definitions) -> Mapping[str, str] | None:
     """Definitions naming one skill twice, bare and qualified, or `None` when that could
     not be asked.
@@ -720,6 +750,13 @@ def inventory(  # noqa: PLR0913 -- the caller's three, beside where to look
     builtin, offered_tools, sources, tools_error, builtin_checked, build_error = _tools(
         cfg, resolved
     )
+    # Not asked without the built-in set: every name on a `builtin_tools:` line would
+    # read as unknown.
+    unresolved_tools = (
+        _unresolved_tools(resolved, builtin)
+        if builtin_checked and build_error is None and tools_error is None
+        else None
+    )
 
     registry = resolved.registry
     subagents: Mapping[str, str] = _NOTHING
@@ -906,6 +943,10 @@ def inventory(  # noqa: PLR0913 -- the caller's three, beside where to look
             else _kept(unresolved_subagents, reached_subjects)
         ),
         unresolved_subagents_checked=unresolved_subagents is not None,
+        unresolved_tools=(
+            _NO_NAMES if unresolved_tools is None else _kept(unresolved_tools, reached_subjects)
+        ),
+        unresolved_tools_checked=unresolved_tools is not None,
         doubled_skills=(
             _NOTHING if doubled_skills is None else _kept(doubled_skills, reached_subjects)
         ),

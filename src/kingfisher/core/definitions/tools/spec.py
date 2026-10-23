@@ -16,6 +16,7 @@ from kingfisher.core.access import (
     narrowed,
     reaches,
     refuse_unoffered,
+    unoffered,
     zoned,
 )
 
@@ -257,6 +258,18 @@ class Offering:
                 subject=subject,
                 listing=f"\n{offered(self.sources, shown)}",
             )
+
+    def unknown(self, builtin: Selection, tools: Selection) -> tuple[str, ...]:
+        """Each name `refuse_unknown` refuses: one its own axis does not offer as written.
+
+        Asked as well as refused, so `doctor` reports what a run refuses from one walk.
+        """
+        return tuple(
+            name
+            for asked, own in ((self.spelt(tools), self.offered), (builtin, self.builtin))
+            if asked not in (ALL, None)
+            for name in unoffered(asked, offered=own)
+        )
 
     def moved(self, claims: Mapping[str, str]) -> tuple[tuple[str, str, str], ...]:
         """Each `(name, where the definition says it is, where it is)` that disagrees.

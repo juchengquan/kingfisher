@@ -4561,6 +4561,15 @@ today over a file nobody touched, and the promise is that `doctor` tells you.
     and raising it from the tool probe sent a reader to the catalogue instead.
     *(2026-10-19, from an architecture review.)*
 
+**A definition naming a tool its line does not offer fails `doctor` too**, and does not
+stop startup, as for a subagent name. `doctor` had asked only *where* a named tool lives,
+so `tools: [lokup]`, a `builtin_tools:` typo and a subagent's misspelt tool all exited 0,
+and every run reaching them was refused. It was found through a client's adapter leaving
+out a tool its spec shut to everyone, which an agent still named. The row asks
+`Offering.unknown`, the question `refuse_unknown` raises on, and a test holds the two to
+one answer; without the built-in set it says "not checked", since every `builtin_tools:`
+name would read as unknown. *(2026-10-23.)*
+
 **`REFUSALS` is what stops the next one.** The table in `tests/unit/test_refusals.py` has an
 entry per catalogue-reading function that can refuse a definition, naming a broken
 catalogue that reaches it or why none can, deny by default both ways, with the raise count

@@ -259,6 +259,34 @@ def test_doctor_names_every_definition_naming_a_subagent_there_is_not(cfg):
     assert "subagent 'reviewer' names second" in said
 
 
+def test_doctor_names_every_definition_naming_a_tool_there_is_not(cfg):
+    """`doctor` exited 0 over these while every run reaching them was refused: the row
+    beside this one said every definition names tools where they are, and asked only where.
+    """
+    from tests.unit.test_list import _name_tools
+
+    _name_tools(cfg, {"builtin_tools": '["*"]', "tools": "[lokup]", "subagents": "[reviewer]"},
+                "[lookp]")
+
+    checks = [c for c in examine(cfg) if c.name == "tool names"]
+
+    assert checks and all(c.verdict == "fail" for c in checks)
+    said = " | ".join(c.detail for c in checks)
+    assert "agent 'lead' names lokup" in said
+    assert "subagent 'reviewer' names lookp" in said
+
+
+def test_a_clean_catalogue_says_its_tool_names_are_fine(cfg, shipped):
+    """The control, against the shipped presets because they name tools on both lines and
+    in both spellings -- an empty workspace would pass a check that failed every name.
+    """
+    seed(cfg, shipped)
+
+    checks = {c.name: c for c in examine(cfg)}
+
+    assert checks["tool names"].verdict == "ok", checks["tool names"].detail
+
+
 def test_a_clean_catalogue_says_its_subagent_references_are_fine(cfg, shipped):
     """The control, against the shipped presets because they name subagents from
     both kinds -- an empty workspace would pass a check that failed every name.
@@ -797,6 +825,23 @@ def test_the_builtin_count_says_unknown_when_it_could_not_be_read(cfg):
     # tools row must not claim the tool catalogue failed.
     assert checks["middlewares"].verdict == "fail"
     assert found.tools_error is None
+
+
+def test_tool_names_are_not_checked_without_the_builtin_set(cfg):
+    """Asked against an empty built-in set, every name on a `builtin_tools:` line reads as
+    unknown, so `doctor` would fail an agent that runs once the middleware is fixed.
+    """
+    folder = cfg.catalogue_roots["middlewares"]
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "broken.py").write_text("import nonexistent_module_xyz\n", encoding="utf-8")
+    an_agent(cfg, "lead", builtin_tools="[read_file]")
+
+    found = inventory(cfg)
+    checks = {check.name: check for check in examine(cfg, found)}
+
+    assert not found.builtin_tools_checked
+    assert not found.unresolved_tools_checked
+    assert checks["tool names"].verdict == "warn", checks["tool names"].detail
 
 
 def test_definitions_that_all_run_say_so_once(cfg, tmp_path):
@@ -1364,16 +1409,19 @@ STOPPED_BY = {
         "bundled entries": "warn",
         "tool references": "ok",
         "subagent references": "ok",
+        "tool names": "ok",
     },
     "a catalogue tool": {
         "bundled entries": "ok",
         "tool references": "warn",
         "subagent references": "ok",
+        "tool names": "warn",
     },
     "a subagent file": {
         "bundled entries": "warn",
         "tool references": "warn",
         "subagent references": "warn",
+        "tool names": "warn",
     },
 }
 

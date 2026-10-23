@@ -82,6 +82,7 @@ def render(found: Inventory) -> Iterator[str]:
     yield from _build(found)
     yield from _misnamed_tools(found)
     yield from _unresolved_subagents(found)
+    yield from _unresolved_tools(found)
     yield from _doubled_skills(found)
     yield from _access(found)
 
@@ -159,6 +160,21 @@ def _unresolved_subagents(found: Inventory) -> Iterator[str]:
         yield f"  {subject}: {', '.join(sorted(names))}"
     yield "  (a run reaching one is refused: write each as listed under subagents,"
     yield "   where a name two files share is spelt with its file)"
+
+
+def _unresolved_tools(found: Inventory) -> Iterator[str]:
+    """Definitions naming a tool their line does not offer.
+
+    Said here or nowhere: a definition's own lines above print the name as written, beside
+    the ones that resolve.
+    """
+    if not found.unresolved_tools:
+        return
+    yield "\ntool names matching nothing on offer"
+    for subject, names in sorted(found.unresolved_tools.items()):
+        yield f"  {subject}: {', '.join(sorted(names))}"
+    yield "  (a run reaching one is refused: write each as listed under builtin tools or"
+    yield "   offered tools, on the line that heading names, or add the tool it means)"
 
 
 def _doubled_skills(found: Inventory) -> Iterator[str]:
@@ -402,6 +418,8 @@ def as_json(found: Inventory) -> dict[str, object]:
         "moved_tools_checked": found.moved_tools_checked,
         "unresolved_subagents": {k: list(v) for k, v in found.unresolved_subagents.items()},
         "unresolved_subagents_checked": found.unresolved_subagents_checked,
+        "unresolved_tools": {k: list(v) for k, v in found.unresolved_tools.items()},
+        "unresolved_tools_checked": found.unresolved_tools_checked,
         "doubled_skills": dict(found.doubled_skills),
         "doubled_skills_checked": found.doubled_skills_checked,
         "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
@@ -457,6 +475,7 @@ def failed(found: Inventory) -> bool:
         found.moved_tools
         or found.miscounted_bundles
         or found.unresolved_subagents
+        or found.unresolved_tools
         or found.doubled_skills
     ):
         return True
