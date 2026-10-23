@@ -67,8 +67,9 @@ HARNESS = ".harness"
 
 #: What it holds, named here because `.harness` is a layout decision.
 PINNED_AGENT = "agent.yaml"
-#: The datazone of the session's first zoned turn, beside the agent rather than in it:
-#: the pin is the agent's document as written.
+#: The datazones of the session's first zoned turn, beside the agent rather than in it:
+#: the pin is the agent's document as written. Not renamed for holding several: every
+#: session pinned before would read as in no datazone, open to every caller.
 PINNED_ZONE = "datazone"
 TRANSCRIPT_FILE = "transcript.jsonl"
 #: The session's tool results, a row each and a closing line a turn. Here, not beside

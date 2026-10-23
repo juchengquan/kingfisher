@@ -20,7 +20,7 @@ import pytest
 import kingfisher
 import kingfisher.plugins
 from kingfisher.cli import __main__ as cli
-from kingfisher.core.access.source_ids import UNSCOPED, Datazone
+from kingfisher.core.access.source_ids import UNSCOPED, Datazone, ExtraDatazone
 from kingfisher.core.plugins import Plugins
 from kingfisher.core.request import Resume
 from kingfisher.core.result import AWAITING, RunResult
@@ -58,6 +58,7 @@ def _args(**over: Any) -> argparse.Namespace:
             "session": None,
             "held": None,
             "datazone": None,
+            "extra_datazones": (),
             "delete_session": False,
             "log": None,
             **over,
@@ -171,6 +172,7 @@ def _decide_args(**over: Any) -> argparse.Namespace:
             "agent": None,
             "held": None,
             "datazone": None,
+            "extra_datazones": (),
             "delete_session": False,
             "log": None,
             **over,
@@ -691,12 +693,15 @@ def test_the_printed_answer_names_the_caller_the_run_was_asked_as(capsys):
     """It named no `--as` or `--datazone`, so under a policy pasting it was refused as
     a call from nobody."""
     cli._awaiting(PAUSED, ("A", Datazone("finance")))
+    cli._awaiting(PAUSED, ("A", Datazone("hr"), ExtraDatazone("finance"), ExtraDatazone("x")))
     cli._awaiting(PAUSED, UNSCOPED)
     cli._awaiting(PAUSED, None)
 
     lines = [one for one in capsys.readouterr().err.splitlines() if "answer with:" in one]
     assert [one.split(" --approve")[0] for one in lines] == [
         "answer with: kingfisher decide --session s-1 --as A --datazone finance",
+        "answer with: kingfisher decide --session s-1 --as A --datazone hr "
+        "--extra-datazones finance,x",
         "answer with: kingfisher decide --session s-1 --as UNSCOPED",
         "answer with: kingfisher decide --session s-1",
     ]

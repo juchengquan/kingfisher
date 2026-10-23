@@ -44,6 +44,7 @@ _EXPORTS = {
     "Audience": "kingfisher.core.access.source_ids",
     "DATAZONE_PREFIX": "kingfisher.core.access.source_ids",
     "Datazone": "kingfisher.core.access.source_ids",
+    "ExtraDatazone": "kingfisher.core.access.source_ids",
     "Held": "kingfisher.core.access.source_ids",
     "Stated": "kingfisher.core.access.source_ids",
     "Vocabulary": "kingfisher.core.access.source_ids",
@@ -53,7 +54,8 @@ _EXPORTS = {
     "spell": "kingfisher.core.access.source_ids",
     "unlisted": "kingfisher.core.access.source_ids",
     "with_datazone": "kingfisher.core.access.source_ids",
-    "zone_held": "kingfisher.core.access.source_ids",
+    "zone_in": "kingfisher.core.access.source_ids",
+    "zones_held": "kingfisher.core.access.source_ids",
     "zoned": "kingfisher.core.access.source_ids",
 }
 
@@ -99,6 +101,7 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import AccessReport as AccessReport
     from kingfisher.core.access.source_ids import Audience as Audience
     from kingfisher.core.access.source_ids import Datazone as Datazone
+    from kingfisher.core.access.source_ids import ExtraDatazone as ExtraDatazone
     from kingfisher.core.access.source_ids import Held as Held
     from kingfisher.core.access.source_ids import Stated as Stated
     from kingfisher.core.access.source_ids import Vocabulary as Vocabulary
@@ -108,8 +111,9 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import spell as spell
     from kingfisher.core.access.source_ids import unlisted as unlisted
     from kingfisher.core.access.source_ids import with_datazone as with_datazone
-    from kingfisher.core.access.source_ids import zone_held as zone_held
+    from kingfisher.core.access.source_ids import zone_in as zone_in
     from kingfisher.core.access.source_ids import zoned as zoned
+    from kingfisher.core.access.source_ids import zones_held as zones_held
 
 
 def __getattr__(name: str) -> Any:

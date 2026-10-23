@@ -7,7 +7,7 @@ from dataclasses import replace
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import Capabilities, Held, Vocabulary, caller_holds, zone_held
+from kingfisher.core.access import Capabilities, Held, Vocabulary, caller_holds, zones_held
 from kingfisher.core.agent.activation import (
     for_the_caller,
     indistinct_subagents,
@@ -56,7 +56,7 @@ from .store import (
     read_ledger,
     read_pause_mark,
     read_transcript,
-    remember_zone,
+    remember_zones,
 )
 from .turn import (
     Prepared,
@@ -123,12 +123,12 @@ class Preparation:
         harness = HarnessFiles(files)
         # Read once, for reach here and for the agent the turn runs; neither asks for a
         # supplied graph where nothing is locked.
-        pinned, zone = (
+        pinned, zones = (
             (yield from pinned_in(harness))
             if held is not None or self._graph is None
             else (None, None)
         )
-        if not self._reaches_pin(pinned, zone, held, session_id=session.id):
+        if not self._reaches_pin(pinned, zones, held, session_id=session.id):
             raise unknown_session(session.id)
         # A turn writes inside the session, which leaves the timestamp `retention.expired`
         # reads alone. At the top of the turn, not the end: a turn that fails still happened.
@@ -151,7 +151,7 @@ class Preparation:
                 files=files,
                 harness=harness,
                 pinned=pinned,
-                zone=zone,
+                zones=zones,
                 held=held,
             )
         except BaseException:
@@ -172,7 +172,7 @@ class Preparation:
         files: Any,
         harness: HarnessFiles,
         pinned: Any,
-        zone: str | None,
+        zones: frozenset[str] | None,
         held: frozenset[str] | None,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
@@ -197,8 +197,8 @@ class Preparation:
         resolved = self._graph is None or held is not None
         agent = self._agent_for(request, held=held, pinned=pinned) if resolved else None
         # What a zoned caller's tools return stays in the session, so once one runs it is
-        # read only from that datazone. Kept beside the agent's pin, after the build.
-        ran_in = zone_held(held) if zone is None and held is not None else None
+        # read only from those datazones. Kept beside the agent's pin, after the build.
+        ran_in = zones_held(held) if zones is None and held is not None else None
         if self._graph is None:
             # Before the build and the reports, which must both see a bare name settled to
             # the one this caller reaches.
@@ -237,8 +237,8 @@ class Preparation:
             yield from place_inputs(placement, files, self.cfg.layout)
             if resolved and pinned is None:
                 yield from self._pin_agent_in(harness, request.agent)
-            if ran_in is not None:
-                yield from remember_zone(harness, ran_in)
+            if ran_in:
+                yield from remember_zones(harness, ran_in)
             if superseded:
                 yield from clear_pause(harness)
             # A resume says so in `run_start`: a task-shaped one would read as the work

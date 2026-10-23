@@ -88,6 +88,28 @@ def test_a_tool_is_handed_the_source_ids_and_datazone_the_caller_holds(scripted)
     assert _said(events).split(" ")[1:3] == ["A,B", "finance"]
 
 
+@pytest.mark.parametrize("extras", [["common"], ["finance", "common"]], ids=["apart", "repeated"])
+def test_a_tool_is_handed_the_datazone_the_caller_is_in_and_not_an_extra_one(scripted, extras):
+    """Held, every zone is a `datazone=` name and the one the caller is in is told apart
+    only by its type, which an extra repeating it, as a hardcoded list does, can push out
+    of the set."""
+    _a_tool(scripted)
+    an_agent(scripted, source_ids="[A]", **EVERY_TOOL)
+    Scripted.script.extend([_calls_who(), AIMessage(content="done")])
+    start(scripted, "s")
+
+    events = list(
+        Kingfisher(scripted, sessions=LocalSessions()).stream(
+            Request("go", agent="only", session_id="s"),
+            source_ids=["A", "B"],
+            datazone="finance",
+            extra_datazones=extras,
+        )
+    )
+
+    assert _said(events).split(" ")[1:3] == ["A,B", "finance"]
+
+
 def test_the_model_is_never_sent_the_context(scripted):
     """Driven, not inspected: every message every call was handed, after every middleware."""
     an_agent(scripted)

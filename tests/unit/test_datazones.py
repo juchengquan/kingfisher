@@ -83,9 +83,11 @@ def zoned(cfg):
     return cfg
 
 
-def built(kf: Kingfisher, source_ids, datazone: str | None) -> tuple[set[str], set[str]]:
+def built(
+    kf: Kingfisher, source_ids, datazone: str | None, extras: tuple[str, ...] = ()
+) -> tuple[set[str], set[str]]:
     """The offered tools and subagents `create_deep_agent` is handed for this caller."""
-    caller = with_datazone(source_ids, datazone)
+    caller = with_datazone(source_ids, datazone, extras)
     session = kf.workspace / "sessions" / f"{datazone}-{id(caller)}"
     session.mkdir(parents=True, exist_ok=True)
     ensure_session_layout(session, DEFAULT_LAYOUT)
@@ -236,6 +238,52 @@ def test_a_datazone_with_no_caller_is_refused_where_nobody_is_the_operator(zoned
 
     with pytest.raises(CallerError, match="names no caller"):
         door(kf, zoned)
+
+
+#: Every door a caller's extra datazones come in by, as a library call.
+EXTRA_DOORS = {
+    "run": lambda kf, cfg, **zones: kf.run("t", source_ids=("A",), **zones),
+    "stream": lambda kf, cfg, **zones: next(iter(kf.stream("t", source_ids=("A",), **zones))),
+    "arun": lambda kf, cfg, **zones: asyncio.run(kf.arun("t", source_ids=("A",), **zones)),
+    "session": lambda kf, cfg, **zones: kf.session("s", source_ids=("A",), **zones),
+    "asession": lambda kf, cfg, **zones: asyncio.run(
+        kf.asession("s", source_ids=("A",), **zones)
+    ),
+    "sessions": lambda kf, cfg, **zones: kf.sessions(source_ids=("A",), **zones),
+    "asessions": lambda kf, cfg, **zones: asyncio.run(
+        kf.asessions(source_ids=("A",), **zones)
+    ),
+    "inventory": lambda kf, cfg, **zones: inventory(cfg, source_ids=["A"], **zones),
+}
+
+
+@pytest.mark.parametrize("door", EXTRA_DOORS.values(), ids=EXTRA_DOORS.keys())
+def test_extra_datazones_with_no_datazone_are_refused_at_every_door(zoned, door):
+    """A deployment sending its hardcoded extras with the zone forgotten would hand the
+    caller everything locked to them, where a caller in no datazone reaches none of it;
+    a door that dropped the extras would not see the zone was missing."""
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    with pytest.raises(CallerError, match="names none -- pass datazone= with them"):
+        door(kf, zoned, extra_datazones=["finance"])
+
+
+@pytest.mark.parametrize(
+    ("extras", "said"),
+    [
+        ("finance", "not a string"),
+        (["finance", " "], "datazone is one name"),
+        (["*"], r"'\*' is not 'any'"),
+    ],
+    ids=["a bare string", "a blank one", "a star"],
+)
+def test_extra_datazones_are_named_as_a_datazone_is(zoned, extras, said):
+    """A bare string was read a letter at a time, each one a zone; the others are the
+    datazone's own refusals, for the same reasons."""
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    with pytest.raises(CallerError, match=said):
+        caller_holds(kf.vocabulary, with_datazone(("A",), "hr", extras))
 
 
 def test_the_command_refuses_a_blank_datazone(zoned, at_the_command_line, capsys):
@@ -397,6 +445,26 @@ def test_a_caller_in_another_datazone_gets_neither(zoned):
     assert subagents == set()
 
 
+def test_a_caller_with_an_extra_datazone_gets_what_it_requires(zoned):
+    """The control beside it is `hr` alone, which reaches neither."""
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    tools, subagents = built(kf, ("A",), "hr", ("finance",))
+
+    assert {"payroll", "line_count"} <= tools
+    assert subagents == {"ledger"}
+    assert "payroll" not in built(kf, ("A",), "hr")[0]
+
+
+def test_an_extra_datazone_is_never_held_as_a_source_id(zoned):
+    """Read as one, `finance` would open whatever a lock names `finance` as a source id."""
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    held = caller_holds(kf.vocabulary, with_datazone(("A",), "hr", ["finance"]))
+
+    assert held == {"A", zone_name("hr"), zone_name("finance")}
+
+
 def test_a_caller_in_no_datazone_gets_only_what_is_for_any(zoned):
     """Closed rather than open: forgetting to pass a datazone must not hand a caller
     every zone's tools, which is the silent widening `source_ids=` refuses as well.
@@ -435,6 +503,14 @@ def test_the_command_line_names_a_datazone(zoned, at_the_command_line, capsys):
 
     assert main(["list", "--as", "A", "--datazone", "hr"]) == 0
     assert "payroll" not in capsys.readouterr().out
+
+
+def test_the_command_line_names_extra_datazones(zoned, at_the_command_line, capsys):
+    assert main(["list", "--as", "A", "--datazone", "hr", "--extra-datazones", "x,finance"]) == 0
+    assert "payroll" in capsys.readouterr().out
+
+    assert main(["list", "--as", "A", "--extra-datazones", "finance"]) == 2
+    assert "pass datazone= with them" in capsys.readouterr().err
 
 
 def test_the_operator_listing_says_each_datazone(zoned, at_the_command_line, capsys):
@@ -488,10 +564,10 @@ def turns(zoned, scripted):
     return replace(zoned, models=scripted.models)
 
 
-def _turn(kf: Kingfisher, session_id: str, datazone: str | None):
+def _turn(kf: Kingfisher, session_id: str, datazone: str | None, extras: tuple[str, ...] = ()):
     Scripted.script.append(AIMessage(content="done"))
     request = Request("t", agent="surveyor", session_id=session_id)
-    return kf.run(request, source_ids=("A",), datazone=datazone)
+    return kf.run(request, source_ids=("A",), datazone=datazone, extra_datazones=extras)
 
 
 def test_a_session_a_zoned_turn_ran_in_is_reached_only_from_that_datazone(turns, way):
@@ -508,6 +584,29 @@ def test_a_session_a_zoned_turn_ran_in_is_reached_only_from_that_datazone(turns,
     assert reads.session("s", source_ids=UNSCOPED) is not None
     with pytest.raises(UnknownSessionError):
         _turn(kf, "s", "hr")
+
+
+def test_a_session_is_reached_only_from_exactly_the_datazones_its_turn_ran_in(turns, way):
+    """Not from fewer: `hr` alone would read what `payroll` returned to `hr` with
+    `finance`. Nor from more: a caller in a zone below `hr` holds `hr` and `finance`
+    besides its own, and would leave what its own zone returned for `hr` to read.
+    """
+    kf = Kingfisher(turns, sessions=LocalSessions())
+    _turn(kf, "s", "hr", ("finance",))
+    reads = Through(kf, way)
+
+    def session(datazone, *extras):
+        return reads.session("s", source_ids=("A",), datazone=datazone, extra_datazones=extras)
+
+    assert session("hr", "finance") is not None
+    assert session("finance", "hr") is not None, "a set: which one the caller is in is theirs"
+    assert session("hr") is None
+    assert session("finance") is None
+    assert session("hr-emea", "hr", "finance") is None
+    with pytest.raises(UnknownSessionError):
+        _turn(kf, "s", "hr")
+    with pytest.raises(UnknownSessionError):
+        _turn(kf, "s", "hr-emea", ("hr", "finance"))
 
 
 def test_a_listing_leaves_out_a_session_in_another_datazone(turns):
