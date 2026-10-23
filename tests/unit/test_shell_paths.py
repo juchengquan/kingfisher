@@ -718,6 +718,31 @@ def test_a_refusal_no_folder_holds_tells_the_shells_result_where_writes_go(way):
     assert left.text == STRAYED
 
 
+@pytest.mark.parametrize(
+    ("output", "folder"),
+    [
+        (
+            f"/bin/sh: {SESSION}/scratchpad/conversation_history/f.md: Operation not permitted",
+            "scratchpad/conversation_history",
+        ),
+        (f"/bin/sh: {SESSION}/outputs/ok.txt: Permission denied", None),
+    ],
+    ids=["history", "outputs"],
+)
+def test_the_note_names_the_folder_the_fence_keeps(way, output, folder):
+    """Which folders the middleware hands `kept_under` is its own choice, and only `/inputs`
+    was driven through it, which every candidate holds: handed the session's folders
+    instead, a refused history write was told `/scratchpad/` is not the agent's to write,
+    and a file under `/outputs` it could not replace that `/outputs/` is not.
+    """
+    corrected = _answered(way, "execute", ToolMessage(output, tool_call_id="c1"))
+
+    if folder is None:
+        assert corrected.text == output
+    else:
+        assert corrected.text == f"{output}\n\n{kept_note(folder, Layout())}"
+
+
 #: GNU's `cp` refused a kept folder under the UTF-8 locale the shell is given.
 CURLY = f"cp: cannot create regular file {LQ}inputs/a.csv{RQ}: Permission denied"
 

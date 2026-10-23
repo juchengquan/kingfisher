@@ -1097,7 +1097,12 @@ def test_the_shell_cannot_rewrite_a_saved_result(cfg, layout):
     for folder in layout.saved_results:
         backend.execute(f"printf FORGED > {folder}/A-0001.txt")
         backend.execute(f"printf FORGED > {folder}/A-0002.txt")
-        backend.execute(f"ln {folder}/A-0001.txt linked && printf FORGED > linked; rm -f linked")
+        # Into `outputs/`, which the shell may write: a link made at the session's top is
+        # refused for where it lands, and would pass with the link rule gone.
+        linked = "outputs/linked"
+        backend.execute(
+            f"ln {folder}/A-0001.txt {linked} && printf FORGED > {linked}; rm -f {linked}"
+        )
         backend.execute(f"rm -rf {folder}")
     moved = backend.execute(
         f"mv {scratch} moved && printf FORGED > moved/{kept}/A-0001.txt; mv moved {scratch}"
@@ -1133,7 +1138,8 @@ def test_the_shell_cannot_rewrite_the_conversation_kept_aside(cfg):
 
     backend.execute(f"printf FORGED > {folder}/kept.md")
     backend.execute(f"printf FORGED > {folder}/added.md")
-    backend.execute(f"ln {folder}/kept.md linked && printf FORGED > linked; rm -f linked")
+    linked = "outputs/linked"
+    backend.execute(f"ln {folder}/kept.md {linked} && printf FORGED > {linked}; rm -f {linked}")
     backend.execute(f"rm -rf {folder}")
 
     (held,) = backend.download_files([f"{route}kept.md"])

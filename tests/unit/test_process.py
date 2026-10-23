@@ -163,6 +163,24 @@ def test_a_command_given_grace_is_asked_to_stop_before_it_is_killed(tmp_path, gr
     assert mark.exists() is asked
 
 
+@pytest.mark.parametrize(
+    ("timeout", "grace", "asked_after"), [(0.4, 0.5, 0.2), (10, 0.5, 9.5)],
+    ids=["grace-longer-than-the-time", "grace-inside-it"],
+)
+def test_a_command_is_asked_to_stop_inside_its_time_and_not_before_it(timeout, grace, asked_after):
+    """A grace longer than the time given asked a command to stop before it had run: a
+    tool's `context.run(timeout=0.3)` reaches the Landlock runner unchecked, and with the
+    whole grace taken off it was asked at a moment already past.
+    """
+    before = time.monotonic()
+    clock = process._Clock(timeout, grace, None)
+    after = time.monotonic()
+
+    assert clock.ask_at is not None and clock.deadline is not None
+    assert before + asked_after <= clock.ask_at <= after + asked_after
+    assert clock.ask_at < clock.deadline
+
+
 def test_a_stop_given_grace_asks_first_too(tmp_path):
     import threading
 
