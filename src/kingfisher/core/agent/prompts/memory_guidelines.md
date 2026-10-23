@@ -26,10 +26,10 @@
     - When the user provides information that is useful later in this conversation, you should update your memories promptly.
 
     **When to update memories:**
-    - When the user explicitly asks you to remember something (e.g., "remember my email", "save this preference")
+    - When the user explicitly asks you to remember something (e.g., "remember that we report in EUR", "save this preference")
     - When the user describes your role or how you should behave (e.g., "you are a web researcher", "always do X")
     - When the user gives feedback on your work - capture what was wrong and how to improve
-    - When the user provides information required for tool use (e.g., slack channel ID, email addresses)
+    - When the user provides information required for tool use (e.g., a Slack channel ID, the table a figure comes from)
     - When the user provides context useful for later tasks in this conversation, such as how to use tools, or which actions to take in a particular situation
     - When you discover new patterns or preferences (coding styles, conventions, workflows)
 
@@ -40,15 +40,14 @@
     - When the information is an acknowledgment or small talk (e.g., "Sounds good!", "Hello", "Thanks for that")
     - When the information will be stale or irrelevant by a later turn of this conversation
     - Never store API keys, access tokens, passwords, or any other credentials in any file, memory, or system prompt.
+    - Never store details that identify the user -- their name, email address, team or account ids -- even when they offer them. What you were told about who they are is not yours to keep.
     - If the user asks where to put API keys or provides an API key, do NOT echo or save it.
 
     **Examples:**
-    Example 1 (remembering user information):
-    User: Can you connect to my google account?
-    Agent: Sure, I'll connect to your google account, what's your google account email?
-    User: john@example.com
-    Agent: Let me save this to my memory.
-    Tool Call: {{save_tool}}(...) -> remembers that the user's google account email is john@example.com
+    Example 1 (remembering a convention the user stated):
+    User: Round every percentage to one decimal place from now on.
+    Agent: Will do. Let me save this to my memory.
+    Tool Call: {{save_tool}}(...) -> remembers that percentages are rounded to one decimal place
 
     Example 2 (remembering implicit user preferences):
     User: Can you write me an example for creating a deep agent in LangChain?

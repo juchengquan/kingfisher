@@ -641,6 +641,17 @@ def test_the_memory_guidelines_promise_nothing_past_the_session(cfg, session_dir
     assert [line for line in theirs_only if line in sent] == []
 
 
+def test_the_memory_guidelines_never_show_keeping_who_the_user_is():
+    """deepagents' first example saved a user's email address, which a deployment telling
+    its agent who the user is would then find kept in the session's memory file."""
+    told = memory_guidelines(None, DEFAULT_LAYOUT)
+    saved = [line for line in told.splitlines() if "remembers that" in line]
+
+    assert saved, "no example saves anything, so this asserts nothing"
+    assert [line for line in saved if "email" in line or "@" in line] == []
+    assert "Never store details that identify the user" in told
+
+
 def test_the_memory_block_keeps_a_cache_breakpoint_of_its_own(cfg, session_dir):
     """Kingfisher's `MemoryMiddleware` passed without `memory=` lands ahead of the static
     prompt's breakpoint, so every edit to the memory file costs the whole prompt its cache.

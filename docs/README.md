@@ -79,8 +79,8 @@ slices land.
   landed; the rest wait on one live Anthropic call each.
 - [Prompts that follow the caller](design/2026-10-23-prompts-that-follow-the-caller.md)
   — telling an agent today's date, who the user is, and what the sources the caller
-  selected need said, each where its lifetime puts it. Its first slice, slots in
-  `system_prompt`, has landed.
+  selected need said, each where its lifetime puts it. Slots in `system_prompt` and
+  the memory wording have landed.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,

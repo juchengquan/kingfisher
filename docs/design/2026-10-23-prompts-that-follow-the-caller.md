@@ -1,6 +1,6 @@
 # Prompts that follow the caller
 
-**Status:** proposed; its first slice, slots, has landed.
+**Status:** proposed; slices 1 and 4 have landed.
 **Date:** 2026-10-23.
 **Occasion:** a deployment needs to tell its agents three things kingfisher gives it no
 place for: today's date, who the user is, and wording that depends on which sources the
@@ -200,9 +200,9 @@ adds its key to it.
    `Caller`, `Told`, the request's `context`, `today`, `receives` and its startup check; the
    sentence ahead of labelled text. `ports.md`'s section is rewritten.
 3. **The caller on `ToolContext`.** `tools.md` gains how a tool reads it.
-4. **Memory wording.** `memory_guidelines.md`'s first example saves a user's email address,
-   which the sentence in slice 2 tells the model not to do. Replace it with an example of
-   a preference.
+4. **Memory wording.** Built: the first example saves a stated convention, and the guidelines
+   tell the model never to store details identifying the user. Recorded in `decisions.md`
+   under *Nor does it keep who the user is*.
 
 ## Not measured
 
