@@ -325,6 +325,21 @@ def test_a_reply_stripped_to_its_tool_calls_still_goes():
     assert "SIGNED" not in json.dumps(payload)
 
 
+def test_a_reply_naming_no_model_is_not_the_signer_of_a_model_naming_none():
+    """An unrecorded reply the server named no model for, sent to a model built outside
+    the catalogue that reports no id either, matched it as `None == None`, and its thinking
+    went on to a model nothing showed had signed it."""
+    nowhere = {"endpoint": None, "address": None, "model": None}
+    request = ModelRequest(
+        model=ChatAnthropic(model="fake-model", api_key="x"),
+        messages=[HumanMessage("first"), _reply(), HumanMessage("second")],
+    )
+
+    kept = kept_for(request, nowhere)
+
+    assert [block["type"] for block in kept.messages[1].content] == ["text"]
+
+
 def test_a_request_with_nothing_to_take_out_is_sent_as_it_came():
     """Rebuilt for nothing, the request would differ from what every middleware inside it
     expects to have been handed."""

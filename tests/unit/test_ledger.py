@@ -29,6 +29,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorded import summary
 from kingfisher.core.agent.middlewares.recorder import (
+    PREVIEW_CHARS,
     RecorderMiddleware,
     made_together,
 )
@@ -1570,7 +1571,17 @@ def wide_rows() -> str:
     return "\\n".join(f"wide {n:02d} " + "x" * 3_000 + f" end {n:02d}" for n in range(40))
 
 
-TOOLS = [one_line, wide_rows]
+def short_lines() -> str:
+    """Return 45,000 lines of one character each."""
+    return "x\\n" * 45_000
+
+
+def blank_lines() -> str:
+    """Return 90,000 empty lines and one more."""
+    return "\\n" * 90_000 + "end"
+
+
+TOOLS = [one_line, wide_rows, short_lines, blank_lines]
 '''
 
 
@@ -1603,6 +1614,20 @@ def test_a_result_whose_every_line_is_too_wide_keeps_its_first_and_last(ledgered
     assert " end 39\nfull result: " in shown, "the last line's end was not shown"
     assert "... [38 lines truncated] ..." in shown, "the two cut lines were counted as lost"
     assert shown.count("characters truncated]") == 2
+
+
+@pytest.mark.parametrize("tool", ["short_lines", "blank_lines"])
+def test_a_preview_of_short_lines_is_no_longer_than_one_of_long_ones(ledgered, tool):
+    """The preview's budget counted each line and not its newline, so a blank line cost
+    nothing: 90,000 of them went to the model whole, and short lines at twice the size.
+    """
+    (tools_dir(ledgered) / "wide.py").write_text(WIDE, encoding="utf-8")
+
+    _run(ledgered, _calls((tool, {}, "c1")), AIMessage(content="done"))
+
+    shown = _handed("c1").text
+    assert "lines truncated]" in shown, "the control: nothing was left out"
+    assert len(shown) <= PREVIEW_CHARS + 200, len(shown)
 
 
 def test_the_id_outlasts_the_preview_of_a_result_made_of_blocks(ledgered):

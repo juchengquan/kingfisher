@@ -934,42 +934,42 @@ def test_an_unseen_result_names_only_a_tool_its_graph_holds():
     assert _of(after, found).content.endswith("too long for it; call grep again narrowed")
 
 
-def test_a_second_refusal_hands_deepagents_the_first():
+def test_a_second_refusal_hands_deepagents_the_first(way):
     """One retry: refused again, clearing can do no more, and deepagents is handed what it
     would have been handed without it, to summarise as before."""
     talk, _, _ = _latest_heavy()
     first, second = _too_long(), _too_long()
 
-    heard, raised = _overflowing(talk, first, second)
+    heard, raised = _overflowing(talk, first, second, way=way)
 
     assert raised is first
     assert len(heard) == 2
 
 
-def test_a_retry_failing_otherwise_raises_its_own_error():
+def test_a_retry_failing_otherwise_raises_its_own_error(way):
     """A retry refused for something else -- a rate limit, a dropped connection -- is that
     failure, which the turn reports as it would any other; the refusal for length is past."""
     talk, _, _ = _latest_heavy()
     other = BadRequestError("tools.0: invalid schema")
 
-    _, raised = _overflowing(talk, _too_long(), other)
+    _, raised = _overflowing(talk, _too_long(), other, way=way)
 
     assert raised is other
 
 
-def test_an_error_not_about_length_is_never_asked_again():
+def test_an_error_not_about_length_is_never_asked_again(way):
     """A 400 for anything else, or an error with no status, is not the conversation's
     size: asked again, it fails again and the turn spends a model call on it."""
     for error in (BadRequestError("tools.0: invalid schema"), RuntimeError("prompt is too long")):
         talk, _, _ = _latest_heavy()
 
-        heard, raised = _overflowing(talk, error)
+        heard, raised = _overflowing(talk, error, way=way)
 
         assert raised is error
         assert len(heard) == 1
 
 
-def test_with_nothing_left_to_clear_the_refusal_is_handed_on_unasked():
+def test_with_nothing_left_to_clear_the_refusal_is_handed_on_unasked(way):
     """A refusal on a conversation already all handles: a retry would send the same
     request, and a handle is never cleared again."""
     talk, _, _ = _latest_heavy()
@@ -977,7 +977,7 @@ def test_with_nothing_left_to_clear_the_refusal_is_handed_on_unasked():
     talk.messages = _applied(talk.messages, _update(update))
     refusal = _too_long()
 
-    heard, raised = _overflowing(talk, refusal)
+    heard, raised = _overflowing(talk, refusal, way=way)
 
     assert raised is refusal
     assert len(heard) == 1
