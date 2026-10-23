@@ -1204,7 +1204,7 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     for absent in ("core.access.NoSuchClass", "core.definitions.skills.spec.NO_SUCH"):
         assert _prose_unresolved(f"`{absent}`") == [absent], absent
     # And a lazy package's exports exist though only `__getattr__` makes them.
-    assert _prose_unresolved("`kingfisher.plugins.Plugins`, `core.access.Capabilities`") == []
+    assert _prose_unresolved("`kingfisher.plugins.LocalSessions`, `core.access.Capabilities`") == []
     # A class is not its module's file, though a case-insensitive disk finds one for it:
     # without this the rule above passed on macOS in exactly the state Linux failed.
     assert _module_file("core.access.Capabilities") is None
@@ -2133,9 +2133,6 @@ WITNESSES: dict[str, dict[str, str]] = {
         # The shipped two, public so a factory adding a third can extend them rather
         # than reimplement them; no page writes the name out.
         "WIRE_FORMATS": "embedder",
-        # What `KINGFISHER_PLUGINS` returns, which `configuration.md` tells a deployment
-        # to build in a module of its own.
-        "Plugins": "document",
         # `ports.md` has a deployment whose shell is not kingfisher's say what it sees,
         # on its runner or on its own sandbox; nothing here has a shell of that kind.
         "ShellPrompt": "document",
@@ -5206,13 +5203,13 @@ PROSE_ATTR_GONE: dict[str, frozenset[str]] = {
         "Config.shell_path_extra", "Config.shell_sandbox", "Endpoint.adapter",
         "Kingfisher.agent_named",
         "Kingfisher.artifact", "Kingfisher.held_for", "Kingfisher.pending",
-        "Kingfisher.session_size", "Plugins.threads", "Request.data",
+        "Kingfisher.session_size", "Request.data",
         "RunResult.log_path", "RunResult.session_dir", "ShellPrompt.starts_in_session",
     }),
     # What a decision removed, or declined to build.
     "docs/decisions.md": frozenset({
         "Capabilities.including", "Config.paths", "Config.shell",
-        "Kingfisher.remember_agent", "Plugins.threads", "Request.input_refs",
+        "Kingfisher.remember_agent", "Request.input_refs",
         "Request.skill_refs", "ShellPrompt.starts_in_session",
     }),
     # The wrong citations this rule was written against, quoted as such.

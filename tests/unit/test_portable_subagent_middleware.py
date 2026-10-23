@@ -17,7 +17,7 @@ from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.subagents.spec import RunOn, declared
-from kingfisher.plugins import AgentsMiddlewares, LocalSessions, Plugins, backend_at
+from kingfisher.plugins import AgentsMiddlewares, LocalSessions, backend_at
 from tests.conftest import (
     EVERY_TOOL,
     FakeToolCallingModel,
@@ -267,15 +267,16 @@ def test_the_default_answers_the_agents_own():
 
 def test_the_deployments_plugin_reaches_every_turn(scripted):
     """A plugin `Kingfisher` held and never handed to the build would leave every portable
-    subagent on the default, whatever the deployment wired. Through `Plugins`, as the
+    subagent on the default, whatever the deployment wired. As a keyword, as embedding code
     command hands it."""
     _write(scripted, "surveyor.py", PORTABLE)
     an_agent(scripted, middlewares="[audit]", subagents="[surveyor]", **EVERY_TOOL)
     Scripted.script.append(AIMessage("done"))
     asking = Answering()
-    wiring = Plugins(subagent_middlewares=asking).keywords()
 
-    Kingfisher(scripted, sessions=LocalSessions(), middlewares=REGISTRY, **wiring).run(
+    Kingfisher(
+        scripted, sessions=LocalSessions(), middlewares=REGISTRY, subagent_middlewares=asking
+    ).run(
         Request("go", agent="only", session_id=start(scripted, "s"))
     )
 

@@ -1,17 +1,14 @@
 """A `TurnInstructions` telling every graph of a turn today's date, in the caller's timezone,
 and who it is working with.
 
-In code, `Kingfisher(..., turn_instructions=DeskInstructions())`; for the command, from the
-checkout's root, `PYTHONPATH=. KINGFISHER_PLUGINS=assets.plugins.desk:build_plugins`. It
-reads the request's `context`: `tz`, an IANA zone name, and `name` and `team`.
+For code that builds its own `Kingfisher`: `Kingfisher(..., turn_instructions=DeskInstructions())`.
+It reads the request's `context`: `tz`, an IANA zone name, and `name` and `team`.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
-from kingfisher.plugins import Plugins
 
 if TYPE_CHECKING:
     from kingfisher import Caller
@@ -38,7 +35,3 @@ def _zone(name: str) -> ZoneInfo:
     except (ZoneInfoNotFoundError, ValueError):
         return ZoneInfo("UTC")
 
-
-def build_plugins() -> Plugins:
-    """What `KINGFISHER_PLUGINS` names."""
-    return Plugins(turn_instructions=DeskInstructions())

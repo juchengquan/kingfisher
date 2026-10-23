@@ -34,7 +34,7 @@ from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
-from kingfisher.plugins import LocalSessions, Plugins, ReturnedPdf
+from kingfisher.plugins import LocalSessions, ReturnedPdf
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
     EVERY_TOOL,
@@ -847,7 +847,7 @@ def test_a_plugin_handing_over_nothing_leaves_kingfishers_verdict(
 
 def test_every_graph_kingfisher_builds_asks_the_deployments_plugin(scripted):
     """A plugin the agent asked and its subagents did not left a declared subagent's PDFs,
-    and `general-purpose`'s, judged by size alone. Through `Plugins`, as the command hands
+    and `general-purpose`'s, judged by size alone. As a keyword, as embedding code hands
     it."""
     subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
     (subagents_dir(scripted) / "helper.yaml").write_text(HELPER, encoding="utf-8")
@@ -869,9 +869,8 @@ def test_every_graph_kingfisher_builds_asks_the_deployments_plugin(scripted):
         AIMessage("done"),
     ])
     asking = _Asking()
-    wiring = Plugins(pdf_attachments=asking).keywords()
 
-    Kingfisher(scripted, sessions=LocalSessions(), **wiring).run(
+    Kingfisher(scripted, sessions=LocalSessions(), pdf_attachments=asking).run(
         Request("go", agent="only", session_id="s")
     )
 

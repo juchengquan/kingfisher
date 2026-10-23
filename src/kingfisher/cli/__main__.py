@@ -477,23 +477,23 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _configured(cfg: Config, *, log: Path | None = None) -> Kingfisher:
-    """The `Kingfisher` a verb builds, with the sessions and plugins its settings name.
-
-    `--log` replaces any run events `KINGFISHER_PLUGINS` names: it is the narrower ask.
-    """
+    """The `Kingfisher` a verb builds, with the sessions its settings name, the command's own
+    turn text, and `--log`'s run events where it was given."""
     # Here, not at module scope: `Kingfisher` loads deepagents, and `seed`, `list` and
     # `doctor` never build one.
     from kingfisher import Kingfisher  # noqa: PLC0415
 
     from .configured import (  # noqa: PLC0415
-        configured_plugins,
+        CommandTurnInstructions,
         configured_sessions,
     )
 
-    wiring = configured_plugins().keywords()
-    if (kept := _kept_in(log)) is not None:
-        wiring["run_events"] = kept
-    return Kingfisher(cfg, sessions=configured_sessions(), **wiring)
+    return Kingfisher(
+        cfg,
+        sessions=configured_sessions(),
+        turn_instructions=CommandTurnInstructions(),
+        run_events=_kept_in(log),
+    )
 
 
 def _kept_in(log: Path | None) -> JsonlRunEvents | None:

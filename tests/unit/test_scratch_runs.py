@@ -38,7 +38,7 @@ from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.core.interfaces import MAX_SCRATCH_BYTES, MAX_SCRATCH_OUTPUTS, CommandResult
 from kingfisher.core.session import runtime
-from kingfisher.plugins import LocalSessions, NoScratchRunLimit, Plugins, backend_at
+from kingfisher.plugins import LocalSessions, NoScratchRunLimit, backend_at
 from kingfisher.plugins.sessions.scratch import ScratchFolder
 from tests.conftest import (
     EVERY_TOOL,
@@ -749,9 +749,8 @@ def test_the_command_hands_the_limit_to_every_turn(scripted, refused, answer):
     _a_tool(scripted)
     an_agent(scripted, **EVERY_TOOL)
     Scripted.script.extend([_calls("shout", text="hi"), AIMessage(content="done")])
-    wiring = Plugins(scratch_run_limit=_Limit(refused)).keywords()
 
-    Kingfisher(scripted, sessions=LocalSessions(), **wiring).run(
+    Kingfisher(scripted, sessions=LocalSessions(), scratch_run_limit=_Limit(refused)).run(
         Request("go", agent="only", session_id="s")
     )
 

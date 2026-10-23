@@ -27,12 +27,11 @@ kingfisher = Kingfisher(cfg, sessions=LocalSessions(runner=my_runner), run_event
 **As a setting**, for the command line only. A constructor argument reaches the
 construction site you control, and the `kingfisher` command builds its own with
 nowhere to point it. `KINGFISHER_SESSIONS` is where every verb but `seed` is told
-the sessions, and `KINGFISHER_PLUGINS` the rest, as a
-`kingfisher.plugins.Plugins` whose fields are the keywords above:
+the sessions, and the only port the command takes: it runs every other one as
+kingfisher's own, and code that needs another builds its own `Kingfisher`.
 
 ```
 KINGFISHER_SESSIONS=mycompany.sessions:build_sessions
-KINGFISHER_PLUGINS=mycompany.plugins:build_plugins
 ```
 
 It names `module:name` — something **callable with no arguments** that returns
@@ -284,8 +283,7 @@ class ArchiveUnusedResults:
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(), unused_results=ArchiveUnusedResults(archive))
 ```
 
-For the command, return it from your `KINGFISHER_PLUGINS` factory as
-`Plugins(unused_results=ArchiveUnusedResults(archive))`. Left out, it is
+The command does not take it. Left out, it is
 `DeleteUnusedResults`, which removes every file it is handed.
 
 `settle` is asked at the end of a turn, once the ledger and the conversation are
@@ -344,8 +342,7 @@ class DeskInstructions:
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(), turn_instructions=DeskInstructions())
 ```
 
-For the command, return it from your `KINGFISHER_PLUGINS` factory as
-`Plugins(turn_instructions=DeskInstructions())`. Left out, no turn is told anything of
+The command does not take it. Left out, no turn is told anything of
 its own.
 
 Things to know:
@@ -407,8 +404,7 @@ class AtMostTwentyPages:
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(), pdf_attachments=AtMostTwentyPages())
 ```
 
-For the command, return it from your `KINGFISHER_PLUGINS` factory as
-`Plugins(pdf_attachments=AtMostTwentyPages())`. Left out, every PDF is judged by its size
+The command does not take it. Left out, every PDF is judged by its size
 alone. pypdf is yours to install: this repository's `agent` group has it for the shipped
 PDF tools, and the package does not depend on it.
 
@@ -462,8 +458,7 @@ class NoneOfTheAgents:
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(), subagent_middlewares=NoneOfTheAgents())
 ```
 
-For the command, return it from your `KINGFISHER_PLUGINS` factory as
-`Plugins(subagent_middlewares=NoneOfTheAgents())`. `names` is told the subagent's name,
+The command does not take it. `names` is told the subagent's name,
 the agent's, and the agent's middleware, and returns which of them the subagent runs.
 Kingfisher's own, `AgentsMiddlewares`, returns `middlewares`.
 
@@ -507,8 +502,7 @@ class NoRunsForResearch:
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(), scratch_run_limit=NoRunsForResearch())
 ```
 
-For the command, return it from your `KINGFISHER_PLUGINS` factory as
-`Plugins(scratch_run_limit=NoRunsForResearch())`. Left out, it is `NoScratchRunLimit`,
+The command does not take it. Left out, it is `NoScratchRunLimit`,
 which allows every graph kingfisher would hand a run.
 
 `allows` is told the graph's `name` and its `kind`: `"agent"` with the agent's name,

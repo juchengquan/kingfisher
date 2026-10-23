@@ -1734,17 +1734,6 @@ def _shipped_definitions(shipped):
     return Definitions.from_roots(definition_roots_for(shipped)).warm()
 
 
-def test_the_plugin_factory_the_docs_name_builds_the_hook():
-    """`KINGFISHER_PLUGINS=assets.plugins.desk:build_plugins` is what the assets README
-    tells a reader to write; driven through the reader the command uses."""
-    from assets.plugins.desk import DeskInstructions
-    from kingfisher.cli.configured import configured_plugins
-
-    plugins = configured_plugins({"KINGFISHER_PLUGINS": "assets.plugins.desk:build_plugins"})
-
-    assert isinstance(plugins.turn_instructions, DeskInstructions)
-
-
 def _caller(started: str, **context: str):
     from datetime import datetime
 
