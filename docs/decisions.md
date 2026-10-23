@@ -1572,7 +1572,10 @@ refuses that start. Named in `shell_confinement`, not `authored_files_for`, beca
 mapping also decides what `ensure_layout` scaffolds and a keys file must never be written
 for a deployment that did not ask. Linux needs nothing: its writable set is the session's
 own directories. `protected_files` exists only in the macOS profile, where the whole
-workspace is writable. *(2026-10-13, from an architecture review.)*
+workspace is writable. *(2026-10-13, from an architecture review.)* *The workspace's
+retired `PROMPT.md` joins them: a start that finds one refuses, and one session's shell
+wrote it, where the profile grants the whole workspace, and stopped the deployment for
+everyone. Linux needs nothing, for the same reason. (2026-10-23.)*
 
 **A model's window is declared under `extra: profile:`, not as a key of its own.**
 `profile` is a constructor argument of every langchain chat model and `extra` already

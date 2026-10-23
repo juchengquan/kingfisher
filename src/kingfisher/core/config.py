@@ -391,6 +391,12 @@ class Config:
         return self.workspace / HARNESS_OWNED
 
     @property
+    def retired_prompt(self) -> Path:
+        """Where the house rules were kept before `INSTRUCTIONS.md`. A start that finds a file
+        here refuses, so the agent's shell must not be able to make one."""
+        return self.workspace / "PROMPT.md"
+
+    @property
     def skills_dir(self) -> Path:
         """The skills catalogue. Shared by every session this workspace serves."""
         return self.definitions / "skills"

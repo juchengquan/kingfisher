@@ -22,6 +22,7 @@ from typing import Any, TypedDict
 
 import pytest
 
+from kingfisher.core.agent.prompting import refuse_a_workspace_prompt
 from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import CommandResult
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, HISTORY, INPUTS_ROUTE, Layout
@@ -1172,6 +1173,26 @@ def test_the_shell_cannot_change_the_keys_file(cfg, session_dir):
     assert keys.read_text(encoding="utf-8") == "minimax: sk-as-written\n"
     # The control, as for the files above: the same commands against a file beside it,
     # so a pass here is the profile refusing rather than the commands never running.
+    assert beside.read_text(encoding="utf-8") == "z"
+
+
+@macos
+def test_the_shell_cannot_plant_the_retired_prompt_that_refuses_every_start(cfg, session_dir):
+    """The profile grants the whole workspace, so one session's shell wrote
+    `<workspace>/PROMPT.md` and every later start of the deployment was refused. Made
+    outright and by rename, through the session's relative path as a model would write it;
+    the file beside it is the control."""
+    stale = cfg.retired_prompt
+    beside = cfg.workspace / "NOTES.md"
+    scratch = session_dir / "outputs" / "swap"
+    backend = backend_at(cfg, session_dir)
+
+    backend.execute('printf x > "$KINGFISHER_SESSION_ROOT/../../PROMPT.md"')
+    backend.execute(f'printf y > "{scratch}" && mv "{scratch}" "{stale}"')
+    backend.execute(f'printf z > "{beside}"')
+
+    assert not stale.exists()
+    refuse_a_workspace_prompt(cfg)
     assert beside.read_text(encoding="utf-8") == "z"
 
 

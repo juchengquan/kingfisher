@@ -276,8 +276,10 @@ def shell_confinement(
         definitions=tuple(cfg.catalogue_roots.values()),
         # The keys file joins here, not in `authored_files`, which is the definitions
         # folder's: a shell that edits it picks the key the next start sends, or refuses
-        # the start. macOS only: the Linux fences grant nothing above the session.
-        authored=(*cfg.authored_files.values(), *_keys_file(cfg)),
+        # the start. macOS only: the Linux fences grant nothing above the session. And the
+        # retired `PROMPT.md`, whose presence refuses every start: one session's shell
+        # writing it, where the profile grants the whole workspace, stopped the deployment.
+        authored=(*cfg.authored_files.values(), *_keys_file(cfg), cfg.retired_prompt),
         # So a renamed inputs folder and saved results are the ones the profile denies.
         layout=cfg.layout,
     )

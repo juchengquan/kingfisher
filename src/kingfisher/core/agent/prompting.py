@@ -408,7 +408,7 @@ def refuse_a_workspace_prompt(cfg: Config) -> None:
 
     Ignored, its house rules would stop reaching every agent with nothing said.
     """
-    stale = cfg.workspace / "PROMPT.md"
+    stale = cfg.retired_prompt
     if stale.is_file():
         msg = (
             f"{stale} is read by nothing now: move what it says to "

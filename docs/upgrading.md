@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The shell may not write the workspace's retired `PROMPT.md`, after #9999
+
+- **On macOS the profile denies `<workspace>/PROMPT.md`**, beside `models.yaml` and the keys
+  file. A start that finds that file refuses, so one session's shell writing it --
+  `echo x > "$KINGFISHER_SESSION_ROOT/../../PROMPT.md"`, which the profile allowed --
+  refused every later start of the deployment. Such a command now gets `Operation not
+  permitted`. The Linux fences grant nothing above the session and needed no change.
+- **`Config.retired_prompt` is new**: that path, which the start's own check reads too.
+
 ## The memory scaffold writes through no link, after #9999
 
 - **`memory/AGENTS.md` is filled only when it is missing or an empty regular file.** It was
