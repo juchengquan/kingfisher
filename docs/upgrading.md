@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `doctor` and `list` fail on a tool name nothing offers, after #1085
+
+- **A definition naming a tool its line does not offer now exits 1.** An agent's or
+  subagent's `tools:` naming a tool no file defines, or a `builtin_tools:` entry that is
+  not a built-in, passed both commands and was refused by every run reaching it. `doctor`
+  fails on its new *tool names* row and `kingfisher list` prints *tool names matching
+  nothing on offer*; `--json` carries `unresolved_tools`. Fix the name as `kingfisher list`
+  spells it, move it to the line it belongs on, or remove it. Nothing that ran before
+  stops running: startup still accepts it.
+
 ## `TurnInstructions` answers one string, after #1083
 
 - **`text(cfg, session_id, caller)` returns a `str`**, sent to every graph the turn builds
