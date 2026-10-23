@@ -34,7 +34,7 @@ def configured_sessions(environ: Mapping[str, str] | None = None) -> Sessions:
 
 
 class CommandTurnInstructions:
-    """The command's `TurnInstructions`, sending every graph the text it was given."""
+    """The command's `TurnInstructions`, sending every graph what `--tell` gave it."""
 
     def __init__(self, said: str = "") -> None:
         self.said = said

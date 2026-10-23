@@ -60,6 +60,7 @@ def _args(**over: Any) -> argparse.Namespace:
             "extra_datazones": (),
             "delete_session": False,
             "log": None,
+            "tell": None,
             **over,
         }
     )
@@ -169,6 +170,7 @@ def _decide_args(**over: Any) -> argparse.Namespace:
             "extra_datazones": (),
             "delete_session": False,
             "log": None,
+            "tell": None,
             **over,
         }
     )
@@ -321,7 +323,12 @@ def _paused_at_the_command_line(cfg, monkeypatch, tmp_path) -> None:
 
 @pytest.mark.parametrize(
     "given",
-    [("--agent", "operator"), ("--delete-session",), ("--log", "kept/turns.jsonl")],
+    [
+        ("--agent", "operator"),
+        ("--delete-session",),
+        ("--log", "kept/turns.jsonl"),
+        ("--tell", "Today is Friday."),
+    ],
     ids=lambda given: given[0],
 )
 def test_the_listing_refuses_a_flag_only_an_answer_uses(
@@ -578,11 +585,49 @@ def test_the_command_hands_every_service_its_own_turn_text_and_logs_where_asked(
 
     cli._run(_args())
     cli._run(_args(log=tmp_path / "turns.jsonl"))
+    cli._run(_args(tell="Today is Friday."))
+    cli._decide(_decide_args(approve=["c1"], tell="Still Friday."))
 
-    plain, logged = handed
+    plain, logged, told, resumed = handed
     assert isinstance(plain["turn_instructions"], CommandTurnInstructions)
+    assert plain["turn_instructions"].said == ""
     assert plain["run_events"] is None, "kingfisher's own, as nothing else was asked for"
     assert isinstance(logged["run_events"], JsonlRunEvents)
+    assert told["turn_instructions"].said == "Today is Friday."
+    assert resumed["turn_instructions"].said == "Still Friday."
+
+
+def test_tell_reaches_every_call_the_turn_makes(scripted, monkeypatch, capsys):
+    """Driven through the command's own handler with a real `Kingfisher`: a flag the parser
+    took and the build never saw would leave the model told nothing."""
+    from langchain_core.messages import AIMessage
+
+    from kingfisher.plugins import LocalSessions
+    from tests.conftest import EVERY_TOOL, an_agent
+    from tests.unit.scripted import Scripted
+
+    an_agent(scripted, **EVERY_TOOL)
+    monkeypatch.setattr(cli, "config_from_env", lambda: scripted)
+    monkeypatch.setattr(
+        importlib.import_module("kingfisher.cli.configured"), "configured_sessions", LocalSessions
+    )
+    Scripted.script.extend([AIMessage(content="done")])
+
+    code = cli._run(_args(agent="only", session="s", tell="Today is Friday 23 October 2026."))
+
+    assert code == 0, capsys.readouterr().err
+    assert Scripted.heard, "no call was made, so nothing was checked"
+    told = "Today is Friday 23 October 2026."
+    assert all(told in str(call[0].content) for call in Scripted.heard)
+
+
+@pytest.mark.parametrize("tell", ["", "   "])
+def test_an_empty_tell_is_refused(tell, monkeypatch, capsys):
+    """Sent, it would add a blank block to every call; dropped, a flag that did nothing."""
+    monkeypatch.setattr(cli, "config_from_env", lambda: pytest.fail("ran past the refusal"))
+
+    assert cli._run(_args(tell=tell)) == 2
+    assert "--tell is empty" in capsys.readouterr().err
 
 
 TWO_WAITING = RunResult(

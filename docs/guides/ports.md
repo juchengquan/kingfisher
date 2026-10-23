@@ -342,7 +342,8 @@ class DeskInstructions:
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(), turn_instructions=DeskInstructions())
 ```
 
-The command does not take it. Left out, no turn is told anything of
+The command does not take it: `kingfisher run --tell TEXT`, and `decide --tell TEXT`
+for a resumed turn, send TEXT the same way. Left out, no turn is told anything of
 its own.
 
 Things to know:
