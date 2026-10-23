@@ -65,15 +65,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kingfisher",
         description=(
-            "Fill a kingfisher workspace, run a task in it, see what is in it, "
-            "and check it over."
+            "Seed a definitions folder, run a task against it, see what it "
+            "offers, and check it over."
         ),
     )
     # Not required, so bare `kingfisher` prints help rather than argparse's usage error.
     sub = parser.add_subparsers(dest="command")
     seeding = sub.add_parser(
         "seed",
-        help="copy definitions into the workspace",
+        help="copy definitions into the definitions folder",
         description=(
             "Copies definitions into this deployment's catalogues, from the "
             "directory KINGFISHER_ASSETS names or the one you pass. Nothing "
@@ -90,16 +90,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="seed from this directory instead of the one KINGFISHER_ASSETS names",
     )
     # Off by default: a definition naming middleware is refused when built, so a fresh
-    # workspace would be filled with files that cannot run.
+    # definitions folder would be filled with files that cannot run.
     seeding.add_argument(
         "--all",
         dest="everything",
         action="store_true",
         help=(
             "also copy definitions held back by default: the ones naming "
-            "middleware, which a workspace that has not registered those names "
+            "middleware, which a deployment that has not registered those names "
             "cannot build, and the ones carrying a lock, which switches on access "
-            "control in this workspace"
+            "control for this deployment"
         ),
     )
     doing = sub.add_parser(
@@ -277,7 +277,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     listing = sub.add_parser(
         "list",
-        help="show what this workspace offers a request",
+        help="show what the definitions offer a request",
         description=(
             "Every name a request may activate here, per grant, with where each "
             "one came from. Exits non-zero if anything here will not load, if a\n"
@@ -782,7 +782,7 @@ def _older_than(raw: str) -> float:
 
 
 def _list(*, as_document: bool = False, held: Held | None = None) -> int:
-    """Print what the workspace offers."""
+    """Print what the definitions offer."""
     cfg = config_from_env()
     # `UNSCOPED` and no `--as` are the same view: a listing is read-only, run on the host
     # with the policy in front of its reader, so it is exempt from a turn's refusal.

@@ -1,4 +1,4 @@
-"""Subagents: registering what a workspace's `subagents/` directory provides."""
+"""Subagents: registering what the definitions folder's `subagents/` directory provides."""
 
 #: The name deepagents gives the tool that dispatches a subagent. Not in
 #: `core.agent.kinds.subagents`, the obvious home: importing that loads the agent runtime,

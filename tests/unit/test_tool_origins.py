@@ -137,7 +137,7 @@ def test_a_builtin_is_listed_without_a_file(cfg):
 
 
 def test_an_empty_workspace_says_so_rather_than_printing_nothing(cfg):
-    """A refusal that trails off after "this workspace offers" reads as a bug in
+    """A refusal that trails off after "the definitions offer" reads as a bug in
     kingfisher rather than an empty catalogue.
     """
     assert offered({}, []) == "  (none)"

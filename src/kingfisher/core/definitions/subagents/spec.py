@@ -40,7 +40,7 @@ class RunOn:
 
 @dataclass(frozen=True, kw_only=True)
 class SubagentSpec(SpecBase):
-    """One subagent, as the workspace defines it."""
+    """One subagent, as its definition file describes it."""
 
     #: The `tools:` and `skills:` entries written `source: bundled`, by half: what this
     #: subagent takes from its own folder. Kept out of `tools` and `skills` because no

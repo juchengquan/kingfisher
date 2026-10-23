@@ -49,7 +49,7 @@ def registered_tools(graph: Any) -> tuple[str, ...] | None:
 def offered_tool_names(
     cfg: Config, *, catalogue: Definitions | None = None
 ) -> tuple[str, ...]:
-    """The tools this workspace defines, as a grant would write them."""
+    """The tools the definitions offer, as a grant would write them."""
     found = (catalogue or Definitions.from_config(cfg)).tools.found
     return tuple(sorted(Offering.of(found).offered))
 
@@ -140,7 +140,7 @@ def bundled_tools_in(catalogue: Definitions) -> tuple[tuple[FoundTool, str, str]
     """Every tool a bundle holds that loads, with where a rename would go and whose it is.
 
     Every bundle the catalogue holds, not only the subagents a request activates: a name
-    that replaces a built-in is a fact about the workspace, and a deployment would find
+    that replaces a built-in is a fact about the definitions, and a deployment would find
     out from whichever request came first otherwise.
     """
     # Neither failure is raised here: it would land on the catalogue's `tools` row and send

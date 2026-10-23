@@ -41,7 +41,7 @@ SKILL = "---\nname: sampling\ndescription: How to sample a file.\n---\n\n# Sampl
 
 
 def write_portable(cfg, *, extra: str = "", with_skills: bool = False) -> None:
-    """A workspace whose `surveyor` is declared in Python and carries its own."""
+    """Definitions whose `surveyor` is declared in Python and carries its own."""
     root = cfg.definitions / "subagents"
     root.mkdir(parents=True, exist_ok=True)
     if with_skills:
@@ -465,7 +465,7 @@ def test_the_listing_says_a_carried_tool_is_not_in_this_workspace(
 ):
     """Both shapes print their private tools the same way, and the names alone do not
     say where the code is. A tool installed by pip that reads exactly like a file in
-    this workspace is the thing an operator cannot audit -- driven against the shipped
+    the definitions folder is the thing an operator cannot audit -- driven against the shipped
     catalogue rather than a fixture, so it is the output a reader actually gets.
     """
     from kingfisher.cli.listing import render

@@ -33,7 +33,7 @@ class Request:
     """One request: the turn boundary made explicit."""
 
     task: str
-    #: A name from the workspace's `agents/`, never a definition, so an untrusted caller
+    #: A name from the definitions folder's `agents/`, never a definition, so an untrusted caller
     #: can activate what exists and invent nothing. Refused downstream rather than
     #: defaulted: the agent decides where every prompt goes and what it costs.
     agent: str | None = None

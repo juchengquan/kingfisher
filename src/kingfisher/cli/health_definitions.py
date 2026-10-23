@@ -1,4 +1,4 @@
-"""doctor's checks on what the workspace defines, read off one `Inventory`."""
+"""doctor's checks on the definitions, read off one `Inventory`."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
             else "built-in set unknown -- see middlewares"
         )
         detail = (
-            f"{kind.defined} in the workspace, {built_in}"
+            f"{kind.defined} offered, {built_in}"
             if kind.name == "tools"
             else f"{kind.defined} defined"
         )
@@ -179,7 +179,7 @@ def _subagent_tools(found: Inventory) -> Iterator[Check]:
         yield Check(
             "subagent tools",
             "ok",
-            f"carried with the definition rather than kept in this workspace: "
+            f"carried with the definition rather than kept in the shared catalogue: "
             f"{', '.join(found.carried_bundles)}",
         )
 

@@ -91,7 +91,7 @@ def test_a_present_but_empty_field_says_so_rather_than_missing():
 
 def test_leaving_the_tool_fields_out_grants_none_of_them():
     """Read as all, a forgotten line hands the agent the shell and every tool the
-    workspace gains later, and nothing on its first turn shows it.
+    definitions folder gains later, and nothing on its first turn shows it.
     """
     spec = _read(MINIMAL, "plain.yaml")
 
@@ -460,7 +460,7 @@ def test_long_entries_that_restrict_nothing_mean_what_the_list_means():
     assert mapped.declares(frozenset({"B"})).tools == listed.declares(frozenset({"B"})).tools
 
 
-# -- the starter printed when a workspace has no agent at all ----------------
+# -- the starter printed when the definitions offer no agent at all --------
 
 
 def test_the_starter_agent_the_refusal_prints_actually_loads(cfg):
@@ -498,7 +498,7 @@ def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
         agent_named(kf, "assistant")
 
     said = str(refused.value)
-    assert "offers none" in said
+    assert "definitions offer none" in said
     assert "name: helper" in said, "the starter is not in the refusal"
     assert "system_prompt" in said
 

@@ -17,7 +17,8 @@ same thing in every session and on every machine:
   and nothing names its path. That folder is yours to read and not to write -- it says
   what happened rather than what you made.
 
-Tools this workspace defines take these same virtual paths.
+Offered tools, the ones this deployment adds to the built-ins, take these same
+virtual paths.
 
 What you write while working goes in one of two places:
 

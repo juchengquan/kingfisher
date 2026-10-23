@@ -222,7 +222,7 @@ def test_the_refusal_names_the_subject_it_was_asked_about():
 
 # -- what a grant leaves out ----------------------------------------------
 #
-# A grant is a whitelist, so it can only mean *less* than the workspace holds,
+# A grant is a whitelist, so it can only mean *less* than the definitions offer,
 # and it said so nowhere. Measured before this existed: a caller wrote
 # "everything except execute" as the other nine names, someone later added a
 # tool, and it was refused with nothing said.
@@ -298,7 +298,7 @@ def test_a_name_that_excludes_nothing_is_refused():
 
 
 def test_the_refusal_names_what_is_actually_on_offer():
-    with pytest.raises(CapabilityError, match=r"offers \('execute', 'ls'\)"):
+    with pytest.raises(CapabilityError, match=r"definitions offer \('execute', 'ls'\)"):
         all_but(("exec",), offered=("ls", "execute"))
 
 
@@ -360,14 +360,14 @@ def test_the_refusal_says_all_four_things_a_reader_needs():
 
 
 def test_the_offered_set_is_not_claimed_to_belong_to_anyone():
-    """`offered:` rather than "this workspace offers" or "this request offers"."""
+    """`offered:` rather than "the definitions offer" or "this request offers"."""
     with pytest.raises(CapabilityError) as raised:
         refuse_unoffered(("nope",), offered=("real",), kind="tool", subject="this request")
 
     message = str(raised.value)
     assert "offered:" in message
     assert "this request offers" not in message
-    assert "workspace offers" not in message
+    assert "definitions offer" not in message
 
 
 def test_a_caller_that_can_say_more_than_names_says_it():

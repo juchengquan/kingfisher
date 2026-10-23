@@ -291,7 +291,7 @@ def test_a_workspace_whose_tools_clash_with_nothing_still_starts(cfg):
     """The control beside it: the probe has to tell a clash from a tool.
 
     Without this the refusal above passes just as well if startup refused every
-    workspace that defines a tool at all.
+    definitions folder that defines a tool at all.
     """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "fine.py").write_text(ITS_OWN_NAME, encoding="utf-8")
@@ -302,14 +302,14 @@ def test_a_workspace_whose_tools_clash_with_nothing_still_starts(cfg):
 def test_a_workspace_with_no_tools_never_assembles_the_probe(cfg, monkeypatch):
     """What keeps the cost where it belongs.
 
-    Nothing can shadow a built-in when the workspace defines no tools, so the graph
+    Nothing can shadow a built-in when the definitions offer no tools, so the graph
     is not worth compiling -- and this is the assertion that keeps that true, since
     a probe on every construction is about 10ms that most of this suite would pay
     for nothing.
     """
 
     def refuse(*_args, **_kwargs):
-        pytest.fail("the probe was assembled for a workspace with no tools")
+        pytest.fail("the probe was assembled for definitions with no tools")
 
     monkeypatch.setattr(service_module, "builtin_tool_names", refuse)
 

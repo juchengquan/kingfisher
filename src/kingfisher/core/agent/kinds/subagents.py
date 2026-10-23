@@ -193,7 +193,7 @@ def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfi
     #: What the agent stops on, as the names calls carry.
     gated: Collection[str] = (),
 ) -> dict[str, Any]:
-    """A subagent the workspace built itself, wrapped the way deepagents takes one."""
+    """A subagent its definition built itself, wrapped the way deepagents takes one."""
     model = model_object(
         spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model
     )

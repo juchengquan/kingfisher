@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 SIMILARITY = 0.7
 
 
-#: Where one `tools:` or `skills:` entry comes from: `shared` is the workspace's catalogue
+#: Where one `tools:` or `skills:` entry comes from: `shared` is the definitions folder's catalogue
 #: and what a plain name means; `bundled` is the subagent's own folder, the one place a
 #: capability can sit that an agent writing `tools: ["*"]` does not receive.
 SHARED = "shared"

@@ -1,4 +1,4 @@
-"""A subagent the workspace built itself, found on disk and handed to deepagents."""
+"""A subagent its definition built itself, found on disk and handed to deepagents."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from kingfisher.plugins import backend_at
 from tests.conftest import FAKE_KEY_VAR, FakeToolCallingModel, declared_subagents
 from tests.unit.test_gate_declaration import _agent
 
-COMPILED = '''"""A subagent the workspace assembled."""
+COMPILED = '''"""A subagent its definition assembled."""
 
 SUBAGENTS = [
     {{
@@ -121,7 +121,7 @@ def test_a_yml_file_is_refused_rather_than_skipped(cfg, name):
 
 def test_a_module_without_the_export_names_itself(cfg):
     """Refused rather than skipped, for the reason the tool loader gives: quietly
-    offering fewer than the workspace defines is the failure `CapabilityError` exists
+    offering fewer than the definitions offer is the failure `CapabilityError` exists
     to prevent, one layer down.
 
     Asserting the *wording*, not just the file and the export name. Dropping this
@@ -264,7 +264,7 @@ def test_the_two_required_keys_are_required():
 
 def test_a_compiled_declaration_naming_no_tools_is_granted_none():
     """Read as the request's every tool, a forgotten `tools` hands a graph kingfisher
-    never wraps in an allowlist every tool the workspace holds or gains later.
+    never wraps in an allowlist every tool the definitions offer or gain later.
     """
     assert declared(_entry(), "researcher.py").tools is None
 
@@ -483,7 +483,7 @@ def _tools_given(cfg, session_dir, capabilities):
     """The objects `build` was handed, which is what the graph will call.
 
     The build's return is discarded deliberately: what this reads is what the
-    workspace's own `build` recorded in `store.SEEN`, not what reached deepagents.
+    definition's own `build` recorded in `store.SEEN`, not what reached deepagents.
     """
     build_agent(
         cfg,

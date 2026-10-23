@@ -190,7 +190,7 @@ def test_every_preset_tool_loads(shipped):
 
 def test_the_preset_tools_load_where_the_agent_group_is_not_installed(shipped, monkeypatch):
     """The wheel carries neither pdfplumber nor pypdf, and one tool file that fails to
-    import refuses every tool in the workspace -- so `pdf_text` and `pdf_pages` may
+    import refuses every offered tool -- so `pdf_text` and `pdf_pages` may
     import them only when called.
     """
     monkeypatch.setitem(sys.modules, "pdfplumber", None)
@@ -914,7 +914,7 @@ def test_every_middleware_a_shipped_definition_names_is_in_the_wiring_block(ship
 
 
 def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(shipped):
-    """It stopped being the one folder a workspace could not have.
+    """It stopped being the one kind folder the definitions could not have.
 
     This asserted the opposite until 2026-09-07, on the argument that a
     middleware read out of the workspace would be code the agent can edit,
@@ -932,7 +932,7 @@ def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(ship
 
     assert set(offered.classes) == set(_documented_registry(shipped)), (
         "the directory offers different names from the wiring block beside it, so "
-        "seeding it and pasting the block would give a workspace two vocabularies"
+        "seeding it and pasting the block would give a deployment two vocabularies"
     )
 
 
@@ -1011,7 +1011,7 @@ def test_a_seeded_workspace_still_loads_once_a_policy_exists(
     capsys.readouterr()
     an_agent(cfg, "gatekeeper", source_ids="[unrelated]")
 
-    assert main(["list"]) == 0, "a seeded workspace refused to load under a policy"
+    assert main(["list"]) == 0, "seeded definitions refused to load under a policy"
 
     printed = capsys.readouterr().out
     assert "cannot load" not in printed, printed
@@ -1054,7 +1054,7 @@ def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, 
     assert "middlewares/summarize_by_count.py" in done.written
     assert (tmp_path / "middlewares" / "summarize_by_count.py").is_file()
     # Left behind for naming middleware, which is a different rule and still
-    # holds: a workspace that can *offer* one has not thereby registered it.
+    # holds: definitions that can *offer* one have not thereby registered it.
     assert "agents/general.yaml" not in done.written
 
 
@@ -1082,13 +1082,13 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
 def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     cfg, session_dir, shipped, monkeypatch
 ):
-    """`general` wrote `middlewares: ["*"]`, and a seeded workspace offers every
+    """`general` wrote `middlewares: ["*"]`, and seeded definitions offer every
     example in `middlewares/`, so the star took whatever was there -- including anything
     added later for another agent -- with neither its file nor its prompt saying so.
 
     Built from a real `seed --all`, which is how a name in a shipped file reaches a
-    workspace that resolves it. The test the star had checked it against an empty
-    registry, which is the one registry a seeded workspace never has.
+    deployment that resolves it. The test the star had checked it against an empty
+    registry, which is the one registry a seeded deployment never has.
     """
     from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository, name_of
     from kingfisher.core.definitions.seeding import seed

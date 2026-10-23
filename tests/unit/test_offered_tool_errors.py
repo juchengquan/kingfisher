@@ -144,7 +144,7 @@ from langchain_core.tools import tool
 
 @tool
 def probe_one(text: str) -> str:
-    """A tool that exists so the build has a workspace name to guard."""
+    """A tool that exists so the build has an offered name to guard."""
     return text
 
 
@@ -176,7 +176,7 @@ def test_the_build_guards_the_names_the_workspace_defined(cfg, session_dir):
 
 
 def test_a_workspace_with_no_tools_hands_back_no_exception_of_its_own(cfg, session_dir):
-    """The guard handed names when the workspace defined no tools, so some other tool's
+    """The guard handed names when the definitions offered no tools, so some other tool's
     exception became a failed result rather than its own report."""
     from kingfisher.core.agent.assembly import build_agent
 

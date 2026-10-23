@@ -1,1 +1,1 @@
-"""Tools: registering what a workspace's `tools/` directory provides."""
+"""Tools: registering what the definitions folder's `tools/` directory provides."""

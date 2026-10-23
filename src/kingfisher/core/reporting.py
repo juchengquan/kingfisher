@@ -127,7 +127,7 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning kind
     events: list[RunEvent] = []
     if unprotected:
         events.append(RunEvent(kind="protect_failed", text="; ".join(unprotected)))
-    # A grant means less than the workspace holds and says so nowhere: told here, not
+    # A grant means less than the definitions offer and says so nowhere: told here, not
     # halfway through a turn. One line per kind, as one line naming three goes unread.
     for what, names in withheld:
         events.append(

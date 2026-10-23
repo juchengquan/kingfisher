@@ -1,4 +1,4 @@
-"""What a workspace offers, as one answer instead of two half-answers."""
+"""What the definitions offer, as one answer instead of two half-answers."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ class Catalogued:
     #: What stopped the directory being read, or `None`. Never set for `skills`, which fail
     #: one at a time, into `skills_unloadable`, `skills_misplaced` and `skills_misfiled`.
     error: str | None
-    #: How many the agent can reach. Zero is a fact about the workspace, not a failure.
+    #: How many the agent can reach. Zero is a fact about the definitions, not a failure.
     defined: int
     #: Where this kind was read from, and whether that is where the configuration says.
     origin: Origin
@@ -96,7 +96,7 @@ class Catalogued:
 
 @dataclass(frozen=True)
 class Inventory:
-    """What this workspace offers right now, per kind, with where each came from."""
+    """What the definitions offer right now, per kind, with where each came from."""
 
     #: Where every part of this deployment was read from, every catalogue directory included.
     origins: Origins
@@ -126,7 +126,7 @@ class Inventory:
     #: import took the probe down. That fault is `middlewares_error`'s, so `tools_error`
     #: stays clear and this says the count is unknown rather than zero.
     builtin_tools_checked: bool = True
-    #: What the workspace defined, granted with `tools:`. A separate axis from
+    #: The offered tools, granted with `tools:`. A separate axis from
     #: `builtin_tools`: a subtraction from their union grants built-in names on this one.
     tools: tuple[str, ...] = ()
     #: Tool name -> the module or package that defined it.
@@ -189,7 +189,7 @@ class Inventory:
     #: Whether `miscounted_bundles` was asked at all; `False` is not "none".
     miscounted_bundles_checked: bool = True
 
-    #: Middleware class name -> the installed module it came from, or `""` for a workspace
+    #: Middleware class name -> the installed module it came from, or `""` for a definition
     #: file, whose `__module__` is only a name made unique.
     middlewares: Mapping[str, str] = _NOTHING
     #: A middleware module that will not import, or offers something not an
@@ -211,7 +211,7 @@ class Inventory:
     #: Catalogue tools a bundle answers for instead, by subagent: shadowing is acceptable
     #: only while visible, and nothing else says the shared one never reaches it.
     shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: Whether `shadowed` was asked at all: it needs the workspace catalogue, and one that
+    #: Whether `shadowed` was asked at all: it needs the shared catalogue, and one that
     #: did not load is not "nothing shadows".
     shadowed_checked: bool = True
     #: Subagents whose bundle arrived with the definition rather than in a folder under the
@@ -225,7 +225,7 @@ class Inventory:
     #: than holding nothing.
     orphaned_assets: tuple[str, ...] = ()
 
-    #: Subagents that are graphs the workspace built: deepagents runs one as given, so a
+    #: Subagents that are graphs their definitions built: deepagents runs one as given, so a
     #: `tools:` grant is no limit on it.
     compiled_subagents: tuple[str, ...] = ()
 
@@ -554,7 +554,7 @@ def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str] | None:
 
 
 def _middlewares(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
-    """What the workspace registers, and why it could not be read."""
+    """What the definitions register, and why it could not be read."""
     try:
         return MappingProxyType({
             name: "" if defined_in_a_workspace(cls.__module__) else cls.__module__
@@ -641,7 +641,7 @@ def _builtin_tools(
 def _tools(
     cfg: Config, resolved: Definitions
 ) -> tuple[tuple[str, ...], tuple[str, ...], Mapping[str, str], str | None, bool, str | None]:
-    """The built-in set, what the workspace adds, where each one lives, why not,
+    """The built-in set, what the definitions add, where each one lives, why not,
     whether the built-in set was read at all, and why no graph could be built.
     """
     builtin: tuple[str, ...] = ()
@@ -698,7 +698,7 @@ def _agents(
     """Each agent, what it declares for this caller, its description, the file it came
     from, the subagents it activates, and why they could not all be read.
 
-    What was read before a failure comes back with it: a listing of a broken workspace
+    What was read before a failure comes back with it: a listing of broken definitions
     still shows what it can.
     """
     specs: Mapping[str, AgentSpec] = MappingProxyType({})
@@ -735,7 +735,7 @@ def inventory(  # noqa: PLR0913 -- the caller's three, beside where to look
     extra_datazones: Sequence[str] = (),
     sessions: object | None = None,
 ) -> Inventory:
-    """Ask the workspace what it offers, through the catalogue a run would use."""
+    """Ask the definitions what they offer, through the catalogue a run would use."""
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
     # Whose view this is, before the agents are read: each one's chain is what it
     # activates for this caller.

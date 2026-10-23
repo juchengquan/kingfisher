@@ -218,7 +218,7 @@ def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
     )
     # Not `names[-1]`: `OfferedToolFailureMiddleware` goes under the deployment's own on a
     # graph that holds an offered tool, so asserting the deployment's was last held only
-    # because this workspace defines none; and the prompt caching is deepagents' slot,
+    # because the definitions offer none; and the prompt caching is deepagents' slot,
     # taken by name.
     assert set(names[names.index("_Audit") + 1 :]) <= {
         "PromptCachingMiddleware",

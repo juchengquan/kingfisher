@@ -161,12 +161,12 @@ def build_parser() -> argparse.ArgumentParser:
     # nothing else here provides, is the one way to reach `main` and have it
     # return without calling a model -- which is how the tests exercise
     # workspace creation and first-run seeding without spending anything.
-    parser.add_argument("--list", action="store_true", help="show what the workspace offers")
+    parser.add_argument("--list", action="store_true", help="show what the definitions offer")
     return parser
 
 
 def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
-    """What this workspace offers right now, per kind."""
+    """What the definitions offer right now, per kind."""
     from kingfisher.core.inventory import inventory
 
     return inventory(cfg).offered
@@ -178,7 +178,7 @@ def _refuse_the_other_axis(
     """Name the flag a subtraction meant, when it named the other axis."""
     for kind, other, describes in (
         ("tools", "builtin_tools", "builtin tool"),
-        ("builtin_tools", "tools", "tool of this workspace"),
+        ("builtin_tools", "tools", "offered tool"),
     ):
         leave_out = excluded[kind]
         if not leave_out:
@@ -352,7 +352,7 @@ def main(argv: list[str]) -> int:
     try:
         result = show(kf.stream(request), sys.stdout)
     except CapabilityError as exc:
-        # A named capability the workspace does not offer. Reported here rather
+        # A named capability the definitions do not offer. Reported here rather
         # than as a traceback because it is a usage error, not a crash.
         print(f"capability error: {exc}", file=sys.stderr)
         # Only for a refusal that fits on one line. Those name something and
@@ -362,7 +362,7 @@ def main(argv: list[str]) -> int:
         # teaches people to stop reading hints. It was matched on a phrase until
         # a second multi-line refusal arrived that did not contain it.
         if "\n" not in str(exc):
-            print("run --list to see what this workspace offers", file=sys.stderr)
+            print("run --list to see what the definitions offer", file=sys.stderr)
         return 2
 
     if result is None:  # pragma: no cover

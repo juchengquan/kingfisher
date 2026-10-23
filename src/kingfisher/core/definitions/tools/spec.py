@@ -100,7 +100,7 @@ class FoundTool:
 
 
 def offered(sources: Mapping[str, str], names: Sequence[str]) -> str:
-    """What a workspace offers, one per line, with where each one lives."""
+    """What the definitions offer, one per line, with where each one lives."""
     if not names:
         return "  (none)"
     width = max(len(name) for name in names)

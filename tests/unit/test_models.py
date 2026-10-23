@@ -593,7 +593,7 @@ def test_the_shipped_minimax_row_sizes_the_summarizer_from_its_window(tmp_path):
     on a 1M window, with nothing saying so.
 
     The shipped template, through the loader, rather than a row written here: the row
-    is what a seeded workspace starts from.
+    is what a seeded definitions folder starts from.
     """
     keys = tmp_path / "keys.yaml"
     keys.write_text("minimax: sk-not-real\nopenai: sk-not-real\n", encoding="utf-8")

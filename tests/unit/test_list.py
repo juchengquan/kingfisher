@@ -24,7 +24,7 @@ def test_a_workspace_with_no_agents_says_so_and_says_what_to_do(at_the_command_l
     """The empty listing for agents, which the ones for skills and subagents had
     and this did not -- a mutation removing it went unnoticed.
 
-    It carries the seed hint because a workspace with no agents cannot serve a
+    It carries the seed hint because definitions with no agents cannot serve a
     request at all: every other emptiness here is survivable.
     """
 
@@ -220,7 +220,7 @@ def test_json_is_asked_for_rather_than_assumed(cfg, at_the_command_line, capsys)
     assert not capsys.readouterr().out.lstrip().startswith("{")
 
 
-# -- a subagent the workspace built itself ----------------------------------
+# -- a subagent its definition built itself --------------------------------
 
 
 COMPILED_MODULE = """from langchain_core.runnables import RunnableLambda
@@ -390,7 +390,7 @@ def test_a_definition_naming_a_moved_tool_is_non_zero_too(
 ):
     """`failed` stopped meaning "will not load" here, and this is the case that
     changed it: a subagent naming a moved tool will not load, an agent naming one
-    loads and runs without it. Both are a workspace that does not mean what it says.
+    loads and runs without it. Both are definitions that do not mean what they say.
     """
     import json
 
@@ -447,8 +447,8 @@ def test_the_middlewares_section_names_what_is_registered(cfg, at_the_command_li
 
 
 def test_a_middleware_that_came_from_a_package_says_which(cfg, at_the_command_line, capsys):
-    """The other half, and the one the mark means something by: a workspace file may list
-    a class it imported, and then the code is not in this workspace to be read. Without
+    """The other half, and the one the mark means something by: a definition file may list
+    a class it imported, and then the code is not in the definitions folder to be read. Without
     this the section says the same thing about both, which is what marking one is for.
     """
     middlewares = cfg.catalogue_roots["middlewares"]
@@ -545,10 +545,10 @@ system_prompt: |
 
 
 def _workspace(cfg, *agents: str, skills: tuple[str, ...] = ()):
-    """A workspace with two tools, whichever agents the test names, and no skills
+    """Definitions with two tools, whichever agents the test names, and no skills
     unless it asks for some.
 
-    Fills the workspace and nothing else: pointing the command at it is
+    Fills the definitions folder and nothing else: pointing the command at it is
     `at_the_command_line`'s job, which every caller here takes.
     """
     from tests.conftest import tools_dir
@@ -623,7 +623,7 @@ def _skill(folder, name: str) -> None:
 
 
 def _subagents_out_of_reach(cfg) -> None:
-    """Every per-subagent field a valid workspace fills, for a subagent `B` cannot open.
+    """Every per-subagent field valid definitions fill, for a subagent `B` cannot open.
 
     The private `line_count` shadows the catalogue's, so `shadowed` names it too.
     """
@@ -703,7 +703,7 @@ def test_a_scoped_listing_carries_nothing_out_of_reach(form, cfg, at_the_command
     leaked, is deliberate: the four that did were not a closed set, and a field added
     later would leak the same way past a field-by-field assertion.
 
-    And subagents out of reach in the workspace, with folders of their own: without
+    And subagents out of reach in the definitions folder, with folders of their own: without
     them every per-subagent field is empty, and the rule passes whatever those fields
     would have held.
     """
@@ -1829,7 +1829,7 @@ def test_a_broken_tools_catalogue_still_leaves_the_access_sections(
 ):
     """The half the early return dropped. `render` used to stop after the skills and
     subagents sections when `tools/` would not walk, so an operator auditing a policy on
-    a workspace with one unparseable `.py` got no access report -- and no sign that
+    a definitions folder with one unparseable `.py` got no access report -- and no sign that
     there was one to get. Skills and subagents had been added to that path; this had not.
     """
     _workspace(cfg, NARROW)
@@ -2184,7 +2184,7 @@ def test_every_error_the_inventory_carries_is_said_in_the_human_listing(field_na
     tells a script something is wrong; only the text tells the person what.
 
     `middlewares_error` and `bundles_error` were both carried, both counted by `failed`,
-    and printed by neither renderer -- so `kingfisher list` on a workspace with one
+    and printed by neither renderer -- so `kingfisher list` on a definitions folder with one
     unparseable `middlewares/*.py` exited 1 over a listing that looked fine. Every rule
     that proved those errors were carried asserted on `--json`, which is how.
     """
@@ -2272,7 +2272,7 @@ def test_every_refusal_the_inventory_asks_is_a_trouble_here():
 def test_every_trouble_besides_an_error_is_said_in_the_human_listing(field_name):
     """The same rule for the two that are not a kind's error. Driven one at a time,
     because that is how one goes missing: a trouble is added to `failed`, the exit code
-    rule keeps passing, and the person looking at the broken workspace is told nothing.
+    rule keeps passing, and the person looking at the broken definitions is told nothing.
     """
     from types import MappingProxyType
 

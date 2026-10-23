@@ -284,7 +284,7 @@ def test_activating_a_subagent_passes_its_definition_through(cfg, session_dir):
 
 
 def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, session_dir):
-    """`()` activates none where the default `ALL` activates every one the workspace
+    """`()` activates none where the default `ALL` activates every one the definitions
     offers -- so the reviewer written above is absent here.
     """
     _write_subagent(cfg.definitions)

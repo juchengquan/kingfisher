@@ -1,4 +1,5 @@
-"""Putting the smoke's fixtures into a workspace.
+"""Putting the smoke's fixtures where a run reads them: the skill into the definitions
+folder, the data into a session.
 
 The sample skill is copied from `assets/skills/tabular-qa`, never held here as well.
 Not through `KINGFISHER_ASSETS`, which exists to point somewhere else: the smoke asserts

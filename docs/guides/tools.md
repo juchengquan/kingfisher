@@ -328,7 +328,7 @@ Two things follow, and both are the point:
 
 ## A module with no `TOOLS` is an error
 
-Not a skipped file. Quietly offering fewer tools than the workspace defines is
+Not a skipped file. Quietly offering fewer tools than the folder defines is
 the failure `CapabilityError` exists to prevent one layer down — a request names
 a tool, the name is not there, and nothing says the file that should have
 supplied it was read and ignored:
@@ -357,7 +357,7 @@ files is still the better answer for anyone who controls both.
 ## What the loader refuses
 
 All for the same reason: an agent quietly holding different tools than the
-workspace defines is worse than a run that stops.
+definitions offer is worse than a run that stops.
 
 | Refused | Why |
 | --- | --- |

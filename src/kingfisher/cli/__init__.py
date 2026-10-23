@@ -1,1 +1,1 @@
-"""`kingfisher`: fill a workspace, run a task in it, see what is in it, and check it over."""
+"""`kingfisher`: seed a definitions folder, run a task, see what it offers, and check it over."""

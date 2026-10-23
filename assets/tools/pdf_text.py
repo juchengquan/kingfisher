@@ -147,7 +147,7 @@ def pdf_text(
     of its own for each range.
     """
     # Here rather than at the top: the wheel does not carry pdfplumber, and one tool
-    # file that fails to import refuses every tool in the workspace, not only this one.
+    # file that fails to import refuses every offered tool, not only this one.
     import pdfplumber  # noqa: PLC0415
     from pdfplumber.utils.exceptions import (  # noqa: PLC0415
         MalformedPDFException,

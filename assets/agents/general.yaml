@@ -5,11 +5,11 @@
 # below costs. A definition naming `summarize-by-count` is refused when the agent
 # is built -- `names unregistered middleware` -- on every deployment that has
 # not written the factory behind that name, so seeding one into a fresh
-# workspace hands somebody a file that cannot run and no reason why.
+# definitions folder hands somebody a file that cannot run and no reason why.
 #
 # It lives here anyway, under the kind it *is*. The rule is `seed`'s rather
 # than the folder's: seeding reads this field and says what it left behind, so
-# an agent can be filed as an agent and still be kept out of a workspace that
+# an agent can be filed as an agent and still be kept out of a deployment that
 # cannot build it. `seed --all` takes it once you have registered the name,
 # which is the whole of the setup:
 #
@@ -23,16 +23,16 @@
 #     )
 name: general
 description: General-purpose agent for a workspace with no particular specialism.
-# Every tool deepagents brings, and every tool this workspace defines,
+# Every tool deepagents brings, and every tool the definitions offer,
 # `web_search` and `http_fetch` among them. `["*"]` is how this format says
 # *all of them*, and it has to be said: leave a line out and the agent holds
 # nothing from that list. Every grant field reads that way -- the two tool
 # lists, `skills`, `subagents`, `middlewares` -- so a forgotten line shows on
 # the first turn as an agent that cannot act, rather than as one quietly
-# holding the shell and every tool somebody adds to the workspace later.
+# holding the shell and every tool somebody adds to the definitions folder later.
 builtin_tools: ["*"]
 tools: ["*"]
-# Every skill the workspace offers, by the same star.
+# Every skill the definitions offer, by the same star.
 skills: ["*"]
 # The subagents that ship beside this file. Naming them is what makes them
 # reachable: a request narrows what an agent declares and can never widen it,
@@ -50,7 +50,7 @@ skills: ["*"]
 # What each brought with it arrives too, and cannot be named separately: its
 # tool is in no catalogue and no agent can ask for it alone.
 subagents: [extractor, reviewer, profiler, timestamps, versions]
-# Named rather than `["*"]`: a star takes whatever the workspace offers, so on a
+# Named rather than `["*"]`: a star takes whatever the definitions offer, so on a
 # seeded one it would also take anything added later for another agent, and a
 # name says exactly what this agent runs under. The prompt below tells it the same.
 #
@@ -73,7 +73,7 @@ middlewares:
 # Required, and the third of the three fields that are: `name`, `description`,
 # this. Every field above has an answer without being written -- left out, a
 # grant field grants none -- and this one does not.
-# `system.md` describes the harness and `PROMPT.md` describes the workspace;
+# `system.md` describes the harness and `INSTRUCTIONS.md` the deployment;
 # neither has heard of this agent, so a file without a prompt is a list of tools
 # with nothing anywhere saying what they are for.
 #

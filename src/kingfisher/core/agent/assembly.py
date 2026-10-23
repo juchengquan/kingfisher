@@ -196,7 +196,7 @@ def _refuse_unknown_gates(
 ) -> None:
     """Refuse a gate on a name no tool anywhere in this build answers to.
 
-    Against what the workspace offers, not this caller's grant: a gate on a tool one
+    Against what this build offers, not this caller's grant: a gate on a tool one
     caller was not granted is fine, and a name matching nothing is a typo that leaves
     the author believing a call is gated.
 
@@ -614,7 +614,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         in_reach=in_reach,
         held=held,
     )
-    # After the probe: what a workspace offers is only knowable from an assembled graph,
+    # After the probe: what a build offers is only knowable from an assembled graph,
     # and asking `builtin_tool_names` from here would recurse. `gated` forces the probe.
     _refuse_unknown_gates(agent, gated, surface)
     permitted = surface.permitted

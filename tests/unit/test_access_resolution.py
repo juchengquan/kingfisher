@@ -230,7 +230,7 @@ def test_a_conjunction_is_one_entry_of_an_or():
 
 def test_definitions_that_lock_nothing_add_up_to_no_vocabulary():
     """`None` is what turns checking off, so a walk returning an empty record instead
-    would switch it on for a workspace with no lock in it."""
+    would switch it on for definitions with no lock in them."""
     assert collected(("agent", {"open": spec()}), ("tool", {})) is None
 
 

@@ -561,7 +561,7 @@ def shipped():
 
 @pytest.fixture
 def workspace_with_presets(cfg, shipped):
-    """A workspace holding the shipped definitions, as `kingfisher seed` leaves one."""
+    """A definitions folder holding the shipped definitions, as `kingfisher seed` leaves one."""
     import shutil
 
     # `tools` too, because a subagent that names one is refused before its
@@ -619,7 +619,7 @@ EVERY_TOOL = {"builtin_tools": '["*"]', "tools": '["*"]'}
 
 
 def an_agent(cfg, name: str = "only", **fields: str) -> str:
-    """Write one agent into this workspace and return its name."""
+    """Write one agent into the definitions folder and return its name."""
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     written = "".join(f"{key}: {value}\n" for key, value in fields.items())
@@ -655,7 +655,7 @@ def verbs(parser) -> dict:
 
 
 def an_inventory(**wrong: Any) -> Any:
-    """An `Inventory` describing a workspace with nothing in it and nothing wrong.
+    """An `Inventory` describing definitions with nothing in them and nothing wrong.
 
     For the rules that break one thing at a time: an error reaching no consumer is
     how `middlewares_error` came to be computed and read by nothing, and driving that

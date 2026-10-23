@@ -400,7 +400,7 @@ def examine(
                 "definitions",
                 "fail",
                 str(exc),
-                "fix it; until then the rows on what the workspace defines are not checked",
+                "fix it; until then the rows on the definitions are not checked",
             )
         )
     checks += health_isolation.checks(cfg, sessions, confined)

@@ -35,13 +35,13 @@ def test_an_agent_out_of_reach_reads_as_one_that_does_not_exist(two_agents):
 
 
 def test_the_listing_in_that_refusal_names_only_reachable_agents(two_agents):
-    """The message lists what the workspace offers, and that listing is the enumeration
+    """The message lists what the definitions offer, and that listing is the enumeration
     this closes.
     """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     with pytest.raises(CapabilityError) as raised:
         agent_named(kf, "assistant", source_ids=("B",))
-    offers = str(raised.value).split("offers", 1)[1]
+    offers = str(raised.value).split("definitions offer", 1)[1]
     assert "surveyor" in offers
     assert "assistant" not in offers
 
@@ -49,7 +49,7 @@ def test_the_listing_in_that_refusal_names_only_reachable_agents(two_agents):
 def test_a_caller_who_reaches_no_agent_is_told_the_workspace_offers_none(cfg):
     an_agent(cfg, "assistant", source_ids="[B]")
     kf = Kingfisher(cfg, sessions=LocalSessions())
-    with pytest.raises(CapabilityError, match="offers none"):
+    with pytest.raises(CapabilityError, match="definitions offer none"):
         agent_named(kf, "anything", source_ids=("A",))
 
 

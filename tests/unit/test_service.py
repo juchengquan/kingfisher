@@ -53,7 +53,7 @@ def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
 
 
 def test_construction_prepares_only_what_sessions_share(cfg):
-    """Eagerly, so a broken workspace fails at startup rather than mid-turn -- but only
+    """Eagerly, so broken definitions fail at startup rather than mid-turn -- but only
     the shared tier, and no definition kind, which nothing reads from the workspace.
     """
     service = Kingfisher(cfg, sessions=LocalSessions())
