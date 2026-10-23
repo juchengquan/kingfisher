@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import Callable, Collection, Sequence
 from typing import TYPE_CHECKING, Any, Literal
@@ -52,6 +53,41 @@ Kind = Literal["agent", "subagent", "general-purpose"]
 
 #: The name deepagents merges its filesystem middleware by, which a deployment's may take.
 FILESYSTEM = FilesystemMiddleware.__name__
+
+
+def _limit_answer(limit: ScratchRunLimit, name: str, kind: Kind) -> tuple[bool, str | None]:
+    """Whether `limit` lets graph `name`'s tools run, and what a refused run is told, where
+    the limit failed to answer."""
+    try:
+        allows = limit.allows(name, kind)
+    except Exception as error:  # noqa: BLE001 -- a plugin's bug costs this graph its
+        # runs, never the turn, and never grants one.
+        _log.warning(
+            "the scratch run limit raised on %s %r; its tools are refused a run",
+            kind,
+            name,
+            exc_info=True,
+        )
+        return False, (
+            f"refused: this deployment's ScratchRunLimit raised {type(error).__name__}: {error}"
+        )
+    if allows is True or allows is False:
+        return allows, None
+    # Only `True` grants: an `async def allows` answers a coroutine, which is truthy, and
+    # read as a grant it handed every graph a run.
+    _log.warning(
+        "the scratch run limit answered %s on %s %r, not True or False; its tools are "
+        "refused a run",
+        type(allows).__name__,
+        kind,
+        name,
+    )
+    if inspect.iscoroutine(allows):
+        allows.close()
+    return False, (
+        f"refused: this deployment's ScratchRunLimit answered {type(allows).__name__}, "
+        "not True or False"
+    )
 
 
 def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing one is built from
@@ -166,22 +202,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # Only where the graph holds offered tools: theirs are the only calls it binds.
     if names:
         limit = NoScratchRunLimit() if scratch_run_limit is None else scratch_run_limit
-        refusal = None
-        try:
-            allows = limit.allows(name, kind)
-        except Exception as error:  # noqa: BLE001 -- a plugin's bug costs this graph its
-            # runs, never the turn, and never grants one.
-            _log.warning(
-                "the scratch run limit raised on %s %r; its tools are refused a run",
-                kind,
-                name,
-                exc_info=True,
-            )
-            allows = False
-            refusal = (
-                f"refused: this deployment's ScratchRunLimit raised "
-                f"{type(error).__name__}: {error}"
-            )
+        allows, refusal = _limit_answer(limit, name, kind)
         standing.append(
             ScratchRunsMiddleware(
                 names,

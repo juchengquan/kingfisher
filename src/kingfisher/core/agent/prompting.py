@@ -408,7 +408,7 @@ def refuse_a_workspace_prompt(cfg: Config) -> None:
 
     Ignored, its house rules would stop reaching every agent with nothing said.
     """
-    stale = cfg.workspace / "PROMPT.md"
+    stale = cfg.retired_prompt
     if stale.is_file():
         msg = (
             f"{stale} is read by nothing now: move what it says to "
@@ -456,6 +456,14 @@ def stray_save(where: str, layout: Layout) -> str:
     return (
         f"{where} is outside the session's folders, so a file saved there is neither kept "
         f"nor handed back. {what_you_make_goes(layout.outputs_route, layout.scratch_route)}"
+    )
+
+
+def miscased_path(where: str, meant: str) -> str:
+    """Why `where` is refused for spelling a folder of the session in other capitals."""
+    return (
+        f"{where} spells a folder of this session in other capitals, and a path here is "
+        f"matched exactly as written: it is {meant}."
     )
 
 

@@ -672,6 +672,35 @@ UNREAD = {
         _TOOL + "BASE = {'A': None}\nTOOLS = [ToolSpec(t, source_ids=[{**BASE}])]\n",
         "t: source_ids=[{**BASE}]",
     ),
+    # Bound once and changed in place: the assignment says `[]`, and the loader reads
+    # `["A"]`. Seed took the assignment for the value and copied the lock as open.
+    "a list appended to after it is bound": (
+        "tools",
+        _TOOL + "IDS = []\nIDS.append('A')\nTOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "an item stored into after it is bound": (
+        "tools",
+        _TOOL + "IDS = ['B']\nIDS[0] = 'A'\nTOOLS = [ToolSpec(t, source_ids=IDS)]\n",
+        "t: source_ids=IDS",
+    ),
+    "a requirement changed through the list holding it": (
+        "tools",
+        _TOOL + "REQ = [{'A': None}]\nREQ[0]['B'] = None\nTOOLS = [ToolSpec(t, source_ids=REQ)]\n",
+        "t: source_ids=REQ",
+    ),
+    "an entry's lock set by its key": (
+        "subagents",
+        'ENTRY = {"name": "s", "description": "d", "system_prompt": "Hi."}\n'
+        'ENTRY["source_ids"] = ["A"]\nSUBAGENTS = [ENTRY]\n',
+        "ENTRY['source_ids']",
+    ),
+    "an entry's datazone set by a call": (
+        "subagents",
+        'ENTRY = {"name": "s", "description": "d", "system_prompt": "Hi."}\n'
+        'ENTRY.setdefault("datazone", "emea")\nSUBAGENTS = [ENTRY]\n',
+        "ENTRY.setdefault('datazone', 'emea')",
+    ),
     "a subagent entry's imported name": (
         "subagents",
         "from shared import IDS\n"

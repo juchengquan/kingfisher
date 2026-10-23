@@ -85,6 +85,14 @@ wrong.*
   `reasoning_details` or any other key of `additional_kwargs`, and `ChatAnthropic` sends
   none of them. Measured on the request each builds, no call made. *(2026-10-22,
   langchain-openai 1.5.1, langchain-anthropic 1.7.6.)*
+- **Under `v1` Anthropic's redacted thinking is a `non_standard` block.** With
+  `output_version="v1"` a `thinking` block becomes `reasoning`, its signature under
+  `extras`, and `redacted_thinking`, which langchain has no standard type for, is wrapped
+  as `{"type": "non_standard", "value": ...}`. `ChatAnthropic` sends `value` back as it is
+  for a reply that says `anthropic`, and `ChatOpenAI` on chat completions sends it too. A
+  Responses reply's reasoning is a `reasoning` block under `v1` and `responses/v1` alike.
+  Measured on the request each builds, no call made. *(2026-10-23, langchain-anthropic
+  1.7.6, langchain-openai 1.5.1.)*
 - **`ChatAnthropic` skips an empty assistant message only after joining its neighbours,
   and never the last.** `_format_messages` merges adjacent messages of one role first, then
   skips an assistant message with no content unless it is the final one, for the API's

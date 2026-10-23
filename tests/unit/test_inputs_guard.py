@@ -268,7 +268,7 @@ def test_inputs_are_read_only_again_even_when_a_copy_fails(cfg, session_dir, tmp
         raise OSError(gone)
 
     monkeypatch.setattr(
-        "kingfisher.plugins.sessions.backend.FilesystemBackend.upload_files", explode
+        "kingfisher.plugins.sessions.links.RootedBackend.upload_files", explode
     )
 
     with pytest.raises(OSError, match=gone):

@@ -1,4 +1,5 @@
-"""The file tools' view of a session, which follows no link inside it."""
+"""The file tools' view of a session, which follows no link inside it, and of a route,
+which follows none out of it."""
 
 from __future__ import annotations
 
@@ -13,7 +14,8 @@ class UnlinkedBackend(FilesystemBackend):
 
     The deny rules judge the path typed, and upstream follows a link anywhere under the
     root: `/scratchpad/x` pointing into `.harness` passed the rule and wrote the pin. For
-    the session root only: every rule on a route covers the whole of it.
+    the session root only: every rule on a route covers the whole of it, so a route needs
+    only `RootedBackend`.
     """
 
     def _resolve_path(self, key: str) -> Path:
@@ -33,3 +35,21 @@ class UnlinkedBackend(FilesystemBackend):
             msg = f"{path} is a link"
             raise ValueError(msg)
         return super()._to_virtual_path(path)
+
+
+class RootedBackend(FilesystemBackend):
+    """A `FilesystemBackend` that answers a link out of its root as the operation's error.
+
+    Upstream refuses one with `ValueError`, which `read`, `write`, `edit`, `delete` and
+    `ls` let escape, so a link the shell left in `/memory` ended the turn. A link inside
+    the root is followed, as upstream follows it: it stays under the route's own rules.
+    """
+
+    def _resolve_path(self, key: str) -> Path:
+        try:
+            return super()._resolve_path(key)
+        except ValueError:
+            # Not upstream's message, which names both host paths; nor `key`, which is the
+            # path inside the route, where each operation's error names the one the model wrote.
+            msg = "it is or runs through a link out of its folder, and the file tools follow none"
+            raise PermissionError(msg) from None

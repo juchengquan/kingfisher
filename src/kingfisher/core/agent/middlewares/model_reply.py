@@ -155,15 +155,26 @@ class ModelReplyMiddleware(AgentMiddleware):
         write = getattr(first.runtime, "stream_writer", None)
         if write is not None:
             write(cut_off_mark(reply))
+        said = reply.text.strip()
+        # Neither an answer nor a call, so the reservation went on thinking, and a model
+        # asked for a shorter answer has none to shorten.
+        cut = (
+            f"Your answer reached {output_limit(reply)} and was cut off. Answer again, shorter."
+            if said or reply.invalid_tool_calls
+            else f"Your reply reached {output_limit(reply)} before you wrote any answer: your "
+            "thinking took all of it. Think less, and answer directly."
+        )
         # The file first, then its path, and no path without the file: an agent told only
         # to put the long part in a file and say where names a file it never wrote.
         note = (
-            f"Your answer reached {output_limit(reply)} and was cut off. Answer again, "
-            f"shorter. If it needs the length, first write the long part to a file under "
+            f"{cut} If it needs the length, first write the long part to a file under "
             f"{self.outputs}, then answer with a summary and the file's path. Name a file "
             "only after you have written it."
         )
-        return first.override(messages=[*first.messages, text_of(reply), HumanMessage(note)])
+        # An answer that says nothing is left out: `ChatAnthropic` skips it only after
+        # joining its neighbours, so the task and the note went out as two user turns.
+        answer = [text_of(reply)] if said else []
+        return first.override(messages=[*first.messages, *answer, HumanMessage(note)])
 
     def _judged(self, first: Any, response: Any, asked: int) -> Any:
         reply = last_reply(response)

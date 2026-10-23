@@ -101,6 +101,26 @@ def strays(where: str, folders: frozenset[str]) -> bool:
     return where.lstrip("/").split("/", 1)[0] not in folders
 
 
+def miscased(where: str, layout: Layout, folders: frozenset[str]) -> str | None:
+    """`where` with the session's own folders spelled as they are, where `where`, a path
+    `validate_path` returned, spells one in other capitals; `None` otherwise.
+
+    By name, never by asking the disk: the rules and the routes match exactly, so on a
+    case-insensitive volume `/.HARNESS/` matches neither and the default backend opens the
+    real `.harness`. The folders are `folders` and every route of `layout`, nested ones
+    included, since `/scratchpad/TOOL_RESULTS/` gets past the deny on the saved results.
+    """
+    parts = where.strip("/").split("/")
+    spelled = list(parts)
+    for known in {*(route.path for route in layout.routes), *(f"/{f}/" for f in folders)}:
+        names = known.strip("/").split("/")
+        if len(names) <= len(parts) and all(
+            name.casefold() == part.casefold() for name, part in zip(names, parts, strict=False)
+        ):
+            spelled[: len(names)] = names
+    return None if spelled == parts else "/" + "/".join(spelled)
+
+
 def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     """Every place the agent should look for skills, labelled."""
     if RESERVED_SKILL_FOLDER in folders:

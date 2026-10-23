@@ -296,6 +296,54 @@ def test_a_python_set_of_anything_but_names_is_refused():
         read.source_ids([{("finance", "senior"), "admin"}])
 
 
+@pytest.mark.parametrize(
+    "written",
+    [[1001], ["A", True], [{1001: None, "A": None}]],
+    ids=["number", "yes", "in-a-requirement"],
+)
+def test_an_id_yaml_typed_is_refused_rather_than_spelled_out(written):
+    """Spelled out with `str()`, `[1001]` was a lock seed counted as no lock and copied
+    without a word, and `[yes]` a lock on `"True"`, which no caller writing `yes` holds.
+    """
+    with pytest.raises(AgentError, match="is not a name"):
+        read.source_ids(written)
+
+
+def test_an_empty_entry_is_still_left_out_beside_a_name():
+    """The control for the refusal above: YAML's empty list item is no id YAML typed, and
+    refusing it with the numbers would refuse a list a trailing `-` left behind."""
+    assert read.source_ids(["A", None]) == ("A",)
+
+
+def test_an_unquoted_number_in_a_skills_entry_is_refused_too():
+    """An entry's audience is read by the same list, so a skill locked to `[42]` was the
+    same lock seed could not see."""
+    text = (
+        "name: a\ndescription: d\nskills:\n  - {name: x, source_ids: [42]}\n"
+        "system_prompt: |\n  Hi.\n"
+    )
+    with pytest.raises(AgentError, match="42 is not a name"):
+        read_agent(DefinitionText(text, Path("a.yaml")))
+
+
+def test_a_tool_spec_naming_a_number_is_refused():
+    """A `ToolSpec` goes through the same reader, so `source_ids=[1001]` locked the tool
+    to `"1001"` where seed saw no lock."""
+    from langchain_core.tools import tool
+
+    from kingfisher.core.definitions.tools.catalogue import ToolError, found_in
+    from kingfisher.core.definitions.tools.spec import ToolSpec
+
+    @tool
+    def payroll(month: str) -> str:
+        """The month's payroll."""
+        return month
+
+    spec = ToolSpec(payroll, source_ids=[1001])  # ty: ignore[invalid-argument-type]
+    with pytest.raises(ToolError, match="1001 is not a name"):
+        found_in(spec, where="tools.py", holder="TOOLS")
+
+
 def test_an_empty_python_set_is_refused():
     """`set()` requires nothing and so admits everyone, as `{}` does."""
     with pytest.raises(AgentError, match="requires nothing"):

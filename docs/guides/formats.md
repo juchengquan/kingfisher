@@ -1426,7 +1426,8 @@ through a `ToolSpec` — see
 
 A source id is a name a lock writes and a caller holds, and nothing else — not a
 path a definition was read from, and not a data file a run is handed. Nothing
-resolves it to either.
+resolves it to either. Quote one YAML would type, `source_ids: ["1001"]`: an unquoted
+number, or `yes`, is refused rather than read as the text it happens to print as.
 
 Two files to read alongside this section: `assets/agents/analyst.yaml` and
 `assets/subagents/auditor.yaml`. `seed` leaves them behind by default, because a lock

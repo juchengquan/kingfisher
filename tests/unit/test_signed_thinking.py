@@ -7,8 +7,10 @@ import json
 from typing import Any
 
 import pytest
+from anthropic.types import Message
 from langchain.agents.middleware import ModelRequest
 from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models._utils import _update_message_content_to_blocks
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langchain_openai.chat_models.base import _construct_lc_result_from_responses_api
@@ -82,6 +84,30 @@ def _kept_as_v0(**metadata: Any) -> AIMessage:
     })
     result = _construct_lc_result_from_responses_api(response, output_version="v0")
     reply = result.generations[0].message
+    assert isinstance(reply, AIMessage)
+    return reply.model_copy(
+        update={"response_metadata": {**reply.response_metadata, **metadata}}
+    )
+
+
+def _kept_as_v1(**metadata: Any) -> AIMessage:
+    """An earlier answer from an endpoint on Anthropic's format that thought and had some
+    of it redacted, as langchain keeps one under `output_version="v1"`: built from the
+    API's own message, as a model call converts it, so each block is wherever langchain
+    puts it."""
+    model = ChatAnthropic(model="fake-model", api_key="x", output_version="v1")
+    message = Message.model_validate({
+        "id": "msg_1", "type": "message", "role": "assistant", "model": "fake-model",
+        "stop_reason": "end_turn", "stop_sequence": None,
+        "usage": {"input_tokens": 1, "output_tokens": 1},
+        "content": [
+            {"type": "thinking", "thinking": "plan A", "signature": "SIGNED"},
+            {"type": "redacted_thinking", "data": "REDACTED"},
+            {"type": "text", "text": "first answer"},
+        ],
+    })
+    reply = model._format_output(message).generations[0].message
+    reply = _update_message_content_to_blocks(reply, "v1")
     assert isinstance(reply, AIMessage)
     return reply.model_copy(
         update={"response_metadata": {**reply.response_metadata, **metadata}}
@@ -208,6 +234,34 @@ def test_a_v0_replys_reasoning_goes_back_only_to_its_signer(served, sent):
     assert earlier.additional_kwargs["reasoning"]["id"] == "rs_SIGNED", "the conversation keeps it"
 
 
+@pytest.mark.parametrize(
+    "model",
+    [ChatAnthropic(model="fake-model", api_key="x"), ChatOpenAI(model="fake-model", api_key="x")],
+    ids=["anthropic", "openai_chat"],
+)
+@pytest.mark.parametrize(
+    ("served", "sent"), [(ELSEWHERE, False), (HERE, True)], ids=["another-signer", "own"]
+)
+def test_a_v1_replys_redacted_thinking_goes_back_only_to_its_signer(model, served, sent):
+    """Under `v1` redacted thinking is wrapped as a `non_standard` block, which a strip
+    reading only the outer type left in, and both chat classes send the wrapped block on as
+    it is: MiniMax's reached Claude. The signer's own going back is the control."""
+    earlier = _kept_as_v1(**{SERVED_BY: served})
+    wrapped = earlier.content[1]
+    assert isinstance(wrapped, dict) and wrapped["type"] == "non_standard", "the shape"
+    request = ModelRequest(
+        model=model, messages=[HumanMessage("first"), earlier, HumanMessage("second")]
+    )
+
+    payload = json.dumps(model._get_request_payload(kept_for(request, HERE).messages))
+
+    assert ("REDACTED" in payload) is sent
+    if not sent:
+        assert "SIGNED" not in payload
+    assert "first answer" in payload
+    assert wrapped["value"]["data"] == "REDACTED", "the conversation keeps it"
+
+
 def test_a_reply_that_was_only_another_signers_thinking_is_left_out(cfg, session_dir, way):
     """Stripped to nothing, the reply went to `ChatAnthropic` empty, which skips it only
     after joining its neighbours, so two user turns went out in a row. Left out first, the
@@ -217,6 +271,25 @@ def test_a_reply_that_was_only_another_signers_thinking_is_left_out(cfg, session
     assert [message["role"] for message in payload["messages"]] == ["user"]
     assert "SIGNED" not in json.dumps(payload)
     assert [block["type"] for block in state["messages"][1].content] == ["thinking"]
+
+
+@pytest.mark.parametrize(
+    "beside",
+    [{"type": "text", "text": ""}, {"type": "text", "text": " \n"}, ""],
+    ids=["empty-text", "blank-text", "empty-string"],
+)
+def test_a_reply_stripped_to_blank_text_is_left_out_too(cfg, session_dir, way, beside):
+    """A reply kept for the blank text beside its thinking went to `ChatAnthropic`, which
+    drops blank text and then skips the reply, so two user turns went out in a row as if
+    nothing had been stripped."""
+    earlier = _only_thought(**{SERVED_BY: ELSEWHERE})
+    earlier = earlier.model_copy(update={"content": [*earlier.content, beside]})
+
+    payload, state = _turn(cfg, session_dir, way, earlier)
+
+    assert [message["role"] for message in payload["messages"]] == ["user"]
+    assert "SIGNED" not in json.dumps(payload)
+    assert state["messages"][1].content[-1] == beside, "the conversation keeps the reply"
 
 
 def test_a_reply_stripped_to_nothing_is_no_prefill():

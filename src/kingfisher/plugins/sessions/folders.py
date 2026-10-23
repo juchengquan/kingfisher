@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import errno
+import os
 import shutil
+import stat
 from contextlib import suppress
 from pathlib import Path
 
@@ -10,6 +13,7 @@ from kingfisher.core.layout import Layout
 from kingfisher.core.session.model import UnknownSessionError
 
 from .permissions import keep_tmp_private, unlock_and_retry
+from .scratch import NOFOLLOW
 
 AGENTS_SCAFFOLD = """\
 # Project memory
@@ -20,6 +24,8 @@ Durable facts about this project and how to work in it. Add entries below.
 
 (none recorded yet)
 """
+
+_REPLACED = frozenset({errno.ELOOP, errno.EEXIST, errno.EISDIR})
 
 
 def names_a_session(session_id: str) -> bool:
@@ -125,8 +131,38 @@ def scaffold_memory(session_dir: Path, layout: Layout) -> None:
     """Give `/memory/AGENTS.md` text for an edit to anchor against: the agent saves memory
     with `edit_file`, which replaces existing text."""
     agents_md = Path(session_dir) / layout.memory / "AGENTS.md"
-    if not agents_md.exists() or not agents_md.read_text(encoding="utf-8").strip():
-        agents_md.write_text(AGENTS_SCAFFOLD, encoding="utf-8")
+    # This runs in kingfisher's process, outside every fence, on a file the shell may
+    # replace: only a regular file is read or written, and only a missing one created. The
+    # flags refuse a link made after the `lstat` too -- not on Windows, which has neither
+    # `O_NOFOLLOW` nor a fence to run the shell in.
+    try:
+        held = agents_md.lstat()
+    except FileNotFoundError:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW
+    else:
+        if not stat.S_ISREG(held.st_mode) or _has_text(agents_md):
+            return
+        flags = os.O_WRONLY | os.O_TRUNC | NOFOLLOW
+    try:
+        fd = os.open(agents_md, flags, 0o644)
+    except OSError as exc:
+        # Replaced since the lstat: a link (ELOOP), a file made first, or a folder.
+        if exc.errno in _REPLACED:
+            return
+        raise
+    with os.fdopen(fd, "w", encoding="utf-8") as out:
+        out.write(AGENTS_SCAFFOLD)
+
+
+def _has_text(path: Path) -> bool:
+    """Whether a regular file holds more than whitespace, read without following a link."""
+    try:
+        fd = os.open(path, os.O_RDONLY | NOFOLLOW)
+    except OSError:
+        # A link, or a file this process cannot read: left as it is.
+        return True
+    with os.fdopen(fd, encoding="utf-8", errors="replace") as held:
+        return bool(held.read().strip())
 
 
 def session_bytes(session_dir: Path) -> int:

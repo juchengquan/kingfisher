@@ -18,6 +18,132 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `kingfisher list` fails on a skill written twice, after #1071
+
+- **`list` exits 1 where a definition names one skill twice**, bare and qualified, as
+  `doctor` and startup already refuse it, and prints it under *skills named twice*. It
+  exited 0 and printed the entry's audience as if it were the only one. `--json` is
+  unchanged: `doubled_skills` was already there.
+
+## A session whose pin no longer reads is out of every scoped caller's reach, after #1071
+
+- **A scoped `sessions()` or `session()` no longer raises over one such session.** An
+  older kingfisher pinned the agent a session ran, and a lock today's reader refuses --
+  `source_ids: datazone=finance`, before #1048 -- made `kf.sessions(source_ids=...)`
+  raise for every caller, and `kf.session(id, source_ids=...)` quote the lock. Now such
+  a session is reached by no scoped caller, a turn naming it is told there is no such
+  session, and a warning on `kingfisher.core.session.methods` names its id.
+- **The operator's listing and `UNSCOPED` still reach it**, so it can be read or deleted.
+
+## Seed holds back a lock set after its value is bound, after #1071
+
+- **`IDS = []` then `IDS.append("A")` is held back.** Seed read the assignment, took `[]`
+  for naming nobody, and copied the tool as open, where the loader reads `["A"]`. A name
+  the module changes in place -- through an item, an attribute or a method call -- is no
+  longer read through, and the skip line names it as written.
+- **An entry whose lock is set by its key or by a call is held back**:
+  `entry["source_ids"] = [...]`, `entry.setdefault("datazone", ...)`. The skip line names
+  that expression. `seed --all` still copies either.
+
+## A source id written as a number or `yes` is refused, after #1071
+
+- **`source_ids: [1001]`, `[yes]` and `ToolSpec(source_ids=[1001])` no longer load.** The
+  loader spelled such an entry out with `str()`, so `1001` was a lock on `"1001"` and an
+  unquoted `yes` one on `"True"`, while seed counted only names and copied the file as if
+  it locked nothing. A source id is now a name or nothing: quote it, `source_ids:
+  ["1001"]`. The same goes for an entry of a requirement, `{1001, A}`, and for a
+  `skills:` entry's audience. The message names the entry.
+- **Seed copies such a file**, as it does any other the loader refuses, and the loader
+  reports it.
+
+## A reply cut off with no answer in it is asked again without one, after #1071
+
+- **The request that asks again after a cut reply leaves out an answer that says nothing.**
+  A reply cut off while still thinking, or while writing a call too broken to parse, used
+  to go back as an empty message, which `ChatAnthropic` skipped, so the task and the note
+  went out as two user turns. Now the note follows the task directly.
+- **A reply that wrote neither an answer nor a call is told its thinking took the output
+  limit**: `Your reply reached <limit> before you wrote any answer: your thinking took all
+  of it. Think less, and answer directly.`, followed by the same sentences about writing a
+  long part to a file. A reply cut off in its answer, or in a call too broken to parse, is
+  still told `Your answer reached <limit> and was cut off. Answer again, shorter.`
+- **The retry is given the same output reservation.** Three cut replies in a row still stop
+  the agent.
+
+## A reply stripped down to blank text is left out too, after #1071
+
+- **A reply whose thinking is taken out and that said nothing else but blank text is left
+  out of the request**, as one that was only thinking already was (#1064). It used to be
+  kept for an empty or whitespace-only text block, which `ChatAnthropic` drops before
+  skipping the reply, so two user turns went out in a row. A reply with tool calls is
+  still sent, and the conversation keeps every reply.
+
+## Redacted thinking kept as `v1` goes back only to its signer too, after #1071
+
+- **A reply kept under `output_version: v1` loses another signer's redacted thinking from
+  the request.** `v1` wraps Anthropic's `redacted_thinking` as a `non_standard` block, which
+  #1048's strip did not look inside, so a session that moved from MiniMax to Claude with
+  `v1` set sent MiniMax's redacted thinking on. Nothing to change; the conversation keeps
+  the block.
+
+## A `ScratchRunLimit` grants a run only by answering `True`, after #1071
+
+- **An answer that is neither `True` nor `False` refuses that graph's runs.** It was read by
+  its truth, so an `async def allows` -- a coroutine, which is truthy -- handed every graph
+  a run, with only a "never awaited" warning to show for it, and `1` or `"yes"` did the
+  same. Now such an answer is treated as a raise is: logged once per graph, and each run
+  a tool asks for answers `refused: this deployment's ScratchRunLimit answered coroutine,
+  not True or False`, the type named. A coroutine is closed. `None` from a limit that
+  forgot to return is refused as before, now with that line instead of the generic one.
+- **If yours is `async`, make it synchronous**: look the policy up before the service is
+  built.
+
+## The shell may not write the workspace's retired `PROMPT.md`, after #1071
+
+- **On macOS the profile denies `<workspace>/PROMPT.md`**, beside `models.yaml` and the keys
+  file. A start that finds that file refuses, so one session's shell writing it --
+  `echo x > "$KINGFISHER_SESSION_ROOT/../../PROMPT.md"`, which the profile allowed --
+  refused every later start of the deployment. Such a command now gets `Operation not
+  permitted`. The Linux fences grant nothing above the session and needed no change.
+- **`Config.retired_prompt` is new**: that path, which the start's own check reads too.
+
+## The memory scaffold writes through no link, after #1071
+
+- **`memory/AGENTS.md` is filled only when it is missing or an empty regular file.** It was
+  written through whatever stood there, so a link the shell left made or filled a file
+  outside the session, or in `.harness`, from kingfisher's own process. A link, a folder or
+  anything else there is left as it is, and the session opens.
+- **A folder there no longer stops a session opening.** `read_text` on it raised
+  `IsADirectoryError` at every open, and the file tools alone can make one. With memory on,
+  each turn still fails, in deepagents' memory load, naming the file: move the folder aside
+  to use memory again.
+
+## A link out of a route is the operation's error, after #1071
+
+- **`read_file`, `write_file`, `edit_file`, `delete` and `ls` on a link out of a route's
+  folder now answer an error** -- `… it is or runs through a link out of its folder, and
+  the file tools follow none` -- where the turn used to end with a `ValueError` naming
+  the host's paths. That covers `/memory`, the kept records, `/inputs`, `/skills` and each
+  bundle's skills. A link that stays inside its route is followed, as before.
+- **Every route `backend_at` builds is a `RootedBackend`**
+  (`kingfisher.plugins.sessions.links`), a `FilesystemBackend` with only that change. A
+  deployment that reads a route's class sees the new one.
+
+## A session's folder spelled in other capitals is refused, after #1071
+
+- **A file tool's path that spells one of the session's folders in other capitals is
+  refused**, naming the spelling that is: `/.HARNESS/x`, `/Inputs/x` or
+  `/scratchpad/TOOL_RESULTS/x` is answered `… spells a folder of this session in other
+  capitals, and a path here is matched exactly as written: it is /.harness/x.` On macOS's
+  default disk such a path used to reach the real folder past every deny rule. A tool
+  handed `runtime.context.backend` is refused the same paths, `invalid_path` in a batch,
+  and `on_this_host` raises `UnsafeReferenceError`.
+- **`/Inputs/x` is no longer the save outside every folder.** It names a folder in other
+  capitals, so it gets the new refusal; a top folder the layout does not name at all
+  still gets #1066's.
+- **A file or folder the agent names inside its own folders is unchanged**, whatever its
+  capitals: `/outputs/Report.csv` is its own spelling.
+
 ## The shell says where its writes go, and a stray one is told so, after #1070
 
 - **The shell's section of the prompt names the two folders it may write**, `/outputs`

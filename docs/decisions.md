@@ -1572,7 +1572,10 @@ refuses that start. Named in `shell_confinement`, not `authored_files_for`, beca
 mapping also decides what `ensure_layout` scaffolds and a keys file must never be written
 for a deployment that did not ask. Linux needs nothing: its writable set is the session's
 own directories. `protected_files` exists only in the macOS profile, where the whole
-workspace is writable. *(2026-10-13, from an architecture review.)*
+workspace is writable. *(2026-10-13, from an architecture review.)* *The workspace's
+retired `PROMPT.md` joins them: a start that finds one refuses, and one session's shell
+wrote it, where the profile grants the whole workspace, and stopped the deployment for
+everyone. Linux needs nothing, for the same reason. (2026-10-23.)*
 
 **A model's window is declared under `extra: profile:`, not as a key of its own.**
 `profile` is a constructor argument of every langchain chat model and `extra` already
@@ -1640,7 +1643,15 @@ which would resend them; a cut call too broken to parse is asked again the same 
 call with no result beside it is refused by the provider. These hidden attempts still
 count toward three, and since their text has already streamed, a `model_call` event goes
 to langgraph's `custom` stream at the cut. *(2026-10-17, from a design session and live
-calls.)*
+calls.)* *Since 2026-10-23 a cut reply with no answer in it is asked again without one: its
+empty text went to `ChatAnthropic`, which skipped it after joining its neighbours, so the
+task and the note went out as two user turns. One that wrote neither an answer nor a call
+spent the reservation thinking, and is told so and asked to think less, where "shorter"
+named an answer it never wrote. The retry is given no more room: the reservation is the
+row's, which deepagents takes off the window to set the summariser's trigger, so a larger
+one for one call is a request the window was never budgeted for. A model whose row fixes
+its thinking budget may be cut the same way again, and the third cut stops it, as any
+other does.*
 
 **`doctor` reports a row that cannot start a turn, by building the model.** Reversed: it
 was held that building costs ~700ms of provider import against 17ms for kingfisher, and
@@ -2963,9 +2974,13 @@ Measured: `edit("/scratchpad/link")` rewrote the pinned agent, and the same thro
 to a saved result forged it. The session root's backend, `UnlinkedBackend`, now refuses a
 path whose resolved location is not its spelling, and `ls`, `glob` and grep's own walk skip
 a link rather than name or read through one -- refused, not resolved and judged again,
-which would be a second copy of the rules. Routes need none of it: upstream refuses a
-link out of a route's root, and every rule on a route covers the whole of it. A check, not
-a lock: a command run beside a file-tool call could race it.
+which would be a second copy of the rules. Routes need only the half upstream has: every
+rule on a route covers the whole of it, so a link inside one is followed, and upstream
+refuses a link out of its root -- with a `ValueError`, which `read`, `write`, `edit`,
+`delete` and `ls` let escape, so a link a model left from `/memory` to its scratchpad
+notes ended the turn. Every route is a `RootedBackend`, which answers it as the
+operation's error; not `UnlinkedBackend`, which would refuse a deployment's skills folder
+its symlinks. A check, not a lock: a command run beside a file-tool call could race it.
 
 **A session folder that is a link is refused at open, not replaced.** `rm -rf memory &&
 ln -s <anywhere> memory` rooted the next turn's `/memory/` route wherever it pointed, and
@@ -2979,6 +2994,13 @@ made or not (`Layout.unlinked_dirs`): #1036 mounted `scratchpad/blobs`, which no
 makes, and a link the shell left there rooted the next turn's route on the host, where
 `read_file` read the operator's credentials. Within the turn the link was made in, the
 route was rooted before it and upstream refuses the path out. *(2026-10-21.)*
+*A link, a folder or anything but a regular file at `memory/AGENTS.md` is left, not
+refused: the scaffold writes only a missing file or an empty regular one, never through a
+link, where it had made a file outside the workspace and in `.harness` from kingfisher's
+own process. A file roots nothing, unlike a folder -- the route answers the path out with
+`invalid_path` -- so refusing would stop a session that, with memory off, nothing reads the
+file in. With memory on, deepagents fails each turn naming it (`Failed to download
+/memory/AGENTS.md: is_directory`). (2026-10-23.)*
 
 **Landlock cannot take back what it has granted, and the Linux job is what
 established that.** The first policy granted the session writable and its `.harness`
@@ -3852,6 +3874,23 @@ themselves and were refused nothing. The cost is Landlock's: no fence lets the s
 write into the directory it starts in. An unfenced shell can still save anywhere, and
 that is accepted. *(2026-10-22.)*
 
+**A path spelling one of the session's folders in other capitals is refused, by name.**
+The deny rules and the composite's routes match a path exactly, so on a case-insensitive
+volume -- macOS's default -- `/.HARNESS/secret.txt` matched neither, fell to the default
+backend rooted at the session, and opened the real `.harness`; `/scratchpad/TOOL_RESULTS/`
+wrote and rewrote saved results, and a tool's `PermittedBackend` and `on_this_host` let
+it through the same way. `miscased` compares the path's leading folders, case-folded,
+with every route the layout names and every folder the backend mounts, and the file
+tools and `PermittedBackend` refuse a path that matches one only in other capitals,
+naming the spelling that is. **By name, not by asking the disk:** whether a volume folds
+case is the disk's to say per folder, and an answer read from it would be one more
+lookup for every path a tool is handed. Refusing by name costs nothing where the disk
+does not fold, since `/.HARNESS` names a folder that is not there. Only the session's
+own folders: a file the agent names inside one is its to spell. *Casefolding the rules*
+was the other way, and the rules are deepagents' matcher: folding them means a second one
+kept beside it, which `PermittedBackend` was built on deepagents' helpers to avoid.
+*(2026-10-23, from a code review.)*
+
 ## Wiring a store
 
 `SessionStore` and `SessionRoot` were reversed on 2026-09-30 -- the backend is where a
@@ -4347,7 +4386,11 @@ through to its value, and any other value the reader cannot walk holds the defin
 named as written. Taken for naming nobody, `source_ids=IDS` copied a lock as an open tool --
 measured, an imported `IDS` and a module-level `ZONE` alike -- and not knowing is the case
 `--all` is for. Not read: a `**` spread into a call or an entry, which would hold back every
-tool module that forwards keyword arguments.*
+tool module that forwards keyword arguments.* *Since 2026-10-23 a name changed in place
+is not bound once -- `IDS = []` then `IDS.append("A")` was read as naming nobody while the
+loader read `["A"]` -- and a field set by its key or by a call, `entry["source_ids"] =
+[...]`, holds the module back, since the entry's own braces never say it. A name handed to
+a function that changes it is still not seen.*
 
 **Only a package or a bundle is decided whole, and by everything in it.** Every folder was,
 by its `.py` alone: a bundle whose definition named a source id was reported seeded with

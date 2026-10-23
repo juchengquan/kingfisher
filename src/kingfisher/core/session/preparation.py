@@ -128,7 +128,7 @@ class Preparation:
             if held is not None or self._graph is None
             else (None, None)
         )
-        if not self._reaches_pin(pinned, zone, held):
+        if not self._reaches_pin(pinned, zone, held, session_id=session.id):
             raise unknown_session(session.id)
         # A turn writes inside the session, which leaves the timestamp `retention.expired`
         # reads alone. At the top of the turn, not the end: a turn that fails still happened.
