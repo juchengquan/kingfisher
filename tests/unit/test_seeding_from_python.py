@@ -37,7 +37,7 @@ def test_the_readme_flow_seeds_a_definitions_folder(tmp_path, assets):
     assert not done.overwritten, "a fresh folder has nothing to overwrite"
     # What landed is loadable, which is the half `test_seeding.py` cannot see:
     # it asserts on what `seed` reported, and this asserts on what is on disk.
-    # `operator` rather than `assistant`, which names middleware and so arrives
+    # `operator` rather than `general`, which names middleware and so arrives
     # only with `everything=True`.
     assert (paths.definitions / "agents" / "operator.yaml").is_file()
     assert (paths.definitions / "skills").is_dir()

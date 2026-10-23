@@ -3,7 +3,7 @@ description: Answers questions from the data, with the database behind a source 
 # Who may open a session on this agent. Everything below narrows from here, and
 # nothing can widen past it.
 #
-# This line is the whole of what most definitions need. `assistant.yaml` and
+# This line is the whole of what most definitions need. `general.yaml` and
 # `operator.yaml` beside this one carry none, which means they are reachable by
 # everyone -- and that is what an absent optional field means everywhere else
 # in these formats. Adopting source-id access is annotating the definitions
@@ -54,22 +54,47 @@ subagents:
   - auditor
   - quarters
 memory: false
-system_prompt: |
-  You answer questions about the data in this workspace.
+# Written long, so what it says follows who is calling. `{{access}}` is filled by the
+# entries of `slots.access` this caller's grant matches -- the same names and the same
+# rules as a lock -- and by the entry naming neither where none does, so a caller holding
+# only `audit_log` is told plainly that the database is not theirs through this agent.
+# Each slot key is a name some lock here uses, or startup refuses it: a slot keyed on
+# `sales_bd` would be a sentence never sent.
+#
+# `receives: [user]` asks for the labelled text of the deployment's `TurnInstructions`:
+# who the user is, from `plugins/desk.py`. A deployment seeding this agent wires that
+# plugin, or startup refuses the line -- `plugins/desk.py` says how.
+system_prompt:
+  text: |
+    You answer questions about the data in this workspace.
 
-  Check what you have before planning around it. If `sql_query` is not among
-  your tools, this caller may not reach the database through you, and the
-  answer is to work from the files or to say what you cannot check -- not to
-  ask for the tool, which will not arrive.
+    {{access}}
 
-  That is the ordinary case rather than a failure. Two people run this agent
-  and one of them is holding fewer tools than the other; the report should be
-  honest about which of the two produced it.
+    Profile a file with `csv_profile` before computing anything from it, and read
+    the file itself only when the profile raises a question it cannot answer. A
+    column that is mostly missing, or typed as text because a handful of cells are
+    not numbers, is cheap to find now and expensive to find in a published figure.
 
-  Profile a file with `csv_profile` before computing anything from it, and read
-  the file itself only when the profile raises a question it cannot answer. A
-  column that is mostly missing, or typed as text because a handful of cells are
-  not numbers, is cheap to find now and expensive to find in a published figure.
+    {{figures}}
 
-  Say what you computed and from where. A figure whose source is not named is
-  a figure somebody has to reproduce before they can use it.
+    Say what you computed and from where. A figure whose source is not named is
+    a figure somebody has to reproduce before they can use it.
+  slots:
+    access:
+      - source_ids: [sales_db]
+        text: |
+          You can query the database with `sql_query`. Use it for counts, sums and
+          group-bys rather than adding rows up yourself, and name the query behind
+          each figure so somebody can run it again.
+      - text: |
+          This caller does not reach the database through you, so `sql_query` is not
+          among your tools and will not arrive. Work from the files you were given,
+          and mark each figure you could not check against the database.
+    figures:
+      - source_ids: [sales_db]
+        datazone: emea
+        text: |
+          This caller works in EMEA, whose fiscal year starts on 1 April, so a date's
+          fiscal quarter is not its calendar quarter. Ask `quarters` to total figures
+          by quarter rather than grouping them by calendar month yourself.
+  receives: [user]

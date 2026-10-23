@@ -21,7 +21,7 @@
 #             "summarize-by-count": SummarizeByCount,
 #         },
 #     )
-name: assistant
+name: general
 description: General-purpose agent for a workspace with no particular specialism.
 # Every tool deepagents brings, and every tool this workspace defines,
 # `web_search` and `http_fetch` among them. `["*"]` is how this format says

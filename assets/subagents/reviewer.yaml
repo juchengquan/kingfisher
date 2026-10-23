@@ -32,7 +32,7 @@ skills:
 #
 # The caller decides whether it is in reach, so the prompt below works both
 # ways. A request naming `reviewer` alone gets a reviewer without it -- dropped,
-# not refused. `assistant.yaml` names both, so it runs with the pair.
+# not refused. `general.yaml` names both, so it runs with the pair.
 #
 # That reaches `profiler` twice, once from the agent and once from here, and is
 # not a loop: delegation is a graph, and only a path back to where it started is

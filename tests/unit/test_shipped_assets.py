@@ -385,12 +385,12 @@ def test_every_preset_agent_parses(shipped):
     """
     specs = LocalAgentRepository(shipped / "agents").specs
 
-    # `assistant` names middleware and `analyst` names source ids, so `seed`
+    # `general` names middleware and `analyst` names source ids, so `seed`
     # leaves both behind -- see
     # `test_seed_leaves_behind_a_definition_that_names_middleware`. Left behind
     # is not unread: they are definitions of this kind, in this kind's folder,
     # and they parse like the rest.
-    assert set(specs) == {"analyst", "assistant", "operator", "scribe"}
+    assert set(specs) == {"analyst", "general", "operator", "scribe"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
@@ -432,11 +432,11 @@ def test_every_preset_names_skills_this_distribution_actually_offers(
     `reviewer` grants `incident::postmortem`, a skill's own identity and the
     spelling its own file is here to demonstrate. Nothing built an agent against
     the shipped skills, so the grant was refused as an unknown name and
-    `kingfisher run --agent assistant` -- the first command the README hands a
+    `kingfisher run --agent general` -- the first command the README hands a
     reader -- died before the model was called.
     """
     cfg = replace(workspace_with_presets, skills_enabled=True)
-    # What `agents/assistant.yaml` declares. Written out rather than read from
+    # What `agents/general.yaml` declares. Written out rather than read from
     # the file, because `build_agent` takes capabilities and this test is about
     # what the subagents resolve to, not about how an agent becomes a request.
     granted = Capabilities(subagents=("extractor", "reviewer", "profiler"))
@@ -478,12 +478,12 @@ def test_the_shipped_subagent_consults_its_helper_under_the_agent_that_ships_it(
     """`reviewer.yaml` named `profiler` and left `task` off its own `builtin_tools`, so
     every consultation was refused -- while a check that `task` was registered passed.
 
-    Read off `assistant.yaml` rather than written out: what could regress is the file
+    Read off `general.yaml` rather than written out: what could regress is the file
     that ships the pairing dropping half of it. Driven, because the refusal is the
     reviewer's own allowlist and arrives only when the call is made.
     """
-    declared = LocalAgentRepository(shipped / "agents").specs["assistant"].subagents
-    assert isinstance(declared, tuple), "assistant names its subagents one by one"
+    declared = LocalAgentRepository(shipped / "agents").specs["general"].subagents
+    assert isinstance(declared, tuple), "general names its subagents one by one"
     assert {"reviewer", "profiler"} <= set(declared), "the file dropped half the pair"
     wired = replace(workspace_with_presets, skills_enabled=True)
 
@@ -865,14 +865,14 @@ def test_the_wiring_block_names_classes_the_example_actually_defines(shipped):
 
 
 def test_the_block_the_agent_file_prints_registers_what_the_agent_names(shipped):
-    """`assistant.yaml` prints its own copy of the wiring block, and nothing read it.
+    """`general.yaml` prints its own copy of the wiring block, and nothing read it.
 
     There are two copies of one registry: the example's docstring, held equal to what
     the directory offers, and this header, held to nothing. It drifted the moment a
     middleware was added -- seeding the agent and pasting its block would have left the
     summarizer unregistered, with the refusal naming a name the block never mentions.
     """
-    printed = dict(WIRING.findall((shipped / "agents" / "assistant.yaml").read_text("utf-8")))
+    printed = dict(WIRING.findall((shipped / "agents" / "general.yaml").read_text("utf-8")))
 
     assert printed, "the block moved out of the header or changed shape"
     assert set(printed) == set(_documented_registry(shipped)), (
@@ -957,14 +957,14 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     done = seed(Destination(), shipped)
 
     assert {left.label for left in done.skipped} == {
-        "agents/assistant.yaml",
+        "agents/general.yaml",
         "agents/analyst.yaml",
         "subagents/auditor.yaml",
         "subagents/quarters.py",
         "tools/sql_query.py",
     }
-    assert "agents/assistant.yaml" not in done.written
-    assert not (tmp_path / "agents" / "assistant.yaml").exists()
+    assert "agents/general.yaml" not in done.written
+    assert not (tmp_path / "agents" / "general.yaml").exists()
 
     # The names are the actionable half of the message, and `wants` is what
     # makes them actionable: "names middleware" sends a reader to a registry
@@ -973,7 +973,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     assert {
         left.label: (left.wants, left.names, left.datazones) for left in done.skipped
     } == {
-        "agents/assistant.yaml": ("middlewares", ("summarize-by-count",), ()),
+        "agents/general.yaml": ("middlewares", ("summarize-by-count",), ()),
         "agents/analyst.yaml": ("source_ids", ("sales_db", "audit_log"), ()),
         "subagents/auditor.yaml": ("source_ids", ("sales_db", "audit_log"), ()),
         # The datazone beside the source id, from one file that names both, each in the
@@ -1029,8 +1029,8 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
     done = seed(Destination(), shipped, everything=True)
 
     assert not done.skipped
-    assert "agents/assistant.yaml" in done.written, "the agent a reader runs first"
-    assert (tmp_path / "agents" / "assistant.yaml").is_file()
+    assert "agents/general.yaml" in done.written, "the agent a reader runs first"
+    assert (tmp_path / "agents" / "general.yaml").is_file()
 
 
 def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, tmp_path):
@@ -1055,7 +1055,7 @@ def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, 
     assert (tmp_path / "middlewares" / "summarize_by_count.py").is_file()
     # Left behind for naming middleware, which is a different rule and still
     # holds: a workspace that can *offer* one has not thereby registered it.
-    assert "agents/assistant.yaml" not in done.written
+    assert "agents/general.yaml" not in done.written
 
 
 def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_path):
@@ -1082,7 +1082,7 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
 def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     cfg, session_dir, shipped, monkeypatch
 ):
-    """`assistant` wrote `middlewares: ["*"]`, and a seeded workspace offers every
+    """`general` wrote `middlewares: ["*"]`, and a seeded workspace offers every
     example in `middlewares/`, so the star took whatever was there -- including anything
     added later for another agent -- with neither its file nor its prompt saying so.
 
@@ -1094,7 +1094,7 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     from kingfisher.core.definitions.seeding import seed
 
     seed(cfg, shipped, everything=True)
-    spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["assistant"]
+    spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["general"]
     offered = set(LocalMiddlewareRepository(cfg.catalogue_roots["middlewares"]).classes)
     wired = replace(cfg, skills_enabled=True)
     built = build_agent(
@@ -1109,9 +1109,9 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     # The class's name rather than the instance's, which `summarize-by-count` points at
     # the deepagents slot it fills.
     worn = {name_of(type(m)) for m in built.middleware} & offered
-    assert spec.middlewares, "assistant names no middleware"
-    assert spec.middlewares != ALL, "assistant takes whatever is offered again"
-    assert worn == set(spec.middlewares), f"assistant runs under {sorted(worn)}"
+    assert spec.middlewares, "general names no middleware"
+    assert spec.middlewares != ALL, "general takes whatever is offered again"
+    assert worn == set(spec.middlewares), f"general runs under {sorted(worn)}"
 
 
 @pytest.mark.parametrize(
@@ -1129,7 +1129,7 @@ def test_the_summarizer_refuses_a_count_it_cannot_use(shipped, messages, refusal
 
 
 def _assistant(shipped):
-    return LocalAgentRepository(shipped / "agents").specs["assistant"]
+    return LocalAgentRepository(shipped / "agents").specs["general"]
 
 
 def test_the_shipped_assistant_writes_the_key_its_middleware_opens(shipped):
@@ -1304,7 +1304,7 @@ def test_the_other_presets_still_restrict_nobody(shipped):
     agents = LocalAgentRepository(shipped / "agents").specs
 
     assert {name for name, spec in agents.items() if spec.source_ids == ALL} == {
-        "assistant",
+        "general",
         "operator",
         "scribe",
     }
@@ -1387,7 +1387,7 @@ def test_assistant_builds_from_the_workspace_alone(cfg, session_dir, shipped):
     roots = Definitions.from_roots(
         {kind: shipped / kind for kind in ("agents", "skills", "subagents", "tools", "middlewares")}
     )
-    spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
+    spec = LocalAgentRepository(shipped / "agents").specs["general"]
 
     wired = replace(cfg, skills_enabled=True)
     graph = build_agent(
@@ -1517,7 +1517,7 @@ def test_a_compacted_agent_still_sees_what_it_just_read(shipped, cfg, session_di
 def test_summarize_by_count_fires_at_sixty_messages_however_small(shipped, cfg, session_dir):
     """Small reads never reach deepagents' token threshold; the message clause does.
 
-    And the summary names where what it replaced went, which `assistant`'s prompt
+    And the summary names where what it replaced went, which `general`'s prompt
     tells the agent to read -- read back here through the agent's own `read_file`,
     so under the permissions the agent runs with rather than the backend's. It went
     to `conversation_history/` at the session root, outside every folder the layout
@@ -1722,3 +1722,92 @@ def test_every_shipped_file_tool_works_on_a_backend_with_nothing_on_this_host(sh
         b"--- page 1 ---\nalpha\n--- page 2 ---\nbeta\n"
     )
     assert held["/scratchpad/report.p2.pdf"].startswith(b"%PDF-")
+
+
+# -- the prompt that follows the caller, and the hook it is written for --------
+
+
+def _shipped_definitions(shipped):
+    from kingfisher.core.config import definition_roots_for
+    from kingfisher.core.definitions.catalogue import Definitions
+
+    return Definitions.from_roots(definition_roots_for(shipped)).warm()
+
+
+def test_the_shipped_hook_offers_every_label_a_shipped_definition_receives(shipped):
+    """`analyst` receives `user`; a hook not offering it, or none, refuses every startup
+    that seeded it. Against the real files, and with the control beside it."""
+    from assets.plugins.desk import DeskInstructions
+    from kingfisher.core.config import ConfigError
+    from kingfisher.core.service import refuse_unoffered_labels
+
+    catalogue = _shipped_definitions(shipped)
+    assert any(spec.receives for spec in catalogue.agents.specs.values()), (
+        "no shipped definition receives a label, so this asserts nothing"
+    )
+
+    refuse_unoffered_labels(catalogue, DeskInstructions())
+    with pytest.raises(ConfigError, match="agent 'analyst' receives user"):
+        refuse_unoffered_labels(catalogue, None)
+
+
+def test_the_plugin_factory_the_docs_name_builds_the_hook():
+    """`KINGFISHER_PLUGINS=assets.plugins.desk:build_plugins` is what three files tell a
+    deployment to write; driven through the reader the command uses."""
+    from assets.plugins.desk import DeskInstructions
+    from kingfisher.cli.configured import configured_plugins
+
+    plugins = configured_plugins({"KINGFISHER_PLUGINS": "assets.plugins.desk:build_plugins"})
+
+    assert isinstance(plugins.turn_instructions, DeskInstructions)
+
+
+def _caller(started: str, **context: str):
+    from datetime import datetime
+
+    from kingfisher import Caller
+
+    return Caller(
+        source_ids=frozenset(),
+        datazone=None,
+        context=context,
+        started=datetime.fromisoformat(started),
+    )
+
+
+def test_the_shipped_hook_says_the_date_where_the_caller_is():
+    """Late on the 22nd in UTC is the 23rd in Singapore: a date read in kingfisher's zone
+    would be a day out for that caller."""
+    from assets.plugins.desk import DeskInstructions
+
+    told = DeskInstructions().text(
+        None, "s", _caller("2026-10-22T23:30:00+00:00", tz="Asia/Singapore", name="Ana", team="Ops")
+    )
+
+    assert told.everyone == "Today is Friday 23 October 2026, in Asia/Singapore."
+    assert told.labelled == {"user": "You are working for Ana, Ops."}
+
+
+def test_the_shipped_hook_names_the_zone_it_fell_back_to_and_says_nothing_of_nobody():
+    from assets.plugins.desk import DeskInstructions
+
+    told = DeskInstructions().text(None, "s", _caller("2026-10-22T23:30:00+00:00", tz="Mars/Base"))
+
+    assert told.everyone == "Today is Thursday 22 October 2026, in UTC."
+    assert told.labelled == {}
+
+
+def test_the_shipped_analyst_tells_each_caller_what_its_grant_reaches(shipped):
+    """The paragraph this replaced told every caller to check whether `sql_query` was
+    among its tools; each caller is now told which, and an EMEA caller about its quarters."""
+    analyst = _shipped_definitions(shipped).agents.specs["analyst"]
+
+    sales = analyst.prompt_for(frozenset({"sales_db"}))
+    audit = analyst.prompt_for(frozenset({"audit_log"}))
+    emea = analyst.prompt_for(frozenset({"sales_db", "datazone=emea"}))
+
+    assert "You can query the database with `sql_query`" in sales
+    assert "does not reach the database" not in sales and "EMEA" not in sales
+    assert "does not reach the database" in audit and "sql_query`. Use it" not in audit
+    assert "fiscal year starts on 1 April" in emea
+    assert "{{" not in sales + audit + emea
