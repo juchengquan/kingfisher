@@ -25,6 +25,8 @@ from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolR
 from kingfisher.core.definitions.tools.spec import FoundTool, Offering, audienced, reference
 from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, RESERVED_SKILL_FOLDER, SKILLS_ROUTE
 
+from .prompts import unused_names
+
 if TYPE_CHECKING:
     from kingfisher.core.access import Vocabulary
 
@@ -187,6 +189,15 @@ class Definitions:
                 refuse_one_skill_twice(
                     spec.skills, self.registry, subject=f"{kind} {spec.name!r}", error=error
                 )
+                # Here, with every lock read: a slot keyed on a misspelt name is never sent,
+                # and a slot key is no lock, or it would make itself legal.
+                if unused := unused_names(spec.slots, self.vocabulary):
+                    msg = (
+                        f"{kind} {spec.name!r}: system_prompt.slots is keyed on "
+                        f"{', '.join(unused)}, which no lock here names, so that text "
+                        "is never sent -- `kingfisher list` prints the names in use"
+                    )
+                    raise error(msg)
         # A bundle's tools too, though only one subagent can call them: otherwise the
         # deployment starts fine and fails on the first request activating that subagent.
         for name, repository in self.bundled_tools.items():

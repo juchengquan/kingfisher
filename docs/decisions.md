@@ -47,6 +47,32 @@ the common case pay for the rare one: adding one audience rewrote every entry in
 field. The old form is refused, naming the entry to write. `all_of` is refused as any
 mapping with a value is, no longer by name. *(2026-09-03.)*
 
+**`system_prompt` written long fills slots from the caller's grant.** A deployment
+needed wording that changes with the sources a caller selected, at a place in the
+prompt it chooses. `text` places `{{name}}` blanks and `slots` lists each one's
+entries, an entry being an audience and its text: every match sent in file order, the
+entry naming none sent only where nothing matched. A field of its own was weighed and
+not taken: a `system_prompt` that is text or a mapping is the short-form-and-long-form
+shape `skills:` and `middlewares:` entries have, and keeps everything the model is told
+by a definition under one key. Text appended at the end is a slot on the last line, so
+there is no second mechanism for it.
+
+- **The caller's grant, for every subagent too.** Not what a subagent reaches through
+  its own tools: data reaches a subagent as files the agent made, and a CSV pulled from
+  `sales_db` is still net of returns when a subagent holding no database tool reads it.
+  An unscoped run, whose `None` reaches everything, fills every slot.
+- **Cached.** The text depends on the grant alone, and the tool list sent ahead of the
+  system prompt already varies with it. Per-turn text cannot be a slot.
+- **Every `text` is `|`, a one-line entry too.** Measured with PyYAML: unquoted,
+  `text: Revenue #1 is net` loads as `Revenue`, and a value beginning `{` fails to load.
+- **Doubled braces are reserved in every prompt**, the short form included: a `{{name}}`
+  no slot fills is refused rather than sent as braces. No escape until a definition
+  needs one; slots do not nest.
+- **A slot keyed on a name no lock uses is refused at startup,** in `warm`, where every
+  lock has been read. Unlike a caller's name, which is held and opens nothing, a slot
+  keyed on `sales_bd` is a sentence never sent. A slot key is not added to the
+  vocabulary: it would make itself legal. *(2026-10-23.)*
+
 ## The catalogue
 
 **Tools and subagents nest; skills stay flat.** A folder is organisation and never

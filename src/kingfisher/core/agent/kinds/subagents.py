@@ -318,7 +318,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         "description": spec.description,
         # The deployment's instructions ahead of its own, so delegated work cannot escape a
         # house rule.
-        "system_prompt": subagent_prompt(spec.system_prompt, instructions, cfg.layout),
+        "system_prompt": subagent_prompt(spec.prompt_for(held), instructions, cfg.layout),
     }
     # A subagent inherits none of the parent's `GrantedOnlyMiddleware`, so the ceiling is applied
     # here or a withheld `execute` reaches every subagent. What it is stays `ceiling`'s call.

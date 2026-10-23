@@ -434,13 +434,17 @@ def test_a_merge_key_overriding_what_it_merges_is_not_a_repeat():
 @pytest.mark.parametrize("kind", sorted(FORMATS))
 def test_a_required_field_written_as_a_list_or_mapping_is_refused(kind, field):
     """Each was stringified, so a list `system_prompt` reached the model as a Python
-    repr of the list."""
+    repr of the list. A mapping `system_prompt` is its long form, refused for its key."""
     read, _known, _spec = FORMATS[kind]
     errors = {"agent": AgentError, "subagent": SubagentError}
     fields = {"name": "x", "description": "d", "system_prompt": "|\n  Go."}
+    long_form = r"unknown field 'system_prompt\.a'"
     for shape, value in (("list", "\n  - one\n  - two"), ("mapping", "\n  a: 1")):
         written = "".join(
             f"{key}: {value if key == field else text}\n" for key, text in fields.items()
         )
-        with pytest.raises(errors[kind], match=f"'{field}' is one piece of text, not a {shape}"):
+        refused = f"'{field}' is one piece of text, not a {shape}"
+        if (field, shape) == ("system_prompt", "mapping"):
+            refused = long_form
+        with pytest.raises(errors[kind], match=refused):
             read(written, "shaped.yaml")

@@ -6,7 +6,7 @@ is a fact about a document rather than about what either kind means.
 
 from __future__ import annotations
 
-from collections.abc import Hashable
+from collections.abc import Hashable, Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -129,19 +129,42 @@ def fields_of(definition: DefinitionText, error: type[ValueError]) -> dict[str, 
 
 
 def require_literal_prompt(text: str, source: Path, error: type[ValueError]) -> None:
-    """Refuse a `system_prompt` written in a style that reflows it."""
+    """Refuse any text of a `system_prompt`, short or long, written in a style that reflows
+    it."""
     node = yaml.compose(text)
     if not isinstance(node, yaml.MappingNode):  # pragma: no cover -- decode checked
         return
-    for key, value in node.value:
-        if getattr(key, "value", None) != "system_prompt":
-            continue
-        if isinstance(value, yaml.ScalarNode) and value.style != LITERAL:
+    for where, value in _prompt_texts(node):
+        if value.style != LITERAL:
             written = f"{value.style!r}" if value.style else "a plain scalar"
             msg = (
-                f"{source.name}: system_prompt is written as {written}, which reflows it. "
-                f"Use a literal block -- `system_prompt: {LITERAL}` -- so the prompt "
-                "reaches the model with the line breaks you wrote"
+                f"{source.name}: {where} is written as {written}, which reflows it. "
+                f"Use a literal block -- `{where.rsplit('.', 1)[-1]}: {LITERAL}` -- so the "
+                "prompt reaches the model with the line breaks you wrote"
             )
             raise error(msg)
+
+
+def _prompt_texts(document: yaml.MappingNode) -> Iterator[tuple[str, yaml.ScalarNode]]:
+    """Every piece of prompt text a definition writes, with where it is written.
+
+    A one-line slot entry too: unquoted, `text: Revenue #1 is net` loads as `Revenue`.
+    """
+    prompt = _value_of(document, "system_prompt")
+    if isinstance(prompt, yaml.ScalarNode):
+        yield "system_prompt", prompt
+    if not isinstance(prompt, yaml.MappingNode):
         return
+    if isinstance(text := _value_of(prompt, "text"), yaml.ScalarNode):
+        yield "system_prompt.text", text
+    slots = _value_of(prompt, "slots")
+    for name, entries in slots.value if isinstance(slots, yaml.MappingNode) else ():
+        for at, entry in enumerate(entries.value if isinstance(entries, yaml.SequenceNode) else ()):
+            if isinstance(entry, yaml.MappingNode) and isinstance(
+                text := _value_of(entry, "text"), yaml.ScalarNode
+            ):
+                yield f"system_prompt.slots.{name.value}[{at}].text", text
+
+
+def _value_of(mapping: yaml.MappingNode, key: str) -> yaml.Node | None:
+    return next((value for k, value in mapping.value if getattr(k, "value", None) == key), None)

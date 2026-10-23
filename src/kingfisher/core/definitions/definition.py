@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 
 from kingfisher.core.access import ALL, Audience, Capabilities, Selection, narrowed_for
 
+from .prompts import Slots, told
+
 
 # `kw_only` lets a subclass add a required field after these defaulted ones.
 @dataclass(frozen=True, kw_only=True)
@@ -22,6 +24,10 @@ class SpecBase:
     #: file may write; a compiled subagent, whose graph carries its prompt, passes `""`.
     #: Each kind checks blankness itself.
     system_prompt: str
+    #: The `{{name}}` blanks in `system_prompt` and how each caller's grant fills them, read
+    #: from its long form. Only `prompt_for` may hand the text on: unfilled, the model is
+    #: sent the braces.
+    slots: Slots = field(default_factory=dict, metadata={"derived": True})
     #: The two tool axes, granted apart because they are offered apart: built-ins come with
     #: deepagents, `tools` is what the workspace wrote. In one list, asking for an offered
     #: tool would give up every built-in. `None` grants none, as on every grant field here: a
@@ -62,6 +68,10 @@ class SpecBase:
     skill_audiences: Mapping[str, Audience] = field(
         default_factory=dict, metadata={"derived": True}
     )
+
+    def prompt_for(self, held: frozenset[str] | None) -> str:
+        """What this definition instructs a caller holding `held` with, its slots filled."""
+        return told(self.system_prompt, self.slots, held)
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
         """What this definition holds, narrowed to what one caller reaches.

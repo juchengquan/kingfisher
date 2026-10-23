@@ -3377,8 +3377,19 @@ def test_the_catalogue_holds_one_module_per_kind():
 #: that turns up.
 #: `catalogue` and `seeding` are not helpers the kinds share but the two readers over all
 #: of them: one reads every kind into `Definitions`, the other copies a definitions folder.
+#: `prompts` reads and fills `system_prompt` written long, which `definition` declares on
+#: both kinds: two copies of the slot grammar would let a slot mean one thing per kind.
 KINDS_HELPERS = frozenset(
-    {"__init__", "catalogue", "definition", "documents", "fields", "importing", "seeding"}
+    {
+        "__init__",
+        "catalogue",
+        "definition",
+        "documents",
+        "fields",
+        "importing",
+        "prompts",
+        "seeding",
+    }
 )
 
 

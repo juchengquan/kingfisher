@@ -49,6 +49,7 @@ _EXPORTS = {
     "Vocabulary": "kingfisher.core.access.source_ids",
     "jointly": "kingfisher.core.access.source_ids",
     "listed": "kingfisher.core.access.source_ids",
+    "mentioned": "kingfisher.core.access.source_ids",
     "spell": "kingfisher.core.access.source_ids",
     "unlisted": "kingfisher.core.access.source_ids",
     "with_datazone": "kingfisher.core.access.source_ids",
@@ -103,6 +104,7 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import Vocabulary as Vocabulary
     from kingfisher.core.access.source_ids import jointly as jointly
     from kingfisher.core.access.source_ids import listed as listed
+    from kingfisher.core.access.source_ids import mentioned as mentioned
     from kingfisher.core.access.source_ids import spell as spell
     from kingfisher.core.access.source_ids import unlisted as unlisted
     from kingfisher.core.access.source_ids import with_datazone as with_datazone
