@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Redacted thinking kept as `v1` goes back only to its signer too, after #9999
+
+- **A reply kept under `output_version: v1` loses another signer's redacted thinking from
+  the request.** `v1` wraps Anthropic's `redacted_thinking` as a `non_standard` block, which
+  #1048's strip did not look inside, so a session that moved from MiniMax to Claude with
+  `v1` set sent MiniMax's redacted thinking on. Nothing to change; the conversation keeps
+  the block.
+
 ## A `ScratchRunLimit` grants a run only by answering `True`, after #9999
 
 - **An answer that is neither `True` nor `False` refuses that graph's runs.** It was read by

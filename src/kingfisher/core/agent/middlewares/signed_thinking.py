@@ -56,6 +56,10 @@ def _readable(reply: AIMessage, signer: Mapping[str, str | None]) -> bool:
 
 
 def _thinking(block: Any) -> bool:
+    # Under `output_version="v1"` Anthropic's redacted thinking is wrapped as
+    # `non_standard`, and both chat classes send its `value` on as it is.
+    if isinstance(block, dict) and block.get("type") == "non_standard":
+        block = block.get("value")
     return isinstance(block, dict) and block.get("type") in THINKING
 
 
