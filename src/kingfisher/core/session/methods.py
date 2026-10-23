@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import ALL, caller_holds, reaches, with_datazone, zoned
 from kingfisher.core.definitions.agents.reading import read
+from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.request import Request, Resume
 
 from .files import read_artifact
@@ -30,6 +32,8 @@ if TYPE_CHECKING:
 
     from kingfisher.core.access import Held, Vocabulary
     from kingfisher.core.config import Config
+
+_log = logging.getLogger(__name__)
 
 
 class SessionMethods:
@@ -58,7 +62,9 @@ class SessionMethods:
         if session_id not in (yield from self._known_steps()):
             raise unknown_session(session_id)
 
-    def _reaches_session(self, harness: Any, held: frozenset[str] | None) -> Steps[bool]:
+    def _reaches_session(
+        self, harness: Any, held: frozenset[str] | None, *, session_id: str
+    ) -> Steps[bool]:
         """Whether a caller holding `held` may touch the session `harness` belongs to.
 
         The rule reading a session and running a turn in it share: a caller who cannot
@@ -69,13 +75,28 @@ class SessionMethods:
         if held is None:
             return True
         kept, zone = yield from pinned_in(harness)
-        return self._reaches_pin(kept, zone, held)
+        return self._reaches_pin(kept, zone, held, session_id=session_id)
 
-    def _reaches_pin(self, kept: Any, zone: str | None, held: frozenset[str] | None) -> bool:
+    def _reaches_pin(
+        self, kept: Any, zone: str | None, held: frozenset[str] | None, *, session_id: str
+    ) -> bool:
         """`_reaches_session`, for the pins already read."""
         if held is None:
             return True
-        return reaches(zoned(ALL if kept is None else read(kept).source_ids, zone), held)
+        try:
+            audience = ALL if kept is None else read(kept).source_ids
+        except AgentError as exc:
+            # A pin an older kingfisher wrote and today's reader refuses reaches no scoped
+            # caller. Raised, it stopped every scoped listing, and told a caller who may not
+            # reach the session what its lock was.
+            _log.warning(
+                "session %s: its pinned agent no longer reads, so only an unscoped call "
+                "reaches it: %s",
+                session_id,
+                exc,
+            )
+            return False
+        return reaches(zoned(audience, zone), held)
 
     def _known_steps(self) -> Steps[tuple[str, ...]]:
         """The id of every session the deployment's backends hold."""
@@ -176,7 +197,9 @@ class SessionMethods:
         if held is None:
             return True, []
         files = yield from self._files_for(session_id)
-        reached = yield from self._reaches_session(HarnessFiles(files), held)
+        reached = yield from self._reaches_session(
+            HarnessFiles(files), held, session_id=session_id
+        )
         return reached, [files]
 
     def _files_in(self, session_id: str, opened: list[Any]) -> Steps[Any]:

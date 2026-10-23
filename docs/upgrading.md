@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session whose pin no longer reads is out of every scoped caller's reach, after #9999
+
+- **A scoped `sessions()` or `session()` no longer raises over one such session.** An
+  older kingfisher pinned the agent a session ran, and a lock today's reader refuses --
+  `source_ids: datazone=finance`, before #1048 -- made `kf.sessions(source_ids=...)`
+  raise for every caller, and `kf.session(id, source_ids=...)` quote the lock. Now such
+  a session is reached by no scoped caller, a turn naming it is told there is no such
+  session, and a warning on `kingfisher.core.session.methods` names its id.
+- **The operator's listing and `UNSCOPED` still reach it**, so it can be read or deleted.
+
 ## Seed holds back a lock set after its value is bound, after #9999
 
 - **`IDS = []` then `IDS.append("A")` is held back.** Seed read the assignment, took `[]`

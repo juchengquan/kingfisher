@@ -518,6 +518,39 @@ def test_a_listing_leaves_out_a_session_in_another_datazone(turns):
     assert kf.sessions(source_ids=("A",)) == ()
 
 
+def _pinned_before_the_reader_tightened(cfg, session_id: str) -> None:
+    """Pin `session_id` to a lock kingfisher took before #1048 and refuses now."""
+    pin = cfg.sessions_root / session_id / ".harness" / "agent.yaml"
+    kept = pin.read_text(encoding="utf-8")
+    stale = kept.replace("source_ids: [A, B]", "source_ids: datazone=finance")
+    assert stale != kept
+    pin.write_text(stale, encoding="utf-8")
+
+
+def test_a_pin_the_reader_now_refuses_reaches_no_scoped_caller(turns, way, caplog):
+    """One such pin raised out of every scoped listing, so no caller got one, and quoted
+    its lock to a caller asking for that session by id, which a leaked id must not do.
+    """
+    kf = Kingfisher(turns, sessions=LocalSessions())
+    _turn(kf, "s1", None)
+    _turn(kf, "s2", None)
+    _pinned_before_the_reader_tightened(turns, "s1")
+
+    listed = (
+        asyncio.run(kf.asessions(source_ids=("A",)))
+        if way == "async"
+        else kf.sessions(source_ids=("A",))
+    )
+    assert [one.id for one in listed] == ["s2"]
+    assert Through(kf, way).session("s1", source_ids=("A",)) is None
+    with pytest.raises(UnknownSessionError):
+        _turn(kf, "s1", None)
+    assert "session s1: its pinned agent no longer reads" in caplog.text
+    # The operator still sees it, so it can be cleaned up.
+    assert {one.id for one in kf.sessions()} == {"s1", "s2"}
+    assert Through(kf, way).session("s1", source_ids=UNSCOPED) is not None
+
+
 def test_the_first_zoned_turn_narrows_a_session_that_had_none(turns):
     """Not the first turn's: an unzoned turn adds nothing a finance caller may not read,
     and the finance turn after it adds what only they may.
