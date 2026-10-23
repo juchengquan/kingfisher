@@ -213,6 +213,9 @@ def test_a_miss_is_read_off_the_line_naming_the_path(output, path):
 
 
 #: Where a shell says it sees the session, which the corrections are named against.
+#: GNU's curly quotes, as its tools print them under a UTF-8 locale.
+LQ, RQ = "\u2018", "\u2019"
+
 SESSION = "/host/sessions/s"
 
 
@@ -238,6 +241,13 @@ SESSION = "/host/sessions/s"
         # The Linux fence's word, and bubblewrap's.
         ("bash: inputs/new.txt: Permission denied", "inputs"),
         ("bash: inputs/new.txt: Read-only file system", "inputs"),
+        # GNU tools under the UTF-8 locale the shell is given, which quote a name in
+        # curly quotes rather than straight ones.
+        (f"cp: cannot create regular file {LQ}inputs/a.csv{RQ}: Permission denied", "inputs"),
+        (
+            f"mkdir: cannot create directory {LQ}{SESSION}/inputs/d{RQ}: Read-only file system",
+            "inputs",
+        ),
         # A program that opened the file itself rather than the shell redirecting into it.
         ("PermissionError: [Errno 1] Operation not permitted: 'inputs/new.txt'", "inputs"),
         # The folder itself, not a file under it.
@@ -305,6 +315,12 @@ HELD = folders_of(DEFAULT_LAYOUT)
         # The Linux fence's word, and bubblewrap's.
         ("bash: mine/out.csv: Permission denied", "/mine/out.csv"),
         ("bash: mine/out.csv: Read-only file system", "/mine/out.csv"),
+        # GNU's curly quotes, which are no part of the path they surround.
+        (
+            f"cp: cannot create regular file {LQ}{SESSION}/out.csv{RQ}: Permission denied",
+            "/out.csv",
+        ),
+        (f"cp: cannot create regular file {LQ}inputs/a.csv{RQ}: Permission denied", None),
         # A folder the layout does name is the fence's to allow, and it allows these two:
         # a refusal under one is not a write that went to the wrong folder.
         (f"/bin/sh: {SESSION}/outputs/ok.txt: Operation not permitted", None),
@@ -700,6 +716,21 @@ def test_a_refusal_no_folder_holds_tells_the_shells_result_where_writes_go(way):
 
     left = _answered(way, "line_count", ToolMessage(STRAYED, tool_call_id="c1"))
     assert left.text == STRAYED
+
+
+#: GNU's `cp` refused a kept folder under the UTF-8 locale the shell is given.
+CURLY = f"cp: cannot create regular file {LQ}inputs/a.csv{RQ}: Permission denied"
+
+
+def test_a_refusal_in_curly_quotes_is_told_its_kept_folder(way):
+    """GNU tools quote a name in curly quotes under the shell's UTF-8 locale, and the
+    opening one was read as part of the path: the model was told `/\u2018inputs/a.csv` was
+    outside every folder instead of that `/inputs/` is kept.
+    """
+    corrected = _answered(way, "execute", ToolMessage(CURLY, tool_call_id="c1"))
+
+    assert kept_note("inputs", Layout()) in corrected.text
+    assert f"{LQ}inputs" not in corrected.text.removeprefix(CURLY)
 
 
 def test_a_kept_folder_is_named_before_a_path_no_folder_holds(way):

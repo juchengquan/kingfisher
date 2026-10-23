@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A refusal GNU quotes in curly quotes gets its kept folder's note, after #9999
+
+- **`cp: cannot create regular file ‘inputs/a.csv’: Permission denied` is told `/inputs/`
+  is kept.** GNU tools quote a name in curly quotes under the UTF-8 locale kingfisher's
+  shell is given, and the quote was read as part of the path: since #1070 the model was
+  told `/‘inputs/a.csv’` was outside every folder, and before it, nothing. Straight quotes,
+  and a deployment's own shell under another locale, read as before.
+
 ## A failure quotes back the string the model sent, not a path made of it, after #9999
 
 - **Only an argument naming a path is spelled back as the call wrote it.** That is the
