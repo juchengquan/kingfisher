@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator, Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from kingfisher.core.layout import INPUTS_ROUTE, OUTPUTS_ROUTE, SCRATCH_ROUTE, Layout
@@ -103,7 +103,10 @@ def as_asked(text: str, args: Mapping[str, Any]) -> str:
     One rule for both, because both are the asked-for path with a prefix taken off or
     put on: a quoted path that ends with one the call named, or that one ends with, is
     that path said another way. Longest first, so a call naming two paths rewrites each
-    against the one it is really a tail of.
+    against the one it is really a tail of. Then each folder the paths run through, as a
+    tail only: a failure about a parent is an `OSError` quoting the host's spelling of it --
+    `write_file /outputs/a.txt/b.txt` beside a file `a.txt` quoted `.../outputs/a.txt` --
+    while a route the composite stripped is stripped from the asked path itself.
     """
     if HOST_PATH_SAID in text:
         return text
@@ -111,11 +114,21 @@ def as_asked(text: str, args: Mapping[str, Any]) -> str:
         (one for one in _strings_in(args) if one.startswith("/")), key=len, reverse=True
     )
 
+    above = sorted(
+        {str(up) for one in asked for up in PurePosixPath(one).parents if str(up) != "/"}
+        - set(asked),
+        key=len,
+        reverse=True,
+    )
+
     def _said(match: re.Match[str]) -> str:
         named = match.group(1)
         for one in asked:
             if named != one and (named.endswith(one) or one.endswith(named)):
                 return f"'{one}'"
+        for up in above:
+            if named != up and named.endswith(up):
+                return f"'{up}'"
         return match.group(0)
 
     return _QUOTED.sub(_said, text)

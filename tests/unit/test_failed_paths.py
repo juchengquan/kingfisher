@@ -141,6 +141,21 @@ def test_a_failure_does_not_hand_over_the_host_path(cfg, session_dir, way):
     assert answer.count("'/scratchpad/shut/x.txt'") == 2, answer
 
 
+def test_a_failure_about_a_folder_above_the_path_names_it_as_asked(cfg, session_dir, way):
+    """A file standing where the path wants a folder fails on that parent, and the
+    `OSError` handed over the host's `.../sessions/<id>/outputs/a.txt`: the asked path is
+    not its tail, nor it the asked path's, so no rule rewrote it."""
+    (session_dir / "outputs" / "a.txt").write_text("x", encoding="utf-8")
+
+    said = _answers(
+        cfg, session_dir, way, ("write_file", {"file_path": "/outputs/a.txt/b.txt", "content": "y"})
+    )
+
+    answer = said["0:write_file"]
+    assert str(session_dir) not in answer, answer
+    assert "'/outputs/a.txt'" in answer, answer
+
+
 def test_a_file_whose_contents_name_a_path_comes_back_whole(cfg, session_dir, way):
     """The reason only a failure is rewritten: a file read whole is content, and a file
     saying `/notes.txt` is not a tool talking about a path.
@@ -386,3 +401,21 @@ def test_a_path_the_call_never_named_is_left_alone():
     text = "Error: File '/elsewhere/other.txt' not found"
 
     assert as_asked(text, {"file_path": "/inputs/nope.txt"}) == text
+
+
+def test_a_folder_the_call_never_named_is_left_alone():
+    """The folders above the asked path stop short of `/`, which every quoted folder
+    written with its slash ends with: matched, a failure about another folder named the
+    session's root."""
+    text = "Error: cannot list '/elsewhere/'"
+
+    assert as_asked(text, {"file_path": "/outputs/a.txt/b.txt"}) == text
+
+
+def test_a_short_path_the_folders_end_with_is_left_alone():
+    """A folder above the asked path is matched only as the tail of a longer quoted path:
+    the other way, an offered tool's `'/data' is not mounted` became `'/inputs/data'`,
+    because the asked `/inputs/data/x.csv` runs through a folder ending so."""
+    text = "Error: '/data' is not mounted"
+
+    assert as_asked(text, {"path": "/inputs/data/x.csv"}) == text

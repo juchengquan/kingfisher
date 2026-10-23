@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A failure about a folder above the asked path names that folder as the model would, after #9999
+
+- **The host path no longer reaches the model when a parent is what failed.** `write_file
+  /outputs/a.txt/b.txt` beside a file `a.txt` answered `File exists:
+  '/…/sessions/<id>/outputs/a.txt'`; it now quotes `'/outputs/a.txt'`. A failure quoting a
+  folder the asked path runs through is rewritten as a quoted tail of the path already
+  was. A deployment that parses these messages sees the session's own spelling there now.
+
 ## `ls`, `glob` and `grep` refuse a host path as `read_file` does, after #9999
 
 - **A search given a host path is told the path to use.** `ls`, `glob` and `grep` handed
