@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator, Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from kingfisher.core.layout import INPUTS_ROUTE, OUTPUTS_ROUTE, SCRATCH_ROUTE, Layout
 
-from .host_paths import HOST_ROOTS, HostPathError
+from .host_paths import HOST_PATH_SAID, HOST_ROOTS, HostPathError
 from .prompting import what_you_make_goes
 
 #: Which arguments name a file: a convention `tools.md` documents, so widening it
@@ -72,7 +72,7 @@ class SessionPaths:
     def translated(self, args: Mapping[str, Any]) -> dict[str, Any]:
         """The same arguments with their paths made real, refusing what escapes."""
         if (host := self.host_path_in(args)) is not None:
-            msg = f"{host!r} is a host path, and a tool is handed this session's own paths"
+            msg = f"{host!r} {HOST_PATH_SAID}, and a tool is handed this session's own paths"
             raise HostPathError(msg)
         wanted = {key: args[key] for key in args if key in PATH_ARGUMENTS}
         return {**args, **{key: self.real(value) for key, value in wanted.items()}}
@@ -87,6 +87,10 @@ class SessionPaths:
 #: A path a failure quotes. Every backend quotes one the same way, and quoting is what
 #: tells a path in a message from the prose around it.
 _QUOTED = re.compile(r"'(/[^']*)'")
+
+#: The arguments a quoted path can be a spelling of: the file tools' `file_path` beside
+#: an offered tool's.
+_NAMING_A_PATH = frozenset({"file_path", *PATH_ARGUMENTS})
 
 
 def as_asked(text: str, args: Mapping[str, Any]) -> str:
@@ -103,17 +107,46 @@ def as_asked(text: str, args: Mapping[str, Any]) -> str:
     One rule for both, because both are the asked-for path with a prefix taken off or
     put on: a quoted path that ends with one the call named, or that one ends with, is
     that path said another way. Longest first, so a call naming two paths rewrites each
-    against the one it is really a tail of.
+    against the one it is really a tail of. Then each folder the paths run through, as a
+    tail only: a failure about a parent is an `OSError` quoting the host's spelling of it --
+    `write_file /outputs/a.txt/b.txt` beside a file `a.txt` quoted `.../outputs/a.txt` --
+    while a route the composite stripped is stripped from the asked path itself.
     """
+    if HOST_PATH_SAID in text:
+        return text
     asked = sorted(
-        (one for one in _strings_in(args) if one.startswith("/")), key=len, reverse=True
+        (
+            one
+            for key, one in args.items()
+            if key in _NAMING_A_PATH and isinstance(one, str) and one.startswith("/")
+        ),
+        key=len,
+        reverse=True,
+    )
+    # Another argument quoted back is that argument: an `edit_file` of `/outputs/conf.sh`
+    # missing its `old_string` of `/conf.sh` quotes the string, which is a tail of the path.
+    echoed = {
+        one for key, value in args.items() if key not in _NAMING_A_PATH
+        for one in _strings_in(value)
+    }
+
+    above = sorted(
+        {str(up) for one in asked for up in PurePosixPath(one).parents if str(up) != "/"}
+        - set(asked),
+        key=len,
+        reverse=True,
     )
 
     def _said(match: re.Match[str]) -> str:
         named = match.group(1)
+        if named in echoed:
+            return match.group(0)
         for one in asked:
             if named != one and (named.endswith(one) or one.endswith(named)):
                 return f"'{one}'"
+        for up in above:
+            if named != up and named.endswith(up):
+                return f"'{up}'"
         return match.group(0)
 
     return _QUOTED.sub(_said, text)

@@ -29,7 +29,7 @@ from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, paths_in, tools_dir
 
 #: Every builtin these rules call, granted together so one agent can be driven once.
-TOOLS = ("read_file", "write_file", "delete", "ls", "execute")
+TOOLS = ("read_file", "write_file", "edit_file", "delete", "ls", "glob", "grep", "execute")
 
 
 @pytest.fixture(params=["sync", "async"])
@@ -103,6 +103,20 @@ def test_a_listing_that_misses_names_the_path_that_was_asked_for(cfg, session_di
     assert "'/inputs/nowhere'" in said["0:ls"], said["0:ls"]
 
 
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [("ls", {}), ("glob", {"pattern": "*"}), ("grep", {"pattern": "x"})],
+)
+def test_a_search_given_a_host_path_is_told_the_path_to_use(cfg, session_dir, way, tool, args):
+    """Upstream's searches route without the hook `read_file` refuses a host path in, so
+    `ls` of the session's own `outputs` folder answered `path_not_found` and `glob` "No
+    files found", where the same path to `read_file` was told the one to use."""
+    said = _answers(cfg, session_dir, way, (tool, {**args, "path": f"{session_dir}/outputs"}))
+
+    assert "is a host path" in said[f"0:{tool}"], said[f"0:{tool}"]
+    assert "Use '/outputs' instead" in said[f"0:{tool}"], said[f"0:{tool}"]
+
+
 def test_a_failure_does_not_hand_over_the_host_path(cfg, session_dir, way):
     """An `OSError` carries the path it failed on, which is the host's: a refused write
     answered with `/private/.../sessions/<id>/scratchpad/...`, the spelling the file
@@ -125,6 +139,52 @@ def test_a_failure_does_not_hand_over_the_host_path(cfg, session_dir, way):
     assert str(session_dir) not in answer, answer
     # Not merely stripped: the path it failed on is still named, as the agent wrote it.
     assert answer.count("'/scratchpad/shut/x.txt'") == 2, answer
+
+
+def test_a_failure_about_a_folder_above_the_path_names_it_as_asked(cfg, session_dir, way):
+    """A file standing where the path wants a folder fails on that parent, and the
+    `OSError` handed over the host's `.../sessions/<id>/outputs/a.txt`: the asked path is
+    not its tail, nor it the asked path's, so no rule rewrote it."""
+    (session_dir / "outputs" / "a.txt").write_text("x", encoding="utf-8")
+
+    said = _answers(
+        cfg, session_dir, way, ("write_file", {"file_path": "/outputs/a.txt/b.txt", "content": "y"})
+    )
+
+    answer = said["0:write_file"]
+    assert str(session_dir) not in answer, answer
+    assert "'/outputs/a.txt'" in answer, answer
+
+
+def test_an_edit_that_misses_names_the_string_it_was_given(cfg, session_dir, way):
+    """deepagents quotes an `old_string` it did not find, and one that is a tail of the
+    file's path was rewritten into the path: the model was told its file was not found,
+    not the string it sent."""
+    (session_dir / "outputs" / "conf.sh").write_text("run /bin/tool\n", encoding="utf-8")
+
+    said = _answers(
+        cfg,
+        session_dir,
+        way,
+        (
+            "edit_file",
+            {"file_path": "/outputs/conf.sh", "old_string": "/conf.sh", "new_string": "z"},
+        ),
+    )
+
+    assert "'/conf.sh'" in said["0:edit_file"], said["0:edit_file"]
+    assert "'/outputs/conf.sh'" not in said["0:edit_file"], said["0:edit_file"]
+
+
+def test_only_an_argument_naming_a_path_is_a_spelling_to_restore():
+    """Every string argument was a candidate, so a quoted host path ending in another
+    argument's text came back as that text: a `content` of `/b.txt` stood in for the file
+    the call wrote."""
+    text = "Error: [Errno 13] Permission denied: '/private/w/sessions/s/outputs/a/b.txt'"
+
+    said = as_asked(text, {"file_path": "/outputs/a/b.txt", "content": "/b.txt"})
+
+    assert said == "Error: [Errno 13] Permission denied: '/outputs/a/b.txt'"
 
 
 def test_a_file_whose_contents_name_a_path_comes_back_whole(cfg, session_dir, way):
@@ -159,20 +219,15 @@ def test_the_shell_keeps_its_own_spelling(cfg, session_dir, way):
     assert "'/scratchpad/missing.py'" not in said["0:execute"], said["0:execute"]
 
 
-def test_a_shell_message_is_what_the_rewrite_would_spoil():
-    """Why the shell is kept out, pinned where no fence can refuse it: the string a shell
-    call names is a command rather than a path, so a quoted path in its output is a tail
-    of the whole command line. Applied to one, the rewrite puts the command where the
-    path belongs -- which is what `status` keeps from happening, since a command that
-    fails is a tool call that succeeded.
+def test_a_shell_message_is_left_as_the_shell_said_it():
+    """A quoted path in a command's output is a tail of the whole command line, and while
+    every string argument was a candidate the rewrite put the command where the path
+    belongs. A `command` names no path, so its output is left alone even where `status`
+    would not keep it out, pinned where no fence can refuse it.
     """
-    command = "/usr/bin/python3 /scratchpad/missing.py"
     said = "python3: can't open file '/scratchpad/missing.py': [Errno 2]"
 
-    spoiled = as_asked(said, {"command": command})
-
-    assert f"'{command}'" in spoiled
-    assert "'/scratchpad/missing.py'" not in spoiled
+    assert as_asked(said, {"command": "/usr/bin/python3 /scratchpad/missing.py"}) == said
 
 
 # -- the one sentence every refusal of a write closes with ---------------------
@@ -330,10 +385,11 @@ def test_an_offered_tools_failure_names_the_path_the_model_wrote(cfg, session_di
     assert "'/inputs/missing.csv'" in str(answer.content), answer.content
 
 
-def test_a_carried_guard_says_it_the_same_way(cfg, session_dir):
+def test_a_carried_guard_says_it_the_same_way(cfg, session_dir, way):
     """`GuardedTool` is what answers where no middleware reaches -- a compiled subagent's
     tools and a call from `eval`'s code -- and the two must answer alike, which is what
-    its own docstring claims and nothing held.
+    its own docstring claims and nothing held. Both ways: `_arun` reporting the host path
+    left every test green while `_run` was held.
     """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "opener.py").write_text(OPENS, encoding="utf-8")
@@ -355,9 +411,12 @@ def test_a_carried_guard_says_it_the_same_way(cfg, session_dir):
         context_schema=ToolContext,
     )
 
-    out = graph.invoke(
-        {"messages": [{"role": "user", "content": "go"}]},
-        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [], cfg.layout)),
+    sent = {"messages": [{"role": "user", "content": "go"}]}
+    context = ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [], cfg.layout))
+    out = (
+        graph.invoke(sent, context=context)
+        if way == "sync"
+        else asyncio.run(graph.ainvoke(sent, context=context))
     )
 
     (answer,) = [one for one in out["messages"] if isinstance(one, ToolMessage)]
@@ -372,3 +431,21 @@ def test_a_path_the_call_never_named_is_left_alone():
     text = "Error: File '/elsewhere/other.txt' not found"
 
     assert as_asked(text, {"file_path": "/inputs/nope.txt"}) == text
+
+
+def test_a_folder_the_call_never_named_is_left_alone():
+    """The folders above the asked path stop short of `/`, which every quoted folder
+    written with its slash ends with: matched, a failure about another folder named the
+    session's root."""
+    text = "Error: cannot list '/elsewhere/'"
+
+    assert as_asked(text, {"file_path": "/outputs/a.txt/b.txt"}) == text
+
+
+def test_a_short_path_the_folders_end_with_is_left_alone():
+    """A folder above the asked path is matched only as the tail of a longer quoted path:
+    the other way, an offered tool's `'/data' is not mounted` became `'/inputs/data'`,
+    because the asked `/inputs/data/x.csv` runs through a folder ending so."""
+    text = "Error: '/data' is not mounted"
+
+    assert as_asked(text, {"path": "/inputs/data/x.csv"}) == text

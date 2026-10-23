@@ -18,6 +18,61 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A file a request names is saved in `/outputs`, after #1073
+
+- **One sentence of the system prompt has changed.** It told the model to follow a
+  request's file names exactly, with nothing in the prompt overriding them. Since #1066 a
+  save in no folder of the session is refused, and a model asked for `/cleaned.csv` read
+  the sentence as an order to put it at the session's top, copying it there through the
+  shell. The prompt now says a requested name is used in `/outputs`, your layout's name
+  for it, and that the answer says where each file went. If you cache, diff or test the
+  system prompt's text, it is not the same.
+- **A request that names its files under `/outputs` already is unaffected.**
+
+## Landlock runs a command unadopted on a kernel without `children` files, after #1073
+
+- **Every command no longer fails on such a kernel.** The reaper that collects what a
+  command leaves behind (#1040) checked only that `/proc/self/task` existed, so on a
+  kernel built without `CONFIG_PROC_CHILDREN` it read a file that is not there after
+  every command: each one exited 1 with a traceback in its `[stderr]`, and nothing it
+  adopted was killed. It now runs the command as it would without a reaper there, which
+  is what it already did where it cannot adopt. A kernel with the files is unchanged.
+
+## A refusal GNU quotes in curly quotes gets its kept folder's note, after #1073
+
+- **`cp: cannot create regular file ‘inputs/a.csv’: Permission denied` is told `/inputs/`
+  is kept.** GNU tools quote a name in curly quotes under the UTF-8 locale kingfisher's
+  shell is given, and the quote was read as part of the path: since #1070 the model was
+  told `/‘inputs/a.csv’` was outside every folder, and before it, nothing. Straight quotes,
+  and a deployment's own shell under another locale, read as before.
+
+## A failure quotes back the string the model sent, not a path made of it, after #1073
+
+- **Only an argument naming a path is spelled back as the call wrote it.** That is the
+  file tools' `file_path` and an offered tool's `path`. An `edit_file` of
+  `/outputs/conf.sh` whose `old_string` `/conf.sh` was not found answered `String not found
+  in file: '/outputs/conf.sh'`; it now quotes `'/conf.sh'`. A quoted value equal to any
+  other argument is left as it is, and so is a host-path refusal, whose suggestion was
+  spelled back as the host path the call wrote.
+
+## A failure about a folder above the asked path names that folder as the model would, after #1073
+
+- **The host path no longer reaches the model when a parent is what failed.** `write_file
+  /outputs/a.txt/b.txt` beside a file `a.txt` answered `File exists:
+  '/…/sessions/<id>/outputs/a.txt'`; it now quotes `'/outputs/a.txt'`. A failure quoting a
+  folder the asked path runs through is rewritten as a quoted tail of the path already
+  was. A deployment that parses these messages sees the session's own spelling there now.
+
+## `ls`, `glob` and `grep` refuse a host path as `read_file` does, after #1073
+
+- **A search given a host path is told the path to use.** `ls`, `glob` and `grep` handed
+  `/…/sessions/<id>/outputs` answered `path_not_found` or "No files found", the path
+  re-rooted inside the session, where `read_file` on the same kind of path was told to use
+  `/outputs/…`. All three, sync and async, now give that refusal. A `path` of `None` or `/`
+  is unchanged.
+- **A deployment whose backend subclasses `WorkspaceScopedBackend`** and overrides one of
+  the three should call `_refuse_host_path(path)` first, as the overrides here do.
+
 ## `kingfisher list` fails on a skill written twice, after #1071
 
 - **`list` exits 1 where a definition names one skill twice**, bare and qualified, as
@@ -709,8 +764,8 @@ replaced the four layers began.
   subagent, a `SUBAGENTS` entry with no `build`, ran under kingfisher's standing
   middleware alone. It now runs the middleware the main agent's file names, in its order
   and with the settings written there for each, a summarizer included; a helper another
-  subagent consults gets the agent's, not its summoner's. A subagent document (YAML or
-  Markdown) and a compiled one are unchanged; a `SUBAGENTS` entry with no `build` typed
+  subagent consults gets the agent's, not its summoner's. A subagent document, a YAML
+  file, and a compiled one are unchanged; a `SUBAGENTS` entry with no `build` typed
   into your definitions folder is portable, and changes too.
 - **To keep the old behaviour, wire a `SubagentMiddlewares` answering nothing**:
   `names(subagent, agent, middlewares)` returning `()`, passed as

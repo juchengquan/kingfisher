@@ -133,8 +133,10 @@ _REFUSED = ("Operation not permitted", "Permission denied", "Read-only file syst
 
 #: A path a message names: anything carrying a slash, up to the punctuation around it. The
 #: slash is what tells a path from a word -- without it `grep: inputs: ...` and a command
-#: that merely printed the word `inputs` are the same line.
-_TOKEN = re.compile(r"[^\s'\"`:,;()]*/[^\s'\"`:,;()]*")
+#: that merely printed the word `inputs` are the same line. Curly quotes count as
+#: punctuation: under the UTF-8 locale `shell_env` sets, GNU tools quote a name in them.
+_STOPS = r"\s'\"`:,;()" + "\u2018\u2019\u201c\u201d"
+_TOKEN = re.compile(f"[^{_STOPS}]*/[^{_STOPS}]*")
 
 
 def _refused_paths(output: str, root: str) -> Iterator[PurePosixPath]:

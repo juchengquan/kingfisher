@@ -1,6 +1,6 @@
 # Thinking a model can read
 
-**Status:** proposed, not built.
+**Status:** proposed. Slice 1 landed in #1048; slices 2–4 are not built.
 **Date:** 2026-10-21.
 **Occasion:** the review of #890–#1038 found that kingfisher can hand a model thinking it
 cannot check. The owner settled the direction below one question at a time. **Cited by
@@ -39,10 +39,10 @@ through a named endpoint.
 
 ## What goes wrong
 
-**A switch between vendors on one wire format.** A session that ran on MiniMax and now
-runs on Claude sends MiniMax's signed thinking to Claude. The Claude API reference says
-a signature it cannot verify is always a 400, and its `drop_block` option does not
-cover that case. The same holds for any two vendors behind `anthropic`, or two
+**A switch between vendors on one wire format.** Until slice 1, a session that ran on
+MiniMax and then ran on Claude sent MiniMax's signed thinking to Claude. The Claude API
+reference says a signature it cannot verify is always a 400, and its `drop_block` option
+does not cover that case. The same held for any two vendors behind `anthropic`, or two
 organisations behind `openai_responses`.
 
 **Edits kingfisher makes to what came before.** On the four models above, each of

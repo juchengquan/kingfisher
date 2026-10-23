@@ -747,6 +747,55 @@ def test_a_route_below_the_path_whose_search_fails_is_answered_not_swallowed(
     assert grepped.error == "the sandbox is gone"
 
 
+class _Unasked:
+    """A route below the searched path that answers if asked, and counts each time."""
+
+    asked = 0
+
+    def grep(
+        self,
+        pattern: str,
+        path: str | None = None,
+        glob: str | None = None,
+        *,
+        max_count: int | None = None,
+    ) -> Any:
+        _Unasked.asked += 1
+        return GrepResult(matches=[{"path": "/x.txt", "line": 1, "text": pattern}])
+
+    async def agrep(
+        self,
+        pattern: str,
+        path: str | None = None,
+        glob: str | None = None,
+        *,
+        max_count: int | None = None,
+    ) -> Any:
+        return self.grep(pattern, path, glob, max_count=max_count)
+
+
+def test_a_scoped_search_whose_budget_runs_out_says_it_stopped_short(cfg, session_dir, way):
+    """deepagents' grep always passes a `max_count`, and a search that filled it before
+    the routes below the path were asked answered as complete, though a route it never
+    reached held a match. Filled exactly, so the outer answer is not cut short itself:
+    measured, the default backend calls exactly `max_count` matches whole.
+    """
+    for name in ("a.txt", "b.txt"):
+        (session_dir / "scratchpad" / name).write_text("needle\n", encoding="utf-8")
+    backend = backend_at(cfg, session_dir)
+    backend.routes[f"{SCRATCH_ROUTE}theirs/"] = _Unasked()
+    backend.sorted_routes = sorted(
+        backend.routes.items(), key=lambda one: len(one[0]), reverse=True
+    )
+    _Unasked.asked = 0
+
+    said = _asked(backend, way, "grep", "needle", SCRATCH_ROUTE, max_count=2)
+
+    assert len(said.matches) == 2
+    assert said.truncated, "a search that left routes unasked said it was complete"
+    assert _Unasked.asked == 0, "the control: the budget was spent before the route"
+
+
 def test_a_file_under_a_route_inside_the_default_root_is_found_once(cfg, session_dir, way):
     """The scoped half of what the overrides are for: a recorded result lives under a
     route *and* under the default backend's own root, so asking both for it hands the

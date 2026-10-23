@@ -190,6 +190,19 @@ def test_the_catalogue_is_said_to_be_the_models_to_read_and_not_to_write():
     assert "prefer an existing procedure over inventing a new one" in said
 
 
+@pytest.mark.parametrize("layout", [DEFAULT_LAYOUT, Layout(outputs="results")])
+def test_a_requested_file_name_is_saved_in_the_outputs(layout):
+    """Told to follow a request's file names exactly, with nothing in the prompt
+    overriding them, a model asked for `/cleaned.csv` copied its files to the session's
+    top through the shell (#1066), where every fence now refuses the write and nothing is
+    handed back -- so the prompt says where a requested name goes, in this layout's name.
+    """
+    said = " ".join(render_system_prompt(layout=layout).split())
+
+    assert f"asked for `/<name>`, save `/{layout.outputs}/<name>`" in said
+    assert "nothing here overrides" not in said
+
+
 def test_the_prompt_names_a_recorded_result_as_the_ledger_does():
     """The folder, the id and the tag are each the recorder's or the delta's spelling;
     renamed on one side alone, the agent is told to look for something never written.

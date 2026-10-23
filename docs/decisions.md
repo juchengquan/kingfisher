@@ -2317,7 +2317,13 @@ ends with the path its own error quotes. Said in `GuardedCallsMiddleware` for a 
 kingfisher builds and in `GuardedTool` for a compiled subagent's tools and `eval`'s code,
 which its docstring already said must answer alike and nothing held. Not taken: mapping a
 host path through the routes, which would need to know which backend answered, when the
-call already says what the model meant. *(2026-10-22.)*
+call already says what the model meant. *(2026-10-22.)* *Since 2026-10-23 the
+call's paths are its path arguments alone, `file_path` and an offered tool's `path`, and a
+quoted value equal to another argument is that argument echoed back: deepagents quotes an
+`edit_file`'s missing `old_string`, and `/conf.sh` was rewritten into its file's path. So a
+shell message would not be rewritten either. Each folder the path runs through is matched
+too, as a tail only, for a failure about a parent; and a refusal of a host path is left as
+written, since it names the path to use.*
 
 **A scoped search asks the routes below the path as well.** The composite stops at the
 one route owning the path, so a search of `/skills` answered with the catalogue's skills

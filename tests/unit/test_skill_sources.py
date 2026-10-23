@@ -235,6 +235,20 @@ def test_two_skills_sharing_a_bare_name_are_still_two_entries(cfg):
     assert warmed.agents.specs["boss"].skills == ("research::lookup", "legal::lookup")
 
 
+@pytest.mark.parametrize("skills", ["[nope, gone]", "[lookup, gone]"], ids=["unknown", "ambiguous"])
+def test_two_names_meaning_no_one_skill_are_not_one_skill(cfg, skills):
+    """Two entries each meaning no single skill were both keyed under `None`, so startup
+    refused the deployment as "one skill (None)" -- a reason that names nothing, where the
+    build would have said which skill was unknown or could be either.
+    """
+    _two_parties(cfg)
+    an_agent(cfg, "boss", builtin_tools="[read_file]", skills=skills)
+
+    warmed = Definitions.from_config(cfg).warm()
+
+    assert warmed.agents.specs["boss"].skills == tuple(skills.strip("[]").split(", "))
+
+
 # -- the two loaders, which do not delegate --------------------------------
 
 

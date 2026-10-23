@@ -73,7 +73,7 @@ _Avoid_: adapter, provider
 **Standing middleware**:
 Middleware kingfisher puts around every agent it builds because it keeps a promise kingfisher
 makes to every caller; no definition can name it or take it out, save the filesystem
-middleware, which a deployment's own of that name replaces.
+middleware and the prompt caching, each of which a deployment's own of that name replaces.
 _Avoid_: built-in middleware, guards, kingfisher's middleware
 
 **Offered middleware**:
@@ -98,7 +98,7 @@ _Avoid_: session prompt, conversation prompt, dynamic prompt, per-session system
 A subagent written to travel between deployments, usually in a package, that kingfisher
 builds from its description. It cannot name anything only one deployment knows: its own
 middleware, its helpers, or its model. Not one that arrives already built, and not a
-subagent document in YAML or Markdown. Its shape decides, not where it is written: one
+subagent document, which is a YAML file. Its shape decides, not where it is written: one
 typed into a deployment's own definitions folder is portable too.
 _Avoid_: packaged subagent, Python subagent, external subagent
 
