@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Seed holds back a lock set after its value is bound, after #9999
+
+- **`IDS = []` then `IDS.append("A")` is held back.** Seed read the assignment, took `[]`
+  for naming nobody, and copied the tool as open, where the loader reads `["A"]`. A name
+  the module changes in place -- through an item, an attribute or a method call -- is no
+  longer read through, and the skip line names it as written.
+- **An entry whose lock is set by its key or by a call is held back**:
+  `entry["source_ids"] = [...]`, `entry.setdefault("datazone", ...)`. The skip line names
+  that expression. `seed --all` still copies either.
+
 ## A source id written as a number or `yes` is refused, after #9999
 
 - **`source_ids: [1001]`, `[yes]` and `ToolSpec(source_ids=[1001])` no longer load.** The

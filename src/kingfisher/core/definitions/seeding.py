@@ -200,9 +200,11 @@ def audiences_in_code(text: str) -> tuple[tuple[str, ...], tuple[str, ...], tupl
 
     Parsed rather than imported: seeding runs before there is a catalogue, and importing
     a definition to find out whether to copy it would run a deployment's code to decide.
-    A name the module binds once, at its top level, is read through to its value; any
-    other value this cannot walk is returned as unread, never taken for naming nobody,
-    which copied a lock as an open definition.
+    A name the module binds once, at its top level, and changes nowhere in place, is
+    read through to its value; any other value this cannot walk is returned as unread,
+    never taken for naming nobody, which copied a lock as an open definition. So is a
+    field set other than by writing it: `entry["source_ids"] = [...]`, or
+    `entry.setdefault("source_ids", [...])`.
     """
     try:
         tree = ast.parse(text)
@@ -224,7 +226,12 @@ def audiences_in_code(text: str) -> tuple[tuple[str, ...], tuple[str, ...], tupl
                     and not _written(value, into=found[field_name], field=field_name, bound=bound)
                 ):
                     unread.append(_as_written(owner, field_name, value))
+        elif isinstance(node, ast.Subscript) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            if _field(node.slice) in found:
+                unread.append(ast.unparse(node))
         elif isinstance(node, ast.Call):
+            if any(_field(arg) in found for arg in node.args):
+                unread.append(ast.unparse(node))
             # A `ToolSpec`'s tool is its first argument.
             first = node.args[0] if node.args else None
             owner = first.id if isinstance(first, ast.Name) else None
@@ -238,6 +245,11 @@ def audiences_in_code(text: str) -> tuple[tuple[str, ...], tuple[str, ...], tupl
         tuple(dict.fromkeys(found["datazone"])),
         tuple(dict.fromkeys(unread)),
     )
+
+
+def _field(node: ast.expr) -> str | None:
+    """The string a key or an argument spells out, where it is one."""
+    return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
 
 
 def _named_in(entry: ast.Dict) -> str | None:
@@ -256,12 +268,16 @@ def _as_written(owner: str | None, field: str, value: ast.expr) -> str:
 
 
 def _bound_once(tree: ast.Module) -> dict[str, ast.expr]:
-    """Each name the module binds exactly once, by a plain assignment at its top level.
+    """Each name the module binds exactly once, by a plain assignment at its top level,
+    and changes nowhere in place.
 
     Counted over the whole module, a function's own bindings included: a name bound
-    twice, or bound again inside a function, may be either value where it is used.
+    twice, or bound again inside a function, may be either value where it is used. And
+    `IDS = []` then `IDS.append("A")` is bound once and holds `["A"]`, which reading the
+    assignment took for naming nobody.
     """
     times = Counter(name for node in ast.walk(tree) for name in _binds(node))
+    changed = {name for node in ast.walk(tree) for name in _changes(node)}
     values: dict[str, ast.expr] = {}
     for statement in tree.body:
         if isinstance(statement, ast.Assign):
@@ -274,7 +290,29 @@ def _bound_once(tree: ast.Module) -> dict[str, ast.expr]:
             and statement.value is not None
         ):
             values[statement.target.id] = statement.value
-    return {name: value for name, value in values.items() if times[name] == 1}
+    return {
+        name: value
+        for name, value in values.items()
+        if times[name] == 1 and name not in changed
+    }
+
+
+def _changes(node: ast.AST) -> Iterator[str]:
+    """The name whose value one node may change in place: through an item or attribute
+    it stores or deletes, or a method it calls, which only the value's type can say is
+    harmless."""
+    if isinstance(node, (ast.Subscript, ast.Attribute)) and isinstance(
+        node.ctx, (ast.Store, ast.Del)
+    ):
+        base = node.value
+    elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        base = node.func.value
+    else:
+        return
+    while isinstance(base, (ast.Subscript, ast.Attribute)):
+        base = base.value
+    if isinstance(base, ast.Name):
+        yield base.id
 
 
 def _binds(node: ast.AST) -> Iterator[str]:

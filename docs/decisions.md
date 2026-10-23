@@ -4386,7 +4386,11 @@ through to its value, and any other value the reader cannot walk holds the defin
 named as written. Taken for naming nobody, `source_ids=IDS` copied a lock as an open tool --
 measured, an imported `IDS` and a module-level `ZONE` alike -- and not knowing is the case
 `--all` is for. Not read: a `**` spread into a call or an entry, which would hold back every
-tool module that forwards keyword arguments.*
+tool module that forwards keyword arguments.* *Since 2026-10-23 a name changed in place
+is not bound once -- `IDS = []` then `IDS.append("A")` was read as naming nobody while the
+loader read `["A"]` -- and a field set by its key or by a call, `entry["source_ids"] =
+[...]`, holds the module back, since the entry's own braces never say it. A name handed to
+a function that changes it is still not seen.*
 
 **Only a package or a bundle is decided whole, and by everything in it.** Every folder was,
 by its `.py` alone: a bundle whose definition named a source id was reported seeded with
