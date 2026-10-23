@@ -108,22 +108,24 @@ def _agent_text(held: bytes | None) -> DefinitionText | None:
     return None if held is None else DefinitionText(held.decode("utf-8"), Path(AGENT_SNAPSHOT))
 
 
-def remember_zone(harness: Any, zone: str) -> Steps[None]:
-    """Keep the datazone this session's first zoned turn ran in.
+def remember_zones(harness: Any, zones: frozenset[str]) -> Steps[None]:
+    """Keep the datazones this session's first zoned turn ran in, a line each.
 
     Never rewritten: what that turn's tools returned is in the session for good, and a
-    caller in another datazone is refused before they could reach this.
+    caller in other datazones is refused before they could reach this.
     """
     if (yield from harness.fetch(PINNED_ZONE)) is not None:
         return
-    yield from harness.store(PINNED_ZONE, zone.encode("utf-8"))
+    yield from harness.store(PINNED_ZONE, "\n".join(sorted(zones)).encode("utf-8"))
 
 
-def pinned_in(harness: Any) -> Steps[tuple[DefinitionText | None, str | None]]:
-    """The agent this session opened with and the datazone it is in, in one read, since
+def pinned_in(harness: Any) -> Steps[tuple[DefinitionText | None, frozenset[str] | None]]:
+    """The agent this session opened with and the datazones it is in, in one read, since
     a listing asks it of every session."""
-    agent, zone = yield from harness.fetch_each(PINNED_AGENT, PINNED_ZONE)
-    return _agent_text(agent), None if zone is None else zone.decode("utf-8")
+    agent, zones = yield from harness.fetch_each(PINNED_AGENT, PINNED_ZONE)
+    return _agent_text(agent), None if zones is None else frozenset(
+        zones.decode("utf-8").splitlines()
+    )
 
 
 def read_transcript(harness: Any) -> Steps[tuple[Message, ...]]:

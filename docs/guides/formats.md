@@ -1900,8 +1900,10 @@ has to parse a set out of a string.
 
 ### Datazones — a second field beside source ids
 
-A caller may also be **in a datazone**: one name, never several. A subagent or a
-tool may say which datazone it is for, and a caller reaches it only from that one.
+A caller may also be **in a datazone**: one name, and the [extra
+ones](#extra-datazones--zones-that-nest) a deployment whose zones nest names beside it.
+A subagent or a tool may say which datazone it is for, and a caller reaches it only from
+that one.
 `assets/subagents/quarters.py` is this section as a working file, and `analyst.yaml`
 grants it.
 
@@ -1933,10 +1935,10 @@ and a tool file writes `ToolSpec(tool, datazone="finance")`.
   whichever datazone its caller names. Nor does an entry —
   `{name: payroll, datazone: hr}` is refused, since on an entry it could only repeat
   the tool's own or contradict it.
-- **A session keeps the datazone of its first zoned turn.** What that turn's tools
+- **A session keeps the datazones of its first zoned turn.** What that turn's tools
   returned stays in it, so from then on the session is read and carried on only from
-  that datazone -- `kf.session(id, source_ids=["sales_db"], datazone="finance")`, and
-  `--datazone` on `artifact` and `decide`. Any other caller is told there is no such
+  exactly those datazones -- `kf.session(id, source_ids=["sales_db"], datazone="finance")`,
+  and `--datazone` on `artifact` and `decide`. Any other caller is told there is no such
   session. One no zoned turn ran in is reached from every datazone.
 - **A datazone nothing requires opens nothing**, as an unused source id does, and a
   misspelt one locks its subagent or tool shut; the listing shows each datazone in
@@ -1945,3 +1947,32 @@ and a tool file writes `ToolSpec(tool, datazone="finance")`.
   one behind, as it does one naming a source id.
 - **Nothing is refused for being unreachable.** An agent that names a finance tool is
   not wrong for an hr caller — the tool is left out of that caller's build.
+
+### Extra datazones — zones that nest
+
+Where a deployment's datazones nest, a caller in one is also in the zones above it, and
+the call names those beside its own:
+
+```python
+kf.run(request, source_ids=["sales_db"], datazone="pmvep", extra_datazones=["common"])
+```
+
+`--extra-datazones common,pm` on the command line, beside `--datazone`. Kingfisher keeps
+no map of which zone sits inside which: the deployment expands it on every call, as it
+expands a role into the source ids it stands for.
+
+- **What any of them requires is offered.** A subagent, tool, skill or prompt slot
+  written `datazone: common` is offered as one written `datazone: pmvep` is, and a slot
+  keyed on each fills with both.
+- **A tool is told the one the caller is in.** `Caller.datazone` is `pmvep`; the extras
+  are not on `Caller`.
+- **A session answers to exactly the zones its first zoned turn ran in**, `{pmvep,
+  common}`. Not to fewer: a `pmvep` caller without `common` would read what `common`'s
+  tools returned. Nor to more: a caller in a zone below `pmvep` is in `pmvep` and `common`
+  as well as its own, and would leave its own zone's results there. When the zones above
+  one change, sessions made before can no longer be reopened.
+- **Extras need a datazone.** `extra_datazones` with no `datazone` is refused: forgetting
+  the zone must not open what the extras lock. The datazone repeated among them is
+  accepted, so one list can be sent for every caller.
+- **Each is named as a datazone is** -- not blank, not `"*"` -- and the extras are a
+  list: a bare string is refused.

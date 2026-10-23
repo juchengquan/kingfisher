@@ -40,7 +40,7 @@ from kingfisher import (
     paths_from_env,
     seed,
 )
-from kingfisher.core.access import Datazone, with_datazone
+from kingfisher.core.access import Datazone, ExtraDatazone, with_datazone
 
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.config import MissingCredentialsWarning
@@ -384,6 +384,14 @@ def _add_caller(parser: argparse.ArgumentParser, help_text: str) -> None:
         metavar="NAME",
         help="the datazone the caller is in, as a subagent's or tool's datazone: names it",
     )
+    parser.add_argument(
+        "--extra-datazones",
+        type=_names,
+        default=(),
+        metavar="NAMES",
+        help="further datazones the caller is in, beside --datazone: what any of them "
+        "requires is offered, and a session is reopened only from all of them",
+    )
 
 
 def _seed(source: str | None = None, *, everything: bool = False) -> int:
@@ -463,7 +471,7 @@ def _run(args: argparse.Namespace) -> int:
     return _drive(
         kf,
         request,
-        held=with_datazone(args.held, args.datazone),
+        held=with_datazone(args.held, args.datazone, args.extra_datazones),
         delete_session=args.delete_session,
     )
 
@@ -594,7 +602,9 @@ def _decide(args: argparse.Namespace) -> int:
     cfg = config_from_env()
     if not decisions:
         return _show_pending(
-            _configured(cfg), args.session, with_datazone(args.held, args.datazone)
+            _configured(cfg),
+            args.session,
+            with_datazone(args.held, args.datazone, args.extra_datazones),
         )
     return _drive(
         _configured(cfg, log=args.log),
@@ -603,7 +613,7 @@ def _decide(args: argparse.Namespace) -> int:
             decisions=tuple(decisions),
             agent=args.agent,
         ),
-        held=with_datazone(args.held, args.datazone),
+        held=with_datazone(args.held, args.datazone, args.extra_datazones),
         delete_session=args.delete_session,
     )
 
@@ -647,16 +657,21 @@ def _answer(call: PendingDecision) -> str:
 
 
 def _caller(held: Held | None) -> str:
-    """`held` as the `--as` and `--datazone` that name it again, with a leading space."""
+    """`held` as the `--as`, `--datazone` and `--extra-datazones` that name it again, with a
+    leading space."""
     if held is None:
         return ""
     if not isinstance(held, Sequence):
         return " --as UNSCOPED"
     ids = [one for one in held if not isinstance(one, Datazone)]
+    extras = [one for one in held if isinstance(one, ExtraDatazone)]
     said = f" --as {shlex.quote(','.join(ids))}" if ids else ""
-    return said + "".join(
-        f" --datazone {shlex.quote(one)}" for one in held if isinstance(one, Datazone)
+    said += "".join(
+        f" --datazone {shlex.quote(one)}"
+        for one in held
+        if isinstance(one, Datazone) and not isinstance(one, ExtraDatazone)
     )
+    return said + (f" --extra-datazones {shlex.quote(','.join(extras))}" if extras else "")
 
 
 def _awaiting(result: RunResult, held: Held | None) -> None:
@@ -709,6 +724,11 @@ def _held(raw: str) -> Held:
     """`--as A,B` as the source ids it names, or the explicit absence of any."""
     if raw.strip() == "UNSCOPED":
         return UNSCOPED
+    return _names(raw)
+
+
+def _names(raw: str) -> tuple[str, ...]:
+    """`A,B` as the names it lists."""
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
@@ -895,7 +915,12 @@ def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
     cfg = config_from_env()
     kf = _configured(cfg)
-    session = kf.session(args.session, source_ids=args.held, datazone=args.datazone)
+    session = kf.session(
+        args.session,
+        source_ids=args.held,
+        datazone=args.datazone,
+        extra_datazones=args.extra_datazones,
+    )
     if session is None:
         msg = f"no session {args.session!r}"
         raise UnknownSessionError(msg)
@@ -998,7 +1023,7 @@ HANDLERS = {
     "seed": lambda args: _seed(args.source, everything=args.everything),
     "doctor": lambda args: _doctor(as_document=args.json, from_dotenv=args.from_dotenv),
     "list": lambda args: _list(
-        as_document=args.json, held=with_datazone(args.held, args.datazone)
+        as_document=args.json, held=with_datazone(args.held, args.datazone, args.extra_datazones)
     ),
     "sessions": lambda args: _sessions(as_document=args.json),
     "artifact": _artifact,

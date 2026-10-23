@@ -13,6 +13,8 @@ from .source_ids import (
     AccessReport,
     CallerError,
     Datazone,
+    ExtraDatazone,
+    InZone,
     Vocabulary,
     _Unscoped,
     mentioned,
@@ -76,10 +78,15 @@ def held_by(
             )
             raise CallerError(msg)
         return None
-    if len(zones) > 1:
-        msg = f"a caller is in one datazone, and this one named {', '.join(map(repr, zones))}"
+    homes = tuple(zone for zone in zones if not isinstance(zone, ExtraDatazone))
+    if len(homes) > 1:
+        msg = f"a caller is in one datazone, and this one named {', '.join(map(repr, homes))}"
         raise CallerError(msg)
-    return frozenset(named) | {zone_name(zone) for zone in zones}
+    # Less the one they are in: repeated among the extras, its plain name would take the
+    # place of the typed one in the set, and a tool be told the caller is in none.
+    extras = {zone_name(one) for one in zones if isinstance(one, ExtraDatazone)}
+    extras -= set(map(zone_name, homes))
+    return frozenset(named) | extras | {InZone(zone_name(zone)) for zone in homes}
 
 
 def caller_holds(

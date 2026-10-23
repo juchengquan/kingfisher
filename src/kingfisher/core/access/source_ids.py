@@ -36,10 +36,27 @@ def zone_name(datazone: str) -> str:
     return f"{DATAZONE_PREFIX}{datazone}"
 
 
-def zone_held(held: Iterable[str]) -> str | None:
-    """The datazone a caller holds, or `None` for one in no datazone."""
-    zones = (one.removeprefix(DATAZONE_PREFIX) for one in held if one.startswith(DATAZONE_PREFIX))
+class InZone(str):
+    """The held name of the datazone a caller is in, as against an extra one.
+
+    Equal to the plain name, so every reach check reads the two alike, and typed, so the
+    zone a caller is in survives `held_by` making all of theirs one set.
+    """
+
+    __slots__ = ()
+
+
+def zone_in(held: Iterable[str]) -> str | None:
+    """The datazone a caller is in, not an extra one, or `None` for one in no datazone."""
+    zones = (str(one).removeprefix(DATAZONE_PREFIX) for one in held if isinstance(one, InZone))
     return next(zones, None)
+
+
+def zones_held(held: Iterable[str]) -> frozenset[str]:
+    """Every datazone a caller holds: the one they are in, and their extra ones."""
+    return frozenset(
+        one.removeprefix(DATAZONE_PREFIX) for one in held if one.startswith(DATAZONE_PREFIX)
+    )
 
 
 @dataclass(frozen=True)
@@ -105,30 +122,67 @@ class Datazone(str):
     __slots__ = ()
 
 
-def with_datazone[Caller: Iterable[str] | _Unscoped | None](
-    source_ids: Caller, datazone: str | None
-) -> Caller | tuple[str, ...]:
-    """The caller's source ids, carrying their datazone where they named one."""
-    if datazone is None or isinstance(source_ids, str):
-        # A bare string is refused by `held_by`, naming the string; leave it to say so.
-        return source_ids
+class ExtraDatazone(Datazone):
+    """One of a caller's extra datazones, carried as their datazone is.
+
+    A `Datazone`, so whatever leaves a caller's zones out of their source ids leaves this
+    out too: read as a source id, `common` would open whatever a lock names `common`.
+    """
+
+    __slots__ = ()
+
+
+def _one_zone(written: object, *, passed: str) -> str:
+    """One datazone a caller names, as it is held; `passed` is how a call spells one."""
     # Read as a definition's is: held as given, `" finance"` reached nothing zoned finance
     # and pinned the session it ran in to `' finance'` for good.
-    zone = datazone.strip() if isinstance(datazone, str) else ""
+    zone = written.strip() if isinstance(written, str) else ""
     if not zone:
-        msg = (
-            f"a caller's datazone is one name -- pass datazone='finance', from the command "
-            f"line --datazone finance -- got {datazone!r}"
-        )
+        msg = f"a caller's datazone is one name -- pass {passed} -- got {written!r}"
         raise CallerError(msg)
-    # Not "any", as `"*"` is in an audience: a caller is in one named zone or none, and held
+    # Not "any", as `"*"` is in an audience: a caller is in named zones or none, and held
     # as a name it reached no zoned definition and pinned the session to a zone of `*`.
     if zone == ALL:
         msg = (
-            "a caller's datazone is one name, and '*' is not 'any' -- pass "
-            "datazone='finance', from the command line --datazone finance, or leave it out"
+            f"a caller's datazone is one name, and '*' is not 'any' -- pass {passed}, or "
+            f"leave it out"
         )
         raise CallerError(msg)
+    return zone
+
+
+def with_datazone[Caller: Iterable[str] | _Unscoped | None](
+    source_ids: Caller, datazone: str | None, extra_datazones: Sequence[str] = ()
+) -> Caller | tuple[str, ...]:
+    """The caller's source ids, carrying their datazone and extra datazones where they
+    named them."""
+    if isinstance(extra_datazones, str):
+        msg = (
+            f"extra datazones are a sequence of names, not a string -- write "
+            f"[{extra_datazones!r}]"
+        )
+        raise CallerError(msg)
+    # Closed, as a caller in no datazone is: a deployment that forgot the zone and sent
+    # its hardcoded extras would otherwise hand the caller everything locked to them.
+    if datazone is None and extra_datazones:
+        msg = (
+            "extra datazones are a caller's beside the one they are in, and this call names "
+            "none -- pass datazone= with them, from the command line --datazone"
+        )
+        raise CallerError(msg)
+    if datazone is None or isinstance(source_ids, str):
+        # A bare string is refused by `held_by`, naming the string; leave it to say so.
+        return source_ids
+    zone = _one_zone(
+        datazone, passed="datazone='finance', from the command line --datazone finance"
+    )
+    extras = tuple(
+        _one_zone(
+            one,
+            passed="extra_datazones=['common'], from the command line --extra-datazones common",
+        )
+        for one in extra_datazones
+    )
     if isinstance(source_ids, _Unscoped):
         msg = (
             "UNSCOPED runs with no caller, so it has no datazone -- pass the caller's "
@@ -142,7 +196,7 @@ def with_datazone[Caller: Iterable[str] | _Unscoped | None](
             "the caller's source ids with it, from the command line --as A,B"
         )
         raise CallerError(msg)
-    return (*source_ids, Datazone(zone))
+    return (*source_ids, Datazone(zone), *map(ExtraDatazone, extras))
 
 
 def jointly(audiences: Iterable[Audience]) -> Audience:

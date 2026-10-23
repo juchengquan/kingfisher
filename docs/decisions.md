@@ -1049,7 +1049,7 @@ kept there is in the trace of every call. It lives on the `FoundTool` the loader
 never on the LangChain object. *(2026-10-16.)*
 
 **A datazone is a second field, held as one more name.** A caller is in at most one
-datazone, and a subagent or tool may require one; an agent may not, because it runs in
+datazone, besides the extra ones below, and a subagent or tool may require one; an agent may not, because it runs in
 whichever datazone its caller names. A prefixed source id -- `datazone:finance` in
 `source_ids:` -- would have needed no new field, and was turned down for that reason: a
 caller has exactly one datazone and any number of source ids, and folding one into the
@@ -1086,6 +1086,24 @@ read, so a finance turn may carry on an unzoned session, which from then on answ
 only to finance. Taken from the caller's datazone rather than from the ledger's stamps
 on what the tools returned: a supplied graph keeps no ledger, and the caller's zone is
 what decided everything the turn could reach. *(2026-10-19.)*
+
+**Nesting datazones are the deployment's to expand.** A deployment whose zones nest --
+a caller in `pmvep` also in `common` -- passes `extra_datazones=["common"]` beside
+`datazone="pmvep"`, each held as one more `datazone=` name, so everything that asks a
+zone asks the extras. Kingfisher keeps no map of the nesting, for the reason covering
+went: what a caller is entitled to is the deployment's to work out before it calls.
+**Not taken:** a list of zones on each definition, `datazone: [pmvep, hr]`, because a new
+child zone then means an edit to every shared tool above it; a file telling kingfisher
+the nesting, because it is a central table again, as `access.yaml` and `source_ids.yaml` were; and
+paths as zone names, `common/pm/pmvep`, because a zone that moves is renamed everywhere.
+**The session pin became the set, matched exactly.** Matched by holding, as one zone
+was, a caller in a zone below would reach a session pinned to the zones above it and
+leave its own zone's results there, and one with fewer would read what the others'
+tools returned. Pinned to the caller's own zone alone, a caller expanded differently
+next time would read what the extras returned. The cost: when a zone's parents change,
+its earlier sessions can no longer be reopened. `Caller.datazone` stays the one zone
+the caller is in, told apart from the extras by the held name's type, because no tool
+has asked for more. *(2026-10-23.)*
 
 **Who holds a tool is printed under each holder.** Each agent and subagent prints
 `tools:` and `builtin tools:` lines beside an agent's `subagents:`, so which agents list

@@ -696,19 +696,20 @@ def _agents(
     return specs, declared, described, sources, chains, None
 
 
-def inventory(
+def inventory(  # noqa: PLR0913 -- the caller's three, beside where to look
     cfg: Config,
     *,
     catalogue: Definitions | None = None,
     source_ids: Iterable[str] | None = None,
     datazone: str | None = None,
+    extra_datazones: Sequence[str] = (),
     sessions: object | None = None,
 ) -> Inventory:
     """Ask the workspace what it offers, through the catalogue a run would use."""
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
     # Whose view this is, before the agents are read: each one's chain is what it
     # activates for this caller.
-    held = held_by(resolved.vocabulary, with_datazone(source_ids, datazone))
+    held = held_by(resolved.vocabulary, with_datazone(source_ids, datazone, extra_datazones))
 
     middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved, held)

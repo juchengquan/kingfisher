@@ -59,7 +59,7 @@ from .turn import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from kingfisher.core.config import Endpoint
     from kingfisher.core.interfaces import UnusedResults
@@ -275,6 +275,7 @@ class Running:
         *,
         source_ids: Held | None = None,
         datazone: str | None = None,
+        extra_datazones: Sequence[str] = (),
         files: Any = None,
     ) -> Iterator[RunEvent]:
         """Run one task, yielding progress as it happens.
@@ -286,7 +287,8 @@ class Running:
         """
         # Coerced here: setup reads the session id first, and a bare string has none.
         yield from self._stream_turn(
-            _asked(request), source_ids=with_datazone(source_ids, datazone), files=files
+            _asked(request), source_ids=with_datazone(source_ids, datazone, extra_datazones),
+            files=files,
         )
 
     @contextmanager
@@ -480,12 +482,13 @@ class Running:
         for event in self._ending(turn):
             yield event
 
-    def run(
+    def run(  # noqa: PLR0913 -- the caller's three, beside the turn's own
         self,
         request: str | Request | Resume,
         *,
         source_ids: Held | None = None,
         datazone: str | None = None,
+        extra_datazones: Sequence[str] = (),
         delete_session: bool = False,
         files: Any = None,
     ) -> RunResult:
@@ -497,7 +500,13 @@ class Running:
         fires when a caller stops reading early, which would delete the session.
         """
         result: RunResult | None = None
-        for event in self.stream(request, source_ids=source_ids, datazone=datazone, files=files):
+        for event in self.stream(
+            request,
+            source_ids=source_ids,
+            datazone=datazone,
+            extra_datazones=extra_datazones,
+            files=files,
+        ):
             if event.kind == "finished":
                 result = event.result
         return drive(self._drained_steps(result, delete_session=delete_session))
@@ -521,6 +530,7 @@ class Running:
         *,
         source_ids: Held | None = None,
         datazone: str | None = None,
+        extra_datazones: Sequence[str] = (),
         files: Any = None,
     ) -> AsyncIterator[RunEvent]:
         """`stream`, for a caller already on an event loop. Cancelling is immediate.
@@ -529,7 +539,8 @@ class Running:
         `wrap_model_call` raises the first time this reaches it.
         """
         turn = self._astream_turn(
-            _asked(request), source_ids=with_datazone(source_ids, datazone), files=files
+            _asked(request), source_ids=with_datazone(source_ids, datazone, extra_datazones),
+            files=files,
         )
         try:
             async for event in turn:
@@ -539,12 +550,13 @@ class Running:
             # until then a caller who stopped reading leaves the session claimed.
             await turn.aclose()
 
-    async def arun(
+    async def arun(  # noqa: PLR0913 -- the caller's three, beside the turn's own
         self,
         request: str | Request | Resume,
         *,
         source_ids: Held | None = None,
         datazone: str | None = None,
+        extra_datazones: Sequence[str] = (),
         delete_session: bool = False,
         files: Any = None,
     ) -> RunResult:
@@ -553,7 +565,13 @@ class Running:
         No `aclose` to match `astream`'s: a cancelled drain gives the claim back one turn
         of the loop later either way.
         """
-        events = self.astream(request, source_ids=source_ids, datazone=datazone, files=files)
+        events = self.astream(
+            request,
+            source_ids=source_ids,
+            datazone=datazone,
+            extra_datazones=extra_datazones,
+            files=files,
+        )
         result: RunResult | None = None
         async for event in events:
             if event.kind == "finished":

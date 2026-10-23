@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from types import MappingProxyType
 
-from kingfisher.core.access import DATAZONE_PREFIX, Capabilities, zone_held
+from kingfisher.core.access import DATAZONE_PREFIX, Capabilities, zone_in
 from kingfisher.core.agent.tool_context import Caller
 from kingfisher.core.definitions.subagents.spec import RunOn
 
@@ -129,7 +129,7 @@ def caller_of(request: Request | Resume, held: frozenset[str] | None, started: d
         source_ids=None
         if held is None
         else frozenset(one for one in held if not one.startswith(DATAZONE_PREFIX)),
-        datazone=None if held is None else zone_held(held),
+        datazone=None if held is None else zone_in(held),
         context=request.context,
         started=started,
     )
