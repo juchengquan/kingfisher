@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A `ScratchRunLimit` grants a run only by answering `True`, after #9999
+
+- **An answer that is neither `True` nor `False` refuses that graph's runs.** It was read by
+  its truth, so an `async def allows` -- a coroutine, which is truthy -- handed every graph
+  a run, with only a "never awaited" warning to show for it, and `1` or `"yes"` did the
+  same. Now such an answer is treated as a raise is: logged once per graph, and each run
+  a tool asks for answers `refused: this deployment's ScratchRunLimit answered coroutine,
+  not True or False`, the type named. A coroutine is closed. `None` from a limit that
+  forgot to return is refused as before, now with that line instead of the generic one.
+- **If yours is `async`, make it synchronous**: look the policy up before the service is
+  built.
+
 ## The shell may not write the workspace's retired `PROMPT.md`, after #9999
 
 - **On macOS the profile denies `<workspace>/PROMPT.md`**, beside `models.yaml` and the keys

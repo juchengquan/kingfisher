@@ -527,6 +527,11 @@ Things to know:
   with an `error` naming it -- `refused: this deployment's ScratchRunLimit raised
   KeyError: 'researcher'`. The other graphs keep what they would have had. An error is
   never taken as allowing a run.
+- **Only `True` allows, and `allows` is not `async`.** It is called as the graph is built,
+  not awaited, so an `async def allows` answers a coroutine. That, or any other answer but
+  `True` or `False` -- `1`, `None` -- refuses the graph's runs the way a raise does, logged
+  and named: `refused: this deployment's ScratchRunLimit answered coroutine, not True or
+  False`. Look a policy up before the service is built, not inside `allows`.
 
 ## The rest
 

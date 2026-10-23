@@ -376,6 +376,8 @@ class ScratchRunLimit(Protocol):
     or holding it behind a person, is refused a run whatever it says, and a tool called
     from `eval`'s code is never handed one. An exception here is logged and refuses that
     graph's tools their runs, naming it in each refusal; the other graphs are untouched.
+    So does any answer but `True` or `False`: `allows` is called, never awaited, so an
+    `async def` answers a coroutine, which is not a grant.
     """
 
     def allows(self, name: str, kind: Literal["agent", "subagent", "general-purpose"]) -> bool:

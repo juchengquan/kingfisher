@@ -8,6 +8,7 @@ real folder that a real shell can swap.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import shutil
 import stat
@@ -51,6 +52,8 @@ from tests.unit.scripted import Scripted
 from tests.unit.test_interpreter import _from_code
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from deepagents.backends.protocol import BackendProtocol
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell and folders")
@@ -449,6 +452,126 @@ def test_a_limit_that_raises_is_logged_once_for_the_graph_it_raised_on(
     ]
     assert raised[0].exc_info is not None
     assert raised[0].exc_info[0] is KeyError
+
+
+async def _refused() -> bool:
+    return False
+
+
+class _Odd(_Limit):
+    """A `ScratchRunLimit` answering `answer` for the graphs named in `refused`, and `True`
+    for the rest; `answer` is called each time, so a coroutine is a fresh one."""
+
+    def __init__(self, answer: Callable[[], Any], *refused: str) -> None:
+        super().__init__(*refused)
+        self.answer = answer
+        self.given: list[Any] = []
+
+    def allows(self, name: str, kind: str) -> bool:
+        self.asked.append((name, kind))
+        if name not in self.refused:
+            return True
+        self.given.append(self.answer())
+        return self.given[-1]
+
+
+#: An answer a limit can give that is neither `True` nor `False`, by the type it is named as.
+_NEITHER = {"coroutine": _refused, "int": lambda: 1, "str": lambda: "yes", "NoneType": lambda: None}
+
+
+def _answered(kind: str) -> str:
+    return f"refused: this deployment's ScratchRunLimit answered {kind}, not True or False"
+
+
+@pytest.mark.parametrize("kind", list(_NEITHER))
+def test_a_limit_answering_neither_true_nor_false_refuses_and_says_why(cfg, session_dir, kind):
+    """`async def allows` answers a coroutine, which is truthy, and read as a grant it handed
+    every graph a run; `1` and `"yes"` did the same. Refused as a raise is, naming what came
+    back. The agent's run, answered `True`, is the control."""
+    _a_tool(cfg)
+    _a_helper(cfg)
+
+    found = _answers(
+        cfg,
+        session_dir,
+        *_shouted_then_delegated("helper"),
+        capabilities=Capabilities(subagents=("helper",)),
+        scratch_run_limit=_Odd(_NEITHER[kind], "helper"),
+    )
+
+    assert found == ["HI", _answered(kind)]
+
+
+def test_a_coroutine_the_limit_answers_is_closed(cfg, session_dir):
+    """Left open, it warned "coroutine … was never awaited" from wherever it was collected,
+    which reads as a bug in kingfisher rather than the deployment's limit."""
+    _a_tool(cfg)
+    _a_helper(cfg)
+    limit = _Odd(_refused, "helper")
+
+    _answers(
+        cfg,
+        session_dir,
+        *_shouted_then_delegated("helper"),
+        capabilities=Capabilities(subagents=("helper",)),
+        scratch_run_limit=limit,
+    )
+
+    (given,) = limit.given
+    assert inspect.getcoroutinestate(given) == inspect.CORO_CLOSED
+
+
+def test_a_limit_answering_neither_is_logged_once_for_its_graph(cfg, session_dir, caplog):
+    """Refused without a word in the log, a limit written `async` reads as the policy."""
+    _a_tool(cfg)
+    _a_helper(cfg)
+
+    _answers(
+        cfg,
+        session_dir,
+        *_shouted_then_delegated("helper"),
+        capabilities=Capabilities(subagents=("helper",)),
+        scratch_run_limit=_Odd(lambda: 1, "helper"),
+    )
+
+    logged = [r.getMessage() for r in caplog.records if "scratch run limit" in r.getMessage()]
+    assert logged == [
+        "the scratch run limit answered int on subagent 'helper', not True or False; its "
+        "tools are refused a run"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("limit", "answer"),
+    [
+        (_Raising(""), RAISED.replace("'helper'", "''")),
+        (_Odd(lambda: 1, ""), _answered("int")),
+    ],
+    ids=["raised", "answered neither"],
+)
+def test_an_async_tool_on_a_graph_its_limit_refused_is_told_why(
+    cfg, session_dir, limit, answer
+):
+    """An async tool asks through `arun`, and every refused-limit test drove the sync
+    `shout`: without `RefusingRunner.arun` the call failed on an `AttributeError` instead."""
+    _a_tool(cfg)
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(
+            responses=[_calls("ashout", text="hi"), AIMessage(content="done")]
+        ),
+        scratch_run_limit=limit,
+    )
+
+    out = asyncio.run(
+        built.graph.ainvoke(
+            {"messages": [{"role": "user", "content": "go"}]}, context=built.context
+        )
+    )
+
+    (result,) = [m for m in out["messages"] if isinstance(m, ToolMessage)]
+    assert result.content == answer
 
 
 @pytest.mark.parametrize(
