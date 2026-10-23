@@ -41,6 +41,8 @@ _EXPORTS = {
     "Kingfisher": "kingfisher.core.service",
     "ConfigError": "kingfisher.core.config",
     "Request": "kingfisher.core.request",
+    # What a tool reads off `runtime.context.caller`.
+    "Caller": "kingfisher.core.agent.tool_context",
     # What a caller holding a paused session needs to answer the gated call.
     "Resume": "kingfisher.core.request",
     "Decision": "kingfisher.core.request",
@@ -79,6 +81,7 @@ __all__ = [
     "STOP_REASONS",
     "UNSCOPED",
     "ArtifactError",
+    "Caller",
     "CallerError",
     "Capabilities",
     "CapabilityError",
@@ -134,6 +137,7 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import UNSCOPED as UNSCOPED
     from kingfisher.core.access.source_ids import CallerError as CallerError
     from kingfisher.core.access.source_ids import Held as Held
+    from kingfisher.core.agent.tool_context import Caller as Caller
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.config import Config as Config
     from kingfisher.core.config import ConfigError as ConfigError

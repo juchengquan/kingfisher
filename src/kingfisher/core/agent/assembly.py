@@ -87,7 +87,7 @@ from .models import (
 from .permitted_backend import PermittedBackend
 from .prompting import memory_guidelines, subagent_prompt, system_prompt
 from .session_paths import SessionPaths
-from .tool_context import ToolContext
+from .tool_context import Caller, ToolContext
 from .tool_guards import guarded_tools
 from .usable_backend import refuse_unusable_backend
 
@@ -349,6 +349,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     offered_tools: Sequence[FoundTool] | None = None,
     agent: AgentSpec | None = None,
     held: frozenset[str] | None = None,
+    caller: Caller | None = None,
     ledger: Ledger | None = None,
     instructions: str = "",
     session_instructions: str | None = None,
@@ -577,7 +578,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         }
         graph = create_deep_agent(**attached)
         budget.measure(graph)
-        return Assembled(graph=graph, context=ToolContext(backend=under_rules), **attached)
+        return Assembled(
+            graph=graph, context=ToolContext(backend=under_rules, caller=caller), **attached
+        )
 
     # `asked`, not `capabilities`: combined, the agent's names are the ones this caller
     # reaches, and a typo in the file must be refused whoever is calling.

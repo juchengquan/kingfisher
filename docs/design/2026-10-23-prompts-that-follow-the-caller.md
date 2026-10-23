@@ -120,15 +120,10 @@ rule covers one-line slot entries too.
 `SessionInstructions` becomes `TurnInstructions`, asked once per turn and handed the
 turn's caller rather than its session id alone:
 
+`Caller` is the one slice 3 put on `ToolContext`: the caller's `source_ids`, `datazone`,
+the request's `context`, and `started`, when the turn started in UTC.
+
 ```python
-@dataclass(frozen=True)
-class Caller:
-    source_ids: tuple[str, ...]
-    datazone: str | None
-    context: Mapping[str, str]   # the request's new context, as the caller sent it
-    today: date                  # read by kingfisher when the turn starts
-
-
 class TurnInstructions(Protocol):
     labels: tuple[str, ...]      # what a definition's `receives` may name
 
@@ -149,7 +144,7 @@ class DeskInstructions:
 
     def text(self, cfg, session_id, caller):
         return Told(
-            everyone=f"Today is {caller.today:%A %-d %B %Y}, {caller.context['tz']}.",
+            everyone=f"Today is {caller.started.astimezone(ZoneInfo(caller.context['tz'])):%A %-d %B %Y}.",
             labelled={"user": f"You are working for {caller.context['name']}, "
                               f"{caller.context['team']}."},
         )
@@ -159,8 +154,8 @@ class DeskInstructions:
   reads. Kingfisher holds no model of the deployment's identities -- the reason
   `source_ids.yaml` went -- so it learns no `user_name` field. The caller sends the
   details; the hook may reshape or check them.
-- **`today` is kingfisher's.** Read from the clock, so no request sets the date. A
-  deployment that wants another takes it from `context` in its own hook.
+- **The clock is kingfisher's.** `started` is read once per turn, so no request sets the
+  date. A deployment that wants another takes it from `context` in its own hook.
 - **Labels, not agent names.** Each definition lists the labelled pieces it wants in
   `system_prompt.receives`, the agent included, and gets `everyone` either way. The hook
   names no agent, so renaming a subagent cannot silently stop its text. A label the hook
@@ -197,9 +192,12 @@ adds its key to it.
    the datazone among them as `datazone=<zone>`, and passes it to `activated_subagents`,
    so matching needs no new argument.
 2. **`TurnInstructions`.** Replaces `SessionInstructions` and its middleware's input;
-   `Caller`, `Told`, the request's `context`, `today`, `receives` and its startup check; the
+   `Told`, `receives` and its startup check, handing the hook slice 3's `Caller`; the
    sentence ahead of labelled text. `ports.md`'s section is rewritten.
-3. **The caller on `ToolContext`.** `tools.md` gains how a tool reads it.
+3. **The caller on `ToolContext`.** Built, and with it `Caller` and the request's
+   `context`, so slice 2 only adds the hook. `Caller.started` is a UTC `datetime`, not the
+   `today: date` drafted above: a date cannot be moved into the caller's timezone. Recorded
+   in `decisions.md` under *A tool is told who the turn runs for, and the model is not*.
 4. **Memory wording.** Built: the first example saves a stated convention, and the guidelines
    tell the model never to store details identifying the user. Recorded in `decisions.md`
    under *Nor does it keep who the user is*.

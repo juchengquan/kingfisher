@@ -4,10 +4,28 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 
-from kingfisher.core.access import Capabilities
+from kingfisher.core.access import DATAZONE_PREFIX, Capabilities, zone_held
+from kingfisher.core.agent.tool_context import Caller
 from kingfisher.core.definitions.subagents.spec import RunOn
+
+
+def _context(given: Mapping[str, str], owner: object) -> None:
+    """Refuse a `context` that is not text to text, then freeze it."""
+    if not isinstance(given, Mapping):
+        msg = f"context is a mapping of names to text -- got {type(given).__name__}"
+        raise TypeError(msg)
+    if odd := sorted(
+        repr(key) for key, value in given.items()
+        if not isinstance(key, str) or not isinstance(value, str)
+    ):
+        msg = f"context maps names to text, and {', '.join(odd)} is not -- write each as a str"
+        raise TypeError(msg)
+    # A copy: the caller's own dict, changed after the call, would change what tools read.
+    object.__setattr__(owner, "context", MappingProxyType(dict(given)))
 
 
 @dataclass(frozen=True)
@@ -29,11 +47,15 @@ class Request:
     #: Text for this turn alone, sent after the task in its message rather than in the
     #: system prompt, so it changes every turn without missing the cache.
     note: str = ""
+    #: The caller's own facts -- a user id, a timezone -- handed to tools on `Caller` and
+    #: never to the model. Kingfisher reads none of them.
+    context: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.task or not self.task.strip():
             msg = "task must not be empty"
             raise ValueError(msg)
+        _context(self.context, self)
         # Normalise at the edge so everything downstream sees real paths.
         object.__setattr__(self, "inputs", tuple(Path(p) for p in self.inputs))
 
@@ -81,8 +103,12 @@ class Resume:
     turn_id: str | None = None
     capabilities: Capabilities = field(default_factory=Capabilities)
     run_on: Mapping[str, RunOn] = field(default_factory=dict)
+    #: Presented again, as the capabilities are: the call a person approved runs for
+    #: whoever resumes it.
+    context: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        _context(self.context, self)
         if not self.session_id or not self.session_id.strip():
             msg = "session_id must not be empty"
             raise ValueError(msg)
@@ -94,3 +120,16 @@ class Resume:
             twice = sorted({call for call in seen if seen.count(call) > 1})
             msg = f"two decisions answer the same call: {', '.join(twice)}"
             raise ValueError(msg)
+
+
+
+def caller_of(request: Request | Resume, held: frozenset[str] | None, started: datetime) -> Caller:
+    """Who `request` runs for, holding `held` as the access checks read it."""
+    return Caller(
+        source_ids=None
+        if held is None
+        else frozenset(one for one in held if not one.startswith(DATAZONE_PREFIX)),
+        datazone=None if held is None else zone_held(held),
+        context=request.context,
+        started=started,
+    )

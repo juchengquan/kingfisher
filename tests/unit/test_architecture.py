@@ -2045,6 +2045,8 @@ WITNESSES: dict[str, dict[str, str]] = {
         "ToolContext": "document",
         # What `ToolContext.run` returns, which `tools.md` reads `.error` and `.files` off.
         "ScratchRun": "embedder",
+        # What `ToolContext.caller` is, which `tools.md` reads `.context` and `.source_ids` off.
+        "Caller": "embedder",
         # `tools.md` writes `ToolSpec(...)` for a tool that says who may use it or what it
         # is called, in a tool file of the deployment's own, as `ToolContext` above is.
         "ToolSpec": "document",

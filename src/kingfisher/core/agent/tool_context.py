@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+# `datetime` and `Mapping` are not under TYPE_CHECKING: pydantic resolves `Caller`'s
+# annotations when a tool is bound.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -14,6 +17,22 @@ NOT_GRANTED = (
     "refused: the agent that called this tool may not run commands itself, so neither may "
     "its tools"
 )
+
+
+@dataclass(frozen=True)
+class Caller:
+    """Who a turn runs for, as its tools are handed it: on `ToolContext.caller`, never in
+    what the model is sent."""
+
+    #: The source ids the caller presented, `None` where nothing narrows: no lock in the
+    #: deployment, or a run `UNSCOPED`.
+    source_ids: frozenset[str] | None
+    datazone: str | None
+    #: The request's `context`, as the caller sent it.
+    context: Mapping[str, str]
+    #: When the turn started, in UTC. Kingfisher's clock, so no request sets the date; a
+    #: tool converts it to the caller's timezone where `context` names one.
+    started: datetime
 
 
 @dataclass(frozen=True)
@@ -31,6 +50,8 @@ class ToolContext:
     #: Bound for one call by `ScratchRunsMiddleware`, and only where the calling agent may
     #: use the shell itself; `None` refuses every run.
     scratch: Any = None
+    #: Who the turn runs for. `None` only for a build no turn asked for.
+    caller: Caller | None = None
 
     def run(
         self,
