@@ -274,6 +274,40 @@ def test_a_clashing_name_still_has_to_be_spelt_out():
     offering.refuse_unknown(ALL, ("a/t.py::fetch",), subject=SUBJECT)
 
 
+#: `(builtin_tools, tools)` lines a run accepts and refuses, so the two answers below are
+#: compared where they differ as well as where they agree.
+GRANTS = [
+    (ALL, ALL),
+    (None, None),
+    (("read_file",), ("csv_columns",)),
+    (ALL, ("csv_profile::csv_columns",)),
+    (ALL, ("a/t.py::fetch",)),
+    (("read_fiel",), ALL),
+    (ALL, ("csv_colums",)),
+    (("csv_columns",), ALL),
+    (ALL, ("read_file",)),
+    (ALL, ("fetch",)),
+]
+
+
+@pytest.mark.parametrize(("builtin", "tools"), GRANTS)
+def test_doctor_asks_the_question_a_run_refuses_on(builtin, tools):
+    """A second rule beside the refusal would drift from it, which is how `doctor` passed
+    agents that every run then refused: it never asked.
+    """
+    offering = Offering(
+        builtin=("read_file",), offered=("csv_columns", *CLASHING), sources=UNIQUE
+    )
+    try:
+        offering.refuse_unknown(builtin, tools, subject=SUBJECT)
+    except CapabilityError:
+        refused = True
+    else:
+        refused = False
+
+    assert bool(offering.unknown(builtin, tools)) == refused
+
+
 def test_the_claim_is_still_checked_by_the_rule_that_checks_claims():
     """`spelt` deliberately does not verify the path, so this has to keep firing: it is
     the whole reason the long form is worth writing.

@@ -947,6 +947,70 @@ def test_an_agent_granted_every_subagent_is_not_reported(cfg, at_the_command_lin
     assert json.loads(capsys.readouterr().out)["unresolved_subagents"] == {}
 
 
+#: Each way a definition can name a tool that a run then refuses: the agent's own fields,
+#: the subagent's `tools:` line or `None` for no subagent, and the name the listing should
+#: blame on whom.
+UNKNOWN_TOOLS = {
+    "an offered tool nobody defines": (
+        {"tools": "[word_tally, lokup]"}, None, "agent 'lead'", "lokup"
+    ),
+    "a built-in that does not exist": (
+        {"builtin_tools": "[read_fiel]"}, None, "agent 'lead'", "read_fiel"
+    ),
+    "an offered tool on the built-in line": (
+        {"builtin_tools": "[word_tally]"}, None, "agent 'lead'", "word_tally"
+    ),
+    "a subagent's tool nobody defines": (
+        {**EVERY_TOOL, "subagents": "[reviewer]"}, "[lokup]", "subagent 'reviewer'", "lokup"
+    ),
+}
+
+
+def _name_tools(cfg, agent_fields: dict[str, str], subagent_tools: str | None) -> None:
+    _workspace(cfg)
+    if subagent_tools is not None:
+        path = subagents_dir(cfg) / "reviewer.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "name: reviewer\ndescription: A subagent.\n"
+            f"tools: {subagent_tools}\nsystem_prompt: |\n  Go.\n",
+            encoding="utf-8",
+        )
+    an_agent(cfg, "lead", **agent_fields)
+
+
+@pytest.mark.parametrize("case", sorted(UNKNOWN_TOOLS))
+def test_a_tool_name_a_run_refuses_fails_the_listing(case, cfg, at_the_command_line, capsys):
+    """Each of these exited 0, and `doctor` with it, while every run reaching the definition
+    was refused -- found through an agent naming a tool its client's adapter had left out.
+    """
+    fields, subagent_tools, subject, name = UNKNOWN_TOOLS[case]
+    _name_tools(cfg, fields, subagent_tools)
+
+    assert main(["list"]) == 1
+    assert f"{subject}: {name}" in capsys.readouterr().out
+    assert main(["list", "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)["unresolved_tools"] == {subject: [name]}
+
+
+def test_tools_named_as_they_are_offered_are_not_reported(cfg, at_the_command_line, capsys):
+    """The control: both lines naming what a run accepts, a tool in its long form and a
+    subagent at `*` -- a check reading every name as unknown would report each.
+    """
+    _name_tools(
+        cfg,
+        {
+            "builtin_tools": "[read_file, task]",
+            "tools": "[word_tally, kit.py::line_count]",
+            "subagents": "[reviewer]",
+        },
+        '["*"]',
+    )
+
+    assert main(["list", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["unresolved_tools"] == {}
+
+
 @pytest.mark.parametrize("form", ["text", "json"])
 def test_the_operator_still_sees_all_of_it(form, cfg, at_the_command_line, capsys):
     """The control both rules above need: the filtering is the caller's view, not the
@@ -2155,6 +2219,7 @@ TROUBLES_BESIDE_THE_ERRORS = {
     "moved_tools": ({"agent 'analyst'": ("csv_profile",)}, "csv_profile"),
     "miscounted_bundles": ({"redactor": "its folder holds two"}, "its folder holds two"),
     "unresolved_subagents": ({"agent 'analyst'": ("phantom",)}, "phantom"),
+    "unresolved_tools": ({"agent 'analyst'": ("lokup",)}, "lokup"),
     "doubled_skills": (
         {"agent 'analyst'": "skills names 'audit' and 'catalogue::audit', which are one skill"},
         "which are one skill",

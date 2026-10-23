@@ -88,6 +88,32 @@ def _subagent_references(found: Inventory) -> Iterator[Check]:
         )
 
 
+def _tool_names(found: Inventory) -> Iterator[Check]:
+    """A definition naming a tool its line does not offer.
+
+    A failure though startup refuses nothing, as for a subagent: every run reaching it is
+    refused, whichever caller is asking.
+    """
+    if not found.unresolved_tools_checked:
+        yield Check(
+            "tool names",
+            "warn",
+            "not checked -- the tools or the built-in set did not load, which is above",
+        )
+        return
+    if not found.unresolved_tools:
+        yield Check("tool names", "ok", "every definition names tools there are")
+        return
+    for subject, names in sorted(found.unresolved_tools.items()):
+        yield Check(
+            "tool names",
+            "fail",
+            f"{subject} names {', '.join(names)}, which nothing offers on that line",
+            "write each as `kingfisher list` lists it under builtin tools or offered "
+            "tools, on the line that heading names, or add the tool it means",
+        )
+
+
 def _skill_entries(found: Inventory) -> Iterator[Check]:
     """A definition naming one skill twice, bare and qualified.
 
@@ -286,6 +312,7 @@ def checks(cfg: Config, found: Inventory) -> Iterator[Check]:
     yield from _buildable(found)
     yield from _catalogues(found)
     yield from _tool_references(found)
+    yield from _tool_names(found)
     yield from _subagent_references(found)
     yield from _skill_entries(found)
     yield from _bundled_entries(found)
