@@ -196,7 +196,8 @@ async def _aglobbed_below(result: Any, pattern: str, path: str | None, routes: A
 
 
 class WorkspaceScopedBackend(CompositeBackend):
-    """A `CompositeBackend` that refuses host paths instead of re-rooting them.
+    """A `CompositeBackend` that refuses host paths instead of re-rooting them, in every
+    call that names a path.
 
     `ls`, `glob` and `grep` are deduplicated: they merge every backend's answer, and
     `/inputs` and `/memory` are routes *inside* the default backend's root, so each file
@@ -205,16 +206,20 @@ class WorkspaceScopedBackend(CompositeBackend):
     """
 
     def ls(self, path: str) -> Any:
+        self._refuse_host_path(path)
         return _listing(super().ls(path), path)
 
     async def als(self, path: str) -> Any:
+        self._refuse_host_path(path)
         return _listing(await super().als(path), path)
 
     def glob(self, pattern: str, path: str | None = None) -> Any:
+        self._refuse_host_path(path)
         found = _globbed_below(super().glob(pattern, path), pattern, path, self.sorted_routes)
         return _once(found, key=_by_path)
 
     async def aglob(self, pattern: str, path: str | None = None) -> Any:
+        self._refuse_host_path(path)
         found = await _aglobbed_below(
             await super().aglob(pattern, path), pattern, path, self.sorted_routes
         )
@@ -228,6 +233,7 @@ class WorkspaceScopedBackend(CompositeBackend):
         *,
         max_count: int | None = None,
     ) -> Any:
+        self._refuse_host_path(path)
         found = super().grep(pattern, path, glob, max_count=max_count)
         if _asks_below(path, found):
             matches = list(found.matches or [])
@@ -252,6 +258,7 @@ class WorkspaceScopedBackend(CompositeBackend):
         *,
         max_count: int | None = None,
     ) -> Any:
+        self._refuse_host_path(path)
         found = await super().agrep(pattern, path, glob, max_count=max_count)
         if _asks_below(path, found):
             matches = list(found.matches or [])
@@ -293,10 +300,18 @@ class WorkspaceScopedBackend(CompositeBackend):
         self.unprotected: tuple[str, ...] = ()
 
     def _get_backend_and_key(self, key: str) -> tuple[Any, str]:
-        reject_host_path(
-            key, self.workspace, session_dir=self._session_dir, scratch_route=self.artifacts_root
-        )
+        self._refuse_host_path(key)
         return super()._get_backend_and_key(key)
+
+    def _refuse_host_path(self, path: str | None) -> None:
+        # Called by the searches as well: upstream's `ls`, `glob` and `grep` route by
+        # prefix without `_get_backend_and_key`, so a host path there was re-rooted and
+        # answered "not found" where `read_file` was told the path to use.
+        if path is not None:
+            reject_host_path(
+                path, self.workspace, session_dir=self._session_dir,
+                scratch_route=self.artifacts_root,
+            )
 
 
 class InputsBackend(RootedBackend):

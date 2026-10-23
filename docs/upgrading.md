@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `ls`, `glob` and `grep` refuse a host path as `read_file` does, after #9999
+
+- **A search given a host path is told the path to use.** `ls`, `glob` and `grep` handed
+  `/…/sessions/<id>/outputs` answered `path_not_found` or "No files found", the path
+  re-rooted inside the session, where `read_file` on the same kind of path was told to use
+  `/outputs/…`. All three, sync and async, now give that refusal. A `path` of `None` or `/`
+  is unchanged.
+- **A deployment whose backend subclasses `WorkspaceScopedBackend`** and overrides one of
+  the three should call `_refuse_host_path(path)` first, as the overrides here do.
+
 ## `kingfisher list` fails on a skill written twice, after #1071
 
 - **`list` exits 1 where a definition names one skill twice**, bare and qualified, as

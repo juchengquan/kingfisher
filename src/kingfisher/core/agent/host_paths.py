@@ -21,6 +21,12 @@ HOST_ROOTS: tuple[str, ...] = (
 )
 
 
+#: What every refusal of a host path says. `as_asked` leaves a failure saying it as
+#: written: the refusal names the path to use, and spelling that back as the host path
+#: the call wrote would undo the correction.
+HOST_PATH_SAID = "is a host path"
+
+
 class HostPathError(ValueError):
     """A host path reached a file tool."""
 
@@ -41,7 +47,7 @@ def reject_host_path(
     if key.startswith(prefix):
         suggestion = f"/{key[len(prefix) :]}"
         msg = (
-            f"{key!r} is a host path, and file tools take virtual paths rooted at the "
+            f"{key!r} {HOST_PATH_SAID}, and file tools take virtual paths rooted at the "
             f"workspace. Use {suggestion!r} instead. (Passing the host path would have "
             f"created it inside the workspace, under a mirror of its own location.)"
         )
@@ -49,7 +55,7 @@ def reject_host_path(
 
     if key.startswith((f"{workspace}/", *HOST_ROOTS)):
         msg = (
-            f"{key!r} is a host path, and file tools take virtual paths rooted at the "
+            f"{key!r} {HOST_PATH_SAID}, and file tools take virtual paths rooted at the "
             f"workspace — it would have been created inside the workspace, not where "
             f"you meant. Use the shell for host paths, or a virtual path such as "
             f"{scratch_route}<name> for files that belong to this task."

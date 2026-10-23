@@ -9,7 +9,7 @@ from typing import Any
 
 from kingfisher.core.layout import INPUTS_ROUTE, OUTPUTS_ROUTE, SCRATCH_ROUTE, Layout
 
-from .host_paths import HOST_ROOTS, HostPathError
+from .host_paths import HOST_PATH_SAID, HOST_ROOTS, HostPathError
 from .prompting import what_you_make_goes
 
 #: Which arguments name a file: a convention `tools.md` documents, so widening it
@@ -72,7 +72,7 @@ class SessionPaths:
     def translated(self, args: Mapping[str, Any]) -> dict[str, Any]:
         """The same arguments with their paths made real, refusing what escapes."""
         if (host := self.host_path_in(args)) is not None:
-            msg = f"{host!r} is a host path, and a tool is handed this session's own paths"
+            msg = f"{host!r} {HOST_PATH_SAID}, and a tool is handed this session's own paths"
             raise HostPathError(msg)
         wanted = {key: args[key] for key in args if key in PATH_ARGUMENTS}
         return {**args, **{key: self.real(value) for key, value in wanted.items()}}
@@ -105,6 +105,8 @@ def as_asked(text: str, args: Mapping[str, Any]) -> str:
     that path said another way. Longest first, so a call naming two paths rewrites each
     against the one it is really a tail of.
     """
+    if HOST_PATH_SAID in text:
+        return text
     asked = sorted(
         (one for one in _strings_in(args) if one.startswith("/")), key=len, reverse=True
     )

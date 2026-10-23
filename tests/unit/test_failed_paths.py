@@ -29,7 +29,7 @@ from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, paths_in, tools_dir
 
 #: Every builtin these rules call, granted together so one agent can be driven once.
-TOOLS = ("read_file", "write_file", "delete", "ls", "execute")
+TOOLS = ("read_file", "write_file", "edit_file", "delete", "ls", "glob", "grep", "execute")
 
 
 @pytest.fixture(params=["sync", "async"])
@@ -101,6 +101,20 @@ def test_a_listing_that_misses_names_the_path_that_was_asked_for(cfg, session_di
     said = _answers(cfg, session_dir, way, ("ls", {"path": "/inputs/nowhere"}))
 
     assert "'/inputs/nowhere'" in said["0:ls"], said["0:ls"]
+
+
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [("ls", {}), ("glob", {"pattern": "*"}), ("grep", {"pattern": "x"})],
+)
+def test_a_search_given_a_host_path_is_told_the_path_to_use(cfg, session_dir, way, tool, args):
+    """Upstream's searches route without the hook `read_file` refuses a host path in, so
+    `ls` of the session's own `outputs` folder answered `path_not_found` and `glob` "No
+    files found", where the same path to `read_file` was told the one to use."""
+    said = _answers(cfg, session_dir, way, (tool, {**args, "path": f"{session_dir}/outputs"}))
+
+    assert "is a host path" in said[f"0:{tool}"], said[f"0:{tool}"]
+    assert "Use '/outputs' instead" in said[f"0:{tool}"], said[f"0:{tool}"]
 
 
 def test_a_failure_does_not_hand_over_the_host_path(cfg, session_dir, way):
