@@ -18,7 +18,7 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
-## A file a request names is saved in `/outputs`, after #9999
+## A file a request names is saved in `/outputs`, after #1073
 
 - **One sentence of the system prompt has changed.** It told the model to follow a
   request's file names exactly, with nothing in the prompt overriding them. Since #1066 a
@@ -29,7 +29,7 @@ replaced the four layers began.
   system prompt's text, it is not the same.
 - **A request that names its files under `/outputs` already is unaffected.**
 
-## Landlock runs a command unadopted on a kernel without `children` files, after #9999
+## Landlock runs a command unadopted on a kernel without `children` files, after #1073
 
 - **Every command no longer fails on such a kernel.** The reaper that collects what a
   command leaves behind (#1040) checked only that `/proc/self/task` existed, so on a
@@ -38,7 +38,7 @@ replaced the four layers began.
   adopted was killed. It now runs the command as it would without a reaper there, which
   is what it already did where it cannot adopt. A kernel with the files is unchanged.
 
-## A refusal GNU quotes in curly quotes gets its kept folder's note, after #9999
+## A refusal GNU quotes in curly quotes gets its kept folder's note, after #1073
 
 - **`cp: cannot create regular file ‘inputs/a.csv’: Permission denied` is told `/inputs/`
   is kept.** GNU tools quote a name in curly quotes under the UTF-8 locale kingfisher's
@@ -46,7 +46,7 @@ replaced the four layers began.
   told `/‘inputs/a.csv’` was outside every folder, and before it, nothing. Straight quotes,
   and a deployment's own shell under another locale, read as before.
 
-## A failure quotes back the string the model sent, not a path made of it, after #9999
+## A failure quotes back the string the model sent, not a path made of it, after #1073
 
 - **Only an argument naming a path is spelled back as the call wrote it.** That is the
   file tools' `file_path` and an offered tool's `path`. An `edit_file` of
@@ -55,7 +55,7 @@ replaced the four layers began.
   other argument is left as it is, and so is a host-path refusal, whose suggestion was
   spelled back as the host path the call wrote.
 
-## A failure about a folder above the asked path names that folder as the model would, after #9999
+## A failure about a folder above the asked path names that folder as the model would, after #1073
 
 - **The host path no longer reaches the model when a parent is what failed.** `write_file
   /outputs/a.txt/b.txt` beside a file `a.txt` answered `File exists:
@@ -63,7 +63,7 @@ replaced the four layers began.
   folder the asked path runs through is rewritten as a quoted tail of the path already
   was. A deployment that parses these messages sees the session's own spelling there now.
 
-## `ls`, `glob` and `grep` refuse a host path as `read_file` does, after #9999
+## `ls`, `glob` and `grep` refuse a host path as `read_file` does, after #1073
 
 - **A search given a host path is told the path to use.** `ls`, `glob` and `grep` handed
   `/…/sessions/<id>/outputs` answered `path_not_found` or "No files found", the path
