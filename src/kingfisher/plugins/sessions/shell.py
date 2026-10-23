@@ -78,8 +78,9 @@ def kingfishers_shell() -> ShellPrompt:
     """What kingfisher's own shell says of itself.
 
     It exports the session root as `KINGFISHER_SESSION_ROOT`, with `TMPDIR` the
-    scratchpad and `KINGFISHER_SKILLS` the catalogue, which is true of no runner a
-    deployment supplies.
+    scratchpad and `KINGFISHER_SKILLS` the catalogue. A deployment's runner given
+    `session_root=` exports the first and no runner the other two, so this is never what
+    a deployment's shell is said to be.
     """
     prompts = resources.files("kingfisher.plugins.sessions.prompts")
     prompt, skills, execute = (
