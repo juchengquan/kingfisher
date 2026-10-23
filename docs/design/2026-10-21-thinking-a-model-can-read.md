@@ -54,7 +54,7 @@ these changes the conversation a block was signed against:
 - deepagents' summariser, which keeps the newest part of the conversation verbatim
   behind its summary -- the reference names that kept tail as a shape the check fails;
 - a system prompt that differs from one turn to the next, as a session's text does when
-  a `SessionInstructions` plugin changes its answer, and memory may when the agent has
+  a `TurnInstructions` plugin changes its answer, and memory may when the agent has
   edited `AGENTS.md`.
 
 So a long turn on one of those models loses its reasoning at its first clearing pass or

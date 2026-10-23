@@ -25,7 +25,7 @@ from kingfisher.core.agent.models import (
     summarizer_count,
     summarizer_trigger,
 )
-from kingfisher.core.agent.prompting import subagent_prompt
+from kingfisher.core.agent.prompting import subagent_prompt, turn_text
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.agents.spec import AgentSpec
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
     from kingfisher.core.config import Config
     from kingfisher.core.definitions.skills.registry import SkillRegistry
-    from kingfisher.core.interfaces import PdfAttachments, ScratchRunLimit
+    from kingfisher.core.interfaces import PdfAttachments, ScratchRunLimit, Told
     from kingfisher.core.session.ledger import Ledger
 
 
@@ -283,7 +283,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     #: The deployment's instructions, which every subagent is given ahead of its own.
     instructions: str = "",
     #: The session's, as `standing_middleware` takes them.
-    session_text: str | None = None,
+    told: Told | None = None,
     #: What the deployment hands over in place of a PDF, asked by every subagent built here.
     pdf_attachments: PdfAttachments | None = None,
     #: Which graphs' offered tools the deployment refuses a run, asked of this one by name.
@@ -415,9 +415,9 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         if skills is None or skills == ALL or backend is None
         else tuple(skills),
         skill_sources=skill_sources or [],
-        session_text=session_text,
+        turn_text=turn_text(told, spec.receives),
         # A helper's stack is its parent's `SubAgentMiddleware`'s, which caches nothing.
-        session_cached=default_model is None,
+        turn_cached=default_model is None,
     )
     # A deployment's own goes outside all of it, in the slot deepagents' merge gives one in
     # every other stack: among the rest, one that offloads would cut a long result before

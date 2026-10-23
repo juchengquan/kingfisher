@@ -1,4 +1,4 @@
-"""A deployment's text for one session, sent after the part of the prompt that is cached."""
+"""A deployment's text for one turn, sent after the part of the prompt that is cached."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from langchain_core.messages import SystemMessage
 from .caching import PromptCachingMiddleware
 
 
-class SessionInstructionsMiddleware(PromptCachingMiddleware):
-    """deepagents' prompt caching, then this session's text after the block it marks.
+class TurnInstructionsMiddleware(PromptCachingMiddleware):
+    """deepagents' prompt caching, then this turn's text after the block it marks.
 
     In that slot the text follows every middleware that writes the prompt and precedes the
     memory block, and has no breakpoint of its own: with memory on, Anthropic's four are

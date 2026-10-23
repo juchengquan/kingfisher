@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `SessionInstructions` is `TurnInstructions`, after #1077
+
+- **The plugin is renamed and asked with the turn's caller.** `session_instructions=` on
+  `Kingfisher` and `Plugins` is `turn_instructions=`, and the class is
+  `TurnInstructions`, from `kingfisher.plugins`. Its `text(cfg, session_id)` is
+  `text(cfg, session_id, caller)` and answers a `Told` rather than a string: what you
+  returned before is `Told(everyone=...)`. It declares `labels`, `()` if it offers none.
+  There is no alias for the old name.
+- **What it says to some definitions only goes under a label**, in `Told.labelled`, and
+  reaches a definition naming that label under `system_prompt.receives`.
+  [`ports.md`](guides/ports.md#turninstructions--text-for-one-turn) has the rules.
+
 ## A file a request names is saved in `/outputs`, after #1073
 
 - **One sentence of the system prompt has changed.** It told the model to follow a

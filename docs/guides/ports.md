@@ -325,44 +325,61 @@ Things to know:
   `delete_session=True` remove everything through the sessions plugin's `delete`, so a
   deployment that archives results archives a session it is about to delete there.
 
-## `SessionInstructions` — text for one session
+## `TurnInstructions` — text for one turn
 
 `INSTRUCTIONS.md`, or `instructions=`, is said to every session alike, inside the part
-of the system prompt Anthropic caches. Text that differs from one session to the next —
-who the caller is, which case this conversation is about — goes here instead, and is
-sent after that part, so every session still shares its cache:
+of the system prompt Anthropic caches. Text that differs from one turn or session to the
+next — today's date, who the user is, which case this conversation is about — goes here
+instead, and is sent after that part, so every session still shares its cache:
 
 ```python
-class CaseInstructions:
-    def __init__(self, cases):
-        self.cases = cases
+from zoneinfo import ZoneInfo
 
-    def text(self, cfg, session_id: str) -> str:
-        case = self.cases.get(session_id)
-        return f"This conversation is about case {case.number}." if case else ""
+from kingfisher.plugins import Told
 
-kingfisher = Kingfisher(cfg, sessions=LocalSessions(), session_instructions=CaseInstructions(cases))
+
+class DeskInstructions:
+    labels = ("user",)
+
+    def text(self, cfg, session_id: str, caller) -> Told:
+        here = caller.started.astimezone(ZoneInfo(caller.context.get("tz", "UTC")))
+        return Told(
+            everyone=f"Today is {here:%A %-d %B %Y}.",
+            labelled={"user": f"You are working for {caller.context['name']}."},
+        )
+
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(), turn_instructions=DeskInstructions())
 ```
 
 For the command, return it from your `KINGFISHER_PLUGINS` factory as
-`Plugins(session_instructions=CaseInstructions(cases))`. Left out, no session is told
-anything of its own.
+`Plugins(turn_instructions=DeskInstructions())`. Left out, no turn is told anything of
+its own.
 
 Things to know:
 
-- **It is asked once per turn**, with the session's id, and every graph that turn builds
-  is sent the same answer: the agent, each subagent it declares and their helpers, and
-  `general-purpose`. A compiled subagent is not, as it is not sent `INSTRUCTIONS.md`: its
-  `build` writes its prompt. It is a plain method: on the async path it is called on
-  kingfisher's thread pool, off the event loop.
+- **`caller` is the turn's `Caller`**, the one tools read on `runtime.context.caller`:
+  the request's `context`, the caller's source ids and datazone, and `started`, when the
+  turn started in UTC ([`tools.md`](tools.md#who-the-turn-is-for)).
+- **`everyone` reaches every graph the turn builds**: the agent, each subagent it
+  declares and their helpers, and `general-purpose`. A compiled subagent is not sent it,
+  as it is not sent `INSTRUCTIONS.md`: its `build` writes its prompt.
+- **A labelled piece reaches only the definitions that ask for it**, by listing the
+  label under `system_prompt.receives` ([`formats.md`](formats.md#text-that-depends-on-the-caller--system_prompt-written-long)).
+  The hook names no agent, so renaming one cannot cut its text off. Kingfisher puts a
+  sentence ahead of it asking the model not to repeat or save it unless asked.
+  `general-purpose`, which has no definition, receives no label.
+- **`labels` is checked both ways.** A definition receiving a label the hook does not
+  offer is refused at startup, and so is any `receives` with no hook wired. A turn the
+  hook answers under a label it does not offer is refused.
+- **It is asked once per turn**, as a plain method: on the async path it is called on
+  kingfisher's thread pool, off the event loop. Nothing it says is stored.
 - **Where it goes**: after the agent's own prompt and every section kingfisher and
   deepagents add to it, and before the memory block. It takes no cache breakpoint of
   its own: with memory on, Anthropic's four are already spent on the tools, the static
   prompt, the memory block and the conversation. So text that changes between one turn
   and the next costs the memory block and the conversation their cache, and nothing
   before them.
-- **An empty string sends what a deployment without the plugin sends.** Say nothing
-  for a session with nothing to say.
+- **An empty `Told()` sends what a deployment without the plugin sends.**
 - **Every model is sent it.** It goes where Anthropic's prompt caching does, and is
   sent to a model that caching does nothing for all the same. A helper, which deepagents
   gives no prompt caching, is sent it with no breakpoint, as it had none.

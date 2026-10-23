@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 from kingfisher.core.session.threads import off_loop, thread_pool
 
 if TYPE_CHECKING:
+    from kingfisher.core.agent.tool_context import Caller
     from kingfisher.core.definitions.catalogue import Definitions
     from kingfisher.core.session.unused import UnusedFiles
 
@@ -257,18 +258,33 @@ class Instructions(Protocol):
         ...
 
 
-class SessionInstructions(Protocol):
-    """A deployment's text for one session, for every agent and subagent a turn in it
-    runs, but a compiled subagent, as `Instructions` reach.
+@dataclass(frozen=True)
+class Told:
+    """What a `TurnInstructions` says for one turn."""
 
-    Asked once per turn, and that turn's every graph is sent the same answer. Sent after
-    the part of the system prompt that is cached, so text that differs between sessions
-    costs none of them that cache; text that changes between one turn and the next costs
-    the part after it, the memory block and the conversation.
+    #: Sent to every graph kingfisher builds for the turn but a compiled subagent.
+    everyone: str = ""
+    #: Label -> text, sent only to a definition naming the label in `system_prompt.receives`.
+    labelled: Mapping[str, str] = field(default_factory=dict)
+
+
+class TurnInstructions(Protocol):
+    """A deployment's text for one turn -- today's date, who the user is -- for every agent
+    and subagent the turn runs but a compiled subagent, as `Instructions` reach.
+
+    Asked once per turn. Sent after the part of the system prompt that is cached, so text
+    that differs between sessions and turns costs none of them that cache, and stored
+    nowhere: the next turn asks again.
     """
 
-    def text(self, cfg: Config, session_id: str) -> str:
-        """The text for this session, or an empty string for none."""
+    @property
+    def labels(self) -> Sequence[str]:
+        """Every label `text` may answer under, and so every name a definition's `receives`
+        may write: one naming any other is refused at startup. A class attribute will do."""
+        ...
+
+    def text(self, cfg: Config, session_id: str, caller: Caller) -> Told:
+        """What this turn's graphs are told."""
         ...
 
 

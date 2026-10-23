@@ -368,7 +368,7 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
     read = fields.Reader(source=source, error=SubagentError)
     read.refuse_unrecognised(entry, known=PORTABLE, declined=NOT_PORTABLE)
     read.require(entry, "name", "description")
-    prompt, slots = read_prompt(entry, read)
+    prompt = read_prompt(entry, read)
     # Absent grants none, so a spec typed to deepagents' `SubAgent`, which has no word for
     # this, holds no built-in until the deployment's own file adds one.
     builtin = read.selection(entry.get("builtin_tools"), absent=None, key="builtin_tools")
@@ -382,8 +382,9 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
-        system_prompt=prompt,
-        slots=slots,
+        system_prompt=prompt.text,
+        slots=prompt.slots,
+        receives=prompt.receives,
         builtin_tools=builtin,
         # No catalogue names, whatever it wrote: it holds what it carried and nothing else.
         tools=None,
@@ -548,7 +549,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     # Before the required fields, so `nmae:` is reported as a typo, not a missing `name`.
     reader.refuse_unrecognised(document, known=KNOWN, declined=REFUSED)
     reader.require(document, "name", "description")
-    prompt, slots = read_prompt(document, reader)
+    prompt = read_prompt(document, reader)
 
     wanted = fields.wanted_model(document, reader)
 
@@ -599,8 +600,9 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     return SubagentSpec(
         name=fields.text(document["name"]),
         description=fields.text(document["description"]),
-        system_prompt=prompt,
-        slots=slots,
+        system_prompt=prompt.text,
+        slots=prompt.slots,
+        receives=prompt.receives,
         builtin_tools=builtin,
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),

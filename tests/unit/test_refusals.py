@@ -119,6 +119,13 @@ def a_prompt_naming_a_slot_nothing_fills(cfg):
     )
 
 
+def a_definition_receiving_every_label(cfg):
+    _write(
+        _root(cfg, "agents") / "a.yaml",
+        'name: a\ndescription: d\nsystem_prompt:\n  text: |\n    Go.\n  receives: ["*"]\n',
+    )
+
+
 def a_tool_module_that_will_not_import(cfg):
     _write(_root(cfg, "tools") / "broken.py", "def (:\n")
 
@@ -329,6 +336,8 @@ REFUSALS: dict[str, Refusal] = {
     "core/definitions/prompts.py::read_prompt": Refusal(
         1, defect=a_prompt_written_long_without_its_text),
     "core/definitions/prompts.py::_slots": Refusal(4, defect=a_slot_with_two_defaults),
+    "core/definitions/prompts.py::_receives": Refusal(
+        2, defect=a_definition_receiving_every_label),
     "core/definitions/prompts.py::_entry": Refusal(5, defect=a_slot_inside_a_slot),
     "core/definitions/prompts.py::_refuse_blanks": Refusal(
         2, defect=a_prompt_naming_a_slot_nothing_fills),
