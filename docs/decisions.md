@@ -212,9 +212,9 @@ agent runtime for names that never reach it.
 `call-cap-strict` and `tool-note` while its subagent `sweeper` named
 `call-cap-generous`, and an agent's `middlewares:` is the ceiling its subagents are
 clamped by. Every test touching the pair had replaced the spec or supplied a registry.
-`assistant` granted all three and ran under both caps, the stricter deciding, until
+`general`, then `assistant`, granted all three and ran under both caps, the stricter deciding, until
 the pair was removed (*The shipped middleware is one summarizer*, below);
-`test_assistant_builds_from_the_workspace_alone` still builds it with no registry.
+`test_general_builds_from_the_workspace_alone` still builds it with no registry.
 *(2026-09-07.)*
 
 **The kind is `middlewares`, in the plural its four siblings were already in.** The
@@ -283,14 +283,14 @@ name, so the replacement notice fires by design, and its settings match the summ
 every other agent runs. Not taken: dropping `compact` from the shipped agents, which
 breaks every workspace naming it. *(2026-10-01.)*
 
-**The shipped `assistant` names its middleware, and does not write the star.**
+**The shipped `general` names its middleware, and does not write the star.**
 `middlewares: ["*"]` was argued as safe because a star resolves to nothing where
 nothing is registered. *Middleware is a definition kind* made that false: `seed` copies
 the examples into `middlewares/`, so a seeded workspace wrapped the first agent a reader
 runs in all of them, unannounced -- measured by building it; the star's test used an
 empty registry, the one a seeded workspace never has. Naming all four puts what it runs
 under in its file and prompt, and a middleware added later does not arrive unasked. The
-price: a plain `kingfisher seed` leaves `assistant` behind, and `--all` brings it. Not
+price: a plain `kingfisher seed` leaves `general` behind, and `--all` brings it. Not
 taken: seeding `middlewares/` only under `--all`, which undoes half of *Middleware is a
 definition kind* for one line, and a star skipping workspace files, which makes one
 registry's two sources mean different things. *(2026-09-16.)*

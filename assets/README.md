@@ -7,11 +7,11 @@ definitions folder:
     kingfisher seed --all --from ./assets
 
 `--all` because several definitions here name middleware or carry a lock,
-`assistant` among them, and a plain `seed` leaves those behind. The middleware
+`general` among them, and a plain `seed` leaves those behind. The middleware
 they name is in `middlewares/` and arrives in the same run.
 
 Everything here is committed, and it is held to working. The tests parse every
-file here, load every tool, build an agent from what `assistant` declares, and
+file here, load every tool, build an agent from what `general` declares, and
 render the skills index each subagent is actually handed, so a definition that
 stops working fails the suite rather than quietly rotting.
 
@@ -37,6 +37,16 @@ directory as one of ours, so somebody else's skill would be held to our tests an
 could fail a change that never touched it. `seed` merges rather than replacing,
 so the two sources are two commands in whichever order you choose, and files
 that collide are reported.
+
+## Plugins
+
+`plugins/desk.py` is not a definition, and `seed` does not copy it: it is the
+`TurnInstructions` the shipped `analyst` is written for, telling every graph
+today's date and telling a definition that receives `user` who the user is.
+`analyst` names that label, so a deployment seeding it wires the plugin or is
+refused at startup:
+
+    PYTHONPATH=. KINGFISHER_PLUGINS=assets.plugins.desk:build_plugins
 
 ## Middleware
 

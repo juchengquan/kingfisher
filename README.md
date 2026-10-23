@@ -52,7 +52,7 @@ is built, so seeding one produces a file that cannot run; one carrying a lock --
 source id or a datazone -- switches on access control in the workspace it lands in.
 `seed` leaves both behind and says which names each carries;
 `seed(..., everything=True)` and `kingfisher seed --all` take them once you have
-registered the middleware, or want the locks. The shipped `assets/` has several, `assistant`
+registered the middleware, or want the locks. The shipped `assets/` has several, `general`
 among them, and ships the middleware they name beside them -- so seed that set
 with `--all`.
 

@@ -166,12 +166,12 @@ def test_a_ninth_axis_cannot_be_added_in_silence():
 
 #: Directories under `assets/` that are not a catalogue kind, and why each is
 #: there in spite of that.
-#: Empty since 2026-09-07. `middlewares` was its only entry, on the argument that
-#: one read out of the workspace would be code the agent could edit wrapped
-#: around the agent that edited it -- true until the definition roots were
-#: denied to the shell. The table stays because the next folder that wants to
-#: break the rule needs somewhere to argue for itself.
-NOT_A_KIND: dict[str, str] = {}
+NOT_A_KIND: dict[str, str] = {
+    "plugins": (
+        "Python a deployment imports through KINGFISHER_PLUGINS, not a definition: the "
+        "shipped analyst receives a label only a plugin offers, so the plugin ships beside it"
+    ),
+}
 
 
 def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads(shipped):
