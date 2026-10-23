@@ -18,12 +18,14 @@ file count it refuses to print.
 | [`decisions.md`](decisions.md) | Why the code is shaped this way, and what was tried and reversed. | **Before proposing a change** to something it lists. |
 | [`findings.md`](findings.md) | What deepagents, langchain and the model surfaces actually do. | Before touching streaming, middleware or delegation. |
 | [`upgrading.md`](upgrading.md) | What changed for a deployment built before #608, when a session became its backend, and what to do about each change. | Upgrading a deployment from before that. |
+| [`ONGOING.md`](ONGOING.md) | Work started or agreed and not finished, and what each item waits on. | Before starting something new, or picking a thread back up. |
 
 The guides are kept current. `decisions.md` and `findings.md` are records:
 `decisions.md` says what was settled and when, `findings.md` says what was measured and
 when. Neither is a manual, and an entry old enough to doubt is one to re-check rather
 than trust. `upgrading.md` is neither: it is for one upgrade, and goes once nobody is
-upgrading from before it.
+upgrading from before it. `ONGOING.md` is neither too: an entry goes when its work lands
+or is dropped, and what was decided moves to `decisions.md`.
 
 ## `guides/`
 
