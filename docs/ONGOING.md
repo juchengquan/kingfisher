@@ -74,3 +74,17 @@ It is held at 0.7.22 by the owner's call, which `pyproject.toml` records. 0.7.24
 an overflowing summary call, which kingfisher's version does not. 0.7.23 adds
 `pinned_skills`, a hook that costs a graph step on every model call while skills are on,
 which `NarrowedSkills` would have to drop. *(2026-10-13.)*
+
+## Branches kept
+
+Every other merged branch was deleted, here and on GitHub, on 2026-10-23.
+
+- **`clearing-counts-like-summariser`**, merged. Its worktree,
+  `.claude/worktrees/clearing-counts-like-summariser`, is locked by a Claude session still
+  running; remove the worktree and the branch once that session ends. *(2026-10-23.)*
+- **`ongoing-overflow-items`**, with no pull request. Its worktree,
+  `.claude/worktrees/agent-a643e3215d187ff03`, holds an uncommitted edit to this page,
+  among it an entry on the client's answers to the overflow request. Land it or drop it.
+  *(2026-10-23.)*
+- **`scratchpad-under-derived`**, #603's, closed unmerged and kept as a reference: see
+  *One folder for everything the agent makes* above. *(2026-10-23.)*
