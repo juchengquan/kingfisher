@@ -5121,7 +5121,8 @@ is refused rather than ignored, since what it named would silently stop applying
 taken: one setting per plugin**, which kept the command's reach at the price of seven
 settings and lost the factory that builds plugins sharing a connection. **Not taken:
 per-turn text on `Request`**, a second source beside a wired hook, which raised which of the
-two an agent saw. *(2026-10-23.)*
+two an agent saw. `--tell TEXT` on `run` and `decide` fills the command's hook. A pause keeps
+no text, so `decide` takes it again, as it takes the caller again. *(2026-10-23.)*
 
 **`Config` holds what the core reads.** The shell's fence and `PATH` additions are
 `LocalSessions`' settings, as `ShellSettings`, and `KINGFISHER_SESSIONS` and

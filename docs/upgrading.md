@@ -43,7 +43,8 @@ replaced the four layers began.
   middleware and scratch-run limit, and only the middleware in the definitions folder. A
   deployment that wired any of these through the command builds `Kingfisher` in its own
   code and passes each as a keyword, as embedding code always has.
-- **The command runs a turn hook of its own**, which sends nothing yet.
+- **The command runs a turn hook of its own**, which sends what `--tell` gives it since
+  #1084.
 
 ## `SessionInstructions` is `TurnInstructions`, after #1077
 

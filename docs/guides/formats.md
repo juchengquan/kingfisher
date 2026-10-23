@@ -826,8 +826,9 @@ system_prompt:
 - The short form is unchanged and still the ordinary case.
 
 What changes every turn — today's date, who the user is — is not written here. The
-deployment's [`TurnInstructions`](ports.md#turninstructions--text-for-one-turn) sends it
-to every graph after the cached part of the prompt, so it cannot fill a slot.
+deployment's [`TurnInstructions`](ports.md#turninstructions--text-for-one-turn), or the
+command's `--tell`, sends it to every graph after the cached part of the prompt, so it
+cannot fill a slot.
 
 Refused when the definition loads: a `{{name}}` no slot fills — in either form, so
 doubled braces are reserved in a prompt — a slot placed nowhere, a slot inside a

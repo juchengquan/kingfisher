@@ -164,6 +164,14 @@ def build_parser() -> argparse.ArgumentParser:
             "call -- to FILE as JSON lines. Without it, nothing is kept"
         ),
     )
+    doing.add_argument(
+        "--tell",
+        metavar="TEXT",
+        help=(
+            "tell every agent and subagent of this turn TEXT -- today's date, who the "
+            "work is for. Sent after the cached part of each prompt, and stored nowhere"
+        ),
+    )
     # Unlike `list --as`, absent is not the operator's view: a turn acts, so the library
     # refuses it.
     _add_caller(doing, _TURN_CALLER)
@@ -232,6 +240,14 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         type=Path,
         help="append what the resumed turn did to FILE as JSON lines, as `run --log` does",
+    )
+    deciding.add_argument(
+        "--tell",
+        metavar="TEXT",
+        help=(
+            "tell every agent and subagent of the resumed turn TEXT, as `run --tell` "
+            "does. A pause does not keep it: give it again"
+        ),
     )
     _add_caller(deciding, _TURN_CALLER)
     checkup = sub.add_parser(
@@ -448,6 +464,9 @@ def _plain_warnings() -> Iterator[None]:
         yield
 
 
+EMPTY_TELL = "--tell is empty -- say what to tell the agents, or leave it out"
+
+
 def _run(args: argparse.Namespace) -> int:
     """Run one task, and say how it ended in the only channel that is left."""
     if not args.task.strip():
@@ -460,8 +479,13 @@ def _run(args: argparse.Namespace) -> int:
         print(f"no such file: {', '.join(missing)}", file=sys.stderr)
         return 2
 
+    if args.tell is not None and not args.tell.strip():
+        # Sent, it would add a blank block to every call; ignored, a flag that did nothing.
+        print(EMPTY_TELL, file=sys.stderr)
+        return 2
+
     cfg = config_from_env()
-    kf = _configured(cfg, log=args.log)
+    kf = _configured(cfg, log=args.log, tell=args.tell)
     request = Request(
         task=args.task,
         agent=args.agent,
@@ -476,9 +500,9 @@ def _run(args: argparse.Namespace) -> int:
     )
 
 
-def _configured(cfg: Config, *, log: Path | None = None) -> Kingfisher:
-    """The `Kingfisher` a verb builds, with the sessions its settings name, the command's own
-    turn text, and `--log`'s run events where it was given."""
+def _configured(cfg: Config, *, log: Path | None = None, tell: str | None = None) -> Kingfisher:
+    """The `Kingfisher` a verb builds, with the sessions its settings name, `--tell`'s text as
+    its turn text, and `--log`'s run events where it was given."""
     # Here, not at module scope: `Kingfisher` loads deepagents, and `seed`, `list` and
     # `doctor` never build one.
     from kingfisher import Kingfisher  # noqa: PLC0415
@@ -491,7 +515,7 @@ def _configured(cfg: Config, *, log: Path | None = None) -> Kingfisher:
     return Kingfisher(
         cfg,
         sessions=configured_sessions(),
-        turn_instructions=CommandTurnInstructions(),
+        turn_instructions=CommandTurnInstructions(tell or ""),
         run_events=_kept_in(log),
     )
 
@@ -588,15 +612,19 @@ def _decide(args: argparse.Namespace) -> int:
             ("--agent", args.agent is not None),
             ("--delete-session", args.delete_session),
             ("--log", args.log is not None),
+            ("--tell", args.tell is not None),
         )
         if given and not decisions
     ]
-    for flag in unused:
-        print(
-            f"{flag} applies only when answering, with --approve, --reject or --respond",
-            file=sys.stderr,
-        )
-    if unused:
+    refused = [
+        f"{flag} applies only when answering, with --approve, --reject or --respond"
+        for flag in unused
+    ]
+    if args.tell is not None and not args.tell.strip():
+        refused.append(EMPTY_TELL)
+    for complaint in refused:
+        print(complaint, file=sys.stderr)
+    if refused:
         return 2
 
     cfg = config_from_env()
@@ -607,7 +635,7 @@ def _decide(args: argparse.Namespace) -> int:
             with_datazone(args.held, args.datazone, args.extra_datazones),
         )
     return _drive(
-        _configured(cfg, log=args.log),
+        _configured(cfg, log=args.log, tell=args.tell),
         Resume(
             session_id=args.session,
             decisions=tuple(decisions),
