@@ -2579,6 +2579,15 @@ call to be made again for less. Accepted: the summariser also summarises a reque
 own count puts over the input budget, before the call is sent, and clearing never sees
 that. A counter calibrated to the gateway moves refusals there, which is the case
 already accepted for a very large batch. *(2026-10-21, from a downstream request.)*
+Measured, and left accepted: on a 200,000-token window, a summary clearing could have
+spared took one batch of eight results just under the 80,000 characters a result is
+shown whole, counted at four characters a token, and copies in `large_tool_results/`
+took ten; at the 3.3 of an Anthropic class, seven and nine. A longer result is shown
+about 4,000 characters of, so only that band adds up so fast, and the shipped
+1,000,000-token MiniMax row needs some five times as many. Going first would take a
+`before_model` hook or a wrapped summariser, both set aside in *Inside the model call*,
+and would clear results the model has not seen with no refusal to say the count was
+wrong. Reopen if turns are seen summarising on a single batch. *(2026-10-23.)*
 
 **A summarised turn is kept as the model last saw it: the summary, then the messages after
 its cut.** deepagents keeps every message in state and the summary beside them as private
