@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A failure quotes back the string the model sent, not a path made of it, after #9999
+
+- **Only an argument naming a path is spelled back as the call wrote it.** That is the
+  file tools' `file_path` and an offered tool's `path`. An `edit_file` of
+  `/outputs/conf.sh` whose `old_string` `/conf.sh` was not found answered `String not found
+  in file: '/outputs/conf.sh'`; it now quotes `'/conf.sh'`. A quoted value equal to any
+  other argument is left as it is, and so is a host-path refusal, whose suggestion was
+  spelled back as the host path the call wrote.
+
 ## A failure about a folder above the asked path names that folder as the model would, after #9999
 
 - **The host path no longer reaches the model when a parent is what failed.** `write_file

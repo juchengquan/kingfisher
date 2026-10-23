@@ -156,6 +156,37 @@ def test_a_failure_about_a_folder_above_the_path_names_it_as_asked(cfg, session_
     assert "'/outputs/a.txt'" in answer, answer
 
 
+def test_an_edit_that_misses_names_the_string_it_was_given(cfg, session_dir, way):
+    """deepagents quotes an `old_string` it did not find, and one that is a tail of the
+    file's path was rewritten into the path: the model was told its file was not found,
+    not the string it sent."""
+    (session_dir / "outputs" / "conf.sh").write_text("run /bin/tool\n", encoding="utf-8")
+
+    said = _answers(
+        cfg,
+        session_dir,
+        way,
+        (
+            "edit_file",
+            {"file_path": "/outputs/conf.sh", "old_string": "/conf.sh", "new_string": "z"},
+        ),
+    )
+
+    assert "'/conf.sh'" in said["0:edit_file"], said["0:edit_file"]
+    assert "'/outputs/conf.sh'" not in said["0:edit_file"], said["0:edit_file"]
+
+
+def test_only_an_argument_naming_a_path_is_a_spelling_to_restore():
+    """Every string argument was a candidate, so a quoted host path ending in another
+    argument's text came back as that text: a `content` of `/b.txt` stood in for the file
+    the call wrote."""
+    text = "Error: [Errno 13] Permission denied: '/private/w/sessions/s/outputs/a/b.txt'"
+
+    said = as_asked(text, {"file_path": "/outputs/a/b.txt", "content": "/b.txt"})
+
+    assert said == "Error: [Errno 13] Permission denied: '/outputs/a/b.txt'"
+
+
 def test_a_file_whose_contents_name_a_path_comes_back_whole(cfg, session_dir, way):
     """The reason only a failure is rewritten: a file read whole is content, and a file
     saying `/notes.txt` is not a tool talking about a path.
@@ -188,20 +219,15 @@ def test_the_shell_keeps_its_own_spelling(cfg, session_dir, way):
     assert "'/scratchpad/missing.py'" not in said["0:execute"], said["0:execute"]
 
 
-def test_a_shell_message_is_what_the_rewrite_would_spoil():
-    """Why the shell is kept out, pinned where no fence can refuse it: the string a shell
-    call names is a command rather than a path, so a quoted path in its output is a tail
-    of the whole command line. Applied to one, the rewrite puts the command where the
-    path belongs -- which is what `status` keeps from happening, since a command that
-    fails is a tool call that succeeded.
+def test_a_shell_message_is_left_as_the_shell_said_it():
+    """A quoted path in a command's output is a tail of the whole command line, and while
+    every string argument was a candidate the rewrite put the command where the path
+    belongs. A `command` names no path, so its output is left alone even where `status`
+    would not keep it out, pinned where no fence can refuse it.
     """
-    command = "/usr/bin/python3 /scratchpad/missing.py"
     said = "python3: can't open file '/scratchpad/missing.py': [Errno 2]"
 
-    spoiled = as_asked(said, {"command": command})
-
-    assert f"'{command}'" in spoiled
-    assert "'/scratchpad/missing.py'" not in spoiled
+    assert as_asked(said, {"command": "/usr/bin/python3 /scratchpad/missing.py"}) == said
 
 
 # -- the one sentence every refusal of a write closes with ---------------------

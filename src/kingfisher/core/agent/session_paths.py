@@ -88,6 +88,10 @@ class SessionPaths:
 #: tells a path in a message from the prose around it.
 _QUOTED = re.compile(r"'(/[^']*)'")
 
+#: The arguments a quoted path can be a spelling of: the file tools' `file_path` beside
+#: an offered tool's.
+_NAMING_A_PATH = frozenset({"file_path", *PATH_ARGUMENTS})
+
 
 def as_asked(text: str, args: Mapping[str, Any]) -> str:
     """`text` with every path it quotes spelled the way the call spelled it.
@@ -111,8 +115,20 @@ def as_asked(text: str, args: Mapping[str, Any]) -> str:
     if HOST_PATH_SAID in text:
         return text
     asked = sorted(
-        (one for one in _strings_in(args) if one.startswith("/")), key=len, reverse=True
+        (
+            one
+            for key, one in args.items()
+            if key in _NAMING_A_PATH and isinstance(one, str) and one.startswith("/")
+        ),
+        key=len,
+        reverse=True,
     )
+    # Another argument quoted back is that argument: an `edit_file` of `/outputs/conf.sh`
+    # missing its `old_string` of `/conf.sh` quotes the string, which is a tail of the path.
+    echoed = {
+        one for key, value in args.items() if key not in _NAMING_A_PATH
+        for one in _strings_in(value)
+    }
 
     above = sorted(
         {str(up) for one in asked for up in PurePosixPath(one).parents if str(up) != "/"}
@@ -123,6 +139,8 @@ def as_asked(text: str, args: Mapping[str, Any]) -> str:
 
     def _said(match: re.Match[str]) -> str:
         named = match.group(1)
+        if named in echoed:
+            return match.group(0)
         for one in asked:
             if named != one and (named.endswith(one) or one.endswith(named)):
                 return f"'{one}'"

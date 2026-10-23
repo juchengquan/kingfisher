@@ -102,9 +102,8 @@ class GuardedCallsMiddleware(AgentMiddleware):
         design, with `KINGFISHER_SESSION_ROOT` exported to it, and a command's own
         spelling is the one that would work again -- measured, a command that fails is a
         tool call that succeeded, `status` included, so no shell result arrives here at
-        all. Rewriting one would mangle it, since the string a shell call names is a
-        command rather than a path: `<python> /scratchpad/missing.py` ends with the path
-        its own error quotes.
+        all. Nor would `as_asked` touch one: a `command` is no argument naming a path,
+        though `<python> /scratchpad/missing.py` ends with the path its own error quotes.
         """
         call = request.tool_call
         answer = answer_in(result, call.get("id"))
