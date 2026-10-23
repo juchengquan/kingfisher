@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session's folder spelled in other capitals is refused, after #9999
+
+- **A file tool's path that spells one of the session's folders in other capitals is
+  refused**, naming the spelling that is: `/.HARNESS/x`, `/Inputs/x` or
+  `/scratchpad/TOOL_RESULTS/x` is answered `… spells a folder of this session in other
+  capitals, and a path here is matched exactly as written: it is /.harness/x.` On macOS's
+  default disk such a path used to reach the real folder past every deny rule. A tool
+  handed `runtime.context.backend` is refused the same paths, `invalid_path` in a batch,
+  and `on_this_host` raises `UnsafeReferenceError`.
+- **`/Inputs/x` is no longer the save outside every folder.** It names a folder in other
+  capitals, so it gets the new refusal; a top folder the layout does not name at all
+  still gets #1066's.
+- **A file or folder the agent names inside its own folders is unchanged**, whatever its
+  capitals: `/outputs/Report.csv` is its own spelling.
+
 ## The shell says where its writes go, and a stray one is told so, after #1070
 
 - **The shell's section of the prompt names the two folders it may write**, `/outputs`

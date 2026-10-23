@@ -33,8 +33,8 @@ from deepagents.middleware.filesystem import (
     _grep_backend,
 )
 
-from .backend import folders_of, strays
-from .prompting import stray_save
+from .backend import folders_of, miscased, strays
+from .prompting import miscased_path, stray_save
 from .references import UnsafeReferenceError
 
 if TYPE_CHECKING:
@@ -121,6 +121,8 @@ class PermittedBackend(BackendProtocol):
             where = validate_path(path)
         except ValueError as malformed:
             return path, str(malformed)
+        if (meant := miscased(where, self._layout, self._folders)) is not None:
+            return where, miscased_path(where, meant)
         if _check_fs_permission(self._rules, operation, where) != "allow":
             return where, f"permission denied for {operation} on {where}"
         if operation == "write" and strays(where, self._folders):
@@ -266,6 +268,8 @@ class PermittedBackend(BackendProtocol):
             where = validate_path(file_path)
         except ValueError as malformed:
             return DeleteResult(error=str(malformed))
+        if (meant := miscased(where, self._layout, self._folders)) is not None:
+            return DeleteResult(error=miscased_path(where, meant))
         nested = _delete_target_may_have_descendants(
             self._inner, where, permissions_configured=bool(self._rules)
         )
@@ -278,6 +282,8 @@ class PermittedBackend(BackendProtocol):
             where = validate_path(file_path)
         except ValueError as malformed:
             return DeleteResult(error=str(malformed))
+        if (meant := miscased(where, self._layout, self._folders)) is not None:
+            return DeleteResult(error=miscased_path(where, meant))
         nested = await _adelete_target_may_have_descendants(
             self._inner, where, permissions_configured=bool(self._rules)
         )
@@ -300,7 +306,9 @@ class PermittedBackend(BackendProtocol):
             except ValueError:
                 refused[at] = INVALID_PATH
                 continue
-            if _check_fs_permission(self._rules, operation, where) != "allow" or (
+            if miscased(where, self._layout, self._folders) is not None:
+                refused[at] = INVALID_PATH
+            elif _check_fs_permission(self._rules, operation, where) != "allow" or (
                 operation == "write" and strays(where, self._folders)
             ):
                 refused[at] = PERMISSION_DENIED

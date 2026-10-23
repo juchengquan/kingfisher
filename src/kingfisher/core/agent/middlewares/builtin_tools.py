@@ -18,8 +18,9 @@ from langchain.agents.middleware.todo import WRITE_TODOS_SYSTEM_PROMPT
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
-from kingfisher.core.agent.backend import folders_of, strays
+from kingfisher.core.agent.backend import folders_of, miscased, strays
 from kingfisher.core.agent.prompting import (
+    DELETE,
     EDIT_FILE,
     EXECUTE,
     GLOB,
@@ -29,6 +30,7 @@ from kingfisher.core.agent.prompting import (
     WRITE_TODOS,
     ShellPrompt,
     execute_line,
+    miscased_path,
     stray_save,
     what_you_make_goes,
 )
@@ -308,6 +310,29 @@ def _unreadable(request: Any) -> ToolMessage | None:
     )
 
 
+#: Where each file tool takes the path it acts on.
+_PATH_ARGUMENT = {
+    READ_FILE: "file_path", WRITE_FILE: "file_path", EDIT_FILE: "file_path",
+    DELETE: "file_path", LS: "path", GLOB: "path", GREP: "path",
+}
+
+
+def _miscased(request: Any, folders: frozenset[str], layout: Layout) -> ToolMessage | None:
+    """The refusal of a file tool's path that spells a folder of the session in other
+    capitals; `None` for any other call."""
+    call = request.tool_call
+    argument = _PATH_ARGUMENT.get(call.get("name"))
+    path = (call.get("args") or {}).get(argument) if argument else None
+    if not isinstance(path, str):
+        return None
+    try:
+        where = validate_path(path)
+    except ValueError:
+        return None
+    meant = miscased(where, layout, folders)
+    return None if meant is None else failed(call, f"Error: {miscased_path(where, meant)}")
+
+
 def _stray(request: Any, folders: frozenset[str], layout: Layout) -> ToolMessage | None:
     """The refusal of a `write_file` or `edit_file` outside every folder of the session;
     `None` for any other call."""
@@ -578,7 +603,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     `write_todos` to a graph not holding it; have each built-in's description name only
     the tools the graph holds; and refuse a command asked to run longer than `longest`,
     a `read_file` of audio, video or slides, which no model here is handed as they are,
-    and a save outside every folder of the session.
+    a path spelling one of the session's folders in other capitals, and a save outside
+    every folder of the session.
 
     The shell's line goes in the description, not the system prompt: a subagent gets none
     of `system.md`, and the description reaches every graph holding the shell. At
@@ -688,6 +714,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         return (
             _overlong(request, self._longest)
             or _unreadable(request)
+            or _miscased(request, self._folders, self._layout)
             or _stray(request, self._folders, self._layout)
         )
 

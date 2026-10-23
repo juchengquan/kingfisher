@@ -3852,6 +3852,23 @@ themselves and were refused nothing. The cost is Landlock's: no fence lets the s
 write into the directory it starts in. An unfenced shell can still save anywhere, and
 that is accepted. *(2026-10-22.)*
 
+**A path spelling one of the session's folders in other capitals is refused, by name.**
+The deny rules and the composite's routes match a path exactly, so on a case-insensitive
+volume -- macOS's default -- `/.HARNESS/secret.txt` matched neither, fell to the default
+backend rooted at the session, and opened the real `.harness`; `/scratchpad/TOOL_RESULTS/`
+wrote and rewrote saved results, and a tool's `PermittedBackend` and `on_this_host` let
+it through the same way. `miscased` compares the path's leading folders, case-folded,
+with every route the layout names and every folder the backend mounts, and the file
+tools and `PermittedBackend` refuse a path that matches one only in other capitals,
+naming the spelling that is. **By name, not by asking the disk:** whether a volume folds
+case is the disk's to say per folder, and an answer read from it would be one more
+lookup for every path a tool is handed. Refusing by name costs nothing where the disk
+does not fold, since `/.HARNESS` names a folder that is not there. Only the session's
+own folders: a file the agent names inside one is its to spell. *Casefolding the rules*
+was the other way, and the rules are deepagents' matcher: folding them means a second one
+kept beside it, which `PermittedBackend` was built on deepagents' helpers to avoid.
+*(2026-10-23, from a code review.)*
+
 ## Wiring a store
 
 `SessionStore` and `SessionRoot` were reversed on 2026-09-30 -- the backend is where a

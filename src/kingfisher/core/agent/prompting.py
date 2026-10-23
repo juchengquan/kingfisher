@@ -459,6 +459,14 @@ def stray_save(where: str, layout: Layout) -> str:
     )
 
 
+def miscased_path(where: str, meant: str) -> str:
+    """Why `where` is refused for spelling a folder of the session in other capitals."""
+    return (
+        f"{where} spells a folder of this session in other capitals, and a path here is "
+        f"matched exactly as written: it is {meant}."
+    )
+
+
 def subagent_prompt(prompt: str, instructions: str, layout: Layout) -> str:
     """A subagent's prompt, in the agent's order: the session's folders, the deployment's
     instructions, then its own.
