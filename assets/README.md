@@ -40,11 +40,9 @@ that collide are reported.
 
 ## Plugins
 
-`plugins/desk.py` is not a definition, and `seed` does not copy it: it is the
-`TurnInstructions` the shipped `analyst` is written for, telling every graph
-today's date and telling a definition that receives `user` who the user is.
-`analyst` names that label, so a deployment seeding it wires the plugin or is
-refused at startup:
+`plugins/desk.py` is not a definition, and `seed` does not copy it: it is an
+example `TurnInstructions`, telling every graph of a turn today's date and who it
+is working with. No shipped definition needs it; to try it with the command:
 
     PYTHONPATH=. KINGFISHER_PLUGINS=assets.plugins.desk:build_plugins
 

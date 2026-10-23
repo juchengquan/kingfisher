@@ -552,20 +552,19 @@ after Anthropic's when their packages are installed, are not installed here and 
 measured: read off the code, with a Bedrock model Bedrock's would mark the last block it
 is handed, which is the text. *(2026-10-21.)*
 
-**Who is told what is the definition's to say, by label.** A deployment telling its agents
-who the user is wants that read by the definitions that need it and no others, and wants
-the date said to all. `TurnInstructions` answers a `Told`: `everyone`, sent to every
-graph, and `labelled`, each piece sent only to a definition naming its label under
-`system_prompt.receives`. Weighed and not taken: the hook deciding per graph by name,
-which puts agent names in deployment code where a renamed subagent silently loses its
-text; and each definition declaring what it receives in words kingfisher renders, which
-makes kingfisher model a user. Labels are checked both ways -- a definition receiving one
-the hook does not offer is refused at startup, a hook answering under one it does not
-offer is refused at the turn -- and `general-purpose`, with no definition, receives none.
-It was `SessionInstructions.text(cfg, session_id)`, renamed when it began receiving the
-turn's `Caller`. Kingfisher puts one sentence ahead of labelled text, asking the model not
-to repeat or save it unless asked, so no deployment has to remember to: wording, not
-enforcement. *(2026-10-23.)*
+**Reversed: who is told what, by label.** `TurnInstructions` answered a `Told`:
+`everyone`, sent to every graph, and labelled pieces sent only to a definition naming the
+label under `system_prompt.receives`, checked both ways. It tied every definition that
+received a label to one deployment's hook: a shared `analyst.yaml` receiving `user` was
+refused by a deployment whose hook called the same thing `customer`, and the only fix was
+editing the definition. Taken out before anything depended on it, as the safer default:
+the hook answers one string, every graph but a compiled subagent is sent it, and no
+definition says anything about it. **Traded: keeping text from one subagent.** A user's
+name now reaches every subagent the turn runs; what must reach only some needs a design of
+its own, if it comes back. **Not taken: tags in a definition's `metadata` the hook reads**,
+which keeps the coupling and loses the check. The sentence kingfisher put ahead of labelled
+text went with it: a hook writes its own caution, and the memory guidelines already forbid
+storing who the user is. *(2026-10-23.)*
 
 **`TodoListMiddleware` stays standing, for now.** `build_agent` reads which tools are
 built in off the middleware its probe holds, so an offered checklist would leave the

@@ -2087,8 +2087,6 @@ WITNESSES: dict[str, dict[str, str]] = {
         "CommandRunner": "interface",
         "Instructions": "interface",
         "TurnInstructions": "interface",
-        # What a `TurnInstructions` answers, which `ports.md` builds.
-        "Told": "document",
         "UnusedResults": "interface",
         "PdfAttachments": "interface",
         # What `PdfAttachments.replacement` is handed, as `ScratchRun` is below.

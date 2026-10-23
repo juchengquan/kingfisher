@@ -1734,26 +1734,9 @@ def _shipped_definitions(shipped):
     return Definitions.from_roots(definition_roots_for(shipped)).warm()
 
 
-def test_the_shipped_hook_offers_every_label_a_shipped_definition_receives(shipped):
-    """`analyst` receives `user`; a hook not offering it, or none, refuses every startup
-    that seeded it. Against the real files, and with the control beside it."""
-    from assets.plugins.desk import DeskInstructions
-    from kingfisher.core.config import ConfigError
-    from kingfisher.core.service import refuse_unoffered_labels
-
-    catalogue = _shipped_definitions(shipped)
-    assert any(spec.receives for spec in catalogue.agents.specs.values()), (
-        "no shipped definition receives a label, so this asserts nothing"
-    )
-
-    refuse_unoffered_labels(catalogue, DeskInstructions())
-    with pytest.raises(ConfigError, match="agent 'analyst' receives user"):
-        refuse_unoffered_labels(catalogue, None)
-
-
 def test_the_plugin_factory_the_docs_name_builds_the_hook():
-    """`KINGFISHER_PLUGINS=assets.plugins.desk:build_plugins` is what three files tell a
-    deployment to write; driven through the reader the command uses."""
+    """`KINGFISHER_PLUGINS=assets.plugins.desk:build_plugins` is what the assets README
+    tells a reader to write; driven through the reader the command uses."""
     from assets.plugins.desk import DeskInstructions
     from kingfisher.cli.configured import configured_plugins
 
@@ -1784,8 +1767,9 @@ def test_the_shipped_hook_says_the_date_where_the_caller_is():
         None, "s", _caller("2026-10-22T23:30:00+00:00", tz="Asia/Singapore", name="Ana", team="Ops")
     )
 
-    assert told.everyone == "Today is Friday 23 October 2026, in Asia/Singapore."
-    assert told.labelled == {"user": "You are working for Ana, Ops."}
+    assert told == (
+        "Today is Friday 23 October 2026, in Asia/Singapore. You are working with Ana, Ops."
+    )
 
 
 def test_the_shipped_hook_names_the_zone_it_fell_back_to_and_says_nothing_of_nobody():
@@ -1793,8 +1777,7 @@ def test_the_shipped_hook_names_the_zone_it_fell_back_to_and_says_nothing_of_nob
 
     told = DeskInstructions().text(None, "s", _caller("2026-10-22T23:30:00+00:00", tz="Mars/Base"))
 
-    assert told.everyone == "Today is Thursday 22 October 2026, in UTC."
-    assert told.labelled == {}
+    assert told == "Today is Thursday 22 October 2026, in UTC."
 
 
 def test_the_shipped_analyst_tells_each_caller_what_its_grant_reaches(shipped):

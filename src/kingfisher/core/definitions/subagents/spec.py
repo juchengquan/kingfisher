@@ -384,7 +384,6 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
         description=fields.text(entry["description"]),
         system_prompt=prompt.text,
         slots=prompt.slots,
-        receives=prompt.receives,
         builtin_tools=builtin,
         # No catalogue names, whatever it wrote: it holds what it carried and nothing else.
         tools=None,
@@ -602,7 +601,6 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         description=fields.text(document["description"]),
         system_prompt=prompt.text,
         slots=prompt.slots,
-        receives=prompt.receives,
         builtin_tools=builtin,
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),

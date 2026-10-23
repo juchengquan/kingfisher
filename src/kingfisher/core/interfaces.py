@@ -258,16 +258,6 @@ class Instructions(Protocol):
         ...
 
 
-@dataclass(frozen=True)
-class Told:
-    """What a `TurnInstructions` says for one turn."""
-
-    #: Sent to every graph kingfisher builds for the turn but a compiled subagent.
-    everyone: str = ""
-    #: Label -> text, sent only to a definition naming the label in `system_prompt.receives`.
-    labelled: Mapping[str, str] = field(default_factory=dict)
-
-
 class TurnInstructions(Protocol):
     """A deployment's text for one turn -- today's date, who the user is -- for every agent
     and subagent the turn runs but a compiled subagent, as `Instructions` reach.
@@ -277,14 +267,8 @@ class TurnInstructions(Protocol):
     nowhere: the next turn asks again.
     """
 
-    @property
-    def labels(self) -> Sequence[str]:
-        """Every label `text` may answer under, and so every name a definition's `receives`
-        may write: one naming any other is refused at startup. A class attribute will do."""
-        ...
-
-    def text(self, cfg: Config, session_id: str, caller: Caller) -> Told:
-        """What this turn's graphs are told."""
+    def text(self, cfg: Config, session_id: str, caller: Caller) -> str:
+        """What this turn's graphs are told, or an empty string for nothing."""
         ...
 
 
