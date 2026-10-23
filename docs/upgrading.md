@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A file a request names is saved in `/outputs`, after #9999
+
+- **One sentence of the system prompt has changed.** It told the model to follow a
+  request's file names exactly, with nothing in the prompt overriding them. Since #1066 a
+  save in no folder of the session is refused, and a model asked for `/cleaned.csv` read
+  the sentence as an order to put it at the session's top, copying it there through the
+  shell. The prompt now says a requested name is used in `/outputs`, your layout's name
+  for it, and that the answer says where each file went. If you cache, diff or test the
+  system prompt's text, it is not the same.
+- **A request that names its files under `/outputs` already is unaffected.**
+
 ## Landlock runs a command unadopted on a kernel without `children` files, after #9999
 
 - **Every command no longer fails on such a kernel.** The reaper that collects what a
