@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A source id written as a number or `yes` is refused, after #9999
+
+- **`source_ids: [1001]`, `[yes]` and `ToolSpec(source_ids=[1001])` no longer load.** The
+  loader spelled such an entry out with `str()`, so `1001` was a lock on `"1001"` and an
+  unquoted `yes` one on `"True"`, while seed counted only names and copied the file as if
+  it locked nothing. A source id is now a name or nothing: quote it, `source_ids:
+  ["1001"]`. The same goes for an entry of a requirement, `{1001, A}`, and for a
+  `skills:` entry's audience. The message names the entry.
+- **Seed copies such a file**, as it does any other the loader refuses, and the loader
+  reports it.
+
 ## A reply cut off with no answer in it is asked again without one, after #9999
 
 - **The request that asks again after a cut reply leaves out an answer that says nothing.**

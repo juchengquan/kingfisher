@@ -411,7 +411,7 @@ class Reader:
                     f"-- every name held at once -- is a set: write {{{parts}}}"
                 )
                 raise self.error(msg)
-            elif name := text(one):
+            elif name := self._named(one, where=where):
                 written.append(name)
         if not written:
             msg = (
@@ -435,6 +435,20 @@ class Reader:
             raise self.error(msg)
         return ALL if written == [ALL] else tuple(written)
 
+    def _named(self, one: object, *, where: str) -> str:
+        """One source id as written, or `""` for an empty entry."""
+        # Refused rather than spelled out with `str()`, which matched a caller only by luck:
+        # YAML reads an unquoted `007` as 7 and `yes` as True, and seed, counting only
+        # names, copied such a lock as open.
+        if one is not None and not isinstance(one, str):
+            msg = (
+                f"{where}: {one!r} is not a name, and a source id is matched as the text a "
+                f"caller writes. Quote it as you mean it: YAML reads an unquoted 007 as 7, "
+                f"and yes as True"
+            )
+            raise self.error(msg)
+        return text(one)
+
     def _python_conjunction(self, raw: Collection[object], *, where: str) -> frozenset[str]:
         """A requirement written as a Python set, which YAML has no way to produce."""
         if odd := sorted(repr(one) for one in raw if not isinstance(one, str)):
@@ -454,7 +468,7 @@ class Reader:
                 f"A requirement is a set of names -- write {{a, b}}, not {{a: b}}"
             )
             raise self.error(msg)
-        named = frozenset(name for one in raw if (name := text(one)))
+        named = frozenset(name for one in raw if (name := self._named(one, where=where)))
         if not named:
             msg = (
                 f"{where}: {{}} requires nothing and so admits everyone. Name the "
