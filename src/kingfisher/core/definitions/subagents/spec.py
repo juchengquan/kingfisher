@@ -16,6 +16,7 @@ from typing import Any, Required, TypedDict
 from kingfisher.core.access import ALL, Selection, bare_name
 from kingfisher.core.definitions import fields
 from kingfisher.core.definitions.definition import SpecBase
+from kingfisher.core.definitions.prompts import read_prompt
 from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.definitions.tools.spec import claimed_sources
 
@@ -282,7 +283,7 @@ class PortableSubagent(TypedDict, total=False):
 
     name: Required[str]
     description: Required[str]
-    system_prompt: Required[str]
+    system_prompt: Required[str | Mapping[str, object]]
     builtin_tools: Sequence[str]
     # Not `Sequence`, which a string is: the tools themselves, each bare or a `ToolSpec`.
     tools: list[Any] | tuple[Any, ...]
@@ -366,7 +367,8 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
     """One `SUBAGENTS` entry with no `build`: a definition kingfisher assembles."""
     read = fields.Reader(source=source, error=SubagentError)
     read.refuse_unrecognised(entry, known=PORTABLE, declined=NOT_PORTABLE)
-    read.require(entry, "name", "description", "system_prompt")
+    read.require(entry, "name", "description")
+    prompt, slots = read_prompt(entry, read)
     # Absent grants none, so a spec typed to deepagents' `SubAgent`, which has no word for
     # this, holds no built-in until the deployment's own file adds one.
     builtin = read.selection(entry.get("builtin_tools"), absent=None, key="builtin_tools")
@@ -380,7 +382,8 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
-        system_prompt=fields.text(entry["system_prompt"]),
+        system_prompt=prompt,
+        slots=slots,
         builtin_tools=builtin,
         # No catalogue names, whatever it wrote: it holds what it carried and nothing else.
         tools=None,
@@ -544,7 +547,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     reader = fields.Reader(source=source.name, error=SubagentError)
     # Before the required fields, so `nmae:` is reported as a typo, not a missing `name`.
     reader.refuse_unrecognised(document, known=KNOWN, declined=REFUSED)
-    reader.require(document, "name", "description", "system_prompt")
+    reader.require(document, "name", "description")
+    prompt, slots = read_prompt(document, reader)
 
     wanted = fields.wanted_model(document, reader)
 
@@ -595,7 +599,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     return SubagentSpec(
         name=fields.text(document["name"]),
         description=fields.text(document["description"]),
-        system_prompt=fields.text(document["system_prompt"]),
+        system_prompt=prompt,
+        slots=slots,
         builtin_tools=builtin,
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),

@@ -272,8 +272,7 @@ PYTHON_FENCE = re.compile(r"^```python\n(.*?)^```", re.M | re.S)
 
 #: The documents whose Python is held to the package: every one carrying any, since each
 #: describes what exists. **A proposal names things that do not exist yet, which is what
-#: makes it a proposal**, so the first to carry Python needs a way out of this rather than
-#: a place in it.
+#: makes it a proposal**, so `docs/design/` is left out of the search rather than listed.
 CHECKED_SNIPPETS: frozenset[str] = frozenset({
     "README.md",
     "docs/guides/configuration.md",
@@ -288,6 +287,8 @@ def _documents_with_python() -> set[str]:
     """Every tracked document carrying at least one ```python fence."""
     found = set()
     for path in [ROOT / "README.md", *sorted(DOCS.rglob("*.md"))]:
+        if path.parent == DOCS / "design":
+            continue
         if PYTHON_FENCE.search(path.read_text(encoding="utf-8")):
             found.add(path.relative_to(ROOT).as_posix())
     return found

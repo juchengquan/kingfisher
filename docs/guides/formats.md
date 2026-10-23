@@ -172,7 +172,7 @@ true of every agent in the workspace.
 | --- | --- | --- |
 | `name` | required | What a request names it by. Authoritative — the filename is not |
 | `description` | required | Single line. Nothing reads it at run time; it is how somebody chooses between your agents in `kingfisher list` |
-| `system_prompt` | required | This agent's own instruction, added after the two documents above. Write it as a literal block — `system_prompt: \|` — so your line breaks survive |
+| `system_prompt` | required | This agent's own instruction, added after the two documents above. Write it as a literal block — `system_prompt: \|` — so your line breaks survive, or [long](#text-that-depends-on-the-caller--system_prompt-written-long) to say something to some callers only |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table below. `["*"]` is all of them. Unset grants **none**, as `[]` does |
 | `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
@@ -625,7 +625,7 @@ on the spot, so every entry after the first would be unreachable.
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
-| `system_prompt` | required | The subagent's own instruction, written after `\|`. It is sent behind the session's folders and the deployment's instructions |
+| `system_prompt` | required | The subagent's own instruction, written after `\|`, or [long](#text-that-depends-on-the-caller--system_prompt-written-long). It is sent behind the session's folders and the deployment's instructions |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table above. `["*"]` is all of them. Unset grants **none**, as `[]` does. `eval` is refused here: the code sandbox is the agent's alone, and no subagent is handed it |
 | `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
@@ -772,6 +772,50 @@ system_prompt: |2           # ✅ first line indented deeper than the rest
       ls -la /inputs        #    plain `|` cannot read this, and says so
   Then report.
 ```
+
+### Text that depends on the caller — `system_prompt` written long
+
+An agent or subagent can say something only to callers holding a source id or in a
+datazone. Write `system_prompt` as a mapping, put a `{{name}}` where the text goes,
+and list under `slots:` what fills it:
+
+```yaml
+system_prompt:
+  text: |
+    You answer questions from the data.
+
+    {{figures}}
+
+    Always cite the quarter.
+  slots:
+    figures:
+      - source_ids: [sales_db, sales_archive]   # a caller holding either
+        text: |
+          Revenue is booked net of returns.
+      - source_ids: [hr_db]
+        datazone: finance                       # and in finance as well
+        text: |
+          Headcount is in FTE.
+      - text: |                                 # no condition: the default
+          Give figures as the source states them.
+```
+
+- **The caller's grant decides**, for an agent and for every subagent it consults,
+  whatever tools the subagent holds: what the agent handed it came from the same data.
+- **Every matching entry is sent**, in file order, a blank line apart. The default is
+  sent only where none matched. A slot with nothing to send takes its line, and the
+  blank line it sat between, with it.
+- `source_ids` and `datazone` mean what they mean in a [lock](#access--source_ids-in-the-definitions):
+  any listed name, `{a, b}` for both, and a datazone beside source ids for both.
+- Every `text` is written `|`, a one-line entry too: unquoted, `text: Revenue #1 is net`
+  loads as `Revenue`.
+- The short form is unchanged and still the ordinary case.
+
+Refused when the definition loads: a `{{name}}` no slot fills — in either form, so
+doubled braces are reserved in a prompt — a slot placed nowhere, a slot inside a
+slot's text, two defaults in one slot, and `source_ids: ["*"]`, which is what the
+default is for. Refused at startup: a slot keyed on a source id or datazone no lock
+names, since no caller could hold it — `kingfisher list` prints the names in use.
 
 ### Your own keys
 

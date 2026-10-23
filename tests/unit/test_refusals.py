@@ -88,6 +88,37 @@ def a_prompt_written_so_it_reflows(cfg):
     )
 
 
+def a_prompt_written_long_without_its_text(cfg):
+    _write(
+        _root(cfg, "agents") / "a.yaml",
+        "name: a\ndescription: d\nsystem_prompt:\n  slots:\n    x:\n      - text: |\n"
+        "          Y.\n",
+    )
+
+
+def a_slot_with_two_defaults(cfg):
+    _write(
+        _root(cfg, "agents") / "a.yaml",
+        "name: a\ndescription: d\nsystem_prompt:\n  text: |\n    {{x}}\n  slots:\n"
+        "    x:\n      - text: |\n          Y.\n      - text: |\n          Z.\n",
+    )
+
+
+def a_slot_inside_a_slot(cfg):
+    _write(
+        _root(cfg, "agents") / "a.yaml",
+        "name: a\ndescription: d\nsystem_prompt:\n  text: |\n    {{x}}\n  slots:\n"
+        "    x:\n      - text: |\n          See {{x}}.\n",
+    )
+
+
+def a_prompt_naming_a_slot_nothing_fills(cfg):
+    _write(
+        _root(cfg, "agents") / "a.yaml",
+        "name: a\ndescription: d\nsystem_prompt: |\n  Use {{figures}}.\n",
+    )
+
+
 def a_tool_module_that_will_not_import(cfg):
     _write(_root(cfg, "tools") / "broken.py", "def (:\n")
 
@@ -295,6 +326,12 @@ REFUSALS: dict[str, Refusal] = {
     "core/definitions/documents.py::require_literal_prompt": Refusal(
         1, defect=a_prompt_written_so_it_reflows),
     "core/definitions/importing.py::load": Refusal(2, defect=a_tool_module_that_will_not_import),
+    "core/definitions/prompts.py::read_prompt": Refusal(
+        1, defect=a_prompt_written_long_without_its_text),
+    "core/definitions/prompts.py::_slots": Refusal(4, defect=a_slot_with_two_defaults),
+    "core/definitions/prompts.py::_entry": Refusal(5, defect=a_slot_inside_a_slot),
+    "core/definitions/prompts.py::_refuse_blanks": Refusal(
+        2, defect=a_prompt_naming_a_slot_nothing_fills),
     # The envelope all three kinds' modules arrive in. A tool catalogue reaches it
     # here because one of them has to; what the other two get from the same two
     # refusals is now the same sentence rather than a near copy of it.

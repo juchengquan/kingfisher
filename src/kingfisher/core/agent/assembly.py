@@ -562,7 +562,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             # probe's prompt is never sent.
             "system_prompt": system_prompt(
                 cfg,
-                agent.system_prompt if agent else "",
+                agent.prompt_for(held) if agent else "",
                 shell,
                 instructions,
                 granted,
