@@ -273,6 +273,25 @@ def test_a_reply_that_was_only_another_signers_thinking_is_left_out(cfg, session
     assert [block["type"] for block in state["messages"][1].content] == ["thinking"]
 
 
+@pytest.mark.parametrize(
+    "beside",
+    [{"type": "text", "text": ""}, {"type": "text", "text": " \n"}, ""],
+    ids=["empty-text", "blank-text", "empty-string"],
+)
+def test_a_reply_stripped_to_blank_text_is_left_out_too(cfg, session_dir, way, beside):
+    """A reply kept for the blank text beside its thinking went to `ChatAnthropic`, which
+    drops blank text and then skips the reply, so two user turns went out in a row as if
+    nothing had been stripped."""
+    earlier = _only_thought(**{SERVED_BY: ELSEWHERE})
+    earlier = earlier.model_copy(update={"content": [*earlier.content, beside]})
+
+    payload, state = _turn(cfg, session_dir, way, earlier)
+
+    assert [message["role"] for message in payload["messages"]] == ["user"]
+    assert "SIGNED" not in json.dumps(payload)
+    assert state["messages"][1].content[-1] == beside, "the conversation keeps the reply"
+
+
 def test_a_reply_stripped_to_nothing_is_no_prefill():
     """Last in the request, an emptied reply is a prefill, which the current Claude models
     refuse with a 400."""

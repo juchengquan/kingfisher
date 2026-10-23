@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A reply stripped down to blank text is left out too, after #9999
+
+- **A reply whose thinking is taken out and that said nothing else but blank text is left
+  out of the request**, as one that was only thinking already was (#1064). It used to be
+  kept for an empty or whitespace-only text block, which `ChatAnthropic` drops before
+  skipping the reply, so two user turns went out in a row. A reply with tool calls is
+  still sent, and the conversation keeps every reply.
+
 ## Redacted thinking kept as `v1` goes back only to its signer too, after #9999
 
 - **A reply kept under `output_version: v1` loses another signer's redacted thinking from

@@ -79,9 +79,22 @@ def _unsigned(reply: AIMessage) -> AIMessage:
     return reply.model_copy(update={"content": content, "additional_kwargs": aside})
 
 
+def _blank(block: Any) -> bool:
+    """Text with nothing in it, which `ChatAnthropic` drops, or sends as an empty block."""
+    if isinstance(block, dict) and block.get("type") == "text":
+        block = block.get("text") or ""
+    return isinstance(block, str) and not block.strip()
+
+
+def _nothing_said(reply: AIMessage) -> bool:
+    """Whether a reply calls no tool and holds no block but blank text."""
+    blocks = [reply.content] if isinstance(reply.content, str) else reply.content
+    return not reply.tool_calls and all(map(_blank, blocks))
+
+
 def kept_for(request: Any, signer: Mapping[str, str | None]) -> Any:
     """`request` with the thinking of every reply its model did not produce taken out,
-    and a reply that was nothing else left out with it, or `request` itself where there
+    and a reply that said nothing else left out with it, or `request` itself where there
     is none.
 
     Out of the request alone: the conversation keeps every block, for the model that can
@@ -93,13 +106,14 @@ def kept_for(request: Any, signer: Mapping[str, str | None]) -> Any:
             messages[at] = _unsigned(one)
     if all(new is old for new, old in zip(messages, request.messages, strict=True)):
         return request
-    # A reply that was only thinking is left out, not sent empty: last, it is a prefill,
-    # which the current Claude models refuse, and `ChatAnthropic` skips an empty one only
-    # after joining its neighbours, so two user turns went out in a row.
+    # A reply that was only thinking, or thinking beside blank text, is left out, not sent
+    # empty: last, it is a prefill, which the current Claude models refuse, and
+    # `ChatAnthropic` drops blank text and skips an empty reply only after joining its
+    # neighbours, so two user turns went out in a row.
     sent = [
         new
         for new, old in zip(messages, request.messages, strict=True)
-        if new is old or new.content or new.tool_calls
+        if new is old or not _nothing_said(new)
     ]
     return request.override(messages=sent)
 
