@@ -2155,6 +2155,17 @@ TROUBLES_BESIDE_THE_ERRORS = {
     "moved_tools": ({"agent 'analyst'": ("csv_profile",)}, "csv_profile"),
     "miscounted_bundles": ({"redactor": "its folder holds two"}, "its folder holds two"),
     "unresolved_subagents": ({"agent 'analyst'": ("phantom",)}, "phantom"),
+    "doubled_skills": (
+        {"agent 'analyst'": "skills names 'audit' and 'catalogue::audit', which are one skill"},
+        "which are one skill",
+    ),
+}
+
+#: Why a field the inventory says it asked, by a `_checked` twin, is no trouble. Every
+#: other one is something startup refuses, so it belongs in the table above.
+CHECKED_BUT_NO_TROUBLE = {
+    "builtin_tools": "what an agent may be granted; unread, the listing calls it unknown",
+    "shadowed": "a bundle answering for a catalogue tool, acceptable while it is shown",
 }
 
 
@@ -2174,6 +2185,22 @@ def test_every_trouble_failed_reads_has_a_rule_here():
 
     assert named <= set(TROUBLES_BESIDE_THE_ERRORS) | set(_errors_carried())
     assert set(TROUBLES_BESIDE_THE_ERRORS) <= named, "a trouble that is gone from `failed`"
+
+
+def test_every_refusal_the_inventory_asks_is_a_trouble_here():
+    """The rule above starts from `failed`, so a refusal `failed` never read passed it:
+    `doubled_skills` was asked, put in `--json` and failed by `doctor`, and `list` exited 0
+    over a skill startup refuses, printing its audience as if it were the only entry.
+    """
+    from dataclasses import fields
+
+    from kingfisher.core.inventory import Inventory
+
+    asked = {
+        f.name.removesuffix("_checked") for f in fields(Inventory) if f.name.endswith("_checked")
+    }
+
+    assert asked - set(CHECKED_BUT_NO_TROUBLE) == set(TROUBLES_BESIDE_THE_ERRORS)
 
 
 @pytest.mark.parametrize("field_name", sorted(TROUBLES_BESIDE_THE_ERRORS))

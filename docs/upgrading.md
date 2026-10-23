@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `kingfisher list` fails on a skill written twice, after #9999
+
+- **`list` exits 1 where a definition names one skill twice**, bare and qualified, as
+  `doctor` and startup already refuse it, and prints it under *skills named twice*. It
+  exited 0 and printed the entry's audience as if it were the only one. `--json` is
+  unchanged: `doubled_skills` was already there.
+
 ## A session whose pin no longer reads is out of every scoped caller's reach, after #9999
 
 - **A scoped `sessions()` or `session()` no longer raises over one such session.** An

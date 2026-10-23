@@ -82,6 +82,7 @@ def render(found: Inventory) -> Iterator[str]:
     yield from _build(found)
     yield from _misnamed_tools(found)
     yield from _unresolved_subagents(found)
+    yield from _doubled_skills(found)
     yield from _access(found)
 
 
@@ -158,6 +159,20 @@ def _unresolved_subagents(found: Inventory) -> Iterator[str]:
         yield f"  {subject}: {', '.join(sorted(names))}"
     yield "  (a run reaching one is refused: write each as listed under subagents,"
     yield "   where a name two files share is spelt with its file)"
+
+
+def _doubled_skills(found: Inventory) -> Iterator[str]:
+    """Definitions naming one skill twice, bare and qualified, which startup refuses.
+
+    Said here or nowhere: the skills above are listed once each, and the access report
+    prints the entry's audience as if it were the only one.
+    """
+    if not found.doubled_skills:
+        return
+    yield "\nskills named twice"
+    for subject, complaint in sorted(found.doubled_skills.items()):
+        yield f"  {subject} {complaint}"
+    yield "  (startup refuses each: keep one entry, the one carrying the audience you mean)"
 
 
 def origins_document(origins: Origins) -> dict[str, object]:
@@ -438,7 +453,12 @@ def failed(found: Inventory) -> bool:
     Not only one that will not load: an agent naming a moved tool loads and runs without
     it, and one naming an unknown subagent loads and refuses every run reaching it.
     """
-    if found.moved_tools or found.miscounted_bundles or found.unresolved_subagents:
+    if (
+        found.moved_tools
+        or found.miscounted_bundles
+        or found.unresolved_subagents
+        or found.doubled_skills
+    ):
         return True
     # Not a kind, so the walk below misses it; without a graph nothing runs.
     if found.build_error is not None:
