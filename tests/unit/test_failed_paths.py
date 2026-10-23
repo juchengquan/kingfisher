@@ -18,7 +18,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from kingfisher import ToolContext
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.builtin_tools import kept_note
+from kingfisher.core.agent.middlewares.builtin_tools import kept_note, stray_note
 from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.prompting import stray_save, what_you_make_goes
 from kingfisher.core.agent.session_paths import as_asked, where_to_write
@@ -195,14 +195,16 @@ def test_every_refusal_that_offers_somewhere_to_write_ends_with_the_one_sentence
     three rules. Each refusal's own rule compares against the function that words it, so
     one reworded in place reddens nothing: this is what notices.
 
-    Driven over all three rather than asserted of the helper, since the helper having one
-    wording is not the claim -- the claim is that nothing says it any other way.
+    Driven over all of them rather than asserted of the helper, since the helper having
+    one wording is not the claim -- the claim is that nothing says it any other way. Every
+    refusal added since joins this table, which is what the fourth did.
     """
     one = what_you_make_goes(DEFAULT_LAYOUT.outputs_route, DEFAULT_LAYOUT.scratch_route)
     offered = {
         "a deny rule": where_to_write("Error: permission denied for write on /inputs/x.txt"),
         "a fence": kept_note("inputs", DEFAULT_LAYOUT),
         "a save outside the folders": stray_save("/cleaned.csv", DEFAULT_LAYOUT),
+        "a fence outside the folders": stray_note("/cleaned.csv", DEFAULT_LAYOUT),
     }
 
     for whose, said in offered.items():

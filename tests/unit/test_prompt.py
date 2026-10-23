@@ -79,6 +79,30 @@ def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
         assert f'| `/{name}/<name>` | `"$KINGFISHER_SESSION_ROOT/{name}/<name>"` |' in text, name
 
 
+def test_the_shell_section_says_where_its_writes_go():
+    """The shell starts at the session's top, where a fence refuses a write: measured,
+    `echo x > out.csv` came back `Operation not permitted` and nothing else, and the
+    section said only how to spell a path, not which folders would take one.
+
+    Under a renamed layout, because the sentence has to name this deployment's folders:
+    written out, it would send every agent to the default names the backend no longer
+    routes. What the sentence claims is already held against the real fence, either way
+    round -- `test_the_shell_cannot_save_at_the_top_of_a_session` refuses the top and
+    `test_the_agent_can_still_write_everything_it_is_meant_to` keeps the two folders the
+    agent's, both in `test_confinement.py`.
+    """
+    moved = Layout(
+        inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
+    )
+    text = render_system_prompt(layout=moved, shell=kingfishers_shell())
+    joined = " ".join(text.split())
+
+    assert "write in two of those folders: `/out`" in joined
+    assert "`/scratch` for anything throwaway" in joined
+    assert "the folder the shell starts in, which is the session's top" in joined
+    assert '`"$KINGFISHER_SESSION_ROOT/out/<name>"`' in joined
+
+
 def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     """The prompt is the one thing the model reads about where its files are. A renamed
     layout that does not reach it leaves the agent told to read and write the default

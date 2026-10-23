@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.types import Command
 
 from kingfisher import Kingfisher, Request
+from kingfisher.core.agent.backend import folders_of
 from kingfisher.core.agent.middlewares.builtin_tools import (
     ABSOLUTE,
     MAPPINGS,
@@ -25,6 +26,8 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
     kept_note,
     kept_under,
     missed,
+    stray_note,
+    strayed_under,
     timeout_line,
 )
 from kingfisher.core.agent.prompting import execute_line, what_you_make_goes
@@ -282,6 +285,74 @@ def test_every_folder_the_note_can_name_is_denied_to_the_file_tools_too():
         f"kept from the shell and not from the file tools: "
         f"{set(DEFAULT_LAYOUT.shell_read_only) - denied}"
     )
+
+
+#: Every folder of the session a file tool may save in, which is what `strayed_under`
+#: reads a refused path against: outside all of them, nothing keeps what a write leaves.
+HELD = folders_of(DEFAULT_LAYOUT)
+
+
+@pytest.mark.parametrize(
+    ("output", "where"),
+    [
+        # The likeliest refusal of all: the shell starts at the session's top, so this is
+        # what `> out.csv` and `python script.py > out.csv` write, spelt in full.
+        (f"/bin/sh: {SESSION}/out.csv: Operation not permitted", "/out.csv"),
+        # A folder no layout names: nothing routes it, so nothing would keep what landed.
+        (f"/bin/sh: {SESSION}/mine/out.csv: Operation not permitted", "/mine/out.csv"),
+        ("/bin/sh: mine/out.csv: Operation not permitted", "/mine/out.csv"),
+        ("mkdir: mine/deeper: Operation not permitted", "/mine/deeper"),
+        # The Linux fence's word, and bubblewrap's.
+        ("bash: mine/out.csv: Permission denied", "/mine/out.csv"),
+        ("bash: mine/out.csv: Read-only file system", "/mine/out.csv"),
+        # A folder the layout does name is the fence's to allow, and it allows these two:
+        # a refusal under one is not a write that went to the wrong folder.
+        (f"/bin/sh: {SESSION}/outputs/ok.txt: Operation not permitted", None),
+        (f"/bin/sh: {SESSION}/scratchpad/ok.txt: Operation not permitted", None),
+        # A kept folder, which `kept_under` answers by name: it is held, not strayed.
+        (f"/bin/sh: {SESSION}/inputs/new.txt: Operation not permitted", None),
+        (f"/bin/sh: {SESSION}/.harness/ledger.jsonl: Operation not permitted", None),
+        # Outside the session: refused for being the host's, not for being the wrong
+        # folder, and `/outputs/` is no answer to a command that meant `/etc/hosts`.
+        ("/bin/sh: /etc/hosts: Operation not permitted", None),
+        (
+            "python3: error: couldn't create cache file '/var/folders/x/T/xcrun_db-A' "
+            "(errno=Operation not permitted)",
+            None,
+        ),
+        # The session's top is somewhere to write *in*, not a path a write lands at.
+        (f"rmdir: {SESSION}: Operation not permitted", None),
+        # A bare word is not read as a path, though this is the message the commonest
+        # refusal of all leaves: read as one, the second line here -- a refused *read* --
+        # would be answered with somewhere to write.
+        ("/bin/sh: out.csv: Operation not permitted", None),
+        ("cat: shadow: Permission denied", None),
+        # A miss rather than a refusal: `missed` answers that one.
+        (f"cat: {SESSION}/out.csv: No such file or directory", None),
+        # Both on one line is the rule, as it is for `kept_under`.
+        (f"wrote {SESSION}/out.csv\nsh: /elsewhere: Operation not permitted", None),
+    ],
+)
+def test_a_refused_path_no_folder_of_the_session_holds_is_read_off_the_line(output, where):
+    """The session's top is where the shell starts and where a fence refuses a write, and
+    `kept_under` cannot answer it: no folder is named, so there is nothing to look under.
+    Measured -- `echo x > "$KINGFISHER_SESSION_ROOT/out.csv"` was refused with the note
+    the kept folders get, and nothing said where the write should have gone.
+    """
+    assert strayed_under(output, SESSION, HELD) == where
+
+
+def test_both_notes_say_it_the_one_way_and_name_what_was_refused():
+    """Two refusals of one mistake a step apart, and a model reading two wordings for one
+    rule reads two rules -- which is what #1068 took out of the three it found.
+    """
+    assert stray_note("/out.csv", DEFAULT_LAYOUT).startswith(
+        "`/out.csv` is not yours to write"
+    )
+    assert kept_note("inputs", DEFAULT_LAYOUT).startswith("`/inputs/` is not yours to write")
+    one = what_you_make_goes("/outputs/", "/scratchpad/")
+    for said in (stray_note("/out.csv", DEFAULT_LAYOUT), kept_note("inputs", DEFAULT_LAYOUT)):
+        assert said.endswith(one), said
 
 
 def test_the_note_names_the_folder_as_the_file_tools_spell_it():
@@ -614,6 +685,34 @@ def test_a_fence_refusal_tells_the_shells_result_which_folder_is_kept(way):
 
     left = _answered(way, "line_count", ToolMessage(KEPT, tool_call_id="c1"))
     assert left.text == KEPT
+
+
+#: The same fence refusing the folder the shell starts in, which no layout names.
+STRAYED = f"/bin/sh: {SESSION}/out.csv: Operation not permitted"
+
+
+def test_a_refusal_no_folder_holds_tells_the_shells_result_where_writes_go(way):
+    """Both hooks, as the other notes need: a note added on one of them is invisible to a
+    suite driving the other.
+    """
+    corrected = _answered(way, "execute", ToolMessage(STRAYED, tool_call_id="c1"))
+    assert stray_note("/out.csv", Layout()) in corrected.text
+
+    left = _answered(way, "line_count", ToolMessage(STRAYED, tool_call_id="c1"))
+    assert left.text == STRAYED
+
+
+def test_a_kept_folder_is_named_before_a_path_no_folder_holds(way):
+    """A command that wrote twice -- `echo x > out.csv; echo y > inputs/b` -- has both
+    notes to choose from. The kept folder is the more specific answer, and two notes at
+    once read as two separate problems.
+    """
+    both = f"{STRAYED}\n{KEPT}"
+
+    corrected = _answered(way, "execute", ToolMessage(both, tool_call_id="c1"))
+
+    assert kept_note("inputs", Layout()) in corrected.text
+    assert "`/out.csv`" not in corrected.text
 
 
 def test_a_misspelt_path_is_told_the_spelling_rather_than_which_folder_is_kept(way):

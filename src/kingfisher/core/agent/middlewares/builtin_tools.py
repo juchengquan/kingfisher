@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import inspect
 import re
-from collections.abc import Awaitable, Callable, Collection
+from collections.abc import Awaitable, Callable, Collection, Iterator
 from functools import cache
 from pathlib import PurePosixPath
 from typing import Any
@@ -135,6 +135,25 @@ _REFUSED = ("Operation not permitted", "Permission denied", "Read-only file syst
 _TOKEN = re.compile(r"[^\s'\"`:,;()]*/[^\s'\"`:,;()]*")
 
 
+def _refused_paths(output: str, root: str) -> Iterator[PurePosixPath]:
+    """Every path a fence's refusal names in `output`, where the shell ran it.
+
+    The shell's working directory *is* the session, so a relative path is resolved
+    against `root` rather than skipped -- `echo x > inputs/f` is the shorter command and
+    the one a model writes.
+
+    Both on one line, as `missed` is, so a path a command printed and an unrelated refusal
+    elsewhere in its output are not read as one.
+    """
+    here = PurePosixPath(root)
+    for line in output.splitlines():
+        if not any(said in line for said in _REFUSED):
+            continue
+        for token in _TOKEN.findall(line):
+            named = PurePosixPath(token)
+            yield named if named.is_absolute() else here / named
+
+
 def kept_under(output: str, root: str, folders: Collection[str]) -> str | None:
     """The first folder of `folders` a fence refused a write under in `output`, or `None`.
 
@@ -142,25 +161,47 @@ def kept_under(output: str, root: str, folders: Collection[str]) -> str | None:
     outside the session too: a `python3` whose cache file sits in the host's temp folder
     reports `Operation not permitted` about a path ending in a name of its own, and
     blaming a session folder there would send the model to correct a path that was never
-    the problem. The shell's working directory *is* the session, so a relative path is
-    resolved against `root` rather than skipped -- `echo x > inputs/f` is the shorter
-    command and the one a model writes.
-
-    Both on one line, as `missed` is, so a path a command printed and an unrelated refusal
-    elsewhere in its output are not read as one.
+    the problem.
     """
     here = PurePosixPath(root)
     kept = [(folder, here / folder) for folder in folders]
-    for line in output.splitlines():
-        if not any(said in line for said in _REFUSED):
-            continue
-        for token in _TOKEN.findall(line):
-            named = PurePosixPath(token)
-            where = named if named.is_absolute() else here / named
-            for folder, under in kept:
-                if where.is_relative_to(under):
-                    return folder
+    for where in _refused_paths(output, root):
+        for folder, under in kept:
+            if where.is_relative_to(under):
+                return folder
     return None
+
+
+def strayed_under(output: str, root: str, folders: Collection[str]) -> str | None:
+    """The first path a fence refused in `output` that no folder of the session holds, as
+    the file tools spell it, or `None`.
+
+    The session's top is the likeliest refusal of all, being where the shell starts, and
+    `kept_under` cannot answer it: no folder is named, so there is nothing to look under.
+    Only inside the session, because a refusal anywhere else is not a write that went to
+    the wrong folder -- the host's own files are refused for being the host's.
+
+    A path with no slash in it is no part of this: `/bin/sh: out.csv: Operation not
+    permitted` names the file as the shell wrote it, and reading a bare word as a path
+    would read `cat: shadow: Permission denied` -- a refused *read* -- as a write that
+    wants somewhere else to go. The section the shell says of itself carries that case.
+    """
+    here = PurePosixPath(root)
+    for where in _refused_paths(output, root):
+        if not where.is_relative_to(here):
+            continue
+        # The root itself is somewhere to write *in*, not a path a write lands at.
+        if (under := where.relative_to(here)).parts and strays(f"/{under}", frozenset(folders)):
+            return f"/{under}"
+    return None
+
+
+def _not_yours(what: str, layout: Layout) -> str:
+    """The one wording for a write the fence refused, `what` being what it refused."""
+    return (
+        f"{what} is not yours to write: the shell is refused there, as the file "
+        f"tools are. {what_you_make_goes(layout.outputs_route, layout.scratch_route)}"
+    )
 
 
 def kept_note(folder: str, layout: Layout) -> str:
@@ -169,10 +210,17 @@ def kept_note(folder: str, layout: Layout) -> str:
     The folder as the file tools spell it, which is the name the prompt gave it: what the
     shell reported is a host path, and the point of the note is that the two are one place.
     """
-    return (
-        f"`/{folder}/` is not yours to write: the shell is refused there, as the file "
-        f"tools are. {what_you_make_goes(layout.outputs_route, layout.scratch_route)}"
-    )
+    return _not_yours(f"`/{folder}/`", layout)
+
+
+def stray_note(where: str, layout: Layout) -> str:
+    """The note for a refused path no folder of the session holds, `where` as the file
+    tools spell it.
+
+    The same sentence a kept folder gets, because it is the same mistake one step out:
+    a file tool refuses a save there too, which `stray_save` says in its own words.
+    """
+    return _not_yours(f"`{where}`", layout)
 
 
 def _found_nothing(tool: str, said: str) -> bool:
@@ -604,6 +652,8 @@ class BuiltinToolsMiddleware(AgentMiddleware):
             result.content, self._root, self._layout.shell_read_only
         ):
             said = kept_note(folder, self._layout)
+        elif strayed := strayed_under(result.content, self._root, self._folders):
+            said = stray_note(strayed, self._layout)
         else:
             return result
         return result.model_copy(update={"content": f"{result.content}\n\n{said}"})
