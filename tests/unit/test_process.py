@@ -179,6 +179,37 @@ def test_a_stop_given_grace_asks_first_too(tmp_path):
     assert time.monotonic() - started < 5, "asked at its deadline, not when stopped"
 
 
+def test_a_kernel_without_children_files_runs_the_command_unadopted(tmp_path, monkeypatch):
+    """A kernel built without CONFIG_PROC_CHILDREN has `/proc/self/task` but no `children`
+    file in it, and the reaper adopted there anyway: reading the file then raised after
+    every command, failing each one and killing nothing it had adopted.
+
+    `prctl` stood in for, so the control can adopt on a host that has none, and the
+    folder built here, since no host the suite runs on lacks only the file.
+    """
+    from types import SimpleNamespace
+
+    from kingfisher.plugins.sessions.sandbox import _reaper
+
+    asked: list[tuple[int, ...]] = []
+
+    def prctl(*args: int) -> int:
+        asked.append(args)
+        return 0
+
+    libc = SimpleNamespace(prctl=prctl)
+    monkeypatch.setattr(_reaper, "ctypes", SimpleNamespace(CDLL=lambda *_, **__: libc))
+    monkeypatch.setattr(_reaper, "TASKS", tmp_path)
+    (tmp_path / "4242").mkdir()
+
+    assert _reaper._subreaper() is False
+    assert asked == []
+    # The control: with the file there, it adopts.
+    (tmp_path / "4242" / "children").write_text("", encoding="ascii")
+    assert _reaper._subreaper() is True
+    assert asked == [(_reaper.PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)]
+
+
 @pytest.mark.parametrize(
     ("command", "answer"),
     [("printf hi; exit 3", ("hi", 3)), ("kill -9 $$", (None, -9))],

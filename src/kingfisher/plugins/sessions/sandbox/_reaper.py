@@ -35,7 +35,10 @@ def _time_up(_signum: int, _frame: object) -> None:
 
 def _subreaper() -> bool:
     """Whether this process now adopts what its descendants orphan."""
-    if not TASKS.is_dir():
+    # The files `_adopted` reads, not the folder alone: a kernel built without
+    # CONFIG_PROC_CHILDREN has the one and not the other, and `_adopted` would then raise
+    # after every command, failing each one and killing nothing it adopted.
+    if not TASKS.is_dir() or not all((task / "children").is_file() for task in TASKS.iterdir()):
         return False
     prctl = getattr(ctypes.CDLL(None, use_errno=True), "prctl", None)
     return prctl is not None and prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) == 0

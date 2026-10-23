@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Landlock runs a command unadopted on a kernel without `children` files, after #9999
+
+- **Every command no longer fails on such a kernel.** The reaper that collects what a
+  command leaves behind (#1040) checked only that `/proc/self/task` existed, so on a
+  kernel built without `CONFIG_PROC_CHILDREN` it read a file that is not there after
+  every command: each one exited 1 with a traceback in its `[stderr]`, and nothing it
+  adopted was killed. It now runs the command as it would without a reaper there, which
+  is what it already did where it cannot adopt. A kernel with the files is unchanged.
+
 ## A refusal GNU quotes in curly quotes gets its kept folder's note, after #9999
 
 - **`cp: cannot create regular file ‘inputs/a.csv’: Permission denied` is told `/inputs/`
