@@ -67,6 +67,14 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 - **`decisions.md` still says expiry removes deepagents' offloaded copy**, in *Marked
   when the turn's ledger is built, removed by the sweep*. Nothing has been offloaded
   since 2026-10-21, so that sentence describes code that is gone. *(2026-10-23.)*
+- **Names that still call the definitions folder a workspace.** #1086 changed the
+  wording but left identifiers: `defined_in_a_workspace` in `core/definitions/importing.py`,
+  and three tests whose messages no longer say "workspace" --
+  `test_a_caller_who_reaches_no_agent_is_told_the_workspace_offers_none`,
+  `test_a_workspace_with_no_agents_is_told_how_to_write_one` and
+  `test_a_workspace_with_no_agents_says_so_and_says_what_to_do`. *(2026-10-23.)*
+- **The "In review" entry for #1071 is stale**: #1071 has merged, so the entry and its
+  heading go. *(2026-10-23.)*
 
 ## When deepagents moves
 
