@@ -825,19 +825,9 @@ system_prompt:
   loads as `Revenue`.
 - The short form is unchanged and still the ordinary case.
 
-`receives:` in the long form names the labelled text of the deployment's
-[`TurnInstructions`](ports.md#turninstructions--text-for-one-turn) this definition is
-sent, beside what it tells everyone — who the user is, say:
-
-```yaml
-system_prompt:
-  text: |
-    You answer questions about the user's own tickets.
-  receives: [user]
-```
-
-A label the deployment does not offer is refused at startup. This text is sent after
-the cached part of the prompt, every turn, so it cannot fill a slot.
+What changes every turn — today's date, who the user is — is not written here. The
+deployment's [`TurnInstructions`](ports.md#turninstructions--text-for-one-turn) sends it
+to every graph after the cached part of the prompt, so it cannot fill a slot.
 
 Refused when the definition loads: a `{{name}}` no slot fills — in either form, so
 doubled braces are reserved in a prompt — a slot placed nowhere, a slot inside a

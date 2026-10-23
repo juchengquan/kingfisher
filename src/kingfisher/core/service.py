@@ -59,7 +59,6 @@ from .interfaces import (
     ScratchRunLimit,
     Sessions,
     SubagentMiddlewares,
-    Told,
     TurnInstructions,
     UnusedResults,
 )
@@ -78,25 +77,6 @@ if TYPE_CHECKING:
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.
 logger = logging.getLogger("kingfisher.origins")
-
-
-def refuse_unoffered_labels(catalogue: Definitions, turn: TurnInstructions | None) -> None:
-    """Refuse a definition receiving a label this deployment's `TurnInstructions` does not
-    offer, or any label where none is wired: its text would never be sent."""
-    offered = set() if turn is None else set(turn.labels)
-    for kind, specs in (("agent", catalogue.agents.specs), ("subagent", catalogue.subagents.specs)):
-        for spec in specs.values():
-            if unoffered := sorted(set(spec.receives) - offered):
-                wired = (
-                    "no turn_instructions= is wired"
-                    if turn is None
-                    else f"{type(turn).__name__} offers {', '.join(sorted(offered)) or 'none'}"
-                )
-                msg = (
-                    f"{kind} {spec.name!r} receives {', '.join(unoffered)}, and {wired}, "
-                    "so that text is never sent"
-                )
-                raise ConfigError(msg)
 
 
 class Kingfisher(SessionMethods, Disposal, Preparation, Running):
@@ -180,8 +160,6 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # No default to fall back on: one wired is what refuses a deployment's own
         # prompt caching, whose slot the text is sent from, whatever a turn's text is.
         self.turn_instructions: TurnInstructions | None = turn_instructions
-        # Here, with every definition read: a label nothing offers is text never sent.
-        refuse_unoffered_labels(self.catalogue, turn_instructions)
         self.unused_results: UnusedResults = (
             unused_results if unused_results is not None else DeleteUnusedResults()
         )
@@ -254,7 +232,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
             run_on=request.run_on,
             middleware_registry=self.middlewares,
             instructions=self.instructions.text(self.cfg),
-            told=self._told(session_id, caller),
+            turn_text=self._turn_text(session_id, caller),
             pdf_attachments=self.pdf_attachments,
             subagent_middlewares=self.subagent_middlewares,
             scratch_run_limit=self.scratch_run_limit,
@@ -263,25 +241,18 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
             ledger=ledger,
         )
 
-    def _told(self, session_id: str, caller: Caller) -> Told | None:
-        """What the deployment's `TurnInstructions` says for this turn, refusing a label it
-        never offered: no definition was checked against it at startup."""
+    def _turn_text(self, session_id: str, caller: Caller) -> str | None:
+        """What the deployment's `TurnInstructions` says for this turn, `None` with none wired."""
         if self.turn_instructions is None:
             return None
-        told = self.turn_instructions.text(self.cfg, session_id, caller)
-        if not isinstance(told, Told):
+        said = self.turn_instructions.text(self.cfg, session_id, caller)
+        if not isinstance(said, str):
             msg = (
                 f"{type(self.turn_instructions).__name__}.text answered "
-                f"{type(told).__name__}; it answers a Told(everyone=..., labelled={{...}})"
+                f"{type(said).__name__}; it answers the turn's text as a str"
             )
             raise TypeError(msg)
-        if unoffered := sorted(set(told.labelled) - set(self.turn_instructions.labels)):
-            msg = (
-                f"{type(self.turn_instructions).__name__}.text answered under "
-                f"{', '.join(unoffered)}, which its labels do not offer -- add each to labels"
-            )
-            raise ValueError(msg)
-        return told
+        return said
 
     def _files_for(self, session_id: str) -> Steps[Any]:
         """The backend a session's files are reached through, by kingfisher and any agent it builds.

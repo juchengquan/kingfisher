@@ -23,7 +23,7 @@ SLOT = re.compile(r"\{\{([^{}]*)\}\}")
 #: What a slot may be called. No spaces or braces, which would make a blank that matches none.
 SLOT_NAME = re.compile(r"\w[\w-]*")
 
-LONG_FORM = ("text", "slots", "receives")
+LONG_FORM = ("text", "slots")
 ENTRY = ("source_ids", "datazone", "text")
 
 
@@ -45,18 +45,16 @@ class Prompt(NamedTuple):
 
     text: str
     slots: Slots
-    #: The labels of a deployment's `TurnInstructions` this definition is sent.
-    receives: tuple[str, ...]
 
 
 def read_prompt(document: Mapping[str, object], read: fields.Reader) -> Prompt:
-    """A definition's prompt: no slots and no labels for the short form."""
+    """A definition's prompt: no slots for the short form."""
     written = document.get(FIELD)
     if not isinstance(written, Mapping):
         read.require(document, FIELD)
         text = fields.text(written)
         _refuse_blanks(text, {}, read)
-        return Prompt(text, {}, ())
+        return Prompt(text, {})
     read.refuse_unrecognised(
         (f"{FIELD}.{key}" for key in written), known=[f"{FIELD}.{key}" for key in LONG_FORM]
     )
@@ -67,25 +65,7 @@ def read_prompt(document: Mapping[str, object], read: fields.Reader) -> Prompt:
     text = fields.text(written["text"])
     slots = _slots(written.get("slots"), read)
     _refuse_blanks(text, slots, read)
-    return Prompt(text, slots, _receives(written.get("receives"), read))
-
-
-def _receives(written: object, read: fields.Reader) -> tuple[str, ...]:
-    where = f"{read.source}: {FIELD}.receives"
-    if written is None:
-        return ()
-    if not isinstance(written, list) or not written:
-        msg = (
-            f"{where} is a list of labels the deployment's TurnInstructions offers -- "
-            f"got {written!r}"
-        )
-        raise read.error(msg)
-    if odd := [one for one in written if not isinstance(one, str) or not SLOT_NAME.fullmatch(one)]:
-        # `"*"` among them: every label would hand a definition text written for another.
-        named = ", ".join(map(repr, odd))
-        msg = f"{where}: {named} is not a label -- letters, digits, _ and - only"
-        raise read.error(msg)
-    return tuple(dict.fromkeys(written))
+    return Prompt(text, slots)
 
 
 def _slots(written: object, read: fields.Reader) -> Slots:

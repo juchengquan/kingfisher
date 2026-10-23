@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -18,13 +17,11 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.caching import CACHING, PromptCachingMiddleware
-from kingfisher.core.agent.prompting import LABELLED_LEAD, session_section, turn_text
+from kingfisher.core.agent.prompting import session_section
 from kingfisher.core.config import ConfigError
-from kingfisher.core.definitions.agents.reading import read
-from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
-from kingfisher.core.definitions.documents import DefinitionText
+from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.layout import MEMORY
-from kingfisher.plugins import LocalSessions, Plugins, Told, backend_at
+from kingfisher.plugins import LocalSessions, Plugins, backend_at
 from tests.conftest import (
     EVERY_TOOL,
     FakeToolCallingModel,
@@ -35,11 +32,6 @@ from tests.conftest import (
 from tests.unit.scripted import Scripted
 
 TEXT = "This session is for the Q3 audit."
-
-
-def _told(text: str | None) -> Told | None:
-    """What a deployment saying `text` to everyone answers, `None` for one wiring nothing."""
-    return None if text is None else Told(everyone=text)
 
 
 class Sent(ChatAnthropic):
@@ -99,7 +91,7 @@ def test_the_text_follows_the_static_prompts_breakpoint_and_takes_none(cfg, sess
     """Sent ahead of the static prompt's breakpoint, text that differs between sessions
     costs every session that cache; given one of its own, a fifth breakpoint, which
     Anthropic refuses."""
-    payload = _first_request(cfg, session_dir, way, told=Told(everyone=TEXT))
+    payload = _first_request(cfg, session_dir, way, turn_text=TEXT)
     blocks = _system(payload)
     (at,) = [i for i, block in enumerate(blocks) if TEXT in block["text"]]
 
@@ -121,7 +113,7 @@ def test_sessions_with_different_text_share_the_cached_prefix(cfg, session_dir):
     """The point of sending it after the breakpoint, and the check that the slot marks as
     deepagents' own did: a session told nothing is the third of the three."""
     told = [
-        _cached_prefix(_first_request(cfg, session_dir, told=_told(text)))
+        _cached_prefix(_first_request(cfg, session_dir, turn_text=text))
         for text in (TEXT, "This session is for payroll.", None)
     ]
 
@@ -131,7 +123,7 @@ def test_sessions_with_different_text_share_the_cached_prefix(cfg, session_dir):
 def test_no_text_leaves_the_request_as_it_was(cfg, session_dir):
     """The control: a deployment that wired the plugin and has nothing to say this turn
     is sent what one that wired none is, so its cache is not broken by the wiring."""
-    assert _first_request(cfg, session_dir, told=Told()) == _first_request(
+    assert _first_request(cfg, session_dir, turn_text="") == _first_request(
         cfg, session_dir
     )
 
@@ -151,7 +143,7 @@ def test_a_model_that_is_not_anthropics_is_sent_it_too(cfg, session_dir):
     must not go with it."""
     model = _Told(responses=[AIMessage(content="ok")])
     built = build_agent(
-        cfg, backend=backend_at(cfg, session_dir), model=model, told=Told(everyone=TEXT)
+        cfg, backend=backend_at(cfg, session_dir), model=model, turn_text=TEXT
     )
 
     built.graph.invoke({"messages": [{"role": "user", "content": "hi"}]}, context=built.context)
@@ -229,7 +221,7 @@ def test_every_graph_kingfisher_builds_is_sent_it_and_a_compiled_one_is_not(
         agent=agent_named(kf, "lead"),
         backend=backend_at(cfg, session_dir),
         model=model,
-        told=_told(text),
+        turn_text=text,
     )
 
     asked = {"messages": [{"role": "user", "content": "go"}]}
@@ -324,7 +316,7 @@ def test_a_helpers_session_text_follows_what_its_own_middleware_writes(
         model=model,
         middleware_registry={"stamps": _Stamps},
         capabilities=Capabilities(subagents=("reviewer", "checker")),
-        told=Told(everyone=TEXT),
+        turn_text=TEXT,
     )
 
     asked = {"messages": [{"role": "user", "content": "go"}]}
@@ -372,7 +364,7 @@ def test_a_deployments_own_prompt_caching_is_refused_beside_it(cfg, session_dir,
         pytest.warns(UserWarning, match=CACHING),
         pytest.raises(ConfigError, match="turn_instructions="),
     ):
-        _own_caching(cfg, session_dir, told=Told(everyone=text))
+        _own_caching(cfg, session_dir, turn_text=text)
 
 
 def test_a_deployments_own_prompt_caching_still_builds_without_it(cfg, session_dir):
@@ -393,16 +385,14 @@ class Asked:
         self.asked: list[str] = []
         self.on_a_loop: bool | None = None
 
-    labels = ()
-
-    def text(self, cfg, session_id: str, caller) -> Told:
+    def text(self, cfg, session_id: str, caller) -> str:
         self.asked.append(session_id)
         try:
             asyncio.get_running_loop()
             self.on_a_loop = True
         except RuntimeError:
             self.on_a_loop = False
-        return Told(everyone=f"Session {session_id}, turn {len(self.asked)}.")
+        return f"Session {session_id}, turn {len(self.asked)}."
 
 
 @pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
@@ -424,114 +414,16 @@ def test_the_plugin_is_asked_once_a_turn_for_its_session(scripted, awaited):
     assert "Session s, turn 2." in str(Scripted.heard[-1][0].content)
 
 
-# -- who receives what -------------------------------------------------------
+def test_a_hook_answering_anything_but_text_is_refused(scripted):
+    """`Told(...)`, the shape this answered before, would reach the model as its repr."""
 
+    class Shaped:
+        def text(self, cfg, session_id: str, caller) -> Any:
+            return {"everyone": "Today is Friday."}
 
-class Desk:
-    """A deployment saying the date to everyone and who the user is to whoever asks."""
-
-    labels = ("user",)
-
-    def __init__(self, labelled: dict[str, str] | None = None) -> None:
-        self.labelled = {"user": "You are working for Ana Ruiz."} if labelled is None else labelled
-
-    def text(self, cfg, session_id: str, caller) -> Told:
-        return Told(everyone="Today is Friday.", labelled=self.labelled)
-
-
-RECEIVING = """system_prompt:
-  text: |
-    You lead.
-  receives: [user]
-"""
-
-HELPER = """name: helper
-description: Reads files.
-system_prompt: |
-  You read files for the lead.
-"""
-
-
-def _desk(scripted, *, receives: str = RECEIVING, **wiring: Any) -> Kingfisher:
-    an_agent(
-        scripted,
-        "lead",
-        system_prompt=receives.removeprefix("system_prompt:"),
-        builtin_tools="[task]",
-        subagents="[helper]",
-    )
-    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
-    (subagents_dir(scripted) / "helper.yaml").write_text(HELPER, encoding="utf-8")
-    return Kingfisher(scripted, sessions=LocalSessions(), **wiring)
-
-
-def _system_of(call: list[Any]) -> str:
-    return str(call[0].content)
-
-
-def test_a_definition_is_sent_only_the_labels_it_receives(scripted):
-    """Driven through a turn: the agent naming `user` is told who the user is, and the
-    subagent naming nothing, and `general-purpose`, which has no definition to name one,
-    are told the date alone, with no lead-in to text they lack."""
-    kf = _desk(scripted, turn_instructions=Desk())
-    Scripted.heard.clear()
-    Scripted.script.extend([
-        _task("helper", "t1"),
-        AIMessage(content="read"),
-        _task("general-purpose", "t2"),
-        AIMessage(content="looked"),
-        AIMessage(content="done"),
-    ])
-
-    kf.run(Request("go", agent="lead", session_id="s"))
-
-    systems = [_system_of(call) for call in Scripted.heard]
-    lead = [s for s in systems if "You lead." in s]
-    others = [s for s in systems if "You lead." not in s]
-    assert lead and any("You read files" in s for s in others) and len(others) >= 2, (
-        "a graph was never called, so nothing was compared"
-    )
-    assert all("Today is Friday." in s and "Ana Ruiz" in s and LABELLED_LEAD in s for s in lead)
-    assert all("Today is Friday." in s for s in others)
-    assert not [s for s in others if "Ana Ruiz" in s or LABELLED_LEAD in s]
-
-
-def test_a_label_nothing_offers_is_refused_at_startup(scripted):
-    """`receives: [usr]` would be text never sent, with nothing to say so."""
-    with pytest.raises(ConfigError, match=r"agent 'lead' receives usr, and Desk offers user"):
-        _desk(scripted, receives=RECEIVING.replace("[user]", "[usr]"), turn_instructions=Desk())
-
-
-def test_receiving_anything_with_no_hook_wired_is_refused_at_startup(scripted):
-    with pytest.raises(ConfigError, match="no turn_instructions= is wired"):
-        _desk(scripted)
-
-
-def test_a_hook_answering_under_a_label_it_does_not_offer_is_refused(scripted):
-    """No definition was checked against it at startup, so whoever it was meant for is a guess."""
-    kf = _desk(scripted, turn_instructions=Desk({"user": "Ana", "manager": "Bo"}))
+    an_agent(scripted, **EVERY_TOOL)
+    kf = Kingfisher(scripted, sessions=LocalSessions(), turn_instructions=Shaped())
     Scripted.script.extend([AIMessage(content="done")])
 
-    with pytest.raises(ValueError, match="under manager, which its labels do not offer"):
-        kf.run(Request("go", agent="lead", session_id="s"))
-
-
-@pytest.mark.parametrize("receives", ['["*"]', "user", "[]"])
-def test_receives_is_a_list_of_labels(receives):
-    with pytest.raises(AgentError, match="receives"):
-        _read_agent(RECEIVING.replace("[user]", receives))
-
-
-def test_the_lead_in_comes_only_with_labelled_text():
-    """A definition told the date alone is not told to keep quiet about text it never got."""
-    told = Told(everyone="Today is Friday.", labelled={"user": "You work for Ana."})
-
-    assert turn_text(told, ()) == "Today is Friday."
-    assert turn_text(told, ("user",)) == f"Today is Friday.\n\n{LABELLED_LEAD}\n\nYou work for Ana."
-    assert turn_text(Told(labelled={"user": "  "}), ("user",)) == ""
-    assert turn_text(None, ("user",)) is None
-
-
-def _read_agent(prompt: str):
-    text = f"name: lead\ndescription: Leads.\n{prompt}"
-    return read(DefinitionText(text, Path("lead.yaml")))
+    with pytest.raises(TypeError, match="answered dict; it answers the turn's text as a str"):
+        kf.run(Request("go", agent="only", session_id="s"))

@@ -60,10 +60,6 @@ memory: false
 # only `audit_log` is told plainly that the database is not theirs through this agent.
 # Each slot key is a name some lock here uses, or startup refuses it: a slot keyed on
 # `sales_bd` would be a sentence never sent.
-#
-# `receives: [user]` asks for the labelled text of the deployment's `TurnInstructions`:
-# who the user is, from `plugins/desk.py`. A deployment seeding this agent wires that
-# plugin, or startup refuses the line -- `plugins/desk.py` says how.
 system_prompt:
   text: |
     You answer questions about the data in this workspace.
@@ -97,4 +93,3 @@ system_prompt:
           This caller works in EMEA, whose fiscal year starts on 1 April, so a date's
           fiscal quarter is not its calendar quarter. Ask `quarters` to total figures
           by quarter rather than grouping them by calendar month yourself.
-  receives: [user]

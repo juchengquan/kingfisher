@@ -44,8 +44,8 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 - **What slots and turn text cost, on a real deployment.** A slot keyed on a name no
   tool lock uses gives two grants with one tool list two system prompts and a cache entry
   each; a subagent's prompt grows with every slot its grant fills. Count both on one
-  deployment's real grants. And one trial of whether the model keeps quiet about
-  labelled text: a user's name under a label, a task inviting a report, and a look at
+  deployment's real grants. And one trial of whether the model keeps quiet about who
+  the user is: a user's name in the turn text, a task inviting a report, and a look at
   `/outputs` and `/memory/AGENTS.md` after. *(2026-10-23.)*
 - **The four `tm-*` clearing trials, re-run** now that clearing counts with the
   summariser's own counter. That re-run was the acceptance agreed for the change.

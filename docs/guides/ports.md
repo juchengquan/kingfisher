@@ -335,18 +335,11 @@ instead, and is sent after that part, so every session still shares its cache:
 ```python
 from zoneinfo import ZoneInfo
 
-from kingfisher.plugins import Told
-
 
 class DeskInstructions:
-    labels = ("user",)
-
-    def text(self, cfg, session_id: str, caller) -> Told:
+    def text(self, cfg, session_id: str, caller) -> str:
         here = caller.started.astimezone(ZoneInfo(caller.context.get("tz", "UTC")))
-        return Told(
-            everyone=f"Today is {here:%A %-d %B %Y}.",
-            labelled={"user": f"You are working for {caller.context['name']}."},
-        )
+        return f"Today is {here:%A %-d %B %Y}. You are working with {caller.context['name']}."
 
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(), turn_instructions=DeskInstructions())
 ```
@@ -360,17 +353,12 @@ Things to know:
 - **`caller` is the turn's `Caller`**, the one tools read on `runtime.context.caller`:
   the request's `context`, the caller's source ids and datazone, and `started`, when the
   turn started in UTC ([`tools.md`](tools.md#who-the-turn-is-for)).
-- **`everyone` reaches every graph the turn builds**: the agent, each subagent it
+- **Every graph the turn builds is sent the same text**: the agent, each subagent it
   declares and their helpers, and `general-purpose`. A compiled subagent is not sent it,
-  as it is not sent `INSTRUCTIONS.md`: its `build` writes its prompt.
-- **A labelled piece reaches only the definitions that ask for it**, by listing the
-  label under `system_prompt.receives` ([`formats.md`](formats.md#text-that-depends-on-the-caller--system_prompt-written-long)).
-  The hook names no agent, so renaming one cannot cut its text off. Kingfisher puts a
-  sentence ahead of it asking the model not to repeat or save it unless asked.
-  `general-purpose`, which has no definition, receives no label.
-- **`labels` is checked both ways.** A definition receiving a label the hook does not
-  offer is refused at startup, and so is any `receives` with no hook wired. A turn the
-  hook answers under a label it does not offer is refused.
+  as it is not sent `INSTRUCTIONS.md`: its `build` writes its prompt. No definition says
+  anything about it, so a definition works the same whatever the deployment's hook says.
+- **Write any caution into the text yourself.** Kingfisher adds nothing to it. The
+  memory guidelines already tell the model never to store details identifying the user.
 - **It is asked once per turn**, as a plain method: on the async path it is called on
   kingfisher's thread pool, off the event loop. Nothing it says is stored.
 - **Where it goes**: after the agent's own prompt and every section kingfisher and
@@ -379,7 +367,7 @@ Things to know:
   prompt, the memory block and the conversation. So text that changes between one turn
   and the next costs the memory block and the conversation their cache, and nothing
   before them.
-- **An empty `Told()` sends what a deployment without the plugin sends.**
+- **An empty string sends what a deployment without the plugin sends.**
 - **Every model is sent it.** It goes where Anthropic's prompt caching does, and is
   sent to a model that caching does nothing for all the same. A helper, which deepagents
   gives no prompt caching, is sent it with no breakpoint, as it had none.

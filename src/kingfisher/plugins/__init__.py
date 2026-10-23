@@ -14,7 +14,6 @@ _EXPORTS = {
     "RunEvents": "kingfisher.core.interfaces",
     "Instructions": "kingfisher.core.interfaces",
     "TurnInstructions": "kingfisher.core.interfaces",
-    "Told": "kingfisher.core.interfaces",
     "UnusedResults": "kingfisher.core.interfaces",
     "PdfAttachments": "kingfisher.core.interfaces",
     "ReturnedPdf": "kingfisher.core.interfaces",
@@ -74,7 +73,6 @@ __all__ = [
     "ShellPrompt",
     "ShellSettings",
     "SubagentMiddlewares",
-    "Told",
     "TurnInstructions",
     "UnusedFile",
     "UnusedFiles",
@@ -114,7 +112,6 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import ScratchRunLimit as ScratchRunLimit
     from kingfisher.core.interfaces import Sessions as Sessions
     from kingfisher.core.interfaces import SubagentMiddlewares as SubagentMiddlewares
-    from kingfisher.core.interfaces import Told as Told
     from kingfisher.core.interfaces import TurnInstructions as TurnInstructions
     from kingfisher.core.interfaces import UnusedResults as UnusedResults
     from kingfisher.core.layout import DEFAULT_LAYOUT as DEFAULT_LAYOUT

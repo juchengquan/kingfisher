@@ -28,9 +28,6 @@ class SpecBase:
     #: from its long form. Only `prompt_for` may hand the text on: unfilled, the model is
     #: sent the braces.
     slots: Slots = field(default_factory=dict, metadata={"derived": True})
-    #: The labels of the deployment's `TurnInstructions` this definition is sent, from its
-    #: long form. Checked against what the deployment offers at startup.
-    receives: tuple[str, ...] = field(default=(), metadata={"derived": True})
     #: The two tool axes, granted apart because they are offered apart: built-ins come with
     #: deepagents, `tools` is what the workspace wrote. In one list, asking for an offered
     #: tool would give up every built-in. `None` grants none, as on every grant field here: a

@@ -148,7 +148,6 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         description=fields.text(document["description"]),
         system_prompt=prompt.text,
         slots=prompt.slots,
-        receives=prompt.receives,
         builtin_tools=builtin,
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),

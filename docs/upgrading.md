@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `TurnInstructions` answers one string, after #1083
+
+- **`text(cfg, session_id, caller)` returns a `str`**, sent to every graph the turn builds
+  but a compiled subagent. `Told`, `labels` and `system_prompt.receives` are gone: a
+  definition still writing `receives:` is refused as an unknown key, so delete the line,
+  and put what it received into the hook's one text. There is no alias.
+
 ## `SessionInstructions` is `TurnInstructions`, after #1077
 
 - **The plugin is renamed and asked with the turn's caller.** `session_instructions=` on
