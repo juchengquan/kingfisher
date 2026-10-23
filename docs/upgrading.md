@@ -753,8 +753,8 @@ replaced the four layers began.
   subagent, a `SUBAGENTS` entry with no `build`, ran under kingfisher's standing
   middleware alone. It now runs the middleware the main agent's file names, in its order
   and with the settings written there for each, a summarizer included; a helper another
-  subagent consults gets the agent's, not its summoner's. A subagent document (YAML or
-  Markdown) and a compiled one are unchanged; a `SUBAGENTS` entry with no `build` typed
+  subagent consults gets the agent's, not its summoner's. A subagent document, a YAML
+  file, and a compiled one are unchanged; a `SUBAGENTS` entry with no `build` typed
   into your definitions folder is portable, and changes too.
 - **To keep the old behaviour, wire a `SubagentMiddlewares` answering nothing**:
   `names(subagent, agent, middlewares)` returning `()`, passed as

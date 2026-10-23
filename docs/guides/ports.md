@@ -464,7 +464,7 @@ Kingfisher's own, `AgentsMiddlewares`, returns `middlewares`.
 
 Things to know:
 
-- **Only a portable subagent is asked about.** A subagent document (YAML or Markdown)
+- **Only a portable subagent is asked about.** A subagent document, a YAML file,
   writes its own `middlewares:` line, and a compiled one is given no middleware at all;
   neither changes. A `SUBAGENTS` entry with no `build` is portable wherever it is
   written, your definitions folder included.
