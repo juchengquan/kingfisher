@@ -1134,6 +1134,22 @@ written as a set `{a, b}` would need a spelling of its own. Little is lost: a sk
 never a boundary, and the locks that matter are on the tools its procedure needs.
 *(2026-10-18.)*
 
+**Not taken: `sources` and `data_zone`, or an alias for either.** Asked for so a
+client's own tool spec, which spells them that way, would match `ToolSpec`. It would
+not have removed the client's conversion: their spec is a class of its own, shared beyond
+kingfisher, and `TOOLS` reads anything that is not a `ToolSpec` as a bare tool, open to
+everyone. Their `sources` also combines names differently -- an all-of tuple of any-of
+groups -- which no rename carries. A rename would have cost a clash: `source` already says
+where a definition was found, as `source: bundled` in the very entries that may write an
+audience, as `FoundTool.source`, and as deepagents' own `sources=`, which is why the
+glossary avoids it. An alias would be two names for one thing, and on `ToolSpec` alone.
+Reading the foreign class by attribute name was refused too: a lock is read with
+`getattr(..., ALL)`, so one renamed field would open a tool with no error. The
+conversion is the client's, in one function its own test drives through kingfisher's
+loader. An empty audience is refused here, so a tool their spec shuts to everyone is
+left out of `TOOLS` rather than locked with a name nobody is given -- which a caller
+presenting it, or any unscoped call, would still pass. *(2026-10-23.)*
+
 **Reversed: a central `access.yaml` listing every asset by name.** Built in full --
 vocabulary, per-asset audiences, reconciliation against the catalogue, two load reports
 -- then replaced within the same branch. What killed it was not taste. A central table
