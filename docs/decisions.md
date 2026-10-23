@@ -2963,9 +2963,13 @@ Measured: `edit("/scratchpad/link")` rewrote the pinned agent, and the same thro
 to a saved result forged it. The session root's backend, `UnlinkedBackend`, now refuses a
 path whose resolved location is not its spelling, and `ls`, `glob` and grep's own walk skip
 a link rather than name or read through one -- refused, not resolved and judged again,
-which would be a second copy of the rules. Routes need none of it: upstream refuses a
-link out of a route's root, and every rule on a route covers the whole of it. A check, not
-a lock: a command run beside a file-tool call could race it.
+which would be a second copy of the rules. Routes need only the half upstream has: every
+rule on a route covers the whole of it, so a link inside one is followed, and upstream
+refuses a link out of its root -- with a `ValueError`, which `read`, `write`, `edit`,
+`delete` and `ls` let escape, so a link a model left from `/memory` to its scratchpad
+notes ended the turn. Every route is a `RootedBackend`, which answers it as the
+operation's error; not `UnlinkedBackend`, which would refuse a deployment's skills folder
+its symlinks. A check, not a lock: a command run beside a file-tool call could race it.
 
 **A session folder that is a link is refused at open, not replaced.** `rm -rf memory &&
 ln -s <anywhere> memory` rooted the next turn's `/memory/` route wherever it pointed, and

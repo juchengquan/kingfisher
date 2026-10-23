@@ -16,7 +16,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from deepagents.backends import CompositeBackend, FilesystemBackend
+from deepagents.backends import CompositeBackend
 from deepagents.backends.composite import (
     _remaining_grep_budget,
     _remap_file_info_path,
@@ -39,6 +39,7 @@ from .folders import (
     session_bytes,
     session_dir,
 )
+from .links import RootedBackend
 from .permissions import protect_inputs, writable_inputs
 from .shell import (
     ConfinedLocalShellBackend,
@@ -298,7 +299,7 @@ class WorkspaceScopedBackend(CompositeBackend):
         return super()._get_backend_and_key(key)
 
 
-class InputsBackend(FilesystemBackend):
+class InputsBackend(RootedBackend):
     """A session's `/inputs`, which is read-only on disk and opened only for an upload.
 
     `upload_files` is the only way in, and the agent's file tools never reach it. Unlocked
@@ -407,19 +408,17 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     layout = cfg.layout
     backing = {
         layout.inputs_route: lambda: InputsBackend(session_dir, layout),
-        layout.skills_route: lambda: FilesystemBackend(root_dir=str(skills_dir)),
-        layout.memory_route: lambda: FilesystemBackend(
-            root_dir=str(session_dir / layout.memory)
-        ),
+        layout.skills_route: lambda: RootedBackend(root_dir=str(skills_dir)),
+        layout.memory_route: lambda: RootedBackend(root_dir=str(session_dir / layout.memory)),
         # Mounted so it can be refused, not as a way in: `read_only_permissions` denies
         # every operation, and a rule is expressible only against a routed path.
-        layout.harness_route: lambda: FilesystemBackend(root_dir=str(session_dir / layout.harness)),
+        layout.harness_route: lambda: RootedBackend(root_dir=str(session_dir / layout.harness)),
     }
     # Each kept record for the same reason, readable: the agent reads a result and the
     # conversation kept aside back from them, and only writing is denied. A mount does not
     # make the folder, so `blobs`, which nothing writes, stays absent until something does.
     backing.update({
-        route: (lambda folder=folder: FilesystemBackend(root_dir=str(session_dir / folder)))
+        route: (lambda folder=folder: RootedBackend(root_dir=str(session_dir / folder)))
         for route, folder in zip(layout.kept_record_routes, layout.kept_records, strict=True)
     })
     missing = [path for path in layout.routed_paths() if path not in backing]
@@ -431,7 +430,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
     # One per bundle and per mount, so the file tools read a subagent's or a mounted
     # party's skills too. Generated: the names are not known until a catalogue is read.
     routes.update({
-        route: FilesystemBackend(root_dir=str(directory))
+        route: RootedBackend(root_dir=str(directory))
         for route, directory in definitions.skill_mounts()
     })
 

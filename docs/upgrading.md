@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A link out of a route is the operation's error, after #9999
+
+- **`read_file`, `write_file`, `edit_file`, `delete` and `ls` on a link out of a route's
+  folder now answer an error** -- `… it is or runs through a link out of its folder, and
+  the file tools follow none` -- where the turn used to end with a `ValueError` naming
+  the host's paths. That covers `/memory`, the kept records, `/inputs`, `/skills` and each
+  bundle's skills. A link that stays inside its route is followed, as before.
+- **Every route `backend_at` builds is a `RootedBackend`**
+  (`kingfisher.plugins.sessions.links`), a `FilesystemBackend` with only that change. A
+  deployment that reads a route's class sees the new one.
+
 ## A session's folder spelled in other capitals is refused, after #9999
 
 - **A file tool's path that spells one of the session's folders in other capitals is
