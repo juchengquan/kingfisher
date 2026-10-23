@@ -3772,6 +3772,14 @@ cannot catch "permanently" written back into kingfisher's own copy, which a test
 match as a phrase. `test_the_memory_block_keeps_a_cache_breakpoint_of_its_own` holds the
 slot. *(2026-10-07.)*
 
+**Nor does it keep who the user is.** deepagents' first example saved a user's email
+address, and two of its bullets offered email addresses as what to remember. A deployment
+telling its agent who the user is wants that read and not kept: memory is a file in the
+session, sent on every later call and summarised with the rest. The example now saves a
+stated convention, the bullets name a channel and a table, and the "do not record" list
+names identifying details beside credentials. Wording, not enforcement: scrubbing known
+values out of what is saved would be matching free text. *(2026-10-23.)*
+
 **A session id is one path segment, checked where it becomes a path.** Nothing checked it,
 and every path built from an id joined it on as given. Measured: `..` laid a session out in
 the workspace's own folder, an absolute id laid one out wherever it pointed, and deleting
