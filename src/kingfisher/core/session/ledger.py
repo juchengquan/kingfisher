@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import bisect
 import threading
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
@@ -50,16 +51,34 @@ class Ledger:
         self._entries: list[LedgerEntry] = []
         #: How many numbers this turn has handed out, a row or not.
         self._reserved = 0
+        #: The number each call took, by the message it was written in and its own id:
+        #: whichever call of a batch arrives first numbers them all, and the rest read
+        #: their own off it.
+        self._numbers: dict[tuple[str, str], str] = {}
 
-    def reserve(self) -> str:
-        """The id the next recorded call's result will have, taken as the call starts.
+    def reserve(self, call: str, batch: Sequence[str], *, message: str) -> str:
+        """The id `call`'s result will have, numbering every call of `batch` with it.
+
+        `batch` is the recorded calls of `message`, the model's reply `call` was written
+        in, in the order it wrote them. Numbered together, because calls made together
+        reach here on threads in any order: taken one at a time as each arrives, a
+        batch's ids run in the order its threads started, so `<ledger_delta>` lists them
+        against the wrong calls and no two runs of one conversation number them the same
+        way.
+
+        The message as well as the call, because a model reuses a call id in a later
+        reply and each of the two is a result of its own:
+        `test_two_calls_of_one_id_in_a_turn_each_keep_their_own_result` holds that.
 
         Never handed out again, though the call may fail and leave no row: a middleware
         inside the recorder may already have named something after it.
         """
         with self._lock:
-            self._reserved += 1
-            return entry_id(self.earlier.last + self._reserved)
+            if (message, call) not in self._numbers:
+                for one in batch:
+                    self._reserved += 1
+                    self._numbers[message, one] = entry_id(self.earlier.last + self._reserved)
+            return self._numbers[message, call]
 
     def add(self, entry: LedgerEntry) -> None:
         """Keep one result's row, under the id `reserve` gave its call.

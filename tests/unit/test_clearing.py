@@ -82,6 +82,9 @@ class Talk:
     def __init__(self, earlier: KeptLedger | None = None) -> None:
         self.messages: list[Any] = [HumanMessage("go", id="m0")]
         self.ledger = Ledger("t", earlier or KeptLedger())
+        #: The message being built and its recorded calls, in the order they were
+        #: written: what the turn's recorder numbers together, a file tool no part of it.
+        self._numbered: tuple[str, list[str]] = ("", [])
 
     def _id(self) -> str:
         return f"m{len(self.messages)}"
@@ -99,7 +102,12 @@ class Talk:
             {"name": name, "args": args, "id": at}
             for (name, args, _), at in zip(calls, ids, strict=True)
         ]
-        self.messages.append(AIMessage(content="", tool_calls=made, id=self._id()))
+        asking = self._id()
+        self.messages.append(AIMessage(content="", tool_calls=made, id=asking))
+        self._numbered = (
+            asking,
+            [at for (name, _, _), at in zip(calls, ids, strict=True) if name not in UNRECORDED],
+        )
         for (name, args, text), at in zip(calls, ids, strict=True):
             self.messages.append(self._result(name, args, text, at, status))
         return ids
@@ -119,7 +127,8 @@ class Talk:
         content = text
         if name not in UNRECORDED and status != "error":
             written = arguments(args)
-            number = self.ledger.reserve()
+            asking, batch = self._numbered
+            number = self.ledger.reserve(at, batch, message=asking)
             self.ledger.add(
                 LedgerEntry(
                     id=number, turn="t", call=at, run=None, role=MAIN, tool=name,

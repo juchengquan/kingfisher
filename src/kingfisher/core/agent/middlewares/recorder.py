@@ -122,6 +122,30 @@ def _numbered(number: str | None) -> Iterator[None]:
         RESULT_ID.reset(token)
 
 
+def made_together(call: Mapping[str, Any], state: Any) -> tuple[str, list[str]]:
+    """The reply `call` was written in, and its recorded calls in the order the model
+    wrote them.
+
+    What `Ledger.reserve` numbers a batch by. Read off the conversation rather than
+    counted as the calls arrive, which is a race: `findings.md` has `ToolNode` running a
+    message's calls at once. Asked only of a call that takes a number, so it is one of
+    these; a call the conversation does not hold is a batch of its own.
+    """
+    wanted = str(call.get("id") or "")
+    for message in reversed(list(state.get("messages") or ())):
+        together = getattr(message, "tool_calls", None) or ()
+        if wanted not in {str(one.get("id") or "") for one in together}:
+            continue
+        # A tool that is never recorded takes no number, so counting it would leave a
+        # gap no row names and number every call after it one too high.
+        return str(getattr(message, "id", None) or ""), [
+            str(one.get("id") or "")
+            for one in together
+            if str(one.get("name") or "") not in UNRECORDED
+        ]
+    return "", [wanted]
+
+
 class RecorderMiddleware(AgentMiddleware):
     """Record each successful tool result, keep it as a file in the session, and end
     what the model is handed with the result's id.
@@ -150,7 +174,7 @@ class RecorderMiddleware(AgentMiddleware):
         self._tool_results_route = tool_results_route
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        number = self._reserved(request.tool_call)
+        number = self._reserved(request)
         with _running(request.tool_call), _numbered(number):
             result = handler(request)
         answer = answer_in(result, request.tool_call.get("id"))
@@ -171,7 +195,7 @@ class RecorderMiddleware(AgentMiddleware):
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        number = self._reserved(request.tool_call)
+        number = self._reserved(request)
         with _running(request.tool_call), _numbered(number):
             result = await handler(request)
         answer = answer_in(result, request.tool_call.get("id"))
@@ -189,16 +213,18 @@ class RecorderMiddleware(AgentMiddleware):
         entry = self._unkept(entry, answers)
         return _stamped(result, answer, entry.id, _shown(answer, entry, text))
 
-    def _reserved(self, call: Mapping[str, Any]) -> str | None:
+    def _reserved(self, request: Any) -> str | None:
         """The id this call's result will have if it is recorded, or `None` for a tool
         that never is.
 
         Taken before the call runs, so a middleware inside this one can name what it
         writes after the result; a call that then fails leaves its number unused.
         """
+        call = request.tool_call
         if str(call.get("name") or "") in UNRECORDED:
             return None
-        return self._ledger.reserve()
+        message, batch = made_together(call, request.state)
+        return self._ledger.reserve(str(call.get("id") or ""), batch, message=message)
 
     def _recorded(
         self, call: Mapping[str, Any], answer: ToolMessage, number: str

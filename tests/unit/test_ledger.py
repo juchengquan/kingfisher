@@ -13,6 +13,8 @@ import json
 import logging
 import re
 import sys
+import time
+from collections.abc import Sequence
 from dataclasses import asdict, replace
 from types import SimpleNamespace
 from typing import Any
@@ -26,7 +28,10 @@ from langgraph.types import Command
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorded import summary
-from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
+from kingfisher.core.agent.middlewares.recorder import (
+    RecorderMiddleware,
+    made_together,
+)
 from kingfisher.core.agent.prompting import render_system_prompt
 from kingfisher.core.layout import (
     DEFAULT_LAYOUT,
@@ -134,10 +139,12 @@ def ledgered(scripted):
     return scripted
 
 
-def _calls(*made: tuple[str, dict[str, Any], str]) -> AIMessage:
-    """One model turn asking for these calls together."""
+def _calls(*made: tuple[str, dict[str, Any], str], message: str | None = None) -> AIMessage:
+    """One model turn asking for these calls together, `message` its own id."""
     return AIMessage(
-        content="", tool_calls=[{"name": name, "args": args, "id": at} for name, args, at in made]
+        content="",
+        id=message,
+        tool_calls=[{"name": name, "args": args, "id": at} for name, args, at in made],
     )
 
 
@@ -1189,13 +1196,103 @@ def test_rows_are_kept_in_id_order_whatever_order_their_calls_finish_in():
     `A-9999`, the span runs backwards.
     """
     ledger = Ledger("t", KeptLedger(last=9_998))
-    first, second = ledger.reserve(), ledger.reserve()
+    batch = ["c1", "c2"]
+    first = ledger.reserve("c1", batch, message="m1")
+    second = ledger.reserve("c2", batch, message="m1")
 
     ledger.add(_entry(10_000, "web_search"))
     ledger.add(_entry(9_999, "sql_query"))
 
     assert (first, second) == ("A-9999", "A-10000")
     assert [e.id for e in ledger.entries] == ["A-9999", "A-10000"]
+
+
+# -- a batch numbered as the model wrote it -------------------------------------
+
+
+def test_a_batch_takes_its_numbers_in_the_order_the_model_wrote_it():
+    """Calls made together reach the recorder on threads in any order, so numbered as
+    each arrives a batch's ids run in the order its threads started: the delta lists the
+    rows against the calls that did not make them, and two runs of one conversation
+    number the same batch two ways.
+    """
+    ledger = Ledger("t", KeptLedger())
+    batch = ["c1", "c2", "c3"]
+
+    # The call the model wrote last asks first, being the thread that got there first.
+    assert ledger.reserve("c3", batch, message="m1") == "A-0003"
+    assert ledger.reserve("c1", batch, message="m1") == "A-0001"
+    assert ledger.reserve("c2", batch, message="m1") == "A-0002"
+    assert ledger.reserve("c4", ["c4"], message="m2") == "A-0004", "the next batch follows"
+    # A model reuses a call id in a later reply, and each is a result of its own:
+    # `test_two_calls_of_one_id_in_a_turn_each_keep_their_own_result` drives it for real.
+    assert ledger.reserve("c1", ["c1"], message="m3") == "A-0005"
+
+
+def test_a_batch_is_read_off_the_message_its_call_arrived_in():
+    """The conversation holds every batch the turn has made, and the latest message is
+    not always the one being numbered: read off the last, a call takes the places of
+    calls it was never made with.
+    """
+    earlier = _calls(
+        ("web_search", {"query": "EV"}, "c1"),
+        ("sql_query", {"query": "1"}, "c2"),
+        message="m1",
+    )
+    latest = _calls(("web_search", {"query": "GDP"}, "c3"), message="m2")
+    state = {"messages": [earlier, ToolMessage(content="r", tool_call_id="c1"), latest]}
+
+    assert made_together(earlier.tool_calls[1], state) == ("m1", ["c1", "c2"])
+    assert made_together(latest.tool_calls[0], state) == ("m2", ["c3"])
+
+
+def test_a_tool_that_is_never_recorded_is_no_part_of_the_batch():
+    """A file tool's result takes no number, so counting it would number every call after
+    it one too high and leave a gap no row names.
+    """
+    together = _calls(
+        ("web_search", {"query": "EV"}, "c1"),
+        ("read_file", {"file_path": "/outputs/notes.txt"}, "c2"),
+        ("sql_query", {"query": "select 1"}, "c3"),
+        message="m1",
+    )
+
+    assert made_together(together.tool_calls[2], {"messages": [together]}) == ("m1", ["c1", "c3"])
+
+
+def test_a_call_the_conversation_does_not_hold_is_a_batch_of_its_own():
+    """A recorder driven outside a graph has no message to read an order off, and a batch
+    the call is no part of leaves `reserve` no number to hand back.
+    """
+    assert made_together({"name": "web_search", "id": "c9"}, {"messages": []}) == ("", ["c9"])
+
+
+def test_a_batch_keeps_the_models_order_when_its_first_call_asks_last(ledgered, monkeypatch):
+    """The flake this fixed: on CI's macOS runner the second call of a batch was numbered
+    first, so `c1`'s result was recorded as `A-0002` and the handle the model read named
+    the file of the call beside it. Driven rather than waited for -- 25 local runs of the
+    test it reddened numbered the batch the same way every time.
+    """
+    taking = Ledger.reserve
+
+    def late(self: Ledger, call: str, batch: Sequence[str], *, message: str) -> str:
+        # The call the model wrote first is the last to ask for a number.
+        if call == "c1":
+            time.sleep(0.05)
+        return taking(self, call, batch, message=message)
+
+    monkeypatch.setattr(Ledger, "reserve", late)
+    kf = _named(ledgered)
+
+    result = _run(
+        ledgered,
+        _calls(("web_search", {"query": "EV"}, "c1"), ("sql_query", {"query": "select 1"}, "c2")),
+        AIMessage(content="done"),
+        kf=kf,
+    )
+
+    assert [call for call, _ in _TOLD] == ["c2", "c1"], "the control: `c1` asked first"
+    assert {e.call: e.id for e in result.ledger} == {"c1": "A-0001", "c2": "A-0002"}
 
 
 # -- access ---------------------------------------------------------------------
@@ -1434,8 +1531,9 @@ def test_a_command_is_stamped_in_a_copy_that_keeps_the_rest_of_it(ledgered):
         DEFAULT_LAYOUT.tool_results_route,
     )
 
+    asked = {"name": "task", "id": "t1", "args": {}}
     handed = recorder.wrap_tool_call(
-        SimpleNamespace(tool_call={"name": "task", "id": "t1", "args": {}}),
+        SimpleNamespace(tool_call=asked, state={"messages": [_calls(("task", {}, "t1"))]}),
         lambda _: returned,
     )
 
