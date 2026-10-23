@@ -18,6 +18,32 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The shell says where its writes go, and a stray one is told so, after #1070
+
+- **The shell's section of the prompt names the two folders it may write**, `/outputs`
+  and `/scratchpad`, and says everywhere else is refused -- `/inputs`, what kingfisher
+  keeps, and the folder the shell starts in, which is the session's top. It said how to
+  spell a path and nothing about which folders would take one, so a bare `> out.csv`
+  wrote where every fence refuses. This is what kingfisher's own shell says of itself; a
+  deployment supplying its own `ShellPrompt` says its own.
+- **A refused command whose path no folder of the session holds gains a note**, in the
+  words a kept folder's refusal has had since #1065:
+
+  ```
+  `/out.csv` is not yours to write: the shell is refused there, as the file tools are.
+  Save what you make under `/outputs/<name>` to hand it back, or under
+  `/scratchpad/<name>` to work on it.
+  ```
+
+  A path under a folder your layout does name is left alone, since a fence allows those
+  and a refusal there is something else; so is a path outside the session; and so is a
+  bare file name, `/bin/sh: out.csv: ...`, which has no slash to tell it from a word. If
+  you assert on `execute` results' text, one more refusal carries a note.
+- **`kept_note` is joined by `stray_note`, and `kept_under` by `strayed_under`**, both
+  in `builtin_tools`. The notes share their sentence. `strayed_under` reads a refused path
+  against the folders a file tool may save in -- your layout's, plus what your backend
+  mounts -- rather than the folders a fence keeps read-only.
+
 ## A batch's results are numbered as the model wrote them, after #1069
 
 - **Which id a call's result takes has changed**, where one message asked for more than

@@ -2866,6 +2866,22 @@ that climbed out of the session is answered with the shape a tool path has, and 
 `/inputs/<name>` as a spelling -- a folder no write may land in. Offering it as a
 destination would make it wrong. *(2026-10-22.)*
 
+**The shell says where its writes go, and a stray write is told so.** The shell starts
+at the session's top, which every fence refuses a write at -- measured: `echo x >
+out.csv` comes back `Operation not permitted` and nothing more, as do `mkdir mine` and a
+Python `open(..., 'w')`. The note the kept folders get cannot answer it, since
+`kept_under` reads a refused path against the folders a fence keeps and the top is under
+none of them. So the shell's own section names the two folders that take a write and
+says everywhere else is refused, the folder it starts in included; and the note now
+answers a refused path no folder of the session holds, in the sentence a kept folder's
+refusal already used.
+
+**A bare file name is left alone**, which is the commonest refusal of all: `/bin/sh:
+out.csv: Operation not permitted` names the file as the model wrote it, with no slash to
+tell a path from a word. Read as a path, `cat: shadow: Permission denied` -- a refused
+*read* -- would be answered with somewhere to write. The prompt reaches that case and
+the note cannot, which is why the prompt is the half that carries it. *(2026-10-23.)*
+
 ## Confining the shell
 
 **The two fences share a toolchain and not a workspace**, and the asymmetry is the
