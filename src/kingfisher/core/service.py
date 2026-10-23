@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import suppress
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -62,7 +63,7 @@ from .interfaces import (
     UnusedResults,
 )
 from .origins import Origins
-from .request import Request, Resume
+from .request import Request, Resume, caller_of
 from .workspace import ensure_layout
 
 if TYPE_CHECKING:
@@ -219,6 +220,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
             # Resolved by setup, which needs the same spec for the withheld report.
             agent=agent,
             held=held,
+            caller=caller_of(request, held, datetime.now(UTC)),
             # The one setup opened, holding the inputs: opened again, a remote backend
             # would be a second sandbox without them.
             backend=files,

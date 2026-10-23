@@ -2796,6 +2796,18 @@ each. `ToolContext` is on the front door apart from the wrapper, so naming it do
 load deepagents. **Not a sandbox for the tool:** a tool's own `open()` meets nothing.
 *(2026-09-30.)*
 
+**A tool is told who the turn runs for, and the model is not.** A deployment's query tool
+must filter by the user, and through an argument the model can be talked into passing
+someone else's id. `ToolContext.caller` carries the request's `context`, the source ids
+and datazone the caller holds, and when the turn started. `context` is names to text that
+kingfisher passes on and never reads: it keeps no model of a deployment's identities, the
+reason `source_ids.yaml` went, so it learns no `user_name`. The time is kingfisher's
+clock, read once per turn, so no request sets the date; it is a UTC `datetime` rather
+than a date, because a date cannot be moved into the caller's timezone and a tool can.
+A `Resume` presents `context` again, as it presents its capabilities: the approved call
+runs for whoever resumed it. `Caller` is defined beside `ToolContext` rather than beside
+`Request`, because pydantic resolves its annotations when a tool is bound. *(2026-10-23.)*
+
 **A tool may run a command, under its caller's grant.** Still no `execute` on the
 wrapper: what a tool is handed instead is `ToolContext.run`, a command over files in a
 throwaway folder, bound per call by `ScratchRunsMiddleware` only where the agent or

@@ -72,6 +72,20 @@ a later turn replays it as it was sent and is not sent it again. It never goes i
 the system prompt, whose text is the cached part of every call. A `Resume` has
 none, because a resume adds no message.
 
+`context` is the other half: facts about the caller a tool needs and the model
+does not -- a user id to filter by, a timezone. Names to text, read by nothing in
+kingfisher, and handed to tools as `runtime.context.caller.context`, never to the
+model. A `Resume` presents it again. [Who the turn is for](tools.md#who-the-turn-is-for)
+says what a tool reads.
+
+```python
+run(Request(
+    task="Which of my tickets are overdue?",
+    agent="assistant",
+    context={"user_id": "u-17", "tz": "Europe/London"},
+), sessions=LocalSessions())
+```
+
 ### Putting one subagent on a different model
 
 A definition says where its subagent runs. A request can override that for a

@@ -481,6 +481,40 @@ as a failed result too, with the virtual path to use instead.
 it would be the way round every row of that table — and would run commands for a
 request that was refused the shell. What a tool has instead is below.
 
+## Who the turn is for
+
+`runtime.context.caller` says who the turn runs for, which the model is never sent.
+A query tool filters by it, so the model cannot be talked into asking for someone
+else's rows:
+
+```python
+from langchain.tools import ToolRuntime
+
+from kingfisher import ToolContext
+
+
+def my_tickets(runtime: ToolRuntime[ToolContext]) -> str:
+    """List the open tickets of the user this turn runs for."""
+    caller = runtime.context.caller
+    if caller is None or "user_id" not in caller.context:
+        raise ValueError("this turn names no user")
+    return f"open tickets for {caller.context['user_id']}"
+
+
+TOOLS = [my_tickets]
+```
+
+| `caller.` | What it is |
+| --- | --- |
+| `context` | the request's `context`, as the caller sent it: names to text, read by nothing in kingfisher |
+| `source_ids` | the source ids the caller presented, without the datazone; `None` where nothing is locked, or the run is `UNSCOPED` |
+| `datazone` | the caller's datazone, or `None` |
+| `started` | when the turn started, in UTC; convert it where `context` names a timezone |
+
+A resume is handed the `context` the `Resume` presents, as it presents its
+capabilities again: the call a person approved runs for whoever resumed it.
+`caller` is `None` only for a graph built outside a turn.
+
 ## A tool that runs a command
 
 Some work should not happen in kingfisher's process: drawing a PDF page is native code
