@@ -324,7 +324,7 @@ def test_one_file_defining_a_name_twice_is_still_refused(cfg):
 
 
 def test_an_offered_tool_shadowing_a_builtin_is_still_refused(cfg, session_dir):
-    """The other collapse, which is not fixed by references: a workspace `read_file`
+    """The other collapse, which is not fixed by references: an offered `read_file`
     would take a built-in's name, and the built-in has no file to be told apart by.
     """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -354,7 +354,7 @@ def _subtractable(cfg):
 
 def test_subtracting_an_ambiguous_bare_name_is_refused(cfg):
     """The grant side refused this from the start; the subtraction side matched the bare
-    name against a workspace holding two and removed *both* without a word.
+    name against definitions holding two and removed *both* without a word.
     """
     _two_vendors(cfg)
 

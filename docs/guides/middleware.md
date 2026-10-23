@@ -5,7 +5,7 @@ class goes in a dict handed to `Kingfisher`, an agent or subagent file writes
 `middlewares: [that-name]`, and the two halves meet nowhere else.
 
 The asymmetry is the design rather than a gap. A tool or a skill is read out of
-the workspace, and the workspace is a directory the agent can write to;
+the definitions folder, which the agent's shell can write to where no fence is on;
 middleware wraps the agent that would be doing the writing. So a `middlewares/`
 directory is one the agent's shell is denied, `seed` leaves behind any definition
 naming middleware this deployment cannot build, and nothing a request carries
@@ -83,7 +83,7 @@ them shares the client. A zero-argument factory closing over the same object
 would work too, and costs you `settings:` — a factory has already chosen its
 values, so a definition writing one is refused.
 
-**A workspace file can make one of its own, and cannot share yours.** A
+**A file in the definitions folder can make one of its own, and cannot share yours.** A
 `middlewares/` module is imported once, when `Kingfisher` reads its catalogue, so
 a client made at module level there is made once too. What it cannot reach is an
 object your program already holds — the connection pool, the metrics handle the
@@ -201,9 +201,9 @@ resolved: a definition names one, and nothing would say which it got. The code
 registry is not going away — a middleware closing over a live object, a
 connection or a metrics client, cannot be a file in a directory.
 
-**A workspace middleware is not the caller's.** A definition still only names,
+**Middleware in the definitions folder is not the caller's.** A definition still only names,
 nothing a request carries can widen `middlewares`, and the file is put there by whoever
-administers the workspace. What makes this safe at all is that the definition
+administers the definitions folder. What makes this safe at all is that the definition
 roots are denied to the agent's shell — `decisions.md`, under *Confining the
 shell*. Before that, a `middlewares/` directory would have been a cap the capped
 thing could rewrite.
@@ -406,7 +406,7 @@ is built, before the model is reached. All but those two raise `CapabilityError`
 | A registry entry that cannot be called — an already-built middleware, most often | `register the class itself, or a zero-argument factory returning one`, and why one shared object would be wrong |
 | A `middlewares/` file exports something that is not an `AgentMiddleware` class | what `MIDDLEWARES` takes, refused as the directory is read rather than at the first turn |
 | Two `middlewares/` files define one name | both files, and to rename a class or give one an explicit `name` |
-| A name is both registered in code and defined in the workspace | both sources, and to rename the class or its registry key |
+| A name is both registered in code and defined in the definitions folder | both sources, and to rename the class or its registry key |
 | A definition names middleware nothing registered | `names unregistered middleware`, with what this deployment did register |
 | A definition names middleware the request withheld | `names middleware this request may not use` |
 | A definition writes a setting outside `yaml_settable` | what that entry does accept, or that it accepts nothing at all |
@@ -421,5 +421,5 @@ The last one is the deployment's mistake rather than the definition's, and it is
 worded that way: every argument the class requires belongs in `defaults`.
 
 `seed` is the one that reports rather than raises. A definition naming middleware
-this workspace cannot build is left behind with its names printed; register them
+this deployment cannot build is left behind with its names printed; register them
 and seed again with `--all`.

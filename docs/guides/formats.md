@@ -1,6 +1,6 @@
 # Writing definitions
 
-The formats a workspace can hold — an agent, a skill, a subagent, a tool —
+The formats a definitions folder can hold — an agent, a skill, a subagent, a tool —
 with every field, what it means, and worked examples you can paste. This page is
 the reference for the formats themselves, and it starts with the agent because
 that is what a request names; everything else here is something an agent selects
@@ -21,10 +21,10 @@ Seed from a directory holding `agents/`, `middlewares/`, `tools/`, `skills/` and
 `subagents/` — any of them, none required:
 
     kingfisher seed --from ./my-definitions   # or $KINGFISHER_ASSETS
-    kingfisher list                           # what the workspace offers now
+    kingfisher list                           # what the definitions offer now
 
-Nothing is loaded automatically. A definition does nothing until it is in a
-workspace catalogue, and what it says there is yours.
+Nothing is loaded automatically. A definition does nothing until it is in the
+definitions folder, and what it says there is yours.
 
 
 A request then names what it wants:
@@ -46,7 +46,7 @@ run(Request(
 
 `agent` is required; there is no default. Leaving a *capability* unset means
 *no opinion* — everything that agent declares, which is not the same as
-everything the workspace holds: an agent that names three tools cannot be asked
+everything the definitions offer: an agent that names three tools cannot be asked
 for a fourth. Passing an empty tuple means *none*. A definition file reads the
 other way round: a field it leaves out grants none. Naming something that does
 not exist raises `CapabilityError` at build time rather than running with
@@ -144,7 +144,7 @@ layout. `agents/support/triage.yaml` is still `triage`, because `name:` is the
 identity and the path is not.
 
 **A request must name one.** There is no default agent; a request without
-`agent` is refused, and the message lists what your workspace has. The agent
+`agent` is refused, and the message lists what your definitions offer. The agent
 decides where every prompt in the session goes and what it costs.
 
 **A session keeps the agent it started with.** It is resolved when the session
@@ -178,7 +178,7 @@ denied. Opening a session returns what was assembled, which is where to check.
 The third part is required: the two documents above it are written once for the
 whole deployment and neither has heard of this agent. One line is enough — say
 what this agent is and what it is careful about, and leave out anything already
-true of every agent in the workspace.
+true of every agent in the deployment.
 
 ### The fields
 
@@ -188,9 +188,9 @@ true of every agent in the workspace.
 | `description` | required | Single line. Nothing reads it at run time; it is how somebody chooses between your agents in `kingfisher list` |
 | `system_prompt` | required | This agent's own instruction, added after the two documents above. Write it as a literal block — `system_prompt: \|` — so your line breaks survive, or [long](#text-that-depends-on-the-caller--system_prompt-written-long) to say something to some callers only |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table below. `["*"]` is all of them. Unset grants **none**, as `[]` does |
-| `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does |
-| `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
-| `subagents` | optional | Subagents it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers. `builtin_tools` has to hold `task`, the tool one is called through |
+| `tools` | optional | The tools *your* definitions offer. `["*"]` is all of them. Unset grants **none**, as `[]` does |
+| `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the definitions offer. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
+| `subagents` | optional | Subagents it may consult. Unset grants **none**; `["*"]` is every subagent the definitions offer. `builtin_tools` has to hold `task`, the tool one is called through |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited, with one exception: a [portable subagent](#a-subagent-that-travels--a-subagents-entry-with-no-build), which may not write it, runs this line unless the deployment's `SubagentMiddlewares` says otherwise |
 | `model` | optional | One entry in your `models.yaml`. Unset runs the `default:` there. A list is refused |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
@@ -202,7 +202,7 @@ One rule covers every field that grants, and a subagent file follows it too:
 **leave a field out and you get none of it; write `["*"]` for everything
 available to you.** A forgotten line fails closed: the agent visibly cannot act
 on its first turn, rather than quietly holding the shell and every tool somebody
-adds to the workspace later. So an agent meant to hold every tool says so on
+adds to the definitions folder later. So an agent meant to hold every tool says so on
 both lines:
 
 ```yaml
@@ -348,7 +348,7 @@ read what a gate takes away.
 A gate on a name **only** one of those folders holds is refused instead, with that
 reason rather than as a name nothing answers to. Withholding there would empty the
 subagent of the tool it was shipped with and say nothing, and a gate on a name
-nothing else in the workspace defines is more likely a mistake than a decision.
+nothing else in the definitions offers is more likely a mistake than a decision.
 
 ### Three fields are refused
 
@@ -500,7 +500,7 @@ none of them -- a subagent that names one gets it: fetch
 unchanged: a request that withheld `execute` cannot have it handed back by a
 definition that asks.
 
-None of this appears in a workspace whose tool names are unique, which is most
+None of this appears in a definitions folder whose tool names are unique, which is most
 of them. Renaming one of the two files is still the better answer for anyone who
 controls both — this is for when nobody does.
 
@@ -565,7 +565,7 @@ needed.
 ### Two tool lists, not one
 
 `builtin_tools` is the set that comes with deepagents — the table further down
-lists them. `tools` is whatever *your* workspace defines in `tools/`.
+lists them. `tools` is whatever *your* definitions folder holds in `tools/`.
 
 They are separate because they are granted separately: on one list, a subagent
 could not ask for an offered tool without giving up every built-in.
@@ -641,7 +641,7 @@ on the spot, so every entry after the first would be unreachable.
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
 | `system_prompt` | required | The subagent's own instruction, written after `\|`, or [long](#text-that-depends-on-the-caller--system_prompt-written-long). It is sent behind the session's folders and the deployment's instructions |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table above. `["*"]` is all of them. Unset grants **none**, as `[]` does. `eval` is refused here: the code sandbox is the agent's alone, and no subagent is handed it |
-| `tools` | optional | The tools *your* workspace defines. `["*"]` is all of them. Unset grants **none**, as `[]` does. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
+| `tools` | optional | The tools *your* definitions offer. `["*"]` is all of them. Unset grants **none**, as `[]` does. An entry written `{name: x, source: bundled}` comes from this subagent's own folder instead — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it. `source: bundled` works here too. `builtin_tools` has to hold `read_file`, the tool a skill is opened with |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited. A [portable subagent](#a-subagent-that-travels--a-subagents-entry-with-no-build) is the one exception: it runs the main agent's line |
 | `subagents` | optional | Subagents this one may consult mid-job. Unset grants **none**. Any depth, no loops — see below |
@@ -1015,7 +1015,7 @@ that is paid on every listing, for a subagent the request may never activate.
 
 **A module with no `SUBAGENTS` is an error**, not a skipped file, for the reason
 a tool module without `TOOLS` is: quietly offering fewer subagents than the
-workspace defines is worse than saying so.
+folder defines is worse than saying so.
 
 ---
 
@@ -1494,7 +1494,7 @@ number, or `yes`, is refused rather than read as the text it happens to print as
 
 Two files to read alongside this section: `assets/agents/analyst.yaml` and
 `assets/subagents/auditor.yaml`. `seed` leaves them behind by default, because a lock
-switches on access control in the workspace it is copied into — `kingfisher seed
+switches on access control in the definitions folder it is copied into — `kingfisher seed
 --all` copies them when that is what you want. `subagents/quarters.py` and
 `tools/sql_query.py` are left behind for the same reason: a lock written in Python
 counts as one, and a tool's only place to write it is there.
@@ -1797,7 +1797,7 @@ see `NOT_COMPILED`.
 ### What a caller can see
 
 **Out of reach reads as not offered.** An asset a caller's source ids do not reach is
-absent from listings, from the "this workspace offers …" in a refusal, and from
+absent from listings, from the "the definitions offer …" in a refusal, and from
 the report of what a run withheld. Naming one gives the same answer naming a typo
 does, so nothing lets a caller enumerate the catalogue by guessing.
 

@@ -170,7 +170,7 @@ def _render_call(name: str, args: Mapping[str, Any]) -> str:
 #: switching on `kind` should ignore one it does not know rather than fail: this grows.
 KINDS: tuple[str, ...] = (
     # Warnings, before the model is reached and only when they apply: a path not
-    # hardened, a grant meaning less than the workspace holds, a grant this agent cannot
+    # hardened, a grant meaning less than the definitions offer, a grant this agent cannot
     # hold, a subagent that meant to run elsewhere and did not, a caller's input overwritten.
     "protect_failed",
     "withheld",

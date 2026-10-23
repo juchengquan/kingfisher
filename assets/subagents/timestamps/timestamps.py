@@ -29,7 +29,7 @@ deployment's own file is the whole of the opt-in, which is why an installed
 package cannot quietly add a subagent to anybody's catalogue.
 
 **What it carries is its own and reaches nothing else.** `iso_timestamp` below is
-not in this workspace's `tools/`, so no agent can be granted it and no request can
+not in the definitions folder's `tools/`, so no agent can be granted it and no request can
 narrow it away; it reaches this subagent and stops. The same goes for the
 `iso-8601` skill beside this file. That is what an imported subagent being
 *atomic* means: you use it, or you do not, and there is no third option where you

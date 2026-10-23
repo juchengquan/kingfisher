@@ -93,7 +93,7 @@ def test_the_skip_line_says_which_of_the_two_reasons_it_was(cfg, monkeypatch, ca
 
     printed = capsys.readouterr().out
     assert "names source_ids (" in printed
-    assert "a lock switches on access control in this workspace" in printed
+    assert "a lock switches on access control for this deployment" in printed
 
 
 def test_the_skip_message_names_no_file_to_write(cfg, monkeypatch, capsys, shipped):
@@ -1174,7 +1174,7 @@ def test_a_session_that_will_not_delete_does_not_fail_the_turn(cfg, monkeypatch,
 def test_a_policied_workspace_still_deletes_the_session_its_run_used(
     cfg, monkeypatch, capsys
 ):
-    """`_discard` opens the session `UNSCOPED`: asked as nobody, a workspace declaring
+    """`_discard` opens the session `UNSCOPED`: asked as nobody, definitions declaring
     source ids refuses it, and a finished `--delete-session` run would end on an access
     error with its session still there.
 
@@ -1184,7 +1184,7 @@ def test_a_policied_workspace_still_deletes_the_session_its_run_used(
     from kingfisher.cli import __main__ as entry
     from tests.unit.test_run import StubAgent
 
-    # The agent's own `source_ids:` is the lock, so this workspace already refuses a
+    # The agent's own `source_ids:` is the lock, so these definitions already refuse a
     # call that says nobody -- there is no policy to hand in beside it.
     agent = an_agent(cfg, source_ids="[A]")
     service = Kingfisher(cfg, graph=StubAgent("done"), sessions=LocalSessions())

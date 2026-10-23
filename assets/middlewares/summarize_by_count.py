@@ -70,8 +70,8 @@ instance is the fix, not a convenience.
     )
 
 Or not at all: `MIDDLEWARES` at the foot means `kingfisher seed` copies this file into
-a workspace like any other definition, and a deployment that wires nothing in Python
-still gets it. That is the case `wants` exists for -- a workspace file has no program
+the definitions folder like any other definition, and a deployment that wires nothing in Python
+still gets it. That is the case `wants` exists for -- a definition file has no program
 to close over.
 """
 

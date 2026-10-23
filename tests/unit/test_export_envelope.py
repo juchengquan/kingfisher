@@ -1,4 +1,4 @@
-"""What a workspace's Python modules must declare, said the same way for every kind."""
+"""What the definitions folder's Python modules must declare, said the same way for every kind."""
 
 from __future__ import annotations
 

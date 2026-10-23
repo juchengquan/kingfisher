@@ -124,7 +124,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         # assembled graph can say, so `warm` cannot. A subagent's own tools as well as the
         # catalogue's: a bundled `read_file` replaced deepagents' own in that subagent and
         # crashed every model call it made, and nothing said so -- `doctor` called the
-        # workspace healthy.
+        # definitions healthy.
         if self.catalogue.tools.found or any(
             repository.found for repository in self.catalogue.bundled_tools.values()
         ):
@@ -325,11 +325,11 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running):
         starter = "" if root is None else f", or write one:\n\n{starter_agent(root)}"
         empty = "" if offered else f" -- try {SEED_HINT}{starter}"
         if name is None:
-            msg = f"this request names no agent; this workspace offers {listing}{empty}"
+            msg = f"this request names no agent; the definitions offer {listing}{empty}"
             raise CapabilityError(msg)
         spec = offered.get(name)
         if spec is None:
-            msg = f"no agent named {name!r}; this workspace offers {listing}{empty}"
+            msg = f"no agent named {name!r}; the definitions offer {listing}{empty}"
             raise CapabilityError(msg)
         return spec
 

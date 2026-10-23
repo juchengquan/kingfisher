@@ -1,4 +1,4 @@
-"""Importing a workspace's own Python, without putting it on the import path."""
+"""Importing the definitions folder's Python, without putting it on the import path."""
 
 from __future__ import annotations
 
@@ -25,22 +25,22 @@ __all__ = [
 #: it states its exports once, in there, and nothing inside it is scanned.
 PACKAGE_MARKER = "__init__.py"
 
-#: The namespace every workspace module is imported under, only to make its name unique.
+#: The namespace every definition module is imported under, only to make its name unique.
 #: No parent package is registered: a package resolves relative imports against itself.
 _NAMESPACE = "kingfisher_workspace"
 
 
 def defined_in_a_workspace(module: str) -> bool:
-    """Whether a class with this `__module__` was written in a workspace file.
+    """Whether a class with this `__module__` was written in a definition file.
 
     Such a name is unique and meaningless, so a listing must not print it as where the
-    code is; a class imported into a workspace module keeps its own package.
+    code is; a class imported into a definition module keeps its own package.
     """
     return module == _NAMESPACE or module.startswith(f"{_NAMESPACE}.")
 
 
 class LoadError(ValueError):
-    """A workspace module could not be loaded, or should not be."""
+    """A definition module could not be loaded, or should not be."""
 
 
 def skipped(name: str) -> bool:
@@ -69,7 +69,7 @@ def modules_in(directory: Path) -> list[Path]:
 
 
 def _module_name(path: Path) -> str:
-    """A name no other workspace file can collide with."""
+    """A name no other definition file can collide with."""
     return f"{_NAMESPACE}.{path.stem}_{abs(hash(str(path)))}"
 
 
@@ -134,7 +134,7 @@ class Export:
 
 
 def exported_from(path: Path, *, where: str, declares: Export) -> Sequence[Any]:
-    """The sequence one workspace module declares, or a refusal an author can act on."""
+    """The sequence one definition module declares, or a refusal an author can act on."""
     module = load(path, declares=declares.name, error=declares.error)
     exported = getattr(module, declares.name, None)
     if exported is None:

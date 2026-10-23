@@ -143,8 +143,8 @@ class Definitions:
     def vocabulary_with(self, tools: Mapping[str, FoundTool]) -> Vocabulary | None:
         """`vocabulary`, its tools half from tools a caller has already walked.
 
-        Tolerant of a kind that will not load, as `locked_tools` is, so the listing of a
-        broken workspace still says what the rest of it locks.
+        Tolerant of a kind that will not load, as `locked_tools` is, so the listing of
+        broken definitions still says what the rest of it locks.
         """
         kinds: list[tuple[str, Mapping[str, object]]] = []
         with suppress(AgentError, SubagentError, CapabilityError):

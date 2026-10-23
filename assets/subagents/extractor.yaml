@@ -1,7 +1,7 @@
 name: extractor
 description: Reads a large or numerous set of files and returns only the facts asked for. Use to keep bulk reading out of the main context.
 # Both tool lists, because they are granted apart. `builtin_tools` is
-# deepagents' own set; `tools` is whatever this workspace defines, and an
+# deepagents' own set; `tools` is whatever the definitions offer, and an
 # empty list says none of them on purpose, where a missing line reads as one
 # forgotten. `["*"]` would make a subagent that exists to read files able to
 # fetch URLs and query databases.

@@ -351,7 +351,7 @@ def test_a_helper_nothing_defines_is_refused(cfg, session_dir):
 
 
 def test_granting_everything_reaches_the_helper_too(cfg, session_dir):
-    """`ALL` is every subagent the workspace defines, so a caller who narrowed nothing
+    """`ALL` is every subagent the definitions offer, so a caller who narrowed nothing
     has named the helper as much as anything else.
     """
     _define(cfg, REVIEWER, HELPER)

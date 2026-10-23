@@ -1,4 +1,4 @@
-"""One answer to "what does this workspace offer", not two."""
+"""One answer to "what do the definitions offer", not two."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ TOOLS = [probe_one]
 
 
 def _populate(cfg) -> None:
-    """Put one of each kind in the workspace.
+    """Put one of each kind in the definitions folder.
 
     Every axis, deliberately. Written against an empty workspace, the assertion below
     reads `() == ()` on three of the four and passes whatever the code does -- which
@@ -196,7 +196,7 @@ STARS = 'builtin_tools: ["*"]\ntools: ["*"]\n'
 
 
 def test_a_delegation_cycle_is_carried_like_any_other_failure(cfg):
-    """An inventory that says a workspace is fine while a run refuses it is the failure
+    """An inventory that says the definitions are fine while a run refuses them is the failure
     this whole file exists to prevent, and a cycle was exactly that: it is checked
     when an agent is built, and `--list` does not build one.
     """
@@ -232,7 +232,7 @@ def test_a_workspace_with_no_cycle_reports_none(cfg):
 
 
 def test_answering_leaves_no_session_behind(cfg):
-    """An agent needs a session to root its backend at, and what a workspace *offers* is
+    """An agent needs a session to root its backend at, and what the definitions *offer* is
     a question about the workspace.
     """
     before = set((cfg.workspace / "sessions").glob("*")) if (

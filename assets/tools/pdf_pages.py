@@ -110,7 +110,7 @@ def pdf_pages(
     `/scratchpad/charts.pdf`; leave it out for `/scratchpad/<name>.p<pages>.pdf`.
     """
     # Here rather than at the top: the wheel does not carry pypdf, and one tool file
-    # that fails to import refuses every tool in the workspace, not only this one.
+    # that fails to import refuses every offered tool, not only this one.
     from pypdf import PdfReader, PdfWriter  # noqa: PLC0415
     from pypdf.errors import PyPdfError  # noqa: PLC0415
 

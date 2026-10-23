@@ -379,7 +379,7 @@ OWN_TOOL_AND_SKILL = owner(skills=("sampling",))
 
 
 def workspace_with_bundle(cfg, definition=PRIVATE_OWNER, private="probe"):
-    """A workspace whose `surveyor` brings one tool of its own."""
+    """Definitions whose `surveyor` brings one tool of its own."""
     bundle = cfg.definitions / "subagents" / "surveyor"
     bundle.mkdir(parents=True, exist_ok=True)
     (bundle / "surveyor.yaml").write_text(definition, encoding="utf-8")
@@ -397,7 +397,7 @@ def workspace_with_bundle(cfg, definition=PRIVATE_OWNER, private="probe"):
 
 
 def built_subagent(cfg, session_dir):
-    """The one subagent this workspace defines, as deepagents received it."""
+    """The one subagent the definitions offer, as deepagents received it."""
     built = build_agent(
         cfg,
         backend=backend_at(cfg, session_dir),
@@ -609,8 +609,8 @@ SUBAGENTS = [
 
 
 def test_the_service_refuses_a_bundled_shadow_when_the_catalogue_defines_no_tool(cfg):
-    """`Kingfisher(...)` probes only where the workspace defines tools, and a bundle's
-    were not among them: a workspace whose only tool is a bundled `read_file` started, and
+    """`Kingfisher(...)` probes only where the definitions offer tools, and a bundle's
+    were not among them: definitions whose only tool is a bundled `read_file` started, and
     the turn that delegated was the first to find out.
     """
     from kingfisher import Kingfisher
@@ -633,7 +633,7 @@ def test_the_service_refuses_a_bundled_shadow_when_the_catalogue_defines_no_tool
 
 
 def test_doctor_names_a_bundled_tool_that_would_replace_a_built_in(cfg):
-    """It reported the workspace healthy and exited 0: `ok tools  0 in the workspace, 10
+    """It reported the definitions healthy and exited 0: `ok tools  0 in the workspace, 10
     built in`, with the bundle holding a `read_file` that crashed every model call the
     subagent made. The detail names the bundle's folder, which is the directory to go and
     open -- the tools row is the catalogue's, and a reader sent there would find nothing.
@@ -1068,7 +1068,7 @@ def test_a_subagent_file_that_will_not_parse_is_not_a_tools_failure(cfg, under_a
 
 def test_a_broken_tool_catalogue_is_not_reported_as_a_subagent_failure(cfg):
     """One unparseable module in `tools/` was named twice -- once as `tools` and once as
-    `subagent tools` -- on a workspace with no subagents at all. The second row sends a
+    `subagent tools` -- on definitions with no subagents at all. The second row sends a
     reader to the wrong directory, which is the fault `doctor` exists to avoid.
 
     The catalogue read sat inside the `try` whose exception becomes `bundles_error`,
@@ -1091,7 +1091,7 @@ def test_a_broken_tool_catalogue_is_not_reported_as_a_subagent_failure(cfg):
 def test_shadowing_says_it_was_not_checked_rather_than_that_there_is_none(cfg):
     """Empty and unknown are different answers and a mapping cannot tell them apart --
     the reason `moved_tools_checked` exists, applied to the one comparison that needs
-    the workspace catalogue.
+    the shared catalogue.
     """
     tools = cfg.catalogue_roots["tools"]
     tools.mkdir(parents=True, exist_ok=True)
@@ -1147,7 +1147,7 @@ def test_a_broken_private_tool_makes_the_listing_non_zero(cfg):
 
 
 def test_a_broken_bundle_is_reported_by_the_subagent_whose_folder_it_is_in(cfg):
-    """`probe.py: ModuleNotFoundError ...` is a basename, and a workspace may hold one
+    """`probe.py: ModuleNotFoundError ...` is a basename, and a definitions folder may hold one
     of those under every subagent -- so the reader `doctor` says this row exists for,
     the one who "has to be told which subagent to go and open", was told a filename.
     """
@@ -1176,7 +1176,7 @@ def test_the_refusal_at_startup_names_the_subagent_too(cfg):
 
 
 def test_every_broken_bundle_is_named_and_the_sound_ones_still_answer(cfg):
-    """One `try` around the whole walk gave up at the first bundle, so a workspace with
+    """One `try` around the whole walk gave up at the first bundle, so a definitions folder with
     two broken ones reported whichever came first and emptied every subagent's section
     to do it -- including the sections of the subagents that were fine.
     """
@@ -1483,7 +1483,7 @@ INHERITS_AND_OWNS_PROBE = '["*", {"name": "probe", "source": "bundled"}]'
 
 
 def compiled_bundle(cfg, *, skill=False, tools=INHERITS_AND_OWNS_PROBE):
-    """A workspace whose `surveyor` is a graph in a folder holding its own tool."""
+    """Definitions whose `surveyor` is a graph in a folder holding its own tool."""
     folder = cfg.definitions / "subagents" / "surveyor"
     (folder / "tools").mkdir(parents=True, exist_ok=True)
     (folder / "surveyor.py").write_text(COMPILED_LISTING % tools, encoding="utf-8")

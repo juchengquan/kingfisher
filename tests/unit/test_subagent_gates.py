@@ -84,7 +84,7 @@ def _session_dir(cfg, session_id: str):
 
 def test_a_subagents_gated_call_stops_the_whole_turn(cfg):
     """A gate the parent never reaches still has to stop the turn, or work delegated
-    away is work that escaped the gate -- which is the failure a workspace gating the
+    away is work that escaped the gate -- which is the failure a deployment gating the
     shell would discover by having it run.
     """
     kf = Kingfisher(cfg, graph=_parent_with("scribe"), sessions=LocalSessions())

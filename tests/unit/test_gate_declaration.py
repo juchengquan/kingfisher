@@ -125,7 +125,7 @@ def test_only_the_named_tool_is_gated(cfg, session_dir):
 
 def test_a_gate_on_a_name_no_tool_answers_to_is_refused(cfg, session_dir):
     """A typo'd gate is a gate that never fires, and an author who believes a call is
-    gated while it runs is worse off than one whose workspace refused to start.
+    gated while it runs is worse off than one whose deployment refused to start.
     """
     with pytest.raises(AgentError, match="no tool here answers to"):
         _run(cfg, session_dir, _agent(interrupt_on="[wrtie_file]"))
@@ -158,7 +158,7 @@ def test_the_gates_reach_deepagents_as_the_argument_a_subagent_inherits(
 ):
     """A subagent cannot declare `interrupt_on` -- the field is `REFUSED` in the
     subagent format -- so what it stops on has to arrive from its parent, or a
-    workspace could gate the shell and lose the gate the moment work was delegated.
+    deployment could gate the shell and lose the gate the moment work was delegated.
 
     What this checks is the agent's own argument. The pause itself is driven at the end
     of this file, where a turn runs through the service, a helper two levels down

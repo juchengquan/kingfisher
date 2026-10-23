@@ -112,7 +112,7 @@ def _middlewares(found: Inventory) -> Iterator[str]:
         yield f"  cannot load: {found.middlewares_error}"
         return
     for name, module in sorted(found.middlewares.items()):
-        # The package, or one installed by pip prints like one in this workspace.
+        # The package, or one installed by pip prints like one in the definitions folder.
         yield f"  {name}" + (f"  (from {module})" if module else "")
     if not found.middlewares:
         yield "  (none)"
@@ -466,7 +466,7 @@ def as_json(found: Inventory) -> dict[str, object]:
 
 
 def failed(found: Inventory) -> bool:
-    """Whether the listing described a workspace that does not mean what it says.
+    """Whether the listing described definitions that do not mean what they say.
 
     Not only one that will not load: an agent naming a moved tool loads and runs without
     it, and one naming an unknown subagent loads and refuses every run reaching it.

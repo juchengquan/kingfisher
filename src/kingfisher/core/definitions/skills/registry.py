@@ -167,14 +167,14 @@ class SkillRegistry:
         source, name = split_qualified(written)
         if source is not None:
             msg = (
-                f"no skill {name!r} in {source!r}; this workspace offers "
+                f"no skill {name!r} in {source!r}; the definitions offer "
                 f"{self.names}"
             )
             raise CapabilityError(msg)
 
         sources = self._sources_of(name)
         if not sources:
-            msg = f"unknown skill: {name!r}; this workspace offers {self.names}"
+            msg = f"unknown skill: {name!r}; the definitions offer {self.names}"
             raise CapabilityError(msg)
         # Several, necessarily: a new reason for `identity` to return `None` needs its own
         # branch above, or it is reported as an ambiguity.

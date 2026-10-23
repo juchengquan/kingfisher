@@ -181,7 +181,7 @@ from langchain_core.tools import tool
 
 @tool
 def always_fails(anything: str) -> str:
-    """Present so the workspace has a tool at all."""
+    """Present so the definitions offer a tool at all."""
     raise FileNotFoundError(anything)
 
 

@@ -130,7 +130,7 @@ system_prompt: |
 
 @pytest.fixture
 def ledgered(scripted):
-    """A workspace with the tools above, `researcher`, and an agent that consults it."""
+    """Definitions with the tools above, `researcher`, and an agent that consults it."""
     tools_dir(scripted).mkdir(parents=True, exist_ok=True)
     (tools_dir(scripted) / "probe.py").write_text(TOOLS, encoding="utf-8")
     subagents_dir(scripted).mkdir(parents=True, exist_ok=True)

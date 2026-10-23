@@ -88,7 +88,7 @@ def test_a_broken_subagent_does_not_take_the_agents_half_down(cfg):
     rather than raised, like every other kind's error in this record.
 
     Left to escape it would reach `doctor` and `list` as a traceback over a
-    workspace whose agents are fine, which is the incident three of the comments in
+    definitions whose agents are fine, which is the incident three of the comments in
     `inventory` record. Nothing held it: the catch could be narrowed to `AgentError`
     alone and the whole suite stayed green.
     """
@@ -243,7 +243,7 @@ def test_a_clean_catalogue_says_its_tool_references_are_fine(cfg, shipped):
 
 
 def test_doctor_names_every_definition_naming_a_subagent_there_is_not(cfg):
-    """`kingfisher list` failed on these and `doctor` called the workspace fine, so
+    """`kingfisher list` failed on these and `doctor` called the definitions fine, so
     the command whose job is to warn before a run said nothing a run would refuse.
     """
     from tests.unit.test_list import UNRESOLVED, _define

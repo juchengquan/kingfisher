@@ -24,7 +24,7 @@ MB = 1024 * 1024
 
 @pytest.fixture
 def logs(shipped):
-    """Both log tools, found the way a workspace finds them: under `logs/`."""
+    """Both log tools, found the way the definitions folder finds them: under `logs/`."""
     found = [one.tool for one in LocalToolRepository(shipped / "tools" / "logs").found]
     return {tool_name(one): getattr(one, "func", one) for one in found}
 

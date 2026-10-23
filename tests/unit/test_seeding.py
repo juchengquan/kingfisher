@@ -49,7 +49,7 @@ def test_a_seeded_skill_is_discovered(cfg):
 
 
 def _materialise(readme: str, cfg) -> None:
-    """Write the README's own inline examples into a workspace."""
+    """Write the README's own inline examples into a definitions folder."""
     import re
 
     for section in re.split(r"\n## ", readme):
@@ -167,7 +167,7 @@ def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
 
 
 def test_an_offered_tool_reaches_the_assembled_agent(cfg, fixture_pack):
-    """The whole point: a file in the workspace becomes a tool the agent has."""
+    """The whole point: a file in the definitions folder becomes a tool the agent has."""
     from tests.conftest import dispatched
 
     shutil.copytree(fixture_pack / "tools", cfg.definitions / "tools", dirs_exist_ok=True)
@@ -270,7 +270,7 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path):
     seeding.seed(cfg, source)
 
     carried = [str(p.relative_to(tools_dir(cfg))) for p in tools_dir(cfg).rglob("__pycache__")]
-    assert not carried, f"seeding carried bytecode into the workspace: {carried}"
+    assert not carried, f"seeding carried bytecode into the definitions folder: {carried}"
     assert (tools_dir(cfg) / "csv_profile" / "__init__.py").is_file(), "and the package itself"
 
 
@@ -278,7 +278,7 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path):
 #: says. Seeding reads these with a tolerant reader of its own -- it runs before
 #: there is a catalogue, so it cannot refuse a document -- and a spelling that reader
 #: stops covering does not fail: the definition reads as naming nobody and is copied
-#: into a workspace that cannot load it. Two of these four were held by nothing.
+#: into a deployment that cannot load it. Two of these four were held by nothing.
 SPELLINGS = {
     "a bare name": ("source_ids: A\n", ("A",)),
     "a list": ("source_ids: [A, B]\n", ("A", "B")),
@@ -291,7 +291,7 @@ SPELLINGS = {
 def test_every_way_of_naming_a_source_id_is_left_behind(spelling, cfg, tmp_path):
     """Driven through `seed` rather than through its reader, because what goes wrong
     is the copying: a definition whose audience this cannot see is written into a
-    workspace where the names it asks for are not declared.
+    deployment where the names it asks for are not declared.
     """
     written, expected = SPELLINGS[spelling]
     source = tmp_path / "presets"
@@ -313,7 +313,7 @@ def test_every_way_of_naming_a_source_id_is_left_behind(spelling, cfg, tmp_path)
 def test_a_definition_naming_only_a_datazone_is_left_behind(cfg, tmp_path):
     """`datazone:` was invisible to seeding, in either format: the shipped `quarters.py`
     was copied for months with nothing in seed's report naming it -- and a datazone is a
-    lock, which switches on access control in the workspace it is copied into.
+    lock, which switches on access control in the definitions folder it is copied into.
 
     One spelling and not a table: a datazone is one name, never a list, and never on an
     entry -- an agent writing one is refused, so a subagent's own field is the only place
@@ -504,7 +504,7 @@ CODE_SPELLINGS = {
 @pytest.mark.parametrize("spelling", sorted(CODE_SPELLINGS))
 def test_every_way_python_names_an_audience_is_left_behind(spelling, cfg, tmp_path):
     """Driven through `seed`, because what goes wrong is the copying: a definition whose
-    audience this cannot see is written into a workspace where the names it asks for are
+    audience this cannot see is written into a deployment where the names it asks for are
     not declared, and the whole catalogue it belongs to then refuses to load.
     """
     kind, written, source_ids, datazones = CODE_SPELLINGS[spelling]
@@ -714,7 +714,7 @@ UNREAD = {
 @pytest.mark.parametrize("spelling", sorted(UNREAD))
 def test_an_audience_seed_cannot_read_is_left_behind_as_written(spelling, cfg, tmp_path):
     """Seed took a value it could not walk for naming nobody, so a lock held in an imported
-    name, or computed, was copied into a workspace as an open definition.
+    name, or computed, was copied into a definitions folder as an open definition.
     """
     kind, written, unread = UNREAD[spelling]
     source = tmp_path / "presets"
@@ -907,7 +907,7 @@ def test_a_bundle_naming_nobody_is_copied_whole(cfg, tmp_path):
 
 def test_a_bundle_is_left_behind_for_what_its_own_tool_names(cfg, tmp_path):
     """A bundled tool's audience is only in its Python, so a bundle read for its YAML
-    alone would copy a tool into a workspace that has not declared who reaches it.
+    alone would copy a tool into a deployment that has not declared who reaches it.
     """
     source = tmp_path / "presets"
     bundle = source / "subagents" / "ledger"
@@ -1065,7 +1065,7 @@ def test_a_tools_own_json_is_not_read_as_a_definition(cfg, tmp_path):
 
     A tool shipping `{"middlewares": [...]}` beside itself is configuration for
     that tool, not a definition naming this deployment's middleware. Dropping it
-    leaves the workspace a tool that cannot start, and the skip list would not
+    leaves the definitions folder a tool that cannot start, and the skip list would not
     mention it -- that list is about definitions.
     """
     source = tmp_path / "presets"
@@ -1201,7 +1201,7 @@ def _grouped_source(tmp_path):
 
 
 def test_a_held_back_definition_is_not_reported_as_overwritten(cfg, tmp_path):
-    """A second seed warned it overwrote the workspace's own copy of a definition it held
+    """A second seed warned it overwrote the definitions folder's own copy of a definition it held
     back for its middleware, and left that copy untouched."""
     source = _grouped_source(tmp_path)
     seeding.seed(cfg, source)
@@ -1215,7 +1215,7 @@ def test_a_held_back_definition_is_not_reported_as_overwritten(cfg, tmp_path):
 
 
 def test_a_dotfile_is_not_reported_as_overwritten(cfg, tmp_path):
-    """A second seed warned it overwrote the workspace's `.DS_Store`, which the copy never
+    """A second seed warned it overwrote the definitions folder's `.DS_Store`, which the copy never
     touches."""
     source = _grouped_source(tmp_path)
     seeding.seed(cfg, source)

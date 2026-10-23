@@ -1,4 +1,4 @@
-"""Finding a workspace's own tools on disk."""
+"""Finding the offered tools on disk."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ EXPORT = "TOOLS"
 
 
 class ToolError(LoadError):
-    """A workspace's tool module could not be loaded, or should not be."""
+    """An offered tool's module could not be loaded, or should not be."""
 
 
 DECLARES = Export(EXPORT, error=ToolError, holding="tools", example="my_tool")

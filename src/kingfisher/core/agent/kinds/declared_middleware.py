@@ -59,7 +59,7 @@ def offered_middleware(
         names = ", ".join(repr(name) for name in clashing)
         msg = (
             f"middleware {names} is both registered by this deployment and defined "
-            f"in its workspace. A definition names one and there is nothing to tell "
+            f"in its definitions folder. A definition names one and there is nothing to tell "
             f"them apart, so rename the class or its registry key"
         )
         raise CapabilityError(msg)

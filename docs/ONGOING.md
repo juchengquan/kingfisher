@@ -31,11 +31,6 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 - **A second folder table.** `core/access` has the only one. Whether another folder
   gets one is judged at the next name moved inside `core/access`, by how many importers
   that move had to touch. *(2026-10-19.)*
-- **Bare "workspace" meaning the definitions folder.** The glossary says the workspace
-  is where sessions live, not where definitions are; "this workspace defines" and "this
-  workspace offers" still say otherwise in `core/access/capabilities.py`,
-  `core/agent/kinds/tools.py`, `core/service.py`, `core/inventory.py` and
-  `prompts/session.md`. *(2026-10-23.)*
 - **Endpoints whose credential is fetched in code**, with neither `key:` nor
   `key_env:`. Parked for a grilling of its own. *(2026-10-14.)*
 

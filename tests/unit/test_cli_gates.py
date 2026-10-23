@@ -666,7 +666,7 @@ def _ran_as_printed(monkeypatch, cfg, said: str, result: RunResult) -> None:
     argv = shlex.split(line.removeprefix("answer with: "))
     assert argv[0] == "kingfisher"
 
-    # The agent's own `source_ids:` is the lock, so this workspace already refuses a
+    # The agent's own `source_ids:` is the lock, so these definitions already refuse a
     # line naming nobody; the datazone the run names is one no definition requires,
     # which is held and opens nothing.
     an_agent(cfg, "only_a", source_ids="[A]")

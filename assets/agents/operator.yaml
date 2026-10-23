@@ -9,7 +9,7 @@ description: Runs commands on your behalf, stopping for a yes before each one.
 # `write_file` and `delete` are absent because the shell already covers what
 # this agent is for, and two ways to change a file means two things to gate.
 builtin_tools: [read_file, ls, glob, grep, execute]
-# Every tool the workspace defines. Said, because leaving the line out grants none.
+# Every tool the definitions offer. Said, because leaving the line out grants none.
 tools: ["*"]
 # The line this file exists to show. Every `execute` call stops and waits for
 # whoever is calling; nothing else here does.

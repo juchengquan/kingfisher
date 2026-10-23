@@ -11,7 +11,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, fields, replace
 from typing import Literal
 
-#: Everything the workspace offers, whatever that turns out to be: narrowing by it changes
+#: Everything the definitions offer, whatever that turns out to be: narrowing by it changes
 #: nothing, and it names nothing that could go stale.
 ALL: Literal["*"] = "*"
 
@@ -60,13 +60,13 @@ class Capabilities:
     """What one request may use, out of what the deployment has wired."""
 
     #: The tools deepagents brings. Separate from `tools`: this set moves when the dependency
-    #: is upgraded, deliberately, while a workspace gains a tool whenever a file is added.
+    #: is upgraded, deliberately, while the definitions gain one whenever a file is added.
     builtin_tools: Selection = ALL
-    #: The tools this workspace defines, loaded from `tools/`.
+    #: The tools the definitions offer, loaded from `tools/`.
     tools: Selection = ALL
     skills: Selection = ALL
-    #: `"*"` means everything this agent declares, a small deliberate set rather than the
-    #: workspace's, since wiring a subagent compiles a whole graph.
+    #: `"*"` means everything this agent declares, a small deliberate set rather than every
+    #: one offered, since wiring a subagent compiles a whole graph.
     subagents: Selection = ALL
     #: Middleware a definition may name, out of what the deployment registered.
     middlewares: Selection = ALL
@@ -141,7 +141,7 @@ def narrowed(selection: Selection, *, by: Selection) -> Selection:
 
 
 def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:
-    """Names the workspace offers that this grant leaves out."""
+    """Names the definitions offer that this grant leaves out."""
     if granted == ALL:
         return ()
     if granted is None:
@@ -169,7 +169,7 @@ def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, 
     if missing:
         msg = (
             f"cannot exclude unknown name(s): {', '.join(sorted(missing))}; "
-            f"this workspace offers {tuple(sorted(known))}"
+            f"the definitions offer {tuple(sorted(known))}"
         )
         raise CapabilityError(msg)
     return withheld(excluded, offered=offered)
@@ -219,7 +219,7 @@ def refuse_unoffered(
                 )
                 raise CapabilityError(msg)
         shown = listing if listing is not None else f"{tuple(sorted(known))}"
-        # `offered:`, not "this workspace offers": who owns the set differs by kind.
+        # `offered:`, not "the definitions offer": who owns the set differs by kind.
         msg = f"{subject} names unknown {kind}(s): {', '.join(unknown)}; offered: {shown}"
         raise CapabilityError(msg)
 

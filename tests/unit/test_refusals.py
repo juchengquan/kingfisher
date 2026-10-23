@@ -393,7 +393,7 @@ REFUSALS: dict[str, Refusal] = {
         1, unreachable="two of a name coexist in a catalogue on purpose; it is an agent "
                        "holding both that is refused, which is a request"),
     "core/definitions/tools/spec.py::Offering.refuse_unknown": Refusal(
-        1, unreachable="a request naming a tool the workspace does not offer"),
+        1, unreachable="a request naming a tool the definitions do not offer"),
 }
 
 

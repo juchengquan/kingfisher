@@ -156,7 +156,7 @@ def test_no_result_when_the_stream_never_finishes():
 
 
 def test_the_inventory_lists_without_a_session(cfg, capsys):
-    """`--list` describes the workspace, and a workspace has no session."""
+    """`--list` describes the definitions, and they have no session."""
     assert main.show_inventory(cfg, cfg.workspace) == 0
 
     printed = capsys.readouterr().out
@@ -463,7 +463,7 @@ def test_no_flags_leaves_every_kind_unrestricted(cfg):
     Which is what `tests/integration/driver.py "task"` was quietly sending. Measured
     against a real run: every offered tool and every skill came back as withheld on
     a command line carrying no capability flags, while this file's own docstring
-    promised that omitting a flag means everything the workspace offers.
+    promised that omitting a flag means everything the definitions offer.
     """
     # Empty, so `Capabilities(**grants)` is `Capabilities()` and every field
     # keeps its own default. That is the whole mechanism: this function says
@@ -490,7 +490,7 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg, shipped):
     assert "delete" not in builtin
     assert "read_file" in builtin
     # The other axis is untouched: subtracting a built-in says nothing about
-    # what the workspace defines, so it is absent rather than `None`.
+    # what the definitions offer, so it is absent rather than `None`.
     assert "tools" not in granted
     assert "http_fetch" not in builtin, "an offered tool leaked onto the builtin axis"
 
@@ -506,7 +506,7 @@ def test_the_two_tool_axes_subtract_independently(cfg, shipped):
     assert tools is not None
     assert "http_fetch" not in tools
     assert "csv_profile" in tools  # an offered tool, so it had to be built to be seen
-    assert "read_file" not in tools, "a builtin leaked onto the workspace axis"
+    assert "read_file" not in tools, "a builtin leaked onto the offered-tools axis"
 
 
 def test_subtracting_skills_and_subagents_too(cfg, shipped):

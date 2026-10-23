@@ -19,7 +19,7 @@ from . import importing
 from .catalogue import DEFINITION_KINDS
 from .documents import decode
 
-#: How the "this workspace is empty" messages tell a reader to fill it.
+#: How the "the definitions offer none" messages tell a reader to fill the folder.
 SEED_HINT = "`kingfisher seed --from DIR`"
 
 
@@ -115,7 +115,7 @@ HELD_BACK = {
     ),
     # A lock is in force wherever it is written, so copying one is choosing access control.
     "source_ids": (
-        "and a lock switches on access control in this workspace: every call must then "
+        "and a lock switches on access control for this deployment: every call must then "
         "say who is calling. Seed again with --all to copy it"
     ),
 }
@@ -407,7 +407,7 @@ def _read(path: Path) -> str | None:
     """One file's text, or `None` where it cannot be read.
 
     Unreadable is copied anyway: the loader reports such a file in its own words, and
-    refusing to seed over it would leave a workspace with a hole and no explanation.
+    refusing to seed over it would leave the definitions folder with a hole and no explanation.
     """
     try:
         return path.read_text(encoding="utf-8")
@@ -430,7 +430,7 @@ def _audienced(
 
 
 def _deployment_specific(path: Path, *, kind: str) -> _Wanted | None:
-    """What this file needs that a workspace may not have, or `None` for nothing."""
+    """What this file needs that a deployment may not have, or `None` for nothing."""
     if path.is_dir():
         # A package or a bundle is one definition, so it is decided as one: dropping the
         # file that names an audience and copying the rest leaves a folder that is neither.

@@ -459,7 +459,7 @@ TOOLS = [secret_export]
 
 #: One a subagent declares and no agent grants. `ceiling` narrows a subagent's tools by
 #: what reached it, so this is a name no path reaches -- and there is no such thing as a
-#: *workspace* tool only a subagent can hold. A tool of its own, in its own folder, is
+#: *offered* tool only a subagent can hold. A tool of its own, in its own folder, is
 #: the shape that exists for that, and it is listed as a private tool.
 SUBAGENT_ONLY_TOOL = UNDECLARED_TOOL.replace("secret_export", "delegated_only").replace(
     "Exports.", "Delegates."
@@ -1569,7 +1569,7 @@ def test_a_request_is_refused_a_name_only_by_an_agent_that_offers_every_subagent
     agent's ceiling, only `"*"` lets it through, and `"*"` is every subagent in reach
     -- a superset of what any other agent activates, so the union equals it. The
     other branch of that call, for a build that resolved no agent, is unreachable: a
-    workspace offering no agent refuses the turn before this.
+    definitions offering no agent refuse the turn before this.
 
     So this pins the premise instead. Widen the refusal -- let a listing agent refuse
     a name it does not declare -- and this rule goes red, which is the moment the

@@ -1,4 +1,4 @@
-"""Loading a workspace's own tools."""
+"""Loading the offered tools."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def test_a_module_contributes_the_tools_it_names(tmp_path):
 
 
 def test_a_directory_that_does_not_exist_is_not_an_error(tmp_path):
-    """Most workspaces have no tools of their own."""
+    """Most definitions folders have no tools of their own."""
     assert LocalToolRepository(tmp_path / "absent").found == ()
 
 
@@ -53,7 +53,7 @@ def test_a_module_without_an_export_list_is_refused_by_name(tmp_path):
 
 
 def test_a_module_that_cannot_be_imported_is_refused_loudly(tmp_path):
-    """Skipping it would give an agent quietly fewer tools than the workspace offers --
+    """Skipping it would give an agent quietly fewer tools than the definitions offer --
     the same failure `CapabilityError` exists to prevent.
     """
     directory = _write(tmp_path / "tools", "broken.py", "import a_module_that_is_not_installed\n")
@@ -101,7 +101,7 @@ def test_the_export_must_be_a_sequence_not_a_single_tool(tmp_path):
 
 
 def test_modules_load_in_a_stable_order(tmp_path):
-    """Two workspaces with the same files must build the same agent."""
+    """Two definitions folders with the same files must build the same agent."""
     directory = _write(tmp_path / "tools", "b_second.py", MODULE.replace("add", "beta"))
     _write(directory, "a_first.py", MODULE.replace("add", "alpha"))
 

@@ -1453,9 +1453,10 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # that is not an `AgentMiddleware` as the directory is read rather than at the
     # first turn, which cannot be done without naming the type.
     "core/definitions/middlewares": frozenset({"langchain"}),
-    # The folder itself, which holds no kind. `core.definitions.importing` loads a workspace's
-    # own Python and takes nothing but the standard library; `core.definitions.documents` reads
-    # the YAML the agent and subagent formats share, which takes the parser.
+    # The folder itself, which holds no kind. `core.definitions.importing` loads the
+    # definitions folder's Python and takes nothing but the standard library;
+    # `core.definitions.documents` reads the YAML the agent and subagent formats share,
+    # which takes the parser.
     #
     # The cost of that entry, stated rather than discovered: a sixth kind added
     # without one of its own falls through to here and inherits `yaml`, where it
@@ -3364,7 +3365,7 @@ def test_the_catalogue_holds_one_module_per_kind():
     )
 
 
-#: What sits in `core/definitions/` and is not a kind. `importing` loads a workspace's own
+#: What sits in `core/definitions/` and is not a kind. `importing` loads the definitions folder's
 #: Python without putting it on the import path, and the kind catalogues that load
 #: Python read it; `documents` reads the YAML the agent and subagent formats are
 #: written in; `fields` reads one decoded field as the value the format meant, for

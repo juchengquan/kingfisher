@@ -49,7 +49,7 @@ same two:
 **Read `skipped`, or your deployment will quietly be missing agents.** A
 definition naming middleware this deployment has not registered is refused when it
 is built, so seeding one produces a file that cannot run; one carrying a lock -- a
-source id or a datazone -- switches on access control in the workspace it lands in.
+source id or a datazone -- switches on access control in the definitions folder it lands in.
 `seed` leaves both behind and says which names each carries;
 `seed(..., everything=True)` and `kingfisher seed --all` take them once you have
 registered the middleware, or want the locks. The shipped `assets/` has several, `general`
@@ -70,7 +70,7 @@ middleware are code rather than documents, so each has its own page:
 deepagents actually does underneath it, and [`GLOSSARY.md`](GLOSSARY.md) names
 the words the code and the docs use for its parts, and the ones they avoid.
 
-`kingfisher list` shows what a workspace offers a request, kind by kind, and
+`kingfisher list` shows what the definitions offer a request, kind by kind, and
 where each one came from. `kingfisher seed` writes a starting
 definitions folder. `kingfisher sessions` shows what the workspace is holding — one line
 per session, how long it has been idle and what it costs — and `kingfisher reap`
