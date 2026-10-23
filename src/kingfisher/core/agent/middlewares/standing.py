@@ -36,9 +36,9 @@ from .narrowing import (
 )
 from .recorder import RecorderMiddleware
 from .scratch_runs import ScratchRunsMiddleware
-from .session_instructions import SessionInstructionsMiddleware
 from .signed_thinking import SignedThinkingMiddleware, signers_of
 from .step_budget import StepBudget, StepBudgetMiddleware
+from .turn_instructions import TurnInstructionsMiddleware
 
 if TYPE_CHECKING:
     from kingfisher.core.config import Models
@@ -115,8 +115,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     pdf_attachments: PdfAttachments | None = None,
     scratch_run_limit: ScratchRunLimit | None = None,
     inner: Sequence[AgentMiddleware[Any, Any, Any]] = (),
-    session_text: str | None = None,
-    session_cached: bool = True,
+    turn_text: str | None = None,
+    turn_cached: bool = True,
 ) -> list[AgentMiddleware[Any, Any, Any]]:
     """Every standing middleware for one graph, in the order it wraps it.
 
@@ -137,8 +137,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     one layer that must stay under them -- `OfferedToolFailureMiddleware`, which answers
     for what the tool raised and must not answer for them -- cannot be left off a graph.
 
-    `session_text` is what the deployment's `SessionInstructions` said for this turn, `None`
-    where it wired none; `session_cached` is false only for a helper, whose stack its
+    `turn_text` is what the deployment's `TurnInstructions` said to this graph, `None`
+    where it wired none; `turn_cached` is false only for a helper, whose stack its
     parent's own `SubAgentMiddleware` builds with no prompt caching.
     """
     if kind != "agent" and reachable is not None:
@@ -151,10 +151,10 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         )
         raise ValueError(msg)
     # Whatever this turn's text: refused only on some sessions, it would look intermittent.
-    if session_text is not None and any(m.name == CACHING for m in inner):
+    if turn_text is not None and any(m.name == CACHING for m in inner):
         msg = (
             f"{kind} middleware named {CACHING!r} replaces deepagents' prompt caching, the "
-            f"slot kingfisher sends the text of session_instructions= from, after the "
+            f"slot kingfisher sends the text of turn_instructions= from, after the "
             f"cached part of the prompt; with both, that text would never be sent. Drop the "
             f"replacement, which the plugin is there to make unnecessary, or the plugin"
         )
@@ -253,10 +253,10 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # After `inner`: in deepagents' stack it takes the caching slot by name wherever it is
     # listed, and in a helper's, which has none, it must still follow all that writes the
     # prompt.
-    if session_text:
-        standing.append(SessionInstructionsMiddleware(session_text, cached=session_cached))
+    if turn_text:
+        standing.append(TurnInstructionsMiddleware(turn_text, cached=turn_cached))
     # A deployment's own caching keeps the slot; a helper has none to take.
-    elif session_cached and not any(m.name == CACHING for m in inner):
+    elif turn_cached and not any(m.name == CACHING for m in inner):
         standing.append(PromptCachingMiddleware())
     # Last of all, under `inner`. Left out where the graph holds no offered tool: there is
     # no name for it to answer for, and a middleware that cannot act reads as one that does.

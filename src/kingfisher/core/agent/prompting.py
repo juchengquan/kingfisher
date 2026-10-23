@@ -18,9 +18,10 @@ from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Sequence
 
     from kingfisher.core.config import Config
+    from kingfisher.core.interfaces import Told
 
 BASE_PROMPT = "system.md"
 
@@ -503,3 +504,21 @@ def system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describe
         shell=shell,
         tools=None if tools is None else _DESCRIBED.intersection(tools),
     )
+
+
+#: Ahead of the labelled text a definition receives. Kingfisher's, so no deployment has to
+#: remember it: memory is a file in the session, and what is said there outlives the turn.
+LABELLED_LEAD = (
+    "What follows is about the person this turn is for. Use it to do the work; do not repeat "
+    "it in your answer, or save it to a file or to memory, unless they ask you to."
+)
+
+
+def turn_text(told: Told | None, receives: Sequence[str]) -> str | None:
+    """What one graph is sent of `told`: everything said to everyone, then the labelled text
+    it receives behind `LABELLED_LEAD`. `None` where no `TurnInstructions` is wired."""
+    if told is None:
+        return None
+    labelled = [told.labelled[one] for one in receives if told.labelled.get(one, "").strip()]
+    parts = [told.everyone.strip(), *((LABELLED_LEAD, *labelled) if labelled else ())]
+    return "\n\n".join(part.strip() for part in parts if part.strip())

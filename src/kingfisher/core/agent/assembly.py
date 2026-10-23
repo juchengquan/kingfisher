@@ -85,7 +85,7 @@ from .models import (
     summarizer_trigger,
 )
 from .permitted_backend import PermittedBackend
-from .prompting import memory_guidelines, subagent_prompt, system_prompt
+from .prompting import memory_guidelines, subagent_prompt, system_prompt, turn_text
 from .session_paths import SessionPaths
 from .tool_context import Caller, ToolContext
 from .tool_guards import guarded_tools
@@ -101,6 +101,7 @@ if TYPE_CHECKING:
         PdfAttachments,
         ScratchRunLimit,
         SubagentMiddlewares,
+        Told,
     )
     from kingfisher.core.session.ledger import Ledger
 
@@ -352,7 +353,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     caller: Caller | None = None,
     ledger: Ledger | None = None,
     instructions: str = "",
-    session_instructions: str | None = None,
+    told: Told | None = None,
     pdf_attachments: PdfAttachments | None = None,
     subagent_middlewares: SubagentMiddlewares | None = None,
     scratch_run_limit: ScratchRunLimit | None = None,
@@ -360,8 +361,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
     """Wire model, backend and checkpointer into a deep agent, and say what was wired.
 
     `ledger` is the turn's, recorded into by every graph built here; `None` records nothing.
-    `session_instructions` is the session's text for every graph but a compiled one, `None`
-    where the deployment wired no `SessionInstructions`.
+    `told` is what the deployment's `TurnInstructions` said for this turn, each graph but a
+    compiled one sent its share; `None` where it wired none.
     `pdf_attachments` is asked by every graph built here, as the ledger is recorded into,
     and `scratch_run_limit` by every one holding offered tools; `None` limits nothing.
     `subagent_middlewares` is asked of every portable subagent; `None` runs the agent's own.
@@ -539,7 +540,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             skill_sources=narrowed_sources,
             reachable=reachable,
             gated=gated,
-            session_text=session_instructions,
+            turn_text=turn_text(told, () if agent is None else agent.receives),
         )
 
     # What the probe below builds with: nothing narrowed yet, and no subagents to name.
@@ -702,7 +703,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 cfg,
                 runs=runs,
                 instructions=instructions,
-                session_text=session_instructions,
+                told=told,
                 pdf_attachments=pdf_attachments,
                 scratch_run_limit=scratch_run_limit,
                 backend=backend,
@@ -858,7 +859,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                     ),
                     tools=permitted,
                     gated=gated,
-                    session_text=session_instructions,
+                    # No definition to say `receives`, so what everyone is told.
+                    turn_text=turn_text(told, ()),
                 )
             ),
         }

@@ -105,7 +105,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     # Before the required-field check, so `nmae:` reads as a typo, not a missing `name`.
     read.refuse_unrecognised(document, known=KNOWN, declined=REFUSED)
     read.require(document, "name", "description")
-    prompt, slots = read_prompt(document, read)
+    prompt = read_prompt(document, read)
 
     # `source: shared` is accepted so an entry reads the same here as in a subagent file.
     # Absent grants none on both tool axes, as everywhere: a forgotten line fails closed.
@@ -146,8 +146,9 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     return AgentSpec(
         name=fields.text(document["name"]),
         description=fields.text(document["description"]),
-        system_prompt=prompt,
-        slots=slots,
+        system_prompt=prompt.text,
+        slots=prompt.slots,
+        receives=prompt.receives,
         builtin_tools=builtin,
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),

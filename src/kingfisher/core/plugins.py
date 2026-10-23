@@ -13,8 +13,8 @@ if TYPE_CHECKING:
         Instructions,
         PdfAttachments,
         ScratchRunLimit,
-        SessionInstructions,
         SubagentMiddlewares,
+        TurnInstructions,
         UnusedResults,
     )
 
@@ -30,7 +30,7 @@ class Plugins:
     run_events: RunEvents | None = None
     middlewares: Mapping[str, Callable[..., Any]] | None = None
     instructions: Instructions | None = None
-    session_instructions: SessionInstructions | None = None
+    turn_instructions: TurnInstructions | None = None
     unused_results: UnusedResults | None = None
     pdf_attachments: PdfAttachments | None = None
     subagent_middlewares: SubagentMiddlewares | None = None

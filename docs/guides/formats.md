@@ -168,8 +168,8 @@ reaches it. An agent's is the last of three parts:
 
 The middle part can come from code instead: `instructions=` on `Kingfisher` takes any
 object with `text(cfg) -> str`, asked once per agent built, so a change reaches the
-next turn. Text for one session rather than every one goes after all three, from
-`session_instructions=` — [`ports.md`](ports.md) says where, and why there.
+next turn. Text for one turn rather than every one goes after all three, from
+`turn_instructions=` — [`ports.md`](ports.md) says where, and why there.
 
 There is no way to replace the first. An agent without it is not leaner — it is
 one holding tools nobody told it about, discovering its permissions by being
@@ -824,6 +824,20 @@ system_prompt:
 - Every `text` is written `|`, a one-line entry too: unquoted, `text: Revenue #1 is net`
   loads as `Revenue`.
 - The short form is unchanged and still the ordinary case.
+
+`receives:` in the long form names the labelled text of the deployment's
+[`TurnInstructions`](ports.md#turninstructions--text-for-one-turn) this definition is
+sent, beside what it tells everyone — who the user is, say:
+
+```yaml
+system_prompt:
+  text: |
+    You answer questions about the user's own tickets.
+  receives: [user]
+```
+
+A label the deployment does not offer is refused at startup. This text is sent after
+the cached part of the prompt, every turn, so it cannot fill a slot.
 
 Refused when the definition loads: a `{{name}}` no slot fills — in either form, so
 doubled braces are reserved in a prompt — a slot placed nowhere, a slot inside a

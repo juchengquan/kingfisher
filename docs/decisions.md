@@ -520,14 +520,14 @@ shell paths as often as subagents did (6 in 26 calls against 12 in 60), and the 
 paragraphs describe messages a subagent never receives. A compiled subagent runs as it
 was built. *(2026-10-22.)*
 
-**A session's own text is sent after the cached part, from deepagents' caching slot.** A
+**A turn's own text is sent after the cached part, from deepagents' caching slot.** A
 deployment telling each session something of its own -- its caller, its case -- replaced
 `AnthropicPromptCachingMiddleware` to get the text past the static prompt's breakpoint:
 `Instructions` is inside that prefix, and text there that differs by session gives every
-session a cache of its own. `SessionInstructions.text(cfg, session_id)` is a plugin of
-its own rather than a second method on `Instructions`, so a deployment wanting one writes
+session a cache of its own. `TurnInstructions.text(cfg, session_id, caller)` is a plugin
+of its own rather than a second method on `Instructions`, so a deployment wanting one writes
 nothing for the other; asked once per turn, it reaches every graph `Instructions` reaches.
-`SessionInstructionsMiddleware` extends deepagents' class and takes its slot by name,
+`TurnInstructionsMiddleware` extends deepagents' class and takes its slot by name,
 marking as it does and then appending the text. A middleware of a new name lands ahead of
 the slot instead, as a `MemoryMiddleware` passed without `memory=` did. Measured on a real
 build with a recording `ChatAnthropic`, sync and async: the agent's system message is
@@ -551,6 +551,21 @@ kingfisher already depends on. Bedrock's and Fireworks' caching, which deepagent
 after Anthropic's when their packages are installed, are not installed here and were not
 measured: read off the code, with a Bedrock model Bedrock's would mark the last block it
 is handed, which is the text. *(2026-10-21.)*
+
+**Who is told what is the definition's to say, by label.** A deployment telling its agents
+who the user is wants that read by the definitions that need it and no others, and wants
+the date said to all. `TurnInstructions` answers a `Told`: `everyone`, sent to every
+graph, and `labelled`, each piece sent only to a definition naming its label under
+`system_prompt.receives`. Weighed and not taken: the hook deciding per graph by name,
+which puts agent names in deployment code where a renamed subagent silently loses its
+text; and each definition declaring what it receives in words kingfisher renders, which
+makes kingfisher model a user. Labels are checked both ways -- a definition receiving one
+the hook does not offer is refused at startup, a hook answering under one it does not
+offer is refused at the turn -- and `general-purpose`, with no definition, receives none.
+It was `SessionInstructions.text(cfg, session_id)`, renamed when it began receiving the
+turn's `Caller`. Kingfisher puts one sentence ahead of labelled text, asking the model not
+to repeat or save it unless asked, so no deployment has to remember to: wording, not
+enforcement. *(2026-10-23.)*
 
 **`TodoListMiddleware` stays standing, for now.** `build_agent` reads which tools are
 built in off the middleware its probe holds, so an offered checklist would leave the
