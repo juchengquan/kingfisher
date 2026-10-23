@@ -18,6 +18,20 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A reply cut off with no answer in it is asked again without one, after #9999
+
+- **The request that asks again after a cut reply leaves out an answer that says nothing.**
+  A reply cut off while still thinking, or while writing a call too broken to parse, used
+  to go back as an empty message, which `ChatAnthropic` skipped, so the task and the note
+  went out as two user turns. Now the note follows the task directly.
+- **A reply that wrote neither an answer nor a call is told its thinking took the output
+  limit**: `Your reply reached <limit> before you wrote any answer: your thinking took all
+  of it. Think less, and answer directly.`, followed by the same sentences about writing a
+  long part to a file. A reply cut off in its answer, or in a call too broken to parse, is
+  still told `Your answer reached <limit> and was cut off. Answer again, shorter.`
+- **The retry is given the same output reservation.** Three cut replies in a row still stop
+  the agent.
+
 ## A reply stripped down to blank text is left out too, after #9999
 
 - **A reply whose thinking is taken out and that said nothing else but blank text is left

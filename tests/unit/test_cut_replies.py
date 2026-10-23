@@ -29,6 +29,7 @@ from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import EVERY_TOOL, RecordedEvents, an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted
+from tests.unit.test_session_instructions import Sent
 
 #: The output reservation each cut reply here spent, which is what it reached.
 CAP = 32_768
@@ -353,8 +354,9 @@ def test_cut_answers_asked_again_in_the_same_call_can_stop_the_reply_after_them(
 
 
 def test_a_cut_call_too_broken_to_read_is_asked_again_like_a_cut_answer(writing):
-    """It is sent back as text alone: a call with no result beside it is refused by the
-    provider, and nothing would run it."""
+    """Its call is not sent back, since one with no result beside it is refused by the
+    provider and nothing would run it; nor is the empty answer left of it, which
+    `ChatAnthropic` skips, sending the task and the note as two user turns."""
     broken = AIMessage(
         content=[{"type": "tool_use", "id": "c1", "name": "write_file", "input": {}}],
         invalid_tool_calls=[
@@ -373,10 +375,47 @@ def test_a_cut_call_too_broken_to_read_is_asked_again_like_a_cut_answer(writing)
     result = _turn(writing, broken, AIMessage("done"))
 
     assert result.answer == "done"
-    sent = Scripted.heard[1][-2]
-    assert sent.content == ""
-    assert not sent.tool_calls
-    assert not sent.invalid_tool_calls
+    asked = Scripted.heard[1]
+    assert not any(isinstance(one, AIMessage) for one in asked)
+    assert asked[-2].type == "human", "the task, and the note straight after it"
+    assert asked[-1].content == ASKED
+
+
+#: The note for a reply that wrote nothing before the cap: its thinking took the reservation.
+ASKED_THINKING = (
+    "Your reply reached the 32,768-token output limit before you wrote any answer: your "
+    "thinking took all of it. Think less, and answer directly. If it needs the length, first "
+    "write the long part to a file under /outputs, then answer with a summary and the file's "
+    "path. Name a file only after you have written it."
+)
+
+
+@pytest.mark.parametrize(
+    "beside", [[], [{"type": "text", "text": " "}]], ids=["only-thinking", "and-blank-text"]
+)
+def test_a_reply_cut_while_thinking_is_asked_again_as_one_user_turn(cfg, session_dir, way, beside):
+    """Its empty answer went back to `ChatAnthropic`, which skipped it after joining its
+    neighbours, so the task and the note went out as two user turns, and the note told the
+    model an answer it never wrote was cut off and to make it shorter."""
+    cut = AIMessage(
+        content=[{"type": "thinking", "thinking": "a long plan", "signature": "SIG"}, *beside],
+        response_metadata={**STOPPED["anthropic"], "model_provider": "anthropic"},
+        usage_metadata={"input_tokens": 10, "output_tokens": CAP, "total_tokens": CAP + 10},
+    )
+    model = Sent(model="claude-sonnet-4-5", api_key="x", script=[cut, AIMessage("done")])
+    built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=model)
+    asked: dict[str, Any] = {"messages": [{"role": "user", "content": "summarise the report"}]}
+
+    if way == "async":
+        asyncio.run(built.graph.ainvoke(asked, context=built.context))
+    else:
+        built.graph.invoke(asked, context=built.context)
+
+    (again,) = model.sent[1]["messages"]
+    assert again["role"] == "user"
+    told = [block.get("text") for block in again["content"] if isinstance(block, dict)]
+    assert told[-1] == ASKED_THINKING
+    assert "SIG" not in json.dumps(model.sent[1]["messages"])
 
 
 def test_the_file_a_cut_answer_is_pointed_at_is_under_this_deployments_outputs(writing):

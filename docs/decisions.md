@@ -1643,7 +1643,15 @@ which would resend them; a cut call too broken to parse is asked again the same 
 call with no result beside it is refused by the provider. These hidden attempts still
 count toward three, and since their text has already streamed, a `model_call` event goes
 to langgraph's `custom` stream at the cut. *(2026-10-17, from a design session and live
-calls.)*
+calls.)* *Since 2026-10-23 a cut reply with no answer in it is asked again without one: its
+empty text went to `ChatAnthropic`, which skipped it after joining its neighbours, so the
+task and the note went out as two user turns. One that wrote neither an answer nor a call
+spent the reservation thinking, and is told so and asked to think less, where "shorter"
+named an answer it never wrote. The retry is given no more room: the reservation is the
+row's, which deepagents takes off the window to set the summariser's trigger, so a larger
+one for one call is a request the window was never budgeted for. A model whose row fixes
+its thinking budget may be cut the same way again, and the third cut stops it, as any
+other does.*
 
 **`doctor` reports a row that cannot start a turn, by building the model.** Reversed: it
 was held that building costs ~700ms of provider import against 17ms for kingfisher, and
