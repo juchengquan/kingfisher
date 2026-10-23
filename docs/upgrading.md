@@ -18,14 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
-## `kingfisher list` fails on a skill written twice, after #9999
+## `kingfisher list` fails on a skill written twice, after #1071
 
 - **`list` exits 1 where a definition names one skill twice**, bare and qualified, as
   `doctor` and startup already refuse it, and prints it under *skills named twice*. It
   exited 0 and printed the entry's audience as if it were the only one. `--json` is
   unchanged: `doubled_skills` was already there.
 
-## A session whose pin no longer reads is out of every scoped caller's reach, after #9999
+## A session whose pin no longer reads is out of every scoped caller's reach, after #1071
 
 - **A scoped `sessions()` or `session()` no longer raises over one such session.** An
   older kingfisher pinned the agent a session ran, and a lock today's reader refuses --
@@ -35,7 +35,7 @@ replaced the four layers began.
   session, and a warning on `kingfisher.core.session.methods` names its id.
 - **The operator's listing and `UNSCOPED` still reach it**, so it can be read or deleted.
 
-## Seed holds back a lock set after its value is bound, after #9999
+## Seed holds back a lock set after its value is bound, after #1071
 
 - **`IDS = []` then `IDS.append("A")` is held back.** Seed read the assignment, took `[]`
   for naming nobody, and copied the tool as open, where the loader reads `["A"]`. A name
@@ -45,7 +45,7 @@ replaced the four layers began.
   `entry["source_ids"] = [...]`, `entry.setdefault("datazone", ...)`. The skip line names
   that expression. `seed --all` still copies either.
 
-## A source id written as a number or `yes` is refused, after #9999
+## A source id written as a number or `yes` is refused, after #1071
 
 - **`source_ids: [1001]`, `[yes]` and `ToolSpec(source_ids=[1001])` no longer load.** The
   loader spelled such an entry out with `str()`, so `1001` was a lock on `"1001"` and an
@@ -56,7 +56,7 @@ replaced the four layers began.
 - **Seed copies such a file**, as it does any other the loader refuses, and the loader
   reports it.
 
-## A reply cut off with no answer in it is asked again without one, after #9999
+## A reply cut off with no answer in it is asked again without one, after #1071
 
 - **The request that asks again after a cut reply leaves out an answer that says nothing.**
   A reply cut off while still thinking, or while writing a call too broken to parse, used
@@ -70,7 +70,7 @@ replaced the four layers began.
 - **The retry is given the same output reservation.** Three cut replies in a row still stop
   the agent.
 
-## A reply stripped down to blank text is left out too, after #9999
+## A reply stripped down to blank text is left out too, after #1071
 
 - **A reply whose thinking is taken out and that said nothing else but blank text is left
   out of the request**, as one that was only thinking already was (#1064). It used to be
@@ -78,7 +78,7 @@ replaced the four layers began.
   skipping the reply, so two user turns went out in a row. A reply with tool calls is
   still sent, and the conversation keeps every reply.
 
-## Redacted thinking kept as `v1` goes back only to its signer too, after #9999
+## Redacted thinking kept as `v1` goes back only to its signer too, after #1071
 
 - **A reply kept under `output_version: v1` loses another signer's redacted thinking from
   the request.** `v1` wraps Anthropic's `redacted_thinking` as a `non_standard` block, which
@@ -86,7 +86,7 @@ replaced the four layers began.
   `v1` set sent MiniMax's redacted thinking on. Nothing to change; the conversation keeps
   the block.
 
-## A `ScratchRunLimit` grants a run only by answering `True`, after #9999
+## A `ScratchRunLimit` grants a run only by answering `True`, after #1071
 
 - **An answer that is neither `True` nor `False` refuses that graph's runs.** It was read by
   its truth, so an `async def allows` -- a coroutine, which is truthy -- handed every graph
@@ -98,7 +98,7 @@ replaced the four layers began.
 - **If yours is `async`, make it synchronous**: look the policy up before the service is
   built.
 
-## The shell may not write the workspace's retired `PROMPT.md`, after #9999
+## The shell may not write the workspace's retired `PROMPT.md`, after #1071
 
 - **On macOS the profile denies `<workspace>/PROMPT.md`**, beside `models.yaml` and the keys
   file. A start that finds that file refuses, so one session's shell writing it --
@@ -107,7 +107,7 @@ replaced the four layers began.
   permitted`. The Linux fences grant nothing above the session and needed no change.
 - **`Config.retired_prompt` is new**: that path, which the start's own check reads too.
 
-## The memory scaffold writes through no link, after #9999
+## The memory scaffold writes through no link, after #1071
 
 - **`memory/AGENTS.md` is filled only when it is missing or an empty regular file.** It was
   written through whatever stood there, so a link the shell left made or filled a file
@@ -118,7 +118,7 @@ replaced the four layers began.
   each turn still fails, in deepagents' memory load, naming the file: move the folder aside
   to use memory again.
 
-## A link out of a route is the operation's error, after #9999
+## A link out of a route is the operation's error, after #1071
 
 - **`read_file`, `write_file`, `edit_file`, `delete` and `ls` on a link out of a route's
   folder now answer an error** -- `… it is or runs through a link out of its folder, and
@@ -129,7 +129,7 @@ replaced the four layers began.
   (`kingfisher.plugins.sessions.links`), a `FilesystemBackend` with only that change. A
   deployment that reads a route's class sees the new one.
 
-## A session's folder spelled in other capitals is refused, after #9999
+## A session's folder spelled in other capitals is refused, after #1071
 
 - **A file tool's path that spells one of the session's folders in other capitals is
   refused**, naming the spelling that is: `/.HARNESS/x`, `/Inputs/x` or
