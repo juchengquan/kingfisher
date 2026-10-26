@@ -88,6 +88,10 @@ slices land.
   name they do not hold would open more. Built. The argument it settles is that this
   is the operator's answer *about* a caller rather than the caller's own view, which
   is why it carries policy a scoped listing may not.
+- [Memory kept up to date](design/2026-10-26-memory-kept-up-to-date.md) — memory as a
+  list of entries a separate writer curates at a turn's end, with what changed reported
+  and an entry forgettable from outside; then, through a store the deployment provides,
+  one memory per user across their conversations. Nothing built.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
