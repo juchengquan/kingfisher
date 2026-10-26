@@ -49,6 +49,16 @@ ABSOLUTE = (
     "optional timeout to override the default."
 )
 
+#: deepagents' word for every shell, false of kingfisher's own, which runs on the host:
+#: dropped for all of them, since a shell that is a sandbox can say so in its own line.
+SANDBOXED = " in an isolated sandbox"
+
+#: deepagents' note to whoever wires a backend, which a model holding `execute` cannot act on.
+BACKENDS_ONLY = (
+    "\n\nOnly available on backends implementing SandboxBackendProtocol; otherwise it "
+    "returns an error."
+)
+
 
 #: deepagents' longest `timeout`, which `create_deep_agent` offers no way to lower.
 _LONGEST = (
@@ -248,11 +258,17 @@ def expired_note(rounds: int) -> str:
 
 def _described(tool: Any, rule: str | None, timed: str) -> Any:
     if isinstance(tool, BaseTool) and tool.name == EXECUTE:
-        said = _timed(_ruled(tool.description, rule), timed)
+        said = _timed(_ruled(_untrue_out(tool.description), rule), timed)
         return tool.model_copy(update={"description": said})
     if isinstance(tool, dict) and tool.get("name") == EXECUTE:
-        return {**tool, "description": _timed(_ruled(tool.get("description") or "", rule), timed)}
+        said = _timed(_ruled(_untrue_out(tool.get("description") or ""), rule), timed)
+        return {**tool, "description": said}
     return tool
+
+
+def _untrue_out(description: str) -> str:
+    # Nothing in their place where deepagents rewords them: a test fails on what is left.
+    return description.replace(SANDBOXED, "").replace(BACKENDS_ONLY, "")
 
 
 def _timed(description: str, timed: str) -> str:

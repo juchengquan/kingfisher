@@ -19,7 +19,9 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.backend import folders_of
 from kingfisher.core.agent.middlewares.builtin_tools import (
     ABSOLUTE,
+    BACKENDS_ONLY,
     MAPPINGS,
+    SANDBOXED,
     BuiltinToolsMiddleware,
     _virtual,
     hint,
@@ -435,6 +437,47 @@ def test_every_shell_says_its_timeout_is_in_seconds(shelled, shell):
     assert len(offered) == 3
     for tools in offered:
         assert timeout_line(cfg.execution_timeout_s) in _execute(tools)
+
+
+@pytest.mark.parametrize("shell", ["own", "silent", "theirs"])
+def test_no_shell_is_called_a_sandbox_or_said_to_need_a_protocol(shelled, shell):
+    """deepagents called every shell "an isolated sandbox", which kingfisher's own runs on
+    the host and is not, and ended on a note to whoever wires a backend. Asked by word as
+    well as by the lines held here, so a rewording upstream is a failure, not a pass."""
+    from deepagents.middleware.filesystem import EXECUTE_TOOL_DESCRIPTION
+
+    cfg, offered = shelled
+    backends = {
+        "own": LocalSessions(),
+        "silent": LocalSessions(runner=lambda _where: Plain()),
+        "theirs": LocalSessions(runner=lambda _where: Plain(), shell_prompt=THEIRS),
+    }[shell]
+
+    _run(cfg, *_consulting("checker"), backends=backends)
+
+    assert SANDBOXED in EXECUTE_TOOL_DESCRIPTION, "deepagents reworded it"
+    assert BACKENDS_ONLY in EXECUTE_TOOL_DESCRIPTION, "deepagents reworded it"
+    assert len(offered) == 3
+    for tools in offered:
+        described = _execute(tools)
+        assert "sandbox" not in described.lower()
+        # The control: the rest of deepagents' description is still there.
+        assert "returns combined stdout/stderr with the exit code" in described
+
+
+def test_an_execute_handed_over_as_a_definition_is_corrected_the_same():
+    """A tool can reach the request as a dict, as a server-side definition does, and that
+    branch of the rewrite had nothing driving it: left alone there, it would go on calling
+    the shell a sandbox."""
+    from deepagents.middleware.filesystem import EXECUTE_TOOL_DESCRIPTION
+
+    from kingfisher.core.agent.middlewares.builtin_tools import _described
+
+    timed = timeout_line(30)
+    said = _described({"name": "execute", "description": EXECUTE_TOOL_DESCRIPTION}, None, timed)
+
+    assert "sandbox" not in said["description"].lower()
+    assert said["description"].endswith(timed)
 
 
 def test_a_subagent_is_told_the_inputs_folder_the_layout_names(shelled):

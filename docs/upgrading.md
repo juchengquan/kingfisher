@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `execute` is no longer called a sandbox, after #1093
+
+- **Two lines of `execute`'s description have gone, for every shell.** "in an isolated
+  sandbox" from its first sentence, false of kingfisher's own shell, which runs on the
+  host; and the closing "Only available on backends implementing SandboxBackendProtocol;
+  otherwise it returns an error." If you cache, diff or test the tools' descriptions,
+  `execute`'s is not the same.
+- **A shell of yours that is a sandbox can say so** in its own line,
+  `ShellPrompt(execute=...)`, which every graph holding it reads.
+
 ## The agent is not sent deepagents' host paths where its shell names the session root, after #1092
 
 - **One block of the agent's system message has gone.** deepagents' *Shell paths vs.
