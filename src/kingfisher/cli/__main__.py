@@ -295,6 +295,41 @@ def build_parser() -> argparse.ArgumentParser:
         "show what these source ids reach: comma-separated names, or UNSCOPED "
         "for the operator's view of everything",
     )
+    showing = sub.add_parser(
+        "prompt",
+        help="show what an agent's model is sent",
+        description=(
+            "Prints what an agent's first model call would be sent: the system\n"
+            "message block by block, each named for what wrote it, then every\n"
+            "tool with its description.\n"
+            "\n"
+            "Built as `run` builds it, in the session --session names, and caught\n"
+            "before the call leaves: no model is called and the session is not\n"
+            "written to. A session not there yet is made to look in, and removed."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    showing.add_argument(
+        "--agent",
+        required=True,
+        help="the agent to show (`kingfisher list` shows them)",
+    )
+    showing.add_argument(
+        "--session",
+        metavar="ID",
+        help="the session to look from, as `run --session` names one; without one, 'default'",
+    )
+    showing.add_argument(
+        "--tell",
+        metavar="TEXT",
+        help="show where `run --tell TEXT` lands",
+    )
+    showing.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the same as JSON, every tool's parameters included",
+    )
+    _add_caller(showing, _TURN_CALLER)
     fetching = sub.add_parser(
         "artifact",
         help="fetch one file a turn produced",
@@ -498,6 +533,30 @@ def _run(args: argparse.Namespace) -> int:
         held=with_datazone(args.held, args.datazone, args.extra_datazones),
         delete_session=args.delete_session,
     )
+
+
+#: The task `prompt` builds with. It reaches only the user message, which is not printed.
+LOOKING = "(kingfisher prompt: nothing is run)"
+
+
+def _prompt(args: argparse.Namespace) -> int:
+    """Print what an agent's first model call would be sent, without making it."""
+    if args.tell is not None and not args.tell.strip():
+        print(EMPTY_TELL, file=sys.stderr)
+        return 2
+    from .sent import as_document, render  # noqa: PLC0415
+
+    kf = _configured(config_from_env(), tell=args.tell)
+    sent = kf.sent(
+        Request(task=LOOKING, agent=args.agent, session_id=args.session),
+        source_ids=with_datazone(args.held, args.datazone, args.extra_datazones),
+    )
+    if args.json:
+        print(json.dumps(as_document(sent), indent=2))
+    else:
+        for line in render(sent):
+            print(line)
+    return 0
 
 
 def _configured(cfg: Config, *, log: Path | None = None, tell: str | None = None) -> Kingfisher:
@@ -1053,6 +1112,7 @@ HANDLERS = {
     "list": lambda args: _list(
         as_document=args.json, held=with_datazone(args.held, args.datazone, args.extra_datazones)
     ),
+    "prompt": _prompt,
     "sessions": lambda args: _sessions(as_document=args.json),
     "artifact": _artifact,
     "reap": _reap,

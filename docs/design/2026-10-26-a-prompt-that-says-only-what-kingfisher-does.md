@@ -1,6 +1,6 @@
 # A prompt that says only what kingfisher does
 
-**Status:** proposed. Nothing built.
+**Status:** proposed. Slice 1 landed in #1091; slices 2–7 are not built.
 **Date:** 2026-10-26.
 **Occasion:** the owner asked whether the default system prompt could shrink so that
 clients decide more of it. Measured first, on a real build with a model that records
@@ -31,6 +31,9 @@ Measured, at four characters a token:
 Of the 5.4k, kingfisher's own sections are about 2.3k. The memory block is about 1.4k,
 the host-path block about 900 in a pytest tree, deepagents' skills block about 500 and
 langchain's `write_todos` block about 340. `write_todos`' description alone is about 970.
+With the code interpreter on, langchain-quickjs adds its instructions for `eval` as a
+block of its own: 18,894 characters for the shipped `scribe`, the largest there is,
+measured with `kingfisher prompt` once slice 1 landed.
 
 ## What goes wrong
 
@@ -63,6 +66,7 @@ langchain's `write_todos` block about 340. `write_todos`' description alone is a
    alone: the per-call blocks and the profile suffix come after it, and nothing in
    `src/` reads it. `formats.md`'s "Opening a session returns what was assembled, which
    is where to check" does not hold. Every figure above came from a test-suite build.
+   Slice 1 answers this.
 5. **The model's name picks text nobody chose.** deepagents 0.7.22 registers profiles
    for `anthropic:claude-haiku-4-5`, `anthropic:claude-sonnet-4-6` and
    `anthropic:claude-opus-4-7`, besides an OpenAI Codex and an NVIDIA Nemotron one. A
@@ -128,7 +132,9 @@ similarity of 0.29) and `read_file`'s, `task`'s, `execute`'s and `edit_file`'s c
 too, so an owned copy goes stale with its tool, and a wrong fact about a tool is what
 the rule exists to stop. `SKILLS_SYSTEM_PROMPT` did not change between them.
 `write_todos` stays langchain's: a client removes it by not granting the tool, and its
-text goes with it. Not taken: deepagents' `HarnessProfile.tool_description_overrides`,
+text goes with it. The interpreter's instructions are `eval`'s manual, and stay
+langchain-quickjs's on the same footing; a deployment leaves them out by leaving the
+interpreter off. Not taken: deepagents' `HarnessProfile.tool_description_overrides`,
 which is beta, registered for the whole process under a model's name, and would change
 every other deepagents agent the process runs.
 
@@ -184,8 +190,9 @@ than one turn in three. These are not permanent evals.
 One pull request each, off main, in this order, each merged before the next starts:
 most of them touch `prompting.py` or the prompt files.
 
-1. **`kingfisher prompt`.** Its guide section names the profile suffix and how to clear
-   it, and `formats.md`'s "where to check" points at the command.
+1. **`kingfisher prompt`.** Landed in #1091 as `Kingfisher.sent`, with the command
+   printing it; *Seeing what the model is sent* in `formats.md` names the profile suffix
+   and how to clear it, and the decision is under *The command line*.
 2. **The host-path block**, out wherever the shell names its session root, and the
    2026-10-15 entry updated.
 3. **`execute`'s false lines.**

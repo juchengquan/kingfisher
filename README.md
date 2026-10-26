@@ -71,7 +71,9 @@ deepagents actually does underneath it, and [`GLOSSARY.md`](GLOSSARY.md) names
 the words the code and the docs use for its parts, and the ones they avoid.
 
 `kingfisher list` shows what the definitions offer a request, kind by kind, and
-where each one came from. `kingfisher seed` writes a starting
+where each one came from. `kingfisher prompt --agent NAME` shows what that agent's
+model is sent, block by block and named for what wrote each, without calling it --
+`kf.sent(request)` from Python. `kingfisher seed` writes a starting
 definitions folder. `kingfisher sessions` shows what the workspace is holding — one line
 per session, how long it has been idle and what it costs — and `kingfisher reap`
 deletes the ones it is finished with. `kingfisher artifact --session ID

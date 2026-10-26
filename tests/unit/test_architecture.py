@@ -2001,6 +2001,12 @@ WITNESSES: dict[str, dict[str, str]] = {
         "STOP_REASONS": "embedder",
         # What `Kingfisher.sessions()` and `session()` return.
         "Session": "embedder",
+        # What `Kingfisher.sent` answers, the block and tool it is made of, and every
+        # source a block can name, which `formats.md` writes out and a caller branches on.
+        "Sent": "embedder",
+        "SentBlock": "embedder",
+        "SentTool": "embedder",
+        "SENT_SOURCES": "document",
         # The four an approval gate needs. A turn that stops at one hands back
         # `PendingDecision`s on its result and cannot be continued without a `Resume`
         # carrying `Decision`s -- so a consumer that cannot name all three cannot answer

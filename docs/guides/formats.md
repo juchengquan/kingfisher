@@ -173,12 +173,66 @@ next turn. Text for one turn rather than every one goes after all three, from
 
 There is no way to replace the first. An agent without it is not leaner — it is
 one holding tools nobody told it about, discovering its permissions by being
-denied. Opening a session returns what was assembled, which is where to check.
+denied. `kingfisher prompt` shows what an agent is sent, which is where to check;
+[*Seeing what the model is sent*](#seeing-what-the-model-is-sent) says how.
 
 The third part is required: the two documents above it are written once for the
 whole deployment and neither has heard of this agent. One line is enough — say
 what this agent is and what it is careful about, and leave out anything already
 true of every agent in the deployment.
+
+### Seeing what the model is sent
+
+    kingfisher prompt --agent analyst --session s1 --tell "Today is the 26th."
+
+prints what that agent's first model call would be sent, without making it: the system
+message block by block, each headed by what wrote it, then every tool with its
+description. It is built as `run` builds it — in that session, for the caller `--as`
+names, under the deployment's grant — and nothing is written to the session; one not
+there yet is made to look in and removed. `--json` gives a script the same, every
+tool's parameters included.
+
+The command builds its `Kingfisher` from the environment, so it holds none of the
+plugins a deployment wires in code. Ask your own instead, with the request a turn
+would be handed:
+
+```python
+from kingfisher import Request
+
+sent = kingfisher.sent(Request("go", agent="analyst", session_id="s1"))
+for block in sent.system:
+    print(block.source, len(block.text))
+```
+
+`asent` is the same on an event loop. Each block's `source` is a key of
+`SENT_SOURCES`:
+
+| `source` | Written by |
+| --- | --- |
+| `kingfisher` | kingfisher: the harness, `INSTRUCTIONS.md` and the agent's `system_prompt` |
+| `profile` | deepagents, for the model the agent runs — see below |
+| `host_paths` | deepagents, where the shell runs on this host: each folder's path there |
+| `write_todos` | langchain, where `write_todos` is held |
+| `skills` | deepagents, the skills index |
+| `interpreter` | langchain-quickjs, where the code interpreter is on: how `eval` works |
+| `turn` | the deployment's `TurnInstructions`, which `run --tell` is for the command |
+| `memory` | the session's memory file, in kingfisher's guidelines |
+| `unknown` | a middleware of your own, or one kingfisher does not recognise |
+
+**A `profile` block is advice deepagents keeps for some models**, appended to the
+agent's prompt and to each subagent whose model has one: for `claude-sonnet-4-6`, among
+others, about parallel tool calls and reading before answering. kingfisher leaves it
+alone. To take it away, register an empty one before the first turn, under the provider
+and the model's id as your `models.yaml` sends it:
+
+```python
+from deepagents import HarnessProfile, register_harness_profile
+
+register_harness_profile("anthropic:claude-sonnet-4-6", HarnessProfile(system_prompt_suffix=""))
+```
+
+It is registered for the whole process, so any other deepagents agent there loses the
+advice too.
 
 ### The fields
 
