@@ -1,6 +1,6 @@
 # A prompt that says only what kingfisher does
 
-**Status:** proposed. Slices 1–5 landed in #1091 to #1094 and #1097; slices 6 and 7 are not built.
+**Status:** proposed. Slices 1–6 landed in #1091 to #1094, #1097 and #1098; slice 7 is not built.
 **Date:** 2026-10-26.
 **Occasion:** the owner asked whether the default system prompt could shrink so that
 clients decide more of it. Measured first, on a real build with a model that records
@@ -207,9 +207,10 @@ most of them touch `prompting.py` or the prompt files.
    section out, the shell's skills sentence in every index of a graph holding the shell,
    and the host-path block out of subagents where that sentence says how to reach the
    catalogue.
-6. **Identity and conduct out**: the identity line, *Deciding when to act*, the first and
-   last paragraphs of *Finishing*, and the three kinds of sentence above; the shipped
-   agents fitted; the upgrading note quoting what went.
+6. **Identity and conduct out.** Landed in #1098: the identity line, *Deciding when to
+   act*, the first and last paragraphs of *Finishing* (whose rule on requested files is
+   *Files a request names* until slice 7 moves it), and the three kinds of sentence above;
+   `general` and `analyst` fitted; the upgrading note quotes what went.
 7. **Structure**: `system.md` dissolved and the client's text first, for agents and
    subagents; `general.yaml`'s "added to the harness prompt that already told you" and
    `formats.md`'s three parts reworded.

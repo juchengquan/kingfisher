@@ -595,7 +595,7 @@ def test_deepagents_host_paths_reach_only_a_shell_on_this_host(shelled, backends
     assert len(systems) == 3
     assert [MAPPINGS in system for system in systems] == [told, told, told]
     # Only the section goes: the rest of what each was told is still there.
-    assert "You are kingfisher" in systems[0]
+    assert "## The session" in systems[0]
     assert "You check." in systems[1]
 
 

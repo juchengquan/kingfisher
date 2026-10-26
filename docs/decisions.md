@@ -497,6 +497,27 @@ empty for a portable entry that brought nothing. It is still a rule about shape,
 origin: the reader sets it for every entry without a `build`, imported or typed in place.
 *(2026-10-21.)*
 
+**The harness prompt says only what kingfisher's running makes true.** It opened every
+agent's prompt as "kingfisher, a general-purpose agent", ahead of the agent's own, and told
+every agent how to behave: when to act and when to stop, that nobody was watching the run,
+to match the effort to the question, to answer rather than write files, and to trace every
+claim. None of it came from a measured failure -- all of it was in the first skeleton --
+and the shipped `operator`, whose every command a person approves, was told nobody was
+watching. So kingfisher states a fact only where the model would get it wrong because of
+how kingfisher runs the turn and nothing else would tell it, and who the agent is and how
+it behaves are its own prompt's and the deployment's instructions' to say. The behaviour
+went to the shipped agents it fits, `general` and `analyst`, in their words; `operator` and
+`scribe` already said their own. Not taken: a seeded `INSTRUCTIONS.md` carrying it, or a
+part a deployment may replace that defaults to today's text, either of which keeps
+kingfisher speaking unless every client opts out. Within the facts, three kinds of sentence
+went and nothing else: one restating a fact said beside it, one explaining a hazard a
+guard has since prevented, and advice riding on a fact. What was added after a measured
+failure stays. Measured on MiniMax-M3 with an agent whose whole prompt was "You do the
+task you are given", three turns each way of a question about an input file that an
+answer settles, and of the smoke: every answer was right and none left a file in
+`/outputs`, with the behaviour in the harness and without it, and all six smokes passed.
+*(2026-10-26.)*
+
 **`general-purpose` is told the deployment's instructions, as a declared subagent is.**
 kingfisher supplies it, to carry the standing middleware, and supplied it with deepagents'
 bare prompt, so a turn delegated to it escaped every house rule a declared subagent was
@@ -2950,7 +2971,9 @@ it. **The prompt is the half that matters**, since a refusal is a call already s
 and of the folders the prompt named, `/skills` was the only one refused without saying
 so, in a section that tells the model to prefer an existing procedure over inventing one.
 What to do instead is an answer rather than a file, since *Finishing* tells the model not
-to manufacture files nobody asked for and a corrected copy of a skill would be one. Not
+to manufacture files nobody asked for and a corrected copy of a skill would be one. *Since
+2026-10-26 the skills index says it itself, "Say what a procedure should say differently in
+your answer", and *Finishing* no longer says anything of files nobody asked for.* Not
 taken: a reason per scope, which belongs where the folder is introduced; or matching the
 rule that refused, which deepagents reports on `delete` alone. The coupling is
 deepagents' wording, which `test_a_refused_write_says_where_a_write_may_go` drives for

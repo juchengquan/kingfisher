@@ -1783,3 +1783,23 @@ def test_the_shipped_analyst_tells_each_caller_what_its_grant_reaches(shipped):
     assert "does not reach the database" in audit and "sql_query`. Use it" not in audit
     assert "fiscal year starts on 1 April" in emea
     assert "{{" not in sales + audit + emea
+
+
+def _prompt_of(name: str) -> str:
+    """A shipped agent's own prompt, as written, slots and all."""
+    written = yaml.safe_load(
+        (repository_root() / "assets" / "agents" / f"{name}.yaml").read_text(encoding="utf-8")
+    )["system_prompt"]
+    return " ".join((written["text"] if isinstance(written, dict) else written).split())
+
+
+def test_what_the_harness_stopped_saying_is_said_by_the_agents_it_fits():
+    """The behaviour the harness prompt dropped went to the shipped agents it fits, and
+    only to those: `operator`'s every command is approved by a person, so it is not told
+    nobody is watching, which the harness told it until the harness said nothing of it."""
+    assert "Nobody is watching a run" in _prompt_of("general")
+    assert "Write a file only when the caller asks for one" in _prompt_of("general")
+    assert "The answer is the deliverable" in _prompt_of("analyst")
+    assert "Nobody is watching" not in _prompt_of("operator")
+    # The control: the operator's own prompt is read, and says who watches.
+    assert "they see each one before it runs" in _prompt_of("operator")

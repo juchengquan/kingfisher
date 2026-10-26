@@ -62,7 +62,8 @@ memory: false
 # `sales_bd` would be a sentence never sent.
 system_prompt:
   text: |
-    You answer questions about the data in this workspace.
+    You answer questions about the data in this workspace. The answer is the
+    deliverable: write a file only when the caller names one.
 
     {{access}}
 
