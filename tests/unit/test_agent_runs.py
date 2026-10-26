@@ -103,8 +103,9 @@ def test_a_request_narrows_the_agent_and_cannot_widen_it(cfg, session_dir):
     assert "execute" not in held, "a request reached past what the agent declared"
 
 
-def test_the_agents_prompt_is_added_after_the_harness_and_the_instructions(cfg):
-    """Three parts, most specific last."""
+def test_the_agents_prompt_comes_first_then_the_instructions_then_the_harness(cfg):
+    """Three parts, most specific first: the client's own text opens the prompt, ahead of
+    kingfisher's account of the session."""
     assembled = system_prompt(
         cfg, "You read files and say what is in them.", instructions="House rule: be terse."
     )
@@ -112,7 +113,7 @@ def test_the_agents_prompt_is_added_after_the_harness_and_the_instructions(cfg):
     harness = assembled.index("/inputs")
     house = assembled.index("House rule")
     mine = assembled.index("You read files")
-    assert harness < house < mine
+    assert mine < house < harness
 
 
 def test_the_agent_runs_the_model_its_file_names(cfg, session_dir):

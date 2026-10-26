@@ -88,7 +88,7 @@ def test_a_build_hands_the_instructions_to_every_subagent(cfg, session_dir):
     )
 
     told = subagent_of(built, "helper")["system_prompt"]
-    assert told.index("House rule: cite every figure.") < told.index("You check figures.")
+    assert told.index("You check figures.") < told.index("House rule: cite every figure.")
 
 
 def test_a_prompt_left_in_the_workspace_is_refused(cfg):

@@ -545,12 +545,12 @@ def test_the_unfenced_shell_keeps_the_runner_contract(cfg, session_dir):
         check(lambda: _ThroughExecute(backend))
 
 
-# -- writes: the rules system.md only asked for ---------------------------
+# -- writes: what the fence holds, whatever the prompt says -----------------
 
 
 @macos
 def test_the_shell_cannot_write_outside_the_workspace(cfg, session_dir):
-    """`system.md` says to stop and report rather than reach outside the workspace."""
+    """The shell is held inside the workspace by the fence, not by anything it is told."""
     target = Path.home() / ".kingfisher-write-probe"
     backend = backend_at(cfg, session_dir)
     try:

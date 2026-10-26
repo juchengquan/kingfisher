@@ -107,7 +107,8 @@ def test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_on
 ):
     """deepagents tells `execute`'s holder to use absolute paths, and the only absolute
     paths a model knows are the file tools': the shipped `reviewer`, a subagent and so
-    never shown `system.md`, ran `open('/inputs/cars.csv')` in the shell and failed.
+    never shown the harness's shell section, ran `open('/inputs/cars.csv')` in the shell
+    and failed.
     """
     cfg, offered = shelled
     rule = execute_line(kingfishers_shell(), DEFAULT_LAYOUT)

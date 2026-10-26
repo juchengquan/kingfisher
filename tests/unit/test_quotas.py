@@ -116,7 +116,7 @@ def test_being_cut_short_keeps_the_work(cfg):
 
 def test_the_caller_is_told_rather_than_left_to_guess(cfg):
     """An answer that quietly overstates what was checked is worse than one that admits
-    a gap -- which is what system.md already tells the agent.
+    a gap, and the caller is owed the same of a quota.
     """
     kf = Kingfisher(
         replace(cfg, turn_timeout_s=0),

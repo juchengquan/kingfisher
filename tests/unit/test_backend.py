@@ -255,7 +255,7 @@ def test_the_host_roots_are_the_prefixes_this_repository_says_they_are():
 
 
 def test_other_host_roots_are_refused_too(cfg, session_dir):
-    """`/tmp/scratch.py` is the example system.md warns about by name.
+    """`/tmp/scratch.py` is the example the file tools' section warns about by name.
 
     One backend for all of them: every case refuses, so nothing is written and no
     iteration can leave anything for the next.

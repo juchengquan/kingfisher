@@ -294,7 +294,7 @@ class RunEvent:
 #: Where a block of the system message came from, and what that is. Matched on what each
 #: source writes, so a block a deployment's own middleware adds is `unknown`, not guessed.
 SENT_SOURCES: Mapping[str, str] = {
-    "kingfisher": "the harness, the deployment's instructions and the agent's own prompt",
+    "kingfisher": "the agent's own prompt, the deployment's instructions and the harness",
     "profile": "deepagents' harness profile for this model",
     "host_paths": "deepagents: where the shell finds each folder on this host",
     "write_todos": "langchain: how to use write_todos",

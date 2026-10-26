@@ -94,7 +94,7 @@ def filesystem_consistency(make: Callable[[], Any]) -> None:
 
 
 def offloads_in_the_scratchpad(make: Callable[[], Any]) -> None:
-    """deepagents' own files land where `system.md` tells the agent they are.
+    """deepagents' own files land where the prompt tells the agent they are.
 
     The history the summarizer keeps goes under the backend's `artifacts_root`, which
     defaults to `/`. `WorkspaceScopedBackend` sets it, so a subclass passes; a

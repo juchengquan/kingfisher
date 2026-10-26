@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 
     from kingfisher.core.config import Config
 
-BASE_PROMPT = "system.md"
-
 #: A `{{leaf}}` placeholder in the shipped markdown, filled by name rather than by
 #: replacing default paths: `/scratchpad` is a prefix of `/scratchpad/tool_results`.
 #: Anything between doubled braces, so `{{ inputs }}` is refused rather than reaching
@@ -39,17 +37,11 @@ SKILLS_FILE = "skills.md"
 #: The variable a shell reaching the catalogue exports it as.
 SKILLS_VAR = "KINGFISHER_SKILLS"
 
-#: Where the session's folders are described: the one part of the harness every subagent
+#: What the session's folders are for: the one part of the harness every subagent
 #: kingfisher builds is handed too, from this one file, so the two cannot drift apart.
-SESSION_MARKER = "<!-- session -->"
 SESSION_FILE = "session.md"
 
-#: Where the shell's own section is spliced in. The rest of `system.md` says nothing
-#: about the shell, because what is true of one depends on what runs it.
-SHELL_MARKER = "<!-- shell -->"
-
-#: Where the file tools' section is spliced in, naming those the agent holds.
-FILE_TOOLS_MARKER = "<!-- file tools -->"
+#: The file tools' section, naming those the agent holds.
 FILE_TOOLS_FILE = "file_tools.md"
 
 #: The names of deepagents' file tools and shell and of langchain's checklist, spelt
@@ -72,11 +64,9 @@ _DESCRIBED = frozenset((*FILE_TOOLS, EXECUTE))
 
 #: Where a deployment that wants results cited says the model may. Permission, not an
 #: instruction: told to, the model hangs an id on every claim whether the reader wants one.
-CITING_MARKER = "<!-- citing -->"
 _CITING = "You can cite it by that id when you rely on that result."
 
-#: Where the paragraphs on seeing a saved result again are spliced in.
-TOOL_RESULTS_MARKER = "<!-- tool results -->"
+#: What the agent's results are recorded as, and how one is seen again.
 TOOL_RESULTS_FILE = "tool_results.md"
 
 #: A sentence for each way to read a saved result back, and every tool it needs: `glob`
@@ -313,21 +303,23 @@ def _expiring(rounds: int | None) -> str:
 
 
 def _tool_results(
-    held: tuple[str, ...], layout: Layout, *, shelled: bool, rounds: int | None
+    held: tuple[str, ...], layout: Layout, *, shelled: bool, rounds: int | None, cites: bool
 ) -> str:
-    """The paragraphs on seeing a saved result again, naming only the tools in `held`."""
+    """What the agent's results are recorded as, and how one is seen again, naming only the
+    tools in `held`."""
     told = [said for needs, said in _READING if all(name in held for name in needs)]
     unread = _AGAIN if shelled else _UNREAD
     return _filled(
         TOOL_RESULTS_FILE,
         layout,
+        citing=_CITING if cites else "",
         reading=_fill("\n".join(told) or unread, layout, TOOL_RESULTS_FILE),
         expiring=_expiring(rounds),
         recovering=_RECOVERING[READ_FILE in held],
     ).strip()
 
 
-#: Enough for a fleet: `extra` carries the running agent's line, so there is a key per
+#: Enough for a fleet: `ahead` carries the running agent's line, so there is a key per
 #: agent a process serves. `layout` and `shell` are in the key because two layouts or
 #: two shells must not be handed one prompt.
 @lru_cache(maxsize=32)
@@ -335,50 +327,40 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     *,
     cite_results: bool = True,
     keep_results_rounds: int | None = None,
-    extra: str = "",
+    ahead: str = "",
     layout: Layout,
     shell: ShellPrompt | None = None,
     tools: frozenset[str] | None = None,
 ) -> str:
-    """Assemble the prompt for the capabilities that are actually wired.
+    """The prompt: `ahead`, the client's own text, then the harness for the capabilities
+    that are actually wired.
 
     `shell` is what the shell running `execute` says of itself, and `None` is one that
     says nothing. `tools` is what the agent was granted, and `None` is everything: a
     tool it does not hold is not described, since a model told of one calls it.
     """
-    base = _filled(BASE_PROMPT, layout)
-    for marker in (
-        SESSION_MARKER,
-        FILE_TOOLS_MARKER,
-        SHELL_MARKER,
-        CITING_MARKER,
-        TOOL_RESULTS_MARKER,
-    ):
-        if marker not in base:  # pragma: no cover -- guards a silent edit
-            msg = f"{BASE_PROMPT} is missing the {marker} marker"
-            raise ValueError(msg)
-
     held = _held(tools)
     shelled = tools is None or EXECUTE in tools
-    assembled = _joined(
-        base.replace(SESSION_MARKER, session_section(layout))
-        .replace(FILE_TOOLS_MARKER, _file_tools(held, layout))
-        .replace(SHELL_MARKER, _said(shell, "prompt", layout) if shelled else "")
-        .replace(CITING_MARKER, _CITING if cite_results else "")
-        .replace(TOOL_RESULTS_MARKER, _tool_results(
-            held, layout, shelled=shelled, rounds=keep_results_rounds
-        )),
-        extra,
+    harness = "\n\n".join(
+        part
+        for part in (
+            session_section(layout),
+            _file_tools(held, layout),
+            _said(shell, "prompt", layout) if shelled else "",
+            _tool_results(
+                held, layout, shelled=shelled, rounds=keep_results_rounds, cites=cite_results
+            ),
+        )
+        if part
     )
-    # Removing a marker leaves a run of blank lines behind.
-    return re.sub(r"\n{3,}", "\n\n", assembled).strip() + "\n"
+    # A blank left empty leaves a run of blank lines behind.
+    return re.sub(r"\n{3,}", "\n\n", _in_order(ahead, harness)).strip() + "\n"
 
 
-def _joined(prompt: str, extra: str) -> str:
-    """Two prompt parts, separated the one way this codebase separates them."""
-    if not extra.strip():
-        return prompt
-    return f"{prompt.strip()}\n\n---\n\n{extra.strip()}"
+def _in_order(*parts: str) -> str:
+    """Prompt parts in the order given, separated the one way this codebase separates them,
+    an empty one left out."""
+    return "\n\n---\n\n".join(part.strip() for part in parts if part.strip())
 
 
 class InstructionsFile:
@@ -405,15 +387,6 @@ def refuse_a_workspace_prompt(cfg: Config) -> None:
             f"{cfg.authored_files[INSTRUCTIONS_FILE]}, beside the definitions, and delete it"
         )
         raise ConfigError(msg)
-
-
-def behind_instructions(prompt: str, instructions: str) -> str:
-    """`prompt`, behind the deployment's instructions if it has any.
-
-    Empty instructions leave `prompt` exactly as it was: `_joined` collapses an empty
-    *trailing* part, and this one leads.
-    """
-    return _joined(instructions, prompt) if instructions.strip() else prompt
 
 
 def skills_index(layout: Layout, shell: ShellPrompt | None, *, shelled: bool) -> str:
@@ -467,13 +440,13 @@ def miscased_path(where: str, meant: str) -> str:
 
 
 def subagent_prompt(prompt: str, instructions: str, layout: Layout) -> str:
-    """A subagent's prompt, in the agent's order: the session's folders, the deployment's
-    instructions, then its own.
+    """A subagent's prompt, in the agent's order: its own, the deployment's instructions,
+    then the session's folders.
 
     Left to guess, a subagent saves to `/outputs` whatever the layout calls it, and nothing
-    reports what lands there. The rest of `system.md` stays the agent's: `decisions.md` says why.
+    reports what lands there. The rest of the harness stays the agent's: `decisions.md` says why.
     """
-    return _joined(session_section(layout), behind_instructions(prompt, instructions))
+    return _in_order(prompt, instructions, session_section(layout))
 
 
 def system_prompt(
@@ -483,8 +456,8 @@ def system_prompt(
     instructions: str = "",
     tools: Collection[str] | None = None,
 ) -> str:
-    """The assembled prompt: the harness, then the deployment's instructions, then the
-    agent's own line.
+    """The assembled prompt: the agent's own line, then the deployment's instructions, then
+    the harness.
 
     `shell` is what the backend's shell says of itself, which only the backend knows.
     `tools` is the agent's allowlist, `None` where nothing narrows it.
@@ -492,7 +465,7 @@ def system_prompt(
     return render_system_prompt(
         cite_results=cfg.cite_results if cfg else True,
         keep_results_rounds=cfg.keep_results_rounds if cfg else None,
-        extra=behind_instructions(agent, instructions),
+        ahead=_in_order(agent, instructions),
         layout=cfg.layout if cfg else DEFAULT_LAYOUT,
         shell=shell,
         tools=None if tools is None else _DESCRIBED.intersection(tools),

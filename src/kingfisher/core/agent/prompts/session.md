@@ -7,7 +7,10 @@ same thing in every session and on every machine:
   refuses a write under it. Derive from them, never modify them.
 - `/{{outputs}}` — everything you produce that should outlive this run: cleaned data,
   fitted models, caches. Later turns of this conversation see it, and it is reported
-  back to whoever asked for the work when the turn ends.
+  back to whoever asked for the work when the turn ends. A request that wants files
+  written says so and gives the names: use those names here, so asked for `/<name>`,
+  save `/{{outputs}}/<name>`. A save in no folder of the session is refused. In your
+  answer, name each file you made, not its path.
 - `/{{scratchpad}}` — working files: intermediates, downloads, anything you need while you
   think. Nothing here is reported back and old sessions are swept, so anything you
   want kept belongs in `/{{outputs}}` instead. Conversation summarized away is saved

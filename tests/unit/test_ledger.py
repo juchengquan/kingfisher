@@ -449,7 +449,7 @@ def test_a_tool_name_is_one_path_segment_in_the_tool_results_folder(ledgered):
 
 def test_a_tool_whose_name_is_all_punctuation_still_gets_a_named_file(ledgered):
     """Stripping what a path segment cannot carry can leave nothing at all, and
-    `A-0001.txt` is not found by the `A-0042-*` glob `system.md` tells the model to use
+    `A-0001.txt` is not found by the `A-0042-*` glob the prompt tells the model to use
     -- which is the recipe `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says`
     drives.
     """
@@ -629,7 +629,7 @@ def test_what_the_shell_writes_beside_the_results_is_left_alone(ledgered):
 def test_the_agent_cannot_rewrite_or_delete_the_file_a_row_names(ledgered):
     """The ledger sits under `.harness` because "a row names its file, and the agent
     must not be able to rewrite what a later turn reads back as true" -- and the file
-    the row named sat in the scratchpad, where the agent could write it. `system.md`
+    the row named sat in the scratchpad, where the agent could write it. The prompt
     tells the model to read that file back rather than call the tool again, so a later
     turn read a forgery as true: measured, the row stayed at `size: 32` with its
     original summary while the file held `forged`.
@@ -2251,7 +2251,7 @@ def test_a_resume_is_rolled_up_with_the_turn_it_answered(ledgered):
 
 def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):
     """Rolled up, an exchange keeps only its ids, so an id is all the model has to find
-    a result by: named or ended otherwise than `system.md` says, the file is one it
+    a result by: named or ended otherwise than the prompt says, the file is one it
     cannot find again.
 
     Through the agent's own `glob`, under the rules its turn runs with, and with the
