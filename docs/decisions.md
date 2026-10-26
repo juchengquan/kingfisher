@@ -518,6 +518,42 @@ answer settles, and of the smoke: every answer was right and none left a file in
 `/outputs`, with the behaviour in the harness and without it, and all six smokes passed.
 *(2026-10-26.)*
 
+**The client's text comes first, and each mechanism is described in one file.** An
+agent's prompt is its own `system_prompt`, then the deployment's instructions, then the
+harness; a subagent's is its own, then the instructions, then the session's folders. Who
+the agent is opens the prompt the model reads, and what kingfisher and the libraries say
+of the environment sits together after it, the libraries' blocks being appended after
+whatever kingfisher passes in. The cache does not care: the static prompt is one cached
+block whatever its order. `system.md` went with the order: its ledger paragraphs open
+`tool_results.md`, the rule on requested files is in the `/outputs` bullet of
+`session.md`, and the order is a list in `render_system_prompt` rather than a document of
+placeholder comments. Memory is described by `memory.md`, the template its block is
+written from, and skills by `skills.md`; the core's prompts are nine files, and the shell's
+four and kingfisher's own shell's three are `ShellPrompt`'s parts. Measured on
+MiniMax-M3, three turns each way of a question an answer settles, of a task run through
+the shell, and of the smoke: every turn answered, counted or passed right in both orders,
+none left an unrequested file, and one shell command missed a path, in the old order.
+*(2026-10-26.)*
+
+**kingfisher takes over library text only where it describes kingfisher's own mechanism or
+is false here.** Taken over: the memory block, the skills index, deepagents' host paths
+where the shell already says the mapping, and the two lines of `execute`'s description
+false of kingfisher's shell. Left as written: the tools' descriptions, which are the
+manual of tools the library implements and change with them -- between deepagents 0.7.6
+and 0.7.22 `glob`'s was rewritten when its matching changed, a similarity of 0.29, and
+`read_file`'s, `task`'s, `execute`'s and `edit_file`'s changed too, where the skills
+template did not -- so an owned copy would go stale with its tool, and a wrong fact about
+a tool is what the harness exists not to say. `write_todos`' text stays langchain's: a
+client removes it by not granting the tool. Not taken: deepagents'
+`HarnessProfile.tool_description_overrides`, beta and registered for the whole process
+under a model's name, which would change every other deepagents agent the process runs.
+deepagents' own profile advice for some models stays its lever too, cleared with
+`register_harness_profile` as `formats.md` shows, rather than kingfisher registering empty
+profiles process-wide or stripping each profile's wording. Not measured: how often
+langchain rewrites `write_todos`' text, and the OpenAI Codex and NVIDIA Nemotron profiles,
+which were listed and never resolved. Each change of this kind was checked with real turns
+on both sides before it landed, the counts in its pull request. *(2026-10-26.)*
+
 **`general-purpose` is told the deployment's instructions, as a declared subagent is.**
 kingfisher supplies it, to carry the standing middleware, and supplied it with deepagents'
 bare prompt, so a turn delegated to it escaped every house rule a declared subagent was
@@ -525,7 +561,8 @@ held to while the `Instructions` contract promised every subagent. It now gets t
 instructions ahead of deepagents' text, joined as a declared subagent's are, and of the
 harness's prompt only what the session's folders are for, as the next entry says. A
 compiled subagent stays outside: its `build` writes its prompt, and that is said in the
-contract. *(2026-10-20.)*
+contract. *(2026-10-20.)* *Since 2026-10-26 the instructions follow deepagents' text, in
+the order every prompt now has.*
 
 **Every subagent kingfisher builds is told what the session's folders are for.** It was
 told nothing of the harness, on the reasoning that its parent's handoff says where work
@@ -539,7 +576,9 @@ subagent's, helper's and `general-purpose`'s include, ahead of the deployment's
 instructions. The rest stays the agent's: the agent, which holds the shell table, missed
 shell paths as often as subagents did (6 in 26 calls against 12 in 60), and the ledger
 paragraphs describe messages a subagent never receives. A compiled subagent runs as it
-was built. *(2026-10-22.)*
+was built. *(2026-10-22.)* *Since 2026-10-26 the section comes last, after the subagent's
+own prompt and the instructions, and carries the rule on requested files, which a
+subagent asked to save one needs as the agent does.*
 
 **A turn's own text is sent after the cached part, from deepagents' caching slot.** A
 deployment telling each session something of its own -- its caller, its case -- replaced

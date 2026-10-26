@@ -441,7 +441,7 @@ def test_a_message_with_no_id_is_left_alone():
 
 def test_a_recorded_results_handle_names_its_file_and_ends_in_its_id():
     """The model is told to read a result back from its file rather than call the tool
-    again, so a handle without the path, or without the id `system.md` explains, leaves
+    again, so a handle without the path, or without the id the prompt explains, leaves
     it nothing to do but call again."""
     talk = Talk()
     call = talk.call("execute", {"command": "python3 count.py"}, _text("rows: 86"))

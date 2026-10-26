@@ -418,18 +418,18 @@ def test_a_subagent_is_given_the_deployments_instructions(cfg):
     work escapes."""
     prompt = _subagent_prompt(cfg, "Always cite the file.")
 
-    assert prompt.index("Always cite the file.") < prompt.index("You review analyses")
+    assert prompt.index("You review analyses") < prompt.index("Always cite the file.")
 
 
 def test_a_deployment_with_no_instructions_adds_no_empty_part(cfg):
-    """The session's folders, then the definition's own text, byte for byte -- no second
-    separator where the instructions would be, no blank tail."""
+    """The definition's own text, then the session's folders, byte for byte -- no second
+    separator where the instructions would be, no blank part."""
     assert _subagent_prompt(cfg) == (
-        f"{session_section(cfg.layout)}\n\n---\n\nYou review analyses for arithmetic errors."
+        f"You review analyses for arithmetic errors.\n\n---\n\n{session_section(cfg.layout)}"
     )
 
 
-#: Each part of `system.md` a subagent is not handed, by its heading.
+#: Each part of the harness a subagent is not handed, by its heading.
 AGENTS_ALONE = (
     "## The file tools",
     "## The shell",
@@ -443,8 +443,8 @@ def test_a_subagent_is_given_the_sessions_folders_and_nothing_else_of_the_harnes
     the ledger paragraphs describe messages a subagent never receives."""
     prompt = _subagent_prompt(cfg, "Always cite the file.")
 
-    assert prompt.startswith(session_section(cfg.layout))
-    assert prompt.index("## The session") < prompt.index("Always cite the file.")
+    assert prompt.endswith(session_section(cfg.layout))
+    assert prompt.index("Always cite the file.") < prompt.index("## The session")
     told = [part for part in AGENTS_ALONE if part in prompt]
     assert told == []
 
@@ -456,12 +456,12 @@ def test_the_agent_and_its_subagents_are_told_the_same_folders(cfg):
 
 
 def test_both_levels_separate_the_addition_the_same_way(cfg):
-    """One joining rule."""
+    """One joining rule, and one order: the instructions, then the harness."""
     main = system_prompt(replace(cfg, skills_enabled=True), instructions="Always cite the file.")
     subagent = _subagent_prompt(cfg, "Always cite the file.")
 
-    assert "\n\n---\n\nAlways cite the file." in main
-    assert "Always cite the file.\n\n---\n\n" in subagent
+    assert "Always cite the file.\n\n---\n\n## The session" in main
+    assert "Always cite the file.\n\n---\n\n## The session" in subagent
 
 
 def test_the_prompt_does_not_promise_other_sessions_are_out_of_reach():
@@ -556,13 +556,13 @@ def test_the_prompt_does_not_count_the_places_a_turn_may_write():
 # -- a deployment's own instructions ---------------------------------------------
 
 
-def test_the_instructions_come_after_the_harness(cfg):
-    """A deployment's standing instruction reaches the main agent, behind the harness
+def test_the_instructions_come_before_the_harness(cfg):
+    """A deployment's standing instruction reaches the main agent, ahead of the harness
     prompt rather than in place of it.
     """
     with_it = system_prompt(cfg, instructions="House rule: cite every figure.")
 
-    assert with_it.index("## The session") < with_it.index("House rule:")
+    assert with_it.index("House rule:") < with_it.index("## The session")
     # The structural contract is still there -- the addition did not replace it.
     assert f"/{INPUTS}" in with_it
 
@@ -572,13 +572,13 @@ def test_no_instructions_change_nothing(cfg):
     assert system_prompt(cfg) == system_prompt(cfg, instructions="")
 
 
-def test_the_instructions_lead_the_agents_own_line(cfg):
-    """Order: harness, then the deployment's instructions, then the agent -- most
-    general to most specific.
+def test_the_agents_own_line_leads_the_instructions(cfg):
+    """Order: the agent, then the deployment's instructions, then the harness -- most
+    specific to most general, so what the client wrote opens the prompt.
     """
     prompt = system_prompt(cfg, "Agent note.", instructions="House rule.")
 
-    assert prompt.index("House rule.") < prompt.index("Agent note.")
+    assert prompt.index("Agent note.") < prompt.index("House rule.")
 
 
 # -- told only of the tools it holds --------------------------------------------
@@ -766,7 +766,7 @@ def test_every_subagent_is_told_the_sessions_folders_in_its_layouts_names(
         for system, heard in zip(systems, Scripted.heard, strict=True)
         if any(isinstance(m, HumanMessage) and m.text == asked for m in heard)
     ]
-    assert system.startswith(session_section(renamed.layout))
+    assert session_section(renamed.layout) in system
     assert "`/results`" in system
     assert "/outputs" not in system
 

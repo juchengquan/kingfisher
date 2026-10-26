@@ -155,30 +155,32 @@ same agent again; naming a different one is refused.
 ### The prompt is added to, not replaced
 
 `system_prompt` is the same word a subagent file uses, doing a different job. A
-subagent's comes after two parts: what the session's folders are for, from
-`prompts/session.md`, and the deployment's instructions. Nothing else of the harness
-reaches it. An agent's is the last of three parts:
+subagent's comes first of three parts: its own, the deployment's instructions, and what
+the session's folders are for, from `prompts/session.md`. Nothing else of the harness
+reaches it. An agent's is the first of three parts too:
 
-    prompts/system.md    what the harness is — /inputs is read-only, /skills is
-                         loadable, where memory lives. Ships with kingfisher
+    system_prompt        what this agent is and how it behaves. Yours, and
+                         required
     INSTRUCTIONS.md      what this deployment asks of every agent. Yours, optional,
                          beside the definitions, and it reaches every subagent,
                          general-purpose too, but one you compile with `build`
-    system_prompt        what this agent is. Yours, and required
+    the harness          what kingfisher's running makes true — the session's
+                         folders, the file tools, the shell, what your tools
+                         returned. Ships with kingfisher, in `prompts/`
 
 The middle part can come from code instead: `instructions=` on `Kingfisher` takes any
 object with `text(cfg) -> str`, asked once per agent built, so a change reaches the
 next turn. Text for one turn rather than every one goes after all three, from
 `turn_instructions=` — [`ports.md`](ports.md) says where, and why there.
 
-There is no way to replace the first. An agent without it is not leaner — it is
+There is no way to replace the last. An agent without it is not leaner — it is
 one holding tools nobody told it about, discovering its permissions by being
 denied. `kingfisher prompt` shows what an agent is sent, which is where to check;
 [*Seeing what the model is sent*](#seeing-what-the-model-is-sent) says how.
 
-The third part is required: the two documents above it are written once for the
-whole deployment and neither has heard of this agent. One line is enough — say
-what this agent is and what it is careful about, and leave out anything already
+The first part is required: the two after it are written once for the whole
+deployment and neither has heard of this agent. Say what this agent is and how it
+should behave — the harness says nothing of either — and leave out anything already
 true of every agent in the deployment.
 
 ### Seeing what the model is sent

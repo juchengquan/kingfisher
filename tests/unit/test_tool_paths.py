@@ -67,8 +67,8 @@ def test_the_name_the_agent_was_taught_now_works(bridge, session):
 
 
 def test_a_relative_name_lands_in_the_session_too(bridge, session):
-    """The shell's spelling of the same file -- `system.md` teaches both, as one path
-    with and without its leading slash.
+    """The shell's spelling of the same file, relative to where the shell starts, which is
+    the session's top.
     """
     assert handed(bridge, a_call(path="inputs/config.ini")) == {
         "path": str(session / "inputs" / "config.ini")

@@ -77,11 +77,6 @@ slices land.
   kingfisher sends back of a model's thinking once the vendor, or the conversation
   before it, has changed, keyed on the endpoint that answered. Its first slice has
   landed; the rest wait on one live Anthropic call each.
-- [A prompt that says only what kingfisher
-  does](design/2026-10-26-a-prompt-that-says-only-what-kingfisher-does.md) — taking
-  who the agent is and how it behaves out of the harness prompt, and the library text
-  that contradicts it, so the client's prompt decides. Its slices land one at a time,
-  and its status line says which have.
 - [Which source ids open
   something](design/2026-10-26-which-source-ids-open-something.md) — which of a
   caller's source ids and datazones open anything under one agent, and which single
@@ -107,7 +102,9 @@ catalogue*. *A session owns what it costs* was built in four the day after it wa
 written; its decisions are split between *Confining the shell* and *Sessions:
 what persists and where*, which is where the two halves of it belonged.
 *Several skills roots* was built in two slices; its decisions are under
-*The catalogue* in `decisions.md`.
+*The catalogue* in `decisions.md`. *A prompt that says only what kingfisher does* was
+built in seven; its rule and its order are under *Agents and delegation* in
+`decisions.md`, and each of its changes beside the entry it changed.
 *A session is its backend* was built in four the day it was written; its decisions
 are under a section of that name in `decisions.md`.
 *A tool's path is the backend's path* was built in four; its decisions are under a

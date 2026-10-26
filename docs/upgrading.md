@@ -18,6 +18,20 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Your agent's prompt now comes first, ahead of the harness, after #1105
+
+- **The order of the system prompt is reversed.** An agent's is now its `system_prompt`,
+  then your `INSTRUCTIONS.md`, then kingfisher's account of the session, its folders, its
+  tools and its shell; a subagent's is its own, the instructions, then the session's
+  folders. Text you wrote saying it is "added to the harness prompt that already told you"
+  now describes what follows it, as the shipped `general`'s now says.
+- **`prompts/system.md` is gone.** Its ledger paragraphs open `prompts/tool_results.md`,
+  and the rule on requested files is in the `/outputs` bullet of `prompts/session.md` --
+  which every subagent is handed too, so a subagent is now told it.
+- **`render_system_prompt`'s `extra` is `ahead`**, since it leads.
+- If you cache, diff or test the text of any agent's or subagent's prompt, none is the
+  same.
+
 ## Memory is a list of numbered entries, after #1102
 
 - **Only where memory is on.** A line of `/memory/AGENTS.md` led by `- ` is an entry, and

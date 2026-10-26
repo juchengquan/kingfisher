@@ -629,7 +629,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     every folder of the session.
 
     The shell's line goes in the description, not the system prompt: a subagent gets none
-    of `system.md`, and the description reaches every graph holding the shell. At
+    of the harness's shell section, and the description reaches every graph holding it. At
     deepagents' 100 lines, a third of every call a turn made was `read_file` paging, most
     naming a limit of 100 because the description did: so the description changes with
     the default, and a limit the model names is left as it is. `grep` is literal, and
