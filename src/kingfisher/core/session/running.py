@@ -18,6 +18,7 @@ from kingfisher.core.result import (
     AWAITING,
     END_TURN,
     LedgerEntry,
+    MemoryChanges,
     PendingDecision,
     RunEvent,
     RunResult,
@@ -31,6 +32,7 @@ from .checkpointing import (
 )
 from .files import collect_artifacts
 from .ledger import keep_ledger, sweep_results
+from .memory import changes, settled_memory
 from .steps import (
     Steps,
     adrive,
@@ -84,6 +86,8 @@ class _Turn:
     awaiting: tuple[PendingDecision, ...] = ()
     #: What this turn's tools returned, as the lifecycle kept it.
     recorded: tuple[LedgerEntry, ...] = ()
+    #: What the turn did to the memory file's entries.
+    memory: MemoryChanges = field(default_factory=MemoryChanges)
 
 
 def _asked(value: str | Request | Resume) -> Request | Resume:
@@ -354,6 +358,11 @@ class Running:
                 turn.stop_reason = "max_tokens"
                 turn.pending.append(out_of_tokens(cut))
             turn.kept = yield from self._keep(prepared, snapshot)
+            if prepared.memory is not None:
+                ended = yield from settled_memory(prepared.files, self.cfg.layout)
+                turn.memory = changes(prepared.memory, ended)
+                if turn.memory:
+                    turn.pending.append(RunEvent(kind="memory_updated", text=turn.memory.said()))
             yield from self._sweep_results(prepared, turn.recorded)
         finally:
             try:
@@ -416,6 +425,7 @@ class Running:
                 # Collected after the graph finished, so it includes what the shell
                 # wrote, which no file tool would have reported.
                 artifacts=turn.kept,
+                memory=turn.memory,
                 stop_reason=turn.stop_reason,
                 ledger=turn.recorded,
             ),

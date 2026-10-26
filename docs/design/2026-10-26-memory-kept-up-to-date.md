@@ -1,6 +1,6 @@
 # Memory kept up to date
 
-**Status:** proposed, not built.
+**Status:** proposed; its entries slice has landed.
 **Date:** 2026-10-26.
 **Occasion:** the owner asked for memory that behaves like a chat app's: kept current by
 something other than the agent's mid-task notes, and in time following a user across
@@ -128,12 +128,17 @@ taken:** the deployment naming its identifying keys, where a key it forgets is u
 
 ## Slices
 
-One pull request each, off main, in this order.
+One pull request each, off main. The entries come first, since everything after them
+reads ids; the three after them touch none of each other's code and are built in
+parallel.
 
-1. **Entries and the writer, on session memory.** The entries format and its ids, the
-   triggers and `KINGFISHER_MEMORY_EVERY`, the `memory_writer:` model and
-   `prompts/memory_writer.md`, the limits, the identifier check, and `memory_updated`,
-   `memory_not_updated` and the `memory` field on `RunResult`.
+0. **Entries.** Built: `core/session/memory.py` numbers the file at a turn's start and
+   end, and the turn reports what it did to the entries as `memory_updated` and the
+   `memory` field on `RunResult`. Recorded in `decisions.md` under *Memory is entries
+   kingfisher numbers*.
+1. **The writer, on session memory.** The triggers and `KINGFISHER_MEMORY_EVERY`, the
+   `memory_writer:` model and `prompts/memory_writer.md`, the limits, the identifier
+   check, and `memory_not_updated`.
 2. **Reading and forgetting from outside.** `memory()` and `forget(id)` on `Session`, with
    their async twins, under the session's claim.
 3. **The user's memory.** The `MemoryStore` port, the per-turn reload, merged saves, the

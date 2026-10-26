@@ -50,6 +50,8 @@ _EXPORTS = {
     "PendingDecision": "kingfisher.core.result",
     # One row of `RunResult.ledger`, for a caller that keeps them.
     "LedgerEntry": "kingfisher.core.result",
+    "MemoryChanges": "kingfisher.core.result",
+    "MemoryEntry": "kingfisher.core.result",
     "RunOn": "kingfisher.core.definitions.subagents.spec",
     # For a module's `SUBAGENTS` to be checked against, imported under `TYPE_CHECKING`.
     "PortableSubagent": "kingfisher.core.definitions.subagents.spec",
@@ -106,6 +108,8 @@ __all__ = [
     "Kingfisher",
     "Landing",
     "LedgerEntry",
+    "MemoryChanges",
+    "MemoryEntry",
     "ModelProfile",
     "Models",
     "Opened",
@@ -187,6 +191,8 @@ if TYPE_CHECKING:
     from kingfisher.core.result import STOP_REASONS as STOP_REASONS
     from kingfisher.core.result import ArtifactError as ArtifactError
     from kingfisher.core.result import LedgerEntry as LedgerEntry
+    from kingfisher.core.result import MemoryChanges as MemoryChanges
+    from kingfisher.core.result import MemoryEntry as MemoryEntry
     from kingfisher.core.result import PendingDecision as PendingDecision
     from kingfisher.core.result import RunEvent as RunEvent
     from kingfisher.core.result import RunResult as RunResult

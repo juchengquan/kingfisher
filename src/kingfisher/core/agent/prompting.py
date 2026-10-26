@@ -137,10 +137,11 @@ MEMORY = "memory.md"
 #: The rule is worded as what saving does, since that is what makes it kingfisher's to say.
 _SAVING = {
     True: (
-        "Save to it with `{saver}`. What is saved is sent on every later call and handed "
-        "back with the turn's files, so never save credentials or details that identify "
-        "the user -- their name, email address, team or account ids -- even when they "
-        "offer them."
+        "Save to it with `{saver}`, one entry per line, written `- ` and the text; "
+        "kingfisher numbers each as `- [m1]`, and an entry is changed or removed by its "
+        "line. What is saved is sent on every later call and handed back with the turn's "
+        "files, so never save credentials or details that identify the user -- their name, "
+        "email address, team or account ids -- even when they offer them."
     ),
     False: "It can be read here but not added to, so do not try to save to it.",
 }

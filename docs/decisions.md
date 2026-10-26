@@ -3902,6 +3902,21 @@ off a shared mount because a per-caller route on shared storage "needs a tenancy
 that has not been made". Until that design exists, "a future session" does not go back
 into the prompt. *(2026-10-07.)*
 
+**Memory is entries kingfisher numbers, and a turn reports what it did to them.** The
+memory file had no shape, so nothing could say what a turn changed in it: the turn's file
+list names what is present, and the file always is. Now each line led by `- ` is an
+entry, and a turn numbers any without an id -- `- [m4] Likes EUR`, after the highest id
+there, so a number is never reused -- once at its start, before the graph reads the file,
+and once at its end. The turn compares the two readings by id and reports what was
+added, changed and removed as `memory_updated` and in `RunResult.memory`. Compared rather
+than taken from tool calls, so a write through the shell counts; numbered at the start as
+well, or a line written before the turn would read as added by it. The agent writes a bare
+line and never an id, so two entries cannot share one; one written twice keeps its first
+and the second is numbered afresh. Headings and prose stay as they are and are not
+entries. With memory off the file is neither read nor rewritten. The writer, `forget` and
+a user's store, in `docs/design/2026-10-26-memory-kept-up-to-date.md`, all read these ids.
+*(2026-10-26.)*
+
 **The guidelines deepagents appends after it say the same, because they are
 kingfisher's.** deepagents' `MEMORY_SYSTEM_PROMPT`, straight after kingfisher's section,
 called each correction "a chance to improve permanently" and told the agent to skip what is
