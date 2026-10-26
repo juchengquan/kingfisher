@@ -343,8 +343,10 @@ for the next reader who reaches for one.*
   0.7.22, which adds a third way in: `execute` writes its output to
   `large_tool_results/<call id>` as it runs, and hands back the stub itself, when the
   backend's default is a `BaseSandbox` and that path is not routed. The stub is then what
-  a `wrap_tool_call` inside eviction sees, so the file holds no id. Kingfisher routes the
-  folder, so its commands take the ordinary eviction. *(2026-10-16, deepagents 0.7.22.)*
+  a `wrap_tool_call` inside eviction sees, so the file holds no id. It never runs in
+  kingfisher: `_resolve_capture` returns `None` without `tool_token_limit_before_evict`,
+  which kingfisher's `FilesystemMiddleware` leaves unset on every graph it builds.
+  *(2026-10-16; the limit 2026-10-26, deepagents 0.7.22.)*
 - **Eviction joins a block list's text with newlines, and keeps what it was handed.**
   `_extract_text_from_message` joins every text block with `\n`, for the size check
   and for the file, where langchain's `.text` and kingfisher's transcript join them
@@ -787,6 +789,11 @@ directly, and `filter_tools_for_ptc` called on its own.*
   same function as a `StructuredTool` reads `Promise<string>`.
 - **`task()` exists whenever `subagents=True` and the agent holds a `task` tool**, and
   dispatches inside an `eval` already approved.
+- **A `task()` from a program, and every call of the subagent it starts, are missing from
+  the run log**, though the program's own `tools.*` calls are there. Measured through
+  `Kingfisher.run` with a scripted model; the bridge hands `task_tool.arun` the `eval`
+  call's `config`, so where the callbacks go astray is not yet found. The ledger is
+  unaffected. *(2026-10-26, langchain-quickjs 0.3.8.)*
 
 - **The sandbox snapshots 1,280KB a turn whether or not `eval` runs.** A floor rather than a
   cost that scales with the work: one run called it zero times in forty-five tool calls and
