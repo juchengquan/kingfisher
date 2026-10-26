@@ -396,3 +396,31 @@ class NoScratchRunLimit:
         self, name: str, kind: Literal["agent", "subagent", "general-purpose"]  # noqa: ARG002
     ) -> bool:
         return True
+
+
+def refuse_incomplete(
+    keyword: str, hook: object, protocol: type, default: type | None = None
+) -> None:
+    """Refuse `hook`, wired as `keyword=`, where it lacks a method `protocol` lists.
+
+    A class of the deployment's own is taken whatever it subclasses, so long as it has
+    every method; `default` is kingfisher's own, named as the way to inherit them.
+    """
+    # Read off the protocol, so a method added to one later is checked with no other edit.
+    missing = sorted(
+        name
+        for name, value in vars(protocol).items()
+        if callable(value)
+        and not name.startswith("_")
+        and not callable(getattr(hook, name, None))
+    )
+    if not missing:
+        return
+    named = ", ".join(missing)
+    inherit = f", or subclass {default.__name__}, kingfisher's own" if default else ""
+    msg = (
+        f"{keyword}= takes a {protocol.__name__}, and {type(hook).__name__} has no "
+        f"{named} -- define {'it' if len(missing) == 1 else 'them'} as "
+        f"{protocol.__name__} does{inherit}"
+    )
+    raise TypeError(msg)

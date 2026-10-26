@@ -61,12 +61,15 @@ from .config import Config, ConfigError
 from .interfaces import (
     AgentsMiddlewares,
     Instructions,
+    NoScratchRunLimit,
     PdfAttachments,
+    RunEvents,
     ScratchRunLimit,
     Sessions,
     SubagentMiddlewares,
     TurnInstructions,
     UnusedResults,
+    refuse_incomplete,
 )
 from .origins import Origins
 from .reporting import what_opens
@@ -78,8 +81,6 @@ if TYPE_CHECKING:
 
     from kingfisher.core.agent.tool_context import Caller
     from kingfisher.core.definitions.documents import DefinitionText
-
-    from .interfaces import RunEvents
 
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.
@@ -175,6 +176,19 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             subagent_middlewares if subagent_middlewares is not None else AgentsMiddlewares()
         )
         self.scratch_run_limit: ScratchRunLimit | None = scratch_run_limit
+        # Here, where the deployment wired it: a missing method was an `AttributeError` in
+        # whichever turn first asked, possibly hours after startup.
+        for keyword, hook, protocol, default in (
+            ("run_events", run_events, RunEvents, LoggedRunEvents),
+            ("instructions", instructions, Instructions, InstructionsFile),
+            ("turn_instructions", turn_instructions, TurnInstructions, None),
+            ("unused_results", unused_results, UnusedResults, DeleteUnusedResults),
+            ("pdf_attachments", pdf_attachments, PdfAttachments, None),
+            ("subagent_middlewares", subagent_middlewares, SubagentMiddlewares, AgentsMiddlewares),
+            ("scratch_run_limit", scratch_run_limit, ScratchRunLimit, NoScratchRunLimit),
+        ):
+            if hook is not None:
+                refuse_incomplete(keyword, hook, protocol, default)
         # Here, not when a definition names one, so the deployment hears it where it
         # wired the registry rather than from the first caller to reach the wrong name.
         refuse_unbuildable_middleware(self.middlewares)
