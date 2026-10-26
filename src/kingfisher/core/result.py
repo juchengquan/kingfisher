@@ -109,6 +109,37 @@ class LedgerEntry:
 
 
 @dataclass(frozen=True)
+class MemoryEntry:
+    """One line of the session's memory file, by the id kingfisher gave it."""
+
+    id: str
+    text: str
+
+
+@dataclass(frozen=True)
+class MemoryChanges:
+    """What became of the memory file's entries during one turn, by id."""
+
+    added: tuple[MemoryEntry, ...] = ()
+    changed: tuple[MemoryEntry, ...] = ()
+    removed: tuple[MemoryEntry, ...] = ()
+
+    def __bool__(self) -> bool:
+        return bool(self.added or self.changed or self.removed)
+
+    def said(self) -> str:
+        """The changes as one line, for an event's text."""
+        parts = [
+            f"{verb} {', '.join(one.id for one in entries)}"
+            for verb, entries in (
+                ("added", self.added), ("changed", self.changed), ("removed", self.removed)
+            )
+            if entries
+        ]
+        return "; ".join(parts)
+
+
+@dataclass(frozen=True)
 class RunResult:
     session_id: str
     #: A caller's own id where it supplied one, so a service can tie the run to its
@@ -120,6 +151,10 @@ class RunResult:
     #: changed: `execute` writes unseen by any file tool, so a caller persisting
     #: incrementally diffs against the previous turn's list, which also shows deletions.
     artifacts: tuple[str, ...] = ()
+    #: What this turn did to the memory file's entries: empty where memory is off or the
+    #: turn left it as it was. Compared between the turn's start and end, so a write
+    #: through the shell counts.
+    memory: MemoryChanges = field(default_factory=MemoryChanges)
     #: Why this turn stopped. Past a bound, the answer is what had been reached and
     #: `artifacts` still lists what was written: discarding either would hide work.
     stop_reason: str = END_TURN
@@ -186,6 +221,8 @@ KINDS: tuple[str, ...] = (
     # an *earlier* turn's gate was superseded, so it arrives at the start of this turn.
     "decision_needed",
     "decision_discarded",
+    # The memory file's entries changed during the turn; `RunResult.memory` says which.
+    "memory_updated",
     # Terminal. `cut_short` precedes `finished` rather than replacing it.
     "cut_short",
     "finished",

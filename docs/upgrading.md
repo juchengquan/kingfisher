@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Memory is a list of numbered entries, after #1102
+
+- **Only where memory is on.** A line of `/memory/AGENTS.md` led by `- ` is an entry, and
+  each turn numbers the ones without an id, `- [m1] …`, writing the file back. Headings
+  and other text are kept as they are. A file from before keeps its prose; its `- ` lines
+  are numbered on the next turn.
+- **The starter file is a heading alone.** The "Conventions" section and "(none recorded
+  yet)" are gone.
+- **A new event kind, `memory_updated`,** and a `memory` field on `RunResult`, say which
+  entries a turn added, changed and removed. A consumer switching on `kind` should already
+  ignore one it does not know.
+
 ## The harness prompt no longer says who the agent is or how it behaves, after #1098
 
 - **The system prompt no longer opens "You are kingfisher".** It now opens on the session's

@@ -18,11 +18,6 @@ from .scratch import NOFOLLOW
 AGENTS_SCAFFOLD = """\
 # Project memory
 
-Durable facts about this project and how to work in it. Add entries below.
-
-## Conventions
-
-(none recorded yet)
 """
 
 _REPLACED = frozenset({errno.ELOOP, errno.EEXIST, errno.EISDIR})

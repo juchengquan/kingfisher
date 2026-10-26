@@ -144,6 +144,6 @@ def memory_sources(layout: Layout) -> list[str]:
     `/memory/` is a route so a request that declined memory can be given a deny rule
     for it.
     """
-    return [f"{layout.memory_route}AGENTS.md"]
+    return [layout.memory_file_route]
 
 

@@ -31,6 +31,8 @@ LAYOUT_DIRS: tuple[str, ...] = (
 INPUTS = "inputs"
 OUTPUTS = "outputs"
 MEMORY = "memory"
+#: The one file in `MEMORY` the agent is given, as deepagents names it.
+MEMORY_FILE = "AGENTS.md"
 #: Where the agent works. Disposable by contract: never returned to the caller, never
 #: saved, swept when the session goes.
 SCRATCH = "scratchpad"
@@ -188,6 +190,11 @@ class Layout:
     @property
     def memory_route(self) -> str:
         return _route(self.memory)
+
+    @property
+    def memory_file_route(self) -> str:
+        """The one memory file, as the file tools name it."""
+        return f"{self.memory_route}{MEMORY_FILE}"
 
     @property
     def outputs_route(self) -> str:

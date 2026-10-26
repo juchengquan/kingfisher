@@ -2063,6 +2063,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         # What `RunResult.ledger` holds, one per recorded result. A caller keeping or
         # showing those entries names the type to do it.
         "LedgerEntry": "embedder",
+        # What `RunResult.memory` holds: the entries a turn added, changed and removed.
+        "MemoryChanges": "embedder",
+        "MemoryEntry": "embedder",
         "Resume": "embedder",
         "Decision": "embedder",
         "DecisionError": "embedder",

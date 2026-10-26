@@ -34,6 +34,7 @@ from .checkpointing import (
 )
 from .files import place_inputs, planned_inputs
 from .ledger import Ledger
+from .memory import settled_memory
 from .model import (
     Conversation,
     SessionBusyError,
@@ -241,6 +242,14 @@ class Preparation:
                 yield from remember_zones(harness, ran_in)
             if superseded:
                 yield from clear_pause(harness)
+            # Before the graph runs, which reads the file: numbered now, so what the
+            # turn's end compares with is entries rather than lines nobody has named.
+            if self._graph is None and self.cfg.memory_enabled and (
+                for_the_caller(agent, allowed, held=held).memory is not False
+            ):
+                prepared = replace(
+                    prepared, memory=(yield from settled_memory(files, self.cfg.layout))
+                )
             # A resume says so in `run_start`: a task-shaped one would read as the work
             # being requested again.
             asked = getattr(request, "task", "")

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.agent.middlewares.recorded import readable_size
 from kingfisher.core.layout import Layout
-from kingfisher.core.result import LedgerEntry, PendingDecision, RunEvent
+from kingfisher.core.result import LedgerEntry, MemoryEntry, PendingDecision, RunEvent
 
 from . import runtime
 
@@ -65,6 +65,9 @@ class Prepared:
     #: The token the session's claim answered, which the turn's ending gives back: a
     #: claim is released only by the token that took it.
     claim: str = ""
+    #: The memory file's entries as the turn found them, numbered; `None` where memory is
+    #: off for this turn, so its ending reads nothing.
+    memory: tuple[MemoryEntry, ...] | None = None
 
 
 def turn_message(
