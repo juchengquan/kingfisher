@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
@@ -14,7 +14,7 @@ from kingfisher.core.result import LedgerEntry, MemoryEntry, PendingDecision, Ru
 from . import runtime
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from kingfisher.core.config import Config
 
@@ -68,6 +68,15 @@ class Prepared:
     #: The memory file's entries as the turn found them, numbered; `None` where memory is
     #: off for this turn, so its ending reads nothing.
     memory: tuple[MemoryEntry, ...] | None = None
+    #: The task as the caller wrote it, without what kingfisher adds to its message: the
+    #: memory writer is shown what the user said and nothing the turn told the agent.
+    task: str = ""
+    #: The request's `context`, which no saved memory entry may contain.
+    caller_context: Mapping[str, str] = field(default_factory=dict)
+    #: Builds the model the memory writer runs on, or `None` for a graph the caller built.
+    #: Built only when the writer runs, so a writer model that cannot be built fails that
+    #: run and not the turn.
+    memory_model: Callable[[], Any] | None = None
 
 
 def turn_message(

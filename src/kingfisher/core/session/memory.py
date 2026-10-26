@@ -20,15 +20,16 @@ _NUMBERED = re.compile(r"^- \[m(\d+)\] (.*)$")
 _BARE = re.compile(r"^- (.*\S.*)$")
 
 
-def numbered(text: str) -> tuple[str, tuple[MemoryEntry, ...]]:
+def numbered(text: str, *, after: int = 0) -> tuple[str, tuple[MemoryEntry, ...]]:
     """`text` with every entry given an id, and the entries, in file order.
 
     A line led by whitespace continues the entry above it. An id written twice keeps its
-    first line and numbers the second afresh, so no two entries share one.
+    first line and numbers the second afresh, so no two entries share one. A new id goes
+    past both the text's highest and `after`.
     """
     lines = text.split("\n")
     taken = {int(m.group(1)) for line in lines if (m := _NUMBERED.match(line))}
-    after = max(taken, default=0)
+    after = max(taken | {after})
     seen: set[int] = set()
     entries: list[list[str]] = []
     out: list[str] = []
@@ -81,30 +82,107 @@ def without(text: str, entry_id: str) -> str:
     return "\n".join(kept)
 
 
-def changes(before: tuple[MemoryEntry, ...], after: tuple[MemoryEntry, ...]) -> MemoryChanges:
-    """What became of the entries between two readings, by id."""
+def changes(
+    before: tuple[MemoryEntry, ...],
+    after: tuple[MemoryEntry, ...],
+    dropped: tuple[MemoryEntry, ...] = (),
+) -> MemoryChanges:
+    """What became of the entries between two readings, by id, with those the identifier
+    check took out reported as dropped rather than removed."""
     was = {one.id: one for one in before}
     now = {one.id: one for one in after}
+    gone = {one.id for one in dropped}
     return MemoryChanges(
         added=tuple(one for one in after if one.id not in was),
         changed=tuple(one for one in after if one.id in was and was[one.id].text != one.text),
-        removed=tuple(one for one in before if one.id not in now),
+        removed=tuple(one for one in before if one.id not in now and one.id not in gone),
+        dropped=dropped,
     )
 
 
-def settled_memory(backend: Any, layout: Layout) -> Steps[tuple[MemoryEntry, ...]]:
-    """The memory file's entries, its unnumbered lines numbered and written back first.
+def without_entries(text: str, ids: frozenset[str]) -> str:
+    """`text` less the entries `ids` names, each with the lines continuing it."""
+    kept: list[str] = []
+    skipping = False
+    for line in text.split("\n"):
+        if skipping and line[:1].isspace() and line.strip():
+            continue
+        found = _NUMBERED.match(line)
+        skipping = found is not None and f"m{found.group(1)}" in ids
+        if not skipping:
+            kept.append(line)
+    return "\n".join(kept)
+
+
+def with_entries(text: str | None, entries: tuple[MemoryEntry, ...]) -> str:
+    """The memory file holding `entries`, under whatever `text` had above its first entry."""
+    above: list[str] = []
+    for line in (text or "").split("\n"):
+        if _BARE.match(line):
+            break
+        above.append(line)
+    header = "\n".join(above).rstrip()
+    listed = "".join(f"- [{one.id}] {one.text}\n" for one in entries)
+    return f"{header}\n\n{listed}" if header else listed
+
+
+#: What a written list says when it keeps nothing, so an empty answer can be refused.
+NOTHING_KEPT = "none"
+
+
+def listed(answer: str, before: tuple[MemoryEntry, ...]) -> tuple[MemoryEntry, ...]:
+    """The entries a written list holds, a new one numbered past every id in `before`.
+
+    An id `before` does not hold is read as no id: kept, it would report an entry nobody
+    had as changed, or bring back an id the file once gave something else. Raises
+    `ValueError`, saying why, for an answer that is not a list.
+    """
+    lines = answer.strip().split("\n")
+    # Fenced or not, the lines inside are the list: models fence unasked.
+    if lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    said = [line for line in lines if line.strip()]
+    if [line.strip().lower() for line in said] == [NOTHING_KEPT]:
+        return ()
+    if not said:
+        msg = "it answered nothing"
+        raise ValueError(msg)
+    known = {one.id for one in before}
+    kept: list[str] = []
+    for line in said:
+        if (found := _NUMBERED.match(line)) and f"m{found.group(1)}" not in known:
+            kept.append(f"- {found.group(2)}")
+        elif _BARE.match(line) or (kept and line[:1].isspace()):
+            kept.append(line)
+        else:
+            msg = f"its answer is not a list of entries: {line.strip()[:80]!r}"
+            raise ValueError(msg)
+    highest = max((int(one.id[1:]) for one in before), default=0)
+    return numbered("\n".join(kept), after=highest)[1]
+
+
+def memory_text(backend: Any, layout: Layout) -> Steps[tuple[str | None, tuple[MemoryEntry, ...]]]:
+    """The memory file as numbered text, or `None` where there is none, and its entries;
+    its unnumbered lines are numbered and written back first.
 
     No file is no entries: an agent may delete it, and a turn must still end.
     """
     path = layout.memory_file_route
     (got,) = yield reading(backend, "download_files", [path])
     if got.error or got.content is None:
-        return ()
+        return None, ()
     text = got.content.decode("utf-8", errors="replace")
     written, entries = numbered(text)
     if written != text:
         yield changing(backend, "upload_files", [(path, written.encode("utf-8"))])
+    return written, entries
+
+
+def settled_memory(backend: Any, layout: Layout) -> Steps[tuple[MemoryEntry, ...]]:
+    """The memory file's entries, its unnumbered lines numbered and written back first."""
+    _, entries = yield from memory_text(backend, layout)
     return entries
 
 

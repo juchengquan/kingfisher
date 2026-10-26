@@ -4064,6 +4064,40 @@ entries. With memory off the file is neither read nor rewritten. The writer, `fo
 a user's store, in `docs/design/2026-10-26-memory-kept-up-to-date.md`, all read these ids.
 *(2026-10-26.)*
 
+**A memory writer curates the entries, and no saved entry may hold a value of the
+request's `context`.** Left to the agent, memory is the notes it chose to take mid-task,
+never merged or trimmed, and a fact said before a summary is gone once the summary
+replaces it. So where memory is on, a turn's end makes one model call -- on
+`models.yaml`'s `memory_writer:`, else the agent's own model, held to the endpoints the
+caller may reach -- given the entries and what was said since it last ran, and saves the
+whole list it answers with. It runs on a turn whose conversation was summarised and
+otherwise every `KINGFISHER_MEMORY_EVERY` turns, 2 until measured; never on a turn that
+failed; and before the start-and-end comparison, so its changes are reported as
+`memory_updated` with the agent's. It is shown the caller's task, the agent's replies and
+the names of the tools it called, and nothing else: no tool result, no system message, no
+turn text, and not the note or kingfisher's lines after the task, since what a turn tells
+the agent is where who the user is comes from. What was said is collected from each
+turn's own state into `/.harness/memory_writer.json` as the turn ends, so the messages a
+summary drops reach the writer from the state that still holds them rather than parsed
+back out of deepagents' history file. A run reads that collection once, kept or not: kept
+on failure it would grow until the call itself could not be made.
+
+An answer over 40 entries or 6,000 characters, one that is not a list, or a failed call
+leaves the memory as it was, and `memory_not_updated` says why; the turn still succeeds.
+An id the answer gives that the list did not hold is read as none, and a new entry is
+numbered past the highest id the list held, so a dropped id is never handed to something
+else. The answer replaces every entry and whatever sat among them; what sat above the
+first entry stays.
+
+Then every entry is compared with the values of the request's `context`, ignoring case and
+skipping values under four characters, and one holding a value is taken out and reported
+as `dropped` -- on every turn with memory on, before the writer is shown the list and
+again after it answers, so the agent's own saves pass it too. This is the enforcement
+*Nor does it keep who the user is* declined as "matching free text": told not to save the
+user's team, a model saved it, and a harmless repeat of a context value is the price.
+The claim is held a model timeout longer where memory is on, since the writer's call
+follows the turn's last superstep. *(2026-10-26.)*
+
 **The guidelines deepagents appends after it say the same, because they are
 kingfisher's.** deepagents' `MEMORY_SYSTEM_PROMPT`, straight after kingfisher's section,
 called each correction "a chance to improve permanently" and told the agent to skip what is

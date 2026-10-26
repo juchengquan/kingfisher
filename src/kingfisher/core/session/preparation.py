@@ -35,6 +35,7 @@ from .checkpointing import (
 from .files import place_inputs, planned_inputs
 from .ledger import Ledger
 from .memory import settled_memory
+from .memory_writer import writer_model
 from .model import (
     Conversation,
     SessionBusyError,
@@ -441,6 +442,15 @@ class Preparation:
             session=session,
             turn=turn,
             logger=logger,
+            task=asked,
+            caller_context=request.context,
+            # The endpoints the agent's own model was held to, so the writer reaches no
+            # endpoint this caller may not.
+            memory_model=writer_model(
+                cfg, built.model, for_the_caller(agent, allowed, held=held).endpoints
+            )
+            if isinstance(built, Assembled)
+            else None,
             config={
                 "configurable": {"thread_id": session.id},
                 "callbacks": [logger],

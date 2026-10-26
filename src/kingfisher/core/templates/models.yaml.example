@@ -74,6 +74,14 @@ endpoints:
 # which of the two went wrong.
 default: MiniMax-M3
 
+# --- memory_writer: what curates memory -------------------------------------
+#
+# Optional. Where KINGFISHER_MEMORY_ENABLED is on, a turn's end now and then
+# makes one call to rewrite the session's memory entries. Name an entry under
+# `models:` for that call -- a cheaper one does the job -- or leave this out
+# and it runs on the agent's own model. Refused at startup as `default:` is.
+# memory_writer: MiniMax-M3
+
 # --- models: what can run, and how ------------------------------------------
 #
 # The key is the model id sent on the wire. This table is **closed**: a name

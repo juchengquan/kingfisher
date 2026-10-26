@@ -32,7 +32,7 @@ from .checkpointing import (
 )
 from .files import collect_artifacts
 from .ledger import keep_ledger, sweep_results
-from .memory import changes, settled_memory
+from .memory_writer import kept_memory
 from .steps import (
     Steps,
     adrive,
@@ -359,10 +359,15 @@ class Running:
                 turn.pending.append(out_of_tokens(cut))
             turn.kept = yield from self._keep(prepared, snapshot)
             if prepared.memory is not None:
-                ended = yield from settled_memory(prepared.files, self.cfg.layout)
-                turn.memory = changes(prepared.memory, ended)
-                if turn.memory:
-                    turn.pending.append(RunEvent(kind="memory_updated", text=turn.memory.said()))
+                turn.memory, said = yield from kept_memory(
+                    prepared,
+                    snapshot,
+                    cfg=self.cfg,
+                    answer=turn.answer,
+                    ok=turn.ok,
+                    paused=bool(turn.awaiting),
+                )
+                turn.pending.extend(said)
             yield from self._sweep_results(prepared, turn.recorded)
         finally:
             try:

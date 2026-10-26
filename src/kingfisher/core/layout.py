@@ -83,6 +83,9 @@ PAUSED_STATE = "paused.state"
 #: What the paused checkpoint was built against, checked before loading it. Apart from it
 #: so it is readable when a checkpoint written by libraries that have since moved is not.
 PAUSED_MARK = "paused.json"
+#: What the memory writer has not yet read, and how many turns since it last ran. Here,
+#: not under `/memory`, so the agent cannot put words in the user's mouth for it.
+MEMORY_WRITER = "memory_writer.json"
 
 #: The folder name a catalogue may not use for its own skills, because a
 #: subagent's bundled skills already mean something under this root.
