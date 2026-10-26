@@ -16,6 +16,10 @@ class ArtifactError(ValueError):
     """A name that is not something a turn produced, or that is not there."""
 
 
+class MemoryEntryError(ValueError):
+    """An id the session's memory file holds no entry for."""
+
+
 def normalize_answer(text: str) -> str:
     """Remove inlined reasoning blocks from a final answer."""
     return _THINK.sub("", text or "").strip()

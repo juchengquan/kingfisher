@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from .steps import adrive, drive
 
 if TYPE_CHECKING:
-    from kingfisher.core.result import PendingDecision
+    from kingfisher.core.result import MemoryEntry, PendingDecision
 
 
 @dataclass(frozen=True)
@@ -47,6 +47,27 @@ class Session:
     async def aartifact(self, name: str) -> bytes:
         """`artifact`, for a caller on an event loop."""
         return await adrive(self._service._artifact_in(self.id, name, self._opened))
+
+    def memory(self) -> tuple[MemoryEntry, ...]:
+        """This session's memory entries, by the ids a turn would give them; none without
+        a memory file."""
+        return drive(self._service._memory_in(self.id, self._opened))
+
+    async def amemory(self) -> tuple[MemoryEntry, ...]:
+        """`memory`, for a caller on an event loop."""
+        return await adrive(self._service._memory_in(self.id, self._opened))
+
+    def forget(self, entry_id: str) -> None:
+        """Remove one entry from this session's memory file, with the lines continuing it.
+
+        `SessionBusyError` while a turn holds the session, and `MemoryEntryError`, naming
+        the ids there are, for one the file does not hold.
+        """
+        drive(self._service._forget_in(self.id, entry_id, self._opened))
+
+    async def aforget(self, entry_id: str) -> None:
+        """`forget`, for a caller on an event loop."""
+        await adrive(self._service._forget_in(self.id, entry_id, self._opened))
 
     def files(self) -> Any:
         """The backend a turn here is given, built the way a turn builds it.

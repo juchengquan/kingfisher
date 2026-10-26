@@ -107,6 +107,14 @@ decline it: memory is described only in its own block, after the prefix, so a
 request that declines it is sent no block and denied the file, and the prefix is
 the same either way.
 
+The memory file is a list of entries, one a line, `- [m3] Reports figures in EUR`,
+each numbered by kingfisher; what a turn did to them is on `RunResult.memory`. From
+Python, `kf.session(session_id).memory()` reads them, and `.forget("m3")` removes one,
+with the indented lines continuing it, and writes the file back. `forget` is refused
+with `SessionBusyError` while a turn is running in the session, and with
+`MemoryEntryError`, naming the ids the file holds, for one it does not. `amemory` and
+`aforget` are the same on an event loop.
+
 ### Citing a result
 
 | Variable | What it does | Default |

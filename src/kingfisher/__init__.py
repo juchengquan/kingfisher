@@ -16,6 +16,7 @@ _EXPORTS = {
     "Held": "kingfisher.core.access.source_ids",
     "CallerError": "kingfisher.core.access.source_ids",
     "ArtifactError": "kingfisher.core.result",
+    "MemoryEntryError": "kingfisher.core.result",
     "UNSCOPED": "kingfisher.core.access.source_ids",
     # How a tool file says who may use its tool, or gives it another name.
     "ToolSpec": "kingfisher.core.definitions.tools.spec",
@@ -110,6 +111,7 @@ __all__ = [
     "LedgerEntry",
     "MemoryChanges",
     "MemoryEntry",
+    "MemoryEntryError",
     "ModelProfile",
     "Models",
     "Opened",
@@ -193,6 +195,7 @@ if TYPE_CHECKING:
     from kingfisher.core.result import LedgerEntry as LedgerEntry
     from kingfisher.core.result import MemoryChanges as MemoryChanges
     from kingfisher.core.result import MemoryEntry as MemoryEntry
+    from kingfisher.core.result import MemoryEntryError as MemoryEntryError
     from kingfisher.core.result import PendingDecision as PendingDecision
     from kingfisher.core.result import RunEvent as RunEvent
     from kingfisher.core.result import RunResult as RunResult

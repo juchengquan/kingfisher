@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.result import MemoryChanges, MemoryEntry
+from kingfisher.core.result import MemoryChanges, MemoryEntry, MemoryEntryError
 
 from .steps import Steps, changing, reading
 
@@ -56,6 +56,31 @@ def numbered(text: str) -> tuple[str, tuple[MemoryEntry, ...]]:
     )
 
 
+def without(text: str, entry_id: str) -> str:
+    """`text` numbered, less the entry `entry_id` and the lines continuing it.
+
+    `MemoryEntryError`, naming the ids there are, for an id `text` holds no entry for.
+    """
+    written, entries = numbered(text)
+    if entry_id not in {one.id for one in entries}:
+        held = ", ".join(one.id for one in entries) or "none"
+        msg = f"no memory entry {entry_id!r}; the memory file holds {held}"
+        raise MemoryEntryError(msg)
+    kept: list[str] = []
+    owner = None
+    for line in written.split("\n"):
+        if entry := _NUMBERED.match(line):
+            owner = f"m{entry.group(1)}"
+        # Continued by the rule `numbered` reads it by, or this would drop lines it did
+        # not count as the entry's, or keep some it did.
+        elif not (line[:1].isspace() and line.strip()):
+            kept.append(line)
+            continue
+        if owner != entry_id:
+            kept.append(line)
+    return "\n".join(kept)
+
+
 def changes(before: tuple[MemoryEntry, ...], after: tuple[MemoryEntry, ...]) -> MemoryChanges:
     """What became of the entries between two readings, by id."""
     was = {one.id: one for one in before}
@@ -81,3 +106,26 @@ def settled_memory(backend: Any, layout: Layout) -> Steps[tuple[MemoryEntry, ...
     if written != text:
         yield changing(backend, "upload_files", [(path, written.encode("utf-8"))])
     return entries
+
+
+def memory_entries(backend: Any, layout: Layout) -> Steps[tuple[MemoryEntry, ...]]:
+    """The memory file's entries, by the ids a turn would give them, with nothing written.
+
+    Written back, a read taken without the session's claim could land over a turn's edit.
+    """
+    (got,) = yield reading(backend, "download_files", [layout.memory_file_route])
+    if got.error or got.content is None:
+        return ()
+    return numbered(got.content.decode("utf-8", errors="replace"))[1]
+
+
+def forget_entry(backend: Any, layout: Layout, entry_id: str) -> Steps[None]:
+    """Write the memory file back without `entry_id`; for a caller holding the claim."""
+    path = layout.memory_file_route
+    (got,) = yield reading(backend, "download_files", [path])
+    present = not got.error and got.content is not None
+    text = got.content.decode("utf-8", errors="replace") if present else ""
+    answers = yield changing(backend, "upload_files", [(path, without(text, entry_id).encode())])
+    if refused := [f"{answer.path}: {answer.error}" for answer in answers if answer.error]:
+        msg = f"the session's backend would not keep {', '.join(refused)}"
+        raise OSError(msg)
