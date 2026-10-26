@@ -1677,6 +1677,53 @@ def test_the_cross_plugin_rule_tells_its_own_from_another(tmp_path):
     )
 
 
+#: The keywords a deployment changes what kingfisher does through, beyond what every
+#: `Kingfisher` is built from. A new one is written here only once it passes *A hook on
+#: `Kingfisher` is admitted by three rules* in `docs/decisions.md`.
+HOOKS = frozenset({
+    "instructions",
+    "turn_instructions",
+    "pdf_attachments",
+    "scratch_run_limit",
+    "subagent_middlewares",
+    "run_events",
+    "unused_results",
+})
+#: Where that entry says grouping them in code is weighed again.
+REGROUP_AT = 10
+
+
+def test_every_hook_on_kingfisher_was_admitted():
+    """A keyword added to `Kingfisher` without the admission rules, which is how the list
+    grows into one every deployment has to learn whole."""
+    from kingfisher import Kingfisher
+
+    built_from = {"self", "cfg", "sessions", "middlewares", "graph"}
+    taken = set(inspect.signature(Kingfisher.__init__).parameters) - built_from
+
+    assert taken == HOOKS, (
+        f"new {sorted(taken - HOOKS)}, gone {sorted(HOOKS - taken)} -- judge a new hook by "
+        "'A hook on `Kingfisher` is admitted by three rules' in docs/decisions.md, then "
+        "write it in HOOKS"
+    )
+    assert len(HOOKS) < REGROUP_AT, (
+        f"{len(HOOKS)} hooks -- weigh grouping them in code, as that entry says"
+    )
+
+
+def test_the_guide_groups_every_hook():
+    """A hook admitted in code and missing from the one place a deployment reads them
+    grouped, so the grouping that stands in for records in code quietly goes stale."""
+    guide = (REPO / "docs" / "guides" / "ports.md").read_text(encoding="utf-8")
+    section = guide.split("## Which there are", 1)[1].split("\n## ", 1)[0]
+    grouped = set(re.findall(r"^\|[^|]*\| `(\w+)` \|", section, flags=re.MULTILINE))
+
+    assert grouped == HOOKS, (
+        f"ports.md groups {sorted(grouped - HOOKS)} beyond HOOKS and leaves out "
+        f"{sorted(HOOKS - grouped)} -- its table under 'Which there are' lists each"
+    )
+
+
 # -- a plugin has of kingfisher what an outsider has --------------------------
 
 

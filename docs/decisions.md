@@ -5210,6 +5210,27 @@ door; the kit takes it through the door. **Not taken: shipping `LocalSessions` a
 package of its own.** It needs nothing the core does not, `sandlock` is already an
 extra, and a second release buys an install nobody asked to skip.
 
+**A hook on `Kingfisher` is admitted by three rules.** Seven keywords beside `sessions`,
+`middlewares` and `graph` change what kingfisher does, and a downstream deployment passes
+three or four of them. What grows with each is less the signature than what a deployment
+has to learn and what kingfisher has to keep once released, so a new one is judged at the
+door rather than packed into a record. **It is a hook only if** it needs what only
+kingfisher knows or does -- a verdict, which graph is built, the end of a turn -- and
+applies deployment-wide, asked wherever the thing happens with no definition able to
+switch it on or forget it; anything else is middleware a definition names. **A request
+close to an existing hook extends that hook** with a required method, its default in a
+base class a deployment may subclass -- not an optional method found by name, where a
+misspelling is ignored and the deployment believes it handled. That base class comes with
+a hook's first such method: before it there is nothing to inherit, and a keyword left out
+stays "no hook", so none is wired by default. **They are grouped in `ports.md`, not in
+code** -- prompt text, what a turn may hand over or run, after the turn. Records would
+shorten the signature and give a type per group to learn, and `Plugins` went for reading
+as the way to wire any plugin; grouping in code is weighed again at ten hooks, or once a
+deployment passes one group's hooks together. `HOOKS` in `test_architecture.py` lists
+them, so a new keyword fails there until it is written beside these rules. **Not taken:
+recognising which hooks an object implements** from the methods it has:
+`Instructions.text` and `TurnInstructions.text` share a name. *(2026-10-26.)*
+
 **Inside `LocalSessions`, a function that needs the layout takes the `Layout`.** The
 folders, backend and three fences took folder names one at a time, each defaulting to
 the shipped name, so a new caller could forget one and lay out or fence a renamed
