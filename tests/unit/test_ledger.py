@@ -25,7 +25,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 
-from kingfisher import Kingfisher, Request
+from kingfisher import Capabilities, Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.recorded import summary
 from kingfisher.core.agent.middlewares.recorder import (
@@ -976,6 +976,46 @@ def test_a_nested_helpers_results_belong_to_the_run_that_started_it(ledgered):
         ("t2", "working", "t1"),
         ("c1", "working", "t1"),
     ]
+
+
+#: A program that calls a tool itself, then hands `researcher` the rest.
+PROGRAM = """(async () => {
+  const found = await tools.webSearch({query: 'EV'});
+  const answer = await task({description: 'dig into it', subagentType: 'researcher'});
+  return found + ' | ' + JSON.stringify(answer);
+})()"""
+
+
+@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
+def test_a_subagent_a_program_starts_is_filed_under_the_program(ledgered, awaited):
+    """Only `task` once started a run, so a subagent started by `task()` from `eval` was
+    filed as the agent's own calls, under no run, and the next message listed them as work
+    the agent had done itself.
+    """
+    cfg = replace(ledgered, interpreter_enabled=True)
+    Scripted.script.extend(
+        [
+            _calls(("eval", {"code": PROGRAM}, "e1")),
+            _calls(("sql_query", {"query": "select margin"}, "c1")),
+            AIMessage(content="margins are thin"),
+            AIMessage(content="done"),
+        ]
+    )
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    # Granted by name: a request granting nothing leaves `tools.*` off inside `eval`.
+    granted = Capabilities(builtin_tools=("eval", "task"), tools=("web_search", "sql_query"))
+    request = Request("go", agent="only", session_id="s", capabilities=granted)
+    result = asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+
+    # The program's own call has no row: the agent was handed only what the program returned.
+    assert [(e.call, e.role, e.run) for e in result.ledger] == [
+        ("e1", "main", None),
+        ("c1", "working", "e1"),
+    ]
+    program = result.ledger[0].path
+    assert program and "Ten results for EV" in _read(cfg, program), "the program never called"
+    _run(cfg, AIMessage(content="noted"))
+    assert _listed_in(_asked()) == ["A-0001", "  A-0002"]
 
 
 def test_general_purpose_records_as_a_subagent(ledgered):
