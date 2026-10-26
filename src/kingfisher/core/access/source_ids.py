@@ -281,6 +281,49 @@ class AccessReport:
 
 
 @dataclass(frozen=True)
+class Opening:
+    """Source ids and datazones, as one side of what a caller's names open."""
+
+    source_ids: frozenset[str] = frozenset()
+    datazones: frozenset[str] = frozenset()
+
+    @classmethod
+    def of(cls, names: Iterable[str]) -> Opening:
+        """These held names, the datazones told from the source ids by their prefix.
+
+        Split rather than handed back as one set: a zone folded in comes back spelt
+        `datazone=finance`, which `held_by` refuses as a source id, so the answer would
+        name its own fix in the one spelling the call rejects. Folded, "one more id
+        would open this" and "no id can open this" also read alike, while the two take
+        different levers.
+        """
+        held = set(names)
+        return cls(
+            source_ids=frozenset(one for one in held if not one.startswith(DATAZONE_PREFIX)),
+            datazones=frozenset(
+                one.removeprefix(DATAZONE_PREFIX)
+                for one in held
+                if one.startswith(DATAZONE_PREFIX)
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class Opened:
+    """Which of one caller's names open something under one agent, and which would.
+
+    The operator's answer *about* a caller, and not that caller's own view: `would`
+    names a lock they do not pass and the name that would pass it, which a scoped
+    listing withholds as policy.
+    """
+
+    #: Of the names they hold, those sitting in an audience entry they satisfy.
+    opens: Opening = Opening()
+    #: Names they do not hold, each of which alone would satisfy a shut audience.
+    would: Opening = Opening()
+
+
+@dataclass(frozen=True)
 class Vocabulary:
     """The source ids and datazones this deployment's definitions use, and which use each.
 

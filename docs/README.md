@@ -85,9 +85,9 @@ slices land.
 - [Which source ids open
   something](design/2026-10-26-which-source-ids-open-something.md) — which of a
   caller's source ids and datazones open anything under one agent, and which single
-  name they do not hold would open more. Nothing built. The argument it settles is
-  that this is the operator's answer *about* a caller rather than the caller's own
-  view, which is why it carries policy a scoped listing may not.
+  name they do not hold would open more. Built. The argument it settles is that this
+  is the operator's answer *about* a caller rather than the caller's own view, which
+  is why it carries policy a scoped listing may not.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,

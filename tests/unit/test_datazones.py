@@ -9,10 +9,11 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import Request, ToolSpec, UnknownSessionError
+from kingfisher import Capabilities, CapabilityError, Request, ToolSpec, UnknownSessionError
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.checks import caller_holds
 from kingfisher.core.access.source_ids import (
+    DATAZONE_PREFIX,
     UNSCOPED,
     CallerError,
     with_datazone,
@@ -721,3 +722,383 @@ def test_the_pending_calls_are_listed_from_the_datazone_the_session_is_in(
     assert "is not waiting on a decision" in capsys.readouterr().err
     assert main(asked) == 2
     assert "no such session" in capsys.readouterr().err
+
+
+# -- which names open something ------------------------------------------------------
+
+
+def _opened(kf: Kingfisher, held: frozenset[str]):
+    """What `opened_by` answers for a caller holding exactly these names."""
+    zones = sorted(
+        one.removeprefix(DATAZONE_PREFIX)
+        for one in held
+        if one.startswith(DATAZONE_PREFIX)
+    )
+    return kf.opened_by(
+        "surveyor",
+        source_ids=sorted(one for one in held if not one.startswith(DATAZONE_PREFIX)),
+        datazone=zones[0] if zones else None,
+        extra_datazones=tuple(zones[1:]),
+    )
+
+
+def _flat(opening) -> set[str]:
+    """One side of the answer back in the one namespace `held_by` holds, for comparing."""
+    return set(opening.source_ids) | {zone_name(one) for one in opening.datazones}
+
+
+def test_a_name_opens_something_only_where_the_caller_satisfies_an_entry(zoned):
+    """A caller told that a name of theirs opened something it did not: `A` is named in
+    the agent's audience and also, with the zone, in the zoned tool's -- and only the
+    first is an entry they satisfy without a datazone.
+    """
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    opened = _opened(kf, frozenset({"A"}))
+
+    assert opened.opens.source_ids == frozenset({"A"})
+    assert opened.opens.datazones == frozenset()
+    # Nothing: B opens the agent `A` already opens, so adding it reaches nothing more.
+    assert opened.would.source_ids == frozenset()
+    assert opened.would.datazones == frozenset({"finance"})
+
+
+def test_both_names_open_the_agent_where_either_alone_would(zoned):
+    """The reading this rule was chosen over: dropping either of `A` and `B` shuts
+    nothing, so a load-bearing rule answers that neither opens anything.
+    """
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    opened = _opened(kf, frozenset({"A", "B"}))
+
+    assert opened.opens.source_ids == frozenset({"A", "B"})
+
+
+def test_a_held_datazone_no_definition_requires_opens_nothing(zoned):
+    """A caller in `hr` told that `hr` opened something. Nothing here is zoned `hr`, and
+    the extra `finance` is what reaches the zoned tool.
+    """
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    opened = _opened(kf, frozenset({"A", zone_name("hr"), zone_name("finance")}))
+
+    assert opened.opens.datazones == frozenset({"finance"})
+    assert opened.opens.source_ids == frozenset({"A"})
+    assert opened.would == type(opened.would)()
+
+
+def test_a_shut_agent_names_the_ids_that_would_open_it_and_no_zone(zoned):
+    """A caller holding nothing told that `finance` would open the zoned tool. It would
+    not: the tool's audience is joint with the agent's, so without `A` or `B` it is two
+    names short, and this is what the composition is for.
+    """
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    opened = _opened(kf, frozenset())
+
+    assert opened.would.source_ids == frozenset({"A", "B"})
+    assert opened.would.datazones == frozenset()
+    assert opened.opens == type(opened.opens)()
+
+
+def test_a_name_no_definition_uses_opens_nothing_and_is_not_reported(zoned):
+    """Held all the same and opening nothing, as `held_by` promises -- and absent from
+    the answer, which would otherwise hand back a name the deployment invented.
+    """
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    opened = _opened(kf, frozenset({"C"}))
+
+    assert _flat(opened.opens) == set()
+    assert opened.would.source_ids == frozenset({"A", "B"})
+
+
+def test_what_opens_agrees_with_the_withheld_report(zoned):
+    """The second reader of these locks, and the one that could drift: a name reported
+    as opening something no run would hand over, or a name whose addition reaches
+    something and is left out of `would`.
+
+    Driven against the report rather than against expectations written here, and the
+    report is pinned to a grant of nothing on every audienced axis -- it skips an axis
+    its grant does not narrow, so under the default grant it answers nothing and this
+    test would pass whatever `opened_by` returned.
+    """
+    from itertools import combinations
+
+    from kingfisher.core.access.capabilities import Capabilities
+    from kingfisher.core.reporting import withheld_by_kind
+    from kingfisher.core.session.steps import drive
+
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+    # Out of the catalogue, never resolved by name: resolution drops an agent out of
+    # reach, so a caller holding nothing is told no agent exists and the oracle goes
+    # blind to exactly the callers `would` is for.
+    spec = kf.catalogue.agents.specs["surveyor"]
+    nothing_granted = kf.grants.intersect(Capabilities(tools=(), skills=(), subagents=()))
+    reached: dict[frozenset[str], frozenset[tuple[str, str]]] = {}
+
+    def reaches(held: frozenset[str]) -> frozenset[tuple[str, str]]:
+        """Everything a run would hand this caller, asked of the withheld report."""
+        if held in reached:
+            return reached[held]
+        session = kf.workspace / "sessions" / f"oracle-{abs(hash(held))}"
+        session.mkdir(parents=True, exist_ok=True)
+        ensure_session_layout(session, DEFAULT_LAYOUT)
+        graph = kf._graph_for(
+            Request(task="t", agent="surveyor"),
+            capabilities=kf.grants,
+            checkpointer=None,
+            agent=spec,
+            held=held,
+            files=drive(kf._files_for(session.name)),
+            session_id=session.name,
+        ).graph
+        told = withheld_by_kind(
+            nothing_granted, kf.cfg, graph, kf.catalogue, agent=spec, held=held
+        )
+        reached[held] = frozenset(
+            (kind, name) for kind, names in told if kind != "builtin tool" for name in names
+        )
+        return reached[held]
+
+    names = ("A", "B", zone_name("finance"))
+    subsets = [
+        frozenset(picked)
+        for size in range(len(names) + 1)
+        for picked in combinations(names, size)
+    ]
+    assert reaches(frozenset(names)) > reaches(frozenset()), "the control: the oracle moves"
+
+    for held in subsets:
+        opened = _opened(kf, held)
+        # A name whose addition, on its own, reaches something more.
+        would = {one for one in set(names) - held if reaches(held | {one}) > reaches(held)}
+        # A name some subset of theirs needs to reach what that subset without it does
+        # not. Over subsets, not over the whole set: pinned to the whole set this
+        # derivation describes the load-bearing reading, which was turned down.
+        opens = {
+            one
+            for one in held
+            if any(
+                reaches(part) - reaches(part - {one})
+                for part in subsets
+                if one in part and part <= held
+            )
+        }
+
+        assert _flat(opened.opens) == opens, f"opens for {sorted(held)}"
+        assert _flat(opened.would) == would, f"would for {sorted(held)}"
+
+
+def test_a_name_only_a_dominated_entry_carries_is_not_a_reason(zoned):
+    """`[A, {A, B}]` is opened by A alone, so a caller holding both is told B opened it
+    when nothing drops the entry no audience needs.
+    """
+    agents = zoned.catalogue_roots["agents"]
+    (agents / "surveyor.yaml").write_text(
+        AGENT.replace("source_ids: [A, B]", "source_ids: [A, {A, B}]"), encoding="utf-8"
+    )
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    opened = _opened(kf, frozenset({"A", "B"}))
+
+    assert opened.opens.source_ids == frozenset({"A"})
+
+
+def test_unscoped_is_refused_where_an_empty_sequence_is_the_question(zoned):
+    """`UNSCOPED` is read everywhere as nothing narrowing, so the walk would answer that
+    nothing opens and nothing would -- the emptiest answer, about the least restricted
+    caller there is.
+    """
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    with pytest.raises(CallerError, match=r"UNSCOPED is no caller at all"):
+        kf.opened_by("surveyor", source_ids=UNSCOPED)  # ty: ignore[invalid-argument-type]
+
+    assert kf.opened_by("surveyor", source_ids=[]).would.source_ids == frozenset({"A", "B"})
+
+
+def test_an_agent_out_of_reach_is_answered_and_an_unknown_one_refused(zoned):
+    """The run path tells a caller neither exists, so that out of reach reads as not
+    offered. Here the first is the answer worth having and only the second is a mistake.
+    """
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    assert kf.opened_by("surveyor", source_ids=["C"]).would.source_ids == frozenset({"A", "B"})
+    with pytest.raises(CapabilityError, match="no agent named 'nowhere'"):
+        kf.opened_by("nowhere", source_ids=["A"])
+
+
+def test_a_deployment_with_no_lock_is_refused_rather_than_answered_empty(cfg):
+    """An empty answer where nothing is locked reads as "these ids buy you nothing",
+    which is the reading `held_by` refuses a named caller for.
+    """
+    agents = cfg.catalogue_roots["agents"]
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "surveyor.yaml").write_text(
+        AGENT.replace("source_ids: [A, B]\n", "").replace("tools: [payroll, line_count]\n", ""),
+        encoding="utf-8",
+    )
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+
+    with pytest.raises(CallerError, match="no definition here carries a lock"):
+        kf.opened_by("surveyor", source_ids=[])
+
+
+#: The same agent with a skills entry narrower than its own line, and no tools.
+SKILLED = """name: surveyor
+description: An agent.
+source_ids: [A, B]
+builtin_tools: [read_file, task]
+skills:
+  - name: payroll-handling
+    source_ids: [pii]
+  - review
+system_prompt: |
+  You do the task.
+"""
+
+
+def _skilled(cfg, *, enabled: bool = True) -> Kingfisher:
+    """The deployment above, with its skills on disk and the deployment's switch set."""
+    agents = cfg.catalogue_roots["agents"]
+    (agents / "surveyor.yaml").write_text(SKILLED, encoding="utf-8")
+    for name in ("payroll-handling", "review"):
+        (cfg.skills_dir / name).mkdir(parents=True, exist_ok=True)
+        (cfg.skills_dir / name / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: A procedure.\n---\nBody.\n", encoding="utf-8"
+        )
+    return Kingfisher(replace(cfg, skills_enabled=enabled), sessions=LocalSessions())
+
+
+def test_a_skill_entrys_own_id_is_named_as_one_that_would_open_it(zoned):
+    """A caller who opens the agent and lacks `pii` is one name short of the entry, and
+    nothing said so: asked for this caller, `declares` drops the entry before its lock
+    can be read, so `would` could name no id that opens a skill.
+    """
+    opened = _opened(_skilled(zoned), frozenset({"A"}))
+
+    assert opened.would.source_ids == frozenset({"pii"})
+    # The bare entry inherits the agent's own line, which this caller satisfies.
+    assert opened.opens.source_ids == frozenset({"A"})
+
+
+def test_a_skill_nothing_can_open_names_no_id(zoned):
+    """An audience on a line the model is never told: granting `pii` would change
+    nothing, and sending an operator to grant it is worse than saying nothing.
+    """
+    off = _opened(_skilled(zoned, enabled=False), frozenset({"A"}))
+    assert off.would.source_ids == frozenset(), "skills switched off for the deployment"
+
+    # Withheld by the request, not by the file: an agent naming `skills:` without the
+    # read tool is refused at load, so the file can never be in this state.
+    shut = _skilled(zoned).opened_by(
+        "surveyor", source_ids=["A"], capabilities=Capabilities(builtin_tools=("task",))
+    )
+    assert shut.would.source_ids == frozenset(), "no read tool granted, so no skill opens"
+
+
+#: A portable subagent locked to `C`, carrying a tool of its own locked to `D`. Its
+#: tools arrive as objects, so no grant reaches them and only their own lock applies.
+VAULT = '''
+from kingfisher import ToolSpec
+
+
+def unseal(name: str) -> str:
+    """Unseal one record."""
+    return "0"
+
+
+SUBAGENTS = [{
+    "name": "vault",
+    "description": "Unseals records.",
+    "system_prompt": "You unseal.",
+    "source_ids": ["C"],
+    "tools": [ToolSpec(unseal, source_ids=["D"])],
+}]
+'''
+
+#: The agent above it, granting nothing but the subagent.
+KEEPER = """name: surveyor
+description: An agent.
+source_ids: [A, B]
+builtin_tools: [task]
+subagents: [vault]
+system_prompt: |
+  You do the task.
+"""
+
+
+@pytest.fixture
+def carried(cfg):
+    """An agent over a locked subagent that carries a tool with a lock of its own."""
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "vault.py").write_text(VAULT, encoding="utf-8")
+    agents = cfg.catalogue_roots["agents"]
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "surveyor.yaml").write_text(KEEPER, encoding="utf-8")
+    return cfg
+
+
+def test_a_carried_tools_lock_is_read_under_the_subagent_that_brings_it(carried):
+    """A caller who cannot reach the subagent told that `D` would open its tool. It
+    would not: `C` and `D` are both missing, and the tool is reached only through the
+    subagent -- the one place a path of three has to be composed to answer right.
+    """
+    kf = Kingfisher(carried, sessions=LocalSessions())
+
+    shut = _opened(kf, frozenset({"A"}))
+    assert shut.would.source_ids == frozenset({"C"}), "C alone opens the subagent"
+
+    # Through it now, so the carried tool's own lock is the one name still missing.
+    through = _opened(kf, frozenset({"A", "C"}))
+    assert through.would.source_ids == frozenset({"D"})
+    assert through.opens.source_ids == frozenset({"A", "C"})
+
+
+#: A subagent locked to `C`, granting the finance tool and narrowing one skill further.
+AUDITOR = """name: auditor
+description: Audits.
+source_ids: [C]
+builtin_tools: [read_file]
+tools: [payroll]
+skills:
+  - name: payroll-handling
+    source_ids: [pii]
+system_prompt: |
+  You audit.
+"""
+
+#: The agent above it, holding nothing itself.
+OVERSEER = """name: surveyor
+description: An agent.
+source_ids: [A, B]
+builtin_tools: [read_file, task]
+subagents: [auditor]
+system_prompt: |
+  You do the task.
+"""
+
+
+def test_what_a_subagent_grants_and_narrows_is_read_under_its_own_lock(zoned):
+    """A subagent's granted tool and its own skills entry, which nothing else here
+    reaches: both are reached only through it, so a caller outside its lock must be told
+    neither `finance` nor `pii` would open anything on its own.
+    """
+    (subagents_dir(zoned) / "auditor.yaml").write_text(AUDITOR, encoding="utf-8")
+    (zoned.catalogue_roots["agents"] / "surveyor.yaml").write_text(OVERSEER, encoding="utf-8")
+    (zoned.skills_dir / "payroll-handling").mkdir(parents=True, exist_ok=True)
+    (zoned.skills_dir / "payroll-handling" / "SKILL.md").write_text(
+        "---\nname: payroll-handling\ndescription: A procedure.\n---\nBody.\n", encoding="utf-8"
+    )
+    kf = Kingfisher(replace(zoned, skills_enabled=True), sessions=LocalSessions())
+
+    shut = _opened(kf, frozenset({"A"}))
+    assert shut.would.source_ids == frozenset({"C"}), "only C opens the subagent at all"
+    assert shut.would.datazones == frozenset()
+
+    # Through it, each of its parts is one name short on its own account.
+    through = _opened(kf, frozenset({"A", "C"}))
+    assert through.would.source_ids == frozenset({"pii"})
+    assert through.would.datazones == frozenset({"finance"})
+    assert through.opens.source_ids == frozenset({"A", "C"})

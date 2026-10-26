@@ -72,6 +72,9 @@ _EXPORTS = {
     "Seeded": "kingfisher.core.definitions.seeding",
     "inventory": "kingfisher.core.inventory",
     "Inventory": "kingfisher.core.inventory",
+    # What `Kingfisher.opened_by` answers: which of a caller's names open anything.
+    "Opened": "kingfisher.core.access.source_ids",
+    "Opening": "kingfisher.core.access.source_ids",
     # Where this deployment reads from, so a library caller can ask what `doctor` prints.
     "Origin": "kingfisher.core.origins",
     "Origins": "kingfisher.core.origins",
@@ -105,6 +108,8 @@ __all__ = [
     "LedgerEntry",
     "ModelProfile",
     "Models",
+    "Opened",
+    "Opening",
     "Origin",
     "Origins",
     "PendingDecision",
@@ -146,6 +151,8 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import UNSCOPED as UNSCOPED
     from kingfisher.core.access.source_ids import CallerError as CallerError
     from kingfisher.core.access.source_ids import Held as Held
+    from kingfisher.core.access.source_ids import Opened as Opened
+    from kingfisher.core.access.source_ids import Opening as Opening
     from kingfisher.core.agent.tool_context import Caller as Caller
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
     from kingfisher.core.config import Config as Config

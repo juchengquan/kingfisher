@@ -42,10 +42,13 @@ _EXPORTS = {
     "within_reach": "kingfisher.core.access.reach",
     "AccessReport": "kingfisher.core.access.source_ids",
     "Audience": "kingfisher.core.access.source_ids",
+    "CallerError": "kingfisher.core.access.source_ids",
     "DATAZONE_PREFIX": "kingfisher.core.access.source_ids",
     "Datazone": "kingfisher.core.access.source_ids",
     "ExtraDatazone": "kingfisher.core.access.source_ids",
     "Held": "kingfisher.core.access.source_ids",
+    "Opened": "kingfisher.core.access.source_ids",
+    "Opening": "kingfisher.core.access.source_ids",
     "Stated": "kingfisher.core.access.source_ids",
     "Vocabulary": "kingfisher.core.access.source_ids",
     "jointly": "kingfisher.core.access.source_ids",
@@ -100,9 +103,12 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import DATAZONE_PREFIX as DATAZONE_PREFIX
     from kingfisher.core.access.source_ids import AccessReport as AccessReport
     from kingfisher.core.access.source_ids import Audience as Audience
+    from kingfisher.core.access.source_ids import CallerError as CallerError
     from kingfisher.core.access.source_ids import Datazone as Datazone
     from kingfisher.core.access.source_ids import ExtraDatazone as ExtraDatazone
     from kingfisher.core.access.source_ids import Held as Held
+    from kingfisher.core.access.source_ids import Opened as Opened
+    from kingfisher.core.access.source_ids import Opening as Opening
     from kingfisher.core.access.source_ids import Stated as Stated
     from kingfisher.core.access.source_ids import Vocabulary as Vocabulary
     from kingfisher.core.access.source_ids import jointly as jointly
