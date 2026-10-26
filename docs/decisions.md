@@ -2749,26 +2749,43 @@ rather than removing it, which answers bytes and the session cap rather than the
 count. `conversation_history/`, whose growth is the summariser re-running every turn,
 noted under clearing. *(2026-10-20, from a grilled plan.)*
 
-**Not built, and still open.**
+**What was left open, decided.** *(2026-10-26, from a grilled list.)*
 
-- **A handle in place of a large result's stub.** A handle in place of *every* result,
-  as the plan has it, was declined: most results are needed at once, and reading each
-  back would double the round trips of every search.
-- **Reusing a result for an identical call within a freshness window, declared
-  supersession, and "derived from" links.** Each needs information nothing supplies.
-- **Regeneration, which gets a design of its own:** rewinding or forking, what becomes
-  of files already in `/outputs`, how a client names a turn. Every row records its turn
-  so it can filter by one.
-- **Calls inside `eval` and inside a compiled subagent,** which no hook sees; the
-  compiled subagent's answer is recorded through `task`. Nor what the shell writes;
-  `RunResult.artifacts` is the sound view of files.
-- **Finding an old entry by anything but its id.** Its file is found by `glob` for
-  `A-0042-*` under `/scratchpad/tool_results/`, a long result's too, as the prompt says
-  and `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says` drives; the
-  `grep` for `[A-0042]` under `large_tool_results/` went on 2026-10-21 with the
-  offloading it searched. A rolled-up
-  entry's arguments and summary are in the ledger, under `.harness`, out of reach; if
-  that proves too little, the index could be written as a readable file.
+- **A call made inside `eval` or inside a compiled subagent gets no row of its own.**
+  The agent never sees those results; what it does see, the program's output or the
+  subagent's answer, is recorded through the `eval` or `task` call, and a program looping
+  over a tool would otherwise add a line per call to every message. What a deployment
+  needs is a true stamp on that one entry, below. A subagent a program starts is filed
+  under the program's call, as a subagent is under its `task`: `eval` names a run too,
+  or that subagent's results read as calls the agent made itself. Nor what the shell
+  writes; `RunResult.artifacts` is the sound view of files.
+- **A program's entry, and a compiled subagent's answer, are stamped with the tools that
+  ran.** Each such call passes `GuardedTool`, which notes its tool against the call it
+  runs under, writing no row; the entry is stamped jointly with what was noted, as a
+  `task` answer is with its run's rows. Since a deployment decides who may continue a
+  session by these stamps, the entry claims no wider audience than what it can repeat.
+  Rejected: stamping with every tool the program or subagent was handed, never too wide
+  but marking a program that only added two numbers as holding locked data.
+- **Closed: a handle in place of a large result's stub.** The preview already shows a
+  result's head, its tail and its id, and the whole is one `read_file` away; clearing
+  turns older results into handles. A handle in place of *every* result, as the plan had
+  it, was declined: most results are needed at once, and reading each back would double
+  the round trips of every search.
+- **Declined: reusing a result for an identical call within a freshness window, declared
+  supersession, and "derived from" links.** Each needs what nothing supplies: how long a
+  tool's results stay fresh, for reuse; a declaration that one result replaces another,
+  from a tool, a policy or a call, for supersession; which earlier results a call drew
+  on, which only the model knows, for "derived from".
+- **Finding an old entry by anything but its id waits for a session that needs it.** The
+  reader is the agent; a deployment already has every row. Its file is found by `glob`
+  for `A-0042-*` under `/scratchpad/tool_results/`, as the prompt says and
+  `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says` drives, and by tool
+  name or content with `glob` and `grep` over the same copies. Detail is lost only at a
+  summary, which clearing makes rare on a large window. If that proves too little, the
+  index could be written as a readable file.
+- **Still open: regeneration, which gets a design of its own:** rewinding or forking, what
+  becomes of files already in `/outputs`, how a client names a turn. Every row records
+  its turn so it can filter by one.
 
 ## Tool failure
 
