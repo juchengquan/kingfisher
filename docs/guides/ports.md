@@ -47,6 +47,27 @@ its own exception is left alone: that is your code failing at your job, its type
 may be one your own error handling knows, and the traceback already says which
 setting reached it.
 
+## Which there are
+
+Beside `sessions`, `Kingfisher` takes these, each optional and left to kingfisher's own
+when left out:
+
+| What it changes | Keyword | Where |
+|---|---|---|
+| **Prompt text** | `instructions` | [`formats.md`](formats.md#the-prompt-is-added-to-not-replaced) |
+| | `turn_instructions` | [below](#turninstructions--text-for-one-turn) |
+| **What a turn may hand over or run** | `pdf_attachments` | [below](#pdfattachments--what-the-model-is-handed-in-place-of-a-pdf) |
+| | `scratch_run_limit` | [below](#scratchrunlimit--which-graphs-tools-may-run-commands) |
+| | `subagent_middlewares` | [below](#subagentmiddlewares--what-a-portable-subagent-runs) |
+| **After the turn** | `run_events` | [below](#runevents--where-each-turns-record-goes) |
+| | `unused_results` | [below](#unusedresults--what-becomes-of-a-saved-result-nothing-names) |
+
+Something kingfisher does that you want done differently is usually middleware, which a
+definition names. One of these exists where only kingfisher knows what the change needs
+-- a verdict, which graph is built, the end of a turn -- and it has to hold for every
+agent with no definition able to forget it. `docs/decisions.md` has the rules a new one
+is admitted by.
+
 ## What yours has to promise
 
 Each interface says what an implementation has to keep, in its own docstring, and
