@@ -17,6 +17,7 @@ from langchain_core.tools import BaseTool, StructuredTool, ToolException
 from langchain_core.tools.base import _get_runnable_config_param, _signature_parameters
 
 from .host_paths import HostPathError
+from .middlewares.recorder import ran
 from .references import UnsafeReferenceError
 from .session_paths import SessionPaths, as_asked, refusal_text
 from .tool_context import naming
@@ -83,6 +84,8 @@ class GuardedTool(BaseTool):
         run_manager: CallbackManagerForToolRun | None = None,
         **kwargs: Any,
     ) -> Any:
+        # No recorder sees this call, so the answer it feeds is stamped with it here.
+        ran(self.inner.name)
         args = self._translated(kwargs)
         with self._named():
             try:
@@ -101,6 +104,7 @@ class GuardedTool(BaseTool):
         run_manager: AsyncCallbackManagerForToolRun | None = None,
         **kwargs: Any,
     ) -> Any:
+        ran(self.inner.name)
         args = self._translated(kwargs)
         # Read as `arun` reads it: a tool with no `_arun` of its own runs its `_run`.
         own = type(self.inner)._arun is not BaseTool._arun

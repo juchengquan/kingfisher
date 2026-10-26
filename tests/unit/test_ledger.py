@@ -1300,6 +1300,62 @@ def test_access_is_the_audience_each_result_was_offered_under(ledgered):
     ]
 
 
+#: A compiled subagent holding the locked `web_search`.
+SURVEYOR = """
+def build(model, tools):
+    from langchain.agents import create_agent
+
+    return create_agent(model, tools)
+
+
+SUBAGENTS = [
+    {"name": "surveyor", "description": "Surveys.", "build": build, "tools": ["web_search"]}
+]
+"""
+
+
+@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
+def test_an_answer_no_recorder_saw_the_work_of_is_stamped_with_what_ran(ledgered, awaited):
+    """A call from code or inside a compiled subagent passes no recorder, so the answer it
+    fed was stamped with only the agent's own audience: a result of a tool locked to
+    `public` came back readable by `finance`, which may not use that tool.
+    """
+    cfg = replace(_audienced(ledgered), interpreter_enabled=True)
+    (subagents_dir(cfg) / "surveyor.py").write_text(SURVEYOR, encoding="utf-8")
+    agent = cfg.catalogue_roots["agents"] / "only.yaml"
+    agent.write_text(
+        AUDIENCED_AGENT.replace("subagents: [researcher]", "subagents: [researcher, surveyor]"),
+        encoding="utf-8",
+    )
+    Scripted.script.extend(
+        [
+            _calls(("eval", {"code": "tools.webSearch({query: 'EV'})"}, "e1")),
+            _calls(("eval", {"code": "tools.sqlQuery({query: 'q'})"}, "e2")),
+            _task("t1", subagent="surveyor"),
+            _calls(("web_search", {"query": "BYD"}, "c1")),
+            AIMessage(content="surveyed"),
+            AIMessage(content="done"),
+        ]
+    )
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    granted = Capabilities(builtin_tools=("eval", "task"), tools=("web_search", "sql_query"))
+    request = Request("go", agent="only", session_id="s", capabilities=granted)
+    result = (
+        asyncio.run(kf.arun(request, source_ids=HOLDING))
+        if awaited
+        else kf.run(request, source_ids=HOLDING)
+    )
+
+    assert {e.call: e.access for e in result.ledger} == {
+        "e1": ("public",),
+        # Narrowed by what ran, not by what was handed over: this program ran no locked tool.
+        "e2": ("finance", "public"),
+        "t1": ("public",),
+    }
+    ran = {e.call: e.path for e in result.ledger}
+    assert all(ran.values()) and "Ten results for EV" in _read(cfg, str(ran["e1"]))
+
+
 def test_a_subagent_paused_at_a_gate_answers_under_everything_its_run_read(ledgered):
     """A subagent stopped at a gate answers in the next turn, and what its run read
     before the pause is in the ledger alone -- counted only from this turn, the answer
