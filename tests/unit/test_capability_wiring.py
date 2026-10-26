@@ -643,13 +643,16 @@ def test_the_memory_guidelines_promise_nothing_past_the_session(cfg, session_dir
 
 def test_the_memory_guidelines_never_show_keeping_who_the_user_is():
     """deepagents' first example saved a user's email address, which a deployment telling
-    its agent who the user is would then find kept in the session's memory file."""
+    its agent who the user is would then find kept in the session's memory file. The
+    examples are gone, and the rule stays, said as what saving does."""
     told = memory_guidelines(None, DEFAULT_LAYOUT)
-    saved = [line for line in told.splitlines() if "remembers that" in line]
 
-    assert saved, "no example saves anything, so this asserts nothing"
-    assert [line for line in saved if "email" in line or "@" in line] == []
-    assert "Never store details that identify the user" in told
+    assert "remembers that" not in told
+    assert "never save credentials or details that identify the user" in told
+    # The control: an agent with nothing to save with is told no rule about saving.
+    read_only = memory_guidelines(frozenset({"read_file"}), DEFAULT_LAYOUT)
+    assert "identify the user" not in read_only
+    assert "can be read here but not added to" in read_only
 
 
 def test_the_memory_block_keeps_a_cache_breakpoint_of_its_own(cfg, session_dir):

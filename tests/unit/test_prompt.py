@@ -13,6 +13,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.kinds.subagents import as_subagent
 from kingfisher.core.agent.middlewares.builtin_tools import MAPPINGS, TODOS
 from kingfisher.core.agent.prompting import (
+    memory_guidelines,
     render_system_prompt,
     session_section,
     system_prompt,
@@ -40,19 +41,26 @@ def test_base_prompt_names_no_dataset_and_no_domain():
 
 def test_capability_sections_appear_only_when_enabled():
     """The agent must never be told about a capability that is not wired."""
-    off = shipped()
-    assert "/skills" not in off
-    assert "/memory" not in off
-
-    on = shipped(skills_enabled=True, memory_enabled=True)
-    assert "/skills" in on
-    assert "/memory" in on
+    assert "/skills" not in shipped()
+    assert "/skills" in shipped(skills_enabled=True)
 
 
-def test_capability_flags_are_independent():
-    skills_only = shipped(skills_enabled=True)
-    assert "/skills" in skills_only
-    assert "/memory" not in skills_only
+def test_memory_is_described_by_its_block_and_nowhere_else():
+    """Described in the cached prompt as well, memory was described twice where it was on,
+    and to a request that had declined it, which is handed no block and no file."""
+    for skills in (False, True):
+        assert "/memory" not in shipped(skills_enabled=skills, shell=kingfishers_shell())
+    assert "/memory" in memory_guidelines(None, DEFAULT_LAYOUT)
+
+
+def test_the_memory_block_says_memory_lasts_only_this_conversation():
+    """`/memory` goes with its session, and a prompt promising "a future session" had the
+    agent writing for a reader who never arrives. The block is the one place it is said
+    now, to an agent that saves and to one that only reads."""
+    for tools in (None, frozenset({"read_file"})):
+        told = " ".join(memory_guidelines(tools, DEFAULT_LAYOUT).split())
+        assert "kept for later turns of this conversation" in told
+        assert "future" not in told.lower()
 
 
 def test_structural_contract_survives_every_combination():
@@ -60,10 +68,9 @@ def test_structural_contract_survives_every_combination():
     on.
     """
     for skills in (False, True):
-        for memory in (False, True):
-            text = shipped(skills_enabled=skills, memory_enabled=memory)
-            assert "/inputs" in text
-            assert "/outputs" in text
+        text = shipped(skills_enabled=skills)
+        assert "/inputs" in text
+        assert "/outputs" in text
 
 
 def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
@@ -111,9 +118,8 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     moved = Layout(
         inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
     )
-    text = render_system_prompt(
-        skills_enabled=True, memory_enabled=True, layout=moved, shell=kingfishers_shell()
-    )
+    text = render_system_prompt(skills_enabled=True, layout=moved, shell=kingfishers_shell())
+    remembered = memory_guidelines(None, moved)
 
     # The renamed leaves, spelled where the default names used to be.
     assert '| `/in/<name>` | `"$KINGFISHER_SESSION_ROOT/in/<name>"` |' in text
@@ -122,12 +128,14 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     assert "/scratch/results/" in text
     # The fixed sub-leaves stay fixed, under the renamed scratchpad.
     assert "/scratch/conversation_history/" in text
-    # The memory capability section names the renamed memory leaf.
-    assert "/mem" in text
+    # The memory block names the renamed memory leaf.
+    assert "`/mem`" in remembered
 
     # And none of the default spellings the rename replaced.
     for gone in ("/inputs", "/outputs", "/scratchpad", "/memory", "/tool_results"):
         assert gone not in text, gone
+        # Backticked, as the block writes a path: its own closing tag holds `/memory`.
+        assert f"`{gone}" not in remembered, gone
 
 
 def test_the_prompt_names_the_folder_deepagents_writes_on_its_own(cfg, session_dir):
@@ -250,7 +258,7 @@ def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
     """
     from evals.task import SMOKE_TASK
 
-    for text in (shipped(skills_enabled=True, memory_enabled=True), SMOKE_TASK):
+    for text in (shipped(skills_enabled=True), memory_guidelines(None, DEFAULT_LAYOUT), SMOKE_TASK):
         assert "run directory" not in text
 
 
@@ -278,11 +286,10 @@ def test_assembly_leaves_no_blank_line_runs_or_markers():
     from kingfisher.core.agent.prompting import CAPABILITY_MARKER
 
     for skills in (False, True):
-        for memory in (False, True):
-            text = shipped(skills_enabled=skills, memory_enabled=memory)
-            assert CAPABILITY_MARKER not in text
-            assert "<!--" not in text
-            assert not re.search(r"\n{3,}", text)
+        text = shipped(skills_enabled=skills)
+        assert CAPABILITY_MARKER not in text
+        assert "<!--" not in text
+        assert not re.search(r"\n{3,}", text)
 
 
 def test_shell_section_does_not_contradict_the_injected_host_mappings():
@@ -311,10 +318,9 @@ def test_the_system_prompt_demands_no_artifacts():
     for both kinds of turn -- the one place that cannot tell them apart.
     """
     for skills in (False, True):
-        for memory in (False, True):
-            text = shipped(skills_enabled=skills, memory_enabled=memory)
-            assert "report.md" not in text
-            assert "result.json" not in text
+        text = shipped(skills_enabled=skills)
+        assert "report.md" not in text
+        assert "result.json" not in text
 
     assert "Answer the question. That is the deliverable" in shipped()
 
@@ -442,9 +448,8 @@ def test_the_prompt_does_not_promise_other_sessions_are_out_of_reach():
     could write. The macOS shell can read and change them, and so can any unfenced one.
     """
     for skills in (False, True):
-        for memory in (False, True):
-            text = shipped(skills_enabled=skills, memory_enabled=memory)
-            assert "another session's files" not in text
+        text = shipped(skills_enabled=skills)
+        assert "another session's files" not in text
 
 
 def test_the_prompt_claims_about_inputs_only_what_holds_with_no_fence():
@@ -513,20 +518,19 @@ def test_the_half_the_prompt_still_claims_holds_with_no_fence_at_all(
 
 def test_the_prompt_does_not_count_the_places_a_turn_may_write():
     """"One of two places, and never anywhere else" is false the moment memory is on:
-    the same composed prompt then tells the agent to record things, and
-    `write_file("/memory/AGENTS.md", ...)` succeeds and comes back as an artifact.
+    the agent is then told to save to it, and `write_file("/memory/AGENTS.md", ...)`
+    succeeds and comes back as an artifact.
 
     An absolute claim in the base document that an optional section contradicts is the
     composition hazard #760 fixed for the shell's four claims. Named rather than
     counted now -- what is *not* the agent's to write does not change with a
     capability, and the sections that grant a place say so where they grant it.
     """
-    for memory in (False, True):
-        text = shipped(memory_enabled=memory)
+    text = shipped()
 
-        assert "never anywhere else" not in text
-        assert "Nothing else in the session is yours to write" in text
-        assert ("Record something when it would change" in text) is memory
+    assert "never anywhere else" not in text
+    assert "Nothing else in the session is yours to write" in text
+    assert "Save to it with `edit_file`" in memory_guidelines(None, DEFAULT_LAYOUT)
 
 
 # -- a deployment's own instructions ---------------------------------------------
@@ -842,9 +846,8 @@ def test_memory_is_saved_only_with_a_tool_the_agent_holds(scripted, granted, sav
 
     assert "<agent_memory>" in system, "no memory was wired, so the rest is vacuous"
     for tool in ("edit_file", "write_file"):
-        assert (f"calling the `{tool}` tool" in system) is (tool == saver), tool
-        assert (f"Tool Call: {tool}(" in system) is (tool == saver), tool
-    assert ("Record something when" in system) is (saver is not None)
+        assert (f"Save to it with `{tool}`" in system) is (tool == saver), tool
+    assert ("never save credentials" in system) is (saver is not None)
     assert ("can be read here but not added to" in system) is (saver is None)
     assert ("evidence from `read_file`" in system) is reads
 

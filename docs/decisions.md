@@ -999,7 +999,9 @@ nothing reads the files, since the shell may. Memory is saved with `edit_file`, 
 neither, as the shipped `operator` does, is told in the guidelines that its memory can be
 read and not added to, and not in the memory section: a request declining memory keeps
 that section as the cached prefix while its file is denied. No subagent is handed memory;
-deepagents gives it only to `mode: fork`, which kingfisher refuses.
+deepagents gives it only to `mode: fork`, which kingfisher refuses. *Since 2026-10-26
+there is no memory section: memory is described in its block alone, so a request
+declining it is told nothing of memory and its file is still denied.*
 deepagents' own tool descriptions name only held tools too, in its wording where it has a
 variant: it picks `execute`'s and `grep`'s itself, but from every built-in, since it runs
 before the grant is applied. `edit_file`'s claim to error on a file not read first was
@@ -3867,7 +3869,20 @@ to the memory file costs the whole prompt its cache.
 off the library and fails if a line kingfisher's copy leaves out reaches the model; it
 cannot catch "permanently" written back into kingfisher's own copy, which a test could only
 match as a phrase. `test_the_memory_block_keeps_a_cache_breakpoint_of_its_own` holds the
-slot. *(2026-10-07.)*
+slot. *(2026-10-07.)* *Since 2026-10-26 the template is `prompts/memory.md`, kingfisher's
+throughout and the whole of what the agent is told about memory: where it was loaded from,
+that it lasts for later turns of this conversation, how to save where a save tool is held,
+the trust rules word for word, and the rule against keeping credentials or who the user
+is. deepagents' advice on when to save and what learning means, its asking for
+information, which told an agent nobody was watching to ask the user, and its examples
+went with the section in the static prompt that said what memory is for: what to keep is
+the deployment's to say. `test_the_memory_block_says_memory_lasts_only_this_conversation`
+now does fail on "future" written back. Measured on MiniMax-M3, ten turns each of a user
+stating a convention: the old guidelines saved it 2 times in 10, this block 0 in 10, and
+this block with one line in the deployment's `INSTRUCTIONS.md` saying to save conventions
+4 in 10; every one of the 30 answers applied the convention, which the conversation goes
+on carrying until it is summarised. A turn with nothing to keep saved nothing either way,
+and the smoke passed 3 of 3 both ways.*
 
 **Nor does it keep who the user is.** deepagents' first example saved a user's email
 address, and two of its bullets offered email addresses as what to remember. A deployment
@@ -3875,7 +3890,10 @@ telling its agent who the user is wants that read and not kept: memory is a file
 session, sent on every later call and summarised with the rest. The example now saves a
 stated convention, the bullets name a channel and a table, and the "do not record" list
 names identifying details beside credentials. Wording, not enforcement: scrubbing known
-values out of what is saved would be matching free text. *(2026-10-23.)*
+values out of what is saved would be matching free text. *(2026-10-23.)* *The examples and
+lists went on 2026-10-26; the rule stayed, said as what saving does -- what is saved is sent
+on every later call and handed back with the turn's files -- since that is what makes it
+kingfisher's to say rather than a deployment's.*
 
 **A session id is one path segment, checked where it becomes a path.** Nothing checked it,
 and every path built from an id joined it on as given. Measured: `..` laid a session out in
