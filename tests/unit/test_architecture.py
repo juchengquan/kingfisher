@@ -2072,6 +2072,11 @@ WITNESSES: dict[str, dict[str, str]] = {
         # about this door.
         "Seeded": "embedder",
         "Inventory": "embedder",
+        # What `Kingfisher.opened_by` hands back, and the half of it each side holds.
+        # The type of a public method's answer cannot be private, and a caller
+        # branching on one must be able to name the other.
+        "Opened": "embedder",
+        "Opening": "embedder",
         "inventory": "embedder",
         "kinds_at": "embedder",
         "WorkspacePaths": "embedder",

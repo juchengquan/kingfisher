@@ -1,6 +1,7 @@
 # Which source ids open something
 
-*Designed 2026-10-26. Not implemented.*
+*Designed 2026-10-26, and built in #1096: the call, its two records and the
+tests landed together.*
 
 A deployment hands out source ids and then cannot tell what they bought. The
 listing answers what a caller reaches; nothing answers *which of their names is
@@ -107,6 +108,16 @@ Built-in tools are left out. They take no audience deliberately, because
 deepagents registers them and a boundary there could not be kept, so no name
 opens one.
 
+What a definition *offers* is read for **no caller**, and this walk does every
+piece of the narrowing itself. Asked for the caller instead, `declares` drops a
+skills entry whose own audience they fail before its lock can be read, so `would`
+could name no id that opens a skill at all, and a shut subagent's tools went the
+same way. Two things follow. The composition above is load-bearing rather than
+tidy: taken for the caller, the selections are already empty wherever the join
+would have mattered, and the rule would be right only by accident of a filter in
+another module. And a fixture without skills and without a bundle cannot execute
+either branch, so neither could have been wrong in a way anything noticed.
+
 Skills are walked only where a skill could be opened at all: with skills
 switched off for the deployment, or no read tool in the composed grant, the
 entries are inert. Skills are off by default, so walking them unconditionally
@@ -204,9 +215,17 @@ measured: a caller holding nothing is told the definitions offer no agent at all
 the callers whose answer matters most. Handed the spec, the build succeeds and
 the report is empty, which is the answer.
 
-Mutation-check it: break one-short to two-short, drop the joint composition, drop
-the superset pruning. Each goes red on its own, which is also the check that the
-oracle is not a second copy of the rule.
+Mutation-check every branch separately, not the walk as a whole: one-short
+widened to two-short, each joint composition dropped in turn, the superset pruning
+skipped, the offered sets taken for the caller, each skills gate removed, the
+carried tools asked for the caller. Each goes red on its own, which is also the
+check that the oracle is not a second copy of the rule.
+
+Three of those could not bite against the fixture as it was, and the fixture grew
+for them rather than the claim shrinking: an audience with a dominated entry, a
+subagent carrying a tool under a lock of its own, and a subagent that grants a
+catalogue tool and narrows a skill further. A branch no fixture reaches is one
+that cannot be wrong in a way a test reports.
 
 ### Measured, 2026-10-26
 

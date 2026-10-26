@@ -13,11 +13,16 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import (
     UNRESTRICTED,
+    CallerError,
     Capabilities,
     CapabilityError,
+    Opened,
     Vocabulary,
+    held_by,
     reaches,
+    with_datazone,
 )
+from kingfisher.core.agent.activation import for_the_caller, settled_request
 from kingfisher.core.agent.assembly import (
     build_agent,
     builtin_tool_names,
@@ -64,11 +69,12 @@ from .interfaces import (
     UnusedResults,
 )
 from .origins import Origins
+from .reporting import what_opens
 from .request import Request, Resume, caller_of
 from .workspace import ensure_layout
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping, Sequence
 
     from kingfisher.core.agent.tool_context import Caller
     from kingfisher.core.definitions.documents import DefinitionText
@@ -191,6 +197,71 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             catalogue=self.catalogue,
             sessions=self._sessions,
         )
+
+    def opened_by(
+        self,
+        agent: str,
+        *,
+        source_ids: Iterable[str],
+        datazone: str | None = None,
+        extra_datazones: Sequence[str] = (),
+        capabilities: Capabilities | None = None,
+    ) -> Opened:
+        """Which of this caller's names open something under `agent`, and which single
+        name they do not hold would open something more.
+
+        The operator's answer *about* a caller, and not that caller's own view: a scoped
+        listing carries no vocabulary and no audiences because those are the policy, and
+        `would` names a lock this caller does not pass beside the name that would pass
+        it. A deployment that hands this on to its own callers has handed them the
+        vocabulary.
+
+        Definitions only -- no session, no backend, no model -- so it is synchronous
+        where the rest of this service is not.
+        """
+        # The catalogue directly, never `_agent_named`, which drops an agent out of
+        # reach so that it reads as one nobody wrote. Here that agent is the answer
+        # worth having, and only a name nothing defines is a mistake in the call.
+        spec = self.catalogue.agents.specs.get(agent)
+        if spec is None:
+            listing = ", ".join(sorted(self.catalogue.agents.specs)) or "none"
+            msg = (
+                f"no agent named {agent!r}; the definitions define {listing}. One this "
+                f"caller cannot reach is answered rather than refused, so this is a "
+                f"name nothing defines"
+            )
+            raise CapabilityError(msg)
+        held = held_by(self.vocabulary, with_datazone(source_ids, datazone, extra_datazones))
+        # `held_by` answers `None` for no caller and for no lock anywhere, and these two
+        # are opposite mistakes: asked of that one function rather than by reading the
+        # shape of `source_ids` here, which is a reader that would come to disagree
+        # with it. With a lock in force, every sequence answers a set, so `None` is a
+        # caller nobody named.
+        if held is None and self.vocabulary is not None:
+            msg = (
+                "UNSCOPED is no caller at all, and this call asks which of a caller's "
+                "names open something -- pass the ids they hold, or [] for a caller "
+                "who holds none"
+            )
+            raise CallerError(msg)
+        if held is None:
+            msg = (
+                "no definition here carries a lock, so no name opens anything and the "
+                "answer would be the unrestricted one -- write a source_ids: or "
+                "datazone: line before asking which names open something"
+            )
+            raise CallerError(msg)
+        # Composed as a run composes it, so the answer is about a request this
+        # deployment would serve: its own grant under the request's, a bare subagent
+        # name settled, then what the agent declares for this caller.
+        asked = settled_request(
+            self.cfg,
+            self.grants.intersect(capabilities or Capabilities()),
+            ceiling=for_the_caller(spec, self.grants, held=held).subagents,
+            held=held,
+            catalogue=self.catalogue,
+        )
+        return what_opens(asked, self.cfg, self.catalogue, agent=spec, held=held)
 
     def _graph_for(  # noqa: PLR0913 -- setup holds each; deriving one here derives it twice
         self,

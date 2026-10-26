@@ -1774,6 +1774,37 @@ is named for its subagent, `counter::count`. `--json` carries the same, under
 `audiences`. Run with `--as`, the listing shows none of this: what a caller reaches
 is theirs to see, and the policy is not.
 
+### Which of one caller's names open anything
+
+`Kingfisher.opened_by` answers the other question an operator has about a caller:
+which of the names they hold open anything under one agent, and which single name
+they do not hold would open something more.
+
+```python
+opened = kf.opened_by("analyst", source_ids=["sales_db"], datazone="finance")
+opened.opens.source_ids   # of theirs, the ids that are why they reach something
+opened.opens.datazones    # of theirs, the zones that are, as bare zone names
+opened.would.source_ids   # ids they lack, each of which alone would open something
+opened.would.datazones    # zones they lack, likewise
+```
+
+A name opens something when it sits in an audience entry this caller satisfies,
+so where two names each open the same agent both are reported -- it answers what
+is a reason, not what is required. `would` names the one name missing from an
+entry otherwise satisfied, so it says nothing where two are missing: under an
+agent a caller cannot open, no tool of that agent's reports its own lock, because
+every audience is held jointly with the path that reaches it.
+
+It reads the definitions only, and it answers for an agent this caller cannot
+reach, which is the case `would` exists for. A name nothing defines, and
+`UNSCOPED`, are the two it will not take: the first opens nothing anywhere, and
+the second is the absence of a caller, where `[]` is a caller holding nothing.
+
+It is the operator's answer *about* a caller, and deliberately not that caller's
+own view: it names a lock they do not pass beside the name that would pass it,
+which the listing above withholds as policy. Hand it on to your own callers and
+you have handed them the vocabulary.
+
 ### No `source_ids:` line means everyone
 
 An absent optional field means no restriction, which is what it means everywhere
