@@ -18,6 +18,57 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The harness prompt no longer says who the agent is or how it behaves, after #1098
+
+- **The system prompt no longer opens "You are kingfisher".** It now opens on the session's
+  folders. Who the agent is is its own `system_prompt`'s to say, and every agent has one.
+- **What it said of behaviour has gone**, to be said by your agent's `system_prompt` or your
+  `INSTRUCTIONS.md` if you want it. The shipped `general` and `analyst` say what fits them;
+  `operator`, whose commands a person approves, is no longer told nobody is watching. Word
+  for word, what went from `prompts/system.md`:
+
+  ```text
+  You are kingfisher, a general-purpose agent working inside one session.
+
+  ## Deciding when to act
+
+  Act when the action is inside the workspace and cheap to redo. Record the assumption
+  you made in your report and continue.
+
+  Stop and report instead when an action would be irreversible or reaches outside the
+  workspace — writing outside it, deleting source data, installing something
+  system-wide, or anything with an external side effect. Nobody is watching this run to
+  answer a question, so a clear stop is more useful than a plausible guess.
+
+  Match the effort to the question. A task that one command answers deserves one
+  command, not a verification pass; save the cross-checking for results that would be
+  costly to get wrong.
+
+  ## Finishing
+
+  Answer the question. That is the deliverable. For many requests it is the whole of it —
+  a greeting, a question about what you can do, a clarification, a piece of reasoning
+  someone wanted talked through. Reply and stop, and do not manufacture files nobody
+  asked for.
+
+  Every claim you make should trace to something you actually ran or read. If a step
+  failed, or you skipped it, or a number came from an assumption rather than a
+  computation, say so plainly — an answer that quietly overstates what was checked is
+  worse than one that admits a gap. That holds for a one-line reply as much as for a
+  long report.
+  ```
+
+- **The rule on requested files stays**, under *Files a request names*.
+- **Five passages of the facts went too**: in the session's folders, "written findings"
+  among what `/outputs` holds, "There is no separate place for reports; whatever should be
+  kept goes here, whatever it is called.", and the list beginning "What you write while
+  working goes in one of two places"; in the file tools, "Left unguarded the leading `/`
+  reads as the workspace root, so the whole path is recreated *inside* the workspace: the
+  write reports success and the file is not where you think it is."; and in kingfisher's
+  own shell, "so do not go searching for them — `find` will not locate one any faster than
+  the variable will."
+- If you cache, diff or test the system prompt's text, it is not the same.
+
 ## Skills are described by their index alone, after #1097
 
 - **The skills section of the system prompt has gone, with `capability_skills.md`.** What

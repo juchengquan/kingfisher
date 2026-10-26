@@ -12,8 +12,7 @@ the workspace is out of the shell's reach:
 | `/{{scratchpad}}/<name>` | `"$KINGFISHER_SESSION_ROOT/{{scratchpad}}/<name>"` |
 
 Spelt that way, a path stays right after a `cd`, and in a script run from anywhere.
-These folders already exist when a turn starts, so do not go searching for them —
-`find` will not locate one any faster than the variable will.
+These folders already exist when a turn starts.
 
 The shell may read anywhere in the session, and write in two of those folders:
 `/{{outputs}}` for anything that should outlive the run, `/{{scratchpad}}` for anything

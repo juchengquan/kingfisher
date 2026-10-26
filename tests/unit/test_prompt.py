@@ -61,6 +61,31 @@ def test_the_memory_block_says_memory_lasts_only_this_conversation():
         assert "future" not in told.lower()
 
 
+#: What the harness said of who the agent is and how it should behave, which is the
+#: agent's own prompt's and the deployment's instructions' to say.
+NOT_THE_HARNESS = (
+    "You are kingfisher",
+    "Deciding when to act",
+    "Nobody is watching",
+    "Match the effort",
+    "That is the deliverable",
+    "manufacture files",
+    "Every claim you make",
+)
+
+
+def test_the_harness_says_nothing_of_who_the_agent_is_or_how_it_behaves():
+    """It opened every agent's prompt as "kingfisher, a general-purpose agent", ahead of
+    the agent's own, and told every agent nobody was watching -- the shipped `operator`,
+    whose every command a person approves, among them."""
+    said = " ".join(shipped(shell=kingfishers_shell()).split())
+
+    for phrase in NOT_THE_HARNESS:
+        assert phrase not in said, phrase
+    # The control: the harness still says what it is.
+    assert "## The session" in said
+
+
 def test_structural_contract_survives_every_combination():
     """The workspace layout is what every turn needs to know, whatever else is switched
     on.
@@ -171,7 +196,7 @@ def test_each_kept_record_is_said_to_be_the_models_to_read_and_not_to_write():
     assert "That folder is yours to read and not to write -- it says what happened" in said
     assert "That folder is yours to read and not to write, for the same reason" in said
     # The control: the scratchpad itself is still the agent's, in the same breath.
-    assert "Anything genuinely throwaway goes in `/scratchpad`" in said
+    assert "working files: intermediates, downloads, anything you need while you think" in said
 
 
 def test_the_catalogue_is_said_to_be_the_models_to_read_and_not_to_write():
@@ -305,22 +330,22 @@ def test_shell_section_does_not_contradict_the_injected_host_mappings():
 
 def test_prompt_warns_about_host_paths_in_file_tools():
     """virtual_mode makes `write_file('/tmp/x')` succeed by creating
-    `<workspace>/tmp/x`.
+    `<workspace>/tmp/x`, which the backend now refuses, and the prompt says so first.
     """
     text = " ".join(shipped().lower().split())
     assert "a host path is not a file-tool path" in text
-    assert "recreated *inside* the workspace" in text
+    assert "is refused, and the error names the virtual path to use instead" in text
 
 
 def test_the_system_prompt_demands_no_artifacts():
     """A general agent is sometimes just answering, and this prompt is the cached prefix
-    for both kinds of turn -- the one place that cannot tell them apart.
+    for both kinds of turn -- the one place that cannot tell them apart. What a turn
+    should answer with is the agent's own prompt's to say, not this one's.
     """
     text = shipped()
     assert "report.md" not in text
     assert "result.json" not in text
-
-    assert "Answer the question. That is the deliverable" in shipped()
+    assert "deliverable" not in text
 
 
 def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements(
@@ -404,14 +429,12 @@ def test_a_deployment_with_no_instructions_adds_no_empty_part(cfg):
     )
 
 
-#: Each part of `system.md` a subagent is not handed, by its heading or opening line.
+#: Each part of `system.md` a subagent is not handed, by its heading.
 AGENTS_ALONE = (
-    "You are kingfisher",
     "## The file tools",
     "## The shell",
     "## What your tools returned",
-    "## Deciding when to act",
-    "## Finishing",
+    "## Files a request names",
 )
 
 
@@ -539,7 +562,7 @@ def test_the_instructions_come_after_the_harness(cfg):
     """
     with_it = system_prompt(cfg, instructions="House rule: cite every figure.")
 
-    assert with_it.index("You are kingfisher") < with_it.index("House rule:")
+    assert with_it.index("## The session") < with_it.index("House rule:")
     # The structural contract is still there -- the addition did not replace it.
     assert f"/{INPUTS}" in with_it
 
@@ -642,7 +665,7 @@ def test_a_subagent_is_not_told_of_a_shell_it_does_not_hold(scripted, subagent, 
     systems = _told(scripted, asks, AIMessage("read"), AIMessage("done"), **agent)
 
     assert len(systems) == 3
-    assert "You are kingfisher" not in systems[1]
+    assert "## What your tools returned" not in systems[1]
     assert MAPPINGS not in systems[1]
 
 
