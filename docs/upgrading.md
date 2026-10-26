@@ -18,6 +18,26 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Skills are described by their index alone, after #1097
+
+- **The skills section of the system prompt has gone, with `capability_skills.md`.** What
+  the catalogue is and that it is read-only is said in the skills index, which every graph
+  holding skills is sent, subagents included -- and which an agent granted no skills is no
+  longer told of. `render_system_prompt` takes no `skills_enabled`, and `system_prompt` no
+  `skills`.
+- **Every index is written from kingfisher's `prompts/skills.md`.** deepagents' "Skills
+  System" text has gone: its advice on when and how to use a skill, its example, and two
+  lines false here -- pass `limit=1000`, and run a skill's scripts by absolute path. An index
+  with no skills no longer says skills can be created.
+- **A `ShellPrompt`'s `skills` part now reaches subagents**, in their index, where the graph
+  holds the shell. A brace in it is kept as written.
+- **deepagents' host paths no longer reach a subagent** where `execute`'s line names the
+  session root and the shell's skills sentence names `$KINGFISHER_SKILLS` -- kingfisher's own
+  shell. They come back to an agent of a runner naming its root once it holds skills, since
+  nothing else tells it where the catalogue is.
+- If you cache, diff or test the system prompt's text, the skills index's, or a subagent's,
+  none is the same.
+
 ## Memory is described in its block alone, and in a fifth of the words, after #1094
 
 - **The memory section of the system prompt has gone.** What memory is and how long it

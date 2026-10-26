@@ -46,6 +46,7 @@ from kingfisher.core.agent.kinds.tools import (
     resolve_tools,
 )
 from kingfisher.core.agent.middlewares.clearing import result_clearing
+from kingfisher.core.agent.middlewares.narrowing import CatalogueSkillsMiddleware
 from kingfisher.core.agent.middlewares.recorder import (
     Audiences,
     RecorderMiddleware,
@@ -85,7 +86,7 @@ from .models import (
     summarizer_trigger,
 )
 from .permitted_backend import PermittedBackend
-from .prompting import memory_guidelines, subagent_prompt, system_prompt
+from .prompting import EXECUTE, memory_guidelines, skills_index, subagent_prompt, system_prompt
 from .session_paths import SessionPaths
 from .tool_context import Caller, ToolContext
 from .tool_guards import guarded_tools
@@ -336,7 +337,7 @@ def builtin_tool_names(
         )
 
 
-def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each statement wires one thing
+def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: each statement wires one thing
     cfg: Config,
     *,
     capabilities: Capabilities | None = None,
@@ -462,6 +463,16 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             system_prompt=memory_guidelines(tools, cfg.layout),
         )
 
+    def indexing(sources: list[Any], tools: Sequence[str] | None) -> CatalogueSkillsMiddleware:
+        """Every skill's index, in deepagents' slot, written for an agent granted `tools`."""
+        held = tools is None or EXECUTE in tools
+        return CatalogueSkillsMiddleware(
+            backend=backend,
+            sources=sources,
+            system_prompt=skills_index(cfg.layout, shell, shelled=held),
+        )
+
+    skills_at: int | None = None
     memory_at: int | None = None
     # Narrowing only subtracts: `memory=True` against a deployment that wired none
     # stays off.
@@ -486,6 +497,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         sources = skills_sources(registry.folders)
         if capabilities.skills == ALL:
             extras["skills"] = sources
+            skills_at = len(switched)
+            switched.append(indexing(sources, None))
         elif capabilities.skills is None:
             # None granted is every skill denied, or each is a `read_file` away unnamed.
             permissions.extend(skill_denials((), registry))
@@ -537,6 +550,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             tools=tools,
             skills=narrowed_skills,
             skill_sources=narrowed_sources,
+            # Every skill's index is in deepagents' slot, beside this stack.
+            indexed=skills_at is not None,
             reachable=reachable,
             gated=gated,
             turn_text=turn_text,
@@ -567,7 +582,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
                 shell,
                 instructions,
                 granted,
-                skills=skills_on,
             ),
             "middleware": middleware,
             "permissions": permissions,
@@ -630,6 +644,11 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
             # Wrapped: a call from code meets none of the guards on this graph's stack.
             offered=guarded_tools(surface.carried, paths),
         )
+
+    if skills_at is not None and permitted is not None:
+        # Re-written now the grant is known, so an agent without the shell is not told how
+        # the shell reaches the catalogue.
+        switched[skills_at] = indexing(extras["skills"], permitted)
 
     if memory_at is not None and permitted is not None:
         # Re-wired now the grant is known, so an agent holding no tool to save with is

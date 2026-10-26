@@ -80,9 +80,8 @@ slices land.
 - [A prompt that says only what kingfisher
   does](design/2026-10-26-a-prompt-that-says-only-what-kingfisher-does.md) — taking
   who the agent is and how it behaves out of the harness prompt, and the library text
-  that contradicts it, so the client's prompt decides. Three of its seven slices have
-  landed: a command that shows what the model is sent, the host paths out of the agent's
-  prompt, and `execute`'s false lines.
+  that contradicts it, so the client's prompt decides. Its slices land one at a time,
+  and its status line says which have.
 - [Which source ids open
   something](design/2026-10-26-which-source-ids-open-something.md) — which of a
   caller's source ids and datazones open anything under one agent, and which single

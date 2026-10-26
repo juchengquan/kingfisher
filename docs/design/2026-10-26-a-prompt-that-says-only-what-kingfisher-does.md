@@ -1,6 +1,6 @@
 # A prompt that says only what kingfisher does
 
-**Status:** proposed. Slices 1–4 landed in #1091 to #1094; slices 5–7 are not built.
+**Status:** proposed. Slices 1–5 landed in #1091 to #1094 and #1097; slices 6 and 7 are not built.
 **Date:** 2026-10-26.
 **Occasion:** the owner asked whether the default system prompt could shrink so that
 clients decide more of it. Measured first, on a real build with a model that records
@@ -203,9 +203,10 @@ most of them touch `prompting.py` or the prompt files.
 4. **`memory.md`.** Landed in #1094: the four memory files are one, the memory section of
    kingfisher's prompt is out, and the block is about 1,040 characters where the section
    and the guidelines were about 5,900.
-5. **`skills.md`**, on both skills paths, with "prefer an existing procedure" out. It
-   carries the shell's skills sentence to every graph holding skills, subagents included,
-   so the host-path block then goes from subagents too.
+5. **`skills.md`.** Landed in #1097: one template for every index, the agent's skills
+   section out, the shell's skills sentence in every index of a graph holding the shell,
+   and the host-path block out of subagents where that sentence says how to reach the
+   catalogue.
 6. **Identity and conduct out**: the identity line, *Deciding when to act*, the first and
    last paragraphs of *Finishing*, and the three kinds of sentence above; the shipped
    agents fitted; the upgrading note quoting what went.

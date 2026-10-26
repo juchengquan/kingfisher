@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
-from deepagents.middleware.skills import SKILLS_SYSTEM_PROMPT
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import SystemMessage
 
@@ -16,7 +15,7 @@ from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.result import Sent, SentBlock, SentTool
 
-from .prompting import memory_guidelines
+from .prompting import memory_guidelines, skills_index
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -30,7 +29,7 @@ if TYPE_CHECKING:
 _OPENINGS = (
     ("host_paths", MAPPINGS),
     ("write_todos", TODOS),
-    ("skills", SKILLS_SYSTEM_PROMPT.lstrip().splitlines()[0]),
+    ("skills", skills_index(DEFAULT_LAYOUT, None, shelled=False).lstrip().splitlines()[0]),
     ("interpreter", "### Interpreter"),
     ("memory", memory_guidelines(None, DEFAULT_LAYOUT).lstrip().splitlines()[0]),
 )

@@ -98,7 +98,22 @@ class GrantedOnlyMiddleware(AgentMiddleware):
         return refusal if refusal is not None else await handler(request)
 
 
-class NarrowedSkillsMiddleware(SkillsMiddleware):
+class CatalogueSkillsMiddleware(SkillsMiddleware):
+    """deepagents' skills index, written from kingfisher's template, saying nothing of
+    creating a skill: every write to the catalogue is refused."""
+
+    # deepagents' own name, so one passed beside `skills=` takes the default's slot.
+    @property
+    def name(self) -> str:
+        return "SkillsMiddleware"
+
+    def _format_skills_list(self, skills: list[Any]) -> str:
+        if not skills:
+            return "(No skills are offered here.)"
+        return super()._format_skills_list(skills)
+
+
+class NarrowedSkillsMiddleware(CatalogueSkillsMiddleware):
     """A skills index restricted to the skills a request activated."""
 
     def __init__(self, *, allowed: tuple[str, ...], **kwargs: Any) -> None:

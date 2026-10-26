@@ -27,11 +27,13 @@ from kingfisher.core.agent.prompting import (
     GREP,
     LS,
     SESSION_ROOT,
+    SKILLS_VAR,
     WRITE_FILE,
     WRITE_TODOS,
     ShellPrompt,
     execute_line,
     miscased_path,
+    skills_index,
     stray_save,
     what_you_make_goes,
 )
@@ -617,8 +619,8 @@ def _split(request: Any) -> list[str] | None:
 class BuiltinToolsMiddleware(AgentMiddleware):
     """Put the shell's own line in `execute`'s description, on a shell exporting the
     session root say how a missed path is spelt there, and keep deepagents' host paths
-    from a shell that is not on this host, and from an agent its shell section has told
-    the session root; have `read_file` read 1,000 lines unless told
+    from a shell that is not on this host, and from a graph `execute`'s line has told the
+    session root; have `read_file` read 1,000 lines unless told
     otherwise, and `grep` search each string of `a|b`, and say so; say nothing of the shell or of
     `write_todos` to a graph not holding it; have each built-in's description name only
     the tools the graph holds; and refuse a command asked to run longer than `longest`,
@@ -646,7 +648,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         here: bool = True,
         expires_after: int | None = None,
         folders: frozenset[str] | None = None,
-        subagent: bool = False,
+        skilled: bool = False,
     ) -> None:
         super().__init__()
         self._longest = longest
@@ -661,13 +663,13 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         # Whether the shell runs on this host; where not, deepagents' section names paths it
         # does not have.
         self._here = here
-        # An agent told the root has deepagents' host paths in the one form that section
-        # forbids. A subagent reads only `execute`'s line, which leaves `/skills` out, so
-        # the list is its only way to a skill's script and it keeps it.
-        self._rooted = (
-            not subagent and shell is not None and SESSION_ROOT in (shell.prompt or "")
-        )
         self._rule = execute_line(shell, layout)
+        # Told the root by `execute`'s line, a graph holding the shell has deepagents' list in
+        # the one form that line forbids -- unless it can reach the catalogue and its shell
+        # says nothing of reaching it, where the list is its one way to a skill's script.
+        self._rooted = SESSION_ROOT in (self._rule or "") and (
+            not skilled or SKILLS_VAR in skills_index(layout, shell, shelled=True)
+        )
         self._virtual = _virtual(layout.session_dirs)
         # Where the shell sees the session, or `None` where it does not say -- which is
         # also where neither correction has anything to name, so it gates both.

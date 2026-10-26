@@ -14,7 +14,10 @@ from langchain_core.messages import AIMessage
 from kingfisher import Kingfisher
 from kingfisher.core.access.capabilities import ALL, Capabilities
 from kingfisher.core.agent.assembly import build_agent, builtin_tool_names
-from kingfisher.core.agent.middlewares.narrowing import NarrowedSkillsMiddleware
+from kingfisher.core.agent.middlewares.narrowing import (
+    CatalogueSkillsMiddleware,
+    NarrowedSkillsMiddleware,
+)
 from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.agents import reading as agents
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
@@ -173,13 +176,16 @@ EVERYTHING = AgentSpec(
 
 
 def told_of_skills(built) -> dict[str, bool]:
-    """Each place an agent hears of skills: the index, and the prompt's two paragraphs."""
+    """Each place an agent hears of skills: the index, what it says of the catalogue, and
+    the shell's sentence in it -- and the prompt, which says nothing of skills itself."""
+    assert "## Skills" not in built.system_prompt
+    indexes = [m for m in built.middleware if isinstance(m, CatalogueSkillsMiddleware)]
+    written = "".join(m.system_prompt_template for m in indexes)
     return {
-        "index": built.skills is not None
-        or any(isinstance(m, NarrowedSkillsMiddleware) for m in built.middleware),
-        "section": "## Skills" in built.system_prompt,
-        # The shell's paragraph under it, which only kingfisher's own shell writes.
-        "shell": "KINGFISHER_SKILLS" in built.system_prompt,
+        "index": bool(indexes),
+        "section": "## Skills" in written,
+        # Which only kingfisher's own shell writes.
+        "shell": "KINGFISHER_SKILLS" in written,
     }
 
 

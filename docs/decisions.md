@@ -635,6 +635,28 @@ subagent only through middleware a deployment registers -- not a configuration t
 open. The name lives in `core.definitions.subagents` beside `TASK_TOOL`, so the helper
 filter and the refusal key on one spelling. *(2026-10-12.)*
 
+**Every skills index is written from one template, kingfisher's.** The agent granted every
+skill was sent deepagents' own index; a narrowed agent and a subagent, deepagents' wording
+around kingfisher's narrowed list; and the agent, kingfisher's skills section in the cached
+prompt besides, saying the same again -- even to an agent granted no skills, and so handed
+no index. deepagents' wording told the model to pass `limit=1000` because the default of
+100 lines is too small, where kingfisher's `read_file` reads 1,000, and to run a skill's
+scripts by absolute path, where the shell reaches them through `$KINGFISHER_SKILLS`; with
+no skills it said they could be created in `/skills/`, where every write is refused.
+`prompts/skills.md` is the one template now, handed to `SkillsMiddleware(system_prompt=)`:
+deepagents' list, where each skill's instructions are, that the catalogue is read and not
+written, and the shell's own `skills` sentence where the graph holds the shell. A
+`CatalogueSkillsMiddleware` passed beside `skills=` takes deepagents' slot by its name, as
+the memory middleware does; `NarrowedSkillsMiddleware` is one too, and keeps its place in
+the standing stack -- measured, under either name the blocks and their order are the same.
+Its empty list is the one protected method overridden, as the narrowed one already
+overrode it to filter. The cached prompt now says nothing of skills, so switching skills
+on leaves it one string, and the fixed part of an index is about 190 tokens with the
+shell's sentence where deepagents' was about 450. Measured on MiniMax-M3, three smoke
+turns each way, whose task the seeded `tabular-qa` skill matches: every turn read its
+`SKILL.md` at the first model call, with deepagents' advice on using skills and without
+it, and all six passed. *(2026-10-26.)*
+
 **The skills switch is the deployment's, for subagents too.** `cfg.skills_enabled`
 says what is wired and a request says what it wants of that. Asking only the request,
 a subagent was handed the catalogue's index with skills off, while the agent got none
@@ -3460,6 +3482,9 @@ the runner; a deployment's sandbox sets the attribute. A shell saying nothing is
 neutrally -- only what holds wherever a shell runs, and deepagents' own `execute` line --
 rather than refused: neutral wording misleads nobody, and a refusal would stop a
 deployment until it wrote prose. A part left `None` is neutral, and `""` says nothing.
+*Since 2026-10-26 the `skills` part goes in every skills index a graph holding the shell
+is sent, the agent's skills section having gone, so a subagent holding skills reads it as
+well as `execute`'s line.*
 
 **Two sentences the base prompt stated unconditionally, and a blank nobody could
 misspell loudly enough.** Each was found by driving rather than reading.
@@ -3570,7 +3595,12 @@ session, every session's system message was its own and none was read from anoth
 cache. A section a deployment silenced keeps it. A subagent keeps it as well, because it
 reads only `execute`'s line, which says nothing of `/skills`, so the list is its one way
 to a skill's script; it goes there once every skills block carries the shell's skills
-sentence. Measured on MiniMax-M3, three turns each way of the smoke and of a task run
+sentence. *Since 2026-10-26 every one does, and the rule is one for every graph: the list
+goes where `execute`'s line names the root, which every graph holding the shell reads, and
+where the graph holds no skills index or its shell's skills sentence names
+`$KINGFISHER_SKILLS`. So a subagent loses it on kingfisher's own shell, and an agent of a
+runner naming its root keeps it once it holds skills, which it had lost since the change
+above with nothing else to say where the catalogue is.* Measured on MiniMax-M3, three turns each way of the smoke and of a task run
 through the shell: every turn passed or counted right both ways, and none of 38 commands
 missed a path or pasted a host path, with the list or without it. The model was not
 copying the list, so what it cost was its size and the cache.*

@@ -183,11 +183,11 @@ class MySandbox(BaseSandbox):
 Things to know:
 
 - **Three parts, because three readers see different ones.** `prompt` is the agent's
-  section on the shell, in place of kingfisher's. `skills` follows the skills section,
-  so it is shown only where skills are on. `execute` replaces deepagents' "Use absolute
-  paths…" line in the tool's description, and is the only part a subagent sees: a
-  subagent is handed the system prompt's session section and none of its shell section.
-  An agent not granted `execute` is told none of the three. Kingfisher's own are
+  section on the shell, in place of kingfisher's. `skills` goes in the skills index, so
+  it is shown only to a graph holding skills, subagents included. `execute` replaces
+  deepagents' "Use absolute paths…" line in the tool's description, which every graph
+  holding the shell reads: a subagent is handed the system prompt's session section and
+  none of its shell section. A graph not granted `execute` is told none of the three. Kingfisher's own are
   `src/kingfisher/plugins/sessions/prompts/shell_here.md`, `shell_here_skills.md` and
   `shell_here_execute.md`.
 - **A part left `None` is said the neutral way**, claiming only what holds wherever a
