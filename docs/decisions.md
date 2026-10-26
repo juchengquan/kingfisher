@@ -5285,12 +5285,16 @@ raised `AttributeError` in whichever turn first asked -- possibly hours later, i
 that had nothing to do with the mistake. Startup is where the deployment wired it, and the
 refusal names the keyword, the class and each missing method. The methods are read off the
 protocol, so one added to a protocol later is checked with no other edit, which is what
-lets a hook grow a required method rather than an optional one found by name. A class of
-the deployment's own with every method is taken whatever it subclasses: kingfisher's
-default is named as the way to inherit the methods, not required. **Not taken:**
-`isinstance` against a `runtime_checkable` protocol, which answers yes or no and so could
-not say which method is missing, and six of the seven protocols are not runtime-checkable;
-checking signatures as well, which would refuse a hook taking `**kwargs` that works.
+lets a hook grow a required method rather than an optional one found by name. Which
+keywords are hooks, and the protocol each takes, are read off `__init__`'s annotations, so
+a hook added to the signature is checked with nothing beside it to extend. A class of the
+deployment's own with every method is taken whatever it subclasses, and the refusal names
+no default to subclass, since only a second list could pair each with its keyword. **Not
+taken:** a table of the hooks beside the signature, which said again what the annotations
+say; `isinstance` against a `runtime_checkable` protocol, which answers yes or no and so
+could not say which method is missing, and six of the seven protocols are not
+runtime-checkable; checking signatures as well, which would refuse a hook taking
+`**kwargs` that works.
 *(2026-10-26.)*
 
 **`Config` holds what the core reads.** The shell's fence and `PATH` additions are

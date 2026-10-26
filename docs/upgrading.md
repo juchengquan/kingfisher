@@ -18,15 +18,6 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
-## A hook missing a method is refused at startup, after #1101
-
-- **`Kingfisher(...)` raises `TypeError` for a hook without every method its protocol
-  lists**: `run_events`, `instructions`, `turn_instructions`, `unused_results`,
-  `pdf_attachments`, `subagent_middlewares` and `scratch_run_limit`. Such a hook used to start
-  and fail with `AttributeError` in the first turn that asked it. The message names the
-  keyword, your class and each missing method; add them. A class of your own that has every
-  method needs no change.
-
 ## Memory is a list of numbered entries, after #1102
 
 - **Only where memory is on.** A line of `/memory/AGENTS.md` led by `- ` is an entry, and
@@ -38,6 +29,15 @@ replaced the four layers began.
 - **A new event kind, `memory_updated`,** and a `memory` field on `RunResult`, say which
   entries a turn added, changed and removed. A consumer switching on `kind` should already
   ignore one it does not know.
+
+## A hook missing a method is refused at startup, after #1101
+
+- **`Kingfisher(...)` raises `TypeError` for a hook without every method its protocol
+  lists**: `run_events`, `instructions`, `turn_instructions`, `unused_results`,
+  `pdf_attachments`, `subagent_middlewares` and `scratch_run_limit`. Such a hook used to start
+  and fail with `AttributeError` in the first turn that asked it. The message names the
+  keyword, your class and each missing method; add them. A class of your own that has every
+  method needs no change.
 
 ## The harness prompt no longer says who the agent is or how it behaves, after #1098
 

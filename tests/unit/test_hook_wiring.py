@@ -3,8 +3,7 @@ protocol lists."""
 
 from __future__ import annotations
 
-import inspect
-from typing import Any, Protocol
+from typing import Any
 
 import pytest
 
@@ -14,7 +13,7 @@ from kingfisher.core.agent.prompting import InstructionsFile
 from kingfisher.core.interfaces import (
     AgentsMiddlewares,
     NoScratchRunLimit,
-    Sessions,
+    hooks_of,
 )
 from kingfisher.core.session.runlog import LoggedRunEvents
 from kingfisher.core.session.unused import DeleteUnusedResults
@@ -54,23 +53,10 @@ class _KeepVerdict:
         return None
 
 
-def test_every_hook_keyword_is_checked_here():
-    """Read off the signature, so a hook keyword added later without a case here fails
-    rather than going unchecked."""
-    protocols = {
-        name
-        for name, one in vars(interfaces).items()
-        if Protocol in getattr(one, "__mro__", ()) and one is not Sessions
-    }
-    # Annotations stay strings under `from __future__ import annotations`.
-    taken = {
-        name
-        for name, parameter in inspect.signature(Kingfisher.__init__).parameters.items()
-        if set(str(parameter.annotation).split(" | ")) & protocols
-    }
-
-    assert "RunEvents" in protocols, "the control: the protocols were found at all"
-    assert taken == set(HOOKS)
+def test_the_check_finds_every_hook_on_kingfisher_from_its_signature():
+    """A hook the signature reading missed would start unchecked, and one it took that is
+    not a hook -- `sessions`, typed as a protocol too -- would be checked twice over."""
+    assert hooks_of(Kingfisher.__init__) == HOOKS
 
 
 @pytest.mark.parametrize(("keyword", "protocol"), HOOKS.items(), ids=HOOKS.keys())
