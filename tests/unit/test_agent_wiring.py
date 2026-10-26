@@ -15,6 +15,7 @@ from kingfisher.core.agent.kinds.declared_middleware import (
     _deepagents_middleware_names,
     declared_middleware,
 )
+from kingfisher.core.agent.middlewares.narrowing import CatalogueSkillsMiddleware
 from kingfisher.core.agent.prompting import system_prompt
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.plugins import LocalSessions, backend_at
@@ -110,7 +111,8 @@ def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(
     cfg,
     session_dir,
 ):
-    """One switch drives both, so the prompt cannot describe a missing capability."""
+    """One switch drives both, so nothing describes a missing capability: each is
+    described by the middleware that carries it, and the prompt says nothing of either."""
     from dataclasses import replace
 
     wired = replace(cfg, skills_enabled=True, memory_enabled=True)
@@ -122,7 +124,8 @@ def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(
 
     assert built.skills == skills_sources()
     assert built.memory == ["/memory/AGENTS.md"]
-    assert "/skills" in built.system_prompt
+    assert any(isinstance(m, CatalogueSkillsMiddleware) for m in built.middleware)
+    assert "/skills" not in built.system_prompt
 
 
 def test_system_prompt_carries_no_host_paths_or_session_ids():

@@ -11,7 +11,7 @@ import pytest
 from deepagents.backends import CompositeBackend, LocalShellBackend
 
 from kingfisher.core.agent.backend import session_root_of, shell_prompt_of, shell_told
-from kingfisher.core.agent.prompting import render_system_prompt
+from kingfisher.core.agent.prompting import EXECUTE, render_system_prompt, skills_index
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import CommandResult, LocalSessions, ShellPrompt, backend_at
 from kingfisher.plugins.sessions.shell import kingfishers_shell
@@ -60,8 +60,13 @@ def _seen(output: str) -> dict[str, str]:
     return dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
 
 
-def _told(shell: ShellPrompt | None, layout: Layout = DEFAULT_LAYOUT, **kwargs: object) -> str:
-    told = render_system_prompt(skills_enabled=True, layout=layout, shell=shell, **kwargs)
+def _told(shell: ShellPrompt | None, layout: Layout = DEFAULT_LAYOUT, **kwargs: Any) -> str:
+    """What an agent holding skills is told of the shell: the prompt's section, and the
+    sentence in its skills index."""
+    tools = kwargs.get("tools")
+    told = render_system_prompt(layout=layout, shell=shell, **kwargs) + skills_index(
+        layout, shell, shelled=tools is None or EXECUTE in tools
+    )
     return " ".join(told.split())
 
 

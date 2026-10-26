@@ -25,8 +25,6 @@ giving the range of their ids and how many results each tool returned.
 
 <!-- tool results -->
 
-<!-- capabilities -->
-
 ## Deciding when to act
 
 Act when the action is inside the workspace and cheap to redo. Record the assumption

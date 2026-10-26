@@ -16,6 +16,7 @@ from kingfisher.core.agent.backend import (
     shell_runs_here,
     shell_told,
 )
+from kingfisher.core.agent.prompting import EXECUTE, skills_index
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import NoScratchRunLimit
@@ -111,6 +112,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     tools_subject: str = "this request",
     skills: Sequence[str] | None = None,
     skill_sources: Sequence[Any] = (),
+    indexed: bool = False,
     reachable: Sequence[str] | None = None,
     pdf_attachments: PdfAttachments | None = None,
     scratch_run_limit: ScratchRunLimit | None = None,
@@ -122,7 +124,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
 
     Built here and nowhere else, so what kingfisher guarantees on a graph is read in one
     place. `names` are the offered tools the graph holds; `tools` narrows what it is
-    offered and `skills` its skills index, each `None` where nothing narrows, and `gated`
+    offered and `skills` its skills index, each `None` where nothing narrows -- `indexed`
+    saying a graph `skills` leaves `None` is handed every skill's index beside it -- and `gated`
     what it stops on for a person; `clearing` builds the result clearing for that grant,
     `None` where no ledger is kept, and `reachable` is the agent's alone.
     `budget` is the turn's, whose step limit reaches only the agent's own run, so a subagent
@@ -232,22 +235,28 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
                 _permissions=permissions,
             )
         )
+    shell = shell_told(backend)
     standing.append(
         BuiltinToolsMiddleware(
             layout,
-            shell_told(backend),
+            shell,
             root=session_root_of(backend),
             longest=longest_command(execution_timeout_s),
             here=shell_runs_here(backend),
             expires_after=keep_results_rounds,
             folders=folders_of(layout, backend),
-            subagent=kind != "agent",
+            skilled=skills is not None or indexed,
         )
     )
     if skills is not None:
         standing.append(
             NarrowedSkillsMiddleware(
-                allowed=tuple(skills), backend=backend, sources=list(skill_sources)
+                allowed=tuple(skills),
+                backend=backend,
+                sources=list(skill_sources),
+                system_prompt=skills_index(
+                    layout, shell, shelled=granted is None or EXECUTE in granted
+                ),
             )
         )
     standing.extend(inner)

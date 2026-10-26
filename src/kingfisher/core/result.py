@@ -261,7 +261,7 @@ SENT_SOURCES: Mapping[str, str] = {
     "profile": "deepagents' harness profile for this model",
     "host_paths": "deepagents: where the shell finds each folder on this host",
     "write_todos": "langchain: how to use write_todos",
-    "skills": "deepagents: the skills index",
+    "skills": "the skills index, deepagents' list in kingfisher's words",
     "interpreter": "langchain-quickjs: the code interpreter behind eval",
     "memory": "the session's memory file, in kingfisher's guidelines",
     "turn": "this turn's instructions",

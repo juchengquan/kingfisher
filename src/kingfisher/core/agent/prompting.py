@@ -31,13 +31,13 @@ BASE_PROMPT = "system.md"
 #: either is wrong about is one the other reports.
 _PLACEHOLDER = re.compile(r"\{\{([^{}]*)\}\}")
 
-#: Where optional capability sections are spliced in. An HTML comment, so
-#: `system.md` stays a plain Markdown document that renders and edits normally.
-CAPABILITY_MARKER = "<!-- capabilities -->"
+#: The template every skills index is written from, which `SkillsMiddleware` fills: its
+#: `{skills_locations}`, `{skills_load_warnings}` and `{skills_list}` are deepagents' to
+#: fill, and only braces it fills may be single in what this hands it.
+SKILLS_FILE = "skills.md"
 
-CAPABILITY_FILES = {
-    "skills": "capability_skills.md",
-}
+#: The variable a shell reaching the catalogue exports it as.
+SKILLS_VAR = "KINGFISHER_SKILLS"
 
 #: Where the session's folders are described: the one part of the harness every subagent
 #: kingfisher builds is handed too, from this one file, so the two cannot drift apart.
@@ -332,7 +332,6 @@ def _tool_results(
 @lru_cache(maxsize=32)
 def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describes
     *,
-    skills_enabled: bool = False,
     cite_results: bool = True,
     keep_results_rounds: int | None = None,
     extra: str = "",
@@ -349,7 +348,6 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     base = _filled(BASE_PROMPT, layout)
     for marker in (
         SESSION_MARKER,
-        CAPABILITY_MARKER,
         FILE_TOOLS_MARKER,
         SHELL_MARKER,
         CITING_MARKER,
@@ -361,13 +359,6 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
 
     held = _held(tools)
     shelled = tools is None or EXECUTE in tools
-    parts: list[str] = []
-    if skills_enabled:
-        parts.append(_filled(CAPABILITY_FILES["skills"], layout).strip())
-        if shelled:
-            parts.append(_said(shell, "skills", layout))
-    sections = "\n\n".join(part for part in parts if part)
-
     assembled = _joined(
         base.replace(SESSION_MARKER, session_section(layout))
         .replace(FILE_TOOLS_MARKER, _file_tools(held, layout))
@@ -375,8 +366,7 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
         .replace(CITING_MARKER, _CITING if cite_results else "")
         .replace(TOOL_RESULTS_MARKER, _tool_results(
             held, layout, shelled=shelled, rounds=keep_results_rounds
-        ))
-        .replace(CAPABILITY_MARKER, sections),
+        )),
         extra,
     )
     # Removing a marker leaves a run of blank lines behind.
@@ -423,6 +413,15 @@ def behind_instructions(prompt: str, instructions: str) -> str:
     *trailing* part, and this one leads.
     """
     return _joined(instructions, prompt) if instructions.strip() else prompt
+
+
+def skills_index(layout: Layout, shell: ShellPrompt | None, *, shelled: bool) -> str:
+    """The template a graph's skills index is written from: what the catalogue is, and
+    where the graph holds the shell, what that shell says of reaching it."""
+    said = _said(shell, "skills", layout) if shelled else ""
+    # deepagents fills the template with `str.format`, so a brace the shell wrote is doubled.
+    told = said.replace("{", "{{").replace("}", "}}")
+    return _filled(SKILLS_FILE, layout, shell=f"\n\n{told}" if told else "")
 
 
 def session_section(layout: Layout) -> str:
@@ -476,24 +475,20 @@ def subagent_prompt(prompt: str, instructions: str, layout: Layout) -> str:
     return _joined(session_section(layout), behind_instructions(prompt, instructions))
 
 
-def system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describes
+def system_prompt(
     cfg: Config | None = None,
     agent: str = "",
     shell: ShellPrompt | None = None,
     instructions: str = "",
     tools: Collection[str] | None = None,
-    *,
-    skills: bool = True,
 ) -> str:
     """The assembled prompt: the harness, then the deployment's instructions, then the
     agent's own line.
 
     `shell` is what the backend's shell says of itself, which only the backend knows.
-    `tools` is the agent's allowlist, `None` where nothing narrows it. `skills` is
-    `False` where the build offers no skills index, so the prompt describes none.
+    `tools` is the agent's allowlist, `None` where nothing narrows it.
     """
     return render_system_prompt(
-        skills_enabled=bool(cfg and cfg.skills_enabled) and skills,
         cite_results=cfg.cite_results if cfg else True,
         keep_results_rounds=cfg.keep_results_rounds if cfg else None,
         extra=behind_instructions(agent, instructions),

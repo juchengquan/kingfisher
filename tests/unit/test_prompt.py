@@ -16,6 +16,7 @@ from kingfisher.core.agent.prompting import (
     memory_guidelines,
     render_system_prompt,
     session_section,
+    skills_index,
     system_prompt,
 )
 from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS, OUTPUTS, SCRATCH, Layout
@@ -39,18 +40,15 @@ def test_base_prompt_names_no_dataset_and_no_domain():
         assert leaked not in text.lower(), f"domain-specific token {leaked!r} in base prompt"
 
 
-def test_capability_sections_appear_only_when_enabled():
-    """The agent must never be told about a capability that is not wired."""
-    assert "/skills" not in shipped()
-    assert "/skills" in shipped(skills_enabled=True)
+def test_skills_and_memory_are_described_by_their_blocks_and_nowhere_else():
+    """Described in the cached prompt as well, each was described twice where it was on,
+    and to a request that had declined it or held no index, and so was handed no block."""
+    text = shipped(shell=kingfishers_shell())
 
-
-def test_memory_is_described_by_its_block_and_nowhere_else():
-    """Described in the cached prompt as well, memory was described twice where it was on,
-    and to a request that had declined it, which is handed no block and no file."""
-    for skills in (False, True):
-        assert "/memory" not in shipped(skills_enabled=skills, shell=kingfishers_shell())
+    assert "/skills" not in text
+    assert "/memory" not in text
     assert "/memory" in memory_guidelines(None, DEFAULT_LAYOUT)
+    assert "$KINGFISHER_SKILLS" in skills_index(DEFAULT_LAYOUT, kingfishers_shell(), shelled=True)
 
 
 def test_the_memory_block_says_memory_lasts_only_this_conversation():
@@ -67,10 +65,9 @@ def test_structural_contract_survives_every_combination():
     """The workspace layout is what every turn needs to know, whatever else is switched
     on.
     """
-    for skills in (False, True):
-        text = shipped(skills_enabled=skills)
-        assert "/inputs" in text
-        assert "/outputs" in text
+    text = shipped()
+    assert "/inputs" in text
+    assert "/outputs" in text
 
 
 def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
@@ -118,7 +115,7 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     moved = Layout(
         inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
     )
-    text = render_system_prompt(skills_enabled=True, layout=moved, shell=kingfishers_shell())
+    text = render_system_prompt(layout=moved, shell=kingfishers_shell())
     remembered = memory_guidelines(None, moved)
 
     # The renamed leaves, spelled where the default names used to be.
@@ -178,24 +175,23 @@ def test_each_kept_record_is_said_to_be_the_models_to_read_and_not_to_write():
 
 
 def test_the_catalogue_is_said_to_be_the_models_to_read_and_not_to_write():
-    """The skills section hands the model the catalogue, says how to run a script a skill
-    ships and tells it to prefer an existing procedure over inventing one -- which invites
+    """The skills section handed the model the catalogue, said how to run a script a skill
+    ships and told it to prefer an existing procedure over inventing one -- which invites
     editing one -- and said nothing about writing, while `/skills/**` is denied. Of the
     folders the prompt names it was the only one refused without saying so, and a model
     not told a place is read-only spends a call finding out.
 
     What to do instead is an answer and not a file: the refusal names the two folders a
-    write may land in, and *Finishing* tells the model not to manufacture files nobody
-    asked for, which a corrected copy of a skill would be.
+    write may land in, and the index says what to do instead.
     """
     # Joined: the prompt wraps at 88 columns, so a sentence this long is never on one line
     # and a plain `in` reads as an absence.
-    said = " ".join(shipped(skills_enabled=True).split())
+    said = " ".join(skills_index(DEFAULT_LAYOUT, None, shelled=False).split())
 
     assert "The catalogue is yours to read and not to write" in said
     assert "Say what a procedure should say differently in your answer" in said
-    # The control: the section still says what the catalogue is for, in the same breath.
-    assert "prefer an existing procedure over inventing a new one" in said
+    # The control: the index still says where a skill's instructions are, in the same breath.
+    assert "what it says to do is in its `SKILL.md`" in said
 
 
 @pytest.mark.parametrize("layout", [DEFAULT_LAYOUT, Layout(outputs="results")])
@@ -258,7 +254,12 @@ def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
     """
     from evals.task import SMOKE_TASK
 
-    for text in (shipped(skills_enabled=True), memory_guidelines(None, DEFAULT_LAYOUT), SMOKE_TASK):
+    for text in (
+        shipped(),
+        skills_index(DEFAULT_LAYOUT, kingfishers_shell(), shelled=True),
+        memory_guidelines(None, DEFAULT_LAYOUT),
+        SMOKE_TASK,
+    ):
         assert "run directory" not in text
 
 
@@ -273,23 +274,21 @@ def test_no_instructions_leave_the_base_prompt_untouched(cfg):
     assert system_prompt(cfg) == shipped()
 
 
-def test_enabling_capabilities_changes_the_rendered_prompt(cfg):
+def test_switching_skills_and_memory_on_leaves_the_cached_prompt_alone(cfg):
+    """Each is described in a block of its own, so the static prompt a deployment's every
+    turn is compared against is one string whichever is on."""
     enabled = replace(cfg, skills_enabled=True, memory_enabled=True)
-    assert system_prompt(enabled) != system_prompt(cfg)
-    assert "/skills" in system_prompt(enabled)
+
+    assert system_prompt(enabled) == system_prompt(cfg)
 
 
 def test_assembly_leaves_no_blank_line_runs_or_markers():
-    """The marker is removed cleanly; the prefix ships on every step."""
+    """Every marker is removed cleanly; the prefix ships on every step."""
     import re
 
-    from kingfisher.core.agent.prompting import CAPABILITY_MARKER
-
-    for skills in (False, True):
-        text = shipped(skills_enabled=skills)
-        assert CAPABILITY_MARKER not in text
-        assert "<!--" not in text
-        assert not re.search(r"\n{3,}", text)
+    text = shipped()
+    assert "<!--" not in text
+    assert not re.search(r"\n{3,}", text)
 
 
 def test_shell_section_does_not_contradict_the_injected_host_mappings():
@@ -317,10 +316,9 @@ def test_the_system_prompt_demands_no_artifacts():
     """A general agent is sometimes just answering, and this prompt is the cached prefix
     for both kinds of turn -- the one place that cannot tell them apart.
     """
-    for skills in (False, True):
-        text = shipped(skills_enabled=skills)
-        assert "report.md" not in text
-        assert "result.json" not in text
+    text = shipped()
+    assert "report.md" not in text
+    assert "result.json" not in text
 
     assert "Answer the question. That is the deliverable" in shipped()
 
@@ -447,9 +445,8 @@ def test_the_prompt_does_not_promise_other_sessions_are_out_of_reach():
     """It told the agent another session's files were not reachable from any path it
     could write. The macOS shell can read and change them, and so can any unfenced one.
     """
-    for skills in (False, True):
-        text = shipped(skills_enabled=skills)
-        assert "another session's files" not in text
+    text = shipped()
+    assert "another session's files" not in text
 
 
 def test_the_prompt_claims_about_inputs_only_what_holds_with_no_fence():

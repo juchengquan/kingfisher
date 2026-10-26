@@ -42,6 +42,9 @@ from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_shell_prompt import Plain
 
+#: One skill, for a graph that must hold one to be told how the shell reaches them.
+DEMO_SKILL = "---\nname: demo\ndescription: D.\n---\nGo.\n"
+
 CHECKER = """name: checker
 description: Checks.
 builtin_tools: [execute]
@@ -169,6 +172,11 @@ def test_the_shell_is_taught_one_spelling_and_not_a_relative_one(shelled):
     `execute`'s description -- since the shipped text reaches it only once filled in.
     """
     cfg, offered = shelled
+    # A skill held, since only an agent holding one is told how the shell reaches them.
+    skill = cfg.catalogue_roots["skills"] / "demo"
+    skill.mkdir(parents=True, exist_ok=True)
+    (skill / "SKILL.md").write_text(DEMO_SKILL, encoding="utf-8")
+    an_agent(cfg, subagents="[checker]", skills='["*"]', **EVERY_TOOL)
     _run(replace(cfg, skills_enabled=True), AIMessage(content="done"))
     (system,) = [m for m in Scripted.heard[0] if isinstance(m, SystemMessage)]
     told = " ".join(f"{system.text}\n{_execute(offered[0])}".split())
@@ -531,17 +539,16 @@ def _systems() -> list[str]:
 
 
 @pytest.mark.parametrize(
-    ("backends", "agent", "subagent"),
+    ("backends", "told"),
     [
-        (LocalSessions(), False, True),
-        (LocalSessions(runner=lambda _where: Here()), True, True),
+        (LocalSessions(), False),
+        (LocalSessions(runner=lambda _where: Here()), True),
         (
             LocalSessions(
                 runner=lambda _where: Here(),
                 session_root=lambda folder: f"/home/runner/job-{folder.name}",
             ),
             False,
-            True,
         ),
         (
             LocalSessions(
@@ -549,44 +556,96 @@ def _systems() -> list[str]:
                 shell_prompt=ShellPrompt(prompt=""),
                 session_root=lambda folder: f"/home/runner/job-{folder.name}",
             ),
-            True,
+            False,
+        ),
+        (
+            LocalSessions(
+                runner=lambda _where: Here(),
+                shell_prompt=ShellPrompt(prompt="", execute=""),
+                session_root=lambda folder: f"/home/runner/job-{folder.name}",
+            ),
             True,
         ),
-        (LocalSessions(runner=lambda _where: Plain()), False, False),
-        (Sandboxed(), False, False),
+        (LocalSessions(runner=lambda _where: Plain()), False),
+        (Sandboxed(), False),
     ],
     ids=[
         "kingfishers-own",
         "local-runner",
         "local-runner-naming-its-root",
-        "root-named-and-section-silent",
+        "root-named-in-execute-alone",
+        "root-named-nowhere",
         "remote-runner",
         "their-own-shell",
     ],
 )
-def test_deepagents_host_paths_reach_only_a_shell_on_this_host(
-    shelled, backends, agent, subagent
-):
+def test_deepagents_host_paths_reach_only_a_shell_on_this_host(shelled, backends, told):
     """deepagents gives each routed folder's path on this host to any shell of its local
     class, and kingfisher's is that class whatever its runner: an agent whose commands
-    ran on another machine was told to use paths only this one has. And an agent whose
-    shell section names the session root was handed every literal host path beside
-    "never paste the path", which also made each session's system message its own; a
-    subagent, told only `execute`'s line, keeps them for `/skills`. Driven through the
-    agent and a subagent, because each is sent the section by a middleware of its own.
+    ran on another machine was told to use paths only this one has. And a graph whose
+    `execute` line names the session root was handed every literal host path beside
+    "never paste the path", which also made each session's system message its own. Driven
+    through the agent and a subagent, because each is sent the section by a middleware of
+    its own, and each reads `execute`'s line.
     """
     cfg, _ = shelled
     _run(cfg, *_consulting("checker"), backends=backends)
 
     systems = _systems()
     assert len(systems) == 3
-    first, consulted, last = systems
-    assert (MAPPINGS in first, MAPPINGS in consulted, MAPPINGS in last) == (
-        agent, subagent, agent,
-    )
+    assert [MAPPINGS in system for system in systems] == [told, told, told]
     # Only the section goes: the rest of what each was told is still there.
     assert "You are kingfisher" in systems[0]
     assert "You check." in systems[1]
+
+
+HOLDER = """name: holder
+description: Holds a skill and the shell.
+builtin_tools: [read_file, execute]
+skills: [demo]
+system_prompt: |
+  You hold a skill.
+"""
+
+
+@pytest.mark.parametrize(
+    ("backends", "told"),
+    [
+        (LocalSessions(), False),
+        (
+            LocalSessions(
+                runner=lambda _where: Here(),
+                session_root=lambda folder: f"/home/runner/job-{folder.name}",
+            ),
+            True,
+        ),
+    ],
+    ids=["kingfishers-own", "local-runner-naming-its-root"],
+)
+# Both grants: every skill's index comes from beside the agent's stack, not from it.
+@pytest.mark.parametrize("grant", ["[demo]", '["*"]'], ids=["named", "every skill"])
+def test_a_graph_holding_skills_keeps_the_host_paths_until_told_how_the_shell_reaches_them(
+    shelled, backends, told, grant
+):
+    """The list is the one place a shell is told where `/skills` is on this host. Taken
+    from a graph holding skills whose shell says nothing of reaching them -- a runner's,
+    which exports no `$KINGFISHER_SKILLS` -- it left no way to a skill's script; with
+    kingfisher's own shell, every skills index now says how."""
+    cfg, _ = shelled
+    skill = cfg.catalogue_roots["skills"] / "demo"
+    skill.mkdir(parents=True, exist_ok=True)
+    (skill / "SKILL.md").write_text(DEMO_SKILL, encoding="utf-8")
+    (subagents_dir(cfg) / "holder.yaml").write_text(HOLDER, encoding="utf-8")
+    an_agent(cfg, subagents="[holder]", skills=grant, **EVERY_TOOL)
+
+    _run(replace(cfg, skills_enabled=True), *_consulting("holder"), backends=backends)
+
+    agent, holder, _ = _systems()
+    assert [MAPPINGS in agent, MAPPINGS in holder] == [told, told]
+    # The control: both were handed an index, which says how only on kingfisher's shell.
+    assert "## Skills" in agent and "## Skills" in holder
+    assert ("$KINGFISHER_SKILLS" in holder) is not told
+
 
 @pytest.mark.parametrize(
     ("backends", "shared"),

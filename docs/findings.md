@@ -823,7 +823,9 @@ figure recorded had been taken against an empty one.*
   Which sharpens why a narrow agent with a procedure in its prompt does not take
   one: the cost is almost all entry fee, so a workspace with one skill pays
   nearly what a workspace with three does. *(464 tokens 2026-08-18, before the
-  split was measured; ~450 + ~50/skill 2026-09-03.)*
+  split was measured; ~450 + ~50/skill 2026-09-03.)* *Since 2026-10-26 the index is
+  kingfisher's own template, whose fixed part is about 190 tokens with the shell's
+  sentence and 80 without; deepagents' preamble is no longer sent.*
 
 - **Building one agent, item by item.** 8.1ms median and 9.2ms p95 for an unrestricted agent,
   7.2ms of it `create_deep_agent` compiling the graph. Per item added to an otherwise
