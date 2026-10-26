@@ -80,9 +80,9 @@ slices land.
 - [A prompt that says only what kingfisher
   does](design/2026-10-26-a-prompt-that-says-only-what-kingfisher-does.md) — taking
   who the agent is and how it behaves out of the harness prompt, and the library text
-  that contradicts it, so the client's prompt decides. Two of its seven slices have
-  landed: a command that shows what the model is sent, and the host paths out of the
-  agent's prompt.
+  that contradicts it, so the client's prompt decides. Three of its seven slices have
+  landed: a command that shows what the model is sent, the host paths out of the agent's
+  prompt, and `execute`'s false lines.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,

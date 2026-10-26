@@ -3372,6 +3372,23 @@ tells the model that is what `|` does. A pattern with an empty part, such as a t
 anchors are left alone: deepagents already points at `rg` in the shell, and unescaping
 would guess at what was meant. *(2026-10-17, from the trial transcripts.)*
 
+**`execute` is not called a sandbox, nor told which backends implement it.** deepagents
+opens `execute`'s description with "Executes a shell command in an isolated sandbox" and
+ends it on "Only available on backends implementing SandboxBackendProtocol; otherwise it
+returns an error." The first is false of kingfisher's own shell, which runs on the host,
+fenced where a fence is wired and unconfined where none is, beside a shell section saying
+so; the second is a note to whoever wires a backend, which a model holding the tool can do
+nothing with. Both go from every graph and for every shell, since the description without
+them is true of all of them, and a shell that is a sandbox says so in its own line.
+Removed, not reworded, from outside like the rest:
+`test_no_shell_is_called_a_sandbox_or_said_to_need_a_protocol` asks for the word as well as
+the lines, so a rewording upstream fails rather than passes. The rest of the description is
+deepagents' manual for the tool and stays theirs. Measured on MiniMax-M3, three smoke turns
+each way: all six passed. One command after it named `/inputs/` the file tools' way and
+was right on the next call, after the correction, which is the miss the 2026-10-17 count
+above found in 8 of 109 commands, and nothing the two removed lines spoke of.
+*(2026-10-26.)*
+
 **An agent near the end of its budget is told how many model calls it has left, and a
 subagent is held to the same budget.** Over 71 trial turns, every turn either finished in
 38 calls or fewer or ran to the 50-call limit and stopped mid-work, never told it was

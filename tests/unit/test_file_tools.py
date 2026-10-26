@@ -20,6 +20,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.builtin_tools import (
     ABSOLUTE,
+    BACKENDS_ONLY,
     EDIT_FILE,
     EXACT_INDENT,
     FROM_READ,
@@ -32,6 +33,7 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
     READ_FIRST,
     READ_LINES,
     REGEX,
+    SANDBOXED,
     SEARCHING,
     SEPARATELY,
     WHOLE,
@@ -351,7 +353,8 @@ def test_an_unrestricted_graph_is_told_what_deepagents_says_but_the_false_claim(
     reading, subagent
 ):
     """Narrowing for every graph, the rewrite would change what an agent holding every tool
-    was told, which only `edit_file`'s untrue line should."""
+    was told, which only the untrue lines should: `edit_file`'s claim, and `execute`'s
+    sandbox and its note on backends."""
     cfg, offered = reading
     rule = execute_line(kingfishers_shell(), DEFAULT_LAYOUT)
     assert rule is not None
@@ -364,7 +367,12 @@ def test_an_unrestricted_graph_is_told_what_deepagents_says_but_the_false_claim(
     for tools in offered:
         said = {getattr(tool, "name", None): tool.description for tool in tools}
         timed = timeout_line(cfg.execution_timeout_s)
-        assert said[EXECUTE] == f"{EXECUTE_TOOL_DESCRIPTION.replace(ABSOLUTE, rule)}\n{timed}"
+        told = (
+            EXECUTE_TOOL_DESCRIPTION.replace(SANDBOXED, "")
+            .replace(BACKENDS_ONLY, "")
+            .replace(ABSOLUTE, rule)
+        )
+        assert said[EXECUTE] == f"{told}\n{timed}"
         # And deepagents' sentence on the offload folder is dropped, not reworded: the
         # offloading it describes is off, so it would send a search to an empty folder.
         assert said[GREP] == (
