@@ -26,6 +26,7 @@ from kingfisher.core.agent.prompting import (
     GLOB,
     GREP,
     LS,
+    SESSION_ROOT,
     WRITE_FILE,
     WRITE_TODOS,
     ShellPrompt,
@@ -600,7 +601,8 @@ def _split(request: Any) -> list[str] | None:
 class BuiltinToolsMiddleware(AgentMiddleware):
     """Put the shell's own line in `execute`'s description, on a shell exporting the
     session root say how a missed path is spelt there, and keep deepagents' host paths
-    from a shell that is not on this host; have `read_file` read 1,000 lines unless told
+    from a shell that is not on this host, and from an agent its shell section has told
+    the session root; have `read_file` read 1,000 lines unless told
     otherwise, and `grep` search each string of `a|b`, and say so; say nothing of the shell or of
     `write_todos` to a graph not holding it; have each built-in's description name only
     the tools the graph holds; and refuse a command asked to run longer than `longest`,
@@ -628,6 +630,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         here: bool = True,
         expires_after: int | None = None,
         folders: frozenset[str] | None = None,
+        subagent: bool = False,
     ) -> None:
         super().__init__()
         self._longest = longest
@@ -642,6 +645,12 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         # Whether the shell runs on this host; where not, deepagents' section names paths it
         # does not have.
         self._here = here
+        # An agent told the root has deepagents' host paths in the one form that section
+        # forbids. A subagent reads only `execute`'s line, which leaves `/skills` out, so
+        # the list is its only way to a skill's script and it keeps it.
+        self._rooted = (
+            not subagent and shell is not None and SESSION_ROOT in (shell.prompt or "")
+        )
         self._rule = execute_line(shell, layout)
         self._virtual = _virtual(layout.session_dirs)
         # Where the shell sees the session, or `None` where it does not say -- which is
@@ -659,7 +668,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
             request = request.override(tools=tools)
         untold = []
-        if not (self._here and EXECUTE in held):
+        if not (self._here and EXECUTE in held) or self._rooted:
             untold.append(MAPPINGS)
         if WRITE_TODOS not in held:
             untold.append(TODOS)

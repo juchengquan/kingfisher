@@ -583,14 +583,16 @@ def _told(cfg, *script: AIMessage, **agent: str) -> list[str]:
     return [m.text for heard in Scripted.heard for m in heard if isinstance(m, SystemMessage)]
 
 
+# Never the host paths: kingfisher's own shell section names the session root, which an
+# agent told it is not handed the list as well.
 @pytest.mark.parametrize(
     ("granted", "told"),
     [
-        ({"builtin_tools": '["*"]'}, set(SECTIONS)),
+        ({"builtin_tools": '["*"]'}, set(SECTIONS) - {MAPPINGS}),
         ({}, set()),
         ({"builtin_tools": "[]"}, set()),
         ({"builtin_tools": "[read_file]"}, {"## The file tools"}),
-        ({"builtin_tools": "[execute]"}, {"## The shell", MAPPINGS}),
+        ({"builtin_tools": "[execute]"}, {"## The shell"}),
         ({"builtin_tools": "[write_todos]"}, {TODOS}),
     ],
     ids=["every", "left out", "none", "read_file", "execute", "write_todos"],

@@ -488,19 +488,48 @@ def _systems() -> list[str]:
 
 
 @pytest.mark.parametrize(
-    ("backends", "here"),
+    ("backends", "agent", "subagent"),
     [
-        (LocalSessions(), True),
-        (LocalSessions(runner=lambda _where: Here()), True),
-        (LocalSessions(runner=lambda _where: Plain()), False),
-        (Sandboxed(), False),
+        (LocalSessions(), False, True),
+        (LocalSessions(runner=lambda _where: Here()), True, True),
+        (
+            LocalSessions(
+                runner=lambda _where: Here(),
+                session_root=lambda folder: f"/home/runner/job-{folder.name}",
+            ),
+            False,
+            True,
+        ),
+        (
+            LocalSessions(
+                runner=lambda _where: Here(),
+                shell_prompt=ShellPrompt(prompt=""),
+                session_root=lambda folder: f"/home/runner/job-{folder.name}",
+            ),
+            True,
+            True,
+        ),
+        (LocalSessions(runner=lambda _where: Plain()), False, False),
+        (Sandboxed(), False, False),
     ],
-    ids=["kingfishers-own", "local-runner", "remote-runner", "their-own-shell"],
+    ids=[
+        "kingfishers-own",
+        "local-runner",
+        "local-runner-naming-its-root",
+        "root-named-and-section-silent",
+        "remote-runner",
+        "their-own-shell",
+    ],
 )
-def test_deepagents_host_paths_reach_only_a_shell_on_this_host(shelled, backends, here):
+def test_deepagents_host_paths_reach_only_a_shell_on_this_host(
+    shelled, backends, agent, subagent
+):
     """deepagents gives each routed folder's path on this host to any shell of its local
     class, and kingfisher's is that class whatever its runner: an agent whose commands
-    ran on another machine was told to use paths only this one has. Driven through the
+    ran on another machine was told to use paths only this one has. And an agent whose
+    shell section names the session root was handed every literal host path beside
+    "never paste the path", which also made each session's system message its own; a
+    subagent, told only `execute`'s line, keeps them for `/skills`. Driven through the
     agent and a subagent, because each is sent the section by a middleware of its own.
     """
     cfg, _ = shelled
@@ -508,11 +537,33 @@ def test_deepagents_host_paths_reach_only_a_shell_on_this_host(shelled, backends
 
     systems = _systems()
     assert len(systems) == 3
-    for system in systems:
-        assert (MAPPINGS in system) is here
+    first, consulted, last = systems
+    assert (MAPPINGS in first, MAPPINGS in consulted, MAPPINGS in last) == (
+        agent, subagent, agent,
+    )
     # Only the section goes: the rest of what each was told is still there.
     assert "You are kingfisher" in systems[0]
     assert "You check." in systems[1]
+
+@pytest.mark.parametrize(
+    ("backends", "shared"),
+    [(LocalSessions(), True), (LocalSessions(runner=lambda _where: Here()), False)],
+    ids=["kingfishers-own", "local-runner"],
+)
+def test_two_sessions_send_the_agent_one_system_message(scripted, backends, shared):
+    """The host paths named the session, so each session's system message was its own and
+    none was ever read from another's cache. The control is a runner that names no root,
+    whose agent keeps the paths and so still differs by session."""
+    an_agent(scripted, **EVERY_TOOL)
+    kf = Kingfisher(scripted, sessions=backends)
+
+    first, second = (
+        [block.text for block in kf.sent(Request("go", agent="only", session_id=name)).system]
+        for name in ("a", "b")
+    )
+
+    assert (first == second) is shared
+
 
 def _asked(way: str, request: Any) -> Any:
     """The request `BuiltinToolsMiddleware` passes on, through whichever model hook `way` names.
