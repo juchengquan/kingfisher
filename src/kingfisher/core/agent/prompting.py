@@ -37,11 +37,7 @@ CAPABILITY_MARKER = "<!-- capabilities -->"
 
 CAPABILITY_FILES = {
     "skills": "capability_skills.md",
-    "memory": "capability_memory.md",
 }
-
-#: What follows the memory section where the agent holds a tool to save with.
-MEMORY_RECORDING = "capability_memory_recording.md"
 
 #: Where the session's folders are described: the one part of the harness every subagent
 #: kingfisher builds is handed too, from this one file, so the two cannot drift apart.
@@ -131,14 +127,23 @@ SESSION_ROOT = "KINGFISHER_SESSION_ROOT"
 #: written by people; `/memory/AGENTS.md` is the agent's own.
 INSTRUCTIONS_FILE = "INSTRUCTIONS.md"
 
-#: deepagents' `MEMORY_SYSTEM_PROMPT` with its lifetime claims corrected, so not to be
-#: re-synced on an upgrade: `/memory` is deleted with its session. Sent as written:
-#: deepagents strips HTML comments from the memory file, not from this.
-MEMORY_GUIDELINES = "memory_guidelines.md"
+#: The template `MemoryMiddleware` puts the memory file into, and the whole of what the agent
+#: is told about memory: kingfisher's own, never re-synced with deepagents', whose says
+#: memory outlives its session. Sent as written: deepagents strips HTML comments from the
+#: memory file, not from this.
+MEMORY = "memory.md"
 
-#: What an agent holding nothing to save with is told in its place: its first half, the
-#: trust rules word for word.
-MEMORY_READ_ONLY = "memory_guidelines_read_only.md"
+#: What the memory block says of saving, by whether the agent holds a tool to save with.
+#: The rule is worded as what saving does, since that is what makes it kingfisher's to say.
+_SAVING = {
+    True: (
+        "Save to it with `{saver}`. What is saved is sent on every later call and handed "
+        "back with the turn's files, so never save credentials or details that identify "
+        "the user -- their name, email address, team or account ids -- even when they "
+        "offer them."
+    ),
+    False: "It can be read here but not added to, so do not try to save to it.",
+}
 
 
 def _prompt_text(name: str) -> str:
@@ -284,9 +289,8 @@ def memory_guidelines(
         else "evidence from your tools"
     )
     saver = _saver(held)
-    if saver is None:
-        return _filled(MEMORY_READ_ONLY, layout, evidence=evidence)
-    return _filled(MEMORY_GUIDELINES, layout, save_tool=saver, evidence=evidence)
+    saving = _SAVING[saver is not None].format(saver=saver)
+    return _filled(MEMORY, layout, saving=saving, evidence=evidence)
 
 
 def _file_tools(held: tuple[str, ...], layout: Layout) -> str:
@@ -329,7 +333,6 @@ def _tool_results(
 def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describes
     *,
     skills_enabled: bool = False,
-    memory_enabled: bool = False,
     cite_results: bool = True,
     keep_results_rounds: int | None = None,
     extra: str = "",
@@ -363,10 +366,6 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
         parts.append(_filled(CAPABILITY_FILES["skills"], layout).strip())
         if shelled:
             parts.append(_said(shell, "skills", layout))
-    if memory_enabled:
-        parts.append(_filled(CAPABILITY_FILES["memory"], layout).strip())
-        if _saver(held) is not None:
-            parts.append(_filled(MEMORY_RECORDING, layout).strip())
     sections = "\n\n".join(part for part in parts if part)
 
     assembled = _joined(
@@ -495,7 +494,6 @@ def system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describe
     """
     return render_system_prompt(
         skills_enabled=bool(cfg and cfg.skills_enabled) and skills,
-        memory_enabled=bool(cfg and cfg.memory_enabled),
         cite_results=cfg.cite_results if cfg else True,
         keep_results_rounds=cfg.keep_results_rounds if cfg else None,
         extra=behind_instructions(agent, instructions),

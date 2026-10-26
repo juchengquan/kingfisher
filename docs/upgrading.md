@@ -18,6 +18,27 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Memory is described in its block alone, and in a fifth of the words, after #1094
+
+- **The memory section of the system prompt has gone.** What memory is and how long it
+  lasts is said in the block around the memory file, which is sent only where memory is
+  on and the request has not declined it. A request declining memory is now told nothing
+  of it, where the cached prompt used to describe it anyway.
+- **The block is cut to its facts**: where it was loaded from, that it lasts for later
+  turns of this conversation, how to save where a save tool is held, the trust rules, and
+  never to save credentials or details that identify the user. deepagents' advice on when
+  to save, its examples, and its telling the agent to ask the user for what it lacks have
+  gone. If your deployment wants memory used for something, say so in `INSTRUCTIONS.md`
+  or the agent's `system_prompt`: measured on MiniMax-M3, a stated convention was saved
+  2 times in 10 under the old wording, 0 in 10 under the new, and 4 in 10 with the one
+  line "Save any convention the user states to `/memory/AGENTS.md`." in `INSTRUCTIONS.md`.
+  The old wording is in git, at `src/kingfisher/core/agent/prompts/memory_guidelines.md`
+  before this change.
+- **`render_system_prompt` takes no `memory_enabled`.** It only ever changed the section
+  that went.
+- If you cache, diff or test the system prompt's text or the memory block's, neither is
+  the same.
+
 ## `execute` is no longer called a sandbox, after #1093
 
 - **Two lines of `execute`'s description have gone, for every shell.** "in an isolated

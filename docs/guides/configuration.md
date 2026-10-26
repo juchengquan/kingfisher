@@ -98,13 +98,14 @@ names are read by nothing. `kingfisher doctor` reports one that is still set,
 which is the only thing that will: a name that stops being read takes its
 setting's effect with it and says nothing.
 
-Skills, memory and the interpreter are switched per deployment, and the reason is
-the prompt. Each splices a section into the base prompt, which is the cached prefix
-every turn is compared against — so whether they are on has to be a deployment-stable
-fact, decided once. Tools, subagents and agents are attached per request through
-capabilities instead, and leave the prefix alone. A request may decline memory
-this deployment wired, and when it does the *reads* are denied rather than the
-prompt rewritten, for the same reason.
+Skills and the interpreter are switched per deployment, and the reason is the
+prompt. Each puts text into the cached prefix every turn is compared against — so
+whether they are on has to be a deployment-stable fact, decided once. Tools,
+subagents and agents are attached per request through capabilities instead, and
+leave the prefix alone. Memory is switched per deployment too, and a request may
+decline it: memory is described only in its own block, after the prefix, so a
+request that declines it is sent no block and denied the file, and the prefix is
+the same either way.
 
 ### Citing a result
 

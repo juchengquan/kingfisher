@@ -474,9 +474,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root: each stateme
         memory_at = len(switched)
         switched.append(remembering(None))
     elif cfg.memory_enabled:
-        # Wired but declined: the prompt still describes memory, because it is the
-        # cached prefix, so this stops the file being read. The memory block sits
-        # behind its own breakpoint, so dropping it leaves the prefix cached.
+        # Wired but declined: no memory block is sent, so nothing describes memory, and
+        # the file is denied, which a file tool could still open. The block sits behind
+        # its own breakpoint, so dropping it leaves the prefix cached.
         permissions.append(memory_is_denied(cfg.layout))
 
     if skills_on:
