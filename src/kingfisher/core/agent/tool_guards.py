@@ -6,7 +6,14 @@ import inspect
 from collections.abc import Sequence
 from typing import Any
 
+from langchain_core.callbacks import AsyncCallbackManagerForToolRun, CallbackManagerForToolRun
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, StructuredTool, ToolException
+
+# langchain's own reading of what a `_run` takes, so the inner tool is handed exactly what
+# its `run` would hand it. It finds the config parameter by resolving the annotation, so
+# `RunnableConfig` above is imported to run, not only to type.
+from langchain_core.tools.base import _get_runnable_config_param, _signature_parameters
 
 from .host_paths import HostPathError
 from .references import UnsafeReferenceError
@@ -38,11 +45,18 @@ class GuardedTool(BaseTool):
         except (UnsafeReferenceError, HostPathError) as escaped:
             raise ToolException(refusal_text(escaped, self.paths)) from escaped
 
-    def _as_tool_call(self, args: dict[str, Any]) -> dict[str, Any]:
-        """The call form, the only one that carries a `content_and_artifact` tool's
-        artifact back.
+    def _handed(self, run: Any, config: RunnableConfig, manager: Any) -> dict[str, Any]:
+        """What the inner tool's `run` would pass its `_run` besides the arguments.
+
+        The inner `_run` is called, not its `invoke`: a second run would report every
+        call twice to each callback, the run log and a deployment's tracer alike.
         """
-        return {"type": "tool_call", "id": "guarded", "name": self.inner.name, "args": args}
+        handed: dict[str, Any] = {}
+        if manager is not None and _signature_parameters(run).get("run_manager"):
+            handed["run_manager"] = manager
+        if param := _get_runnable_config_param(run):
+            handed[param] = config
+        return handed
 
     def _failed(self, exc: Exception, asked: dict[str, Any]) -> ToolException:
         # The type as well as the message: `FileNotFoundError: /inputs/x.csv` tells a
@@ -54,25 +68,34 @@ class GuardedTool(BaseTool):
         msg = f"Error: {type(exc).__name__}: {exc}"
         return ToolException(as_asked(msg, asked))
 
-    def _run(self, **kwargs: Any) -> Any:
+    def _run(
+        self,
+        *,
+        config: RunnableConfig,
+        run_manager: CallbackManagerForToolRun | None = None,
+        **kwargs: Any,
+    ) -> Any:
         args = self._translated(kwargs)
         try:
-            if self.response_format == "content_and_artifact":
-                answered = self.inner.invoke(self._as_tool_call(args))
-                return answered.content, answered.artifact
-            return self.inner.invoke(args)
+            return self.inner._run(**args, **self._handed(self.inner._run, config, run_manager))
         except ToolException:
             raise
         except Exception as exc:
             raise self._failed(exc, kwargs) from exc
 
-    async def _arun(self, **kwargs: Any) -> Any:
+    async def _arun(
+        self,
+        *,
+        config: RunnableConfig,
+        run_manager: AsyncCallbackManagerForToolRun | None = None,
+        **kwargs: Any,
+    ) -> Any:
         args = self._translated(kwargs)
+        # Read as `arun` reads it: a tool with no `_arun` of its own runs its `_run`.
+        own = type(self.inner)._arun is not BaseTool._arun
+        checked = self.inner._arun if own else self.inner._run
         try:
-            if self.response_format == "content_and_artifact":
-                answered = await self.inner.ainvoke(self._as_tool_call(args))
-                return answered.content, answered.artifact
-            return await self.inner.ainvoke(args)
+            return await self.inner._arun(**args, **self._handed(checked, config, run_manager))
         except ToolException:
             raise
         except Exception as exc:
