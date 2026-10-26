@@ -80,8 +80,8 @@ slices land.
 - [A prompt that says only what kingfisher
   does](design/2026-10-26-a-prompt-that-says-only-what-kingfisher-does.md) — taking
   who the agent is and how it behaves out of the harness prompt, and the library text
-  that contradicts it, so the client's prompt decides. Nothing built; seven slices,
-  the first a command that shows what the model is sent.
+  that contradicts it, so the client's prompt decides. Its first slice, a command that
+  shows what the model is sent, has landed; six remain.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,

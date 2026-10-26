@@ -56,6 +56,11 @@ _EXPORTS = {
     "CompiledSubagent": "kingfisher.core.definitions.subagents.spec",
     "RunEvent": "kingfisher.core.result",
     "RunResult": "kingfisher.core.result",
+    # What `Kingfisher.sent` answers: the first model call of a turn, as it would be sent.
+    "Sent": "kingfisher.core.result",
+    "SentBlock": "kingfisher.core.result",
+    "SentTool": "kingfisher.core.result",
+    "SENT_SOURCES": "kingfisher.core.result",
     # Every `kind` a `RunEvent` can carry, and every `stop_reason` a `RunResult` can.
     "KINDS": "kingfisher.core.result",
     "STOP_REASONS": "kingfisher.core.result",
@@ -78,6 +83,7 @@ _EXPORTS = {
 
 __all__ = [
     "KINDS",
+    "SENT_SOURCES",
     "STOP_REASONS",
     "UNSCOPED",
     "ArtifactError",
@@ -111,6 +117,9 @@ __all__ = [
     "RunResult",
     "ScratchRun",
     "Seeded",
+    "Sent",
+    "SentBlock",
+    "SentTool",
     "Session",
     "SessionBusyError",
     "SubagentError",
@@ -167,12 +176,16 @@ if TYPE_CHECKING:
     from kingfisher.core.request import Request as Request
     from kingfisher.core.request import Resume as Resume
     from kingfisher.core.result import KINDS as KINDS
+    from kingfisher.core.result import SENT_SOURCES as SENT_SOURCES
     from kingfisher.core.result import STOP_REASONS as STOP_REASONS
     from kingfisher.core.result import ArtifactError as ArtifactError
     from kingfisher.core.result import LedgerEntry as LedgerEntry
     from kingfisher.core.result import PendingDecision as PendingDecision
     from kingfisher.core.result import RunEvent as RunEvent
     from kingfisher.core.result import RunResult as RunResult
+    from kingfisher.core.result import Sent as Sent
+    from kingfisher.core.result import SentBlock as SentBlock
+    from kingfisher.core.result import SentTool as SentTool
     from kingfisher.core.run import run as run
     from kingfisher.core.run import stream as stream
     from kingfisher.core.service import Kingfisher as Kingfisher

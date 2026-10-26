@@ -39,6 +39,7 @@ from kingfisher.core.session.model import opened_for
 from kingfisher.core.session.preparation import Preparation
 from kingfisher.core.session.runlog import LoggedRunEvents
 from kingfisher.core.session.running import Running
+from kingfisher.core.session.sent import Preview
 from kingfisher.core.session.steps import (
     Steps,
     changing,
@@ -79,7 +80,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("kingfisher.origins")
 
 
-class Kingfisher(SessionMethods, Disposal, Preparation, Running):
+class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
     """A configured kingfisher. Construct once; call `run` or `stream` per request."""
 
     def __init__(  # noqa: PLR0913 -- the composition root: each argument is substitutable

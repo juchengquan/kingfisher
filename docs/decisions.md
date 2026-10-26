@@ -4517,6 +4517,26 @@ every caller prints it; `test_only_the_record_says_what_a_skipped_definition_nee
 any `skipped …` line composed outside `seeding.py`, searching the README, the driver, the
 example and `evals/` too. *(2026-09-23.)*
 
+**What the model is sent is shown by the library, and the command prints it.**
+`Kingfisher.sent` builds a request's agent as its turn would -- in the session it names,
+for the caller's reach and the session's pinned agent, under the deployment's grant --
+and catches the first model call before it leaves; `kingfisher prompt` prints the
+answer. In the library because the command builds its own `Kingfisher` from the
+environment, so a deployment wiring plugins in code would have been shown a prompt it
+never sends. Caught at the chat model's start callback rather than by a middleware,
+since deepagents lands a new one ahead of its caching and memory, which would not have
+finished the request; and not by wrapping the model, since deepagents picks a model's
+profile from the instance it is handed. The stop is a `BaseException`, so a fallback
+answering for a failed call does not carry the turn on and run the tools it calls. No
+claim, transcript or last-used time is written, and a session made in order to look is
+removed. The code interpreter's runtime, which the caught call starts where a grant
+lists its tools, is closed as a turn's teardown closes it: left open, `kingfisher
+prompt` printed its listing and never exited. Each block is named by matching what
+wrote it, so a deployment's own reads `unknown` rather than being guessed at; the
+interpreter's heading is spelt here because langchain-quickjs keeps its template
+private. Not shown: the conversation, which a turn writes and a placeholder task does
+not stand for. *(2026-10-26.)*
+
 ## What doctor promises
 
 **`kingfisher doctor` exiting zero means nothing in the catalogue will break** -- at startup

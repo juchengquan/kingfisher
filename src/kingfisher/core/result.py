@@ -252,3 +252,52 @@ class RunEvent:
         if self.kind == "finished":
             return "[done ]"
         return f"[{self.kind}] {self.text}"
+
+
+#: Where a block of the system message came from, and what that is. Matched on what each
+#: source writes, so a block a deployment's own middleware adds is `unknown`, not guessed.
+SENT_SOURCES: Mapping[str, str] = {
+    "kingfisher": "the harness, the deployment's instructions and the agent's own prompt",
+    "profile": "deepagents' harness profile for this model",
+    "host_paths": "deepagents: where the shell finds each folder on this host",
+    "write_todos": "langchain: how to use write_todos",
+    "skills": "deepagents: the skills index",
+    "interpreter": "langchain-quickjs: the code interpreter behind eval",
+    "memory": "the session's memory file, in kingfisher's guidelines",
+    "turn": "this turn's instructions",
+    "unknown": "added by middleware kingfisher does not recognise",
+}
+
+
+@dataclass(frozen=True)
+class SentBlock:
+    """One block of the system message, as the model call would send it."""
+
+    text: str
+    #: A key of `SENT_SOURCES`.
+    source: str
+    #: Whether a cache breakpoint is on it.
+    cached: bool = False
+
+
+@dataclass(frozen=True)
+class SentTool:
+    """One tool the model call would offer, as the provider would be sent it."""
+
+    name: str
+    description: str
+    parameters: Mapping[str, Any]
+    #: Offered by the definitions, rather than built into deepagents or langchain.
+    offered: bool = False
+    cached: bool = False
+
+
+@dataclass(frozen=True)
+class Sent:
+    """What the first model call of a turn would be sent: the system message, block by
+    block, and the tools. The conversation itself is not here, since a turn adds it."""
+
+    agent: str
+    session_id: str
+    system: tuple[SentBlock, ...]
+    tools: tuple[SentTool, ...]
