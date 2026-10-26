@@ -77,6 +77,11 @@ slices land.
   kingfisher sends back of a model's thinking once the vendor, or the conversation
   before it, has changed, keyed on the endpoint that answered. Its first slice has
   landed; the rest wait on one live Anthropic call each.
+- [A prompt that says only what kingfisher
+  does](design/2026-10-26-a-prompt-that-says-only-what-kingfisher-does.md) — taking
+  who the agent is and how it behaves out of the harness prompt, and the library text
+  that contradicts it, so the client's prompt decides. Nothing built; seven slices,
+  the first a command that shows what the model is sent.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
