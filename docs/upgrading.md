@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## An answer names the files it made, not their paths, after #1089
+
+- **One sentence of the system prompt has changed again.** Since #1073 it told the model
+  to say in its answer where each file went; it now says to name each file it made, not
+  its path. Where a requested name is saved, and that a save in no folder of the session
+  is refused, are as before. If you cache, diff or test the system prompt's text, it is
+  not the same.
+
 ## `doctor` and `list` fail on a tool name nothing offers, after #1085
 
 - **A definition naming a tool its line does not offer now exits 1.** An agent's or
