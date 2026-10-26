@@ -14,6 +14,7 @@ _EXPORTS = {
     "RunEvents": "kingfisher.core.interfaces",
     "Instructions": "kingfisher.core.interfaces",
     "TurnInstructions": "kingfisher.core.interfaces",
+    "MemoryStore": "kingfisher.core.interfaces",
     "UnusedResults": "kingfisher.core.interfaces",
     "PdfAttachments": "kingfisher.core.interfaces",
     "ReturnedPdf": "kingfisher.core.interfaces",
@@ -61,6 +62,7 @@ __all__ = [
     "JsonlRunEvents",
     "Layout",
     "LocalSessions",
+    "MemoryStore",
     "NoScratchRunLimit",
     "PdfAttachments",
     "ReturnedPdf",
@@ -102,6 +104,7 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import CommandResult as CommandResult
     from kingfisher.core.interfaces import CommandRunner as CommandRunner
     from kingfisher.core.interfaces import Instructions as Instructions
+    from kingfisher.core.interfaces import MemoryStore as MemoryStore
     from kingfisher.core.interfaces import NoScratchRunLimit as NoScratchRunLimit
     from kingfisher.core.interfaces import PdfAttachments as PdfAttachments
     from kingfisher.core.interfaces import ReturnedPdf as ReturnedPdf

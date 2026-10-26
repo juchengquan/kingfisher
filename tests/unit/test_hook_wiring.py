@@ -28,6 +28,7 @@ HOOKS: dict[str, type] = {
     "pdf_attachments": interfaces.PdfAttachments,
     "subagent_middlewares": interfaces.SubagentMiddlewares,
     "scratch_run_limit": interfaces.ScratchRunLimit,
+    "memory_store": interfaces.MemoryStore,
 }
 
 

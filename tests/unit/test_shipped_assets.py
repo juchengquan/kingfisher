@@ -1769,6 +1769,63 @@ def test_the_shipped_hook_names_the_zone_it_fell_back_to_and_says_nothing_of_nob
     assert told == "Today is Thursday 22 October 2026, in UTC."
 
 
+def test_the_shipped_memory_store_keys_on_the_user_and_keeps_each_apart(tmp_path):
+    """A store keyed on anything shared, or one spelling a user id into a path, would hand
+    one user's memory to another, or write it wherever the id pointed."""
+    from assets.plugins.memory_store import FileMemoryStore
+    from kingfisher import MemoryChanges, MemoryEntry
+
+    store = FileMemoryStore(tmp_path / "users")
+    ana, ben = (store.key(_caller("2026-10-22T23:30:00+00:00", user_id=one)) for one in "ab")
+    store.apply("../../a", MemoryChanges(added=(MemoryEntry("m1", "Likes EUR"),)))
+
+    assert (ana, ben) == ("a", "b")
+    assert store.key(_caller("2026-10-22T23:30:00+00:00")) is None
+    assert store.load("a") == store.load("b") == ()
+    assert [one.parent for one in tmp_path.rglob("*.json")] == [tmp_path / "users"]
+    # The control: kept, and read back by a store made afresh, as the next process would.
+    assert FileMemoryStore(tmp_path / "users").load("../../a") == (MemoryEntry("m1", "Likes EUR"),)
+
+
+def test_the_shipped_memory_store_merges_a_save_by_id(tmp_path):
+    """Replacing the list with the one a session sends loses what another session of the
+    user saved since; an edit landing on an entry already removed brings a forgotten fact
+    back; and an id handed out again takes an edit meant for the entry it once named."""
+    from assets.plugins.memory_store import FileMemoryStore
+    from kingfisher import MemoryChanges, MemoryEntry
+
+    store = FileMemoryStore(tmp_path)
+    eur, short, mondays = (
+        MemoryEntry("m1", "Likes EUR"),
+        MemoryEntry("m2", "Short answers"),
+        MemoryEntry("m3", "Reviews on Mondays"),
+    )
+    store.apply("a", MemoryChanges(added=(eur, short)))
+    # One session adds `mondays`, and the user forgets it.
+    store.apply("a", MemoryChanges(added=(mondays,)))
+    store.apply("a", MemoryChanges(removed=(mondays,)))
+
+    # Another session, which loaded `eur` and `short`, added m3, an id the user once had,
+    # and m2, which is taken, and edited `eur`.
+    store.apply(
+        "a",
+        MemoryChanges(
+            added=(MemoryEntry("m3", "Times in UTC"), MemoryEntry("m2", "Long answers")),
+            changed=(MemoryEntry("m1", "Likes EUR, rounded"),),
+        ),
+    )
+    # A third, still holding the forgotten m3, edits it.
+    after = store.apply("a", MemoryChanges(changed=(MemoryEntry("m3", "On Tuesdays"),)))
+
+    assert after == (
+        MemoryEntry("m1", "Likes EUR, rounded"),
+        short,
+        MemoryEntry("m4", "Times in UTC"),
+        MemoryEntry("m5", "Long answers"),
+    )
+    assert store.load("a") == after
+
+
 def test_the_shipped_analyst_tells_each_caller_what_its_grant_reaches(shipped):
     """The paragraph this replaced told every caller to check whether `sql_query` was
     among its tools; each caller is now told which, and an EMEA caller about its quarters."""

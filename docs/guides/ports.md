@@ -61,6 +61,7 @@ when left out:
 | | `subagent_middlewares` | [below](#subagentmiddlewares--what-a-portable-subagent-runs) |
 | **After the turn** | `run_events` | [below](#runevents--where-each-turns-record-goes) |
 | | `unused_results` | [below](#unusedresults--what-becomes-of-a-saved-result-nothing-names) |
+| **What outlives the session** | `memory_store` | [below](#memorystore--a-users-memory-across-their-sessions) |
 
 Something kingfisher does that you want done differently is usually middleware, which a
 definition names. One of these exists where only kingfisher knows what the change needs
@@ -553,6 +554,81 @@ Things to know:
   `True` or `False` -- `1`, `None` -- refuses the graph's runs the way a raise does, logged
   and named: `refused: this deployment's ScratchRunLimit answered coroutine, not True or
   False`. Look a policy up before the service is built, not inside `allows`.
+
+## `MemoryStore` — a user's memory across their sessions
+
+With memory on, each session keeps its own `/memory/AGENTS.md`, and it goes when the
+session does. A store makes it the user's: the session's file becomes a working copy of
+their memory, reloaded at each turn's start, so what one conversation learnt reaches the
+next on its next turn.
+
+```python
+from kingfisher import MemoryChanges, MemoryEntry
+
+
+class MemoryTable:
+    def __init__(self, db):
+        self.db = db
+
+    def key(self, caller) -> str | None:
+        return caller.context.get("user_id")
+
+    def load(self, key: str) -> tuple[MemoryEntry, ...]:
+        return tuple(MemoryEntry(one, text) for one, text in self.db.rows(key))
+
+    def apply(self, key: str, changes: MemoryChanges) -> tuple[MemoryEntry, ...]:
+        with self.db.transaction():
+            for one in changes.removed:
+                self.db.delete(key, one.id)
+            for one in changes.changed:
+                self.db.update(key, one.id, one.text)
+            for one in changes.added:
+                self.db.insert(key, one.id, one.text)  # a new id where this one is or was taken
+        return self.load(key)
+
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(), memory_store=MemoryTable(db))
+```
+
+The command does not take it, and keeps session memory. Left out, memory lasts as long
+as its session. `assets/plugins/memory_store.py` is a store on files, keyed on
+`context["user_id"]`.
+
+`key` is asked with the turn's `Caller`, the one `TurnInstructions` is handed, and
+answers whose memory this is. kingfisher reads no part of it and hands it back to
+`load` and `apply` as it was given. Key on who the user is, never on their source ids:
+those say what a caller may reach, and two people holding one grant would share a memory.
+
+Things to know:
+
+- **Each turn writes the user's entries into the session's file** before the agent reads
+  it, as `- [m3] text` lines under a heading. Anything else in the file goes: the file is a
+  copy, and the store is the memory.
+- **A turn's end hands over only what changed** -- `added`, `changed` and `removed`, by
+  id, against what the turn started from -- and only when something did. Another session
+  of the same user may have saved since, so merge by id: two sessions adding different
+  entries both keep theirs, and two editing one entry end with the later edit. An added
+  entry whose id is taken, or was once, needs a new one, `m` and a number, or the next
+  turn renumbers it: an id handed out again takes an edit another session's older copy
+  makes to the entry it used to name. Whatever `apply` answers is written back into the
+  session's file. The turn's own report names the id the session gave an entry, so one
+  the store renumbered shows under its new id from the next turn on.
+- **Asked only where memory is on** for the turn: `KINGFISHER_MEMORY_ENABLED` set and the
+  agent not declining with `memory: false`. Otherwise no method is called. A graph the
+  deployment built itself is never numbered, and never asked about either.
+- **`None` from `key` keeps the session's memory** for that turn, and the turn says so
+  with a `memory_unkeyed` event. A request without a user still runs.
+- **An exception never fails the turn.** It is logged with its traceback and reported as
+  `memory_store_failed`, naming the method and the error. From `key`, the turn keeps the
+  session's memory. From `load`, it reads the session's copy, which is what the last turn
+  left, and still hands its changes over at the end. From `apply`, the changes stay in
+  the session's copy only until its next turn reloads the user's memory.
+- **The agent is told whose memory it is.** With a key, the memory block says the memory
+  carries into this user's later conversations; without one, that it lasts for later
+  turns of this one. `sent` builds without asking the store, so it shows the second.
+- **Plain methods, asked while the session is claimed**: on the async path each is called
+  on kingfisher's thread pool, off the event loop. Two sessions of one user run their
+  turns at once, so `apply` must be safe beside another `apply` for the same key.
+- **Deleting a session leaves the user's memory alone.**
 
 ## The rest
 

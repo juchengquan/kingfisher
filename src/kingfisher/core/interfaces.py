@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from kingfisher.core.session.unused import UnusedFiles
 
     from .config import Config
+    from .result import MemoryChanges, MemoryEntry
 
 
 @dataclass(frozen=True)
@@ -270,6 +271,38 @@ class TurnInstructions(Protocol):
 
     def text(self, cfg: Config, session_id: str, caller: Caller) -> str:
         """What this turn's graphs are told, or an empty string for nothing."""
+        ...
+
+
+class MemoryStore(Protocol):
+    """Where a user's memory is kept, for a deployment whose memory follows the user from
+    one session to the next rather than ending with each.
+
+    With one wired, the session's memory file is a working copy: a turn's start writes the
+    user's entries into it before the agent reads it, and its end hands over what the turn
+    added, changed and removed. Asked only where memory is on for the turn. Plain methods:
+    on the async path each is called on kingfisher's thread pool, off the event loop. An
+    exception from any is reported as `memory_store_failed` and the turn goes on.
+    """
+
+    def key(self, caller: Caller) -> str | None:
+        """Whose memory this turn's is, or `None` for no one's, which keeps the session's.
+
+        kingfisher reads no part of it, and hands it back to `load` and `apply` as given.
+        """
+        ...
+
+    def load(self, key: str) -> tuple[MemoryEntry, ...]:
+        """This user's entries, in order, each with the id kingfisher gave it."""
+        ...
+
+    def apply(self, key: str, changes: MemoryChanges) -> tuple[MemoryEntry, ...]:
+        """`changes` applied by id to this user's entries as they are now, and the result.
+
+        Another session of the same user may have changed them since this one loaded, so
+        an entry is merged by its id, never the list replaced. An id given afresh is `m`
+        and a number, as kingfisher numbers one, or the next turn numbers it again.
+        """
         ...
 
 

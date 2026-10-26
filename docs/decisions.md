@@ -4029,8 +4029,8 @@ session works" had it writing for a reader who never arrives. It says *later tur
 conversation*, the lifetime `/outputs` has. Memory shared between sessions is a separate
 design, not made: `docs/design/2026-09-10-a-mount-kingfisher-can-name.md` leaves `/memory`
 off a shared mount because a per-caller route on shared storage "needs a tenancy argument
-that has not been made". Until that design exists, "a future session" does not go back
-into the prompt. *(2026-10-07.)*
+that has not been made". Since 2026-10-26 it goes back in exactly when a `MemoryStore` is
+wired and names the turn's user, which is when it is true. *(2026-10-07.)*
 
 **A caller reads a session's memory, and forgets one entry, through its `Session`.**
 `memory()` answers the entries and `forget(entry_id)` removes one with the lines
@@ -4143,6 +4143,26 @@ values out of what is saved would be matching free text. *(2026-10-23.)* *The ex
 lists went on 2026-10-26; the rule stayed, said as what saving does -- what is saved is sent
 on every later call and handed back with the turn's files -- since that is what makes it
 kingfisher's to say rather than a deployment's.*
+
+**A user's memory is the deployment's store, and the session's file a copy of it.** With
+a `MemoryStore` wired as `memory_store=`, a turn's start asks it whose memory this is,
+`key(caller)`, and writes that user's entries into `/memory/AGENTS.md` before the start's
+numbering reads the file, so they are the baseline the turn's changes are counted from
+and another session's saves arrive on the next turn. The end hands the store only what
+changed, `apply(key, changes)`, and writes back what it answers. The tenancy argument the
+mount design asked for is that the key is the deployment's, chosen from who the caller
+says the user is: kingfisher reads no part of it. **Not taken: keying on source ids**,
+which say what a caller may reach, so two people holding one grant would share a memory.
+**Not taken: saving the whole list**, which drops what another session of the user saved
+since this one loaded; merged by id, both keep theirs. A request naming no user keeps
+session memory and says so, `memory_unkeyed`, since refusing would make a user id a
+requirement of every request. A store that raises never fails the turn, which keeps the
+session's copy and reports `memory_store_failed`; a failed load still applies the turn's
+changes at its end, because the copy the last turn wrote carries the user's ids. Admitted
+as a hook by the three rules: it needs the turn's start and end, where only kingfisher
+numbers memory, and holds deployment-wide; no existing hook is near it. The command takes
+no plugins, so it keeps session memory. Off, or declined by an agent, the store is never
+asked. *(2026-10-26.)*
 
 **A session id is one path segment, checked where it becomes a path.** Nothing checked it,
 and every path built from an id joined it on as given. Measured: `..` laid a session out in
