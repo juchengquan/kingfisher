@@ -3543,7 +3543,18 @@ deepagents' heading, because the section arrives as a system-message block of it
 merged into other text it would be left whole, and
 `test_deepagents_host_paths_reach_only_a_shell_on_this_host` would fail.
 `standing_middleware` is handed the turn's backend, so the `execute` line and this section
-are asked of the same shell. *(2026-10-15.)*
+are asked of the same shell. *(2026-10-15.)* *Since 2026-10-26 the agent is not given it
+either where its shell section names `$KINGFISHER_SESSION_ROOT`, kingfisher's own shell
+and a runner given `session_root=` among them: the list is that rule in the one form the
+section forbids, a literal path pasted into a command, and since the paths name the
+session, every session's system message was its own and none was read from another's
+cache. A section a deployment silenced keeps it. A subagent keeps it as well, because it
+reads only `execute`'s line, which says nothing of `/skills`, so the list is its one way
+to a skill's script; it goes there once every skills block carries the shell's skills
+sentence. Measured on MiniMax-M3, three turns each way of the smoke and of a task run
+through the shell: every turn passed or counted right both ways, and none of 38 commands
+missed a path or pasted a host path, with the list or without it. The model was not
+copying the list, so what it cost was its size and the cache.*
 
 **`HOME` is `scratch` too, and `.home` is gone.** `HOME` had a directory of its own so
 that whatever a tool caches under `~` would land in the session, be swept by `reap` and be

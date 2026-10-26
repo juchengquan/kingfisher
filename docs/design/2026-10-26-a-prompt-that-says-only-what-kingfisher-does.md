@@ -1,6 +1,6 @@
 # A prompt that says only what kingfisher does
 
-**Status:** proposed. Slice 1 landed in #1091; slices 2–7 are not built.
+**Status:** proposed. Slices 1 and 2 landed in #1091 and #1092; slices 3–7 are not built.
 **Date:** 2026-10-26.
 **Occasion:** the owner asked whether the default system prompt could shrink so that
 clients decide more of it. Measured first, on a real build with a model that records
@@ -123,8 +123,10 @@ here.** How each is changed:
 | host-path block | taken out by its heading, as `BuiltinToolsMiddleware._told` already does where the shell is not on this host | text matching, already there |
 | `execute`'s false lines | removed from the description `BuiltinToolsMiddleware` already rewrites, with a test that fails if deepagents rewords them | text matching |
 
-The host-path block goes wherever the shell names its session root, since the shell's
-section then gives the mapping; a runner that says nothing keeps it. The 2026-10-15
+The host-path block goes from the agent wherever its shell section names the session
+root, since that section then gives the mapping; a runner that says nothing keeps it. A
+subagent keeps it until slice 5: it reads only `execute`'s line, which leaves `/skills`
+out, so the list is its one way to a skill's script. The 2026-10-15
 entry kept it for a local shell "since its paths are real there", before
 `$KINGFISHER_SESSION_ROOT` existed. Tool manuals stay the library's: between deepagents
 0.7.6 and 0.7.22, `glob`'s description was rewritten when its matching changed (a
@@ -193,12 +195,15 @@ most of them touch `prompting.py` or the prompt files.
 1. **`kingfisher prompt`.** Landed in #1091 as `Kingfisher.sent`, with the command
    printing it; *Seeing what the model is sent* in `formats.md` names the profile suffix
    and how to clear it, and the decision is under *The command line*.
-2. **The host-path block**, out wherever the shell names its session root, and the
-   2026-10-15 entry updated.
+2. **The host-path block.** Landed in #1092: out of the agent's prompt wherever its shell
+   section names the session root, so two sessions now send the agent one system
+   message. Subagents keep it, for `/skills`, until slice 5.
 3. **`execute`'s false lines.**
 4. **`memory.md`**, with the memory section of kingfisher's prompt out, and the
    2026-10-07 and 2026-10-23 entries updated.
-5. **`skills.md`**, on both skills paths, with "prefer an existing procedure" out.
+5. **`skills.md`**, on both skills paths, with "prefer an existing procedure" out. It
+   carries the shell's skills sentence to every graph holding skills, subagents included,
+   so the host-path block then goes from subagents too.
 6. **Identity and conduct out**: the identity line, *Deciding when to act*, the first and
    last paragraphs of *Finishing*, and the three kinds of sentence above; the shipped
    agents fitted; the upgrading note quoting what went.

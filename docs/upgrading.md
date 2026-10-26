@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The agent is not sent deepagents' host paths where its shell names the session root, after #1092
+
+- **One block of the agent's system message has gone.** deepagents' *Shell paths vs.
+  virtual paths*, listing each folder's path on this host, is no longer sent to an agent
+  whose shell section names `$KINGFISHER_SESSION_ROOT`: kingfisher's own shell, and a
+  runner given `session_root=`. That section already says how a file-tool path is reached
+  from the shell. If you cache, diff or test the system prompt's text, it is not the same.
+- **Two sessions now send the agent one system message**, where the paths named each
+  session's folder; across sessions the prompt can now be read from one cache.
+- **Subagents are unchanged**, and so is an agent whose shell names no root or whose
+  `ShellPrompt(prompt="")` says nothing.
+
 ## An answer names the files it made, not their paths, after #1089
 
 - **One sentence of the system prompt has changed again.** Since #1073 it told the model

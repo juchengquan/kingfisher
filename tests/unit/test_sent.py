@@ -21,6 +21,7 @@ from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, FakeGraph, an_agent, pin, start, tools_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_interpreter import _close_every_interpreter, _quickjs_workers
+from tests.unit.test_shell_paths import Here
 
 WHERE = '''from langchain.tools import ToolRuntime
 
@@ -90,7 +91,7 @@ def test_what_is_shown_is_what_the_turn_sends(scripted):
     assert [(block.text, block.cached) for block in sent.system] == heard
     # The control: the comparison is over something, every source of it named.
     assert [block.source for block in sent.system] == [
-        "kingfisher", "host_paths", "write_todos", "skills", "turn", "memory",
+        "kingfisher", "write_todos", "skills", "turn", "memory",
     ]
 
 
@@ -258,11 +259,16 @@ def test_a_session_out_of_the_callers_reach_reads_as_one_that_is_not_there(cfg):
 
 def test_each_block_and_tool_is_named_for_what_wrote_it(cfg, monkeypatch):
     """On the catalogue's own `ChatAnthropic`, whose request carries the cache marks and
-    the tools a scripted model never binds."""
+    the tools a scripted model never binds, and through a runner on this host that names
+    no session root, the one shell whose agent is still sent deepagents' host paths."""
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "where.py").write_text(WHERE, encoding="utf-8")
-    kf = _kingfisher(_with_everything(cfg))
+    kf = Kingfisher(
+        _with_everything(cfg),
+        sessions=LocalSessions(runner=lambda _where: Here()),
+        turn_instructions=Told(),
+    )
 
     sent = kf.sent(Request("go", agent="only", session_id="s"))
 

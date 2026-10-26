@@ -241,6 +241,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             here=shell_runs_here(backend),
             expires_after=keep_results_rounds,
             folders=folders_of(layout, backend),
+            subagent=kind != "agent",
         )
     )
     if skills is not None:
