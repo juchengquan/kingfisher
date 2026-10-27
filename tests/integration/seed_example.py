@@ -31,9 +31,9 @@ def seed_definitions(
     # naming both ways to say where. Nothing ships with the library, so there is
     # no set to fall back on and guessing one would seed from somewhere the
     # caller never named.
-    tree = definitions_source(paths, source)
+    tree = definitions_source(paths.assets, source)
 
-    return seed(paths, tree, everything=everything)
+    return seed(paths.definitions, tree, everything=everything)
 
 
 def main(argv: list[str] | None = None) -> int:

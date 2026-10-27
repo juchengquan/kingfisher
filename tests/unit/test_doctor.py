@@ -197,7 +197,7 @@ def test_doctor_names_every_definition_whose_tool_moved(cfg, shipped):
     `everything=True` because the agent that names it, `analyst`, also names source
     ids, which a plain seed leaves behind.
     """
-    seed(cfg, shipped, everything=True)
+    seed(cfg.definitions, shipped, everything=True)
     (tools_dir(cfg) / "csv_profile").rename(tools_dir(cfg) / "analysis")
 
     checks = [c for c in examine(cfg) if c.name == "tool references"]
@@ -235,7 +235,7 @@ def test_a_clean_catalogue_says_its_tool_references_are_fine(cfg, shipped):
     """The control: the shipped presets use the long form, so this would fail if the
     check were wrong about the layout it ships with.
     """
-    seed(cfg, shipped)
+    seed(cfg.definitions, shipped)
 
     checks = {c.name: c for c in examine(cfg)}
 
@@ -280,7 +280,7 @@ def test_a_clean_catalogue_says_its_tool_names_are_fine(cfg, shipped):
     """The control, against the shipped presets because they name tools on both lines and
     in both spellings -- an empty workspace would pass a check that failed every name.
     """
-    seed(cfg, shipped)
+    seed(cfg.definitions, shipped)
 
     checks = {c.name: c for c in examine(cfg)}
 
@@ -291,7 +291,7 @@ def test_a_clean_catalogue_says_its_subagent_references_are_fine(cfg, shipped):
     """The control, against the shipped presets because they name subagents from
     both kinds -- an empty workspace would pass a check that failed every name.
     """
-    seed(cfg, shipped)
+    seed(cfg.definitions, shipped)
 
     checks = {c.name: c for c in examine(cfg)}
 

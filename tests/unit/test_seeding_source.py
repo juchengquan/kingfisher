@@ -43,7 +43,7 @@ def test_nothing_ships_to_seed_from(shipped):
 
 
 def test_seeding_from_the_worked_set_writes_all_of_it(cfg, shipped):
-    written = seeding.seed(cfg, shipped).written
+    written = seeding.seed(cfg.definitions, shipped).written
 
     assert any(entry.startswith("skills/") for entry in written), written
     assert any(entry.startswith("subagents/") for entry in written), written
@@ -60,7 +60,7 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(tmp_pat
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
     into = WorkspacePaths(tmp_path / "definitions")
 
-    written = seeding.seed(into, mine).written
+    written = seeding.seed(into.definitions, mine).written
 
     assert (into.authored_files["models.yaml"].parent / EXAMPLE).is_file()
     assert EXAMPLE not in written
@@ -78,28 +78,26 @@ def test_seed_will_not_invent_a_source(cfg):
     assert parameter.default is inspect.Parameter.empty
 
 
-def test_an_explicit_directory_beats_the_variable(cfg, tmp_path):
+def test_an_explicit_directory_beats_the_variable(tmp_path):
     """The ordinary shape of a flag against a variable, and the one `__main__` already
     documents for `.env`: an explicit argument must not be quietly replaced by
     something the caller may not have known was set.
     """
-    from dataclasses import replace
 
     configured = _definitions(tmp_path / "configured", "skills/theirs/SKILL.md")
     asked_for = _definitions(tmp_path / "asked-for", "skills/mine/SKILL.md")
 
-    resolved = seeding.definitions_source(replace(cfg, assets=configured), asked_for)
+    resolved = seeding.definitions_source(configured, asked_for)
 
     assert resolved == asked_for
 
 
-def test_the_variable_is_used_when_nothing_was_asked_for(cfg, tmp_path):
+def test_the_variable_is_used_when_nothing_was_asked_for(tmp_path):
     """`kingfisher seed` with no `--from`, which is the common invocation."""
-    from dataclasses import replace
 
     configured = _definitions(tmp_path / "configured", "skills/theirs/SKILL.md")
 
-    assert seeding.definitions_source(replace(cfg, assets=configured)) == configured
+    assert seeding.definitions_source(configured) == configured
 
 
 def test_the_variable_reaches_a_first_run(monkeypatch, tmp_path):
@@ -122,13 +120,12 @@ def test_no_variable_is_not_an_error_by_itself(monkeypatch, tmp_path):
     assert paths_from_env().assets is None
 
 
-def test_the_refusal_says_both_ways_of_answering_it(cfg, tmp_path, monkeypatch):
+def test_the_refusal_says_both_ways_of_answering_it(tmp_path, monkeypatch):
     """A variable and a flag."""
-    from dataclasses import replace
 
     monkeypatch.chdir(tmp_path)
     with pytest.raises(ConfigError) as refused:
-        seeding.definitions_source(replace(cfg, assets=None))
+        seeding.definitions_source(None)
 
     assert "KINGFISHER_ASSETS" in str(refused.value)
     assert "--from" in str(refused.value)
@@ -143,7 +140,7 @@ def test_a_given_directory_is_seeded_instead(cfg, tmp_path):
     """
     mine = _definitions(tmp_path / "mine", "skills/mine/SKILL.md")
 
-    written = seeding.seed(cfg, mine).written
+    written = seeding.seed(cfg.definitions, mine).written
 
     assert "skills/mine" in written, written
     assert not any("code-review" in entry for entry in written), (
@@ -154,7 +151,7 @@ def test_a_given_directory_is_seeded_instead(cfg, tmp_path):
 def test_a_source_that_is_not_a_directory_is_refused(cfg, tmp_path):
     """Loudly, and before anything is written."""
     with pytest.raises(ConfigError, match="nothing to seed from"):
-        seeding.seed(cfg, tmp_path / "no-such-directory")
+        seeding.seed(cfg.definitions, tmp_path / "no-such-directory")
 
 
 def test_nothing_is_written_before_that_refusal(cfg, tmp_path):
@@ -162,7 +159,7 @@ def test_nothing_is_written_before_that_refusal(cfg, tmp_path):
     a refusal leaves nothing behind to clean up.
     """
     with pytest.raises(ConfigError):
-        seeding.seed(cfg, tmp_path / "no-such-directory")
+        seeding.seed(cfg.definitions, tmp_path / "no-such-directory")
 
     assert not cfg.skills_dir.exists() or not any(cfg.skills_dir.iterdir())
 
@@ -171,7 +168,7 @@ def test_a_source_holding_only_one_kind_seeds_only_that(cfg, tmp_path):
     """A directory is not required to hold every kind."""
     mine = _definitions(tmp_path / "mine", "skills/alone/SKILL.md")
 
-    written = seeding.seed(cfg, mine).written
+    written = seeding.seed(cfg.definitions, mine).written
 
     assert "skills/alone" in written
     assert not any(entry.startswith("subagents/") for entry in written), written

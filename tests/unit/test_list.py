@@ -396,7 +396,7 @@ def test_a_definition_naming_a_moved_tool_is_non_zero_too(
 
     from kingfisher import seed
 
-    seed(cfg, shipped)
+    seed(cfg.definitions, shipped)
     (cfg.catalogue_roots["tools"] / "csv_profile").rename(
         cfg.catalogue_roots["tools"] / "analysis"
     )

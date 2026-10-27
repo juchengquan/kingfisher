@@ -366,7 +366,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
     # An agent of this test's own. `general` declares subagents of its own, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
@@ -396,7 +396,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
     # An agent of this test's own. `general` declares subagents of its own, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
@@ -462,7 +462,7 @@ def test_nothing_is_withheld_from_the_skills_axis_when_the_switch_is_off(cfg, sh
     """
     from kingfisher.core.definitions import seeding
 
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
     an_agent(cfg)
     off = replace(cfg, skills_enabled=False)
     asked = Request(
@@ -484,7 +484,7 @@ def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
     from kingfisher.core.agent.activation import available_skills
     from kingfisher.core.definitions import seeding
 
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
     an_agent(cfg)
     on = replace(cfg, skills_enabled=True)
     asked = Request(
@@ -506,7 +506,7 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
     # An agent of this test's own. `general` declares subagents of its own, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.

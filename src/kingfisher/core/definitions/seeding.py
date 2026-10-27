@@ -10,7 +10,6 @@ from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Protocol, runtime_checkable
 
 from kingfisher.core.config import ConfigError, definition_roots_for
 from kingfisher.core.workspace import ensure_definitions
@@ -45,25 +44,9 @@ Leave out `builtin_tools:` or `tools:` and it holds none of them, as with
 `skills:` and `subagents:`; ["*"] is all. See docs/guides/formats.md for the rest."""
 
 
-@runtime_checkable
-class Destination(Protocol):
-    """Where seeding puts things: a definitions folder, and nothing else."""
-
-    @property
-    def definitions(self) -> Path: ...
-
-
-@runtime_checkable
-class Source(Protocol):
-    """Where definitions are copied *from*, as a deployment configured it."""
-
-    @property
-    def assets(self) -> Path | None: ...
-
-
-def destinations(into: Destination) -> tuple[tuple[str, Path], ...]:
+def destinations(definitions: Path) -> tuple[tuple[str, Path], ...]:
     """Each kind of definition, and the catalogue it belongs in."""
-    roots = definition_roots_for(into.definitions)
+    roots = definition_roots_for(definitions)
     return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS)
 
 
@@ -577,12 +560,15 @@ def kinds_at(source: Path) -> tuple[str, ...]:
     return tuple(kind for kind in DEFINITION_KINDS if (source / kind).is_dir())
 
 
-def definitions_source(paths: Source, override: str | Path | None = None) -> Path:
-    """The directory `seed` should copy from, or a refusal saying how to name one."""
+def definitions_source(assets: Path | None, override: str | Path | None = None) -> Path:
+    """The directory `seed` should copy from, or a refusal saying how to name one.
+
+    `assets` is the deployment's configured source, `KINGFISHER_ASSETS`.
+    """
     if override is not None:
         return Path(override).expanduser()
-    if paths.assets is not None:
-        return paths.assets
+    if assets is not None:
+        return assets
 
     msg = (
         "no definitions to seed from: set KINGFISHER_ASSETS to a directory "
@@ -591,28 +577,28 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
     raise ConfigError(msg)
 
 
-def seed(into: Destination, source: Path, *, everything: bool = False) -> Seeded:
+def seed(definitions: Path, source: Path, *, everything: bool = False) -> Seeded:
     """Copy definitions into this deployment's catalogues, and say what changed."""
     # Before anything is copied, and not left to the caller: a folder never laid out
     # would look seeded and lack the `models.yaml.example` it needs to start.
-    ensure_definitions(into.definitions)
+    ensure_definitions(definitions)
 
     if not source.is_dir():
         msg = f"nothing to seed from: {source} is not a directory"
         raise ConfigError(msg)
-    written, overwritten, skipped = _copy(into, source, everything=everything)
+    written, overwritten, skipped = _copy(definitions, source, everything=everything)
 
     return Seeded(tuple(written), tuple(overwritten), tuple(skipped), source=source)
 
 
 def _copy(
-    into: Destination, tree: Path, *, everything: bool
+    definitions: Path, tree: Path, *, everything: bool
 ) -> tuple[list[str], list[str], list[Skipped]]:
     """Copy one opened tree of definitions into this deployment's catalogues."""
     written: list[str] = []
     overwritten: list[str] = []
     skipped: list[Skipped] = []
-    for kind, destination in destinations(into):
+    for kind, destination in destinations(definitions):
         source = tree / kind
         if not source.is_dir():
             # A source holding only some of the kinds is ordinary, not a refusal.

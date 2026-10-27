@@ -480,7 +480,7 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg, shipped):
     """
     from kingfisher.core.definitions import seeding
 
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
 
     granted = main._grants(cfg, _args(without_builtin_tools="execute,delete"))
 
@@ -499,7 +499,7 @@ def test_the_two_tool_axes_subtract_independently(cfg, shipped):
     """An offered tool is subtracted from the `tools` set, and only that."""
     from kingfisher.core.definitions import seeding
 
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
 
     tools = main._grants(cfg, _args(without_tools="http_fetch"))["tools"]
 
@@ -513,7 +513,7 @@ def test_subtracting_skills_and_subagents_too(cfg, shipped):
     """The rest is asked of the catalogue, not named here."""
     from kingfisher.core.definitions import seeding
 
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
     # `_offered`, which is what the *registry* resolves -- including a skill in a
     # source folder, `incident::postmortem`. Listing the directories under
     # `skills/` instead made this a test that passed until somebody shipped one.
@@ -536,7 +536,7 @@ def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg, shipped):
     """The mistake someone arrives with, because it used to be the advice."""
     from kingfisher.core.definitions import seeding
 
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
 
     with pytest.raises(CapabilityError, match=r"subtract it with --without-builtin-tools"):
         main._grants(cfg, _args(without_tools="execute"))

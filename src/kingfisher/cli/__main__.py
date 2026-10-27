@@ -452,8 +452,8 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
     # with nothing to seed still gets its folders and `models.yaml.example`.
     ensure_definitions(paths.definitions)
 
-    tree = definitions_source(paths, source)
-    written = seed(paths, tree, everything=everything)
+    tree = definitions_source(paths.assets, source)
+    written = seed(paths.definitions, tree, everything=everything)
     for line in written.report():
         print(line)
 
