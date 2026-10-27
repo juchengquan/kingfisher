@@ -36,6 +36,12 @@ replaced the four layers began.
   in its own call's id; the `tool_result` whose `call` is that id ends it. Code that
   ignores a kind it does not know needs nothing. Code that prints every event prints
   one more line per delegation, such as `[reviewer] check the tests`.
+- **`kingfisher run` and `decide` print delegations side by side as blocks.** While two
+  delegations with one caller are open, neither prints live: each is printed whole when
+  its result arrives, in the order they finish, headed by the subagent and the first line
+  of what it was asked. A lone delegation streams live as before. A turn that stops with
+  one open prints what it held, marked `(unfinished)`. Only stderr changes; stdout still
+  carries only the answer.
 
 ## A shipped skill names its own files from its folder, after #1123
 
