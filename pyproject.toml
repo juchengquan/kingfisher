@@ -45,7 +45,10 @@ dependencies = [
     # reservation check are sized from: 1.7.5 gives `claude-sonnet-4-5` a window
     # of 1,000,000 tokens, and 1.7.6 gives it 200,000.
     "langchain-anthropic>=1.7.6",
-    "langchain-openai>=1.5.1",
+    # 1.7.2 for the `openai_responses` row, which streams the Responses API:
+    # before it, a reply after several of OpenAI's built-in tool calls could
+    # stream its answer into a reasoning block and leave `.text` empty.
+    "langchain-openai>=1.7.2",
     # The four the harness imports by name and this file never named. Each
     # arrived transitively, which is the reason given three times above for
     # naming a package anyway -- and the reason was never applied to the
