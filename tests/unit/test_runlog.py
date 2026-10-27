@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from dataclasses import replace
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -18,7 +20,7 @@ from kingfisher.core.session.runlog import (
     usage_of,
 )
 from kingfisher.plugins import LocalSessions
-from tests.conftest import RecordedEvents, an_agent, start, subagents_dir
+from tests.conftest import RecordedEvents, an_agent, start, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 
@@ -282,3 +284,67 @@ def test_a_file_sink_keeps_one_line_per_event_in_its_own_alphabet(tmp_path):
     events = [json.loads(line) for line in written.splitlines()]
     assert [e["event"] for e in events] == ["run_start", "run_end"]
     assert "Résume" in written
+
+
+PING = '''
+def ping(x: str) -> str:
+    """Answer pong."""
+    return f"pong:{x}"
+
+
+TOOLS = [ping]
+'''
+
+COMPILED = """
+def build(model, tools):
+    from langchain.agents import create_agent
+
+    return create_agent(model, tools)
+
+
+SUBAGENTS = [{"name": "surveyor", "description": "Surveys.", "build": build, "tools": ["ping"]}]
+"""
+
+
+def _called(name: str, args: dict, at: str) -> AIMessage:
+    return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": at}])
+
+
+ROUTES = {
+    "eval": [
+        _called("eval", {"code": "(async () => await tools.ping({x: 'a'}))()"}, "e1"),
+        AIMessage(content="done"),
+    ],
+    "compiled": [
+        _called("task", {"description": "go", "subagent_type": "surveyor"}, "t1"),
+        _called("ping", {"x": "a"}, "p1"),
+        AIMessage(content="surveyed"),
+        AIMessage(content="done"),
+    ],
+}
+
+
+@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
+@pytest.mark.parametrize("route", sorted(ROUTES))
+def test_a_call_from_code_or_a_compiled_subagent_is_logged_once(scripted, route, awaited):
+    """Each such call was logged twice: the guard those tools carry ran as a tool of its
+    own around the tool, and both reported starting and ending.
+    """
+    cfg = replace(scripted, interpreter_enabled=True)
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "ping.py").write_text(PING, encoding="utf-8")
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "surveyor.py").write_text(COMPILED, encoding="utf-8")
+    an_agent(cfg, subagents="[surveyor]", builtin_tools="[eval, task]", tools="[ping]")
+    start(cfg, "s")
+    Scripted.script.extend(ROUTES[route])
+    sink = RecordedEvents()
+    kf = Kingfisher(cfg, sessions=LocalSessions(), run_events=sink)
+    request = Request("go", agent="only", session_id="s")
+
+    result = asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+
+    assert result.answer == "done"
+    started = [e["tool"] for e in sink.named("tool_start")]
+    assert started.count("ping") == 1, started
+    assert len(sink.named("tool_end")) == len(started), "a call ended more often than it began"
