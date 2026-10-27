@@ -5501,8 +5501,11 @@ default in a base class. As abstract base classes, Python refuses a hook missing
 when the deployment makes it, which is earlier than `Kingfisher` could and names the
 method, so the 2026-10-26 objection to `isinstance` -- that it could not say what was
 missing -- no longer holds. `Kingfisher` refuses a hook that does not subclass its interface,
-naming the keyword and the interface, `LocalSessions` refuses such a runner, and a sessions
-setting such a result; the method-by-method check went. **Not taken:** keeping a hook
+naming the keyword and the interface, and `KINGFISHER_SESSIONS` such a result, both when
+wired; a runner is made per session by `runner=`, so `LocalSessions` refuses such a one the
+first time a session opens. The hooks and the runner go through `refuse_unless_subclass`,
+public for a plugin taking an implementation of its own; a setting keeps its own refusal,
+since it also builds a `Mapping`, which nobody subclasses. The method-by-method check went. **Not taken:** keeping a hook
 taken by shape beside the base class, which is two ways to write one and leaves a shaped
 hook without the defaults; plain functions for the single-method hooks, which cannot grow
 the required method the hook rules add. *(2026-10-27.)*

@@ -23,6 +23,7 @@ _EXPORTS = {
     "ScratchRunLimit": "kingfisher.core.interfaces",
     "NoScratchRunLimit": "kingfisher.core.interfaces",
     "CommandRunner": "kingfisher.core.interfaces",
+    "refuse_unless_subclass": "kingfisher.core.interfaces",
     "CommandResult": "kingfisher.core.interfaces",
     "ScratchRun": "kingfisher.core.interfaces",
     "Definitions": "kingfisher.core.definitions.catalogue",
@@ -81,6 +82,7 @@ __all__ = [
     "backend_at",
     "host_path",
     "list_skills",
+    "refuse_unless_subclass",
     "reject_host_path",
     "scratch_runs_of",
     "unrouted_denials",
@@ -115,6 +117,7 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import SubagentMiddlewares as SubagentMiddlewares
     from kingfisher.core.interfaces import TurnInstructions as TurnInstructions
     from kingfisher.core.interfaces import UnusedResults as UnusedResults
+    from kingfisher.core.interfaces import refuse_unless_subclass as refuse_unless_subclass
     from kingfisher.core.layout import DEFAULT_LAYOUT as DEFAULT_LAYOUT
     from kingfisher.core.layout import Layout as Layout
     from kingfisher.core.session.unused import DeleteUnusedResults as DeleteUnusedResults

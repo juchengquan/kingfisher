@@ -129,11 +129,11 @@ def test_an_attribute_that_is_not_there_is_refused():
 
 
 def test_a_factory_returning_the_wrong_shape_is_refused():
-    """What was returned, and what to subclass instead."""
+    """What was returned, and what it should have been."""
     with pytest.raises(ConfigError, match="NoneType") as caught:
         named(f"{HERE}:make_nothing")
 
-    assert "Subclass Sessions" in str(caught.value)
+    assert "not a Sessions" in str(caught.value)
 
 
 def test_a_factory_that_raises_is_left_alone():

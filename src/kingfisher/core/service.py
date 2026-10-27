@@ -69,6 +69,7 @@ from .interfaces import (
     TurnInstructions,
     UnusedResults,
     hooks_of,
+    refuse_unless_subclass,
 )
 from .origins import Origins
 from .reporting import what_opens
@@ -180,19 +181,11 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         )
         self.scratch_run_limit: ScratchRunLimit | None = scratch_run_limit
         self.memory_store: MemoryStore | None = memory_store
-        # Here, where the deployment wired it: only a subclass has had Python refuse it a
-        # missing method, and a hook without one was an `AttributeError` in whichever turn
-        # first asked, possibly hours after startup. Each is kept under its keyword, which
-        # is how it is found.
+        # Only a subclass has had its methods checked, by Python as it was made. Each hook
+        # is kept under its keyword, which is how it is found.
         for keyword, interface in hooks_of(Kingfisher.__init__).items():
-            hook = getattr(self, keyword)
-            if hook is not None and not isinstance(hook, interface):
-                msg = (
-                    f"{keyword}= takes a {interface.__name__}, and {type(hook).__name__} "
-                    f"does not subclass it -- subclass {interface.__name__}, which names "
-                    "every method it asks for"
-                )
-                raise TypeError(msg)
+            if (hook := getattr(self, keyword)) is not None:
+                refuse_unless_subclass(f"{keyword}=", hook, interface)
         # Here, not when a definition names one, so the deployment hears it where it
         # wired the registry rather than from the first caller to reach the wrong name.
         refuse_unbuildable_middleware(self.middlewares)

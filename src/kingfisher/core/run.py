@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from .config import Config
-from .interfaces import Sessions
+from .interfaces import RunEvents, Sessions
 from .request import Request
 from .result import RunEvent, RunResult
 from .service import Kingfisher
@@ -23,7 +23,7 @@ def stream(
     sessions: Sessions,
     cfg: Config | None = None,
     graph: Any | None = None,
-    run_events: Any | None = None,
+    run_events: RunEvents | None = None,
 ) -> Iterator[RunEvent]:
     """Run one task, yielding progress as it happens."""
     return Kingfisher(
@@ -40,7 +40,7 @@ def run(
     sessions: Sessions,
     cfg: Config | None = None,
     graph: Any | None = None,
-    run_events: Any | None = None,
+    run_events: RunEvents | None = None,
 ) -> RunResult:
     """Run one task to completion and return where its outputs landed."""
     return Kingfisher(

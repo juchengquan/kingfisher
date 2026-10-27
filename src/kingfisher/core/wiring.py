@@ -37,11 +37,11 @@ def built_from_setting(spec: str, *, setting: str, interface: type) -> Any:
         raise ConfigError(msg) from exc
 
     built = factory()
+    # Not `refuse_unless_subclass`: `interface` may be a `Mapping`, which nobody subclasses.
     if not isinstance(built, interface):
         msg = (
             f"{setting} names {spec!r}, which returned {type(built).__name__} -- not "
-            f"a {interface.__name__}. Subclass {interface.__name__}, which names every "
-            "method it asks for"
+            f"a {interface.__name__}"
         )
         raise ConfigError(msg)
     return built

@@ -14,9 +14,12 @@ page is about writing the thing a setting names.
 
 Yours subclasses the interface it stands in for. Each is an abstract base class,
 importable from `kingfisher.plugins`, so a method you left out is refused when yours is
-made, and a class that subclasses nothing is refused when it is wired, however many of
-the methods it has. Subclassing is also how yours inherits what an interface writes for
-you: `local` on a `CommandRunner`, and every async twin on `Sessions`.
+made. A class that subclasses nothing is refused however many of the methods it has:
+when it is wired, as a keyword on `Kingfisher` or by `KINGFISHER_SESSIONS`, and for a
+runner, which `runner=` makes per session, the first time a session opens. A plugin of
+yours that takes one of its own refuses it the same way, with `refuse_unless_subclass`.
+Subclassing is also how yours inherits what an interface writes for you: `local` on a
+`CommandRunner`, and every async twin on `Sessions`.
 
 ## The two ways to supply one
 
