@@ -668,32 +668,6 @@ def test_a_turn_raced_in_its_own_datazone_runs(turns, door):
     assert kf.session("s", source_ids=("A",), datazone="finance") is not None
 
 
-class _Unlisted(LocalSessions):
-    """`LocalSessions` whose next listing leaves out the sessions in `missing`, as a
-    listing that has not caught up with what the backend holds does."""
-
-    missing: frozenset[str] = frozenset()
-
-    def sessions(self, cfg):
-        missing, self.missing = self.missing, frozenset()
-        return tuple(row for row in super().sessions(cfg) if row[0] not in missing)
-
-
-def test_a_session_the_listing_missed_is_not_made_anew_for_another_datazone(turns, way):
-    """`create=True` took an id the listing lacked for a session nobody had made, and
-    handed back a finance session to an hr caller without reading its pins."""
-    sessions = _Unlisted()
-    kf = Kingfisher(turns, sessions=sessions)
-    _turn(kf, "s", "finance")
-    reads = Through(kf, way)
-
-    sessions.missing = frozenset({"s"})
-    assert reads.session("s", source_ids=("A",), datazone="hr", create=True) is None
-    # The control: the caller it is pinned to gets it back.
-    sessions.missing = frozenset({"s"})
-    assert reads.session("s", source_ids=("A",), datazone="finance", create=True) is not None
-
-
 def test_a_listing_leaves_out_a_session_in_another_datazone(turns):
     kf = Kingfisher(turns, sessions=LocalSessions())
     _turn(kf, "s", "finance")
@@ -1246,6 +1220,21 @@ class _Unlisted(LocalSessions):
     def sessions(self, cfg):
         missing, self.missing = self.missing, frozenset()
         return tuple(row for row in super().sessions(cfg) if row[0] not in missing)
+
+
+def test_a_session_the_listing_missed_is_not_made_anew_for_another_datazone(turns, way):
+    """`create=True` took an id the listing lacked for a session nobody had made, and
+    handed back a finance session to an hr caller without reading its pins."""
+    sessions = _Unlisted()
+    kf = Kingfisher(turns, sessions=sessions)
+    _turn(kf, "s", "finance")
+    reads = Through(kf, way)
+
+    sessions.missing = frozenset({"s"})
+    assert reads.session("s", source_ids=("A",), datazone="hr", create=True) is None
+    # The control: the caller it is pinned to gets it back.
+    sessions.missing = frozenset({"s"})
+    assert reads.session("s", source_ids=("A",), datazone="finance", create=True) is not None
 
 
 def _refused_over_budget(turns, sessions: _Unlisted, door: str, session_id: str) -> None:

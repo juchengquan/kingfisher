@@ -165,7 +165,8 @@ class Sessions(ABC):
         """`(session_id, last_used)` for every session there is.
 
         One left out is not merely unlisted: its files are refused, a sweep never reaps it,
-        and a turn in it takes it for a session it made, deleted if refused after its claim.
+        and a turn in it takes it for a session it made, deleted if refused after its claim
+        unless an earlier turn pinned it.
         """
         ...
 
