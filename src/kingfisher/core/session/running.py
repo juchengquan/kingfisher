@@ -606,15 +606,14 @@ class Running:
         No `aclose` to match `astream`'s: a cancelled drain gives the claim back one turn
         of the loop later either way.
         """
-        events = self.astream(
+        result: RunResult | None = None
+        async for event in self.astream(
             request,
             source_ids=source_ids,
             datazone=datazone,
             extra_datazones=extra_datazones,
             files=files,
-        )
-        result: RunResult | None = None
-        async for event in events:
+        ):
             if event.kind == "finished":
                 result = event.result
         return await adrive(self._drained_steps(result, delete_session=delete_session))

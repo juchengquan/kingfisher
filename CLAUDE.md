@@ -123,6 +123,14 @@ plan rests on "X is slow" or "Y is not supported", verify it first.
 **Mutation-test a new guard.** A test that passes is not the same as a test that
 bites -- break the thing it guards and confirm it goes red, then restore.
 
+**Write a test for a break nothing else catches**, and name that break in its docstring.
+Four kinds catch nothing worth their lines, and the suite deletes them: the async half of
+a pair whose async method is a copy, which `test_async_twins.py` holds; the ordinary case
+the edge cases already drive; a rare input where little is lost; a past bug whose only
+harm was the model being shown something less useful for a turn. Who may reach what, data
+lost, overwritten or leaked, and money spent or a turn failed always earn a test. *The
+size of the test suite* in `decisions.md` says why.
+
 ## Landing work
 
 Independent slices, one green commit each, a pull request per slice off `main`.
