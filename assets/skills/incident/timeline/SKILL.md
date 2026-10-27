@@ -17,9 +17,10 @@ of every log you name and prints the warnings and errors in time order, each
 repeat collapsed into one line with a count, and every stretch in which no log
 said anything:
 
-    cd "$KINGFISHER_SESSION_ROOT" && python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" inputs/api.log inputs/worker.log
+    cd "$KINGFISHER_SESSION_ROOT" && python3 "$KINGFISHER_SKILLS/<folder>/scripts/timeline.py" inputs/api.log inputs/worker.log
 
-Run it from the session root, as written, and name each log from there: each event
+`<folder>` is this skill's folder: the path the skill list gave for this file, without
+`/skills/` in front or `/SKILL.md` behind. Run it from the session root, as written, and name each log from there: each event
 cites the path it was given, so `inputs/api.log` keeps the write-up free of host
 paths. `$KINGFISHER_SKILLS` is where the shell finds this catalogue. If either is
 unset, this deployment cannot run skill scripts — say so, and build the timeline

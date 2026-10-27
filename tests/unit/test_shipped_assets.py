@@ -33,6 +33,23 @@ from tests.conftest import FakeToolCallingModel, middleware_of, repository_root,
 from tests.unit.test_subagent_helpers import _subagent, _tools_of
 
 
+def test_no_shipped_skill_names_its_own_files_by_where_the_catalogue_puts_it(shipped):
+    """`release-notes` read its house format at `/skills/release-notes/...` and `timeline`
+    ran `$KINGFISHER_SKILLS/incident/timeline/...`, both wrong wherever a mount or a
+    regrouped catalogue puts the skill: a skill names its own files from its folder."""
+    root = shipped / "skills"
+    folders = [found.parent for found in root.rglob("SKILL.md")]
+    # A rule over no skills passes whatever they say.
+    assert len(folders) >= 2, folders
+    for folder in folders:
+        own = folder.relative_to(root).as_posix()
+        for path in (p for p in folder.rglob("*") if p.is_file()):
+            # Bytes, so a stray `__pycache__` beside a script is read rather than refused.
+            text = path.read_bytes().decode("utf-8", "replace")
+            for spelt in (f"/skills/{own}/", f"$KINGFISHER_SKILLS/{own}/"):
+                assert spelt not in text, f"{path.relative_to(root)} names {spelt}"
+
+
 def test_every_preset_subagent_parses(shipped):
     specs = LocalSubagentRepository(shipped / "subagents").specs
 
@@ -103,11 +120,11 @@ def test_the_timeline_skill_runs_the_script_it_names(shipped, tmp_path):
     skill telling the model to run a file that is not there -- and a script that parses
     nothing prints an empty timeline, which reads as a quiet incident.
     """
-    root = shipped / "skills"
-    text = (root / "incident" / "timeline" / skill.FILENAME).read_text(encoding="utf-8")
-    (named,) = set(re.findall(r"\$KINGFISHER_SKILLS/(\S+?\.py)", text))
-    script = root / named
-    assert script.is_file(), f"SKILL.md runs {named}, which is not in the catalogue"
+    folder = shipped / "skills" / "incident" / "timeline"
+    text = (folder / skill.FILENAME).read_text(encoding="utf-8")
+    (named,) = set(re.findall(r"\$KINGFISHER_SKILLS/<folder>/(\S+?\.py)", text))
+    script = folder / named
+    assert script.is_file(), f"SKILL.md runs <folder>/{named}, which is not in the skill"
 
     (tmp_path / "inputs").mkdir()
     (tmp_path / "inputs" / "api.log").write_text(

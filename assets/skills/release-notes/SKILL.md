@@ -22,7 +22,7 @@ between two versions.
 4. **Drop the noise.** Merge commits, formatting passes, dependency bumps with
    no user-visible effect. If a section would be empty after that, omit the
    section rather than padding it.
-5. **Apply the house format** in `/skills/release-notes/reference/format.md` —
+5. **Apply the house format** in `reference/format.md`, in this skill's folder —
    read it now if you have not already. It holds the section order, the tense,
    and the worked example.
 

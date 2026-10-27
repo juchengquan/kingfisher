@@ -1,8 +1,9 @@
 """Every warning and error across a set of logs, in time order, repeats collapsed.
 
 A skill's script, run by the shell and never imported. The skill reaches it as
-`$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py` and hands it shell
-paths -- `inputs/api.log`, not the file tools' `/inputs/api.log`.
+`$KINGFISHER_SKILLS/<folder>/scripts/timeline.py`, `<folder>` being wherever the
+catalogue holds the skill, and hands it shell paths -- `inputs/api.log`, not the
+file tools' `/inputs/api.log`.
 
 Standard library only. A skill travels from one deployment to the next as files,
 and nothing installs a dependency it would need.
