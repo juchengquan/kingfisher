@@ -46,8 +46,7 @@ from kingfisher.core.agent.prompting import EXECUTE, execute_line
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from kingfisher.plugins.sessions.shell import kingfishers_shell
-from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
+from tests.conftest import EVERY_TOOL, an_agent, hosts_shell, start, subagents_dir
 from tests.unit.scripted import Scripted
 
 HELPER = (
@@ -356,7 +355,7 @@ def test_an_unrestricted_graph_is_told_what_deepagents_says_but_the_false_claim(
     was told, which only the untrue lines should: `edit_file`'s claim, and `execute`'s
     sandbox and its note on backends."""
     cfg, offered = reading
-    rule = execute_line(kingfishers_shell(), DEFAULT_LAYOUT)
+    rule = execute_line(hosts_shell(cfg), DEFAULT_LAYOUT)
     assert rule is not None
     asked = {"description": "look", "subagent_type": subagent}
     consulting = AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}])

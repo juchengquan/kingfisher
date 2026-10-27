@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,8 +15,16 @@ from kingfisher.core.agent.backend import session_root_of, shell_prompt_of, shel
 from kingfisher.core.agent.prompting import EXECUTE, render_system_prompt, skills_index
 from kingfisher.core.interfaces import CommandRunner
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
-from kingfisher.plugins import CommandResult, LocalSessions, ShellPrompt, backend_at
+from kingfisher.plugins import (
+    CommandResult,
+    LocalSessions,
+    ShellPrompt,
+    ShellSettings,
+    backend_at,
+)
+from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.shell import kingfishers_shell
+from tests.conftest import hosts_shell
 
 #: What a command can see of the claims kingfisher's own wording makes.
 PROBE = (
@@ -80,13 +89,44 @@ def test_kingfishers_own_shell_is_described_by_what_holds_of_it(cfg, session_dir
     backend = backend_at(cfg, session_dir)
     seen = _seen(backend.execute(PROBE).output)
 
-    assert shell_prompt_of(backend) is kingfishers_shell()
+    assert shell_prompt_of(backend) is hosts_shell(cfg)
     assert Path(seen["pwd"]).resolve() == session_dir.resolve()
     assert Path(seen["root"]).resolve() == session_dir.resolve()
     assert Path(seen["tmp"]).resolve() == (session_dir / "scratchpad").resolve()
     assert seen["skills"]
     for phrase in ITS_OWN:
-        assert phrase in _told(kingfishers_shell()), phrase
+        assert phrase in _told(kingfishers_shell(fenced=True)), phrase
+
+
+@pytest.mark.parametrize("sandbox", [confinement.OFF, confinement.EXTERNAL])
+def test_an_unfenced_shell_is_asked_where_to_write_rather_than_told_it_is_refused(
+    cfg, session_dir, sandbox
+):
+    """Under `off` and `external` nothing refuses a write to `/inputs` or the session's
+    top, and the shell was told both were refused anyway: an agent sure a write would
+    fail has no reason to avoid one that succeeds.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        backend = backend_at(cfg, session_dir, shell=ShellSettings(sandbox=sandbox))
+    told = shell_prompt_of(backend)
+
+    assert told is kingfishers_shell(fenced=False)
+    for part in (told.prompt or "", told.execute or ""):
+        assert "refused" not in part
+        assert "never in `/{{inputs}}`" in part
+
+
+def test_a_fenced_shell_is_told_where_it_is_refused(cfg, session_dir):
+    """The control: under a fence of kingfisher's own the refusal is real, so it is
+    said; `test_confinement.py` holds the claim against the fence itself."""
+    if hosts_shell(cfg) is not kingfishers_shell(fenced=True):
+        pytest.skip("no sandbox kingfisher applies itself is available on this host")
+    told = shell_prompt_of(backend_at(cfg, session_dir))
+
+    assert told is kingfishers_shell(fenced=True)
+    for part in (told.prompt or "", told.execute or ""):
+        assert "`/{{inputs}}` is refused" in part or "refused in `/{{inputs}}`" in part
 
 
 def test_a_runner_s_shell_is_not_described_as_kingfishers_own(cfg):

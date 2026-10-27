@@ -1,0 +1,1 @@
+- The shell writes under `/{{outputs}}` and `/{{scratchpad}}` (which is `$TMPDIR`): `/{{inputs}}` is refused, and so is the session's top, where the shell starts -- a bare `> out.csv` is refused where `"$KINGFISHER_SESSION_ROOT/{{outputs}}/out.csv"` is not.

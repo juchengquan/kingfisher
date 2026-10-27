@@ -412,7 +412,11 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         # The deployment's runner, not `chosen`, which on Linux is kingfisher's own fence:
         # that one is handed `env` and the session directory, a deployment's only the
         # command.
-        shell_prompt=kingfishers_shell() if runner is None else shell_prompt,
+        shell_prompt=(
+            kingfishers_shell(fenced=confined.mechanism in confinement.FENCES_HARNESS)
+            if runner is None
+            else shell_prompt
+        ),
         # What `shell_env` exports, where the shell is kingfisher's own.
         session_root=str(session_dir) if runner is None else session_root,
         root_dir=str(session_dir),

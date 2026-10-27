@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The shell is told it is refused only where a fence refuses it, after #1120
+
+- **The shell's write wording follows the fence.** Under sandbox-exec, bubblewrap or
+  Landlock the shell section and `execute`'s description still say a write to `/inputs`
+  or the session's top is refused. Under `off` or `external`, where nothing refuses it,
+  both now ask the agent to write only in `/outputs` and `/scratchpad` instead.
+- **Neither counts the folders any more.** "Write in two of those folders … everywhere
+  else is refused" was false wherever `/memory` is on, so the sentence names what is
+  refused and not what is left. If you assert on either text, re-read it.
+
 ## A turn runs on the pins read under its claim, after #1118
 
 - **A turn can be refused after its claim.** The session's pinned agent and datazones are
