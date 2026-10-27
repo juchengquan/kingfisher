@@ -1,6 +1,6 @@
 # House format for release notes
 
-Loaded on demand by `/skills/release-notes/SKILL.md`. It lives in a separate
+Loaded on demand by this skill's `SKILL.md`. It lives in a separate
 file because most tasks never need it — that is the whole point of a skill's
 directory: `SKILL.md` stays short enough to be worth reading, and the detail is
 one `read_file` away when it is actually wanted.

@@ -1515,11 +1515,19 @@ Three shapes:
 - **A `reference/` file the body points to,** read on demand. Use this when the
   detail is long and most tasks will not need it: `SKILL.md` stays short enough
   that reading it is cheap, and the reference is fetched only when it applies.
+  Name it from the skill's own folder — "`reference/format.md` in this skill's
+  folder" — and never by a path under `/skills/`: a mount or a regrouped catalogue
+  moves the skill, and the agent finds its folder in the skill list, which says
+  where each `SKILL.md` is.
 - **A script the body tells the agent to run.** Put it under the skill —
   `skills/<name>/scripts/` — and give the command in the procedure, reaching it
-  through `$KINGFISHER_SKILLS`, which the shell exports as the catalogue's path:
+  through `$KINGFISHER_SKILLS`, which the shell exports as the catalogue's path,
+  and the skill's folder under it, which is the agent's to fill in:
 
-      cd "$KINGFISHER_SESSION_ROOT" && python3 "$KINGFISHER_SKILLS/incident/timeline/scripts/timeline.py" inputs/api.log
+      cd "$KINGFISHER_SESSION_ROOT" && python3 "$KINGFISHER_SKILLS/<folder>/scripts/timeline.py" inputs/api.log
+
+  with the body saying what `<folder>` is: this skill's path under `/skills/`, as
+  the skill list gives it, without `/SKILL.md`.
 
   Reach for this where a step is mechanical and a model doing it by eye would
   miss things — `skills/incident/timeline/` walks every line of a log so a

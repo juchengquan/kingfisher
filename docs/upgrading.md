@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A shipped skill names its own files from its folder, after #1123
+
+- **Only if you mount or regroup skills you seeded.** `release-notes` and
+  `incident/timeline` named their own files by where the shipped catalogue puts them,
+  `/skills/release-notes/...` and `$KINGFISHER_SKILLS/incident/timeline/...`, which is
+  wrong once a mount or a regrouping moves them. They now name them from the skill's
+  folder. Copies seeded before this keep the old text: re-seed them, or make the same
+  edit, if they live anywhere else. A skill you write follows the same rule; see
+  *Three shapes* in `guides/formats.md`.
+
 ## The shell is told it is refused only where a fence refuses it, after #1120
 
 - **The shell's write wording follows the fence.** Under sandbox-exec, bubblewrap or
