@@ -27,11 +27,12 @@ from kingfisher.core.definitions.subagents.spec import SubagentError, declared
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError, found_in
 from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.core.inventory import inventory
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TRANSCRIPT_FILE
 from kingfisher.core.service import Kingfisher
+from kingfisher.core.session.model import QuotaExceededError
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
-from tests.conftest import Through, agent_named, subagents_dir, tools_dir
+from tests.conftest import Through, agent_named, start, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted
 
 if TYPE_CHECKING:
@@ -1231,3 +1232,54 @@ def test_what_a_subagent_grants_and_narrows_is_read_under_its_own_lock(zoned):
     assert through.would.source_ids == frozenset({"pii"})
     assert through.would.datazones == frozenset({"finance"})
     assert through.opens.source_ids == frozenset({"A", "C"})
+
+
+# -- a session the listing missed ------------------------------------------------
+
+
+class _Unlisted(LocalSessions):
+    """`LocalSessions` whose next listing leaves out the sessions in `missing`, as a
+    listing that has not caught up with what the backend holds does."""
+
+    missing: frozenset[str] = frozenset()
+
+    def sessions(self, cfg):
+        missing, self.missing = self.missing, frozenset()
+        return tuple(row for row in super().sessions(cfg) if row[0] not in missing)
+
+
+def _refused_over_budget(turns, sessions: _Unlisted, door: str, session_id: str) -> None:
+    """A turn in `session_id`, refused after its claim because the session is too large,
+    with the listing missing the session when the turn asks whether it made it."""
+    kf = Kingfisher(replace(turns, session_max_bytes=1), sessions=sessions)
+    request = Request("t", agent="surveyor", session_id=session_id)
+    sessions.missing = frozenset({session_id})
+    with pytest.raises(QuotaExceededError):
+        if door == "arun":
+            asyncio.run(kf.arun(request, source_ids=("A",)))
+        else:
+            kf.run(request, source_ids=("A",))
+
+
+@pytest.mark.parametrize("door", ["run", "arun"])
+def test_a_pinned_session_the_listing_missed_outlives_a_refused_turn(turns, door):
+    """A turn took a session its listing lacked for one it had made, and a refusal after
+    its claim deleted it, conversation and all, though an earlier turn had pinned it."""
+    sessions = _Unlisted()
+    _turn(Kingfisher(turns, sessions=sessions), "s", None)
+
+    _refused_over_budget(turns, sessions, door, "s")
+
+    assert (turns.sessions_root / "s" / HARNESS / TRANSCRIPT_FILE).is_file()
+
+
+@pytest.mark.parametrize("door", ["run", "arun"])
+def test_an_unpinned_session_the_listing_missed_is_still_taken_for_one_made(turns, door):
+    """The gap left open, recorded rather than hidden: nothing tells an unpinned session
+    the listing missed from one this turn made, so a refusal still deletes it. Only a
+    listing of every session there is, as `Sessions.sessions` promises, closes it."""
+    start(turns, "u")
+
+    _refused_over_budget(turns, _Unlisted(), door, "u")
+
+    assert not (turns.sessions_root / "u").exists()

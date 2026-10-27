@@ -107,7 +107,7 @@ class Preparation:
         Every refusal comes before `run_start` and before the session's agent and datazone
         are pinned, so a refused request leaves no turn behind and fixes nothing; the claim
         is taken before them and given back if one refuses, and a session this request
-        made goes with it unless another turn has pinned it since.
+        made goes with it unless another turn has pinned it.
         """
         cfg = self.cfg
         session = yield from self._session_for(request)
@@ -150,8 +150,9 @@ class Preparation:
             # A turn that held the claim since the read above may have pinned the session
             # to an agent or datazones this caller does not reach.
             pinned, zones = (yield from pinned_in(harness)) if reads_pins else (None, None)
-            if (pinned, zones) != first:
-                # That turn ran here, so the session is no longer this request's to delete.
+            if (pinned, zones) != (None, None):
+                # This request pins only later, so another turn ran here, whatever the
+                # listing said: not a session this request made, nor its to delete.
                 made = False
             self._refuse_out_of_reach(pinned, zones, held, session_id=session.id)
             prepared = yield from self._claimed(
