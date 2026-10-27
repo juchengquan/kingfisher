@@ -196,6 +196,9 @@ class RunResult:
 #: How much of one tool argument to show: `write_file`'s is a whole file.
 ARG_PREVIEW = 60
 
+#: How much of what a subagent was asked heads its delegation.
+ASKED_PREVIEW = 100
+
 
 def _flatten(value: Any, limit: int) -> str:
     """One value as a single bounded line."""
@@ -227,6 +230,9 @@ KINDS: tuple[str, ...] = (
     "model_call",
     "tool_result",
     "token",
+    # A subagent began answering a `task` call; sent again for each one a resumed turn
+    # re-enters. The `tool_result` answering that call ends it.
+    "delegation_start",
     # An approval gate. `decision_needed` precedes `finished`; `decision_discarded` says
     # an *earlier* turn's gate was superseded, so it arrives at the start of this turn.
     "decision_needed",
@@ -265,12 +271,21 @@ class RunEvent:
     #: On a `model_call`: the reply stopped at the model's output cap. The turn goes on,
     #: the call it was cut inside unrun, so this is the only report of one it got past.
     cut_off: bool = False
+    #: Index-aligned with `tools`: each call's own id, `""` where the provider gave none.
+    #: Two calls to one tool in one reply are told apart by nothing else.
+    calls: tuple[str, ...] = ()
+    #: On a `tool_result`: the id of the call it answers.
+    call: str | None = None
+    #: The delegations this came from inside, outermost first, each by its call's id;
+    #: `()` for the agent the caller asked. Two runs of one subagent share an `agent`.
+    delegations: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         # The one place parallel arrays can be kept from being built out of step.
-        if self.args and len(self.args) != len(self.tools):
-            msg = f"args ({len(self.args)}) must be parallel to tools ({len(self.tools)})"
-            raise ValueError(msg)
+        for name, aligned in (("args", self.args), ("calls", self.calls)):
+            if aligned and len(aligned) != len(self.tools):
+                msg = f"{name} ({len(aligned)}) must be parallel to tools ({len(self.tools)})"
+                raise ValueError(msg)
 
     def _tag(self, kind: str) -> str:
         """The bracketed tag, naming the subagent when one produced this."""
@@ -281,8 +296,7 @@ class RunEvent:
         flat = " ".join(self.text.split())
         return flat if len(flat) <= limit else flat[: limit - 1] + "…"
 
-    # One branch per kind: fewer returns would mean more nesting, not less branching.
-    def __str__(self) -> str:
+    def __str__(self) -> str:  # noqa: PLR0911 -- one branch per kind; fewer would nest more
         if self.kind == "token":
             # A fragment split mid-word, so untagged even for a subagent, and not passed
             # through `_line`, which would flatten the markdown being written.
@@ -299,6 +313,10 @@ class RunEvent:
             )
         if self.kind == "tool_result":
             return f"[{self._tag('tool ')}] {self.tool}: {self._line()}"
+        if self.kind == "delegation_start":
+            # The first line of what it was asked: all that tells two runs of one apart.
+            asked = next(iter(self.text.strip().splitlines()), "")
+            return f"[{self.agent or 'subagent'}] {_flatten(asked, ASKED_PREVIEW)}"
         if self.kind == "run_start":
             return f"[start] {self.text}"
         if self.kind == "finished":

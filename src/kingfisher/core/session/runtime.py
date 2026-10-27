@@ -104,8 +104,9 @@ TOKEN_CHUNK_PARTS = 2
 
 #: `updates` drives progress events; `values` carries the state, whose last emission
 #: holds the answer; `messages` the model's output as it comes; `custom` what
-#: kingfisher's middleware reports of a reply that never reaches the state.
-STREAM_MODES: list[StreamMode] = ["updates", "values", "messages", "custom"]
+#: kingfisher's middleware reports of a reply that never reaches the state; `tasks` the
+#: call each tool task runs, the one place a subagent's chunks are tied to its `task` call.
+STREAM_MODES: list[StreamMode] = ["updates", "values", "messages", "custom", "tasks"]
 
 #: The key a middleware writes to the `custom` stream under, for a cut answer it asked
 #: again and so kept out of the state, where a `model_call` event is otherwise read from.
@@ -219,12 +220,15 @@ def usage_of(message: Any) -> dict[str, int]:
     }
 
 
-def tool_calls(message: Any) -> tuple[tuple[str, ...], tuple[Mapping[str, Any], ...]]:
-    """Names and arguments of the tools a message asks for, index-aligned."""
+def tool_calls(
+    message: Any,
+) -> tuple[tuple[str, ...], tuple[Mapping[str, Any], ...], tuple[str, ...]]:
+    """Names, arguments and ids of the tools a message asks for, index-aligned."""
     calls = getattr(message, "tool_calls", None) or []
     return (
         tuple(call["name"] for call in calls),
         tuple(call.get("args") or {} for call in calls),
+        tuple(call.get("id") or "" for call in calls),
     )
 
 
@@ -311,11 +315,12 @@ def _event_for(message: Any) -> RunEvent | None:
             kind="tool_result",
             tool=getattr(message, "name", None),
             text=message.text[:PREVIEW],
+            call=message.tool_call_id or None,
         )
     if isinstance(message, AIMessage):
         # One event per model turn, with its tools' arguments but not its prose, which
         # already arrived as tokens.
-        names, args = tool_calls(message)
+        names, args, ids = tool_calls(message)
         # `.text`, not `str()`, which renders the Responses API's content blocks as a repr.
         # A message with no text, tools or usage is a state shuffle, not a turn.
         if not (names or message.text.strip() or getattr(message, "usage_metadata", None)):
@@ -324,6 +329,7 @@ def _event_for(message: Any) -> RunEvent | None:
             kind="model_call",
             tools=names,
             args=args,
+            calls=ids,
             usage=usage_of(message),
             cut_off=cut_off(message),
         )
@@ -363,6 +369,54 @@ class SubagentNames:
         if isinstance(metadata, Mapping) and (found := metadata.get("lc_agent_name")):
             self._names[key] = str(found)
         return self._names.get(key)
+
+
+class Delegations:
+    """Which delegations a chunk came from inside, learned from the stream as it arrives.
+
+    A namespace names each graph a chunk passed through by the id of the task that ran
+    it, and langgraph announces a step's tasks, a `tools` task with the call it runs,
+    before running any: so a `task` call's id is known before anything inside it streams,
+    and again for each one a resumed turn re-enters.
+    """
+
+    def __init__(self) -> None:
+        self._calls: dict[str, str] = {}
+
+    def started(self, namespace: Any, chunk: Any) -> RunEvent | None:
+        """The `delegation_start` a `tasks` chunk announces, or `None`."""
+        if not isinstance(chunk, Mapping) or chunk.get("name") != TOOLS_NODE:
+            return None
+        call = _one_call(chunk.get("input"))
+        if call is None or call.get("name") != TASK_TOOL:
+            return None
+        made = str(call.get("id") or "")
+        self._calls[str(chunk.get("id"))] = made
+        asked = call.get("args") or {}
+        return RunEvent(
+            kind="delegation_start",
+            text=str(asked.get("description") or ""),
+            agent=str(asked.get(SUBAGENT_TYPE_ARG) or "") or None,
+            delegations=(*self.within(namespace), made),
+        )
+
+    def within(self, namespace: Any) -> tuple[str, ...]:
+        """The delegations a chunk came from inside, outermost first; `()` for the main
+        agent. A segment no `task` call started, a supplied graph's own subgraph, adds
+        nothing."""
+        return tuple(
+            self._calls[ran]
+            for segment in namespace or ()
+            if (ran := str(segment).partition(":")[2]) in self._calls
+        )
+
+
+def _one_call(started: Any) -> Mapping[str, Any] | None:
+    """The tool call a `tools` task runs. Only a task running one call can stand for it:
+    with two, nothing would say which a chunk inside belonged to."""
+    if isinstance(started, list) and len(started) == 1 and isinstance(started[0], Mapping):
+        return started[0]
+    return None
 
 
 class SeenMessages:
@@ -407,22 +461,36 @@ def _token_event(chunk: Any) -> RunEvent | None:
     return RunEvent(kind="token", text=text) if text else None
 
 
-def events_in(
+def events_in(  # noqa: PLR0912, PLR0913 -- a branch per mode, and what the stream taught
     namespace: Any,
     mode: str,
     chunk: Any,
     subagent_names: SubagentNames | None = None,
+    *,
     seen: SeenMessages | None = None,
+    delegations: Delegations | None = None,
 ) -> Iterator[RunEvent]:
     """Translate one stream chunk into domain events."""
+    if mode == "tasks":
+        start = delegations.started(namespace, chunk) if delegations is not None else None
+        if start is not None:
+            yield start
+        return
     named = subagent_names.name(namespace) if subagent_names is not None else None
+    within = delegations.within(namespace) if delegations is not None else ()
     if mode == "values":
         if seen is not None:
             seen.held(namespace, chunk)
         return
     if mode == "custom":
         if isinstance(chunk, Mapping) and isinstance(usage := chunk.get(CUT_OFF_MARK), Mapping):
-            yield RunEvent(kind="model_call", usage=dict(usage), cut_off=True, agent=named)
+            yield RunEvent(
+                kind="model_call",
+                usage=dict(usage),
+                cut_off=True,
+                agent=named,
+                delegations=within,
+            )
         return
     if mode == "messages":
         if (
@@ -433,7 +501,7 @@ def events_in(
             # Only a `messages` chunk carries `lc_agent_name`, so the map learns here.
             named = subagent_names.name(namespace, chunk[1])
         if (event := _token_event(chunk)) is not None:
-            yield replace(event, agent=named)
+            yield replace(event, agent=named, delegations=within)
         return
     if mode != "updates":
         return
@@ -442,7 +510,7 @@ def events_in(
             if seen is not None and seen.rewritten(namespace, message):
                 continue
             if (event := _event_for(message)) is not None:
-                yield replace(event, agent=named)
+                yield replace(event, agent=named, delegations=within)
 
 
 def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
