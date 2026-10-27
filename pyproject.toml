@@ -93,7 +93,10 @@ dependencies = [
     # here is held to nothing. A dependency justified by a file that is gone is a
     # dependency nobody can re-examine. It also arrives transitively through
     # deepagents, but a transitive dep is not a promise.
-    "pyyaml>=6.0",
+    #
+    # 6.0.1, not 6.0: 6.0 ships no wheel for 3.12 and its sdist no longer
+    # builds, so under `requires-python` 6.0 installs nowhere.
+    "pyyaml>=6.0.1",
     "python-dotenv>=1.2.2",
     #
     "anthropic>=0.120.0,<1",

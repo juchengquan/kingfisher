@@ -693,7 +693,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.12.5,<3" },
     { name = "pydantic-settings", specifier = ">=2.10.0,<3" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
-    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "pyyaml", specifier = ">=6.0.1" },
     { name = "sandlock", marker = "sys_platform == 'linux' and extra == 'fence'", specifier = ">=0.8.8" },
 ]
 provides-extras = ["fence"]
