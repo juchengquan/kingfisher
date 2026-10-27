@@ -5838,7 +5838,7 @@ set `_claims`**, so the call it invites type-checks and does not run:
 A mixin's declarations state what it needs of its host, so one it does not read is a
 requirement that moved or never was. `test_no_mixin_declares_what_it_does_not_read`
 asks it of every class whose annotations are a requirement -- not a dataclass's, which
-are its constructor, nor a Protocol's, which are its contract.
+are its constructor.
 
 **What that rule still does not see is a property.** `Surface.ambiguous` had no caller
 while the run report asked `Offering.ambiguous` directly; it was deleted rather than
