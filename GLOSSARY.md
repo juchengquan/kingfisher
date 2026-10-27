@@ -38,6 +38,12 @@ One request carried out in one session, from start to finish. A session runs one
 time, and a turn may stop partway to wait for an approval.
 _Avoid_: run, step, call
 
+**Delegation**:
+One request from an agent to a subagent, from the asking to the answer, named by the id of
+the call that made it. A turn that pauses inside one carries it into the turn that answers.
+Not the subagent, which may have several delegations open in one turn.
+_Avoid_: subagent run, task, run
+
 **Note**:
 Text a caller adds to one turn's request, sent after the task in that turn's message and
 kept with it, so later turns see it as it was sent. A turn that answers an approval adds

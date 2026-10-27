@@ -77,6 +77,9 @@ slices land.
   kingfisher sends back of a model's thinking once the vendor, or the conversation
   before it, has changed, keyed on the endpoint that answered. Its first slice has
   landed; the rest wait on one live Anthropic call each.
+- [Delegations side by side](design/2026-10-27-delegations-side-by-side.md) — telling
+  two subagents running at once apart on the stream, by the call that started each,
+  and printing each as one block in the CLI. Nothing built; its mechanism is measured.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
