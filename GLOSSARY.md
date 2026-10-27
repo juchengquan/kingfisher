@@ -124,6 +124,16 @@ A label a caller is in at most one of, and a definition may require. Checked bes
 never as one of them.
 _Avoid_: zone, data zone, region
 
+**Opens**:
+Of the names a caller holds, one in an audience entry they satisfy, so it is a reason they
+reach something. Several names may each open the same thing on their own.
+_Avoid_: needs, grants, permits, unlocks
+
+**Would open**:
+A name a caller does not hold that is the one name missing from an entry of an audience they
+do not reach, so holding it alone would open something.
+_Avoid_: missing, required, suggested
+
 ### Tools
 
 **Built-in tool**:

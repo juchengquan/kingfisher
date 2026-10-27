@@ -77,12 +77,6 @@ slices land.
   kingfisher sends back of a model's thinking once the vendor, or the conversation
   before it, has changed, keyed on the endpoint that answered. Its first slice has
   landed; the rest wait on one live Anthropic call each.
-- [Which source ids open
-  something](design/2026-10-26-which-source-ids-open-something.md) — which of a
-  caller's source ids and datazones open anything under one agent, and which single
-  name they do not hold would open more. Built. The argument it settles is that this
-  is the operator's answer *about* a caller rather than the caller's own view, which
-  is why it carries policy a scoped listing may not.
 - [Memory kept up to date](design/2026-10-26-memory-kept-up-to-date.md) — memory as a
   list of entries a separate writer curates at a turn's end, with what changed reported
   and an entry forgettable from outside; then, through a store the deployment provides,
@@ -105,6 +99,8 @@ what persists and where*, which is where the two halves of it belonged.
 *The catalogue* in `decisions.md`. *A prompt that says only what kingfisher does* was
 built in seven; its rule and its order are under *Agents and delegation* in
 `decisions.md`, and each of its changes beside the entry it changed.
+*Which source ids open something* was built in one; its decisions are under
+*Source-id access* in `decisions.md`, and its two words are in `GLOSSARY.md`.
 *A session is its backend* was built in four the day it was written; its decisions
 are under a section of that name in `decisions.md`.
 *A tool's path is the backend's path* was built in four; its decisions are under a

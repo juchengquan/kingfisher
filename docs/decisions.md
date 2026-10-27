@@ -1616,6 +1616,80 @@ from the place that holds it is the same defect as a rule that cannot fail. Both
 gone, and the ten mutations of this slice all bite. *(2026-10-15, from an architecture
 review.)*
 
+**`opened_by` is the operator's answer about a caller, not the caller's own view.**
+`Kingfisher.opened_by` says which of one caller's source ids and datazones open something
+under one agent, and which single name they do not hold would open more. A scoped listing
+carries no vocabulary and no audiences, because those are the policy; `would` is policy
+by construction, naming a lock the caller cannot pass beside the name that passes it. The
+line is not that a terminal is safer than a library. `list --as B` promises to be B's
+view and must be exactly that, while this answers *about* B to the deployment that built
+the service and already holds the catalogue. Nothing in the code carries the difference,
+so the next reader finds this unfiltered beside a listing that filters and reaches for
+consistency, which is the change not to make. A deployment that forwards it to its own
+callers has handed them the vocabulary, and the docstring says so. *(2026-10-26, #1096.)*
+
+**A name opens something when it sits in an audience entry the caller satisfies, and
+would when it is the one name missing from an entry of an audience they do not reach.**
+Every entry is a set, singletons included, and one walk gives both halves, so they cannot
+come apart -- this section keeps recording pairs of readers that each worked out what a
+caller reaches and disagreed. Two readings were turned down. *Named in an audience they
+reach* over-reports: under `[{A, C}, B]` a caller holding A and B is told A opened it,
+when the only entry naming A also wants C. *Load-bearing*, an id whose removal shuts
+something, answers nothing under the ordinary `[A, B]` with both held, and an empty
+answer reads as "none of these ids do anything". Load-bearing is still a filter over the
+same record -- an id in every satisfied entry of some thing -- and arrives as a field
+with its own word if it is wanted, never as a new meaning for `opens`. Zones come back
+apart from the ids, as bare zone names: `held_by` refuses a source id spelt with the
+datazone prefix, and folded in, "one more id would open this" and "no id can" read alike
+while they take different levers. *(2026-10-26, #1096.)*
+
+**The walk is a run's, so the answer is about a request this deployment would serve.**
+The grant is the deployment's under the request's, with bare subagent names settled as a
+run settles them; leaving out the deployment's grant would report an id opening a tool
+no run hands out. So an empty `opens` does not tell a lock from a withholding grant, and
+the lock-only question would be another call with another name. Every audience is held
+jointly with the path that reaches it, one level of subagents down as the build activates
+them, which is what keeps `would` honest: under an agent open to A or B, a caller holding
+neither is told A or B opens the agent, and not that a zone alone opens a zoned tool
+beneath it. What a definition offers is read for no caller and the walk narrows it
+itself, because `declares(held)` drops a skills entry the caller fails before its lock
+is read, and `would` could then never name an id that opens a skill. Built-in tools take
+no audience, so nothing opens one. Skills are walked only where one could be opened, or
+the default deployment, with skills off, would send an operator to grant a name that
+changes nothing. *(2026-10-26, #1096.)*
+
+**An agent nothing defines is refused, and one out of reach is answered.** The run path
+makes the two read alike, because out of reach must read as not offered. Here an agent
+out of reach is the case `would` exists for, so it is answered, and the refusal of a name
+nothing defines lists every defined agent; the departure carries a comment, or it gets
+"fixed" back. `UNSCOPED` is refused: it means no caller, every reach check reads it as
+nothing narrowing, and the answer would describe the least restricted caller there is.
+`[]` is a real caller holding nothing and the most useful call, since it answers the
+smallest grant that opens anything, and the refusal says to pass it. With no lock in any
+definition every call is refused, because no name opens anything. *(2026-10-26, #1096.)*
+
+**`Opened` is in `core.access.source_ids`, and the walk is in `core.reporting`.** The
+records are public, as the inventory record is: a public method returning a type nobody
+can import leaves a deployment unable to annotate what it got, and only a module free of
+the agent runtime may export one. The walk sits beside the withheld report it has to
+agree with, and not under `core/access/`: the walk needs `core.agent.activation`, which
+imports `core.access` back, a cycle, and imports deepagents, which the architecture
+rules keep out of `core/access/`. *(2026-10-26, #1096.)*
+
+**The test derives both halves from the withheld report, over subsets.** Agreement
+cannot be equality: the report sees only the top-level agent's universe, so a
+subagent's private tools, skills entries and carried tools are outside it, and under the
+default grant it answers nothing at all. Granted nothing on the audienced axes, it
+reports exactly what is in reach, and
+`test_what_opens_agrees_with_the_withheld_report` derives `would` as the ids whose
+addition grows that set and `opens` as the ids some subset of the caller's names needs.
+The subset is the whole of it. Pinned to the caller's full set of names, the derivation
+describes load-bearing instead, and the fixture's caller holding A and B is what tells
+the two apart. What the oracle cannot see is asserted directly. Each branch was mutated
+on its own, and three could not bite until the fixture grew for them: an audience with a
+dominated entry, a subagent carrying a tool under a lock of its own, and one narrowing a
+skill further. *(2026-10-26, #1096.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds
