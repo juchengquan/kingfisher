@@ -4074,7 +4074,7 @@ replaces it. So where memory is on, a turn's end makes one model call -- on
 `models.yaml`'s `memory_writer:`, else the agent's own model, held to the endpoints the
 caller may reach -- given the entries and what was said since it last ran, and saves the
 whole list it answers with. It runs on a turn whose conversation was summarised and
-otherwise every `KINGFISHER_MEMORY_EVERY` turns, 2 until measured; never on a turn that
+otherwise every `KINGFISHER_MEMORY_EVERY` turns, 4 by default; never on a turn that
 failed; and before the start-and-end comparison, so its changes are reported as
 `memory_updated` with the agent's. It is shown the caller's task, the agent's replies and
 the names of the tools it called, and nothing else: no tool result, no system message, no
@@ -4099,7 +4099,20 @@ again after it answers, so the agent's own saves pass it too. This is the enforc
 *Nor does it keep who the user is* declined as "matching free text": told not to save the
 user's team, a model saved it, and a harmless repeat of a context value is the price.
 The claim is held a model timeout longer where memory is on, since the writer's call
-follows the turn's last superstep. *(2026-10-26.)*
+follows the turn's last superstep. *(2026-10-26.)* *The default went from 2 to 4 on
+2026-10-27, measured on MiniMax over 46 turns and 18 writer calls. The call is cheap: on
+M3 a median of 2 seconds, about 800 tokens in and 110 out, where M2.5 took twice as long
+and wrote twice as much. Every answer kept the format, the longest list 7 entries. What
+it costs is the cache. The turn after memory changed kept about 2,770 of 10,500 input
+tokens cached, where with memory off every turn kept nearly all, so on MiniMax the
+breakpoint ahead of the memory block saves little; the writer changed memory on every run,
+so at 2 about half the turns paid it. At 4 half as many do, and a fact is not late to the
+conversation it was said in, which still carries it; with a store, the user's other
+conversations have it a few turns later. The summariser is no trigger on M3, which
+summarises at 850,000 tokens; M2.5 does at 170,000. A store's load costs nothing on a
+turn whose memory is unchanged: that turn kept its cache. The check's price was sharper
+than a harmless repeat once: M2.5 wrote the user's team and their reporting currency as
+one entry, and the currency went with the team.*
 
 **The guidelines deepagents appends after it say the same, because they are
 kingfisher's.** deepagents' `MEMORY_SYSTEM_PROMPT`, straight after kingfisher's section,

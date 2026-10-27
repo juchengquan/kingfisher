@@ -18,6 +18,11 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 
 ## Waiting on a decision
 
+- **Keeping the cache through a memory change on MiniMax.** The breakpoint ahead of the
+  memory block saves little there, so each change the writer makes costs the next turn
+  most of its cache; `KINGFISHER_MEMORY_EVERY` went to 4 to pay it half as often. Moving
+  the block, or asking MiniMax how it matches a prefix, needs a grilling of its own.
+  *(2026-10-27.)*
 - **One folder for everything the agent makes.** #603 put the scratchpad inside the
   returned folder, as a subfolder that is never returned; it was closed unmerged and its
   branch, `scratchpad-under-derived`, kept. Its other two halves landed apart: a save
@@ -36,12 +41,11 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 
 ## Waiting on a run
 
-- **What the memory writer costs, and how often it runs.** `KINGFISHER_MEMORY_EVERY` is
-  2 until this is measured: how often a real session is summarised, the writer's other
-  trigger; what one writer call costs in tokens and seconds, on the agent's model and on
-  a cheaper one; and whether it keeps the format and the limits without retries, over
-  the trial sessions and a long one. With a store wired, whether the per-turn reload
-  costs any cache beyond the memory block and the conversation after it. *(2026-10-27.)*
+- **Whether a changed memory block costs Anthropic the whole prompt**, as it costs
+  MiniMax: there the turn after the writer changed memory kept about a quarter of its
+  input cached. Two turns on an Anthropic model, memory changed between them, settle it.
+  And how often a real deployment's sessions are summarised on M2.5, whose summariser
+  fires at 170,000 tokens, which needs that deployment's sessions. *(2026-10-27.)*
 - **What slots and turn text cost, on a real deployment.** A slot keyed on a name no
   tool lock uses gives two grants with one tool list two system prompts and a cache entry
   each; a subagent's prompt grows with every slot its grant fills. Count both on one
