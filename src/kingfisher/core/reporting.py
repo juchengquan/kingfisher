@@ -199,7 +199,10 @@ def what_opens(
     path = stated(agent).audience
     reasons.see(path)
     found = catalogue.tools.found
-    for one in Offering.of(found).carried(offered.tools, found):
+    offering = Offering.of(found)
+    # `spelt` first, as a run spells a grant: `carried` matches the catalogue's spelling,
+    # so a `file.py::name` entry would skip that tool's lock.
+    for one in offering.carried(offering.spelt(offered.tools), found):
         reasons.see(path, one.audience)
     for audience in _skills_told(cfg, catalogue, allowed=offered, said=stated(agent).skills):
         reasons.see(path, audience)
@@ -212,7 +215,7 @@ def what_opens(
         under = jointly((path, stated(spec).audience))
         reasons.see(under)
         shared = spec.declares(None)
-        for one in Offering.of(found).carried(shared.tools, found):
+        for one in offering.carried(offering.spelt(shared.tools), found):
             reasons.see(under, one.audience)
         # Its own folder's tools, which no grant reaches, still answer to their own
         # locks. Asked unscoped: filtered for this caller they would be invisible here,

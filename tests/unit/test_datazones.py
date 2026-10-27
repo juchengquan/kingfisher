@@ -813,6 +813,52 @@ def test_a_name_no_definition_uses_opens_nothing_and_is_not_reported(zoned):
     assert opened.would.source_ids == frozenset({"A", "B"})
 
 
+@pytest.mark.parametrize("granted", ["payroll", "pay.py::payroll"])
+def test_a_grant_naming_a_tool_by_its_file_still_reads_its_lock(zoned, granted):
+    """A grant written `pay.py::payroll` was compared with the catalogue's short
+    spelling, so the zoned tool it grants was skipped and `finance` reported as opening
+    nothing. The bare name is the control beside it, and `ledger` is unzoned so that
+    the tool is the only thing `finance` could open.
+    """
+    (subagents_dir(zoned) / "ledger.yaml").write_text(
+        LEDGER.replace("datazone: finance\n", ""), encoding="utf-8"
+    )
+    agents = zoned.catalogue_roots["agents"]
+    (agents / "surveyor.yaml").write_text(
+        AGENT.replace("tools: [payroll, line_count]", 'tools: ["*"]'), encoding="utf-8"
+    )
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    opened = kf.opened_by(
+        "surveyor",
+        source_ids=["A"],
+        datazone="finance",
+        capabilities=Capabilities(tools=(granted,)),
+    )
+
+    assert opened.opens.datazones == frozenset({"finance"})
+
+
+@pytest.mark.parametrize("declared", ["payroll", "pay.py::payroll"])
+def test_a_subagent_naming_a_tool_by_its_file_still_reads_its_lock(zoned, declared):
+    """The same miss on a subagent's own `tools:` line, which no grant reaches. The
+    subagent is unzoned and the agent does not carry `payroll`, so its tool is the only
+    thing `finance` opens.
+    """
+    (subagents_dir(zoned) / "ledger.yaml").write_text(
+        LEDGER.replace("datazone: finance\n", f"tools: [{declared}]\n"), encoding="utf-8"
+    )
+    agents = zoned.catalogue_roots["agents"]
+    (agents / "surveyor.yaml").write_text(
+        AGENT.replace("tools: [payroll, line_count]", "tools: [line_count]"), encoding="utf-8"
+    )
+    kf = Kingfisher(zoned, sessions=LocalSessions())
+
+    opened = _opened(kf, frozenset({"A", zone_name("finance")}))
+
+    assert opened.opens.datazones == frozenset({"finance"})
+
+
 def test_what_opens_agrees_with_the_withheld_report(zoned):
     """The second reader of these locks, and the one that could drift: a name reported
     as opening something no run would hand over, or a name whose addition reaches
