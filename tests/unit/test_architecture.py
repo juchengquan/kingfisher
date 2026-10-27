@@ -4565,9 +4565,8 @@ def _unread(defined: Mapping[Named, str], live: set[Named]) -> set[Named]:
 
 
 #: Class shapes whose bare annotations are the point rather than a requirement: a
-#: dataclass's are its constructor, a Protocol's are its contract, and the others
-#: build their members out of them too.
-DECLARED_BY_SHAPE = frozenset({"Protocol", "TypedDict", "Enum", "StrEnum", "NamedTuple"})
+#: dataclass's are its constructor, and the others build their members out of them too.
+DECLARED_BY_SHAPE = frozenset({"TypedDict", "Enum", "StrEnum", "NamedTuple"})
 
 
 def test_no_mixin_declares_what_it_does_not_read():

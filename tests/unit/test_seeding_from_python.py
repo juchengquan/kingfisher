@@ -30,8 +30,8 @@ def test_the_readme_flow_seeds_a_definitions_folder(tmp_path, assets):
     paths = WorkspacePaths(tmp_path / "definitions")
 
     ensure_definitions(paths.definitions)
-    source = definitions_source(paths, assets)
-    done = seed(paths, source)
+    source = definitions_source(paths.assets, assets)
+    done = seed(paths.definitions, source)
 
     assert done.written, "the documented flow seeded nothing"
     assert not done.overwritten, "a fresh folder has nothing to overwrite"
@@ -63,7 +63,7 @@ def test_the_flow_writes_nothing_into_a_workspace(tmp_path, assets):
     paths = WorkspacePaths(tmp_path / "definitions", workspace=workspace)
 
     ensure_definitions(paths.definitions)
-    seed(paths, definitions_source(paths, assets))
+    seed(paths.definitions, definitions_source(paths.assets, assets))
 
     assert (paths.definitions / "models.yaml.example").is_file(), "the control"
     assert not workspace.exists(), "seeding made or wrote into the workspace"
@@ -74,7 +74,7 @@ def test_the_flow_reports_what_it_left_behind(tmp_path, assets):
     paths = WorkspacePaths(tmp_path / "definitions")
     ensure_definitions(paths.definitions)
 
-    done = seed(paths, definitions_source(paths, assets))
+    done = seed(paths.definitions, definitions_source(paths.assets, assets))
 
     assert done.skipped, (
         "the shipped assets no longer demonstrate a definition seeding leaves "
@@ -95,8 +95,8 @@ def test_everything_takes_what_the_default_leaves(tmp_path, assets):
     paths = WorkspacePaths(tmp_path / "definitions")
     ensure_definitions(paths.definitions)
 
-    default = seed(paths, definitions_source(paths, assets))
-    complete = seed(paths, definitions_source(paths, assets), everything=True)
+    default = seed(paths.definitions, definitions_source(paths.assets, assets))
+    complete = seed(paths.definitions, definitions_source(paths.assets, assets), everything=True)
 
     assert not complete.skipped
     assert set(default.written) < set(complete.written), (
@@ -120,7 +120,7 @@ def test_a_workspace_paths_is_destination_enough(tmp_path, assets):
     assert paths.workspace is None, "no workspace, deliberately"
     assert not (paths.definitions / "models.yaml").exists(), "no catalogue yet, deliberately"
 
-    assert seed(paths, definitions_source(paths, assets)).written
+    assert seed(paths.definitions, definitions_source(paths.assets, assets)).written
 
 
 def test_no_source_configured_says_how_to_name_one(tmp_path, monkeypatch):
@@ -129,7 +129,7 @@ def test_no_source_configured_says_how_to_name_one(tmp_path, monkeypatch):
     paths = WorkspacePaths(tmp_path / "definitions")
 
     with pytest.raises(ConfigError, match="KINGFISHER_ASSETS"):
-        definitions_source(paths)
+        definitions_source(paths.assets)
 
 
 # -- the script on the live shelf ----------------------------------------

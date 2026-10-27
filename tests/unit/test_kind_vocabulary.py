@@ -197,7 +197,7 @@ def test_a_folder_that_is_not_a_kind_is_not_seeded_either(shipped, cfg):
     """The claim every `NOT_A_KIND` entry rests on, checked rather than asserted."""
     from kingfisher.core.definitions import seeding
 
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
 
     for name in NOT_A_KIND:
         assert not (cfg.definitions / name).exists(), (
@@ -236,7 +236,7 @@ def test_every_reason_a_definition_is_skipped_has_a_remedy(cfg, tmp_path):
             f"name: {name.removesuffix('.yaml')}\ndescription: d\n{body}", encoding="utf-8"
         )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
     reported = {left.wants for left in done.skipped}
 
     assert len(done.skipped) == len(SKIPPED_SHAPES), (

@@ -43,7 +43,7 @@ def formats_doc():
 
 def test_a_seeded_skill_is_discovered(cfg):
     """Seeding puts a skill where discovery looks."""
-    seeding.seed(cfg, FIXTURE)
+    seeding.seed(cfg.definitions, FIXTURE)
 
     assert "probe-skill" in available_skills(cfg)
 
@@ -210,7 +210,7 @@ def test_an_offered_tool_may_not_shadow_a_builtin(cfg):
 
 
 def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
-    result = seeding.seed(cfg, FIXTURE)
+    result = seeding.seed(cfg.definitions, FIXTURE)
 
     assert result.written
     assert result.overwritten == ()
@@ -218,7 +218,7 @@ def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
 
 def test_seeding_does_not_claim_the_catalogue_example(cfg):
     """It is not a definition, and it is no longer seeding's to write."""
-    result = seeding.seed(cfg, FIXTURE)
+    result = seeding.seed(cfg.definitions, FIXTURE)
 
     assert not [entry for entry in result.written if entry.endswith(".example")]
     assert not [entry for entry in result.overwritten if entry.endswith(".example")]
@@ -234,7 +234,7 @@ def test_seeding_alone_leaves_a_definitions_folder_that_can_start(tmp_path):
     fresh = tmp_path / "untouched"
     paths = paths_from_env({"KINGFISHER_DEFINITIONS_DIR": str(fresh)})
 
-    result = seeding.seed(paths, FIXTURE)
+    result = seeding.seed(paths.definitions, FIXTURE)
 
     assert result.written, "nothing was seeded, so the rest asserts nothing"
     assert (fresh / "models.yaml.example").is_file(), (
@@ -247,7 +247,7 @@ def test_seeding_never_writes_the_catalogue_itself(cfg):
     catalogue = cfg.definitions / "models.yaml"
     catalogue.write_text("mine: do not touch\n", encoding="utf-8")
 
-    seeding.seed(cfg, FIXTURE)
+    seeding.seed(cfg.definitions, FIXTURE)
 
     assert catalogue.read_text(encoding="utf-8") == "mine: do not touch\n"
 
@@ -267,7 +267,7 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path):
     # The planted tree directly. This used to stand in for `opened`, which
     # materialised an installed package; `seed` takes a plain directory now, so
     # there is nothing left to patch and the planted tree can just be passed.
-    seeding.seed(cfg, source)
+    seeding.seed(cfg.definitions, source)
 
     carried = [str(p.relative_to(tools_dir(cfg))) for p in tools_dir(cfg).rglob("__pycache__")]
     assert not carried, f"seeding carried bytecode into the definitions folder: {carried}"
@@ -301,7 +301,7 @@ def test_every_way_of_naming_a_source_id_is_left_behind(spelling, cfg, tmp_path)
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "agents/audienced.yaml" not in done.written
     left = [s for s in done.skipped if s.label == "agents/audienced.yaml"]
@@ -326,7 +326,7 @@ def test_a_definition_naming_only_a_datazone_is_left_behind(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "subagents/zoned.yaml" not in done.written
     (left,) = done.skipped
@@ -349,13 +349,13 @@ def test_a_star_datazone_is_left_behind_and_refused_where_it_loads(cfg, tmp_path
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "subagents/ledger.yaml" not in done.written
     (left,) = done.skipped
     assert (left.label, left.datazones) == ("subagents/ledger.yaml", ("*",))
 
-    assert "subagents/ledger.yaml" in seeding.seed(cfg, source, everything=True).written
+    assert "subagents/ledger.yaml" in seeding.seed(cfg.definitions, source, everything=True).written
     with pytest.raises(SubagentError, match=r"datazone '\*' is not 'any'"):
         _ = LocalSubagentRepository(subagents_dir(cfg)).specs
 
@@ -512,7 +512,7 @@ def test_every_way_python_names_an_audience_is_left_behind(spelling, cfg, tmp_pa
     (source / kind).mkdir(parents=True)
     (source / kind / "audienced.py").write_text(written, encoding="utf-8")
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert f"{kind}/audienced.py" not in done.written
     left = [one for one in done.skipped if one.label == f"{kind}/audienced.py"]
@@ -553,7 +553,7 @@ def test_source_ids_of_everyone_are_copied_in_python(kind, written, cfg, tmp_pat
     (source / kind).mkdir(parents=True)
     (source / kind / "open.py").write_text(written, encoding="utf-8")
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert f"{kind}/open.py" in done.written
     assert not done.skipped
@@ -572,7 +572,7 @@ def test_an_empty_frozenset_is_the_loaders_to_refuse_not_seeds_to_crash_on(cfg, 
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "tools/empty.py" in done.written
 
@@ -721,7 +721,7 @@ def test_an_audience_seed_cannot_read_is_left_behind_as_written(spelling, cfg, t
     (source / kind).mkdir(parents=True)
     (source / kind / "computed.py").write_text(written, encoding="utf-8")
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert f"{kind}/computed.py" not in done.written, f"{spelling} was copied as naming nobody"
     (left,) = done.skipped
@@ -741,7 +741,7 @@ def test_the_skip_line_names_an_audience_seed_cannot_read_by_its_tool(cfg, tmp_p
     (source / "tools").mkdir(parents=True)
     (source / "tools" / "computed.py").write_text(UNREAD["an imported name"][1], encoding="utf-8")
 
-    (line,) = seeding.seed(cfg, source).report()
+    (line,) = seeding.seed(cfg.definitions, source).report()
 
     assert line.startswith(
         "skipped tools/computed.py — names an audience seed cannot read without running it "
@@ -759,7 +759,7 @@ def test_a_tool_package_computing_its_audience_is_left_behind_whole(cfg, tmp_pat
     (package / "__init__.py").write_text("", encoding="utf-8")
     (package / "profile.py").write_text(UNREAD["an imported name"][1], encoding="utf-8")
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert [(one.label, one.unread) for one in done.skipped] == [
         ("tools/profiler", ("t: source_ids=IDS",))
@@ -777,7 +777,7 @@ def test_an_audience_seed_cannot_read_is_named_below_the_top_level(cfg, tmp_path
         UNREAD["an imported name"][1], encoding="utf-8"
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert [(one.label, one.unread) for one in done.skipped] == [
         ("tools/group/computed.py", ("t: source_ids=IDS",))
@@ -800,7 +800,7 @@ def test_a_module_that_only_mentions_an_audience_is_copied(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "subagents/documented.py" in done.written
     assert not done.skipped
@@ -821,7 +821,7 @@ def test_a_tool_package_is_left_behind_whole(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert [(one.label, one.names) for one in done.skipped] == [("tools/profiler", ("A",))]
     assert not (tools_dir(cfg) / "profiler").exists(), "half a package is not a tool"
@@ -845,7 +845,7 @@ def test_a_bundle_is_left_behind_whole(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "subagents/ledger" not in done.written
     assert [(one.label, one.names) for one in done.skipped] == [("subagents/ledger", ("A",))]
@@ -869,7 +869,7 @@ def test_a_bundle_naming_middleware_is_left_behind_whole(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert [(one.label, one.wants, one.names) for one in done.skipped] == [
         ("subagents/ledger", "middlewares", ("audit",))
@@ -898,7 +898,7 @@ def test_a_bundle_naming_nobody_is_copied_whole(cfg, tmp_path):
         'SUBAGENTS = [{"name": "d", "source_ids": ["A"]}]\n', encoding="utf-8"
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "subagents/ledger" in done.written
     assert not done.skipped
@@ -923,7 +923,7 @@ def test_a_bundle_is_left_behind_for_what_its_own_tool_names(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert [(one.label, one.datazones) for one in done.skipped] == [
         ("subagents/ledger", ("emea",))
@@ -949,7 +949,7 @@ def test_a_compiled_subagents_bundle_is_left_behind_whole(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert [(one.label, one.names) for one in done.skipped] == [("subagents/surveyor", ("A",))]
     assert not (subagents_dir(cfg) / "surveyor").exists()
@@ -972,7 +972,7 @@ def test_a_grouping_folder_is_judged_file_by_file(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert (subagents_dir(cfg) / "analysis" / "profiler.yaml").is_file()
     assert not (subagents_dir(cfg) / "analysis" / "zoned.py").exists()
@@ -998,7 +998,7 @@ def test_a_tools_grouping_folder_is_judged_file_by_file(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert (tools_dir(cfg) / "warehouse" / "echo.py").is_file()
     assert not (tools_dir(cfg) / "warehouse" / "sql_query.py").exists()
@@ -1018,7 +1018,7 @@ def test_the_skip_line_names_both_fields_a_definition_wrote(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    report = "\n".join(seeding.seed(cfg, source).report())
+    report = "\n".join(seeding.seed(cfg.definitions, source).report())
 
     assert "names source_ids (A) and datazone (emea)" in report
     assert "source_ids.yaml" not in report, "a file nothing reads"
@@ -1034,7 +1034,7 @@ def test_a_definition_naming_nobody_is_copied(cfg, tmp_path):
         "name: plain\ndescription: d\nsystem_prompt: |\n  Hi.\n", encoding="utf-8"
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "agents/plain.yaml" in done.written
     assert not done.skipped
@@ -1052,7 +1052,7 @@ def test_a_definition_naming_middleware_is_left_behind(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "agents/plain.yaml" in done.written
     assert "agents/wired.yaml" not in done.written
@@ -1073,7 +1073,7 @@ def test_a_tools_own_json_is_not_read_as_a_definition(cfg, tmp_path):
     (source / "tools" / "note.py").write_text("TOOLS = []\n", encoding="utf-8")
     (source / "tools" / "note.json").write_text('{"middlewares": ["audit"]}\n', encoding="utf-8")
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "tools/note.json" in done.written
     assert not done.skipped
@@ -1090,7 +1090,7 @@ def test_a_star_is_not_a_name_and_is_seeded(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "agents/starry.yaml" in done.written
     assert not done.skipped
@@ -1111,7 +1111,7 @@ def test_the_rule_holds_below_the_top_level(cfg, tmp_path):
         "name: shallow\ndescription: d\nsystem_prompt: |\n  Hi.\n", encoding="utf-8"
     )
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     landed = subagents_dir(cfg) / "analysis"
     assert (landed / "shallow.yaml").is_file()
@@ -1128,7 +1128,7 @@ def test_everything_takes_what_the_default_leaves(cfg, tmp_path):
         encoding="utf-8",
     )
 
-    done = seeding.seed(cfg, source, everything=True)
+    done = seeding.seed(cfg.definitions, source, everything=True)
 
     assert "agents/wired.yaml" in done.written
     assert not done.skipped
@@ -1142,7 +1142,7 @@ def test_a_definition_that_does_not_parse_is_copied_rather_than_judged(cfg, tmp_
     (source / "agents").mkdir(parents=True)
     (source / "agents" / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
 
-    done = seeding.seed(cfg, source)
+    done = seeding.seed(cfg.definitions, source)
 
     assert "agents/broken.yaml" in done.written
     assert not done.skipped
@@ -1150,18 +1150,18 @@ def test_a_definition_that_does_not_parse_is_copied_rather_than_judged(cfg, tmp_
 
 def test_seeding_twice_unchanged_is_silent(cfg):
     """By content, not by presence."""
-    seeding.seed(cfg, FIXTURE)
+    seeding.seed(cfg.definitions, FIXTURE)
 
-    assert seeding.seed(cfg, FIXTURE).overwritten == ()
+    assert seeding.seed(cfg.definitions, FIXTURE).overwritten == ()
 
 
 def test_an_edited_copy_is_reported_and_still_replaced(cfg):
-    seeding.seed(cfg, FIXTURE)
+    seeding.seed(cfg.definitions, FIXTURE)
     edited = subagents_dir(cfg) / "probe-agent.yaml"
     edited.write_text("name: probe-agent\ndescription: mine\n"
         "system_prompt: |\n  My prompt.\n", encoding="utf-8")
 
-    result = seeding.seed(cfg, FIXTURE)
+    result = seeding.seed(cfg.definitions, FIXTURE)
 
     assert "subagents/probe-agent.yaml" in result.overwritten
     assert "description: mine" not in edited.read_text(encoding="utf-8")
@@ -1169,19 +1169,19 @@ def test_an_edited_copy_is_reported_and_still_replaced(cfg):
 
 def test_a_file_added_beside_a_preset_is_not_reported(cfg):
     """`copytree` merges, so this one survives."""
-    seeding.seed(cfg, FIXTURE)
+    seeding.seed(cfg.definitions, FIXTURE)
     (cfg.skills_dir / "probe-skill" / "notes.md").write_text("mine", encoding="utf-8")
 
-    assert seeding.seed(cfg, FIXTURE).overwritten == ()
+    assert seeding.seed(cfg.definitions, FIXTURE).overwritten == ()
     assert (cfg.skills_dir / "probe-skill" / "notes.md").read_text(encoding="utf-8") == "mine"
 
 
 def test_an_edited_file_inside_a_skill_is_named_exactly(cfg):
     """Entries are what you asked for; files are what you might have lost."""
-    seeding.seed(cfg, FIXTURE)
+    seeding.seed(cfg.definitions, FIXTURE)
     (cfg.skills_dir / "probe-skill" / "SKILL.md").write_text("clobber me", encoding="utf-8")
 
-    assert seeding.seed(cfg, FIXTURE).overwritten == ("skills/probe-skill/SKILL.md",)
+    assert seeding.seed(cfg.definitions, FIXTURE).overwritten == ("skills/probe-skill/SKILL.md",)
 
 
 def _grouped_source(tmp_path):
@@ -1204,11 +1204,11 @@ def test_a_held_back_definition_is_not_reported_as_overwritten(cfg, tmp_path):
     """A second seed warned it overwrote the definitions folder's own copy of a definition it held
     back for its middleware, and left that copy untouched."""
     source = _grouped_source(tmp_path)
-    seeding.seed(cfg, source)
+    seeding.seed(cfg.definitions, source)
     mine = subagents_dir(cfg) / "group" / "needs_mw.yaml"
     mine.write_text("edited by me\n", encoding="utf-8")
 
-    result = seeding.seed(cfg, source)
+    result = seeding.seed(cfg.definitions, source)
 
     assert "subagents/group/needs_mw.yaml" not in result.overwritten
     assert mine.read_text(encoding="utf-8") == "edited by me\n"
@@ -1218,11 +1218,11 @@ def test_a_dotfile_is_not_reported_as_overwritten(cfg, tmp_path):
     """A second seed warned it overwrote the definitions folder's `.DS_Store`, which the copy never
     touches."""
     source = _grouped_source(tmp_path)
-    seeding.seed(cfg, source)
+    seeding.seed(cfg.definitions, source)
     mine = subagents_dir(cfg) / "group" / ".DS_Store"
     mine.write_text("mine", encoding="utf-8")
 
-    result = seeding.seed(cfg, source)
+    result = seeding.seed(cfg.definitions, source)
 
     assert "subagents/group/.DS_Store" not in result.overwritten
     assert mine.read_text(encoding="utf-8") == "mine"
@@ -1233,10 +1233,10 @@ def test_an_edited_copy_beside_what_seed_leaves_out_still_warns(cfg, tmp_path):
     `test_a_dotfile_is_not_reported_as_overwritten`: in the same folder, a file the copy
     does replace is still named."""
     source = _grouped_source(tmp_path)
-    seeding.seed(cfg, source)
+    seeding.seed(cfg.definitions, source)
     (subagents_dir(cfg) / "group" / "plain.yaml").write_text("edited\n", encoding="utf-8")
 
-    assert seeding.seed(cfg, source).overwritten == ("subagents/group/plain.yaml",)
+    assert seeding.seed(cfg.definitions, source).overwritten == ("subagents/group/plain.yaml",)
 
 
 def test_the_readme_subagent_table_matches_the_real_field_set(formats_doc):

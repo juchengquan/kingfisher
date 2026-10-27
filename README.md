@@ -13,7 +13,7 @@ from kingfisher import definitions_source, ensure_definitions, paths_from_env, s
 paths = paths_from_env()
 ensure_definitions(paths.definitions)
 
-done = seed(paths, definitions_source(paths))
+done = seed(paths.definitions, definitions_source(paths.assets))
 for line in done.report():
     print(line)
 if (closing := done.nothing_seeded()) is not None:

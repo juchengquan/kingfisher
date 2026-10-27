@@ -321,7 +321,7 @@ def test_the_whole_job_is_reachable_through_the_front_door(cfg, shipped):
     """What phase 2 is for, and what the CLI will be held to."""
     from kingfisher import Inventory, Seeded, inventory, kinds_at, seed
 
-    written = seed(cfg, shipped)
+    written = seed(cfg.definitions, shipped)
     found = inventory(cfg)
 
     assert isinstance(written, Seeded)

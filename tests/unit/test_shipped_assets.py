@@ -949,12 +949,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     """
     from kingfisher.core.definitions.seeding import seed
 
-    class Destination:
-        # Written out rather than a `WorkspacePaths`, because the point of a
-        # destination written here is that the protocol is satisfied by shape.
-        definitions = tmp_path
-
-    done = seed(Destination(), shipped)
+    done = seed(tmp_path, shipped)
 
     assert {left.label for left in done.skipped} == {
         "agents/general.yaml",
@@ -1021,12 +1016,7 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
     """The deployment that already registered the names wants its own examples."""
     from kingfisher.core.definitions.seeding import seed
 
-    class Destination:
-        # Written out rather than a `WorkspacePaths`, because the point of a
-        # destination written here is that the protocol is satisfied by shape.
-        definitions = tmp_path
-
-    done = seed(Destination(), shipped, everything=True)
+    done = seed(tmp_path, shipped, everything=True)
 
     assert not done.skipped
     assert "agents/general.yaml" in done.written, "the agent a reader runs first"
@@ -1046,10 +1036,7 @@ def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, 
     """
     from kingfisher.core.definitions.seeding import seed
 
-    class Destination:
-        definitions = tmp_path
-
-    done = seed(Destination(), shipped)
+    done = seed(tmp_path, shipped)
 
     assert "middlewares/summarize_by_count.py" in done.written
     assert (tmp_path / "middlewares" / "summarize_by_count.py").is_file()
@@ -1062,12 +1049,7 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
     """The property the rule exists for, checked over the result rather than the inputs."""
     from kingfisher.core.definitions.seeding import middleware_named, seed
 
-    class Destination:
-        # Written out rather than a `WorkspacePaths`, because the point of a
-        # destination written here is that the protocol is satisfied by shape.
-        definitions = tmp_path
-
-    seed(Destination(), shipped)
+    seed(tmp_path, shipped)
 
     for kind in ("agents", "subagents"):
         for path in (tmp_path / kind).rglob("*.yaml"):
@@ -1093,7 +1075,7 @@ def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository, name_of
     from kingfisher.core.definitions.seeding import seed
 
-    seed(cfg, shipped, everything=True)
+    seed(cfg.definitions, shipped, everything=True)
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["general"]
     offered = set(LocalMiddlewareRepository(cfg.catalogue_roots["middlewares"]).classes)
     wired = replace(cfg, skills_enabled=True)

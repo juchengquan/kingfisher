@@ -258,7 +258,7 @@ def test_the_run_reports_no_skill_withheld_where_none_could_be_opened(
     """`1 skill(s) not granted` says the others were, to a request that withheld
     `read_file` and so was offered none.
     """
-    seeding.seed(cfg, shipped)
+    seeding.seed(cfg.definitions, shipped)
     an_agent(cfg, builtin_tools='["*"]', tools='["*"]', skills='["*"]')
     on = replace(cfg, skills_enabled=True)
     asked = Request(

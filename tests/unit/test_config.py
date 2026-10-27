@@ -564,17 +564,6 @@ def test_the_two_records_cannot_disagree_about_where_things_go(tmp_path):
     assert paths.authored_files == cfg.authored_files
 
 
-def test_a_config_is_a_seeding_destination(tmp_path, cfg):
-    """Both records satisfy the protocol the seeder asks for, by shape and without
-    either being told about it.
-    """
-    from kingfisher.core.config import WorkspacePaths
-    from kingfisher.core.definitions.seeding import Destination
-
-    assert isinstance(WorkspacePaths(definitions=tmp_path), Destination)
-    assert isinstance(cfg, Destination)
-
-
 # -- the source-id vocabulary ------------------------------------------------------
 
 

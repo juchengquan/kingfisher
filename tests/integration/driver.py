@@ -253,7 +253,7 @@ def main(argv: list[str]) -> int:
     # seeds it.
     if fresh:
         try:
-            source = seeding.definitions_source(paths)
+            source = seeding.definitions_source(paths.assets)
         except ConfigError as exc:
             print(f"configuration error: {exc}", file=sys.stderr)
             print(f"this driver takes no --from; {SEED_HINT} does", file=sys.stderr)
@@ -266,7 +266,7 @@ def main(argv: list[str]) -> int:
     # somewhere unexpected read more like success than an empty folder does.
     if fresh:
         print(f"created a new definitions folder at {paths.definitions}")
-        result = seeding.seed(paths, source)
+        result = seeding.seed(paths.definitions, source)
         # `report` rather than a loop of this driver's own. What it prints about a
         # skipped definition is the reason `--agent researcher` would otherwise fail
         # with nothing to go on, and the sentence is the record's because this

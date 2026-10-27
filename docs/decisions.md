@@ -801,7 +801,7 @@ it refuse a request naming a different agent mid-conversation. Both halves are d
 This reversed twice. The current answer is the third one.
 
 **Definitions live outside the wheel, and where a deployment gets them is a
-setting.** `KINGFISHER_ASSETS` names one path; `seed(into, source)` takes it as a
+setting.** `KINGFISHER_ASSETS` names one path; `seed(definitions, source)` takes it as a
 required argument with no `None` branch. This repository's own are in `assets/`,
 outside the wheel, committed and held to working by the suite. Definitions from
 another project belong outside the checkout, and are seeded with a second `--from`.
@@ -929,13 +929,15 @@ caller saw it, and it went with the packaging reversal above.
 *(2026-08-17, `one-folder-for-the-packages.md`. Reversed 2026-08-18.)*
 
 **Seeding lays the definitions folder out itself, and its parameter says what it is.**
-`seed(into: Destination, source: Path)` returns a `Seeded`. `into` rather than `cfg`,
-because `Destination` is a Protocol so seeding can run before a `Config` exists -- the
-model catalogue is a file among the definitions, so reading one raises before the folder
-does. `Seeded`, because it records something finished. It calls `ensure_definitions`
-first: seeding a folder never laid out reported success and left no
-`models.yaml.example`, a dead end a library caller could not see from the signature.
-*(2026-09-01.)*
+`seed(definitions: Path, source: Path)` returns a `Seeded`. A path rather than `cfg`, so
+seeding can run before a `Config` exists -- the model catalogue is a file among the
+definitions, so reading one raises before the folder does. Not a protocol for "anything
+with a `.definitions`": one attribute is a parameter, and `Config` matching a type
+declared in `definitions/` was a dependency drawn the wrong way. `Seeded`, because it
+records something finished. It calls `ensure_definitions` first: seeding a folder never
+laid out reported success and left no `models.yaml.example`, a dead end a library caller
+could not see from the signature. *(2026-09-01; a path rather than a protocol,
+2026-10-27.)*
 
 **`config_from_env`, not `from_env`.** It returns a `Config` and the bare name
 said none of that -- imported at package level, which is how most calls read, it
@@ -5838,7 +5840,7 @@ set `_claims`**, so the call it invites type-checks and does not run:
 A mixin's declarations state what it needs of its host, so one it does not read is a
 requirement that moved or never was. `test_no_mixin_declares_what_it_does_not_read`
 asks it of every class whose annotations are a requirement -- not a dataclass's, which
-are its constructor, nor a Protocol's, which are its contract.
+are its constructor.
 
 **What that rule still does not see is a property.** `Surface.ambiguous` had no caller
 while the run report asked `Offering.ambiguous` directly; it was deleted rather than
