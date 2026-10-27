@@ -344,7 +344,7 @@ class Config:
     skills_enabled: bool = False
     memory_enabled: bool = False
     # How many turns the memory writer waits between runs where nothing was summarised.
-    memory_every: int = 2
+    memory_every: int = 4
     # On, because a cited id is what lets a reader trace a claim to the result behind it.
     cite_results: bool = True
     # A JavaScript sandbox to compute in: no filesystem or network, capped memory and

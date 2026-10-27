@@ -61,7 +61,7 @@ into the definitions folder.
 | `KINGFISHER_SESSION_MAX_BYTES` | Cap on what one session may hold. Checked between turns, never during one. | none — unbounded |
 | `KINGFISHER_KEEP_RESULTS_ROUNDS` | How many rounds of a conversation -- a user message and the resumes after it, the current one included -- keep their saved tool results. An older result's file is handed to the `UnusedResults` plugin at the end of a turn, which by default removes it; its ledger row stays, with `path` empty and `expired_in` naming that turn, and the agent is told to call the tool again. | none — every result kept |
 | `KINGFISHER_SESSION_TTL_S` | How long an idle session survives a sweep — `kingfisher reap`, or a deployment's own call to `reap()`. Nothing sweeps on a schedule. | `604800` (7 days) |
-| `KINGFISHER_MEMORY_EVERY` | Where memory is on, how many turns the memory writer waits between runs: one model call at a turn's end that rewrites the session's memory entries from what was said since it last ran. It also runs on any turn where the conversation was summarised. It runs on `memory_writer:` in `models.yaml`, or the agent's own model where that is absent. | `2` |
+| `KINGFISHER_MEMORY_EVERY` | Where memory is on, how many turns the memory writer waits between runs: one model call at a turn's end that rewrites the session's memory entries from what was said since it last ran. It also runs on any turn where the conversation was summarised. It runs on `memory_writer:` in `models.yaml`, or the agent's own model where that is absent. | `4` |
 
 **A turn stops between steps, so the turn timeout is a deadline and not a limit.** A
 turn out of time finishes the step it is inside before it stops, and that step is

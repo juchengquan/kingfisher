@@ -18,6 +18,12 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The memory writer runs every fourth turn, after #1114
+
+- **`KINGFISHER_MEMORY_EVERY` defaults to 4**, where it was 2. Each change the writer makes
+  costs the next turn most of its cache on MiniMax, so it now runs half as often. Set it
+  to 2 to keep the old cadence.
+
 ## A memory writer keeps the entries, after #1108
 
 - **Only where memory is on.** Every `KINGFISHER_MEMORY_EVERY` turns (2 by default), and on

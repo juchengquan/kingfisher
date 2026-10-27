@@ -60,18 +60,20 @@ def _kinds(events, kind: str) -> list[str]:
 # -- when it runs --------------------------------------------------------------
 
 
-def test_the_writer_runs_on_the_second_turn_by_default_and_not_the_first(scripted):
+def test_the_writer_runs_on_the_fourth_turn_by_default_and_not_before(scripted):
     """A counter that never advanced would leave memory uncurated; one read as `>= 0`
-    would cost a call on every "thanks"."""
+    would cost a call on every "thanks"; a default back at 2 would cost the next turn
+    most of its cache twice as often."""
     kf = _writing(scripted)
 
-    _turn(kf, AIMessage(content="one"))
-    assert _writer_calls() == [], "the writer ran on the first turn"
+    for said in ("one", "two", "three"):
+        _turn(kf, AIMessage(content=said))
+    assert _writer_calls() == [], "the writer ran before the fourth turn"
 
-    _turn(kf, AIMessage(content="two"), AIMessage(content="- Likes EUR"))
-    assert len(_writer_calls()) == 1, "the writer did not run on the second turn"
+    _turn(kf, AIMessage(content="four"), AIMessage(content="- Likes EUR"))
+    assert len(_writer_calls()) == 1, "the writer did not run on the fourth turn"
 
-    _turn(kf, AIMessage(content="three"))
+    _turn(kf, AIMessage(content="five"))
     assert len(_writer_calls()) == 1, "the count did not start again after the writer ran"
 
 
@@ -134,7 +136,7 @@ def test_with_memory_off_it_never_runs(scripted):
 
 
 def test_its_revised_list_is_written_numbered_and_reported(scripted):
-    kf = _writing(scripted)
+    kf = _writing(scripted, memory_every=2)
     memory = _memory_file(scripted)
     memory.write_text("# Project memory\n\n- [m1] Short answers\n", encoding="utf-8")
 
@@ -156,7 +158,7 @@ def test_its_revised_list_is_written_numbered_and_reported(scripted):
 def test_a_new_entry_never_takes_the_id_of_one_the_writer_dropped(scripted):
     """Numbered from the answer alone, the new entry would be `m2` again and reported as
     `m2` changed, where `m2` was removed and something else added."""
-    kf = _writing(scripted)
+    kf = _writing(scripted, memory_every=2)
     _memory_file(scripted).write_text("- [m1] Short answers\n- [m2] Likes GBP\n", encoding="utf-8")
 
     _turn(kf, AIMessage(content="one"))
@@ -205,7 +207,7 @@ OVER_SIZE = "- " + "x" * MAX_CHARACTERS
 def test_an_answer_not_kept_leaves_memory_as_it_was_and_says_why(scripted, answer, why):
     """A half-written memory is worse than a stale one, and a turn whose answer is in
     hand must not fail because the writer did."""
-    kf = _writing(scripted)
+    kf = _writing(scripted, memory_every=2)
     memory = _memory_file(scripted)
     memory.write_text("# Project memory\n\n- [m1] Short answers\n", encoding="utf-8")
 
@@ -229,7 +231,7 @@ def test_an_answer_not_kept_leaves_memory_as_it_was_and_says_why(scripted, answe
 def test_an_entry_holding_a_context_value_is_dropped_and_reported(scripted):
     """Compared ignoring case; a value under four characters is no identifier, or "en"
     would drop every entry with "when" in it."""
-    kf = _writing(scripted)
+    kf = _writing(scripted, memory_every=2)
     context = {"team": "Payments Platform", "lang": "en"}
 
     _turn(kf, AIMessage(content="one"), context=context)
@@ -250,7 +252,7 @@ def test_an_entry_holding_a_context_value_is_dropped_and_reported(scripted):
 def test_an_entry_the_agent_saved_holding_a_context_value_is_dropped_too(scripted):
     """The trial the check is for: told not to save the user's team, the agent saved it.
     On a turn the writer does not run, so the check is not the writer's alone."""
-    kf = _writing(scripted)
+    kf = _writing(scripted, memory_every=2)
     edit = {
         "file_path": "/memory/AGENTS.md",
         "old_string": "# Project memory\n",
@@ -282,7 +284,7 @@ def test_the_writer_is_never_sent_the_turn_text_the_note_or_a_tool_result(script
     """The turn text is where a deployment says who the user is; a writer never shown it
     cannot copy it. Read off what the scripted model was actually handed, with the
     agent's own call as the control that each of them was there to leak."""
-    kf = _writing(scripted, wiring={"turn_instructions": _Told()})
+    kf = _writing(scripted, memory_every=2, wiring={"turn_instructions": _Told()})
     (scripted.workspace / "sessions" / "s" / "outputs" / "a.txt").write_text(
         "TOOL-RESULT-7781", encoding="utf-8"
     )
