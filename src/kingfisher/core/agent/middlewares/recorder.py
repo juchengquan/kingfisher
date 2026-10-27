@@ -17,7 +17,7 @@ from langchain_core.messages import ToolMessage
 
 from kingfisher.core.access import Audience, jointly, listed, stated, unlisted
 from kingfisher.core.agent.prompting import FILE_TOOLS, WRITE_TODOS
-from kingfisher.core.definitions.subagents import TASK_TOOL
+from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.result import MAIN, WORKING, LedgerEntry, Listed
 
 from .recorded import arguments, stamp, summary
@@ -28,8 +28,13 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger(__name__)
 
-#: The parent's `task` call a subagent runs inside, or `None` in the agent the caller asked.
-#: Set around that call and read by every recorder inside it, on langgraph's threads too.
+#: The calls that start a run: `eval` as well as `task`, since a program can start a
+#: subagent, whose results would otherwise read as calls the agent made itself.
+RUNS = frozenset({TASK_TOOL, INTERPRETER_TOOL})
+
+#: The agent's `task` or `eval` call a subagent runs inside, or `None` in the agent the
+#: caller asked. Set around that call and read by every recorder inside it, on langgraph's
+#: threads too.
 RUN: ContextVar[str | None] = ContextVar("kingfisher_ledger_run", default=None)
 
 #: The id the tool call running here will be recorded under, taken before it runs, or
@@ -98,12 +103,12 @@ class Audiences:
 
 @contextmanager
 def _running(call: Mapping[str, Any]) -> Iterator[None]:
-    """Name the run a top-level `task` call starts, for as long as it runs.
+    """Name the run a top-level `task` or `eval` call starts, for as long as it runs.
 
     Only where none is named yet: everything inside a subagent, a nested helper's
     calls included, belongs to the run of the call that started it.
     """
-    if call.get("name") != TASK_TOOL or RUN.get() is not None:
+    if call.get("name") not in RUNS or RUN.get() is not None:
         yield
         return
     token = RUN.set(call.get("id") or "")
