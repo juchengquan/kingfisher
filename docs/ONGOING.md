@@ -24,11 +24,11 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   the block, or asking MiniMax how it matches a prefix, needs a grilling of its own.
   *(2026-10-27.)*
 - **One folder for everything the agent makes.** #603 put the scratchpad inside the
-  returned folder, as a subfolder that is never returned; it was closed unmerged and its
-  branch, `scratchpad-under-derived`, kept. Its other two halves landed apart: a save
-  outside every folder is refused (#1066), and the shell is told where it may write (#760,
-  #1070). The branch predates `inputs` and `outputs`, so it is a reference rather than a
-  rebase. Rebuild, or drop it and delete the branch. *(2026-10-23.)*
+  returned folder, as a subfolder that is never returned; it was closed unmerged, and its
+  branch is gone but GitHub keeps it: `git fetch origin pull/603/head`. Its other two
+  halves landed apart: a save outside every folder is refused (#1066), and the shell is
+  told where it may write (#760, #1070). It predates `inputs` and `outputs`, so it is a
+  reference rather than a rebase. Rebuild, or drop it. *(2026-10-27.)*
 - **A second folder table.** `core/access` has the only one. Whether another folder
   gets one is judged at the next name moved inside `core/access`, by how many importers
   that move had to touch. *(2026-10-19.)*
@@ -119,6 +119,4 @@ Every other merged branch was deleted, here and on GitHub, on 2026-10-27.
 
 - **`clearing-counts-like-summariser`**, merged. Its worktree,
   `.claude/worktrees/clearing-counts-like-summariser`, is locked by a Claude session still
-  running; remove the worktree and the branch once that session ends. *(2026-10-23.)*
-- **`scratchpad-under-derived`**, #603's, closed unmerged and kept as a reference: see
-  *One folder for everything the agent makes* above. *(2026-10-23.)*
+  running; remove the worktree and the branch once that session ends. *(2026-10-27.)*
