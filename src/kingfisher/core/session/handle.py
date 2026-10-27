@@ -61,7 +61,8 @@ class Session:
         """Remove one entry from this session's memory file, with the lines continuing it.
 
         `SessionBusyError` while a turn holds the session, and `MemoryEntryError`, naming
-        the ids there are, for one the file does not hold.
+        the ids there are, for one the file does not hold. With a `MemoryStore` wired, a
+        keyed turn replaces the file with the user's memory: forget there instead.
         """
         drive(self._service._forget_in(self.id, entry_id, self._opened))
 

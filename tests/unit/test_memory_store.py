@@ -296,3 +296,21 @@ def test_an_entry_the_identifier_check_drops_leaves_the_store_too(scripted):
     (finished,) = [one for one in events if one.kind == "finished"]
     assert finished.result.memory.dropped == (team,)
     assert shelf.users["ana"] == (EUR,)
+
+
+def test_an_entry_forgotten_in_the_store_is_gone_from_the_next_turn(scripted):
+    """With a store wired, a deployment forgets through it; a turn that read the session's
+    copy rather than the store would bring the entry back to the agent."""
+    shelf = Shelf(ana=(EUR, SHORT))
+    kf = _kingfisher(scripted, shelf)
+    start(scripted, "s")
+    copy = "# Memory\n\n- [m1] Likes EUR\n- [m2] Short answers\n"
+    _memory_file(scripted).write_text(copy, encoding="utf-8")
+
+    shelf.apply("ana", MemoryChanges(removed=(SHORT,)))
+    result, _ = _turn(kf, AIMessage("hello"))
+
+    assert "Short answers" not in _heard()
+    assert "Short answers" not in _memory_file(scripted).read_text(encoding="utf-8")
+    # Gone before the turn's baseline is read, so not reported as the turn's removal.
+    assert not result.memory

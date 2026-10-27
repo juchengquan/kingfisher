@@ -115,7 +115,9 @@ Python, `kf.session(session_id).memory()` reads them, and `.forget("m3")` remove
 with the indented lines continuing it, and writes the file back. `forget` is refused
 with `SessionBusyError` while a turn is running in the session, and with
 `MemoryEntryError`, naming the ids the file holds, for one it does not. `amemory` and
-`aforget` are the same on an event loop.
+`aforget` are the same on an event loop. With a `MemoryStore` wired, the file is a copy
+the next turn replaces, and an entry is forgotten in the store
+([`ports.md`](ports.md#memorystore--a-users-memory-across-their-sessions)).
 
 ### Citing a result
 

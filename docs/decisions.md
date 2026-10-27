@@ -4044,10 +4044,13 @@ claiming between the ask and the write reads the entry at its start and may writ
 and would report the forget as its own removal. A held session answers
 `SessionBusyError`, and an id the file does not hold a `MemoryEntryError` naming the ids
 it does, since a mistyped id ignored looks like a forget that worked. Neither asks whether
-memory is on: with it off the file is read as it stands. With a user's store wired,
-`forget` must reach the store as well, or the next turn's reload brings the entry back;
-that is the store's slice of `docs/design/2026-10-26-memory-kept-up-to-date.md`.
-*(2026-10-26.)*
+memory is on: with it off the file is read as it stands. *(2026-10-26.)* *Since
+2026-10-27, with a user's store wired, the deployment forgets in its store, through its
+own `apply` with the entry removed, and every session's next turn loads the list without
+it; `forget` edits only the session's copy, which that load replaces. **Not taken:**
+`forget` handed a key, or the request's `context` to ask `key` with, which is a second
+door to a store the deployment already holds, and one called without either still edits
+only the copy.*
 
 **Memory is entries kingfisher numbers, and a turn reports what it did to them.** The
 memory file had no shape, so nothing could say what a turn changed in it: the turn's file
@@ -4061,8 +4064,7 @@ well, or a line written before the turn would read as added by it. The agent wri
 line and never an id, so two entries cannot share one; one written twice keeps its first
 and the second is numbered afresh. Headings and prose stay as they are and are not
 entries. With memory off the file is neither read nor rewritten. The writer, `forget` and
-a user's store, in `docs/design/2026-10-26-memory-kept-up-to-date.md`, all read these ids.
-*(2026-10-26.)*
+a user's store all read these ids. *(2026-10-26.)*
 
 **A memory writer curates the entries, and no saved entry may hold a value of the
 request's `context`.** Left to the agent, memory is the notes it chose to take mid-task,
