@@ -136,6 +136,20 @@ _SAVING = {
     False: "It can be read here but not added to, so do not try to save to it.",
 }
 
+#: How long the memory block says memory lasts, by whether a `MemoryStore` keeps it for
+#: the user. Said only where true: a promise of later conversations with no store had the
+#: agent writing for a reader who never arrives.
+_KEPT = {
+    False: (
+        "Like `/{outputs}`, it is kept for later turns of this conversation and reported "
+        "back when the turn ends."
+    ),
+    True: (
+        "It is this user's memory, kept for their later conversations as well as later "
+        "turns of this one, and reported back when the turn ends."
+    ),
+}
+
 
 def _prompt_text(name: str) -> str:
     prompts = resources.files("kingfisher.core.agent.prompts")
@@ -269,10 +283,11 @@ def _saver(held: tuple[str, ...]) -> str | None:
 
 
 def memory_guidelines(
-    tools: Collection[str] | None, layout: Layout
+    tools: Collection[str] | None, layout: Layout, *, users: bool = False
 ) -> str:
     """The template `MemoryMiddleware` puts the memory file into, `{agent_memory}` and all,
-    for an agent granted `tools`, `None` being everything."""
+    for an agent granted `tools`, `None` being everything. `users` where the memory is the
+    user's, kept by a `MemoryStore`, rather than this session's."""
     held = _held(tools)
     evidence = (
         "evidence from `read_file` and other tools"
@@ -281,7 +296,8 @@ def memory_guidelines(
     )
     saver = _saver(held)
     saving = _SAVING[saver is not None].format(saver=saver)
-    return _filled(MEMORY, layout, saving=saving, evidence=evidence)
+    kept = _KEPT[users].format(outputs=layout.outputs)
+    return _filled(MEMORY, layout, kept=kept, saving=saving, evidence=evidence)
 
 
 def memory_writer_prompt(layout: Layout, *, entries: int, characters: int) -> str:

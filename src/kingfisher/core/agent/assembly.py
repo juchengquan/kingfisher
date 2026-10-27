@@ -354,6 +354,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     ledger: Ledger | None = None,
     instructions: str = "",
     turn_text: str | None = None,
+    users_memory: bool = False,
     pdf_attachments: PdfAttachments | None = None,
     subagent_middlewares: SubagentMiddlewares | None = None,
     scratch_run_limit: ScratchRunLimit | None = None,
@@ -363,6 +364,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     `ledger` is the turn's, recorded into by every graph built here; `None` records nothing.
     `turn_text` is what the deployment's `TurnInstructions` said for this turn, sent to every
     graph but a compiled one; `None` where it wired none.
+    `users_memory` where this turn's memory is the user's, kept by a `MemoryStore`.
     `pdf_attachments` is asked by every graph built here, as the ledger is recorded into,
     and `scratch_run_limit` by every one holding offered tools; `None` limits nothing.
     `subagent_middlewares` is asked of every portable subagent; `None` runs the agent's own.
@@ -460,7 +462,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             sources=extras["memory"],
             # As deepagents' own has it: the memory block's own breakpoint.
             add_cache_control=True,
-            system_prompt=memory_guidelines(tools, cfg.layout),
+            system_prompt=memory_guidelines(tools, cfg.layout, users=users_memory),
         )
 
     def indexing(sources: list[Any], tools: Sequence[str] | None) -> CatalogueSkillsMiddleware:

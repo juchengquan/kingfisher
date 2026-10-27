@@ -4,6 +4,7 @@ placed, a pause restored, and the graph built."""
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
@@ -24,7 +25,7 @@ from kingfisher.core.reporting import (
     subagent_only,
     withheld_by_kind,
 )
-from kingfisher.core.request import DecisionError, Request, Resume
+from kingfisher.core.request import DecisionError, Request, Resume, caller_of
 
 from . import runtime
 from .checkpointing import (
@@ -34,7 +35,7 @@ from .checkpointing import (
 )
 from .files import place_inputs, planned_inputs
 from .ledger import Ledger
-from .memory import settled_memory
+from .memory import UsersMemory, as_file, settled_memory, users_memory
 from .memory_writer import writer_model
 from .model import (
     Conversation,
@@ -69,7 +70,8 @@ from .turn import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from kingfisher.core.interfaces import RunEvents
+    from kingfisher.core.agent.tool_context import Caller
+    from kingfisher.core.interfaces import MemoryStore, RunEvents
 
 
 class Preparation:
@@ -81,6 +83,7 @@ class Preparation:
     vocabulary: Vocabulary | None
     grants: Capabilities
     run_events: RunEvents
+    memory_store: MemoryStore | None
     _sessions: Any
     _graph: Any
     _session_for: Callable[..., Steps[Conversation]]
@@ -214,6 +217,17 @@ class Preparation:
         history = yield from read_transcript(harness)
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
         earlier = (yield from read_ledger(harness)) if self._graph is None else None
+        # One for the turn, so the store is asked about the caller its tools are handed.
+        caller = caller_of(request, held, datetime.now(UTC))
+        remembers = self._graph is None and self.cfg.memory_enabled and (
+            for_the_caller(agent, allowed, held=held).memory is not False
+        )
+        # Before the build, which tells the agent whose memory it is.
+        users = (
+            (yield from users_memory(self.memory_store, caller))
+            if remembers and self.memory_store is not None
+            else UsersMemory()
+        )
         prepared = yield on_host(
             self._built_turn,
             request,
@@ -230,6 +244,8 @@ class Preparation:
             placement=placement,
             history=history,
             earlier=earlier,
+            caller=caller,
+            users_memory=users.key is not None,
         )
         # After the build's refusals and before the graph runs: a refused request must
         # leave the session's files, its agent and datazone, and its gate as they were. A
@@ -244,12 +260,20 @@ class Preparation:
             if superseded:
                 yield from clear_pause(harness)
             # Before the graph runs, which reads the file: numbered now, so what the
-            # turn's end compares with is entries rather than lines nobody has named.
-            if self._graph is None and self.cfg.memory_enabled and (
-                for_the_caller(agent, allowed, held=held).memory is not False
-            ):
+            # turn's end compares with is entries rather than lines nobody has named. The
+            # user's entries first, so another session's changes are this turn's baseline.
+            if remembers:
+                if users.loaded is not None:
+                    yield changing(
+                        files,
+                        "upload_files",
+                        [(self.cfg.layout.memory_file_route, as_file(users.loaded).encode())],
+                    )
                 prepared = replace(
-                    prepared, memory=(yield from settled_memory(files, self.cfg.layout))
+                    prepared,
+                    memory=(yield from settled_memory(files, self.cfg.layout)),
+                    memory_key=users.key,
+                    events=(*prepared.events, *users.events),
                 )
             # A resume says so in `run_start`: a task-shaped one would read as the work
             # being requested again.
@@ -341,6 +365,8 @@ class Preparation:
         placement: Any,
         history: tuple[Any, ...],
         earlier: KeptLedger | None = None,
+        caller: Caller | None = None,
+        users_memory: bool = False,
     ) -> Prepared:
         """The saver, the graph and the turn itself: what setup builds rather than asks
         for. On kingfisher's pool for `astream`, because building the agent is CPU-bound
@@ -372,6 +398,8 @@ class Preparation:
                 files=files,
                 session_id=session.id,
                 ledger=ledger,
+                caller=caller,
+                users_memory=users_memory,
             )
             # `isinstance`, not a duck test on `.graph`, which would accept anything
             # carrying one.

@@ -231,6 +231,10 @@ KINDS: tuple[str, ...] = (
     # an *earlier* turn's gate was superseded, so it arrives at the start of this turn.
     "decision_needed",
     "decision_discarded",
+    # A wired `MemoryStore` named no user for this turn, which keeps the session's memory;
+    # or a call to it failed, at the turn's start or end, and the turn went on.
+    "memory_unkeyed",
+    "memory_store_failed",
     # The memory file's entries changed during the turn; `RunResult.memory` says which.
     "memory_updated",
     "memory_not_updated",  # the memory writer's answer was not kept; the text says why

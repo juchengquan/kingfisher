@@ -77,6 +77,9 @@ class Prepared:
     #: Built only when the writer runs, so a writer model that cannot be built fails that
     #: run and not the turn.
     memory_model: Callable[[], Any] | None = None
+    #: Whose memory the turn's ending hands its changes to, as the `MemoryStore` named
+    #: them; `None` keeps them in the session.
+    memory_key: str | None = None
 
 
 def turn_message(

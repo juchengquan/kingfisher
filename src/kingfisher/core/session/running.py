@@ -32,6 +32,7 @@ from .checkpointing import (
 )
 from .files import collect_artifacts
 from .ledger import keep_ledger, sweep_results
+from .memory import kept_in_store
 from .memory_writer import kept_memory
 from .steps import (
     Steps,
@@ -64,7 +65,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from kingfisher.core.config import Endpoint
-    from kingfisher.core.interfaces import UnusedResults
+    from kingfisher.core.interfaces import MemoryStore, UnusedResults
 
 
 
@@ -182,6 +183,7 @@ class Running:
     _prepare_steps: Callable[..., Steps[Prepared]]
     _delete_session_steps: Callable[[str], Steps[str | None]]
     unused_results: UnusedResults
+    memory_store: MemoryStore | None
 
     def _keep(self, prepared: Prepared, snapshot: Any) -> Steps[tuple[str, ...]]:
         """Persist what this turn produced, and name it."""
@@ -368,6 +370,23 @@ class Running:
                     paused=bool(turn.awaiting),
                 )
                 turn.pending.extend(said)
+                # Only what changed: the store merges it into what other sessions saved since.
+                # A dropped entry is a removal to the store, or its next load brings it back.
+                store = self.memory_store
+                if turn.memory and prepared.memory_key is not None and store is not None:
+                    failed = yield from kept_in_store(
+                        store,
+                        prepared.memory_key,
+                        replace(
+                            turn.memory,
+                            removed=turn.memory.removed + turn.memory.dropped,
+                            dropped=(),
+                        ),
+                        prepared.files,
+                        self.cfg.layout,
+                    )
+                    if failed is not None:
+                        turn.pending.append(failed)
             yield from self._sweep_results(prepared, turn.recorded)
         finally:
             try:

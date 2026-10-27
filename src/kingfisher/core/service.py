@@ -61,6 +61,7 @@ from .config import Config, ConfigError
 from .interfaces import (
     AgentsMiddlewares,
     Instructions,
+    MemoryStore,
     PdfAttachments,
     ScratchRunLimit,
     Sessions,
@@ -115,6 +116,8 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         subagent_middlewares: SubagentMiddlewares | None = None,
         # Left out, every graph kingfisher would hand a run is handed one.
         scratch_run_limit: ScratchRunLimit | None = None,
+        # Left out, memory lasts as long as its session.
+        memory_store: MemoryStore | None = None,
     ) -> None:
         self.cfg = cfg or config_module.config_from_env()
         refuse_a_workspace_prompt(self.cfg)
@@ -177,6 +180,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             subagent_middlewares if subagent_middlewares is not None else AgentsMiddlewares()
         )
         self.scratch_run_limit: ScratchRunLimit | None = scratch_run_limit
+        self.memory_store: MemoryStore | None = memory_store
         # Here, where the deployment wired it: a missing method was an `AttributeError` in
         # whichever turn first asked, possibly hours after startup. Each is kept under its
         # keyword, which is how it is found.
@@ -282,11 +286,14 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         files: Any,
         session_id: str,
         ledger: Ledger | None = None,
+        caller: Caller | None = None,
+        users_memory: bool = False,
     ) -> Any:
         """What serves one request, rooted at its session.
 
         `Assembled` for a build made here; a supplied graph comes back as itself on this
         turn's saver, because an `Assembled` for it would assert a build that never ran.
+        `caller` is the turn's, made from the request where none is given.
         """
         if self._graph is not None:
             if not request.capabilities.is_unrestricted:
@@ -296,7 +303,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             # beside the transcript, or keep no state to write one, or lose a pause.
             return self._graph.copy(update={"checkpointer": checkpointer})
 
-        caller = caller_of(request, held, datetime.now(UTC))
+        caller = caller or caller_of(request, held, datetime.now(UTC))
         return build_agent(
             self.cfg,
             # Resolved by setup, which needs the same spec for the withheld report.
@@ -313,6 +320,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             middleware_registry=self.middlewares,
             instructions=self.instructions.text(self.cfg),
             turn_text=self._turn_text(session_id, caller),
+            users_memory=users_memory,
             pdf_attachments=self.pdf_attachments,
             subagent_middlewares=self.subagent_middlewares,
             scratch_run_limit=self.scratch_run_limit,

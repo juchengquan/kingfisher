@@ -1688,6 +1688,7 @@ HOOKS = frozenset({
     "subagent_middlewares",
     "run_events",
     "unused_results",
+    "memory_store",
 })
 #: Where that entry says grouping them in code is weighed again.
 REGROUP_AT = 10
@@ -2152,6 +2153,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         "CommandRunner": "interface",
         "Instructions": "interface",
         "TurnInstructions": "interface",
+        "MemoryStore": "interface",
         "UnusedResults": "interface",
         "PdfAttachments": "interface",
         # What `PdfAttachments.replacement` is handed, as `ScratchRun` is below.
