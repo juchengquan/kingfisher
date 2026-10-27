@@ -265,12 +265,18 @@ class RunEvent:
     #: On a `model_call`: the reply stopped at the model's output cap. The turn goes on,
     #: the call it was cut inside unrun, so this is the only report of one it got past.
     cut_off: bool = False
+    #: Index-aligned with `tools`: each call's own id, `""` where the provider gave none.
+    #: Two calls to one tool in one reply are told apart by nothing else.
+    calls: tuple[str, ...] = ()
+    #: On a `tool_result`: the id of the call it answers.
+    call: str | None = None
 
     def __post_init__(self) -> None:
         # The one place parallel arrays can be kept from being built out of step.
-        if self.args and len(self.args) != len(self.tools):
-            msg = f"args ({len(self.args)}) must be parallel to tools ({len(self.tools)})"
-            raise ValueError(msg)
+        for name, aligned in (("args", self.args), ("calls", self.calls)):
+            if aligned and len(aligned) != len(self.tools):
+                msg = f"{name} ({len(aligned)}) must be parallel to tools ({len(self.tools)})"
+                raise ValueError(msg)
 
     def _tag(self, kind: str) -> str:
         """The bracketed tag, naming the subagent when one produced this."""

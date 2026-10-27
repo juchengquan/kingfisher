@@ -146,6 +146,59 @@ def test_a_tool_call_carries_its_arguments(cfg):
     assert "execute(command=echo hi)" in str(call)
 
 
+def _two_calls_to_one_tool(*calls: dict) -> StubAgent:
+    """One reply calling `sql_query` twice, its results answering in the other order."""
+    answers = [
+        ToolMessage(content=text, name="sql_query", tool_call_id=at)
+        for text, at in (("B", "c2"), ("A", "c1"))
+    ]
+    return StubAgent(
+        "ok",
+        updates=[
+            {"agent": {"messages": [AIMessage(content="", tool_calls=list(calls))]}},
+            *({"tools": {"messages": [answer]}} for answer in answers),
+        ],
+    )
+
+
+def test_a_call_and_its_result_carry_the_calls_id(cfg):
+    """Two calls to one tool in one reply, and their two results, were told apart by
+    nothing a caller could read."""
+    agent = _two_calls_to_one_tool(
+        {"name": "sql_query", "args": {"query": "a"}, "id": "c1"},
+        {"name": "sql_query", "args": {"query": "b"}, "id": "c2"},
+    )
+    events = _events(cfg, agent)
+
+    (call,) = [e for e in events if e.kind == "model_call"]
+    assert call.calls == ("c1", "c2")
+    answered = [(e.call, e.text) for e in events if e.kind == "tool_result"]
+    assert answered == [("c2", "B"), ("c1", "A")]
+
+
+def test_a_call_with_no_id_keeps_the_ids_in_step(cfg):
+    """Dropped rather than kept as `""`, every id after a missing one would be read as
+    the id of the call before it."""
+    agent = _two_calls_to_one_tool(
+        {"name": "sql_query", "args": {"query": "a"}, "id": None},
+        {"name": "sql_query", "args": {"query": "b"}, "id": "c2"},
+    )
+
+    (call,) = [e for e in _events(cfg, agent) if e.kind == "model_call"]
+
+    assert call.calls == ("", "c2")
+
+
+def test_a_calls_id_stays_off_its_line(cfg):
+    """A provider's id is noise to a reader; it is on the event for code to match on."""
+    events = _events(cfg, _agent_with_a_tool_call())
+
+    printed = [str(e) for e in events if e.kind in ("model_call", "tool_result")]
+
+    assert len(printed) == 2
+    assert not [line for line in printed if "c1" in line]
+
+
 def test_a_large_tool_argument_cannot_flood_the_line(cfg):
     """`write_file` takes an entire file as one of its arguments."""
     agent = StubAgent(
@@ -184,6 +237,8 @@ def test_tools_and_arguments_cannot_be_constructed_out_of_step():
 
     with _pytest.raises(ValueError, match="parallel"):
         RunEvent(kind="model_call", tools=("a", "b"), args=({},))
+    with _pytest.raises(ValueError, match="calls"):
+        RunEvent(kind="model_call", tools=("a", "b"), calls=("c1",))
 
 
 def test_finished_event_carries_the_normalized_answer(cfg):

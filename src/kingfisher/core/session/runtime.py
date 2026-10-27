@@ -219,12 +219,15 @@ def usage_of(message: Any) -> dict[str, int]:
     }
 
 
-def tool_calls(message: Any) -> tuple[tuple[str, ...], tuple[Mapping[str, Any], ...]]:
-    """Names and arguments of the tools a message asks for, index-aligned."""
+def tool_calls(
+    message: Any,
+) -> tuple[tuple[str, ...], tuple[Mapping[str, Any], ...], tuple[str, ...]]:
+    """Names, arguments and ids of the tools a message asks for, index-aligned."""
     calls = getattr(message, "tool_calls", None) or []
     return (
         tuple(call["name"] for call in calls),
         tuple(call.get("args") or {} for call in calls),
+        tuple(call.get("id") or "" for call in calls),
     )
 
 
@@ -311,11 +314,12 @@ def _event_for(message: Any) -> RunEvent | None:
             kind="tool_result",
             tool=getattr(message, "name", None),
             text=message.text[:PREVIEW],
+            call=message.tool_call_id or None,
         )
     if isinstance(message, AIMessage):
         # One event per model turn, with its tools' arguments but not its prose, which
         # already arrived as tokens.
-        names, args = tool_calls(message)
+        names, args, ids = tool_calls(message)
         # `.text`, not `str()`, which renders the Responses API's content blocks as a repr.
         # A message with no text, tools or usage is a state shuffle, not a turn.
         if not (names or message.text.strip() or getattr(message, "usage_metadata", None)):
@@ -324,6 +328,7 @@ def _event_for(message: Any) -> RunEvent | None:
             kind="model_call",
             tools=names,
             args=args,
+            calls=ids,
             usage=usage_of(message),
             cut_off=cut_off(message),
         )

@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Events say which call and which delegation they belong to, after #1130
+
+- **`model_call` carries `calls`, and `tool_result` carries `call`.** The first is the
+  id of each call a reply makes, lined up with `tools` as `args` is, `""` where the
+  provider gave none; the second is the id of the call a result answers. Both are new
+  fields with defaults, after the others, so code that builds or reads a `RunEvent`
+  is unchanged. Code that matched a result to its call by the tool's name can match by
+  id, which tells two calls to one tool apart.
+
 ## A shipped skill names its own files from its folder, after #1123
 
 - **Only if you mount or regroup skills you seeded.** `release-notes` and
