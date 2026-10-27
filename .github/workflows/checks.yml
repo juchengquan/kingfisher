@@ -159,3 +159,50 @@ jobs:
                   continue
               raise SystemExit(f'{absent} is installed and should not be')
           "
+
+  # Every job above installs the lock, so nothing installs the floors in
+  # `pyproject.toml` -- and a floor that resolves to a release that cannot build,
+  # or cannot import what the library imports, stays green there indefinitely.
+  floors:
+    name: the library at its floors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Pin a uv-managed Python
+        run: uv python install 3.12
+
+      # `lowest-direct`, not `lowest`: the floors written here are the promise,
+      # and lowering every transitive dependency too would test other packages'
+      # floors and go red on them. Every extra, because an extra's floor is
+      # written here as well; on Linux, so `fence` has something to install.
+      - name: Resolve every direct dependency at its floor
+        run: >-
+          uv pip compile pyproject.toml --all-extras --resolution lowest-direct
+          --python-version 3.12 -o /tmp/floors.txt
+
+      # The wheel under those versions as constraints, not the compiled list
+      # installed on its own: what has to resolve is the library's own
+      # requirements, as a user installing it resolves them. Outside the
+      # workspace and through the venv's binaries, for the reason `base-install`
+      # gives: `uv run` would re-sync to the lock.
+      - name: Build and install the library at those versions
+        run: |
+          uv build --wheel --out-dir /tmp/wheels .
+          uv venv /tmp/floors
+          VIRTUAL_ENV=/tmp/floors uv pip install "$(ls /tmp/wheels/kingfisher-*.whl)[fence]" -c /tmp/floors.txt
+          VIRTUAL_ENV=/tmp/floors uv pip check
+
+      # Loading, not the suite: the suite also reads data a release ships, such
+      # as a provider's model windows, so a floor run would answer for that too.
+      # Every public name reaches the private imports a floor has to cover;
+      # `tool_guards.py`'s import of `_signature_parameters` is what holds
+      # `langchain-core` at 1.6.7, and this is the step it fails.
+      - name: Every public name loads
+        run: |
+          /tmp/floors/bin/python -c "
+          import kingfisher
+          for name in kingfisher._EXPORTS:
+              getattr(kingfisher, name)
+          print(f'{len(kingfisher._EXPORTS)} public names, at the floors')
+          "
