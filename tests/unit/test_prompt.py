@@ -44,12 +44,13 @@ def test_base_prompt_names_no_dataset_and_no_domain():
 def test_skills_and_memory_are_described_by_their_blocks_and_nowhere_else():
     """Described in the cached prompt as well, each was described twice where it was on,
     and to a request that had declined it or held no index, and so was handed no block."""
-    text = shipped(shell=kingfishers_shell())
+    text = shipped(shell=kingfishers_shell(fenced=True))
 
     assert "/skills" not in text
     assert "/memory" not in text
     assert "/memory" in memory_guidelines(None, DEFAULT_LAYOUT)
-    assert "$KINGFISHER_SKILLS" in skills_index(DEFAULT_LAYOUT, kingfishers_shell(), shelled=True)
+    shell = kingfishers_shell(fenced=True)
+    assert "$KINGFISHER_SKILLS" in skills_index(DEFAULT_LAYOUT, shell, shelled=True)
 
 
 def test_the_memory_block_says_memory_lasts_only_this_conversation():
@@ -79,7 +80,7 @@ def test_the_harness_says_nothing_of_who_the_agent_is_or_how_it_behaves():
     """It opened every agent's prompt as "kingfisher, a general-purpose agent", ahead of
     the agent's own, and told every agent nobody was watching -- the shipped `operator`,
     whose every command a person approves, among them."""
-    said = " ".join(shipped(shell=kingfishers_shell()).split())
+    said = " ".join(shipped(shell=kingfishers_shell(fenced=True)).split())
 
     for phrase in NOT_THE_HARNESS:
         assert phrase not in said, phrase
@@ -103,7 +104,7 @@ def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
     The names come from `layout` rather than being written out here, since a literal
     copy would be renamed along with the prompt, or not at all, and pass either way.
     """
-    text = shipped(shell=kingfishers_shell())
+    text = shipped(shell=kingfishers_shell(fenced=True))
 
     for name in (INPUTS, OUTPUTS, SCRATCH):
         assert f'| `/{name}/<name>` | `"$KINGFISHER_SESSION_ROOT/{name}/<name>"` |' in text, name
@@ -124,11 +125,11 @@ def test_the_shell_section_says_where_its_writes_go():
     moved = Layout(
         inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
     )
-    text = render_system_prompt(layout=moved, shell=kingfishers_shell())
+    text = render_system_prompt(layout=moved, shell=kingfishers_shell(fenced=True))
     joined = " ".join(text.split())
 
-    assert "write in two of those folders: `/out`" in joined
-    assert "`/scratch` for anything throwaway" in joined
+    assert "It writes in `/out`, for anything that should outlive the run" in joined
+    assert "in `/scratch`, for anything throwaway" in joined
     assert "the folder the shell starts in, which is the session's top" in joined
     assert '`"$KINGFISHER_SESSION_ROOT/out/<name>"`' in joined
 
@@ -141,7 +142,7 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     moved = Layout(
         inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
     )
-    text = render_system_prompt(layout=moved, shell=kingfishers_shell())
+    text = render_system_prompt(layout=moved, shell=kingfishers_shell(fenced=True))
     remembered = memory_guidelines(None, moved)
 
     # The renamed leaves, spelled where the default names used to be.
@@ -282,7 +283,7 @@ def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
 
     for text in (
         shipped(),
-        skills_index(DEFAULT_LAYOUT, kingfishers_shell(), shelled=True),
+        skills_index(DEFAULT_LAYOUT, kingfishers_shell(fenced=True), shelled=True),
         memory_guidelines(None, DEFAULT_LAYOUT),
         SMOKE_TASK,
     ):
@@ -322,7 +323,7 @@ def test_shell_section_does_not_contradict_the_injected_host_mappings():
     used, and instructs the agent to substitute them in shell commands.
     """
     # Collapse wrapping: the prompt is hard-wrapped, so phrases span newlines.
-    text = " ".join(shipped(shell=kingfishers_shell()).lower().split())
+    text = " ".join(shipped(shell=kingfishers_shell(fenced=True)).lower().split())
     assert "do not use host absolute paths" not in text
     # And it must not repeat the middleware's misleading implication that
     # unmapped mounts are unreachable from the shell.

@@ -1,0 +1,1 @@
+- Write from the shell under `/{{outputs}}` and `/{{scratchpad}}` (which is `$TMPDIR`), never in `/{{inputs}}` or at the session's top, where the shell starts -- not a bare `> out.csv` but `"$KINGFISHER_SESSION_ROOT/{{outputs}}/out.csv"`.

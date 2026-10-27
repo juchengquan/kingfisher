@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     # deepagents into every collection of this file for one annotation, which is
     # the second the lazy front door exists to avoid paying.
     from kingfisher.core.agent.assembly import Assembled
+    from kingfisher.core.agent.prompting import ShellPrompt
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
 
 
@@ -318,6 +319,16 @@ def _backend_in(cfg, session_dir: Path):
     from kingfisher.plugins.sessions.folders import ensure_session_layout
 
     return backend_at(cfg, ensure_session_layout(Path(session_dir), DEFAULT_LAYOUT))
+
+
+def hosts_shell(cfg) -> ShellPrompt:
+    """What `backend_at` says of kingfisher's own shell on this host, whose fence decides
+    whether a write is said to be refused."""
+    from kingfisher.plugins.sessions.sandbox import confinement
+    from kingfisher.plugins.sessions.shell import kingfishers_shell
+
+    confined = confinement.shell_confinement(cfg, confinement.ShellSettings.from_env())
+    return kingfishers_shell(fenced=confined.mechanism in confinement.FENCES_HARNESS)
 
 
 def harness_of(cfg, session_id: str):

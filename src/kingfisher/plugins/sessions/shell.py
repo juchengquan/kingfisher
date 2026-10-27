@@ -72,10 +72,17 @@ def shell_env(
 #: and its line in `execute`'s description.
 _HERE = ("shell_here.md", "shell_here_skills.md", "shell_here_execute.md")
 
+#: Where the shell may write, said of the section and of `execute`, by whether a fence
+#: refuses the rest: without one, "is refused" is a claim nothing keeps.
+_WRITES = {
+    True: ("shell_writes_refused.md", "shell_writes_refused_execute.md"),
+    False: ("shell_writes_asked.md", "shell_writes_asked_execute.md"),
+}
 
-@lru_cache(maxsize=1)
-def kingfishers_shell() -> ShellPrompt:
-    """What kingfisher's own shell says of itself.
+
+@lru_cache(maxsize=2)
+def kingfishers_shell(*, fenced: bool) -> ShellPrompt:
+    """What kingfisher's own shell says of itself, `fenced` or not.
 
     It exports the session root as `KINGFISHER_SESSION_ROOT`, with `TMPDIR` the
     scratchpad and `KINGFISHER_SKILLS` the catalogue. A deployment's runner given
@@ -83,10 +90,15 @@ def kingfishers_shell() -> ShellPrompt:
     a deployment's shell is said to be.
     """
     prompts = resources.files("kingfisher.plugins.sessions.prompts")
-    prompt, skills, execute = (
-        prompts.joinpath(name).read_text(encoding="utf-8").strip() for name in _HERE
+    prompt, skills, execute, writes, writes_line = (
+        prompts.joinpath(name).read_text(encoding="utf-8").strip()
+        for name in (*_HERE, *_WRITES[fenced])
     )
-    return ShellPrompt(prompt=prompt, skills=skills, execute=execute)
+    return ShellPrompt(
+        prompt=f"{prompt}\n\n{writes}",
+        skills=skills,
+        execute=f"{execute}\n{writes_line}",
+    )
 
 
 #: Where the shell's view of a catalogue with mounts is built. Inside

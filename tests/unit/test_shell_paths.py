@@ -38,7 +38,7 @@ from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import LocalSessions, ShellPrompt, backend_at
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from kingfisher.plugins.sessions.shell import kingfishers_shell
-from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
+from tests.conftest import EVERY_TOOL, an_agent, hosts_shell, start, subagents_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_shell_prompt import Plain
 
@@ -111,7 +111,7 @@ def test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_on
     and failed.
     """
     cfg, offered = shelled
-    rule = execute_line(kingfishers_shell(), DEFAULT_LAYOUT)
+    rule = execute_line(hosts_shell(cfg), DEFAULT_LAYOUT)
     assert rule is not None
     _run(cfg, *_consulting(subagent))
     assert len(offered) == 3
@@ -676,7 +676,9 @@ def _asked(way: str, request: Any) -> Any:
     while the same change to its sync twin reddened the rules above.
     """
     asked: list[Any] = []
-    middleware = BuiltinToolsMiddleware(Layout(), kingfishers_shell(), longest=120, here=False)
+    middleware = BuiltinToolsMiddleware(
+        Layout(), kingfishers_shell(fenced=True), longest=120, here=False
+    )
     if way == "sync":
         middleware.wrap_model_call(request, asked.append)
         return asked[0]
@@ -756,7 +758,7 @@ def _answered(way: str, name: str, result: Any) -> Any:
     green, while the same change to its sync twin reddened the rules above.
     """
     middleware = BuiltinToolsMiddleware(
-        Layout(), kingfishers_shell(), longest=120, root=SESSION
+        Layout(), kingfishers_shell(fenced=True), longest=120, root=SESSION
     )
     request = Call(tool_call={"name": name, "args": {}, "id": "c1"})
     if way == "sync":
@@ -789,7 +791,7 @@ def test_the_shell_rule_reaches_execute_and_no_other_tool(shelled):
     it passes just as well when every tool does.
     """
     cfg, offered = shelled
-    rule = execute_line(kingfishers_shell(), DEFAULT_LAYOUT)
+    rule = execute_line(hosts_shell(cfg), DEFAULT_LAYOUT)
     assert rule is not None
     _run(cfg, *_consulting("checker"))
 
@@ -811,7 +813,7 @@ def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name(way):
     the suite builds offers one: mutating the mapping branch's name check away leaves
     the whole suite green, so a file tool offered that way would carry the shell's rule.
     """
-    rule = execute_line(kingfishers_shell(), DEFAULT_LAYOUT)
+    rule = execute_line(kingfishers_shell(fenced=True), DEFAULT_LAYOUT)
     assert rule is not None
 
     told = _told_tools(
