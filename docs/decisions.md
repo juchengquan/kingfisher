@@ -6015,8 +6015,59 @@ more than about three lines goes here.
 
 ## The size of the test suite
 
-**Rejected: cutting the suite substantially. There is nothing redundant in it to
-cut.** Counted on the tree of the date below: 2,431 tests against 89 modules, and
+**A test goes if it is one of four kinds, and never if the keep-list holds it.** The
+kinds: the async half of a pair whose async method is its sync twin with `await` added,
+which `test_async_twins.py` holds instead; the ordinary case its own edge-case tests
+already drive; a rare input where little is lost; and a past bug whose only harm was the
+model being shown something less useful for one turn. The keep-list: who may reach what --
+grants, the fence, datazones, a result's audience; data lost, overwritten or leaked; and
+money spent or a turn failed. Kind four is what the model is shown, not which refusal
+fired: a `match=` on a refusal's sentence is how the suite tells refusals apart, as
+*Rejected: deleting the tests that only assert wording* measures, and it stays. A test that
+an older ledger row is still read holds the decision that one is, and goes only with it.
+*(2026-10-27.)*
+
+**The answer changed because the rate did, not the redundancy.** Read in full,
+`test_ledger.py` and `test_clearing.py` -- 182 items, both written since September --
+hold three tests whose every check another test makes, each the ordinary case its edge
+cases repeat as their starting point; the four kinds took about fifty, on one reader's
+sort. The suite meanwhile went from 2,002 items on 2026-09-21 to 4,798 on 2026-10-27, about
+430 test functions a week, so a cut by redundancy alone buys back two days of it.
+
+**A cut is confirmed by breaking what the keep-list guards.** The deletion list is frozen
+first, for the reason *Neither coverage nor kill-set can authorise a cut* gives. Then the
+keep-list's files are mutated -- `core/access/`, the narrowing and guarded-call
+middlewares, `permitted_backend.py`, `plugins/sessions/sandbox/`, the store, ledger,
+transcript, files and disposal of `core/session/`, `plugins/sessions/backend.py`,
+`folders.py`, the recorder, `caching.py`, `clearing.py`, `models.py` and `step_budget.py`
+-- and each mutant is run against the tests about to go. One they catch is run against the
+reduced suite, and a mutant nothing left catches brings its test back unless one line says
+why nothing is lost. For an async half the excused twins are mutated too, being where an
+async test's own catch lands.
+
+**An async half goes only where its twin is a copy.** 44 of the 60 pairs in `src/` are,
+once four that did the same in other words were respelled; `narrowing` and `model_reply`
+wrote `refused if refused is not None` where the sync half wrote `refused or`, which agree
+because a `ToolMessage` is always true. The rest are in `DIFFERS` with the reason each must
+differ, the async turn loop among them, so a test reaching one keeps its async half. The
+comparison ignores hints, an awaited handler being typed differently, and requires an
+`await`, since a twin whose `await` was dropped is otherwise its sync method exactly.
+
+**Growth is held by a rule in `CLAUDE.md`, not by anything in CI.** 557 of the 608 commits
+since September were written with Claude, which reads that file on every task. The growth
+is spread evenly -- a third each from PRs adding up to five tests, six to ten, and more --
+so a limit per PR reaches a third of it, and a cap on the total invites merging tests to
+fit under it. Measured again a month on: if the weekly rate is not well under 430, a count
+per PR goes into CI.
+
+**The async halves go first**, then the other kinds a few files a slice, the files that grew
+most first, and the half older than September last, so the tree holds one standard rather
+than a deletable test kept beside one the rule refuses. Merging tests and trimming
+docstrings are out: about 5% of lines between them, and a merged test names more than one
+failure.
+
+**Nothing in the suite was redundant, by the strict test, in September** -- which is still
+the answer to that test. Counted on the tree of the date below: 2,431 tests against 89 modules, and
 32,724 lines of test against 15,331 of source, which looks like padding twice over.
 Six ways of looking for the padding found none. *Structural duplication*, pointing
 `audit_duplication.py` at the tests: 13 findings, each a two-statement fixture helper.

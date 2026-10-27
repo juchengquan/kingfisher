@@ -240,5 +240,4 @@ class ModelReplyMiddleware(AgentMiddleware):
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        refused = self._refused(request)
-        return refused if refused is not None else await handler(request)
+        return self._refused(request) or await handler(request)

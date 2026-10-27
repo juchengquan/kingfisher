@@ -94,8 +94,7 @@ class GrantedOnlyMiddleware(AgentMiddleware):
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        refusal = self._refuse(request)
-        return refusal if refusal is not None else await handler(request)
+        return self._refuse(request) or await handler(request)
 
 
 class CatalogueSkillsMiddleware(SkillsMiddleware):

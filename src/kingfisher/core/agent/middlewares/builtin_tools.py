@@ -765,8 +765,9 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         if (refused := self._refused(request)) is not None:
             return refused
         if (parts := _split(request)) is None:
-            result = await handler(_limited(request))
-            return self._explained(request, self._corrected(request, result))
+            return self._explained(
+                request, self._corrected(request, await handler(_limited(request)))
+            )
         call = request.tool_call
         answers = [
             await handler(request.override(tool_call=_parted(call, part, n)))
