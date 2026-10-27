@@ -12,14 +12,16 @@ from kingfisher.core.request import Request, Resume
 
 from .files import read_artifact
 from .handle import Session
+from .memory import forget_entry, memory_entries
 from .model import (
     DEFAULT_SESSION,
     Conversation,
     QuotaExceededError,
+    SessionBusyError,
     known,
     unknown_session,
 )
-from .steps import Steps, adrive, drive, reading
+from .steps import Steps, adrive, changing, drive, reading
 from .store import (
     HarnessFiles,
     pending_from_mark,
@@ -237,6 +239,28 @@ class SessionMethods:
     def _artifact_in(self, session_id: str, name: str, opened: list[Any]) -> Steps[bytes]:
         files = yield from self._files_in(session_id, opened)
         return (yield from read_artifact(files, name, self.cfg.layout))
+
+    def _memory_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[Any, ...]]:
+        files = yield from self._files_in(session_id, opened)
+        return (yield from memory_entries(files, self.cfg.layout))
+
+    def _forget_in(self, session_id: str, entry_id: str, opened: list[Any]) -> Steps[None]:
+        files = yield from self._files_in(session_id, opened)
+        # Taken, not asked, as a sweep takes it: a turn claiming between the ask and the
+        # write reads the entry at its start and may write it back.
+        claimed = yield changing(
+            self._sessions, "claim", self.cfg, session_id,
+            stale_after=self.cfg.claim_stale_after,
+        )
+        if claimed is None:
+            msg = (
+                f"session {session_id} has a turn running; forget {entry_id} once it ends"
+            )
+            raise SessionBusyError(msg)
+        try:
+            yield from forget_entry(files, self.cfg.layout, entry_id)
+        finally:
+            yield changing(self._sessions, "release", self.cfg, session_id, claimed)
 
     def _size_in(self, session_id: str) -> Steps[int]:
         yield from self._refuse_if_absent(session_id)

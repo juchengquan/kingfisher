@@ -3958,6 +3958,23 @@ off a shared mount because a per-caller route on shared storage "needs a tenancy
 that has not been made". Until that design exists, "a future session" does not go back
 into the prompt. *(2026-10-07.)*
 
+**A caller reads a session's memory, and forgets one entry, through its `Session`.**
+`memory()` answers the entries and `forget(entry_id)` removes one with the lines
+continuing it, each with an `a` twin, because being able to say "forget this" is what
+makes remembering acceptable. `memory()` numbers an unnumbered line in what it answers
+and writes nothing back: it takes no claim, and a write without one could land over a
+turn's. The id it shows is the one the next numbering writes, since numbering is
+deterministic, and `forget` numbers and drops in one write, so a caller forgets by the id
+it was shown. `forget` takes the claim, as `reap` does, rather than asking `held`: a turn
+claiming between the ask and the write reads the entry at its start and may write it back,
+and would report the forget as its own removal. A held session answers
+`SessionBusyError`, and an id the file does not hold a `MemoryEntryError` naming the ids
+it does, since a mistyped id ignored looks like a forget that worked. Neither asks whether
+memory is on: with it off the file is read as it stands. With a user's store wired,
+`forget` must reach the store as well, or the next turn's reload brings the entry back;
+that is the store's slice of `docs/design/2026-10-26-memory-kept-up-to-date.md`.
+*(2026-10-26.)*
+
 **Memory is entries kingfisher numbers, and a turn reports what it did to them.** The
 memory file had no shape, so nothing could say what a turn changed in it: the turn's file
 list names what is present, and the file always is. Now each line led by `- ` is an

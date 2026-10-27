@@ -731,7 +731,8 @@ drives it with no context, and such a tool finds `runtime.context` is `None`.
 **Kingfisher reaches the session through it too.** A request's `inputs` are placed
 with `upload_files` under `/inputs/`, what a turn left is listed with `glob` under
 `/outputs/` and `/memory/`, and `Session.artifact` fetches one with
-`download_files`. Each tool result a turn records is saved with `upload_files` under
+`download_files`. `Session.memory` reads the memory file with `download_files`, and
+`Session.forget` writes it back with `upload_files`, holding the session's claim. Each tool result a turn records is saved with `upload_files` under
 `/scratchpad/tool_results/`, outside the file tools' permissions, which deny that folder
 to them, though your backend's own refusals still apply; at
 the end of the turn that folder is listed with `ls`, and a result file no row of the
