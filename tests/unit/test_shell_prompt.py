@@ -12,6 +12,7 @@ from deepagents.backends import CompositeBackend, LocalShellBackend
 
 from kingfisher.core.agent.backend import session_root_of, shell_prompt_of, shell_told
 from kingfisher.core.agent.prompting import EXECUTE, render_system_prompt, skills_index
+from kingfisher.core.interfaces import CommandRunner
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import CommandResult, LocalSessions, ShellPrompt, backend_at
 from kingfisher.plugins.sessions.shell import kingfishers_shell
@@ -38,7 +39,7 @@ THEIRS = ShellPrompt(
 
 
 @dataclass(frozen=True)
-class Plain:
+class Plain(CommandRunner):
     """The runner a deployment writes first: it runs the command it is handed, and is
     handed nothing else. Not local, so no fence of this host's is put in front of it.
     """

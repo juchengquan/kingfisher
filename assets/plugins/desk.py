@@ -10,11 +10,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from kingfisher.plugins import TurnInstructions
+
 if TYPE_CHECKING:
     from kingfisher import Caller
 
 
-class DeskInstructions:
+class DeskInstructions(TurnInstructions):
     """The date in the caller's timezone, and the caller's name and team."""
 
     def text(self, cfg: Any, session_id: str, caller: Caller) -> str:  # noqa: ARG002 -- the interface's

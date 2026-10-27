@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from kingfisher import MemoryEntry
+from kingfisher.plugins import MemoryStore
 
 if TYPE_CHECKING:
     from kingfisher import Caller, MemoryChanges
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
 _ID = re.compile(r"m(\d+)")
 
 
-class FileMemoryStore:
+class FileMemoryStore(MemoryStore):
     """One JSON file per user, in `directory`, merged by id on every save."""
 
     def __init__(self, directory: Path) -> None:

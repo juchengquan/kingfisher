@@ -3320,18 +3320,17 @@ compared in several places reads a renamed mechanism as *not a fence* -- an unfe
 shell beside a `Confinement` reporting one. `LINUX_FENCES` is the pair `fence_for` builds
 a runner for. *(2026-09-20.)*
 
-**A runner that says nothing keeps the fence, and one function decides it.** `local`
-defaults to `True`, the safe direction, and was read twice: whether to wrap, and what the
+**A runner that says nothing keeps the fence.** `local` defaults to `True` on
+`CommandRunner`, the safe direction, and is read twice: whether to wrap, and what the
 `Confinement` claims. Flipping the second left all 2,109 tests passing, and with it a
 local runner declaring nothing ran unsandboxed under
 `Confinement(wrap=_unwrapped, elsewhere=True)`, reported as somebody else's boundary. The
 test named for it replaced the confinement after building it;
 `test_a_runner_that_says_nothing_is_confined_here` asserts on `elsewhere`, since
-Landlock's wrap is the identity by design. `runs_locally` is the one reading. **The
-contract kit keeps its own on purpose:** importing the module holding `runs_locally`
-would take `tests/checks/runner.py`, which a deployment copies, from 70 loaded modules to
-3,104, measured on 2026-10-16, to share one `getattr`. *(2026-09-25, from an architecture
-review.)*
+Landlock's wrap is the identity by design. Both read `runner.local` plainly: a runner
+subclasses `CommandRunner`, so there is no runner without one, and the `getattr` default
+that once stood in for it went with the hooks becoming base classes. *(2026-09-25, from an
+architecture review; 2026-10-27.)*
 
 **Sessions reaching each other is reported, not refused.** The macOS profile gives the
 whole workspace back, so one session's shell can read and change every other's files:
@@ -3619,7 +3618,7 @@ folder is reached from the session root -- by dropping the slash then, and from
 `$KINGFISHER_SESSION_ROOT` since. A deployment whose shell runs elsewhere reported
 it; the prompt was built from `Config` alone, so nothing about the backend could reach it.
 
-`runs_locally` cannot choose the wording. Measured on 2026-10-15 with the plainest runner
+`local` cannot choose the wording. Measured on 2026-10-15 with the plainest runner
 a deployment writes, through `LocalSessions(runner=...)`: local or not, it started in the
 process's directory, with the system's `TMPDIR`, no `KINGFISHER_SKILLS` and no `inputs/`,
 because a runner is handed the command and nothing else. `local` says whether the fence
@@ -5216,11 +5215,10 @@ cancel would otherwise reach nobody, so the sequence is handed the answer before
 cancel. Work on this host goes to the pool and is always waited for, because a thread
 runs to the end regardless.
 
-**`aopen` and `asessions` are defaults on the protocol**, as is every async twin
+**`aopen` and `asessions` are defaults on the interface**, as is every async twin
 `Sessions` declares, each running its sync method on kingfisher's pool -- the shape
-deepagents' `BackendProtocol` gives its own. A subclass of `Sessions` inherits them;
-a class that only matches it must write them, since `isinstance` asks for every member,
-which is the breaking half. The session's *backend* is read through deepagents' async
+deepagents' `BackendProtocol` gives its own. Every `Sessions` subclasses it, so every one
+inherits them. The session's *backend* is read through deepagents' async
 methods, which for its filesystem backends use the default executor -- a local read; a
 backend a round trip away overrides them.
 
@@ -5230,7 +5228,7 @@ exists was a sandbox for nothing. *(2026-10-02.)*
 
 **Deleting a session has an async twin.** `Session.adelete` and
 `arun(delete_session=True)` end in one sequence, written once and awaited. `adelete`
-is a default on the protocol, and the kit checks it. *(2026-10-05.)*
+is a default on the interface, and the kit checks it. *(2026-10-05.)*
 
 **Setup is one sequence for both loops.** `_prepare_steps` is the lookup, the open,
 the pin, `mark_used`, the claim, the quota, the data, the pause, the agent and the
@@ -5288,7 +5286,7 @@ also outlived its event loop; a task does not, and a loop stopped outright is th
 given up. `test_the_turns_ending_runs_to_the_end_however_often_it_is_cancelled` cancels
 at every step three times over and requires every step to have run. `release` gained
 `arelease`, since the protected task is what keeps it from stopping halfway. The pool
-stays 16 because session backends whose async methods are the protocol's defaults still
+stays 16 because session backends whose async methods are the interface's defaults still
 run every call there. *(2026-10-05.)*
 
 **Asked and declined: making a turn a langchain `Runnable`.** It would bring `batch`,
@@ -5480,7 +5478,7 @@ per-turn text on `Request`**, a second source beside a wired hook, which raised 
 two an agent saw. `--tell TEXT` on `run` and `decide` fills the command's hook. A pause keeps
 no text, so `decide` takes it again, as it takes the caller again. *(2026-10-23.)*
 
-**A hook missing a method its protocol lists is refused when `Kingfisher` is built.** The
+**A hook missing a method is refused at startup, not in a turn.** The
 protocols were annotations only, so a hook without one of its methods started cleanly and
 raised `AttributeError` in whichever turn first asked -- possibly hours later, in a turn
 that had nothing to do with the mistake. Startup is where the deployment wired it, and the
@@ -5489,14 +5487,25 @@ protocol, so one added to a protocol later is checked with no other edit, which 
 lets a hook grow a required method rather than an optional one found by name. Which
 keywords are hooks, and the protocol each takes, are read off `__init__`'s annotations, so
 a hook added to the signature is checked with nothing beside it to extend. A class of the
-deployment's own with every method is taken whatever it subclasses, and the refusal names
-no default to subclass, since only a second list could pair each with its keyword. **Not
-taken:** a table of the hooks beside the signature, which said again what the annotations
-say; `isinstance` against a `runtime_checkable` protocol, which answers yes or no and so
-could not say which method is missing, and six of the seven protocols are not
-runtime-checkable; checking signatures as well, which would refuse a hook taking
-`**kwargs` that works.
-*(2026-10-26.)*
+deployment's own with every method was taken whatever it subclassed. **Not taken:** a
+table of the hooks beside the signature, which said again what the annotations say;
+checking signatures as well, which would refuse a hook taking `**kwargs` that works.
+*(2026-10-26. The check by method reversed 2026-10-27, below.)*
+
+**Every interface is an abstract base class, and a hook subclasses its own.** The ten in
+`core/interfaces.py` were Protocols, matched by shape, and two already worked only as base
+classes: `Sessions` carries its async twins and `CommandRunner` its `local`, which only a
+subclass inherits, so a class matching either by shape lacked them, and `Kingfisher` already
+told a deployment to subclass `Sessions`. The hook rules above give a hook's next method a
+default in a base class. As abstract base classes, Python refuses a hook missing a method
+when the deployment makes it, which is earlier than `Kingfisher` could and names the
+method, so the 2026-10-26 objection to `isinstance` -- that it could not say what was
+missing -- no longer holds. `Kingfisher` refuses a hook that does not subclass its interface,
+naming the keyword and the interface, `LocalSessions` refuses such a runner, and a sessions
+setting such a result; the method-by-method check went. **Not taken:** keeping a hook
+taken by shape beside the base class, which is two ways to write one and leaves a shaped
+hook without the defaults; plain functions for the single-method hooks, which cannot grow
+the required method the hook rules add. *(2026-10-27.)*
 
 **`Config` holds what the core reads.** The shell's fence and `PATH` additions are
 `LocalSessions`' settings, as `ShellSettings`, and `KINGFISHER_SESSIONS` and

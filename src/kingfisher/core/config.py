@@ -175,7 +175,7 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
 
 
-#: The thread pool's size when nothing configured one. Sessions on the protocol's
+#: The thread pool's size when nothing configured one. Sessions on the interface's
 #: default async methods run every sync call on it, each a round trip on a remote
 #: one, and those are what a smaller pool would queue.
 DEFAULT_THREAD_POOL_SIZE = 16

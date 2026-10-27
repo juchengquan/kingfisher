@@ -179,7 +179,7 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
     @property
     def runs_here(self) -> bool:
         """Whether commands run on this host, which `shell_runs_here` reads."""
-        return self.runner is None or runs_locally(self.runner)
+        return self.runner is None or self.runner.local
 
     def execute(self, command: str, *, timeout: int | None = None) -> Any:
         if not command or not isinstance(command, str):
@@ -203,7 +203,7 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
             # A confinement is a prefix naming paths on *this* host: shipped elsewhere, it
             # fails looking like a broken remote shell rather than a wrong prefix.
             outcome = self.runner.run(
-                self.confinement.wrap(command) if runs_locally(self.runner) else command,
+                self.confinement.wrap(command) if self.runner.local else command,
                 timeout=bounded,
             )
         return ExecuteResponse(
@@ -274,17 +274,6 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         if bad := [name for name in names if not plain(name)]:
             return f"refused: {bad!r} -- a file here is one plain name"
         return None
-
-
-def runs_locally(runner: Any) -> bool:
-    """Whether a supplied runner runs the command on this machine.
-
-    The one reading, so whether a command is wrapped and what its `Confinement` claims
-    cannot disagree. A duck-typed runner inherits no `local` from the Protocol, and the
-    safe default is local. The contract kit keeps its own reading on purpose: importing
-    this module would load deepagents to share one `getattr`.
-    """
-    return getattr(runner, "local", True)
 
 
 def fence_for(  # noqa: PLR0913 -- one argument per thing a fence is built from

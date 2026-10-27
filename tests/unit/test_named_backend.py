@@ -44,6 +44,15 @@ class Recording(Sessions):
     def delete(self, cfg, session_id):
         return None
 
+    def claim(self, cfg, session_id, /, *, stale_after, now=None):
+        return "held"
+
+    def release(self, cfg, session_id, token, /):
+        return None
+
+    def held(self, cfg, session_id, /, *, stale_after, now=None):
+        return False
+
 
 class BoomError(RuntimeError):
     """What a deployment's own factory raises when its credentials are missing."""
@@ -120,11 +129,11 @@ def test_an_attribute_that_is_not_there_is_refused():
 
 
 def test_a_factory_returning_the_wrong_shape_is_refused():
-    """What was returned, and what it has to answer to."""
+    """What was returned, and what to subclass instead."""
     with pytest.raises(ConfigError, match="NoneType") as caught:
         named(f"{HERE}:make_nothing")
 
-    assert "sessions" in str(caught.value)
+    assert "Subclass Sessions" in str(caught.value)
 
 
 def test_a_factory_that_raises_is_left_alone():

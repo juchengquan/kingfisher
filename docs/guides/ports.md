@@ -1,9 +1,9 @@
 # Writing your own
 
-Kingfisher reaches the world through the Protocols in
+Kingfisher reaches the world through the interfaces in
 [`core/interfaces.py`](../../src/kingfisher/core/interfaces.py) — what runs a shell
 command, and where each turn's record goes — and through the `sessions` every
-deployment names. The Protocols have defaults; the sessions have none to fall back
+deployment names. The interfaces have defaults; the sessions have none to fall back
 on, and kingfisher's own, `LocalSessions`, works on one host with its own disk. This
 page is for a deployment that needs one of them to be something else — a sandbox, a
 bucket, another machine.
@@ -12,9 +12,11 @@ A different question from *what can I set?* — [`configuration.md`](configurati
 lists the variables, and `.env.example` argues each one where it is set. This
 page is about writing the thing a setting names.
 
-Satisfaction is by shape. An interface is a Protocol, not a base class, so yours
-implements the methods and inherits nothing — a test satisfies most of them with
-a dict.
+Yours subclasses the interface it stands in for. Each is an abstract base class,
+importable from `kingfisher.plugins`, so a method you left out is refused when yours is
+made, and a class that subclasses nothing is refused when it is wired, however many of
+the methods it has. Subclassing is also how yours inherits what an interface writes for
+you: `local` on a `CommandRunner`, and every async twin on `Sessions`.
 
 ## The two ways to supply one
 
@@ -42,7 +44,7 @@ them and your factory reads its own configuration. A class with a no-argument
 
 Kingfisher checks the **name**, not the building. A spec that will not parse, a
 module that will not import, an attribute that is not there, a result of the
-wrong shape — each is a `ConfigError` naming the setting. A factory that raises
+wrong type — each is a `ConfigError` naming the setting. A factory that raises
 its own exception is left alone: that is your code failing at your job, its type
 may be one your own error handling knows, and the traceback already says which
 setting reached it.
@@ -92,7 +94,8 @@ while each caller reads every other caller's files as their own.
 
 ## `CommandRunner` — what runs a shell command
 
-`run(command, timeout=None)` returning a `CommandResult`. For a deployment that
+A subclass of `CommandRunner` writing `run(command, timeout=None)`, returning a
+`CommandResult`. For a deployment that
 runs commands somewhere else, or as another user, or with resource limits. Kingfisher's
 own shell always hands it a `timeout`, `KINGFISHER_EXECUTION_TIMEOUT_S` at most.
 
@@ -246,7 +249,9 @@ What a turn did — its start and end, every model call with its token counts, e
 tool call — as one event at a time, while it happens:
 
 ```python
-class ShipToCollector:
+from kingfisher.plugins import RunEvents
+
+class ShipToCollector(RunEvents):
     def record(self, event):
         collector.send(dict(event))
 
@@ -291,9 +296,9 @@ own plugin removes them; yours decides instead — keep them in an archive, coun
 hold them for an audit:
 
 ```python
-from kingfisher.plugins import UnusedFiles
+from kingfisher.plugins import UnusedFiles, UnusedResults
 
-class ArchiveUnusedResults:
+class ArchiveUnusedResults(UnusedResults):
     def __init__(self, archive):
         self.archive = archive
 
@@ -355,8 +360,10 @@ instead, and is sent after that part, so every session still shares its cache:
 ```python
 from zoneinfo import ZoneInfo
 
+from kingfisher.plugins import TurnInstructions
 
-class DeskInstructions:
+
+class DeskInstructions(TurnInstructions):
     def text(self, cfg, session_id: str, caller) -> str:
         here = caller.started.astimezone(ZoneInfo(caller.context.get("tz", "UTC")))
         return f"Today is {here:%A %-d %B %Y}. You are working with {caller.context['name']}."
@@ -410,9 +417,9 @@ import io
 
 from pypdf import PdfReader
 
-from kingfisher.plugins import ReturnedPdf
+from kingfisher.plugins import PdfAttachments, ReturnedPdf
 
-class AtMostTwentyPages:
+class AtMostTwentyPages(PdfAttachments):
     def replacement(self, pdf: ReturnedPdf) -> str | None:
         data = pdf.read()
         # Kingfisher's own line for one it refused, and nothing to count for a reference.
@@ -474,7 +481,9 @@ otherwise, for one subagent or every one. Turning it off:
 ```python
 from collections.abc import Sequence
 
-class NoneOfTheAgents:
+from kingfisher.plugins import SubagentMiddlewares
+
+class NoneOfTheAgents(SubagentMiddlewares):
     def names(self, subagent: str, agent: str, middlewares: tuple[str, ...]) -> Sequence[str]:
         return ()
 
@@ -518,7 +527,7 @@ from typing import Literal
 
 from kingfisher.plugins import ScratchRunLimit
 
-class NoRunsForResearch:
+class NoRunsForResearch(ScratchRunLimit):
     def allows(self, name: str, kind: Literal["agent", "subagent", "general-purpose"]) -> bool:
         return name != "researcher"
 
@@ -564,9 +573,10 @@ next on its next turn.
 
 ```python
 from kingfisher import MemoryChanges, MemoryEntry
+from kingfisher.plugins import MemoryStore
 
 
-class MemoryTable:
+class MemoryTable(MemoryStore):
     def __init__(self, db):
         self.db = db
 
@@ -739,10 +749,9 @@ caller is named; a `Session`'s `apending`, `aartifact` and `afiles` open it with
 `astream` also records the session used with `amark_used` and checks its quota with
 `asize`.
 `Sessions` carries all five, running the sync method on kingfisher's thread
-pool, so a class that subclasses it — `LocalSessions` does — has them already.
+pool, so yours has them already, as `LocalSessions` does.
 Override one where it is a round trip you can await: the async path then holds no
-thread while it waits. A class that does not subclass `Sessions` has to write
-all five, because the type check asks for every method. The backend `open` returns is read through its own async methods,
+thread while it waits. The backend `open` returns is read through its own async methods,
 `adownload_files` and the rest, which deepagents' `BackendProtocol` already has.
 
 Starting from nothing instead is allowed and is yours to get right — which is a
@@ -760,7 +769,7 @@ own folders, as every place the agent is given a skills index, each a `route`, a
 `folder` and the `source` in it deepagents lists, and `list_skills(backend,
 path)` lists one the way deepagents will: listing each through your backend and through
 the folder itself shows whether you serve what kingfisher read. Nothing at runtime can see that mistake,
-which is why `Sessions` is a typed protocol rather than a line of prose —
+which is why `Sessions` is a typed interface rather than a line of prose —
 write the signature out and your type checker catches it.
 
 **What `open` returns is one session's, and only one.** A backend shared between

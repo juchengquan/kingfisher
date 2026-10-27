@@ -16,6 +16,7 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
+from kingfisher.core.interfaces import RunEvents
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.session.steps import drive
 from kingfisher.core.workspace import ensure_definitions, ensure_layout
@@ -73,7 +74,7 @@ def scripted(cfg):
     Scripted.summaries = 0
 
 
-class RecordedEvents:
+class RecordedEvents(RunEvents):
     """A `RunEvents` that keeps what it is handed, for a test to read back."""
 
     def __init__(self) -> None:

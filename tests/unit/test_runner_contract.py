@@ -19,7 +19,7 @@ from tests.checks.runner import RUNNER_CHECKS
 
 
 @dataclass(frozen=True)
-class ReferenceRunner:
+class ReferenceRunner(CommandRunner):
     """A `CommandRunner` written the way the port asks, for the kit to run on.
 
     Not shipped: `runner=None` already means "run it here", through kingfisher's own
@@ -123,7 +123,7 @@ def test_the_kit_runs_every_check_it_defines():
 
 
 @dataclass(frozen=True)
-class RaisingRunner:
+class RaisingRunner(CommandRunner):
     """A runner that lets `TimeoutExpired` out -- the obvious implementation."""
 
     local: bool = True
@@ -136,7 +136,7 @@ class RaisingRunner:
 
 
 @dataclass(frozen=True)
-class ShellOnlyRunner:
+class ShellOnlyRunner(CommandRunner):
     """A runner whose timeout kills the shell and leaves what it started -- the obvious
     implementation, and what every runner here did until the kit asked."""
 
@@ -153,7 +153,7 @@ class ShellOnlyRunner:
 
 
 @dataclass(frozen=True)
-class BlindRunner:
+class BlindRunner(CommandRunner):
     """A runner whose shell cannot leave a mark, so no leftover could ever be seen."""
 
     local: bool = True
@@ -163,7 +163,7 @@ class BlindRunner:
 
 
 @dataclass(frozen=True)
-class RefusedRedirectRunner:
+class RefusedRedirectRunner(CommandRunner):
     """A runner whose shell refuses the job's redirection, as Landlock refused
     `>/dev/null`: the job never starts, so no mark could ever appear."""
 

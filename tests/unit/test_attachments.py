@@ -32,6 +32,7 @@ from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import summarizer_trigger
+from kingfisher.core.interfaces import PdfAttachments
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
 from kingfisher.plugins import LocalSessions, ReturnedPdf
@@ -649,7 +650,7 @@ def test_a_new_turn_holds_no_pdf_an_earlier_turn_opened(scripted):
     assert _files([_first_shown("r2")]), "the second turn's PDF was refused"
 
 
-class _Asking:
+class _Asking(PdfAttachments):
     """A `PdfAttachments` keeping every PDF it is asked about, and answering `instead`'s
     answer for it, or `None` with no `instead`."""
 

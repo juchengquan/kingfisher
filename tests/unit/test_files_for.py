@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.core import service as service_module
-from kingfisher.core.interfaces import CommandResult
+from kingfisher.core.interfaces import CommandResult, CommandRunner
 from kingfisher.core.layout import HARNESS
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_dir
@@ -72,7 +72,7 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
     well-formed and run its commands somewhere nobody chose.
     """
 
-    class Runner:
+    class Runner(CommandRunner):
         local = True
 
         def run(self, command, *, timeout=None):

@@ -11,6 +11,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, MemoryChanges, MemoryEntry, Request
+from kingfisher.core.interfaces import MemoryStore
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start
 from tests.unit.scripted import Scripted
@@ -20,7 +21,7 @@ USERS = "kept for their later conversations"
 SESSIONS = "kept for later turns of this conversation"
 
 
-class Shelf:
+class Shelf(MemoryStore):
     """A store in a dict, recording every call, merging by id as a store should."""
 
     def __init__(self, **users: tuple[MemoryEntry, ...]) -> None:

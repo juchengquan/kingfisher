@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 
 from kingfisher import Kingfisher, MemoryEntry, Request
 from kingfisher.core.config import ConfigError
+from kingfisher.core.interfaces import TurnInstructions
 from kingfisher.core.layout import HARNESS, MEMORY_WRITER
 from kingfisher.core.model_catalogue import load
 from kingfisher.core.session.memory import listed
@@ -273,7 +274,7 @@ def test_an_entry_the_agent_saved_holding_a_context_value_is_dropped_too(scripte
 # -- what it is shown --------------------------------------------------------------
 
 
-class _Told:
+class _Told(TurnInstructions):
     def text(self, cfg, session_id: str, caller) -> str:
         return "TURN-TEXT: the user is Ada Lovelace"
 

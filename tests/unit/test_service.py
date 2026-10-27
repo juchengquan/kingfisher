@@ -12,7 +12,7 @@ from kingfisher import Kingfisher
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
-from kingfisher.core.interfaces import CommandResult
+from kingfisher.core.interfaces import CommandResult, CommandRunner
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
 from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
@@ -588,7 +588,7 @@ def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, mon
     asked: list[Path] = []
     handed: list[object] = []
 
-    class Runner:
+    class Runner(CommandRunner):
         local = True
 
         def run(self, command, *, timeout=None):
@@ -620,7 +620,7 @@ def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, mon
 def test_a_runner_that_is_not_a_callable_is_refused_at_wiring_time(cfg):
     """With the sentence that says what to type instead."""
 
-    class Runner:
+    class Runner(CommandRunner):
         local = True
 
         def run(self, command, *, timeout=None):

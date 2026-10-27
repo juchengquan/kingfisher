@@ -16,6 +16,7 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from kingfisher.core.interfaces import CommandRunner
 from kingfisher.core.layout import Layout
 
 from .linux import present
@@ -92,7 +93,7 @@ def argv_for(
     return argv
 
 
-class BubblewrapRunner:
+class BubblewrapRunner(CommandRunner):
     """Runs one session's commands inside that sandbox."""
 
     local = True

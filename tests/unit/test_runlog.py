@@ -86,7 +86,7 @@ def test_a_sink_that_fails_does_not_fail_the_turn(cfg, caplog):
     broken log shipper cost the caller their answer.
     """
 
-    class Broken:
+    class Broken(RunEvents):
         def record(self, event):
             raise ConnectionRefusedError
 
@@ -210,7 +210,7 @@ def test_a_sink_that_is_empty_is_still_the_one_used(cfg):
     logger before it got one.
     """
 
-    class Kept(list):
+    class Kept(list, RunEvents):
         def record(self, event):
             self.append(event)
 

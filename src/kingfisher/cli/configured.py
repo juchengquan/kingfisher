@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from kingfisher.core.wiring import built_from_setting
-from kingfisher.plugins import LocalSessions, Sessions
+from kingfisher.plugins import LocalSessions, Sessions, TurnInstructions
 
 
 def _named(setting: str, environ: Mapping[str, str] | None) -> str | None:
@@ -33,7 +33,7 @@ def configured_sessions(environ: Mapping[str, str] | None = None) -> Sessions:
     return built_from_setting(named, setting="KINGFISHER_SESSIONS", interface=Sessions)
 
 
-class CommandTurnInstructions:
+class CommandTurnInstructions(TurnInstructions):
     """The command's `TurnInstructions`, sending every graph what `--tell` gave it."""
 
     def __init__(self, said: str = "") -> None:

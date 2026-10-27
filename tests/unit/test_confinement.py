@@ -24,7 +24,7 @@ import pytest
 
 from kingfisher.core.agent.prompting import refuse_a_workspace_prompt
 from kingfisher.core.config import ConfigError
-from kingfisher.core.interfaces import CommandResult
+from kingfisher.core.interfaces import CommandResult, CommandRunner
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, HISTORY, INPUTS_ROUTE, Layout
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
@@ -268,7 +268,7 @@ def test_the_async_path_is_confined_too(cfg, session_dir):
         secret.unlink(missing_ok=True)
 
 
-class Recorder:
+class Recorder(CommandRunner):
     """A runner that runs nothing, for tests about what reaches one."""
 
     #: This one is local, so the confinement should reach it.
@@ -302,38 +302,6 @@ def test_a_runner_that_is_not_here_gets_the_command_unwrapped(cfg, session_dir):
     assert runner.seen == [("echo hi", cfg.execution_timeout_s)], "the local prefix must not travel"
 
 
-def test_a_runner_that_says_nothing_keeps_the_fence(cfg, session_dir):
-    """The default is the safe one on purpose.
-
-    This half only: that `execute` wraps the command when the runner reads as local.
-    It replaces the confinement below, so it cannot see what `LocalSessions` decided
-    about that runner -- which is the other half, and was held by nothing until
-    `test_a_runner_that_says_nothing_is_confined_here` was written.
-    """
-
-    class SaysNothing:
-        def __init__(self):
-            self.seen = []
-
-        def run(self, command, *, timeout=None):
-            self.seen.append(command)
-            return CommandResult(output="", exit_code=0)
-
-    runner = SaysNothing()
-    # `ty: ignore` is the test. `local` is required of anything type-checked
-    # against the protocol, so an object without it is exactly the duck-typed
-    # case the safe default exists for -- and the only way to reach that case is
-    # to pass something the checker refuses.
-    backend = backend_at(cfg, session_dir, runner=runner)  # ty: ignore[invalid-argument-type]
-    backend.default.confinement = replace(
-        backend.default.confinement, wrap=lambda c: f"fenced({c})"
-    )
-
-    backend.execute("echo hi")
-
-    assert runner.seen == ["fenced(echo hi)"]
-
-
 def test_a_runner_that_says_nothing_is_confined_here(cfg, session_dir):
     """What the build decides about a runner that declares nothing, rather than what
     `execute` then does with it.
@@ -349,23 +317,36 @@ def test_a_runner_that_says_nothing_is_confined_here(cfg, session_dir):
     unchanged is correct on Linux and a failure on macOS.
     """
 
-    class SaysNothing:
+    class SaysNothing(CommandRunner):
         def run(self, command, *, timeout=None):
             return CommandResult(output="", exit_code=0)
 
-    # `ty: ignore` for the reason the sibling above gives: the duck-typed runner is
-    # the whole case, and the checker refuses one without `local`.
-    backend = backend_at(cfg, session_dir, runner=SaysNothing())  # ty: ignore[invalid-argument-type]
+    backend = backend_at(cfg, session_dir, runner=SaysNothing())
     confined = backend.default.confinement
 
     assert confined.elsewhere is False, "a runner that said nothing was read as remote"
     assert confined.supplied is True, "and the record should still say a runner was given"
 
 
+def test_a_runner_not_subclassing_command_runner_is_refused(cfg, session_dir):
+    """Driven with a runner that has `local` and `run` both, so what is refused is the
+    missing base: Python checks the methods only of a subclass, and a runner lacking one
+    raised on the first command rather than where the deployment supplied it."""
+
+    class Shaped:
+        local = True
+
+        def run(self, command, *, timeout=None):
+            return CommandResult(output="", exit_code=0)
+
+    with pytest.raises(TypeError, match="Shaped does not subclass it"):
+        backend_at(cfg, session_dir, runner=Shaped())  # ty: ignore[invalid-argument-type]
+
+
 def test_a_runner_that_says_it_is_elsewhere_is_taken_at_its_word(cfg, session_dir):
     """The control the rule above needs: `elsewhere` is not simply always false."""
 
-    class SaysRemote:
+    class SaysRemote(CommandRunner):
         local = False
 
         def run(self, command, *, timeout=None):
@@ -507,7 +488,7 @@ def test_off_really_does_leave_the_shell_open(cfg, session_dir):
 
 
 @dataclass(frozen=True)
-class _ThroughExecute:
+class _ThroughExecute(CommandRunner):
     """A backend's `execute`, in the shape the runner kit drives."""
 
     backend: Any
