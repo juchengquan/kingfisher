@@ -162,7 +162,11 @@ class Sessions(ABC):
 
     @abstractmethod
     def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
-        """`(session_id, last_used)` for every session there is."""
+        """`(session_id, last_used)` for every session there is.
+
+        One left out is not merely unlisted: its files are refused, a sweep never reaps it,
+        and a turn in it takes it for a session it made, deleted if refused after its claim.
+        """
         ...
 
     @abstractmethod
