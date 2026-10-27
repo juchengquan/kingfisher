@@ -40,8 +40,15 @@ dependencies = [
     "langchain-quickjs>=0.3.8,<0.4",
     # Imported directly by core/agent/models.py. It also arrives
     # transitively through deepagents, but a transitive dep is not a promise.
-    "langchain-anthropic>=1.5.4",
-    "langchain-openai>=1.5.1",
+    #
+    # 1.7.6 for its model profiles, which the summariser's trigger and the output
+    # reservation check are sized from: 1.7.5 gives `claude-sonnet-4-5` a window
+    # of 1,000,000 tokens, and 1.7.6 gives it 200,000.
+    "langchain-anthropic>=1.7.6",
+    # 1.7.2 for the `openai_responses` row, which streams the Responses API:
+    # before it, a reply after several of OpenAI's built-in tool calls could
+    # stream its answer into a reasoning block and leave `.text` empty.
+    "langchain-openai>=1.7.2",
     # The four the harness imports by name and this file never named. Each
     # arrived transitively, which is the reason given three times above for
     # naming a package anyway -- and the reason was never applied to the
@@ -78,12 +85,12 @@ dependencies = [
     # --resolution lowest-direct` shows what the resolution forces today; where it
     # names a higher version than a floor here, the floor is the line that is wrong.
     #
-    # `langchain-core` is the exception, and lowering it to what the resolution
-    # forces (1.6.6) breaks the import: tool_guards.py's private import of
-    # `_signature_parameters` from `langchain_core.tools.base` sets it, since 1.6.7
-    # is the first release that name imports from. Private, so `<2` does not hold
-    # it either -- the lock is what proves it is still there.
-    "langchain-core>=1.6.7,<2",
+    # `langchain-core` is set by `langchain-anthropic>=1.7.6` above, which needs
+    # 1.6.10. Lowered with it, it stops at 1.6.7 rather than the 1.6.6 the rest
+    # forces: tool_guards.py's private import of `_signature_parameters` from
+    # `langchain_core.tools.base` first imports in 1.6.7. Private, so `<2` does
+    # not hold it either -- the lock and the `floors` job prove it is still there.
+    "langchain-core>=1.6.10,<2",
     "langchain>=1.4.3,<2",
     "langgraph>=1.2.12,<2",
     "langgraph-checkpoint>=4.1,<5",
