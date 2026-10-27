@@ -7,9 +7,10 @@ and the conversation is kept in the session, so none of them is here.
 from __future__ import annotations
 
 import base64
-from collections.abc import Mapping, Sequence
+import inspect
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, get_args, runtime_checkable
 
 from kingfisher.core.session.threads import off_loop, thread_pool
 
@@ -396,3 +397,56 @@ class NoScratchRunLimit:
         self, name: str, kind: Literal["agent", "subagent", "general-purpose"]  # noqa: ARG002
     ) -> bool:
         return True
+
+
+def hooks_of(function: Callable[..., object]) -> dict[str, type]:
+    """The parameters of `function` that are hooks, and the protocol each takes: those
+    left out by default and typed as one of the protocols here.
+
+    Read off the annotation, so a hook added to a signature is checked with nothing else
+    to extend.
+    """
+    protocols = {
+        name: one
+        for name, one in globals().items()
+        if isinstance(one, type) and Protocol in one.__mro__[1:]
+    }
+    found: dict[str, type] = {}
+    for name, parameter in inspect.signature(function).parameters.items():
+        if parameter.default is not None:
+            continue
+        written = parameter.annotation
+        # A string under `from __future__ import annotations`, as `service.py` writes it.
+        names = (
+            written.split(" | ")
+            if isinstance(written, str)
+            else [getattr(one, "__name__", "") for one in get_args(written) or (written,)]
+        )
+        if taken := [protocols[one] for one in names if one in protocols]:
+            found[name] = taken[0]
+    return found
+
+
+def refuse_incomplete(keyword: str, hook: object, protocol: type) -> None:
+    """Refuse `hook`, wired as `keyword=`, where it lacks a method `protocol` lists.
+
+    A class of the deployment's own is taken whatever it subclasses, so long as it has
+    every method.
+    """
+    # Read off the protocol, so a method added to one later is checked with no other edit.
+    missing = sorted(
+        name
+        for name, value in vars(protocol).items()
+        if callable(value)
+        and not name.startswith("_")
+        and not callable(getattr(hook, name, None))
+    )
+    if not missing:
+        return
+    named = ", ".join(missing)
+    msg = (
+        f"{keyword}= takes a {protocol.__name__}, and {type(hook).__name__} has no "
+        f"{named} -- define {'it' if len(missing) == 1 else 'them'} as "
+        f"{protocol.__name__} does"
+    )
+    raise TypeError(msg)

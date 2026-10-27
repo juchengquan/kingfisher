@@ -44,6 +44,15 @@ replaced the four layers began.
   entries a turn added, changed and removed. A consumer switching on `kind` should already
   ignore one it does not know.
 
+## A hook missing a method is refused at startup, after #1101
+
+- **`Kingfisher(...)` raises `TypeError` for a hook without every method its protocol
+  lists**: `run_events`, `instructions`, `turn_instructions`, `unused_results`,
+  `pdf_attachments`, `subagent_middlewares` and `scratch_run_limit`. Such a hook used to start
+  and fail with `AttributeError` in the first turn that asked it. The message names the
+  keyword, your class and each missing method; add them. A class of your own that has every
+  method needs no change.
+
 ## The harness prompt no longer says who the agent is or how it behaves, after #1098
 
 - **The system prompt no longer opens "You are kingfisher".** It now opens on the session's

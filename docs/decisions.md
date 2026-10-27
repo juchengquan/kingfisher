@@ -5352,6 +5352,24 @@ per-turn text on `Request`**, a second source beside a wired hook, which raised 
 two an agent saw. `--tell TEXT` on `run` and `decide` fills the command's hook. A pause keeps
 no text, so `decide` takes it again, as it takes the caller again. *(2026-10-23.)*
 
+**A hook missing a method its protocol lists is refused when `Kingfisher` is built.** The
+protocols were annotations only, so a hook without one of its methods started cleanly and
+raised `AttributeError` in whichever turn first asked -- possibly hours later, in a turn
+that had nothing to do with the mistake. Startup is where the deployment wired it, and the
+refusal names the keyword, the class and each missing method. The methods are read off the
+protocol, so one added to a protocol later is checked with no other edit, which is what
+lets a hook grow a required method rather than an optional one found by name. Which
+keywords are hooks, and the protocol each takes, are read off `__init__`'s annotations, so
+a hook added to the signature is checked with nothing beside it to extend. A class of the
+deployment's own with every method is taken whatever it subclasses, and the refusal names
+no default to subclass, since only a second list could pair each with its keyword. **Not
+taken:** a table of the hooks beside the signature, which said again what the annotations
+say; `isinstance` against a `runtime_checkable` protocol, which answers yes or no and so
+could not say which method is missing, and six of the seven protocols are not
+runtime-checkable; checking signatures as well, which would refuse a hook taking
+`**kwargs` that works.
+*(2026-10-26.)*
+
 **`Config` holds what the core reads.** The shell's fence and `PATH` additions are
 `LocalSessions`' settings, as `ShellSettings`, and `KINGFISHER_SESSIONS` and
 `KINGFISHER_PLUGINS` were the command's: nothing in the core read any of the four.

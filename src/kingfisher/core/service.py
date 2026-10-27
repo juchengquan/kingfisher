@@ -67,6 +67,8 @@ from .interfaces import (
     SubagentMiddlewares,
     TurnInstructions,
     UnusedResults,
+    hooks_of,
+    refuse_incomplete,
 )
 from .origins import Origins
 from .reporting import what_opens
@@ -175,6 +177,12 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             subagent_middlewares if subagent_middlewares is not None else AgentsMiddlewares()
         )
         self.scratch_run_limit: ScratchRunLimit | None = scratch_run_limit
+        # Here, where the deployment wired it: a missing method was an `AttributeError` in
+        # whichever turn first asked, possibly hours after startup. Each is kept under its
+        # keyword, which is how it is found.
+        for keyword, protocol in hooks_of(Kingfisher.__init__).items():
+            if (hook := getattr(self, keyword)) is not None:
+                refuse_incomplete(keyword, hook, protocol)
         # Here, not when a definition names one, so the deployment hears it where it
         # wired the registry rather than from the first caller to reach the wrong name.
         refuse_unbuildable_middleware(self.middlewares)
