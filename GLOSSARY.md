@@ -50,6 +50,22 @@ Sessions, and kingfisher's own state beside them. Not where definitions are, whi
 write and kingfisher only reads: that is the definitions folder.
 _Avoid_: state folder, data folder, root
 
+**Memory entry**:
+One line of memory, `- [m3] Reports figures in EUR`, under the id kingfisher gave it.
+What a turn reports changing, what `forget` removes and what a store merges, each by id.
+_Avoid_: memory item, fact, note
+
+**Memory writer**:
+The model call at a turn's end that curates the memory entries from what was said since it
+last ran. Not the agent, which writes an entry itself when told to remember one.
+_Avoid_: summariser, memory agent, curator
+
+**User's memory**:
+The memory entries a deployment's memory store keeps for one user. Each of their sessions
+holds a copy, replaced at every turn's start. Without a store, memory is the session's and
+ends with it.
+_Avoid_: global memory, long-term memory, profile
+
 ### The plugins
 
 **Sessions**:

@@ -77,11 +77,6 @@ slices land.
   kingfisher sends back of a model's thinking once the vendor, or the conversation
   before it, has changed, keyed on the endpoint that answered. Its first slice has
   landed; the rest wait on one live Anthropic call each.
-- [Memory kept up to date](design/2026-10-26-memory-kept-up-to-date.md) — memory as a
-  list of entries a separate writer curates at a turn's end, with what changed reported
-  and an entry forgettable from outside; then, through a store the deployment provides,
-  one memory per user across their conversations. Its first slice, entries kingfisher
-  numbers and a turn reports, has landed.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
@@ -101,6 +96,10 @@ built in seven; its rule and its order are under *Agents and delegation* in
 `decisions.md`, and each of its changes beside the entry it changed.
 *Which source ids open something* was built in one; its decisions are under
 *Source-id access* in `decisions.md`, and its two words are in `GLOSSARY.md`.
+*Memory kept up to date* was built in four; its decisions are the entries dated
+2026-10-26 from *A caller reads a session's memory* to *A user's memory is the
+deployment's store* in `decisions.md`, its three words are in `GLOSSARY.md`, and what
+it left unmeasured is in `ONGOING.md`.
 *A session is its backend* was built in four the day it was written; its decisions
 are under a section of that name in `decisions.md`.
 *A tool's path is the backend's path* was built in four; its decisions are under a

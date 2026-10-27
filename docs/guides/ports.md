@@ -628,6 +628,11 @@ Things to know:
 - **Plain methods, asked while the session is claimed**: on the async path each is called
   on kingfisher's thread pool, off the event loop. Two sessions of one user run their
   turns at once, so `apply` must be safe beside another `apply` for the same key.
+- **Forget in the store.** `Session.forget` edits the session's copy, which the next
+  keyed turn replaces with what `load` answers, so the entry comes back. Remove it with
+  `apply(key, MemoryChanges(removed=(entry,)))` on the store you wired, and every session
+  of that user goes without it from its next turn. `Session.memory()` reads the copy too;
+  the user's list is `load(key)`.
 - **Deleting a session leaves the user's memory alone.**
 
 ## The rest

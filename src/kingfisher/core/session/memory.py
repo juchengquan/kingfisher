@@ -265,7 +265,7 @@ def kept_in_store(
     answered. The event saying it failed, or `None`.
 
     Written back so the copy between turns is the user's memory, not this session's view
-    of it. A turn ends here; `forget` reaches the store through here too.
+    of it.
     """
     try:
         after = yield on_host(_entries, store.apply, key, changed)
