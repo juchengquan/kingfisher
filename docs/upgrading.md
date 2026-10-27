@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A memory writer keeps the entries, after #1108
+
+- **Only where memory is on.** Every `KINGFISHER_MEMORY_EVERY` turns (2 by default), and on
+  any turn whose conversation was summarised, a turn's end makes one more model call, which
+  rewrites `/memory/AGENTS.md`'s entries; the turn ends a few seconds later. Its changes are
+  reported in `memory_updated` and `RunResult.memory` as the agent's are.
+- **`memory_writer:` in `models.yaml`** names the model for that call. Without it the call
+  runs on the agent's own model. A name the catalogue cannot run is refused at startup.
+- **A new event kind, `memory_not_updated`,** says why the writer's answer was not kept; the
+  memory stays as it was and the turn succeeds.
+- **An entry holding a value of the request's `context` is taken out,** on every turn with
+  memory on, and listed in a new `dropped` field on `MemoryChanges`. A value under four
+  characters is not checked for.
+- **A session's claim lasts a model timeout longer** where memory is on.
+
 ## Your agent's prompt now comes first, ahead of the harness, after #1105
 
 - **The order of the system prompt is reversed.** An agent's is now its `system_prompt`,

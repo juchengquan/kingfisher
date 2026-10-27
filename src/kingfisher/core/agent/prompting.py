@@ -284,6 +284,13 @@ def memory_guidelines(
     return _filled(MEMORY, layout, saving=saving, evidence=evidence)
 
 
+def memory_writer_prompt(layout: Layout, *, entries: int, characters: int) -> str:
+    """What the memory writer is told, with the limits its answer is held to."""
+    return _filled(
+        "memory_writer.md", layout, entries=str(entries), characters=f"{characters:,}"
+    )
+
+
 def _file_tools(held: tuple[str, ...], layout: Layout) -> str:
     """The file tools' section, naming the ones in `held`, or nothing for none."""
     if not held:

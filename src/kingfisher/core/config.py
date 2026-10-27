@@ -243,6 +243,9 @@ class Models:
     #: What runs when nothing names another; always a key of `models`, because
     #: `model_catalogue.load` refuses a file where it is not.
     default: str
+    #: What the memory writer runs on, or `None` for the agent's own model. A key of
+    #: `models` where set, for the reason `default` is.
+    memory_writer: str | None = None
     #: Models this file defines that this machine cannot reach, and why -- keyed by
     #: model name, valued as the clause `resolve` drops into its refusal.
     unreachable: Mapping[str, str] = field(default_factory=dict)
@@ -340,6 +343,8 @@ class Config:
     # measured ~90% cache hit.
     skills_enabled: bool = False
     memory_enabled: bool = False
+    # How many turns the memory writer waits between runs where nothing was summarised.
+    memory_every: int = 2
     # On, because a cited id is what lets a reader trace a claim to the result behind it.
     cite_results: bool = True
     # A JavaScript sandbox to compute in: no filesystem or network, capped memory and
@@ -378,6 +383,17 @@ class Config:
             # Not zero, even with neither models nor a bound on a command: zero would
             # restore the overlap.
             ModelProfile.timeout_s,
+        ) + self._memory_writer_bound
+
+    @property
+    def _memory_writer_bound(self) -> float:
+        """How long the memory writer's call may hold the claim after the turn's last
+        superstep, which it follows: none where memory is off."""
+        if not self.memory_enabled:
+            return 0
+        return max(
+            (profile.timeout_s for profile in self.models.models.values()),
+            default=ModelProfile.timeout_s,
         )
 
     def __post_init__(self) -> None:

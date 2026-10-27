@@ -127,16 +127,22 @@ class MemoryChanges:
     added: tuple[MemoryEntry, ...] = ()
     changed: tuple[MemoryEntry, ...] = ()
     removed: tuple[MemoryEntry, ...] = ()
+    #: Taken out because they held a value of the request's `context`. Not in `removed`,
+    #: which says the agent or the writer let an entry go.
+    dropped: tuple[MemoryEntry, ...] = ()
 
     def __bool__(self) -> bool:
-        return bool(self.added or self.changed or self.removed)
+        return bool(self.added or self.changed or self.removed or self.dropped)
 
     def said(self) -> str:
         """The changes as one line, for an event's text."""
         parts = [
             f"{verb} {', '.join(one.id for one in entries)}"
             for verb, entries in (
-                ("added", self.added), ("changed", self.changed), ("removed", self.removed)
+                ("added", self.added),
+                ("changed", self.changed),
+                ("removed", self.removed),
+                ("dropped", self.dropped),
             )
             if entries
         ]
@@ -227,6 +233,7 @@ KINDS: tuple[str, ...] = (
     "decision_discarded",
     # The memory file's entries changed during the turn; `RunResult.memory` says which.
     "memory_updated",
+    "memory_not_updated",  # the memory writer's answer was not kept; the text says why
     # Terminal. `cut_short` precedes `finished` rather than replacing it.
     "cut_short",
     "finished",

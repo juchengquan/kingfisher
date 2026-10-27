@@ -158,6 +158,7 @@ class Environment:
                 ("recursion_limit", "KINGFISHER_RECURSION_LIMIT", 1),
                 ("thread_pool_size", "KINGFISHER_THREAD_POOL_SIZE", 1),
                 ("keep_results_rounds", "KINGFISHER_KEEP_RESULTS_ROUNDS", 1),
+                ("memory_every", "KINGFISHER_MEMORY_EVERY", 1),
             )
             if (value := self.optional_number(key, least=least)) is not None
         }

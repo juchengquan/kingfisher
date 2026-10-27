@@ -26,8 +26,8 @@ from .workspace import EXAMPLE
 if TYPE_CHECKING:
     from pathlib import Path
 
-#: Top-level keys. `default` names a model; the other two are the tables.
-KNOWN_TOP: frozenset[str] = frozenset({"endpoints", "models", "default"})
+#: Top-level keys. `default` and `memory_writer` name a model; the other two are the tables.
+KNOWN_TOP: frozenset[str] = frozenset({"endpoints", "models", "default", "memory_writer"})
 
 #: What an endpoint entry may say. `base_url` is literal: it is topology, not a secret,
 #: and two gateways speaking one wire format could not share one conventional variable.
@@ -431,24 +431,37 @@ def load(
     if not default:
         msg = f"{path}: no 'default' model named; one must be, or nothing knows what to run"
         raise ConfigError(msg)
-    if default not in models:
-        # A default naming nothing is a broken file; one whose endpoint has no key here
-        # is a deployment not yet set up.
-        known = tuple(sorted(models))
-        if default in set(_mapping(document.get("models"), str(path))):
-            msg = (
-                f"{path}: default model {default!r} runs on an endpoint this machine has "
-                f"no credentials for; it can run {known or 'none'}"
-            )
-        else:
-            msg = f"{path}: default model {default!r} is not defined here; it defines {known}"
-        raise ConfigError(msg)
+    _refuse_unrunnable("default", default, models, document, path)
+    # Optional: absent, the memory writer runs on the agent's own model.
+    memory_writer = str(document.get("memory_writer") or "").strip() or None
+    if memory_writer is not None:
+        _refuse_unrunnable("memory_writer", memory_writer, models, document, path)
     return Models(
         models=models,
         endpoints=endpoints,
         default=default,
+        memory_writer=memory_writer,
         unreachable=unreachable,
         dropped=dropped,
         source=path,
         keys_file=keys_file,
     )
+
+
+def _refuse_unrunnable(
+    key: str, named: str, models: Mapping[str, Any], document: Mapping[str, Any], path: Path
+) -> None:
+    """Refuse a top-level `key` naming a model this deployment cannot run."""
+    if named in models:
+        return
+    # Naming nothing is a broken file; naming a model whose endpoint has no key here is a
+    # deployment not yet set up.
+    known = tuple(sorted(models))
+    if named in set(_mapping(document.get("models"), str(path))):
+        msg = (
+            f"{path}: {key} model {named!r} runs on an endpoint this machine has "
+            f"no credentials for; it can run {known or 'none'}"
+        )
+    else:
+        msg = f"{path}: {key} model {named!r} is not defined here; it defines {known}"
+    raise ConfigError(msg)
