@@ -443,6 +443,35 @@ class NoScratchRunLimit(ScratchRunLimit):
         return True
 
 
+def every_interface() -> tuple[type, ...]:
+    """The interfaces defined here, in the order they are written."""
+    # By base rather than `inspect.isabstract`: that takes the imported `collections.abc`
+    # names too, and would drop an interface whose every method came to have a default,
+    # while the defaults kept here subclass an interface rather than `ABC`.
+    return tuple(
+        one
+        for one in globals().values()
+        if isinstance(one, type) and one.__module__ == __name__ and ABC in one.__bases__
+    )
+
+
+def refuse_unless_subclass(
+    what: str, given: object, interface: type, *, error: type[Exception] = TypeError
+) -> None:
+    """Raise `error` unless `given`, wired as `what`, subclasses `interface`.
+
+    Python refuses a subclass missing a method when it is made, and checks nothing of
+    anything else.
+    """
+    if isinstance(given, interface):
+        return
+    msg = (
+        f"{what} takes a {interface.__name__}, and {type(given).__name__} does not "
+        f"subclass it -- subclass {interface.__name__}, which names every method it asks for"
+    )
+    raise error(msg)
+
+
 def hooks_of(function: Callable[..., object]) -> dict[str, type]:
     """The parameters of `function` that are hooks, and the interface each takes: those
     left out by default and typed as one of the interfaces here.
@@ -450,12 +479,7 @@ def hooks_of(function: Callable[..., object]) -> dict[str, type]:
     Read off the annotation, so a hook added to a signature is checked with nothing else
     to extend.
     """
-    # Abstract, so the defaults kept here, which subclass an interface, are not taken for one.
-    interfaces = {
-        name: one
-        for name, one in globals().items()
-        if isinstance(one, type) and inspect.isabstract(one)
-    }
+    interfaces = {one.__name__: one for one in every_interface()}
     found: dict[str, type] = {}
     for name, parameter in inspect.signature(function).parameters.items():
         if parameter.default is not None:

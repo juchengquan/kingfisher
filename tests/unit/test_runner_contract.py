@@ -180,6 +180,22 @@ def _run(contract, name, subject):
     check(subject)
 
 
+class ShapedRunner:
+    """Every method a runner has, subclassing nothing."""
+
+    local = True
+
+    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+        return CommandResult(output="", exit_code=0)
+
+
+def test_a_runner_not_subclassing_the_interface_is_caught():
+    """Driven with a runner that has `local` and `run` both: kingfisher refuses it the
+    first time a session opens, so a kit passing it would pass a runner that never runs."""
+    with pytest.raises(AssertionError, match="subclasses CommandRunner"):
+        _run(RUNNER_CHECKS, "a_runner_says_where_it_runs", ShapedRunner)
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="the check runs a POSIX shell command")
 def test_a_timeout_that_raises_is_caught():
     """The one every implementer gets to write wrongly, because every timeout API in

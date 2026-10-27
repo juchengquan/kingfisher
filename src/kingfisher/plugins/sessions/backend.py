@@ -28,7 +28,7 @@ from kingfisher.core.agent.host_paths import reject_host_path
 from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.interfaces import CommandRunner, Sessions
+from kingfisher.core.interfaces import CommandRunner, Sessions, refuse_unless_subclass
 from kingfisher.core.layout import Layout
 from kingfisher.plugins.sessions.sandbox import confinement
 
@@ -390,13 +390,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         chosen: CommandRunner | None = fence
     else:
         # Here rather than when `LocalSessions` is built: a runner is made per session.
-        if not isinstance(runner, CommandRunner):
-            msg = (
-                f"a runner is a CommandRunner, and {type(runner).__name__} does not "
-                "subclass it -- subclass CommandRunner, which says what `run` takes "
-                "and that the runner is local unless it says not"
-            )
-            raise TypeError(msg)
+        refuse_unless_subclass("runner=", runner, CommandRunner)
         # A supplied runner that is not local receives nothing this process applied, so
         # the confinement must stop claiming it.
         chosen = runner

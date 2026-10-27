@@ -10,10 +10,10 @@ import time
 import uuid
 from typing import TYPE_CHECKING
 
+from kingfisher.plugins import CommandRunner
+
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from kingfisher.plugins import CommandRunner
 
 
 def _equal(got: object, want: object, *, doing: str) -> None:
@@ -43,6 +43,13 @@ SLEEPS = "sleep 30"
 def a_runner_says_where_it_runs(make: Callable[[], CommandRunner]) -> None:
     """`local` decides whether the fence is applied, so it is read before a command is."""
     runner = make()
+    _must_be(
+        runner,
+        CommandRunner,
+        doing="making the runner",
+        why="a runner subclasses CommandRunner, which is where `local` comes from when it "
+        "says nothing, and kingfisher refuses one that does not",
+    )
     declared = runner.local
     _must_be(
         declared,

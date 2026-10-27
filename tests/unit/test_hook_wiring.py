@@ -3,6 +3,9 @@ interface."""
 
 from __future__ import annotations
 
+import ast
+import inspect
+import textwrap
 from typing import Any
 
 import pytest
@@ -86,13 +89,62 @@ def test_a_hook_not_subclassing_its_interface_is_refused_at_startup(cfg, keyword
     assert "_Everything does not subclass it" in said
 
 
-@pytest.mark.parametrize("interface", HOOKS.values(), ids=HOOKS.keys())
+#: Every interface, read off the module, so one added there is held here with no edit.
+INTERFACES = interfaces.every_interface()
+
+
+def test_every_interface_is_read_off_the_module():
+    """The rules below are parametrized over this; read wrongly, they hold nothing."""
+    assert {one.__name__ for one in INTERFACES} == {
+        "CommandRunner",
+        "RunEvents",
+        "Sessions",
+        "Instructions",
+        "TurnInstructions",
+        "MemoryStore",
+        "UnusedResults",
+        "PdfAttachments",
+        "SubagentMiddlewares",
+        "ScratchRunLimit",
+    }
+
+
+@pytest.mark.parametrize("interface", INTERFACES, ids=lambda one: one.__name__)
 def test_a_subclass_missing_a_method_cannot_be_made(interface):
-    """`Kingfisher` asks only for the subclass, so a method left without
-    `@abstractmethod` would be an `AttributeError` mid-turn again."""
+    """Kingfisher asks only for the subclass, so an interface with nothing abstract would
+    let a hook missing its method start, to raise `AttributeError` mid-turn."""
     lacking = type("Lacking", (interface,), {})
     with pytest.raises(TypeError, match="abstract"):
         lacking()
+
+
+def _bodiless(function: Any) -> bool:
+    """Whether `function` is written as a docstring and `...`, with nothing to run."""
+    (node,) = ast.parse(textwrap.dedent(inspect.getsource(function))).body
+    assert isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    body = node.body[1:] if ast.get_docstring(node) is not None else node.body
+    return (
+        len(body) == 1
+        and isinstance(body[0], ast.Expr)
+        and getattr(body[0].value, "value", None) is Ellipsis
+    )
+
+
+@pytest.mark.parametrize("interface", INTERFACES, ids=lambda one: one.__name__)
+def test_every_method_an_interface_leaves_unwritten_is_abstract(interface):
+    """Checked method by method, since one abstract method is enough to make the rule above
+    pass: a `Sessions.held` left without `@abstractmethod` is a hook missing it taken at
+    startup, and a `None` where a turn asks whether a claim is held."""
+    unwritten = {
+        name
+        for name, value in vars(interface).items()
+        if inspect.isfunction(value) and not name.startswith("_") and _bodiless(value)
+    }
+
+    assert unwritten
+    assert unwritten <= interface.__abstractmethods__, sorted(
+        unwritten - interface.__abstractmethods__
+    )
 
 
 @pytest.mark.parametrize(

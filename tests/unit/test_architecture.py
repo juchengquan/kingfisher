@@ -2209,6 +2209,10 @@ WITNESSES: dict[str, dict[str, str]] = {
         # And the refusal kingfisher's own backend makes, which `ports.md` offers a
         # backend that wants to refuse host paths the same way.
         "reject_host_path": "document",
+        # The refusal kingfisher makes of every implementation it is handed, which
+        # `ports.md` offers a plugin that takes one of its own, as `LocalSessions` takes a
+        # runner.
+        "refuse_unless_subclass": "document",
         # The two refusals kingfisher makes of every backend it resolves, which
         # `ports.md` offers a plugin's own suite to ask first; and where a tool's path
         # lives on this host, which it offers for checking a backend's answer.
