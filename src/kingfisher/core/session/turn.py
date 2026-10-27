@@ -196,11 +196,15 @@ def consume(  # noqa: PLR0913 -- a chunk, the answer so far, and what the stream
     subagent_names: runtime.SubagentNames,
     *,
     seen: runtime.SeenMessages | None = None,
+    delegations: runtime.Delegations | None = None,
 ) -> tuple[str, tuple[RunEvent, ...]]:
     """One stream chunk into (answer so far, events to emit)."""
     if (text := runtime.answer_in(namespace, mode, chunk)) is not None:
         answer = text
-    return answer, tuple(runtime.events_in(namespace, mode, chunk, subagent_names, seen=seen))
+    events = runtime.events_in(
+        namespace, mode, chunk, subagent_names, seen=seen, delegations=delegations
+    )
+    return answer, tuple(events)
 
 
 def decision_needed(waiting: tuple[PendingDecision, ...]) -> RunEvent:

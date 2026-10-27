@@ -26,6 +26,16 @@ replaced the four layers began.
   fields with defaults, after the others, so code that builds or reads a `RunEvent`
   is unchanged. Code that matched a result to its call by the tool's name can match by
   id, which tells two calls to one tool apart.
+- **Every event carries `delegations`**: the delegations it came from inside, outermost
+  first, each by the id of the `task` call that made it, and `()` for the agent the
+  caller asked. A subagent's events said only its name, which two runs of one subagent
+  share. `delegations[0]` is what the ledger's `run` records for the same subagent.
+- **A new kind, `delegation_start`**, arrives when a subagent begins answering a `task`
+  call, before anything it says, and again for each delegation a resumed turn re-enters.
+  Its `agent` is the subagent, its `text` what it was asked, and its `delegations` end
+  in its own call's id; the `tool_result` whose `call` is that id ends it. Code that
+  ignores a kind it does not know needs nothing. Code that prints every event prints
+  one more line per delegation, such as `[reviewer] check the tests`.
 
 ## A shipped skill names its own files from its folder, after #1123
 
