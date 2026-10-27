@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A turn runs on the pins read under its claim, after #1118
+
+- **A turn can be refused after its claim.** The session's pinned agent and datazones are
+  read again once the claim is taken, and a caller they no longer admit gets the same
+  `UnknownSessionError` an out-of-reach caller always got. This happens only when another
+  turn pinned the session between the two reads, typically two first turns racing on a
+  new id from different datazones; before, the second ran in a session it could not
+  reach. A session refused this way is kept, since the other turn ran in it.
+
 ## The memory writer runs every fourth turn, after #1114
 
 - **`KINGFISHER_MEMORY_EVERY` defaults to 4**, where it was 2. Each change the writer makes

@@ -822,20 +822,28 @@ def test_the_command_reports_a_provider_refusal_in_one_line(cfg, monkeypatch, ca
     assert "Traceback" not in said
 
 
-def _snapshot_reads(monkeypatch) -> list[Path]:
-    """Every read of a session's pinned agent, as they happen."""
+def _snapshot_reads(monkeypatch) -> list[int]:
+    """Every read of a session's pinned agent, each as how many claims had been taken."""
     from kingfisher.core.session import preparation
 
-    seen: list[Path] = []
+    seen: list[int] = []
+    claims = [0]
 
     def counting(real):
         def read(session_dir):
-            seen.append(session_dir)
+            seen.append(claims[0])
             return real(session_dir)
 
         return read
 
+    real_claim = LocalSessions.claim
+
+    def claiming(self, *args, **kwargs):
+        claims[0] += 1
+        return real_claim(self, *args, **kwargs)
+
     monkeypatch.setattr(preparation, "pinned_in", counting(preparation.pinned_in))
+    monkeypatch.setattr(LocalSessions, "claim", claiming)
     return seen
 
 
@@ -878,7 +886,8 @@ def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
     finally:
         events.close()
 
-    assert len(reads) == 1, f"the pinned agent was read {len(reads)} times in one turn"
+    # One read each side of the claim: the second is what the turn runs on.
+    assert reads == [0, 1], f"the pinned agent was read at claims {reads} in one turn"
     # And the one resolution reached the second reader. Handing it `None` would leave
     # the report measured against the whole catalogue, which is what it filters.
     assert reported and reported[0] is not None
@@ -924,7 +933,7 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
 
     service.run(Request("go", agent="only"), source_ids=("A",))
 
-    assert len(reads) == 1
+    assert reads == [0, 1]
     assert reported and reported[0] is not None
 
 

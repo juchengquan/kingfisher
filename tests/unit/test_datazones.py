@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -32,6 +33,9 @@ from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import Through, agent_named, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 #: `payroll` is for the finance datazone; `line_count` is for any.
 TOOLS = '''
@@ -608,6 +612,59 @@ def test_a_session_is_reached_only_from_exactly_the_datazones_its_turn_ran_in(tu
         _turn(kf, "s", "hr")
     with pytest.raises(UnknownSessionError):
         _turn(kf, "s", "hr-emea", ("hr", "finance"))
+
+
+class _Racing(LocalSessions):
+    """`LocalSessions` running one turn of another's inside the next turn's `mark_used`,
+    the one step between that turn's first read of the pins and its claim."""
+
+    race: Callable[[], object] | None = None
+
+    def mark_used(self, cfg, session_id):
+        race, self.race = self.race, None
+        if race is not None:
+            race()
+        super().mark_used(cfg, session_id)
+
+
+def _raced(turns, door: str, datazone: str, racer: str):
+    """A finance turn starting session `s` as a `racer` turn pins it under the claim."""
+    sessions = _Racing()
+    kf = Kingfisher(turns, sessions=sessions)
+    sessions.race = lambda: _turn(kf, "s", racer)
+    Scripted.script.append(AIMessage(content="done"))
+    request = Request("t", agent="surveyor", session_id="s")
+    if door == "arun":
+        return kf, asyncio.run(kf.arun(request, source_ids=("A",), datazone=datazone))
+    return kf, kf.run(request, source_ids=("A",), datazone=datazone)
+
+
+@pytest.mark.parametrize("door", ["run", "arun"])
+def test_a_turn_runs_on_the_pins_read_under_its_claim(turns, door):
+    """The pins were read once, before the claim, so a finance turn starting a session
+    an hr turn pinned in between ran in it anyway, and left finance's results where hr
+    reads them; refused, it would have deleted the session the hr turn ran in.
+
+    Raced through `mark_used` rather than threads, so the hr turn lands in the gap
+    every time and not only when the scheduler happens to put it there.
+    """
+    with pytest.raises(UnknownSessionError):
+        _raced(turns, door, "finance", racer="hr")
+
+    kf = Kingfisher(turns, sessions=LocalSessions())
+    assert kf.session("s", source_ids=("A",), datazone="hr") is not None
+    assert kf.session("s", source_ids=("A",), datazone="finance") is None
+    _turn(kf, "s", "hr")  # and the claim was given back
+
+
+@pytest.mark.parametrize("door", ["run", "arun"])
+def test_a_turn_raced_in_its_own_datazone_runs(turns, door):
+    """The control: a session pinned under the claim to what this caller reaches is
+    one it carries on, not one it is refused."""
+    kf, result = _raced(turns, door, "finance", racer="finance")
+
+    assert result.session_id == "s"
+    assert kf.session("s", source_ids=("A",), datazone="finance") is not None
 
 
 def test_a_listing_leaves_out_a_session_in_another_datazone(turns):

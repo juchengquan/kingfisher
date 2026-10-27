@@ -140,10 +140,11 @@ def test_opening_a_sessions_files_makes_no_sync_port_call_on_the_loop(cfg, sync_
     assert not on_the_loop, f"made on the event loop's thread: {on_the_loop}"
 
 
-def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
+def test_a_turn_reads_the_pin_once_each_side_of_its_claim(cfg, monkeypatch):
     """Read once to decide whether the caller reaches the session and again to decide
     which agent the turn runs, every turn under a policy paid a round trip for a file
-    it already held.
+    it already held. The second read now is the one under the claim, which the turn
+    runs on.
     """
     from kingfisher.core.layout import HARNESS_ROUTE, PINNED_AGENT
 
@@ -167,7 +168,7 @@ def test_a_turn_reads_the_pin_once(cfg, monkeypatch):
     monkeypatch.setattr(CompositeBackend, "download_files", counted)
     kf.run(asked, source_ids=("A",))
 
-    assert reads == [pin]
+    assert reads == [pin, pin]
 
 
 def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
