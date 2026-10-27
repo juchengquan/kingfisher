@@ -29,10 +29,6 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   outside every folder is refused (#1066), and the shell is told where it may write (#760,
   #1070). The branch predates `inputs` and `outputs`, so it is a reference rather than a
   rebase. Rebuild, or drop it and delete the branch. *(2026-10-23.)*
-- **Stopping deepagents' own writes to `large_tool_results/`.** Its offloading is off,
-  but its summariser still writes there on its own over-budget check and when clearing's
-  retry fails, as the comment on `OFFLOADS` in `core/layout.py` says. Clearing acting
-  before that check would stop it, and needs a grilling of its own. *(2026-10-22.)*
 - **A second folder table.** `core/access` has the only one. Whether another folder
   gets one is judged at the next name moved inside `core/access`, by how many importers
   that move had to touch. *(2026-10-19.)*
@@ -62,6 +58,12 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 - **One `kingfisher list` on the client's next redeploy.** Lock names are collected from
   the definitions now, so a misspelt one opens nothing rather than being refused at
   startup; the listing shows every name in use and the files using it. *(2026-10-20.)*
+- **The client's answers on the overflow request.** Three questions went with the note on
+  what landed: whether their gateway's window is smaller than the `max_input_tokens`
+  their models give, whether what they saw was a refusal or an unexpected summary, and
+  which model rows ran. A summary on a single batch reopens clearing acting before the
+  summariser's own check, which *A refusal for length is clearing's to answer first* in
+  `decisions.md` measured and left accepted. *(2026-10-23.)*
 
 ## Small fixes, not yet made
 
@@ -77,6 +79,13 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 - **`decisions.md` still says expiry removes deepagents' offloaded copy**, in *Marked
   when the turn's ledger is built, removed by the sweep*. Nothing has been offloaded
   since 2026-10-21, so that sentence describes code that is gone. *(2026-10-23.)*
+- **The PDF allowance counts four characters a token.** `pdf_allowance` in
+  `attachments.py` gives a turn half the summariser's trigger at four characters of
+  base64 a token, but langchain counts a PDF block by its `repr` at the summariser's
+  own rate, 3.3 on an Anthropic class, scaled up to 1.25 by reported usage. So a turn's
+  PDFs fill some 60% of the trigger rather than half, before any scaling. The same
+  mismatch clearing had; reading the rate off `summarizer_count` would close it.
+  *(2026-10-23.)*
 - **Names that still call the definitions folder a workspace.** #1086 changed the
   wording but left identifiers: `defined_in_a_workspace` in `core/definitions/importing.py`,
   and three tests whose messages no longer say "workspace" --
@@ -95,14 +104,10 @@ which `NarrowedSkills` would have to drop. *(2026-10-13.)*
 
 ## Branches kept
 
-Every other merged branch was deleted, here and on GitHub, on 2026-10-23.
+Every other merged branch was deleted, here and on GitHub, on 2026-10-27.
 
 - **`clearing-counts-like-summariser`**, merged. Its worktree,
   `.claude/worktrees/clearing-counts-like-summariser`, is locked by a Claude session still
   running; remove the worktree and the branch once that session ends. *(2026-10-23.)*
-- **`ongoing-overflow-items`**, with no pull request. Its worktree,
-  `.claude/worktrees/agent-a643e3215d187ff03`, holds an uncommitted edit to this page,
-  among it an entry on the client's answers to the overflow request. Land it or drop it.
-  *(2026-10-23.)*
 - **`scratchpad-under-derived`**, #603's, closed unmerged and kept as a reference: see
   *One folder for everything the agent makes* above. *(2026-10-23.)*
