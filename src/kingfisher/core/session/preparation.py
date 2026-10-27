@@ -107,7 +107,7 @@ class Preparation:
         Every refusal comes before `run_start` and before the session's agent and datazone
         are pinned, so a refused request leaves no turn behind and fixes nothing; the claim
         is taken before them and given back if one refuses, and a session this request
-        made goes with it.
+        made goes with it unless another turn has pinned it since.
         """
         cfg = self.cfg
         session = yield from self._session_for(request)
@@ -126,15 +126,12 @@ class Preparation:
             made = False
             refuse_files_of_another(files, session.id)
         harness = HarnessFiles(files)
-        # Read once, for reach here and for the agent the turn runs; neither asks for a
-        # supplied graph where nothing is locked.
-        pinned, zones = (
-            (yield from pinned_in(harness))
-            if held is not None or self._graph is None
-            else (None, None)
-        )
-        if not self._reaches_pin(pinned, zones, held, session_id=session.id):
-            raise unknown_session(session.id)
+        # Neither read asks a supplied graph where nothing is locked.
+        reads_pins = held is not None or self._graph is None
+        # Only so a caller out of reach hears "no session" rather than "busy": the turn
+        # runs on the pins read again under the claim.
+        first = (yield from pinned_in(harness)) if reads_pins else (None, None)
+        self._refuse_out_of_reach(*first, held, session_id=session.id)
         # A turn writes inside the session, which leaves the timestamp `retention.expired`
         # reads alone. At the top of the turn, not the end: a turn that fails still happened.
         yield changing(self._sessions, "mark_used", cfg, session.id)
@@ -150,6 +147,13 @@ class Preparation:
             )
             raise SessionBusyError(msg)
         try:
+            # A turn that held the claim since the read above may have pinned the session
+            # to an agent or datazones this caller does not reach.
+            pinned, zones = (yield from pinned_in(harness)) if reads_pins else (None, None)
+            if (pinned, zones) != first:
+                # That turn ran here, so the session is no longer this request's to delete.
+                made = False
+            self._refuse_out_of_reach(pinned, zones, held, session_id=session.id)
             prepared = yield from self._claimed(
                 request,
                 session,
@@ -168,6 +172,13 @@ class Preparation:
             yield changing(self._sessions, "release", cfg, session.id, claimed)
             raise
         return replace(prepared, claim=claimed)
+
+    def _refuse_out_of_reach(
+        self, pinned: Any, zones: frozenset[str] | None, held: frozenset[str] | None, *,
+        session_id: str,
+    ) -> None:
+        if not self._reaches_pin(pinned, zones, held, session_id=session_id):
+            raise unknown_session(session_id)
 
     def _claimed(  # noqa: PLR0913 -- setup's, handed on: a second backend is a second sandbox
         self,
