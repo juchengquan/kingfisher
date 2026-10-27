@@ -796,6 +796,48 @@ its own graph and no policy has no reader for the spec, and resolving anyway wou
 it refuse a request naming a different agent mid-conversation. Both halves are driven.
 *(2026-09-23, from an architecture review.)*
 
+**Every event says which delegations it is inside, as a chain of call ids.**
+`RunEvent.delegations` holds the id of each `task` call an event sits inside, outermost
+first, and is `()` for the main agent; `agent` stays the innermost subagent's name. The
+name told two subagents apart and not two runs of one: every token of both said
+`reviewer`, and the command printed their answers merged word by word. The innermost id
+alone does not say which run of a subagent a helper serves, and the outermost alone
+files two helpers one subagent runs at once under one id. `delegations[0]` is the call
+the ledger files a subagent's results under. The chain comes from langgraph's `tasks`
+stream, because deepagents passes a subagent no call id; `findings.md` has what that
+stream carries. A namespace segment no `task` call started, a supplied graph's own
+subgraph, adds nothing, or every event of that graph would read as delegated.
+*(2026-10-27, #1130.)*
+
+**Calls and results carry their ids, for every tool, and the field is not `call_id`.** A
+`model_call` has `calls`, index-aligned with `tools` and refused out of step by the
+check that holds `args`, and a `tool_result` has `call`, the id of the call it answers.
+Without them nothing said which of two runs had just finished, nor which of two parallel
+`sql_query` results was which. `call` is the ledger's word for a call's id; `call_id` on
+a `PendingDecision` names a pause, and `decision_needed` carries neither, since the
+pause does not hold the call's id. A provider that leaves an id out gives `""`, which
+keeps the tuple aligned. No printed line shows an id: to a reader a provider's
+`toolu_01…` is noise. *(2026-10-27, #1130.)*
+
+**A `delegation_start` announces each delegation on every turn it is open in, and no
+event announces its end.** It is the delegation's own: `agent` is the subagent,
+`delegations` ends in its id, and `text` is what it was asked. It fires when the call
+begins rather than at the subagent's first output, so a reader can decide to hold a
+delegation's output before any has printed. It is also what makes a resumed turn
+readable: a resume repeats no `model_call`, and the command answers an approval in a new
+process, so without it nothing in the resumed stream would say what `p0` was, or that
+two delegations were open. The `tool_result` whose `call` is the delegation's id ends
+it; a pause is not an end. *(2026-10-27, #1130.)*
+
+**Not covered: the run-events record, a program's subagents, and an approval's subagent
+with two open.** `RunEvents` is built from langchain's callbacks rather than the stream,
+so telling parallel calls apart there needs a mechanism of its own; the ledger already
+files a subagent's results under the call that started it, so the record after the fact
+was never blind the way the live stream was. `ONGOING.md` keeps it. A subagent a program
+starts with `task()` inside `eval` does not reach the stream at all.
+`PendingDecision.agent` stays `None` while two delegations are open, for the reason
+`_subagent_behind` gives. *(2026-10-27.)*
+
 ## Packaging: where the definitions live
 
 This reversed twice. The current answer is the third one.
@@ -4759,6 +4801,24 @@ caller for correct behaviour and does nothing for whoever forgets it. **A subage
 is progress, not answer**: the streams keep the voices apart, and an extractor's notes are
 not what anybody redirected stdout for. `Progress` moved out of the driver rather than
 being copied, since two renderers would disagree about the next event kind. *(2026-09-04.)*
+
+**Delegations side by side are held, and each prints whole as it finishes.** While two
+or more delegations with one parent chain are open, everything each says -- its prose
+and its own `[model:…]` and `[tool :…]` lines -- is held, and printed as one block when
+its result arrives: the `delegation_start` line as its header, what it said, then the
+result. A lone delegation, by far the common case, stays live and prints byte for byte
+as before, and so does a lone subagent consulting a lone helper: siblings share a
+parent, so a helper is never beside its own subagent. Holding only the prose would have
+kept a sign of life, but the one-line events interleave too, and two runs of one
+subagent would have needed labels invented for them; a reader who wants a long parallel
+run live has `--log`. Blocks print in finish order, so a fast one is not kept behind a
+slow one called first, and the header tells two runs of one subagent apart by the first
+line of what each was asked. A held block's own parallel helpers are blocks inside it.
+**Nothing held is dropped**: a turn that stops with delegations open, at a gate, a
+deadline or an exception out of the stream, prints each block marked `(unfinished)`
+before the line saying why, innermost first so a helper's lands inside its subagent's.
+*(2026-10-27, #1130; seen once on MiniMax-M3, two runs of one subagent each printed
+whole.)*
 
 **The exit code carries `stop_reason`, because prose on stdout leaves nowhere else to put
 it.** `0` finished, `1` stopped at a bound, `2` never ran -- so `kingfisher run ... >

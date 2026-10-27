@@ -39,6 +39,34 @@ wrong.*
   and tags a subagent's `model_call`, `tool_result` and `token` events with
   `agent=<name>` -- `SubagentNames` in `core/session/runtime.py`, held
   by `tests/unit/test_stream_subagents.py`.
+- **langgraph's `tasks` stream names the call that started a subagent.** A start event
+  for a `tools` node carries an `id` equal to the namespace segment its subagent's
+  chunks arrive under, `tools:<id>`, and an `input` holding the one call it runs:
+  `{'name': 'task', 'args': {'description': …, 'subagent_type': …}, 'id': 't1', 'type':
+  'tool_call'}`. So two runs of one subagent have distinct namespaces, and nested
+  helpers map at every level, a compiled subagent's as well, under `stream` and
+  `astream` alike. deepagents' `task` tool passes no call id into the subagent's config,
+  so on the stream this is the only place it is. `Delegations` in
+  `core/session/runtime.py`, held by `tests/unit/test_stream_delegations.py`. *(2026-10-27, langgraph 1.2.15, deepagents
+  0.7.22.)*
+- **A step announces all its tasks before running any.** `tick` in
+  `langgraph/pregel/_loop.py` emits every task start of the step together, so each
+  sibling's start precedes any sibling's output, and `map_debug_tasks` hands over each
+  task's input by reference rather than a copy. *(2026-10-27, langgraph 1.2.15.)*
+- **A resume re-announces each delegation it re-enters, and sends a finished sibling's
+  result again.** With `scribe` paused at a gate and `clerk` answered beside it, the
+  resumed stream starts both under their old ids and repeats `clerk`'s `task` result
+  before `scribe` goes on. Kingfisher passed that repeat on before it read `tasks`, and
+  still does; the command prints it as a block of a header and a result. *(2026-10-27,
+  re-measured 2026-10-28, langgraph 1.2.15.)*
+- **The `tasks` stream costs little.** Two events per node per step at each level, start
+  and end: 34 on a two-level probe, of which kingfisher reads the four `tools` starts. A
+  scripted turn of 400 model calls, each reply 4,000 characters, streamed in 0.95s
+  without the mode and 0.98s with it, over three trials each. *(2026-10-28, langgraph
+  1.2.15.)*
+- **A subagent a program starts with `task()` inside `eval` never streams.** Two started
+  at once ran and answered, and the stream showed only the `eval` result. *(2026-10-27,
+  deepagents 0.7.22.)*
 - **An `updates` chunk carries a message written back under its own id as if it were
   new.** Clearing swaps an older result for its handle that way, and deepagents'
   summariser clips an overflowing result the same way; in the node's update either is

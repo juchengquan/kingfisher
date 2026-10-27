@@ -77,9 +77,6 @@ slices land.
   kingfisher sends back of a model's thinking once the vendor, or the conversation
   before it, has changed, keyed on the endpoint that answered. Its first slice has
   landed; the rest wait on one live Anthropic call each.
-- [Delegations side by side](design/2026-10-27-delegations-side-by-side.md) — telling
-  two subagents running at once apart on the stream, by the call that started each,
-  and printing each as one block in the CLI. Nothing built; its mechanism is measured.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,
@@ -112,6 +109,10 @@ section of that name in `decisions.md`.
 *One absolute path for the shell* was built in two the day it was written; its
 decisions are the two entries on `$KINGFISHER_SESSION_ROOT` under
 *Sessions: what persists and where* in `decisions.md`.
+*Delegations side by side* was built in one, in three commits; its decisions are under
+*Agents and delegation* and *The command line* in `decisions.md`, what it measured of
+langgraph is under *Streaming* in `findings.md`, its word is in `GLOSSARY.md`, and the
+part it left for later is in `ONGOING.md`.
 
 A document belongs there while it is arguing for something; once it is built its
 decisions move to `decisions.md`, anything it measured about upstream moves to
