@@ -188,8 +188,13 @@ class SessionMethods:
         listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
         if create and session_id not in listing:
             made = yield from self._files_for(session_id)
+            # Checked although nothing is pinned in a session this call made: a listing
+            # that missed one opens a session that was already there.
+            if not (yield from self._reaches_session(
+                HarnessFiles(made), held, session_id=session_id
+            )):
+                return None
             listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
-            # Nothing is pinned in a session this call made, so no caller is out of reach.
             return Session(session_id, listing[session_id], self, [made])
         if session_id not in listing:
             return None
