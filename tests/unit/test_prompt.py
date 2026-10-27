@@ -19,6 +19,7 @@ from kingfisher.core.agent.prompting import (
     skills_index,
     system_prompt,
 )
+from kingfisher.core.interfaces import Instructions
 from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS, OUTPUTS, SCRATCH, Layout
 from kingfisher.core.session.store import entry_id
 from kingfisher.core.session.turn import ledger_delta, ledger_index
@@ -669,7 +670,7 @@ def test_a_subagent_is_not_told_of_a_shell_it_does_not_hold(scripted, subagent, 
     assert MAPPINGS not in systems[1]
 
 
-class _HouseRules:
+class _HouseRules(Instructions):
     """A deployment's instructions, handed in as `Kingfisher(instructions=)` takes them."""
 
     def text(self, cfg) -> str:

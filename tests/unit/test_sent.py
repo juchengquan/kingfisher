@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from kingfisher import SENT_SOURCES, Capabilities, Kingfisher, ModelProfile, Request
 from kingfisher.cli.__main__ import EMPTY_TELL, main
 from kingfisher.core.agent.sent import _OPENINGS, first_call, labelled, sent_tool
+from kingfisher.core.interfaces import TurnInstructions
 from kingfisher.core.session.model import UnknownSessionError
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, FakeGraph, an_agent, pin, start, tools_dir
@@ -39,7 +40,7 @@ TOOLS = [where]
 TOLD = "Today is the 26th of October."
 
 
-class Told:
+class Told(TurnInstructions):
     """A `TurnInstructions` saying one thing to every turn."""
 
     def text(self, cfg, session_id, caller):

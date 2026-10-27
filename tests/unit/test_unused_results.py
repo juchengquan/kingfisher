@@ -16,6 +16,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
+from kingfisher.core.interfaces import UnusedResults
 from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH, TOOL_RESULTS, TRANSCRIPT_FILE
 from kingfisher.plugins import (
     DeleteUnusedResults,
@@ -79,7 +80,7 @@ def _turn(kf: Kingfisher, *script: AIMessage, awaited: bool = False):
     return asyncio.run(kf.arun(request)) if awaited else kf.run(request)
 
 
-class Keeping:
+class Keeping(UnusedResults):
     """Removes nothing, and keeps what each turn handed it."""
 
     def __init__(self) -> None:
@@ -175,7 +176,7 @@ def test_a_turn_with_nothing_unused_does_not_ask(workspace):
     assert keeping.handed == []
 
 
-class Reaching:
+class Reaching(UnusedResults):
     """Tries to reach past what it was handed, and records what happened."""
 
     def __init__(self) -> None:
@@ -215,7 +216,7 @@ def test_the_files_handed_over_reach_no_other_path(workspace):
     assert reaching.offered == ({"session_id"}, {"path", "size", "read", "remove"})
 
 
-class Raising:
+class Raising(UnusedResults):
     def settle(self, found: UnusedFiles) -> None:
         msg = "the archive is down"
         raise RuntimeError(msg)
@@ -239,7 +240,7 @@ def test_a_plugin_that_raises_is_logged_and_the_turn_keeps_its_answer(
     assert STRAY in _kept(workspace)
 
 
-class Twice:
+class Twice(UnusedResults):
     """Removes each file twice: the second finds it gone."""
 
     def settle(self, found: UnusedFiles) -> None:
@@ -259,7 +260,7 @@ def test_removing_a_file_already_gone_is_not_an_error(workspace, caplog):
     assert "unused results" not in caplog.text
 
 
-class Watching:
+class Watching(UnusedResults):
     """Records, while settling, whether the session was still claimed and which thread
     it was asked on."""
 

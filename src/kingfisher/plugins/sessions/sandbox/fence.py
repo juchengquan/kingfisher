@@ -13,6 +13,7 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.interfaces import CommandRunner
 from kingfisher.core.layout import Layout
 
 from .linux import present
@@ -92,7 +93,7 @@ def reaper() -> str:
     return Path(__file__).with_name("_reaper.py").read_text(encoding="utf-8")
 
 
-class LandlockRunner:
+class LandlockRunner(CommandRunner):
     """Runs one session's commands behind that policy.
 
     Owns the launch and confines between `fork` and `exec`, because `Sandbox.run` needs

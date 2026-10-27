@@ -17,6 +17,7 @@ from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.subagents.spec import RunOn, declared
+from kingfisher.core.interfaces import SubagentMiddlewares
 from kingfisher.plugins import AgentsMiddlewares, LocalSessions, backend_at
 from tests.conftest import (
     EVERY_TOOL,
@@ -89,7 +90,7 @@ def _graph(model, tools):
 '''
 
 
-class Answering:
+class Answering(SubagentMiddlewares):
     """A `SubagentMiddlewares` answering `names` for every subagent, and keeping what it
     was asked."""
 

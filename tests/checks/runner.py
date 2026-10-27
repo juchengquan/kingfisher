@@ -43,7 +43,7 @@ SLEEPS = "sleep 30"
 def a_runner_says_where_it_runs(make: Callable[[], CommandRunner]) -> None:
     """`local` decides whether the fence is applied, so it is read before a command is."""
     runner = make()
-    declared = getattr(runner, "local", True)
+    declared = runner.local
     _must_be(
         declared,
         bool,

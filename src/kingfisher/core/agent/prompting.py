@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.skills import READ_FILE
+from kingfisher.core.interfaces import Instructions
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 
 if TYPE_CHECKING:
@@ -386,7 +387,7 @@ def _in_order(*parts: str) -> str:
     return "\n\n---\n\n".join(part.strip() for part in parts if part.strip())
 
 
-class InstructionsFile:
+class InstructionsFile(Instructions):
     """Kingfisher's own `Instructions`: `INSTRUCTIONS.md` in the definitions folder.
 
     With what people write rather than in the workspace sessions make, so the macOS

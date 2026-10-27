@@ -36,7 +36,13 @@ from kingfisher.core.agent.tool_context import NOT_GRANTED
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
-from kingfisher.core.interfaces import MAX_SCRATCH_BYTES, MAX_SCRATCH_OUTPUTS, CommandResult
+from kingfisher.core.interfaces import (
+    MAX_SCRATCH_BYTES,
+    MAX_SCRATCH_OUTPUTS,
+    CommandResult,
+    CommandRunner,
+    ScratchRunLimit,
+)
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions, NoScratchRunLimit, backend_at
 from kingfisher.plugins.sessions.scratch import ScratchFolder
@@ -303,7 +309,7 @@ def test_an_async_tool_runs_on_an_async_graph(cfg, session_dir):
 # -- a deployment's limit -----------------------------------------------------
 
 
-class _Limit:
+class _Limit(ScratchRunLimit):
     """A `ScratchRunLimit` refusing the graphs named in `refused`, keeping what it is asked."""
 
     def __init__(self, *refused: str) -> None:
@@ -1184,7 +1190,7 @@ def test_a_deployments_own_runner_is_not_gone_round(cfg, session_dir):
     """A runner a deployment supplied may run as another user or under limits; a scratch
     run launching its own process would skip all of it."""
 
-    class Theirs:
+    class Theirs(CommandRunner):
         local = True
 
         def run(self, command: str, *, timeout: int | None = None) -> CommandResult:

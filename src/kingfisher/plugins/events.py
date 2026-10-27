@@ -6,8 +6,10 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
+from kingfisher.core.interfaces import RunEvents
 
-class JsonlRunEvents:
+
+class JsonlRunEvents(RunEvents):
     """`RunEvents` appended to a file, one JSON line per event: `kingfisher run --log`.
 
     Opened per event rather than held, so a turn that crashes leaves every line it got to.

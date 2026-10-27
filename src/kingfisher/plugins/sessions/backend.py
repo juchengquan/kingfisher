@@ -45,7 +45,6 @@ from .shell import (
     ConfinedLocalShellBackend,
     fence_for,
     kingfishers_shell,
-    runs_locally,
     shell_env,
     shell_skills,
 )
@@ -390,10 +389,18 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         )
         chosen: CommandRunner | None = fence
     else:
+        # Here rather than when `LocalSessions` is built: a runner is made per session.
+        if not isinstance(runner, CommandRunner):
+            msg = (
+                f"a runner is a CommandRunner, and {type(runner).__name__} does not "
+                "subclass it -- subclass CommandRunner, which says what `run` takes "
+                "and that the runner is local unless it says not"
+            )
+            raise TypeError(msg)
         # A supplied runner that is not local receives nothing this process applied, so
         # the confinement must stop claiming it.
         chosen = runner
-        confined = confinement.with_supplied_runner(confined, local=runs_locally(runner))
+        confined = confinement.with_supplied_runner(confined, local=runner.local)
     if confined.warning:
         # After the runner is settled: one that is not local withdraws the warning.
         # `stacklevel=1` so the default filter says it once per process. The sessions

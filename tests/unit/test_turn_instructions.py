@@ -21,6 +21,7 @@ from kingfisher.core.agent.middlewares.caching import CACHING, PromptCachingMidd
 from kingfisher.core.agent.prompting import session_section
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.agents.spec import AgentSpec
+from kingfisher.core.interfaces import TurnInstructions
 from kingfisher.core.layout import MEMORY
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
@@ -378,7 +379,7 @@ def test_a_deployments_own_prompt_caching_still_builds_without_it(cfg, session_d
     assert not [m for m in built.middleware if isinstance(m, PromptCachingMiddleware)]
 
 
-class Asked:
+class Asked(TurnInstructions):
     """Answers with the session and how many times it has been asked, and records whether
     it was asked on an event loop."""
 
@@ -417,7 +418,7 @@ def test_the_plugin_is_asked_once_a_turn_for_its_session(scripted, awaited):
 def test_a_hook_answering_anything_but_text_is_refused(scripted):
     """`Told(...)`, the shape this answered before, would reach the model as its repr."""
 
-    class Shaped:
+    class Shaped(TurnInstructions):
         def text(self, cfg, session_id: str, caller) -> Any:
             return {"everyone": "Today is Friday."}
 

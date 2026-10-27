@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import base64
 import inspect
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Protocol, get_args, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, get_args
 
 from kingfisher.core.session.threads import off_loop, thread_pool
 
@@ -60,7 +61,7 @@ class ScratchRun:
     error: str | None = None
 
 
-class CommandRunner(Protocol):
+class CommandRunner(ABC):
     """How a shell command is run, for a deployment that runs them elsewhere.
 
     `command` arrives already confined **when the runner is local**, the default:
@@ -74,15 +75,10 @@ class CommandRunner(Protocol):
     outlives it.
     """
 
-    @property
-    def local(self) -> bool:
-        """Whether the command runs on this machine. `True` unless a runner says not.
+    #: Whether the command runs on this machine. `True` unless a runner says not.
+    local: bool = True
 
-        A property, not an attribute: a protocol declaring `local: bool` demands a
-        settable one, which a frozen dataclass adapter is not, and nothing assigns it.
-        """
-        return True
-
+    @abstractmethod
     def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
         """Run `command`, giving up after `timeout` seconds if one is given.
 
@@ -93,8 +89,7 @@ class CommandRunner(Protocol):
 
 
 
-@runtime_checkable
-class RunEvents(Protocol):
+class RunEvents(ABC):
     """Where a record of each turn goes: its start and end, every model and tool call.
 
     Not session state: written as the turn runs and most wanted for a turn that
@@ -102,6 +97,7 @@ class RunEvents(Protocol):
     Every event carries `session_id` and `turn_id`.
     """
 
+    @abstractmethod
     def record(self, event: Mapping[str, object]) -> None:
         """Keep one event: a flat mapping whose `event` key names what happened.
 
@@ -114,8 +110,7 @@ class RunEvents(Protocol):
         ...
 
 
-@runtime_checkable
-class Sessions(Protocol):
+class Sessions(ABC):
     """How a deployment says where its sessions are, and what each one runs on.
 
     Asked per turn to `open` its session, and asked what only something seeing every
@@ -123,8 +118,8 @@ class Sessions(Protocol):
     session id, because a backend that runs elsewhere has no directory here.
 
     `open` is typed by its call, not its return: deepagents decides what a backend is
-    with `isinstance` against its own base class, so an object matching a protocol
-    would still get no shell. `refuse_unusable_backend` asks once there is an object.
+    with `isinstance` against its own base class, so an object with a backend's
+    methods would still get no shell. `refuse_unusable_backend` asks once there is an object.
 
     Each takes the `Config` because the default serves every workspace and keeps its
     sessions there; a deployment's own may ignore it.
@@ -152,12 +147,12 @@ class Sessions(Protocol):
     `/inputs`, and refuses a host path.
     """
 
+    @abstractmethod
     def open(
         self,
         cfg: Config,
         session_id: str,
-        # Positional-only: a protocol matches parameter names, so without the slash
-        # an `open` reading `(config, which)` would not satisfy it.
+        # Positional-only, so an override may name them as it likes: `(config, which)`.
         /,
         *,
         catalogue: Definitions | None = None,
@@ -165,10 +160,12 @@ class Sessions(Protocol):
         """This session's backend, making the session if it is new."""
         ...
 
+    @abstractmethod
     def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
         """`(session_id, last_used)` for every session there is."""
         ...
 
+    @abstractmethod
     def mark_used(self, cfg: Config, session_id: str) -> None:
         """Record that a turn is running in this session now.
 
@@ -177,14 +174,17 @@ class Sessions(Protocol):
         """
         ...
 
+    @abstractmethod
     def size(self, cfg: Config, session_id: str) -> int:
         """How many bytes this session holds."""
         ...
 
+    @abstractmethod
     def delete(self, cfg: Config, session_id: str) -> str | None:
         """Remove this session and everything in it. A reason on failure, or `None`."""
         ...
 
+    @abstractmethod
     def claim(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
     ) -> str | None:
@@ -198,12 +198,14 @@ class Sessions(Protocol):
         """
         ...
 
+    @abstractmethod
     def release(self, cfg: Config, session_id: str, token: str, /) -> None:
         """Give back the lock `token` took. Safe where it was never taken, and a no-op
         where a later turn holds it: a turn that outlived its claim must not end the
         claim of the turn that took it over."""
         ...
 
+    @abstractmethod
     def held(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
     ) -> bool:
@@ -246,7 +248,7 @@ class Sessions(Protocol):
         return await off_loop(thread_pool(), self.release, cfg, session_id, token)
 
 
-class Instructions(Protocol):
+class Instructions(ABC):
     """A deployment's standing text for every agent and subagent it runs, but a compiled
     subagent: deepagents runs that graph with the prompt its `build` gave it.
 
@@ -255,12 +257,13 @@ class Instructions(Protocol):
     What kingfisher tells every agent is not replaceable.
     """
 
+    @abstractmethod
     def text(self, cfg: Config) -> str:
         """The instructions, or an empty string for none."""
         ...
 
 
-class TurnInstructions(Protocol):
+class TurnInstructions(ABC):
     """A deployment's text for one turn -- today's date, who the user is -- for every agent
     and subagent the turn runs but a compiled subagent, as `Instructions` reach.
 
@@ -269,12 +272,13 @@ class TurnInstructions(Protocol):
     nowhere: the next turn asks again.
     """
 
+    @abstractmethod
     def text(self, cfg: Config, session_id: str, caller: Caller) -> str:
         """What this turn's graphs are told, or an empty string for nothing."""
         ...
 
 
-class MemoryStore(Protocol):
+class MemoryStore(ABC):
     """Where a user's memory is kept, for a deployment whose memory follows the user from
     one session to the next rather than ending with each.
 
@@ -285,6 +289,7 @@ class MemoryStore(Protocol):
     exception from any is reported as `memory_store_failed` and the turn goes on.
     """
 
+    @abstractmethod
     def key(self, caller: Caller) -> str | None:
         """Whose memory this turn's is, or `None` for no one's, which keeps the session's.
 
@@ -292,10 +297,12 @@ class MemoryStore(Protocol):
         """
         ...
 
+    @abstractmethod
     def load(self, key: str) -> tuple[MemoryEntry, ...]:
         """This user's entries, in order, each with the id kingfisher gave it."""
         ...
 
+    @abstractmethod
     def apply(self, key: str, changes: MemoryChanges) -> tuple[MemoryEntry, ...]:
         """`changes` applied by id to this user's entries as they are now, and the result.
 
@@ -306,7 +313,7 @@ class MemoryStore(Protocol):
         ...
 
 
-class UnusedResults(Protocol):
+class UnusedResults(ABC):
     """What becomes of the saved tool results nothing points to any more.
 
     Asked at the end of every turn that leaves one, once the ledger and the conversation
@@ -315,6 +322,7 @@ class UnusedResults(Protocol):
     recorder gives, so nothing the agent wrote beside them is among them.
     """
 
+    @abstractmethod
     def settle(self, found: UnusedFiles) -> None:
         """Do what this deployment does with each file in `found`.
 
@@ -352,7 +360,7 @@ class ReturnedPdf:
         return None if self._base64 is None else base64.b64decode(self._base64)
 
 
-class PdfAttachments(Protocol):
+class PdfAttachments(ABC):
     """What the model is handed in place of a PDF a tool returns, for a deployment that
     judges one by more than its size: its pages, say, or what it holds.
 
@@ -363,6 +371,7 @@ class PdfAttachments(Protocol):
     pool, off the event loop.
     """
 
+    @abstractmethod
     def replacement(self, pdf: ReturnedPdf) -> str | Sequence[Any] | None:
         """What the model is handed instead of `pdf`, or `None` for kingfisher's verdict.
 
@@ -375,7 +384,7 @@ class PdfAttachments(Protocol):
         ...
 
 
-class SubagentMiddlewares(Protocol):
+class SubagentMiddlewares(ABC):
     """Which of the agent's middleware a portable subagent runs, since it may name none.
 
     Asked once for each portable subagent built, a helper too, with the main agent's names
@@ -384,6 +393,7 @@ class SubagentMiddlewares(Protocol):
     subagent the deployment wrote, or one that arrives compiled, is never asked about.
     """
 
+    @abstractmethod
     def names(self, subagent: str, agent: str, middlewares: tuple[str, ...]) -> Sequence[str]:
         """The middleware `subagent` runs, from `middlewares`, the agent's own, in order.
 
@@ -393,7 +403,7 @@ class SubagentMiddlewares(Protocol):
         ...
 
 
-class AgentsMiddlewares:
+class AgentsMiddlewares(SubagentMiddlewares):
     """`SubagentMiddlewares` answering the agent's own: what a subagent written to travel
     cannot name, it runs as the agent it works for does."""
 
@@ -401,7 +411,7 @@ class AgentsMiddlewares:
         return middlewares
 
 
-class ScratchRunLimit(Protocol):
+class ScratchRunLimit(ABC):
     """Which graphs' offered tools a deployment refuses `ToolContext.run`, among those
     kingfisher would hand it to.
 
@@ -414,6 +424,7 @@ class ScratchRunLimit(Protocol):
     `async def` answers a coroutine, which is not a grant.
     """
 
+    @abstractmethod
     def allows(self, name: str, kind: Literal["agent", "subagent", "general-purpose"]) -> bool:
         """Whether the tools of graph `name` may run commands, where kingfisher would let them.
 
@@ -423,7 +434,7 @@ class ScratchRunLimit(Protocol):
         ...
 
 
-class NoScratchRunLimit:
+class NoScratchRunLimit(ScratchRunLimit):
     """Every graph kingfisher would hand a run is handed one."""
 
     def allows(
@@ -433,16 +444,17 @@ class NoScratchRunLimit:
 
 
 def hooks_of(function: Callable[..., object]) -> dict[str, type]:
-    """The parameters of `function` that are hooks, and the protocol each takes: those
-    left out by default and typed as one of the protocols here.
+    """The parameters of `function` that are hooks, and the interface each takes: those
+    left out by default and typed as one of the interfaces here.
 
     Read off the annotation, so a hook added to a signature is checked with nothing else
     to extend.
     """
-    protocols = {
+    # Abstract, so the defaults kept here, which subclass an interface, are not taken for one.
+    interfaces = {
         name: one
         for name, one in globals().items()
-        if isinstance(one, type) and Protocol in one.__mro__[1:]
+        if isinstance(one, type) and inspect.isabstract(one)
     }
     found: dict[str, type] = {}
     for name, parameter in inspect.signature(function).parameters.items():
@@ -455,31 +467,6 @@ def hooks_of(function: Callable[..., object]) -> dict[str, type]:
             if isinstance(written, str)
             else [getattr(one, "__name__", "") for one in get_args(written) or (written,)]
         )
-        if taken := [protocols[one] for one in names if one in protocols]:
+        if taken := [interfaces[one] for one in names if one in interfaces]:
             found[name] = taken[0]
     return found
-
-
-def refuse_incomplete(keyword: str, hook: object, protocol: type) -> None:
-    """Refuse `hook`, wired as `keyword=`, where it lacks a method `protocol` lists.
-
-    A class of the deployment's own is taken whatever it subclasses, so long as it has
-    every method.
-    """
-    # Read off the protocol, so a method added to one later is checked with no other edit.
-    missing = sorted(
-        name
-        for name, value in vars(protocol).items()
-        if callable(value)
-        and not name.startswith("_")
-        and not callable(getattr(hook, name, None))
-    )
-    if not missing:
-        return
-    named = ", ".join(missing)
-    msg = (
-        f"{keyword}= takes a {protocol.__name__}, and {type(hook).__name__} has no "
-        f"{named} -- define {'it' if len(missing) == 1 else 'them'} as "
-        f"{protocol.__name__} does"
-    )
-    raise TypeError(msg)

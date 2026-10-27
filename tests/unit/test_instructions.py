@@ -9,6 +9,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.prompting import INSTRUCTIONS_FILE, InstructionsFile
 from kingfisher.core.config import ConfigError
+from kingfisher.core.interfaces import Instructions
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import EVERY_TOOL, agent_named, an_agent, subagent_of, subagents_dir
 from tests.unit.scripted import Scripted
@@ -53,7 +54,7 @@ def test_a_deployments_own_are_asked_on_every_turn(scripted):
     where the file it replaces took effect on the next turn."""
     an_agent(scripted, **EVERY_TOOL)
 
-    class Counting:
+    class Counting(Instructions):
         asked = 0
 
         def text(self, cfg) -> str:

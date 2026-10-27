@@ -47,6 +47,7 @@ from kingfisher.core.access.capabilities import ALL, CapabilityError, all_but
 from kingfisher.core.config import Config
 from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.seeding import SEED_HINT
+from kingfisher.core.interfaces import RunEvents
 from kingfisher.core.layout import DEFAULT_LAYOUT, OUTPUTS
 from kingfisher.core.session.runlog import usage_of
 from kingfisher.core.workspace import ensure_layout
@@ -66,7 +67,7 @@ def _selection(value: str | None) -> tuple[str, ...] | None:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
-class _Recorded:
+class _Recorded(RunEvents):
     """The run's events, kept for the usage line at the end."""
 
     def __init__(self) -> None:

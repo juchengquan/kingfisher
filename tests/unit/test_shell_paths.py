@@ -33,7 +33,7 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
     timeout_line,
 )
 from kingfisher.core.agent.prompting import execute_line, what_you_make_goes
-from kingfisher.core.interfaces import CommandResult
+from kingfisher.core.interfaces import CommandResult, CommandRunner
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import LocalSessions, ShellPrompt, backend_at
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
@@ -1015,7 +1015,7 @@ def test_execute_is_told_the_setting_as_its_longest(shelled):
 
 
 @dataclass
-class Timed:
+class Timed(CommandRunner):
     """A runner keeping the timeout each command was handed."""
 
     handed: list[int | None] = field(default_factory=list)
@@ -1153,7 +1153,7 @@ def test_a_miss_is_corrected_only_on_a_shell_exporting_the_session_root(shelled,
 
 
 @dataclass
-class Noting:
+class Noting(CommandRunner):
     """A runner keeping each command it was handed."""
 
     handed: list[str] = field(default_factory=list)

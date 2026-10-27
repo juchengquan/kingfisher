@@ -8,11 +8,6 @@ from typing import Any
 from .config import ConfigError
 
 
-def _wanted(interface: type) -> str:
-    """Every public name on `interface`, field or method, so a refusal can say what is missing."""
-    return ", ".join(sorted(name for name in dir(interface) if not name.startswith("_")))
-
-
 def built_from_setting(spec: str, *, setting: str, interface: type) -> Any:
     """Import `spec`, call it, and check the result is an `interface`."""
     module_name, separator, attribute = spec.partition(":")
@@ -45,7 +40,8 @@ def built_from_setting(spec: str, *, setting: str, interface: type) -> Any:
     if not isinstance(built, interface):
         msg = (
             f"{setting} names {spec!r}, which returned {type(built).__name__} -- not "
-            f"a {interface.__name__}. It has to answer to {_wanted(interface)}"
+            f"a {interface.__name__}. Subclass {interface.__name__}, which names every "
+            "method it asks for"
         )
         raise ConfigError(msg)
     return built

@@ -7,10 +7,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.interfaces import UnusedResults
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
-
-    from kingfisher.core.interfaces import UnusedResults
 
 _log = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class UnusedFiles:
         self._removed.add(path)
 
 
-class DeleteUnusedResults:
+class DeleteUnusedResults(UnusedResults):
     """`UnusedResults` that removes every file it is handed."""
 
     def settle(self, found: UnusedFiles) -> None:

@@ -11,6 +11,8 @@ from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 
+from kingfisher.core.interfaces import RunEvents
+
 from . import runtime
 
 MODEL_CALL = "model_call"
@@ -48,7 +50,7 @@ def usage_of(events: Iterable[Mapping[str, Any]]) -> Usage:
     )
 
 
-class LoggedRunEvents:
+class LoggedRunEvents(RunEvents):
     """`RunEvents` into the `kingfisher.run` logger.
 
     `extra` carries the mapping for a handler that ships structured records. Checked
