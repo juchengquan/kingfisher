@@ -34,6 +34,17 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   that move had to touch. *(2026-10-19.)*
 - **Endpoints whose credential is fetched in code**, with neither `key:` nor
   `key_env:`. Parked for a grilling of its own. *(2026-10-14.)*
+- **A tool the agent and the grant spell differently is dropped.** `Capabilities.intersect`
+  compares names as written, before anything spells them, so an agent declaring
+  `pay.py::line_count` under a grant of `line_count`, or the other way round, runs
+  without `line_count` and nothing refuses. Measured through `build_agent`; one spelling
+  on both sides keeps it. Spelling both before the intersect changes what a run is
+  handed, so it is the owner's call. *(2026-10-27.)*
+- **`langchain-anthropic`'s floor.** At the lowest resolution `pyproject.toml` allows,
+  nine tests in `test_models.py` fail: 1.7.5 gives `claude-sonnet-4-5` a 1,000,000-token
+  window where they expect 200,000. 1.7.6 agrees with them but needs
+  `langchain-core>=1.6.10`. Raise the floor to 1.7.6, or stop the tests reading the model
+  data a release ships. *(2026-10-27.)*
 
 ## Waiting on a run
 
