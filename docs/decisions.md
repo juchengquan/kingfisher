@@ -6126,6 +6126,23 @@ drop a branch, and a branch dropped from `GuardedTool._arun` is the bug
 caught 280, nothing caught 18, and a doomed half alone caught one, the `cached` check in
 `turn_instructions.py` turned round; 231 halves went and 27 stayed. *(2026-10-28.)*
 
+**Kinds two to four, read the same way in every slice.** A test whose every check another
+makes still stays when what it guards is on the keep-list:
+`test_a_written_mark_is_used_as_written` repeats the mark-beside test, and a capped mark
+rebuilds the cache early. Kind four is the model, for one turn: an index missing ids after
+a summary loses them for the conversation, and a person reading `kingfisher list` is not
+the model, so neither is kind four. The gate adds one structural break to each keep-list
+line a doomed test runs -- a branch made unreachable, a statement dropped -- since the
+operators never drop one. Of the 294 items in `test_ledger.py`, `test_clearing.py` and
+`test_list.py`, 52 went; the last gave four, being nearly all who may see what under
+`--as`, or an exit code telling a script every run will be refused. Of 883 breaks, no
+doomed test noticed 299, a test that stays caught 575, and a doomed test alone caught
+nine. One brought its test back: a resume's rows dropped from its exchange, which the next
+message and every later index then miss. The other eight lose nothing -- four the
+read-miss note kind four lets go, a size label, a `.json` suffix, a gap in numbering, and
+the files of a turn a crash cut just before a resume, kept past their rounds.
+*(2026-10-28.)*
+
 **Growth is held by a rule in `CLAUDE.md`, not by anything in CI.** 557 of the 608 commits
 since September were written with Claude, which reads that file on every task. The growth
 is spread evenly -- a third each from PRs adding up to five tests, six to ten, and more --

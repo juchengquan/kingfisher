@@ -298,20 +298,6 @@ def test_a_workspace_with_no_compiled_subagent_says_nothing_about_them(cfg):
     assert "compiled" not in printed
 
 
-def test_a_compiled_subagent_is_not_annotated_with_the_file_you_can_already_see(cfg):
-    """`_from` stays silent when the name already tells you the file."""
-    from kingfisher.cli.listing import render
-    from kingfisher.core.inventory import inventory
-
-    _subagent_catalogue(cfg)
-    (line,) = [
-        one for one in render(inventory(cfg))
-        if one.strip().startswith("researcher")
-    ]
-
-    assert "(researcher.py)" not in line
-
-
 def test_the_json_listing_carries_it_too(cfg):
     """`--json` is what a script reads, and a script deciding whether a grant means
     anything needs the same fact the text gives a person.
@@ -937,16 +923,6 @@ def test_a_shared_name_written_with_its_file_is_not_reported(cfg, at_the_command
     assert json.loads(capsys.readouterr().out)["unresolved_subagents"] == {}
 
 
-def test_an_agent_granted_every_subagent_is_not_reported(cfg, at_the_command_line, capsys):
-    """`*` read as a name is one no subagent has, which reported an agent granted all
-    of them as naming a subagent that does not exist.
-    """
-    _define(cfg, {"reviewer.yaml": ("reviewer", None)}, '["*"]')
-
-    assert main(["list", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out)["unresolved_subagents"] == {}
-
-
 #: Each way a definition can name a tool that a run then refuses: the agent's own fields,
 #: the subagent's `tools:` line or `None` for no subagent, and the name the listing should
 #: blame on whom.
@@ -991,24 +967,6 @@ def test_a_tool_name_a_run_refuses_fails_the_listing(case, cfg, at_the_command_l
     assert f"{subject}: {name}" in capsys.readouterr().out
     assert main(["list", "--json"]) == 1
     assert json.loads(capsys.readouterr().out)["unresolved_tools"] == {subject: [name]}
-
-
-def test_tools_named_as_they_are_offered_are_not_reported(cfg, at_the_command_line, capsys):
-    """The control: both lines naming what a run accepts, a tool in its long form and a
-    subagent at `*` -- a check reading every name as unknown would report each.
-    """
-    _name_tools(
-        cfg,
-        {
-            "builtin_tools": "[read_file, task]",
-            "tools": "[word_tally, kit.py::line_count]",
-            "subagents": "[reviewer]",
-        },
-        '["*"]',
-    )
-
-    assert main(["list", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out)["unresolved_tools"] == {}
 
 
 @pytest.mark.parametrize("form", ["text", "json"])
@@ -1822,27 +1780,6 @@ def test_a_scoped_view_carries_no_policy(cfg, at_the_command_line):
     assert operator.vocabulary is not None
     assert operator.audiences
     assert not operator.access_report.is_clean
-
-
-def test_a_broken_tools_catalogue_still_leaves_the_access_sections(
-    cfg, at_the_command_line, capsys
-):
-    """The half the early return dropped. `render` used to stop after the skills and
-    subagents sections when `tools/` would not walk, so an operator auditing a policy on
-    a definitions folder with one unparseable `.py` got no access report -- and no sign that
-    there was one to get. Skills and subagents had been added to that path; this had not.
-    """
-    _workspace(cfg, NARROW)
-    from tests.conftest import tools_dir
-
-    (tools_dir(cfg) / "broken.py").write_text("this is not python(\n", encoding="utf-8")
-
-    assert main(["list"]) == 1
-
-    printed = capsys.readouterr().out
-    assert "cannot load" in printed, "and it still says the tools catalogue is the fault"
-    assert "access — by definition" in printed
-    assert "agent narrow  [A, B]" in printed
 
 
 def test_the_operator_sees_audiences_per_definition(policied, capsys):

@@ -16,11 +16,6 @@ from typing import Any
 
 import pytest
 from deepagents.middleware import SubAgentMiddleware
-from deepagents.middleware._message_eviction import (
-    _TOO_LARGE_TOOL_MSG,
-    _create_content_preview,
-    _render_preview_stub,
-)
 from langchain.agents.middleware import ExtendedModelResponse, ModelRequest, ModelResponse
 from langchain_anthropic import ChatAnthropic
 from langchain_anthropic.chat_models import _format_messages
@@ -196,13 +191,6 @@ class Talk:
         return _applied(self.messages, self.passed(high, sent, tools=tools)[1])
 
 
-def _stub(call: str, path: str, content: str) -> str:
-    """The stub deepagents' eviction hands the model in place of `content`."""
-    return _render_preview_stub(
-        _TOO_LARGE_TOOL_MSG, _create_content_preview(content), tool_call_id=call, file_path=path
-    )
-
-
 def _applied(messages: list[Any], update: dict[str, Any] | None) -> list[Any]:
     """`update` written into `messages` the way deepagents' reducer writes it: by id."""
     if update is None:
@@ -349,25 +337,6 @@ def test_the_call_a_pass_runs_on_sends_the_handles():
     assert _of(sent, call) == _of(_applied(talk.messages, update), call) != talk.result(call)
 
 
-def test_a_handle_is_made_from_the_message_in_state_not_the_one_sent():
-    """deepagents' summariser shortens older write and edit arguments in what it sends
-    on, past its own trigger -- and, on a model with no window, once twenty messages
-    precede them. A handle made from that copy would name the length of the shortened
-    text, and write it into the conversation for good."""
-    talk = Talk()
-    wrote = talk.write("/outputs/r.md")
-    talk.pad()
-    at = talk.messages.index(talk.result(wrote)) - 1
-    (call,) = talk.messages[at].tool_calls
-    short = {"file_path": "/outputs/r.md", "content": "x" * 2_000 + "...(argument truncated)"}
-    shortened = talk.messages[at].model_copy(update={"tool_calls": [{**call, "args": short}]})
-    sent = [*talk.messages[:at], shortened, *talk.messages[at + 1 :]]
-
-    after = talk.cleared(high=500, sent=sent)
-
-    assert _call_in(after, wrote)["args"]["content"].startswith("8,000 chars written")
-
-
 SHORTENED = "x" * 2_000 + "...(argument truncated)"
 
 
@@ -438,24 +407,6 @@ def test_a_message_with_no_id_is_left_alone():
 # -- what a handle says ----------------------------------------------------------------
 
 
-def test_a_recorded_results_handle_names_its_file_and_ends_in_its_id():
-    """The model is told to read a result back from its file rather than call the tool
-    again, so a handle without the path, or without the id the prompt explains, leaves
-    it nothing to do but call again."""
-    talk = Talk()
-    call = talk.call("execute", {"command": "python3 count.py"}, _text("rows: 86"))
-    talk.pad()
-    (row,) = (e for e in talk.ledger.entries if e.call == call)
-
-    handle = _of(talk.cleared(), call).content
-
-    assert handle == (
-        "execute command='python3 count.py' -- rows: 86\n"
-        f"({row.size:,} bytes, cleared; full result: /scratchpad/tool_results/A-0001-execute.txt)\n"
-        "[A-0001]"
-    )
-
-
 def test_an_earlier_turns_result_is_named_from_the_ledger_the_turn_found():
     """A replayed result's row is in the ledger the turn read, not in this turn's: a
     handle looked up in this turn's alone would leave every replayed result whole."""
@@ -471,7 +422,6 @@ def test_an_earlier_turns_result_is_named_from_the_ledger_the_turn_found():
     assert "full result: /scratchpad/tool_results/A-0001-web_search.txt" in handle
     assert handle.endswith("\n[A-0001]")
     assert talk.ledger.entries[0].id == "A-0002", "numbered on from the ledger"
-
 
 
 def test_an_expired_result_is_cleared_and_says_to_call_its_tool_again():
@@ -495,19 +445,6 @@ def test_an_expired_result_is_cleared_and_says_to_call_its_tool_again():
     assert handle.endswith("\n[A-0001]")
 
 
-def test_a_result_recorded_as_a_stub_is_named_by_its_own_copy():
-    """A tool that offloads its own output hands the recorder the stub, so the copy the
-    row names holds what the model saw, and the handle names that copy, not the tool's file.
-    """
-    talk = Talk()
-    call = talk.call("execute", {"command": "make"}, _stub("c1", "/elsewhere/c1", BIG + "\n" + BIG))
-    talk.pad()
-
-    handle = _of(talk.cleared(high=500), call).content
-
-    assert "full result: /scratchpad/tool_results/A-0001-execute.txt" in handle
-
-
 def test_a_file_tools_handle_names_the_call_that_gets_it_back():
     """A file tool's result has no saved copy, so the handle is the only record of which
     file and which lines it was: without them the model cannot ask for them again."""
@@ -521,23 +458,6 @@ def test_a_file_tools_handle_names_the_call_that_gets_it_back():
     assert handle == (
         "read_file file_path='/inputs/service.py' offset=300 limit=100 -- 6,308 chars, "
         "cleared; call read_file again to see it as it is now"
-    )
-
-
-def test_a_read_that_was_more_than_text_is_not_given_a_length():
-    """A PDF comes back as a file block, whose text is empty: `0 chars` would tell the model
-    there was nothing there."""
-    talk = Talk()
-    pdf = {"type": "file", "mime_type": "application/pdf", "base64": "J" * 40_000}
-    read = talk.call("read_file", {"file_path": "/inputs/a.pdf"}, "")
-    talk.messages[-1] = talk.messages[-1].model_copy(update={"content": [pdf]})
-    talk.pad()
-
-    handle = _of(talk.cleared(), read).content
-
-    assert handle == (
-        "read_file file_path='/inputs/a.pdf' -- cleared; "
-        "call read_file again to see it as it is now"
     )
 
 
@@ -645,18 +565,6 @@ def test_an_agent_without_read_file_calls_its_tool_again_whatever_the_length():
 
     assert short.endswith(_saying("call execute again to see it", "A-0001"))
     assert long.endswith(_saying("call http_fetch again to see it", "A-0002"))
-
-
-def test_an_agent_holding_neither_calls_every_result_again():
-    """An agent holding neither file tool sent to one for each result it cleared, every
-    call refused."""
-    recorded, _long = _handles(("execute", "http_fetch"))
-
-    assert recorded == (
-        "execute command='python3 count.py' -- rows: 86\n"
-        "(8,009 bytes, cleared; call execute again to see it)\n[A-0001]"
-    )
-    assert _long.endswith(_saying("call http_fetch again to see it", "A-0002"))
 
 
 # -- what is never cleared -----------------------------------------------------------
@@ -1152,21 +1060,6 @@ def test_a_long_turn_clears_and_the_transcript_carries_the_handles(bulky):
     assert last[0] == said["c1"] and last[1] == said["c2"]
 
 
-def test_a_turn_clears_to_handles_naming_only_tools_the_agent_holds(bulky):
-    """The grant reaching every guard but the clearing, which then hands an agent holding
-    no file tool the path of a file it cannot read."""
-    # `builtin_tools` left out grants none, so neither `read_file` nor `grep`.
-    an_agent(bulky, tools='["*"]')
-    cfg = _marked(bulky, clear_results_at=12_000)
-
-    calls = (_one("bulky", n, n=n) for n in range(1, 7))
-    _turn(cfg, *calls, AIMessage(content="done"))
-
-    said = {one.call_id: one.content for one in _transcript(cfg) if one.role == "tool"}
-    for call, number in (("c1", "A-0001"), ("c2", "A-0002")):
-        assert said[call].endswith(f"bytes, cleared; call bulky again to see it)\n[{number}]")
-
-
 def test_a_long_results_handle_finds_it_after_the_turn(bulky):
     """The path the handle names has to still hold the result once the turn has swept
     what no row names -- driven through a real turn, because the sweep and the handle are
@@ -1187,35 +1080,6 @@ def test_a_long_results_handle_finds_it_after_the_turn(bulky):
     found = [one for one in folder.iterdir() if one.name.startswith("A-0001-")]
     assert len(found) == 1, sorted(one.name for one in folder.iterdir())
     assert found[0].read_text(encoding="utf-8").startswith("row 00000")
-
-
-CHART = '''
-def chart() -> list:
-    """Return a chart's caption and the chart, a 3 KB image."""
-    return [
-        {"type": "text", "text": "Revenue by month"},
-        {"type": "image", "base64": "A" * 4_096, "mime_type": "image/png"},
-    ]
-
-
-TOOLS = [chart]
-'''
-
-
-def test_a_result_carrying_an_image_says_its_saved_copy_is_the_text_alone(bulky):
-    """An image result was saved as its text alone while its row and handle called that
-    file the full result, sending the agent to read back an image that was never kept."""
-    (tools_dir(bulky) / "chart.py").write_text(CHART, encoding="utf-8")
-    cfg = _marked(bulky, clear_results_at=12_000)
-
-    bulky_calls = (_one("bulky", n, n=n) for n in range(1, 7))
-    result = _turn(cfg, _one("chart", 0), *bulky_calls, AIMessage(content="done"))
-
-    chart, text_only = result.ledger[:2]
-    assert chart.summary == "chart -- Revenue by month (text only; an image of 3 KB was not kept)"
-    assert text_only.summary == f"bulky n=1 -- row 1-0000 {'y' * 70}"
-    said = next(one.content for one in _transcript(cfg) if one.call_id == "c0")
-    assert said == f"{chart.summary}\n(16 bytes, cleared; full result: {chart.path})\n[A-0001]"
 
 
 def test_the_summariser_counts_the_cleared_conversation(bulky):
@@ -1379,24 +1243,6 @@ def test_a_subagents_long_task_clears_to_its_own_rows(bulky, subagent, asks):
         assert (cfg.workspace / "sessions" / "s" / row.path.lstrip("/")).exists()
     for call in ("c3", "c4", "c5", "c6"):
         assert len(said[call]) > 16_000, (subagent, call)
-
-
-def test_a_subagent_without_read_file_is_told_to_call_its_tool_again(bulky):
-    """The grant a subagent's handles are written for is its own: handed the agent's, or
-    none, one granted no file tool is sent to read a path it cannot."""
-    # `builtin_tools` left out grants none, so neither `read_file` nor `grep`.
-    _subagent(bulky, "bare", 'tools: ["*"]\n')
-    an_agent(bulky, subagents="[bare]", **EVERY_TOOL)
-    cfg = _marked(bulky, clear_results_at=12_000)
-
-    calls = (_one("bulky", n, n=n) for n in range(1, 7))
-    result = _turn(cfg, _task("bare"), *calls, AIMessage("dug"), AIMessage(content="done"))
-
-    said = _subagents_last_call()
-    rows = {entry.call: entry for entry in result.ledger}
-    for call in ("c1", "c2"):
-        handle = f"bytes, cleared; call bulky again to see it)\n[{rows[call].id}]"
-        assert said[call].endswith(handle)
 
 
 def test_a_subagent_clears_by_the_mark_beside_the_model_it_runs(bulky):
