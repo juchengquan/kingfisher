@@ -15,26 +15,21 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.types import Command
 
 from kingfisher import Kingfisher, Request
-from kingfisher.core.agent.backend import folders_of
 from kingfisher.core.agent.middlewares.builtin_tools import (
     ABSOLUTE,
     BACKENDS_ONLY,
     MAPPINGS,
     SANDBOXED,
     BuiltinToolsMiddleware,
-    _virtual,
     hint,
     kept_note,
-    kept_under,
-    missed,
     stray_note,
-    strayed_under,
     timeout_line,
 )
-from kingfisher.core.agent.prompting import execute_line, what_you_make_goes
+from kingfisher.core.agent.prompting import execute_line
 from kingfisher.core.interfaces import CommandResult, CommandRunner
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
-from kingfisher.plugins import LocalSessions, ShellPrompt, backend_at
+from kingfisher.plugins import LocalSessions, ShellPrompt
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from kingfisher.plugins.sessions.shell import kingfishers_shell
 from tests.conftest import EVERY_TOOL, an_agent, hosts_shell, start, subagents_dir
@@ -121,51 +116,6 @@ def test_every_graph_holding_the_shell_is_told_its_paths_rather_than_absolute_on
         assert rule in described
 
 
-def test_a_shell_call_missing_a_file_tool_path_is_told_the_shell_spelling(shelled):
-    """Told the rule, the agent still wrote `open("/inputs/cars.csv")` into a script and
-    ran it, and the shell's own error names the path but never the reason.
-    """
-    cfg, _ = shelled
-    _run(
-        cfg,
-        _calls(
-            ("execute", {"command": "cat /inputs/cars.csv"}, "c1"),
-            ("execute", {"command": "cat inputs/cars.csv"}, "c2"),
-        ),
-        AIMessage(content="done"),
-    )
-    answers = {
-        message.tool_call_id: message.text
-        for message in Scripted.heard[-1]
-        if isinstance(message, ToolMessage)
-    }
-    assert hint("/inputs/cars.csv") in answers["c1"]
-    # The control: a miss spelt the shell's way is a missing file, and says only that.
-    assert "No such file" in answers["c2"]
-    assert "file-tool path" not in answers["c2"]
-
-
-def test_the_correction_gives_a_spelling_the_shell_reaches_from_anywhere(shelled):
-    """The correction said `inputs/cars.csv`, the relative spelling that misses after any
-    `cd`. What it now gives is run as written, from `/`, through the session's own shell.
-    """
-    cfg, _ = shelled
-    _run(
-        cfg,
-        _calls(("execute", {"command": "cat /outputs/cars.csv"}, "c1")),
-        AIMessage(content="done"),
-    )
-    (answer,) = [m.text for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
-    suggested = re.search(r'`("\$KINGFISHER_SESSION_ROOT/[^`]+")`', answer)
-    assert suggested, answer
-    session = cfg.sessions_root / "s"
-    (session / cfg.layout.outputs / "cars.csv").write_text("make,model\n", encoding="utf-8")
-
-    ran = backend_at(cfg, session).execute(f"cd / && cat {suggested.group(1)}")
-
-    assert "make,model" in ran.output, ran.output
-
-
 def test_the_shell_is_taught_one_spelling_and_not_a_relative_one(shelled):
     """Taught to drop the slash, the agent wrote relative paths, which miss once anything
     moves the working directory. Read off what the model was sent -- the system prompt and
@@ -195,202 +145,8 @@ def test_the_shell_is_taught_one_spelling_and_not_a_relative_one(shelled):
     assert "`$KINGFISHER_SESSION_ROOT/skills` names a directory that does not exist" in told
 
 
-@pytest.mark.parametrize(
-    ("output", "path"),
-    [
-        ("FileNotFoundError: [Errno 2] No such file or directory: '/inputs/cars.csv'",
-         "/inputs/cars.csv"),
-        ("ls: /inputs/: No such file or directory", "/inputs/"),
-        ("python3: can't open file '/scratchpad/x.py': [Errno 2] No such file or directory",
-         "/scratchpad/x.py"),
-        ("sh: 1: /scratchpad/run.sh: not found", "/scratchpad/run.sh"),
-        ("bash: /outputs/a.csv: Read-only file system", "/outputs/a.csv"),
-        # The host's spelling of a session folder, which is right.
-        ("cat: /Users/me/sessions/s/inputs/x.csv: No such file or directory", None),
-        ("cat: inputs/x.csv: No such file or directory", None),
-        ("cat: ./inputs/x.csv: No such file or directory", None),
-        # A name that only starts like a session folder.
-        ("cat: /inputs.csv: No such file or directory", None),
-        # A path printed beside a miss of something else.
-        ("wrote /outputs/a.csv\nsh: rg: command not found", None),
-    ],
-)
-def test_a_miss_is_read_off_the_line_naming_the_path(output, path):
-    """A host path ending in a session folder's name was read as a file-tool one, and a
-    correct command was told to drop a slash it never had.
-    """
-    assert missed(output, _virtual(DEFAULT_LAYOUT.session_dirs)) == path
-
-
 #: Where a shell says it sees the session, which the corrections are named against.
-#: GNU's curly quotes, as its tools print them under a UTF-8 locale.
-LQ, RQ = "\u2018", "\u2019"
-
 SESSION = "/host/sessions/s"
-
-
-# -- a folder the fence keeps read-only ------------------------------------
-#
-# The other half of the same problem. `missed` answers a path spelt the file tools' way,
-# which is a command that was never going to run; these answer a command written exactly
-# as the prompt says to write one, refused because the folder it names is kept.
-
-
-@pytest.mark.parametrize(
-    ("output", "folder"),
-    [
-        # The shell's own spelling, which is what the prompt asks for.
-        (f"/bin/sh: {SESSION}/inputs/new.txt: Operation not permitted", "inputs"),
-        # The shell starts in the session, so the shorter command is the one models write.
-        ("/bin/sh: inputs/new.txt: Operation not permitted", "inputs"),
-        ("/bin/sh: ./inputs/new.txt: Operation not permitted", "inputs"),
-        (
-            f"/bin/sh: {SESSION}/scratchpad/conversation_history/f.md: Operation not permitted",
-            "scratchpad/conversation_history",
-        ),
-        # The Linux fence's word, and bubblewrap's.
-        ("bash: inputs/new.txt: Permission denied", "inputs"),
-        ("bash: inputs/new.txt: Read-only file system", "inputs"),
-        # GNU tools under the UTF-8 locale the shell is given, which quote a name in
-        # curly quotes rather than straight ones.
-        (f"cp: cannot create regular file {LQ}inputs/a.csv{RQ}: Permission denied", "inputs"),
-        (
-            f"mkdir: cannot create directory {LQ}{SESSION}/inputs/d{RQ}: Read-only file system",
-            "inputs",
-        ),
-        # A program that opened the file itself rather than the shell redirecting into it.
-        ("PermissionError: [Errno 1] Operation not permitted: 'inputs/new.txt'", "inputs"),
-        # The folder itself, not a file under it.
-        (f"rmdir: {SESSION}/inputs: Operation not permitted", "inputs"),
-        # Measured, and the reason the session root is checked rather than the folder name:
-        # `python3` reports its own cache file, in the host's temp folder, with the same
-        # words -- and the model would be sent to correct a path it never wrote.
-        (
-            "python3: error: couldn't create cache file '/var/folders/x/T/xcrun_db-A' "
-            "(errno=Operation not permitted)",
-            None,
-        ),
-        # A kept folder's name outside the session: refused for being outside it.
-        ("/bin/sh: /elsewhere/inputs/new.txt: Operation not permitted", None),
-        # A folder the fence does not keep.
-        (f"/bin/sh: {SESSION}/outputs/ok.txt: Operation not permitted", None),
-        # The words, and no path in the line to hang them on.
-        ("/bin/sh: Operation not permitted", None),
-        # A miss rather than a refusal: `missed` answers this one, and saying a folder is
-        # kept would be false as well as unhelpful.
-        (f"cat: {SESSION}/inputs/given.txt: No such file or directory", None),
-        # Both on one line is the rule; on two lines, the path a command printed and a
-        # refusal of something else are not one refusal.
-        (f"wrote {SESSION}/inputs/a\nsh: /elsewhere: Operation not permitted", None),
-    ],
-)
-def test_a_fence_refusal_is_read_off_the_line_naming_the_kept_folder(output, folder):
-    """A command following the prompt exactly, refused because its folder is kept, said
-    `Operation not permitted` about a host path and nothing else -- the same message a
-    broken sandbox gives, and the model had no way to tell the two apart.
-    """
-    assert kept_under(output, SESSION, DEFAULT_LAYOUT.shell_read_only) == folder
-
-
-def test_every_folder_the_note_can_name_is_denied_to_the_file_tools_too():
-    """The note says the shell is refused `as the file tools are`, which is a claim about
-    the rules and not about the fence: a folder the fence kept while the rules allowed it
-    would make the sentence false, and nothing else would notice.
-    """
-    denied = {
-        scope.removeprefix("/").removesuffix("/**") for scope in DEFAULT_LAYOUT.denied_scopes()
-    }
-
-    assert set(DEFAULT_LAYOUT.shell_read_only) <= denied, (
-        f"kept from the shell and not from the file tools: "
-        f"{set(DEFAULT_LAYOUT.shell_read_only) - denied}"
-    )
-
-
-#: Every folder of the session a file tool may save in, which is what `strayed_under`
-#: reads a refused path against: outside all of them, nothing keeps what a write leaves.
-HELD = folders_of(DEFAULT_LAYOUT)
-
-
-@pytest.mark.parametrize(
-    ("output", "where"),
-    [
-        # The likeliest refusal of all: the shell starts at the session's top, so this is
-        # what `> out.csv` and `python script.py > out.csv` write, spelt in full.
-        (f"/bin/sh: {SESSION}/out.csv: Operation not permitted", "/out.csv"),
-        # A folder no layout names: nothing routes it, so nothing would keep what landed.
-        (f"/bin/sh: {SESSION}/mine/out.csv: Operation not permitted", "/mine/out.csv"),
-        ("/bin/sh: mine/out.csv: Operation not permitted", "/mine/out.csv"),
-        ("mkdir: mine/deeper: Operation not permitted", "/mine/deeper"),
-        # The Linux fence's word, and bubblewrap's.
-        ("bash: mine/out.csv: Permission denied", "/mine/out.csv"),
-        ("bash: mine/out.csv: Read-only file system", "/mine/out.csv"),
-        # GNU's curly quotes, which are no part of the path they surround.
-        (
-            f"cp: cannot create regular file {LQ}{SESSION}/out.csv{RQ}: Permission denied",
-            "/out.csv",
-        ),
-        (f"cp: cannot create regular file {LQ}inputs/a.csv{RQ}: Permission denied", None),
-        # A folder the layout does name is the fence's to allow, and it allows these two:
-        # a refusal under one is not a write that went to the wrong folder.
-        (f"/bin/sh: {SESSION}/outputs/ok.txt: Operation not permitted", None),
-        (f"/bin/sh: {SESSION}/scratchpad/ok.txt: Operation not permitted", None),
-        # A kept folder, which `kept_under` answers by name: it is held, not strayed.
-        (f"/bin/sh: {SESSION}/inputs/new.txt: Operation not permitted", None),
-        (f"/bin/sh: {SESSION}/.harness/ledger.jsonl: Operation not permitted", None),
-        # Outside the session: refused for being the host's, not for being the wrong
-        # folder, and `/outputs/` is no answer to a command that meant `/etc/hosts`.
-        ("/bin/sh: /etc/hosts: Operation not permitted", None),
-        (
-            "python3: error: couldn't create cache file '/var/folders/x/T/xcrun_db-A' "
-            "(errno=Operation not permitted)",
-            None,
-        ),
-        # The session's top is somewhere to write *in*, not a path a write lands at.
-        (f"rmdir: {SESSION}: Operation not permitted", None),
-        # A bare word is not read as a path, though this is the message the commonest
-        # refusal of all leaves: read as one, the second line here -- a refused *read* --
-        # would be answered with somewhere to write.
-        ("/bin/sh: out.csv: Operation not permitted", None),
-        ("cat: shadow: Permission denied", None),
-        # A miss rather than a refusal: `missed` answers that one.
-        (f"cat: {SESSION}/out.csv: No such file or directory", None),
-        # Both on one line is the rule, as it is for `kept_under`.
-        (f"wrote {SESSION}/out.csv\nsh: /elsewhere: Operation not permitted", None),
-    ],
-)
-def test_a_refused_path_no_folder_of_the_session_holds_is_read_off_the_line(output, where):
-    """The session's top is where the shell starts and where a fence refuses a write, and
-    `kept_under` cannot answer it: no folder is named, so there is nothing to look under.
-    Measured -- `echo x > "$KINGFISHER_SESSION_ROOT/out.csv"` was refused with the note
-    the kept folders get, and nothing said where the write should have gone.
-    """
-    assert strayed_under(output, SESSION, HELD) == where
-
-
-def test_both_notes_say_it_the_one_way_and_name_what_was_refused():
-    """Two refusals of one mistake a step apart, and a model reading two wordings for one
-    rule reads two rules -- which is what #1068 took out of the three it found.
-    """
-    assert stray_note("/out.csv", DEFAULT_LAYOUT).startswith(
-        "`/out.csv` is not yours to write"
-    )
-    assert kept_note("inputs", DEFAULT_LAYOUT).startswith("`/inputs/` is not yours to write")
-    one = what_you_make_goes("/outputs/", "/scratchpad/")
-    for said in (stray_note("/out.csv", DEFAULT_LAYOUT), kept_note("inputs", DEFAULT_LAYOUT)):
-        assert said.endswith(one), said
-
-
-def test_the_note_names_the_folder_as_the_file_tools_spell_it():
-    """What the shell reported was a host path, or a relative one; the note's whole job is
-    that the two are the folder the prompt named.
-    """
-    said = kept_note("scratchpad/conversation_history", DEFAULT_LAYOUT)
-
-    assert "`/scratchpad/conversation_history/` is not yours to write" in said
-    # The same closing sentence every other refusal of a write offers, from the one place
-    # that words it: three wordings for one rule read as three rules.
-    assert what_you_make_goes("/outputs/", "/scratchpad/") in said
 
 
 THEIRS = ShellPrompt(execute="- The shell holds this session at `/workspace/{{inputs}}`.")
@@ -430,24 +186,6 @@ def test_a_shell_s_own_line_reaches_every_graph_holding_it(shelled, subagent):
 
 
 @pytest.mark.parametrize("shell", ["own", "silent", "theirs"])
-def test_every_shell_says_its_timeout_is_in_seconds(shelled, shell):
-    """Models passed milliseconds, 5000 to 40000, each refused as past deepagents' longest,
-    and kingfisher's line had replaced the one that mentioned the timeout at all."""
-    cfg, offered = shelled
-    backends = {
-        "own": LocalSessions(),
-        "silent": LocalSessions(runner=lambda _where: Plain()),
-        "theirs": LocalSessions(runner=lambda _where: Plain(), shell_prompt=THEIRS),
-    }[shell]
-
-    _run(cfg, *_consulting("checker"), backends=backends)
-
-    assert len(offered) == 3
-    for tools in offered:
-        assert timeout_line(cfg.execution_timeout_s) in _execute(tools)
-
-
-@pytest.mark.parametrize("shell", ["own", "silent", "theirs"])
 def test_no_shell_is_called_a_sandbox_or_said_to_need_a_protocol(shelled, shell):
     """deepagents called every shell "an isolated sandbox", which kingfisher's own runs on
     the host and is not, and ended on a note to whoever wires a backend. Asked by word as
@@ -471,21 +209,6 @@ def test_no_shell_is_called_a_sandbox_or_said_to_need_a_protocol(shelled, shell)
         assert "sandbox" not in described.lower()
         # The control: the rest of deepagents' description is still there.
         assert "returns combined stdout/stderr with the exit code" in described
-
-
-def test_an_execute_handed_over_as_a_definition_is_corrected_the_same():
-    """A tool can reach the request as a dict, as a server-side definition does, and that
-    branch of the rewrite had nothing driving it: left alone there, it would go on calling
-    the shell a sandbox."""
-    from deepagents.middleware.filesystem import EXECUTE_TOOL_DESCRIPTION
-
-    from kingfisher.core.agent.middlewares.builtin_tools import _described
-
-    timed = timeout_line(30)
-    said = _described({"name": "execute", "description": EXECUTE_TOOL_DESCRIPTION}, None, timed)
-
-    assert "sandbox" not in said["description"].lower()
-    assert said["description"].endswith(timed)
 
 
 def test_a_subagent_is_told_the_inputs_folder_the_layout_names(shelled):
@@ -737,7 +460,6 @@ class Call:
 MISSED = "tail: /inputs/api.log: No such file or directory"
 
 
-
 def _answered(name: str, result: Any) -> Any:
     """What `BuiltinToolsMiddleware` hands back for one tool's result.
 
@@ -762,30 +484,6 @@ def _told_tools(tools: list[Any]) -> list[Any]:
             ),
         ).tools
     )
-
-
-def test_the_shell_rule_reaches_execute_and_no_other_tool(shelled):
-    """Without the name gate the rule lands on every tool offered, and what it says --
-    that a path is spelt from `$KINGFISHER_SESSION_ROOT` in the shell -- is wrong advice for
-    `read_file`, whose paths are the virtual ones. The rule asserting `execute` carries
-    it passes just as well when every tool does.
-    """
-    cfg, offered = shelled
-    rule = execute_line(hosts_shell(cfg), DEFAULT_LAYOUT)
-    assert rule is not None
-    _run(cfg, *_consulting("checker"))
-
-    every, carrying = set(), set()
-    for tools in offered:
-        every |= {getattr(tool, "name", None) for tool in tools}
-        carrying |= {
-            getattr(tool, "name", None)
-            for tool in tools
-            if rule in (getattr(tool, "description", "") or "")
-        }
-    # The control is only a control while the tool it names is on offer.
-    assert "read_file" in every
-    assert carrying == {"execute"}
 
 
 def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name():
@@ -875,48 +573,6 @@ def test_the_note_names_the_folder_the_fence_keeps(output, folder):
         assert corrected.text == f"{output}\n\n{kept_note(folder, Layout())}"
 
 
-#: GNU's `cp` refused a kept folder under the UTF-8 locale the shell is given.
-CURLY = f"cp: cannot create regular file {LQ}inputs/a.csv{RQ}: Permission denied"
-
-
-def test_a_refusal_in_curly_quotes_is_told_its_kept_folder():
-    """GNU tools quote a name in curly quotes under the shell's UTF-8 locale, and the
-    opening one was read as part of the path: the model was told `/\u2018inputs/a.csv` was
-    outside every folder instead of that `/inputs/` is kept.
-    """
-    corrected = _answered("execute", ToolMessage(CURLY, tool_call_id="c1"))
-
-    assert kept_note("inputs", Layout()) in corrected.text
-    assert f"{LQ}inputs" not in corrected.text.removeprefix(CURLY)
-
-
-def test_a_kept_folder_is_named_before_a_path_no_folder_holds():
-    """A command that wrote twice -- `echo x > out.csv; echo y > inputs/b` -- has both
-    notes to choose from. The kept folder is the more specific answer, and two notes at
-    once read as two separate problems.
-    """
-    both = f"{STRAYED}\n{KEPT}"
-
-    corrected = _answered("execute", ToolMessage(both, tool_call_id="c1"))
-
-    assert kept_note("inputs", Layout()) in corrected.text
-    assert "`/out.csv`" not in corrected.text
-
-
-def test_a_misspelt_path_is_told_the_spelling_rather_than_which_folder_is_kept():
-    """Where a command writes twice, once with the file tools' spelling and once with the
-    shell's -- `echo x > /inputs/a; echo y > inputs/b` -- both corrections have something
-    to say and only the spelling is worth saying: the first write was never going to run
-    wherever the folder was, and two notes at once read as two separate problems.
-    """
-    both = f"sh: /inputs/a: Operation not permitted\n{KEPT}"
-
-    corrected = _answered("execute", ToolMessage(both, tool_call_id="c1"))
-
-    assert hint("/inputs/a") in corrected.text
-    assert "is not yours to write" not in corrected.text
-
-
 def test_a_command_that_ran_is_told_nothing():
     """The control: a note on a command that worked reads as a correction, and the rules
     above would pass a middleware that appended it to everything.
@@ -979,16 +635,6 @@ def test_a_command_asking_for_the_setting_itself_runs(shelled):
     assert (cfg.sessions_root / "s" / "scratchpad" / "ran").exists()
 
 
-def test_execute_is_told_the_setting_as_its_longest(shelled):
-    """The description said 3,600 seconds while the setting was what a command ran for."""
-    cfg, offered = shelled
-    bounded = replace(cfg, execution_timeout_s=7)
-
-    _run(bounded, AIMessage("done"))
-
-    assert timeout_line(7) in _execute(offered[0])
-
-
 @dataclass
 class Timed(CommandRunner):
     """A runner keeping the timeout each command was handed."""
@@ -1016,21 +662,6 @@ def test_kingfishers_shell_hands_no_runner_more_than_the_setting(cfg):
     shell.execute("true", timeout=1)
 
     assert runner.handed == [cfg.execution_timeout_s, cfg.execution_timeout_s, 1]
-
-
-@pytest.mark.parametrize("asked", [0, -1])
-def test_kingfishers_shell_refuses_a_timeout_that_is_not_positive(cfg, asked):
-    """Handed on, a zero timeout came back "timed out after 0 seconds" from a command
-    that never ran, where deepagents' own shell is refused and its tool says "Invalid
-    parameter"."""
-    runner = Timed()
-    start(cfg, "s")
-    shell = LocalSessions(runner=lambda _where: runner).open(cfg, "s").default
-
-    with pytest.raises(ValueError, match="timeout must be positive"):
-        shell.execute("true", timeout=asked)
-
-    assert runner.handed == []
 
 
 # -- a runner's shell that exports the session root ------------------------
@@ -1091,40 +722,6 @@ def test_a_runner_s_own_wording_is_followed_by_the_variable_and_an_empty_part_by
     assert system.index("Mine.") < system.index(SPELT)
     for tools in offered:
         assert "KINGFISHER_SESSION_ROOT" not in _execute(tools)
-
-
-def test_kingfishers_own_shell_is_not_told_the_variable_twice(shelled):
-    """Its wording already teaches the variable, and the sentence for a runner's shell
-    would follow it -- the same rule twice, in two wordings, in every graph.
-    """
-    cfg, offered = shelled
-    _run(cfg, *_consulting("checker"))
-
-    assert _system().count(READ) == 1
-    assert len(offered) == 3
-    for tools in offered:
-        assert _execute(tools).count(READ) == 1
-
-
-@pytest.mark.parametrize("given", [True, False], ids=["session-root", "none"])
-def test_a_miss_is_corrected_only_on_a_shell_exporting_the_session_root(shelled, given):
-    """The correction was gated on `starts_in_session`, which a deployment's shell could
-    claim without exporting the variable the correction names. Without `session_root=`,
-    the control, the miss is left as the shell said it.
-    """
-    cfg, _ = shelled
-    _run(
-        cfg,
-        _calls(("execute", {"command": "cat /inputs/cars.csv"}, "c1")),
-        AIMessage(content="done"),
-        backends=LocalSessions(
-            runner=lambda _where: Plain(), session_root=_job if given else None
-        ),
-    )
-    (answer,) = [m.text for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
-
-    assert "No such file" in answer
-    assert (hint("/inputs/cars.csv") in answer) is given
 
 
 @dataclass

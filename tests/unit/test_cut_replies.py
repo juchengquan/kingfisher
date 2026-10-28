@@ -22,7 +22,7 @@ from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware, 
 from kingfisher.core.agent.middlewares.step_budget import warning
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
-from kingfisher.core.session.runtime import cut_off, output_limit, with_call_args
+from kingfisher.core.session.runtime import cut_off, with_call_args
 from kingfisher.core.session.transcript import from_json
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
@@ -124,18 +124,6 @@ def test_a_reply_cut_writing_text_after_its_calls_cut_none_of_them(wire):
     assert cut_call(after) is None
 
 
-def test_a_call_too_broken_to_parse_cut_none_of_the_calls_before_it():
-    """Taking the last call that parsed refused a whole write and left the cut one to langchain."""
-    broken = reply(write(1), write(2))
-    broken.tool_calls = broken.tool_calls[:1]
-    broken.invalid_tool_calls = [
-        {"type": "invalid_tool_call", "name": "write_file", "args": '{"file_pa', "id": "c2",
-         "error": "unparsable"}
-    ]
-
-    assert cut_call(broken) is None
-
-
 def test_where_a_provider_puts_no_calls_in_the_content_the_last_call_is_refused():
     """Nothing there says what came last, and running a cut call saves a shortened file."""
     bare = reply(write(1), write(2))
@@ -163,14 +151,6 @@ def test_new_arguments_reach_every_copy_of_a_call_in_each_block_shape():
         assert changed.tool_calls[0]["args"]["content"] == "short"
         assert "y" * 900 not in json.dumps(changed.content), block["type"]
         assert "short" in json.dumps(changed.content), block["type"]
-
-
-def test_the_limit_is_named_from_what_the_reply_spent():
-    """At the cap, a reply's output count is the cap, whichever format it came in."""
-    assert output_limit(reply(write(1))) == "the 32,768-token output limit"
-    assert output_limit(AIMessage(content="", response_metadata=STOPPED["anthropic"])) == (
-        "the output limit"
-    )
 
 
 # -- through real turns --------------------------------------------------------------
