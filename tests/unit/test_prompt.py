@@ -32,13 +32,6 @@ def shipped(**described: Any) -> str:
     return render_system_prompt(layout=DEFAULT_LAYOUT, **described)
 
 
-def test_base_prompt_names_no_dataset_and_no_domain():
-    """A general agent's base prompt must read the same whatever the project is."""
-    text = shipped()
-    for leaked in ("sales", ".csv", "revenue", "region"):
-        assert leaked not in text.lower(), f"domain-specific token {leaked!r} in base prompt"
-
-
 def test_skills_and_memory_are_described_by_their_blocks_and_nowhere_else():
     """Described in the cached prompt as well, each was described twice where it was on,
     and to a request that had declined it or held no index, and so was handed no block."""
@@ -59,15 +52,6 @@ def test_the_memory_block_says_memory_lasts_only_this_conversation():
         told = " ".join(memory_guidelines(tools, DEFAULT_LAYOUT).split())
         assert "kept for later turns of this conversation" in told
         assert "future" not in told.lower()
-
-
-def test_structural_contract_survives_every_combination():
-    """The workspace layout is what every turn needs to know, whatever else is switched
-    on.
-    """
-    text = shipped()
-    assert "/inputs" in text
-    assert "/outputs" in text
 
 
 def test_the_prompt_s_path_table_spells_the_directories_the_session_has():
@@ -208,47 +192,6 @@ def test_switching_skills_and_memory_on_leaves_the_cached_prompt_alone(cfg):
     assert system_prompt(enabled) == system_prompt(cfg)
 
 
-def test_assembly_leaves_no_blank_line_runs_or_markers():
-    """Every marker is removed cleanly; the prefix ships on every step."""
-    import re
-
-    text = shipped()
-    assert "<!--" not in text
-    assert not re.search(r"\n{3,}", text)
-
-
-def test_shell_section_does_not_contradict_the_injected_host_mappings():
-    """FilesystemMiddleware injects host path mappings whenever a CompositeBackend is
-    used, and instructs the agent to substitute them in shell commands.
-    """
-    # Collapse wrapping: the prompt is hard-wrapped, so phrases span newlines.
-    text = " ".join(shipped(shell=kingfishers_shell(fenced=True)).lower().split())
-    assert "do not use host absolute paths" not in text
-    # And it must not repeat the middleware's misleading implication that
-    # unmapped mounts are unreachable from the shell.
-    assert "nothing in the workspace is out of the shell's reach" in text
-
-
-def test_prompt_warns_about_host_paths_in_file_tools():
-    """virtual_mode makes `write_file('/tmp/x')` succeed by creating
-    `<workspace>/tmp/x`, which the backend now refuses, and the prompt says so first.
-    """
-    text = " ".join(shipped().lower().split())
-    assert "a host path is not a file-tool path" in text
-    assert "is refused, and the error names the virtual path to use instead" in text
-
-
-def test_the_system_prompt_demands_no_artifacts():
-    """A general agent is sometimes just answering, and this prompt is the cached prefix
-    for both kinds of turn -- the one place that cannot tell them apart. What a turn
-    should answer with is the agent's own prompt's to say, not this one's.
-    """
-    text = shipped()
-    assert "report.md" not in text
-    assert "result.json" not in text
-    assert "deliverable" not in text
-
-
 def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements(
     cfg, session_dir
 ):
@@ -326,15 +269,6 @@ def test_the_agent_and_its_subagents_are_told_the_same_folders(cfg):
     """Two copies of the section would drift, and a subagent would be told a folder the
     agent was not."""
     assert session_section(cfg.layout) in system_prompt(cfg)
-
-
-def test_both_levels_separate_the_addition_the_same_way(cfg):
-    """One joining rule, and one order: the instructions, then the harness."""
-    main = system_prompt(replace(cfg, skills_enabled=True), instructions="Always cite the file.")
-    subagent = _subagent_prompt(cfg, "Always cite the file.")
-
-    assert "Always cite the file.\n\n---\n\n## The session" in main
-    assert "Always cite the file.\n\n---\n\n## The session" in subagent
 
 
 @pytest.mark.parametrize("sandbox", ["auto", "off", "external"])

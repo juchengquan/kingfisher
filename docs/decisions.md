@@ -6209,6 +6209,17 @@ wrongly, and one refused at load every definition whose prompt is keyed on a dat
 exists, which only `test_the_shipped_analyst_tells_each_caller_what_its_grant_reaches`
 loaded. It stays, as a test that alone drives a path able to raise. *(2026-10-28.)*
 
+**The older half holds less, and reads the same way.** What was written before September
+is mostly who reaches what -- the shell's environment and home, a session's scratch, a
+grant reaching a subagent -- or a refusal a person reads, where kind four does not reach.
+The eighth slice took 24 of the 143 older items in `test_prompt.py`, `test_backend.py`,
+`test_shipped_assets.py`, `test_skill_registry.py`, `test_tool_shapes.py`,
+`test_offered_tool_errors.py`, `test_tool_origins.py` and `test_capability_wiring.py`:
+prompt lines a newer test holds or that only word what the model is shown, a tool's
+description pinned, a routed file found twice, and ordinary cases their edge cases drive.
+Of 312 breaks, a doomed test alone caught none, and a routed file found twice again is
+still caught by the control the two deleted tests sat beside. *(2026-10-28.)*
+
 **Growth is held by a rule in `CLAUDE.md`, not by anything in CI.** 557 of the 608 commits
 since September were written with Claude, which reads that file on every task. The growth
 is spread evenly -- a third each from PRs adding up to five tests, six to ten, and more --

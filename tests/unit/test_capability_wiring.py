@@ -742,18 +742,6 @@ def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
     assert registered_tools(_hand_written_graph()) is None
 
 
-def test_a_real_build_is_readable(cfg, session_dir):
-    """The pin."""
-    from kingfisher.core.agent.assembly import build_agent
-    from kingfisher.core.agent.kinds.tools import registered_tools
-
-    built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=None)
-    names = registered_tools(built.graph)
-
-    assert names is not None, "a graph we built must be readable"
-    assert names, "and must dispatch something"
-
-
 def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch, cfg):
     """The reason any of this changed."""
     from kingfisher.core import inventory as inventory_module

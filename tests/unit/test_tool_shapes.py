@@ -61,18 +61,6 @@ def _calls(name: str, args: dict):
     ]
 
 
-def test_a_plain_function_is_named_by_the_function(cfg):
-    """No `.name` to read, so `__name__` is the name a request grants and an allowlist
-    matches -- and everything downstream keys on that one string.
-    """
-    _install(cfg, "shout", BARE)
-
-    (found,) = LocalToolRepository(tools_dir(cfg)).found
-
-    assert tool_name(found.tool) == "shout"
-    assert not hasattr(found.tool, "name"), "this is the case the fallback is for"
-
-
 def test_a_plain_function_is_offered_to_the_model_and_dispatches(cfg, session_dir):
     """Through a graph that really dispatches, because the interesting part is not that
     it loads -- it is that deepagents wraps it and the call arrives.
@@ -93,25 +81,6 @@ def test_a_plain_function_is_offered_to_the_model_and_dispatches(cfg, session_di
     results = [m.content for m in out["messages"] if isinstance(m, ToolMessage)]
     assert results == ["HI"]
     assert out["messages"][-1].content == "done"
-
-
-def test_the_docstring_and_the_annotations_are_what_the_model_gets(cfg, session_dir):
-    """What you give up by leaving the decorator off, stated as behaviour: not the
-    description or the schema, which come from the function as written -- only the
-    ability to make them differ from it.
-    """
-    _install(cfg, "shout", BARE)
-
-    graph = build_agent(
-        cfg,
-        backend=backend_at(cfg, session_dir),
-        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-    ).graph
-    node = getattr(graph, "nodes", {}).get("tools")
-    wrapped = getattr(getattr(node, "bound", None), "tools_by_name", {})["shout"]
-
-    assert "asks to shout" in wrapped.description
-    assert list(wrapped.args) == ["text"]
 
 
 def test_a_plain_function_fails_the_way_a_decorated_one_does(cfg, session_dir):
@@ -200,16 +169,6 @@ def test_the_class_itself_is_refused_rather_than_offered(cfg):
 
     with pytest.raises(ToolError, match=r"write Shout\(\) to build one"):
         _ = LocalToolRepository(tools_dir(cfg)).found
-
-
-def test_a_function_is_not_caught_by_that_refusal(cfg):
-    """The refusal is `isinstance(tool, type)`, and the point of it is that nothing
-    legitimate is one: a function is not a class, and neither is a `StructuredTool`
-    or an instance of your own.
-    """
-    _install(cfg, "shout", BARE)
-
-    assert [tool_name(f.tool) for f in LocalToolRepository(tools_dir(cfg)).found] == ["shout"]
 
 
 # Not a near miss like the class above -- an entry that is not a tool in any
