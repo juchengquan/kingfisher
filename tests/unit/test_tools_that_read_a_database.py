@@ -247,21 +247,6 @@ def test_the_rows_stop_at_the_characters_the_answer_carries(tools, database, mon
     assert len(said) - len(lines[-1]) <= 40, "the rows passed the cap the note names"
 
 
-def test_a_first_row_that_will_not_fit_beside_the_names_is_refused(
-    tools, database, monkeypatch
-):
-    """The other side of "at least one row always comes back": where not even one fits,
-    there is nothing to answer with, and a header with a note under it reads as a query
-    that matched nothing. Refused with the width instead, as a single wide value is.
-    """
-    monkeypatch.setitem(_globals(tools["sql_query"]), "MAX_ANSWER_CHARS", 30)
-
-    said = tools["sql_query"].invoke({"statement": "SELECT region, note FROM sales"})
-
-    assert said.startswith("refused: one row of 2 columns needs 36 characters beside")
-    assert "select fewer columns" in said
-
-
 def test_a_row_of_values_each_inside_the_cap_is_still_refused_by_its_width(
     tools, database, monkeypatch
 ):
@@ -318,21 +303,6 @@ def test_column_names_alone_past_the_cap_are_refused(tools, database, monkeypatc
     assert "alias them shorter with AS" in said
 
 
-def test_the_docstring_names_every_bound_the_tool_applies(tools):
-    """The model plans its next statement by these three numbers and reads them here
-    and nowhere else, so a bound that moved without the sentence would leave it asking
-    for an answer this tool will not give. Whitespace-normalised: the sentences wrap
-    where the column ran out, and an `in` against the source sees a line break the
-    model never does.
-    """
-    globals_ = _globals(tools["sql_query"])
-    reads = " ".join(tools["sql_query"].description.split())
-
-    assert f"at most {globals_['MAX_ROWS']} rows" in reads
-    assert f"{globals_['MAX_ANSWER_CHARS']} characters" in reads
-    assert f"at most {globals_['MAX_SECONDS']:g} seconds" in reads
-
-
 def test_the_tables_are_listed_one_per_line(tools, database):
     """What the docstring tells the model to call before writing a statement."""
     assert tools["sql_tables"].invoke({}).splitlines() == ["regions", "sales"]
@@ -351,16 +321,6 @@ def test_a_statement_that_is_not_a_select_is_refused_before_it_runs(tools, datab
     reading.close()
 
 
-def test_a_select_that_the_database_refuses_comes_back_as_a_message(tools, database):
-    """A bad query is something the model can fix on its next step, so it reads the
-    reason rather than a failed call.
-    """
-    said = tools["sql_query"].invoke({"statement": "SELECT nope FROM sales"})
-
-    assert said.startswith("sql error:")
-    assert "nope" in said
-
-
 def test_a_read_only_connection_refuses_a_write_even_if_one_gets_through(tools, database):
     """The guard above is a string test, and the connection is the half that holds
     when a statement starting `select` goes on to write -- which SQLite allows in a
@@ -370,43 +330,6 @@ def test_a_read_only_connection_refuses_a_write_even_if_one_gets_through(tools, 
 
     with opened() as connection, pytest.raises(sqlite3.OperationalError, match="readonly"):
         connection.execute("DELETE FROM sales")
-
-
-@pytest.mark.parametrize("name", ["sql_query", "sql_tables", "sql_explain"])
-def test_a_missing_database_is_said_rather_than_raised(name, tools, tmp_path, monkeypatch):
-    """The shipped default points at `~/kingfisher-example.db`, which a fresh
-    deployment does not have -- so this is the first thing a model will see, on all
-    three, and a traceback is not an answer it can act on.
-    """
-    monkeypatch.setitem(_globals(tools[name]), "DATABASE", tmp_path / "nothing.db")
-    asked = {} if name == "sql_tables" else {"statement": "SELECT 1"}
-
-    said = tools[name].invoke(asked)
-
-    assert said.startswith("no database at")
-
-
-def test_the_plan_is_one_numbered_step_a_line(tools, database):
-    """`sql_explain` is the class-shaped example, and nothing had ever called it: its
-    coverage was the schema its arguments declare.
-    """
-    said = tools["sql_explain"].invoke({"statement": "SELECT region FROM sales"})
-
-    assert said.startswith("1. ")
-    assert "sales" in said.lower()
-
-
-def test_the_verbose_plan_is_the_rows_as_they_came(tools, database):
-    """The argument the class shape exists to describe, so it is also the one nothing
-    held: a `verbose` that did nothing would read as working.
-    """
-    plain = tools["sql_explain"].invoke({"statement": "SELECT region FROM sales"})
-    said = tools["sql_explain"].invoke(
-        {"statement": "SELECT region FROM sales", "verbose": True}
-    )
-
-    assert said != plain
-    assert not said.startswith("1. ")
 
 
 def test_a_plan_naming_something_spelt_at_length_is_cut_and_marked(tools, database):

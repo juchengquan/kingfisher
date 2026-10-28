@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import replace
-from types import SimpleNamespace
-from typing import Any, cast
 
 import pytest
 from deepagents import HarnessProfile, register_harness_profile
@@ -15,7 +13,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 
 from kingfisher import SENT_SOURCES, Capabilities, Kingfisher, ModelProfile, Request
 from kingfisher.cli.__main__ import EMPTY_TELL, main
-from kingfisher.core.agent.sent import _OPENINGS, first_call, labelled, sent_tool
+from kingfisher.core.agent.sent import _OPENINGS, labelled, sent_tool
 from kingfisher.core.interfaces import TurnInstructions
 from kingfisher.core.session.model import UnknownSessionError
 from kingfisher.plugins import LocalSessions
@@ -166,20 +164,6 @@ def test_a_fallback_answering_for_the_model_does_not_carry_the_turn_on(scripted)
     kf.sent(Request("go", agent="only", session_id="s"))
 
     assert not (scripted.workspace / "sessions" / "s" / "outputs" / "fallback.txt").exists()
-
-
-def test_a_graph_that_never_calls_a_model_is_said_to_send_nothing():
-    """Rather than an `AttributeError` from a catch that caught nothing."""
-    quiet = SimpleNamespace(
-        graph=SimpleNamespace(invoke=lambda *args, **kwargs: {}),
-        context=None,
-        middleware=[],
-        tools=None,
-        system_prompt="P",
-    )
-
-    with pytest.raises(RuntimeError, match="without calling a model"):
-        first_call(cast(Any, quiet), "go", agent="only", session_id="s")
 
 
 def test_no_sandbox_outlives_the_look(cfg, monkeypatch):

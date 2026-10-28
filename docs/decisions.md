@@ -6165,6 +6165,20 @@ The fifth slice took 53 of the 186 items in `test_prompt.py`,
 caught two, both a plugin's empty answer handed to the model for one call with the PDF
 withheld, which loses nothing. *(2026-10-28.)*
 
+**A note after a miss is kind four; a crash is not.** What the shell's holder is told
+after a refused or missed command -- which folder is kept, where a write should go, how
+the shell spells a path -- is the model told something worse, since the prompt still says
+where its writes land. A test that alone drives a path able to raise into a turn stays
+whatever it is about: `test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name` checks
+wording, and is the one test offering a tool as a dict, as a provider's own tools arrive,
+and a request with no system message; eleven breaks crashed one or the other and only it
+noticed. The sixth slice took 75 of the 197 items in `test_shell_paths.py`,
+`test_tools_that_read_a_database.py`, `test_cut_replies.py` and `test_sent.py`, the last
+being a preview a person reads, where kind four does not reach. The gate broke
+`builtin_tools.py` and `model_reply.py` too: of 905 breaks, a doomed test alone caught
+fourteen: eleven that crash where only the dict test looks, and three that word a note
+wrongly. *(2026-10-28.)*
+
 **Growth is held by a rule in `CLAUDE.md`, not by anything in CI.** 557 of the 608 commits
 since September were written with Claude, which reads that file on every task. The growth
 is spread evenly -- a third each from PRs adding up to five tests, six to ten, and more --
