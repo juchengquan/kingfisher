@@ -21,19 +21,14 @@ from kingfisher.core.agent.middlewares.builtin_tools import (
     ABSOLUTE,
     BACKENDS_ONLY,
     EDIT_FILE,
-    EXACT_INDENT,
-    FROM_READ,
     GREP,
     JOINED,
     LS,
     MUST_READ,
     OFFLOADED_ELSEWHERE,
-    PREFER_EDIT,
     READ_FIRST,
     READ_LINES,
-    REGEX,
     SANDBOXED,
-    SEARCHING,
     SEPARATELY,
     WHOLE,
     WRITE_FILE,
@@ -222,130 +217,6 @@ def test_it_adds_no_step_to_the_agents_loop(reading):
 # -- which tools each description names -----------------------------------
 
 
-def _said_to(reading: tuple[Any, list[list[Any]]], grant: str) -> dict[str, str]:
-    """What each tool says to an agent granted `grant`, over one real turn.
-
-    Driven rather than built, because deepagents writes these descriptions outside
-    kingfisher's middleware, from every built-in: a test handing the middleware text of
-    its own would pass whatever deepagents sends.
-    """
-    cfg, offered = reading
-    an_agent(cfg, builtin_tools=grant)
-    _turn(cfg, AIMessage("done"))
-    return {tool.name: tool.description for tool in offered[-1]}
-
-
-@pytest.mark.parametrize(
-    ("grant", "line"),
-    [
-        (
-            "[execute, grep, glob]",
-            "- You MUST avoid using search commands like find and grep. Instead use the grep, "
-            "glob tools to search.\n"
-            "    - execute(command=\"find . -name '*.py'\")  # Use glob tool instead\n"
-            "    - execute(command=\"grep -r 'pattern' .\")  # Use grep tool instead\n",
-        ),
-        (
-            "[execute, grep, read_file]",
-            "- You MUST avoid using shell grep for searches. Instead use the grep tool to search "
-            "text. Use read_file rather than cat/head/tail.\n"
-            "    - execute(command=\"grep -r 'pattern' .\")  # Use grep tool instead\n",
-        ),
-        (
-            "[execute, glob, read_file]",
-            "- You MUST avoid using shell find for searches. Instead use the glob tool to find "
-            "files. Use read_file rather than cat/head/tail.\n"
-            "    - execute(command=\"find . -name '*.py'\")  # Use glob tool instead\n",
-        ),
-        ("[execute, read_file]", "- Use read_file rather than cat/head/tail.\n"),
-    ],
-)
-def test_execute_names_only_the_search_and_read_tools_held(reading, grant, line):
-    """deepagents tells every shell holder to search with `grep` and `glob` and read with
-    `read_file`, whether or not it holds them."""
-    said = _said_to(reading, grant)[EXECUTE]
-
-    assert f"\n{line}" in said
-    for name in ("grep", "glob", "read_file"):
-        assert (name in said) is (name in grant), name
-
-
-def test_execute_holding_no_search_or_read_tool_loses_the_line_whole(reading):
-    """Emptied rather than dropped whole, the line would reach the model as a bare `- `
-    or a blank line."""
-    said = _said_to(reading, "[execute]")[EXECUTE]
-
-    for name in ("grep", "glob", "read_file", "cat/head/tail"):
-        assert name not in said, name
-    assert "-" not in [line.strip() for line in said.splitlines()]
-    assert "\n\n\n" not in said
-    assert timeout_line(reading[0].execution_timeout_s) in said
-
-
-@pytest.mark.parametrize("grant", ["[grep, execute]", "[grep]"])
-def test_grep_sends_only_the_shells_holder_to_the_shell_for_regex(reading, grant):
-    """deepagents sends every `grep` holder to `execute` for a regex, shell or not."""
-    said = _said_to(reading, grant)[GREP]
-
-    assert (REGEX in said) is ("execute" in grant)
-    assert ("execute" in said) is ("execute" in grant), "deepagents reworded it"
-    assert JOINED in said
-
-
-ALWAYS = "You should almost ALWAYS use this tool before using the"
-
-
-@pytest.mark.parametrize(
-    ("grant", "last"),
-    [
-        ("[ls, read_file, edit_file]", f"{ALWAYS} read_file or edit_file tools."),
-        ("[ls, read_file]", f"{ALWAYS} read_file tool."),
-        ("[ls, edit_file]", f"{ALWAYS} edit_file tool."),
-        (
-            "[ls]",
-            "This is useful for exploring the filesystem and finding the right file to read or "
-            "edit.",
-        ),
-    ],
-)
-def test_ls_names_only_the_tools_it_lists_for_that_are_held(reading, grant, last):
-    """`ls` sends every holder on to `read_file` and `edit_file`, held or not."""
-    said = _said_to(reading, grant)[LS]
-
-    assert said.endswith(f"\n{last}")
-
-
-@pytest.mark.parametrize("grant", ["[write_file, edit_file]", "[write_file]"])
-def test_write_file_points_at_edit_file_only_for_its_holder(reading, grant):
-    """deepagents' `write_file` recommends `edit_file` whether or not it is held."""
-    said = _said_to(reading, grant)[WRITE_FILE]
-
-    assert (PREFER_EDIT in said) is ("edit_file" in grant)
-    assert ("edit_file" in said) is ("edit_file" in grant), "deepagents reworded it"
-
-
-@pytest.mark.parametrize("grant", ["[edit_file, read_file]", "[edit_file]"])
-def test_edit_file_never_claims_to_check_that_the_file_was_read(reading, grant):
-    """deepagents' `edit_file` says it errors on a file not read first, and checks no such
-    thing; to an agent without `read_file` it was also advice to call a tool not held."""
-    said = _said_to(reading, grant)[EDIT_FILE]
-
-    assert "errors otherwise" not in said, "deepagents reworded it"
-    assert (READ_FIRST in said) is ("read_file" in grant)
-    assert ("before editing" in said) is ("read_file" in grant)
-
-
-@pytest.mark.parametrize("grant", ["[edit_file, read_file]", "[edit_file]"])
-def test_edit_file_speaks_of_the_read_output_only_to_a_reader(reading, grant):
-    """`edit_file` told an agent without `read_file` to keep the indentation "from the read
-    output" and leave out its status header, output it could never have seen."""
-    said = _said_to(reading, grant)[EDIT_FILE]
-
-    assert (FROM_READ in said) is ("read_file" in grant)
-    assert (EXACT_INDENT in said) is ("read_file" not in grant)
-    assert ("read output" in said) is ("read_file" in grant), "deepagents reworded it"
-
-
 @pytest.mark.parametrize("subagent", ["helper", "general-purpose"])
 def test_an_unrestricted_graph_is_told_what_deepagents_says_but_the_false_claim(
     reading, subagent
@@ -383,31 +254,3 @@ def test_an_unrestricted_graph_is_told_what_deepagents_says_but_the_false_claim(
         assert said[WRITE_FILE] == WRITE_FILE_TOOL_DESCRIPTION.strip()
         assert READ_FIRST in said[EDIT_FILE]
         assert said[EDIT_FILE] == EDIT_FILE_TOOL_DESCRIPTION.replace(MUST_READ, READ_FIRST)
-
-
-RUNNER = (
-    "name: runner\ndescription: Runs.\n"
-    "builtin_tools: [execute]\n"
-    "system_prompt: |\n  You run.\n"
-)
-
-
-def test_a_subagent_is_told_of_the_tools_it_holds_not_its_callers(reading):
-    """Read off the agent's grant, a subagent granted only the shell would be sent to the
-    agent's `grep`, `glob` and `read_file`."""
-    cfg, offered = reading
-    (subagents_dir(cfg) / "runner.yaml").write_text(RUNNER, encoding="utf-8")
-    an_agent(cfg, subagents="[runner]", **EVERY_TOOL)
-    asked = {"description": "run", "subagent_type": "runner"}
-    consulting = AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}])
-
-    _turn(cfg, consulting, AIMessage("ran"), AIMessage("done"))
-
-    assert len(offered) == 3
-    callers, runners = (
-        {getattr(tool, "name", None): tool.description for tool in tools} for tools in offered[:2]
-    )
-    assert f"\n{SEARCHING}\n" in callers[EXECUTE]
-    assert set(runners) == {EXECUTE}
-    for name in ("grep", "glob", "read_file"):
-        assert name not in runners[EXECUTE], name

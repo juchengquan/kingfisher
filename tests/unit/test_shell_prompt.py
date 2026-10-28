@@ -319,18 +319,6 @@ def test_a_shell_of_a_deployment_s_own_is_told_the_variable_it_exports(session_d
     assert "KINGFISHER_SESSION_ROOT" not in _told(shell_told(Silent(root_dir=str(session_dir))))
 
 
-def test_a_session_root_that_is_not_a_string_is_refused(session_dir):
-    """A `Path` set where the root goes would reach the prompt as whatever it prints,
-    and the refusal names the shell, which is where the mistake is.
-    """
-
-    class Mistaken(LocalShellBackend):
-        session_root = Path("/workspace")
-
-    with pytest.raises(TypeError, match=r"Mistaken\.session_root is a \w*Path"):
-        session_root_of(Mistaken(root_dir=str(session_dir)))
-
-
 def test_an_empty_session_root_is_refused(session_dir):
     """An empty root would teach `"$KINGFISHER_SESSION_ROOT/inputs/x"`, which the shell
     expands to the host's `/inputs/x`, the path the variable exists to keep it from.

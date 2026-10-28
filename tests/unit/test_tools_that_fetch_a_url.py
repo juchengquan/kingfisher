@@ -242,14 +242,6 @@ def test_a_page_the_bytes_cut_before_the_characters_did_says_that_instead(fetch,
     )
 
 
-def test_the_character_the_cut_invented_is_not_in_the_answer(fetch, serving):
-    """The byte cap stops mid-character and `errors="replace"` writes a character the
-    page never sent, so the answer ended `\u65e5a\u65e5\ufffd` -- which a caller reads
-    as the page's own corruption, and this page holds nothing of the kind.
-    """
-    assert "\ufffd" not in fetch.func(url=f"{serving}/shifty")
-
-
 def test_a_server_that_answers_a_byte_at_a_time_is_given_up_on(fetch, serving, monkeypatch):
     """`timeout=` is a socket timeout -- one operation -- and reading it as a bound on
     the call is what left this unbounded: measured, a server sending one byte every two
@@ -352,19 +344,6 @@ def test_a_body_the_wrong_encoding_only_dents_is_answered(fetch, serving):
     assert "refused" not in said
 
 
-def test_a_content_type_the_server_made_up_is_not_printed_back(fetch, serving):
-    """A header is the server's own text and a refusal is one line: `get_content_type()`
-    hands back whatever it parsed, so a type of three hundred characters would be three
-    hundred characters of someone else's writing inside an answer about their page.
-    """
-    said = fetch.func(url=f"{serving}/forged-type")
-
-    assert said.startswith("refused: ")
-    assert "evil/" not in said
-    assert "xxx" not in said
-    assert "do not read as text" in said
-
-
 @pytest.mark.parametrize("declared", sorted(ENCODED))
 def test_a_body_is_decoded_as_the_response_says_it_is(declared, fetch, serving):
     """The server says what its bytes are and this tool was not listening: measured, a
@@ -372,22 +351,3 @@ def test_a_body_is_decoded_as_the_response_says_it_is(declared, fetch, serving):
     `utf-16` as its bytes with a NUL between every character.
     """
     assert fetch.func(url=f"{serving}/{declared}") == ENCODED[declared]
-
-
-def test_an_encoding_this_machine_does_not_have_is_not_the_servers_to_choose(fetch, serving):
-    """A server may name anything, and `decode` raises `LookupError` on a name Python
-    does not know -- which would leave the server deciding whether this tool fails.
-    """
-    assert fetch.func(url=f"{serving}/bogus-charset") == "whatever"
-
-
-def test_the_docstring_names_both_bounds_the_tool_applies(fetch):
-    """The model plans its call by these two numbers and reads them here and nowhere
-    else. Whitespace-normalised: the sentence wraps where the column ran out, and an
-    `in` against the source sees a line break the model never does.
-    """
-    held = _globals(fetch)
-    reads = " ".join(fetch.description.split())
-
-    assert f"at most {held['MAX_CHARS']:,} characters" in reads
-    assert f"gives up after {held['MAX_SECONDS']:g} seconds" in reads

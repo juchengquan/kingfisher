@@ -6198,6 +6198,17 @@ being a preview a person reads, where kind four does not reach. The gate broke
 fourteen: eleven that crash where only the dict test looks, and three that word a note
 wrongly. *(2026-10-28.)*
 
+**The last model-facing files gave least.** `test_file_tools.py` lost the descriptions
+naming tools an agent does not hold, and the other four little: a deployment's shell
+telling the agent where its files are, the reference definitions a deployment copies and
+the backend's routes are each the way to something or who reaches it. The seventh slice
+took 34 of the 224 items in `test_file_tools.py`, `test_backend.py`,
+`test_tools_that_fetch_a_url.py`, `test_shipped_assets.py` and `test_shell_prompt.py`. Of
+804 breaks, a doomed test alone caught nine: eight word a description or a listing
+wrongly, and one refused at load every definition whose prompt is keyed on a datazone that
+exists, which only `test_the_shipped_analyst_tells_each_caller_what_its_grant_reaches`
+loaded. It stays, as a test that alone drives a path able to raise. *(2026-10-28.)*
+
 **Growth is held by a rule in `CLAUDE.md`, not by anything in CI.** 557 of the 608 commits
 since September were written with Claude, which reads that file on every task. The growth
 is spread evenly -- a third each from PRs adding up to five tests, six to ten, and more --
