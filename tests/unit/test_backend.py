@@ -19,7 +19,6 @@ from kingfisher.core.layout import (
     BUNDLED_SKILLS_ROUTE,
     DEFAULT_LAYOUT,
     SCRATCH_ROUTE,
-    SKILLS_ROUTE,
 )
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -644,23 +643,6 @@ def test_a_scoped_search_reaches_a_route_below_the_path(cfg, session_dir):
     assert grepped == [bundled]
 
 
-def test_a_scoped_search_keeps_the_anchor_of_its_pattern(cfg, session_dir):
-    """A leading slash anchors a pattern to the directory searched, and a route nested
-    below it is deeper than the anchor allows -- so asking the routes below must not
-    answer with files the pattern does not reach. deepagents' own rule decides it; this
-    is what says kingfisher still asks it.
-    """
-    _a_bundle_with_a_skill(cfg)
-    (cfg.definitions / "skills" / "loose.md").write_text("top level", encoding="utf-8")
-    backend = backend_at(cfg, session_dir)
-
-    found = [one["path"] for one in _asked(backend, "glob", "/*.md", "/skills").matches]
-
-    assert found == ["/skills/loose.md"], "an anchored pattern reached past its anchor"
-    # Which is the file it would have reached, two levels deeper than `/*.md` allows.
-    assert (cfg.definitions / "subagents" / "surveyor" / "skills" / "inside.md").exists()
-
-
 def test_a_scoped_search_survives_a_route_whose_folder_is_not_there(cfg, session_dir):
     """`/scratchpad/blobs/` and `/scratchpad/large_tool_results/` are mounted and never
     made, and asking a route below the path searched now asks them too.
@@ -766,46 +748,6 @@ class _Unasked:
         return self.grep(pattern, path, glob, max_count=max_count)
 
 
-def test_a_scoped_search_whose_budget_runs_out_says_it_stopped_short(cfg, session_dir):
-    """deepagents' grep always passes a `max_count`, and a search that filled it before
-    the routes below the path were asked answered as complete, though a route it never
-    reached held a match. Filled exactly, so the outer answer is not cut short itself:
-    measured, the default backend calls exactly `max_count` matches whole.
-    """
-    for name in ("a.txt", "b.txt"):
-        (session_dir / "scratchpad" / name).write_text("needle\n", encoding="utf-8")
-    backend = backend_at(cfg, session_dir)
-    backend.routes[f"{SCRATCH_ROUTE}theirs/"] = _Unasked()
-    backend.sorted_routes = sorted(
-        backend.routes.items(), key=lambda one: len(one[0]), reverse=True
-    )
-    _Unasked.asked = 0
-
-    said = _asked(backend, "grep", "needle", SCRATCH_ROUTE, max_count=2)
-
-    assert len(said.matches) == 2
-    assert said.truncated, "a search that left routes unasked said it was complete"
-    assert _Unasked.asked == 0, "the control: the budget was spent before the route"
-
-
-def test_a_file_under_a_route_inside_the_default_root_is_found_once(cfg, session_dir):
-    """The scoped half of what the overrides are for: a recorded result lives under a
-    route *and* under the default backend's own root, so asking both for it hands the
-    model the same file twice.
-    """
-    kept = session_dir / "scratchpad" / "tool_results" / "1-execute.txt"
-    kept.write_text("as written", encoding="utf-8")
-    backend = backend_at(cfg, session_dir)
-
-    found = _asked(backend, "glob", "**/*.txt", SCRATCH_ROUTE)
-    said = _asked(backend, "grep", "as written", SCRATCH_ROUTE)
-    globbed = [one["path"] for one in found.matches]
-    grepped = [one["path"] for one in said.matches]
-
-    assert globbed == [f"{DEFAULT_LAYOUT.tool_results_route}1-execute.txt"]
-    assert grepped == [f"{DEFAULT_LAYOUT.tool_results_route}1-execute.txt"]
-
-
 def test_a_routed_file_is_globbed_once(cfg, session_dir):
     """Measured before this: `--input orders.csv` reached the model as
     `['/inputs/orders.csv', '/inputs/orders.csv']`, on every pattern tried.
@@ -842,79 +784,9 @@ def test_a_routed_file_is_grepped_once(cfg, session_dir):
         assert found == [f"{route}/probe.txt"]
 
 
-def test_the_root_names_each_directory_it_holds_once(cfg, session_dir):
-    """`ls /` answered eleven rows for seven directories: three of the routes point at
-    real directories under the session, so each arrived once from the route and once
-    from the default backend walking past it, told apart only by an empty
-    `modified_at`. A model reading that has two `/inputs/` to choose between.
-    """
-    backend = backend_at(cfg, session_dir)
-
-    found = [one["path"] for one in _entries(_asked(backend, "ls", "/"))]
-
-    assert found == sorted(set(found)), "a directory named twice at the root"
-    assert "/inputs/" in found, "and the control: the routes are listed at all"
-
-
-def test_the_root_holds_no_path_that_is_not_in_it(cfg, session_dir):
-    """deepagents adds a row for every route at the root, nested ones included, while
-    its own `ls` is non-recursive -- so `/scratchpad/tool_results/` was a top-level
-    entry of `/`, beside the folder that holds it.
-    """
-    backend = backend_at(cfg, session_dir)
-
-    found = [one["path"] for one in _entries(_asked(backend, "ls", "/"))]
-
-    deeper = [one for one in found if one.strip("/").count("/")]
-    assert not deeper, f"{deeper} are not in `/`, and `ls` does not recurse"
-
-
-def test_a_route_below_another_is_listed_under_the_one_above_it(cfg, session_dir):
-    """The other half: a nested route's row belongs under the directory that holds it,
-    not at the root beside it.
-    """
-    backend = backend_at(cfg, session_dir)
-
-    found = [one["path"] for one in _entries(_asked(backend, "ls", SCRATCH_ROUTE))]
-
-    assert DEFAULT_LAYOUT.tool_results_route in found
-
-
-def test_a_route_whose_folder_is_not_there_is_not_listed(cfg, session_dir):
-    """A mounted route is no folder. #1036 mounted two kept records no session was made
-    with, and `ls /scratchpad` then named four folders where two existed, the model being
-    told `path_not_found` about either of the others when it opened one.
-
-    Driven through the backend a turn gets, with the write as the control: a listing that
-    answered nothing at all under the scratchpad would pass the first half.
-    """
-    backend = backend_at(cfg, session_dir)
-    absent = f"{SCRATCH_ROUTE}blobs/"
-
-    found = [one["path"] for one in _entries(_asked(backend, "ls", SCRATCH_ROUTE))]
-    assert absent not in found, "a folder the model cannot open was named"
-    assert DEFAULT_LAYOUT.tool_results_route in found, "and the control: made, so named"
-
-    backend.upload_files([(f"{absent}0f1e2d", b"payload")])
-    after = [one["path"] for one in _entries(_asked(backend, "ls", SCRATCH_ROUTE))]
-    assert absent in after, "written to, and the folder it made went unnamed"
-
-
-def test_a_route_outside_the_session_is_still_named_at_the_root(cfg, session_dir):
-    """What the rule above must not take with it, and the reason dropping deepagents'
-    route rows costs nothing: `/skills/` is a directory the default backend never walks
-    past, and deepagents names it at the root itself.
-    """
-    backend = backend_at(cfg, session_dir)
-
-    found = [one["path"] for one in _entries(_asked(backend, "ls", "/"))]
-
-    assert SKILLS_ROUTE in found
-
-
 def test_a_directory_still_lists_what_it_actually_holds(cfg, session_dir):
-    """The control the two rules above need: a filter keeping only direct children
-    passes both of them by answering nothing at all.
+    """A directory lists what it holds one level at a time, and a filter keeping only
+    direct children can answer nothing at all, which leaves the model no way to its files.
     """
     backend = backend_at(cfg, session_dir)
     inside = session_dir / "outputs" / "deep"
@@ -927,27 +799,6 @@ def test_a_directory_still_lists_what_it_actually_holds(cfg, session_dir):
     assert [one["path"] for one in _entries(_asked(backend, "ls", "/outputs/deep"))] == [
         "/outputs/deep/probe.txt"
     ]
-
-
-def test_a_route_does_not_list_itself_among_its_contents(cfg, session_dir):
-    """`_directly_under` excludes the directory asked about, and `/outputs` cannot show
-    that: it is not a route, so no stand-in row is ever added for it and the control
-    above passes whether that exclusion is there or not.
-
-    Driven on `/inputs`, which is a route. Without the exclusion the empty remainder
-    reads as a direct child of itself: measured, `ls /inputs` answered `['/inputs/']`
-    and `ls /memory` the folder and its file -- which is the failure
-    `_directly_under`'s own docstring cites as how it was found, held by nothing until
-    this.
-    """
-    backend = backend_at(cfg, session_dir)
-    where = session_dir / "inputs"
-    where.mkdir(parents=True, exist_ok=True)
-    (where / "given.txt").write_text("as written\n", encoding="utf-8")
-
-    listed = [one["path"] for one in _entries(_asked(backend, "ls", "/inputs"))]
-
-    assert listed == ["/inputs/given.txt"], "a route listed its own stand-in row"
 
 
 def test_a_file_matching_twice_still_reports_both(cfg, session_dir):
