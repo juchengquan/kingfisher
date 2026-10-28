@@ -32,6 +32,12 @@ replaced the four layers began.
   that paused, and the turn that resumes it writes a `tool_start` again, with the same
   `call`, and then its end. A sink that counts `tool_error` as failures stops counting
   pauses; one that holds open calls finds one still open when a paused turn ends.
+- **`run_end` carries `stop_reason`, and is written later.** The reason is the one
+  `RunResult.stop_reason` gives, or `null` for a turn that failed before it was known.
+  To know it, `run_end` now waits for the turn's saved state to be read and any pause
+  settled, so it arrives after the ledger is written rather than first in the ending.
+  Every `run_start` still has one, a failure on the way included. Code that called
+  `RunLogger.run_end` itself passes `stop_reason=`.
 
 ## Events say which call and which delegation they belong to, after #1130
 

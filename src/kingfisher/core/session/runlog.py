@@ -124,8 +124,8 @@ class RunLogger(BaseCallbackHandler):
     def run_start(self, task: str) -> None:
         self._write("run_start", task=task)
 
-    def run_end(self, *, ok: bool, answer_chars: int) -> None:
-        self._write("run_end", ok=ok, answer_chars=answer_chars)
+    def run_end(self, *, ok: bool, answer_chars: int, stop_reason: str | None) -> None:
+        self._write("run_end", ok=ok, answer_chars=answer_chars, stop_reason=stop_reason)
 
     def on_chat_model_start(
         self,

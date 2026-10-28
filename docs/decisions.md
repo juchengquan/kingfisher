@@ -843,6 +843,15 @@ call at a time; on the stream such a task is refused up front. A subagent's paus
 reaches its `task` call as an exception and is written as nothing: it failed nothing,
 and the `tool_error` it was written as read as one that had. *(2026-10-28, #1138.)*
 
+**`run_end` says why the turn stopped, so it waits until that is known.** Its
+`stop_reason` is the one `RunResult` carries, and two reasons are read only off the
+saved state: a pause, and an answer cut off at the cap. So it is written once the state
+is read, the ledger written and the pause settled, not first in the ending as it was,
+and before the memory writer and the cleanup. A step failing on the way still writes it,
+from a `finally`, so every `run_start` keeps its end. A turn that failed before its
+reason was known says `null`: `end_turn` would read as one that finished.
+*(2026-10-28, #1138.)*
+
 **Not covered: a program's subagents, and an approval's subagent with two open.** A
 subagent a program starts with `task()` inside `eval` reaches neither the stream nor the
 run-events record. `PendingDecision.agent` stays `None` while two delegations are open,

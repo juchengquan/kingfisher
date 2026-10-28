@@ -269,6 +269,12 @@ where it runs one, and elsewhere the main agent's. `model_call` carries `input_t
 `output_tokens` and `cache_read`, which is what a bill is totalled from, and `cut_off`,
 true for a reply that stopped at the model's output cap.
 
+`run_end` carries `ok`, `answer_chars` and `stop_reason`, the reason
+`RunResult.stop_reason` gives, or `null` for a turn that failed before it was known. It
+is written once that reason is final, after the turn's saved state is read and any pause
+settled, and before the memory writer and the cleanup. A failure on the way still
+writes it, so every `run_start` has one.
+
 Every model and tool event says where it came from, in the stream's words: `agent` is
 the subagent that made it, `null` for the agent the caller asked, and `delegations` the
 `task` calls it came from inside, outermost first, each by its call's id. Two runs of

@@ -15,6 +15,7 @@ from langchain_core.outputs import ChatGeneration, LLMResult
 from kingfisher import Kingfisher
 from kingfisher.core.interfaces import RunEvents
 from kingfisher.core.request import Decision, Request, Resume
+from kingfisher.core.session import running
 from kingfisher.core.session.runlog import (
     RUN_LOGGER,
     LoggedRunEvents,
@@ -32,6 +33,7 @@ from tests.conftest import (
     tools_dir,
 )
 from tests.unit.scripted import Scripted
+from tests.unit.test_cut_replies import reply
 from tests.unit.test_run import StubAgent
 from tests.unit.test_stream_delegations import _gated_beside_ungated, _task, _twice
 from tests.unit.test_subagent_helpers import HELPER, REVIEWER, _define
@@ -290,7 +292,7 @@ def test_a_file_sink_keeps_one_line_per_event_in_its_own_alphabet(tmp_path):
 
     sink = JsonlRunEvents(tmp_path / "logs" / "turns.jsonl")
     _logger(sink).run_start("Résume le rapport")
-    _logger(sink).run_end(ok=True, answer_chars=3)
+    _logger(sink).run_end(ok=True, answer_chars=3, stop_reason="end_turn")
 
     written = (tmp_path / "logs" / "turns.jsonl").read_text(encoding="utf-8")
     events = [json.loads(line) for line in written.splitlines()]
@@ -456,6 +458,8 @@ def test_a_subagents_pause_is_no_tool_error_in_the_record(cfg, session_dir):
     resumed = kf.run(Resume(session_id=paused.session_id, decisions=answers))
 
     assert sink.named("tool_error") == []
+    # `run_end` was written before the pause was read off the saved state.
+    assert [e["stop_reason"] for e in sink.named("run_end")] == ["awaiting_decision", "end_turn"]
     delegated = [
         (e["turn_id"], e["event"], e["call"])
         for e in sink.events
@@ -470,3 +474,52 @@ def test_a_subagents_pause_is_no_tool_error_in_the_record(cfg, session_dir):
             (resumed.turn_id, "tool_end", "p0"),
         ]
     )
+
+
+def test_run_end_says_the_turn_was_cut_off(scripted):
+    """`max_tokens` is read off the saved state, which `run_end` was written before, so a
+    turn whose answer was cut off three times ended in the record as `end_turn`."""
+    an_agent(scripted, **EVERY_TOOL)
+    start(scripted, "s")
+    Scripted.script.extend(reply(text=said) for said in ("First try", "Second try", "Third"))
+    sink = RecordedEvents()
+
+    result = Kingfisher(scripted, sessions=LocalSessions(), run_events=sink).run(
+        Request("go", agent="only", session_id="s")
+    )
+
+    assert result.stop_reason == "max_tokens"
+    assert [e["stop_reason"] for e in sink.named("run_end")] == ["max_tokens"]
+
+
+class _Broken(StubAgent):
+    def stream(self, *_args, **_kwargs):
+        msg = "the graph fell over"
+        raise RuntimeError(msg)
+        yield  # pragma: no cover -- a generator that raises before its first yield
+
+
+def _unreadable(self, prepared):
+    msg = "the saver could not be read"
+    raise RuntimeError(msg)
+
+
+@pytest.mark.parametrize("where", ["graph", "ending"])
+def test_a_turn_that_failed_before_its_reason_was_known_still_ends_with_none(
+    cfg, monkeypatch, where
+):
+    """`run_end` waits for the saved state, and a failure reading it would have left a
+    `run_start` with no end; a turn that failed, said to stop at `end_turn`, read as one
+    that had finished."""
+    if where == "ending":
+        monkeypatch.setattr(running.Running, "_settled", _unreadable)
+    graph = _Broken("ok") if where == "graph" else StubAgent("42")
+    sink = RecordedEvents()
+    start(cfg, "s")
+    kf = Kingfisher(cfg, graph=graph, sessions=LocalSessions(), run_events=sink)
+
+    with pytest.raises(RuntimeError):
+        kf.run(Request("t", session_id="s"))
+
+    assert [e["event"] for e in sink.events] == ["run_start", "run_end"]
+    assert sink.events[-1]["stop_reason"] is None

@@ -341,25 +341,37 @@ class Running:
     def _ending_steps(self, turn: _Turn) -> Steps[None]:
         """What a turn does once it is over, however it ended."""
         prepared = turn.prepared
-        yield on_host(prepared.logger.run_end, ok=turn.ok, answer_chars=len(turn.answer))
+        # Known only once the saved state is read, and never for a turn that failed:
+        # `end_turn` there would read as a turn that finished.
+        stopped: str | None = None
         try:
-            # Before anything is let go of: the saver still holds the paused state.
-            snapshot = yield on_host(self._settled, prepared)
-            # Before the pause as well as the transcript: a resume carries on from that
-            # state, and a result in either must already have its row.
-            turn.recorded = yield from self._record_ledger(prepared, snapshot)
-            turn.awaiting = yield from self._settle_pause(prepared, snapshot)
-            if turn.awaiting:
-                turn.pending.append(decision_needed(turn.awaiting))
-                # A bound that already fired keeps its reason: `stop_reason` says why
-                # the turn ended, and the pending calls are reported either way.
-                if turn.stop_reason == END_TURN:
-                    turn.stop_reason = AWAITING
-            # Off the state, not the stream, so it is the agent's last reply and never a
-            # subagent's, whose cut answer is its caller's to read.
-            if turn.stop_reason == END_TURN and (cut := runtime.ended_cut_off(snapshot)):
-                turn.stop_reason = "max_tokens"
-                turn.pending.append(out_of_tokens(cut))
+            try:
+                # Before anything is let go of: the saver still holds the paused state.
+                snapshot = yield on_host(self._settled, prepared)
+                # Before the pause as well as the transcript: a resume carries on from
+                # that state, and a result in either must already have its row.
+                turn.recorded = yield from self._record_ledger(prepared, snapshot)
+                turn.awaiting = yield from self._settle_pause(prepared, snapshot)
+                if turn.awaiting:
+                    turn.pending.append(decision_needed(turn.awaiting))
+                    # A bound that already fired keeps its reason: `stop_reason` says why
+                    # the turn ended, and the pending calls are reported either way.
+                    if turn.stop_reason == END_TURN:
+                        turn.stop_reason = AWAITING
+                # Off the state, not the stream, so it is the agent's last reply and never
+                # a subagent's, whose cut answer is its caller's to read.
+                if turn.stop_reason == END_TURN and (cut := runtime.ended_cut_off(snapshot)):
+                    turn.stop_reason = "max_tokens"
+                    turn.pending.append(out_of_tokens(cut))
+                stopped = turn.stop_reason if turn.ok else None
+            finally:
+                # However the steps above end, so every `run_start` has its `run_end`.
+                yield on_host(
+                    prepared.logger.run_end,
+                    ok=turn.ok,
+                    answer_chars=len(turn.answer),
+                    stop_reason=stopped,
+                )
             turn.kept = yield from self._keep(prepared, snapshot)
             if prepared.memory is not None:
                 turn.memory, said = yield from kept_memory(
