@@ -18,6 +18,27 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The run-events record says which agent and delegation, after #1138
+
+- **Every model and tool event in `RunEvents` carries `agent` and `delegations`**, as
+  the stream's events have since #1130: the subagent that made it, `null` for the
+  caller's agent, and the ids of the `task` calls it came from inside, outermost first.
+  Tool events carry `call`, the call's id, and `tool_end` and `tool_error` now carry
+  `tool` as well; `model_call` carries `calls` beside `tool_calls`. Each is a new key, so
+  a sink reading the keys it knows is unchanged. One that paired an end with the latest
+  start can pair them by `call`, which holds when calls run at once.
+- **A subagent's pause is no longer a `tool_error`.** Its `task` call was logged as
+  failing with `GraphInterrupt: ...`. Now it has a `tool_start` and no end in the turn
+  that paused, and the turn that resumes it writes a `tool_start` again, with the same
+  `call`, and then its end. A sink that counts `tool_error` as failures stops counting
+  pauses; one that holds open calls finds one still open when a paused turn ends.
+- **`run_end` carries `stop_reason`, and is written later.** The reason is the one
+  `RunResult.stop_reason` gives, or `null` for a turn that failed before it was known.
+  To know it, `run_end` now waits for the turn's saved state to be read and any pause
+  settled, so it arrives after the ledger is written rather than first in the ending.
+  Every `run_start` still has one, a failure on the way included. Code that called
+  `RunLogger.run_end` itself passes `stop_reason=`.
+
 ## Events say which call and which delegation they belong to, after #1130
 
 - **`model_call` carries `calls`, and `tool_result` carries `call`.** The first is the

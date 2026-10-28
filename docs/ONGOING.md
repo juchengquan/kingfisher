@@ -40,10 +40,6 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   without `line_count` and nothing refuses. Measured through `build_agent`; one spelling
   on both sides keeps it. Spelling both before the intersect changes what a run is
   handed, so it is the owner's call. *(2026-10-27.)*
-- **Telling delegations side by side apart in the run-events record.** #1130 did it for
-  the stream and the command; `RunEvents` is built from langchain's callbacks, not the
-  stream, and needs a mechanism of its own. The owner left it for a later look.
-  *(2026-10-28.)*
 
 ## Waiting on a run
 

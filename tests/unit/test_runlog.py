@@ -4,25 +4,39 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from dataclasses import replace
 
 import pytest
+from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
 from kingfisher import Kingfisher
 from kingfisher.core.interfaces import RunEvents
-from kingfisher.core.request import Request
+from kingfisher.core.request import Decision, Request, Resume
+from kingfisher.core.session import running
 from kingfisher.core.session.runlog import (
     RUN_LOGGER,
     LoggedRunEvents,
     RunLogger,
     usage_of,
 )
-from kingfisher.plugins import LocalSessions
-from tests.conftest import RecordedEvents, an_agent, start, subagents_dir, tools_dir
+from kingfisher.plugins import LocalSessions, backend_at
+from tests.conftest import (
+    EVERY_TOOL,
+    FakeToolCallingModel,
+    RecordedEvents,
+    an_agent,
+    start,
+    subagents_dir,
+    tools_dir,
+)
 from tests.unit.scripted import Scripted
+from tests.unit.test_cut_replies import reply
 from tests.unit.test_run import StubAgent
+from tests.unit.test_stream_delegations import _gated_beside_ungated, _task, _twice
+from tests.unit.test_subagent_helpers import HELPER, REVIEWER, _define
 
 
 def _logger(sink) -> RunLogger:
@@ -278,7 +292,7 @@ def test_a_file_sink_keeps_one_line_per_event_in_its_own_alphabet(tmp_path):
 
     sink = JsonlRunEvents(tmp_path / "logs" / "turns.jsonl")
     _logger(sink).run_start("Résume le rapport")
-    _logger(sink).run_end(ok=True, answer_chars=3)
+    _logger(sink).run_end(ok=True, answer_chars=3, stop_reason="end_turn")
 
     written = (tmp_path / "logs" / "turns.jsonl").read_text(encoding="utf-8")
     events = [json.loads(line) for line in written.splitlines()]
@@ -348,3 +362,164 @@ def test_a_call_from_code_or_a_compiled_subagent_is_logged_once(scripted, route,
     started = [e["tool"] for e in sink.named("tool_start")]
     assert started.count("ping") == 1, started
     assert len(sink.named("tool_end")) == len(started), "a call ended more often than it began"
+
+
+# -- delegations side by side, in the record ------------------------------------
+
+
+def _where(event: dict) -> tuple:
+    return event["agent"], tuple(event["delegations"])
+
+
+def test_two_runs_of_one_subagent_are_told_apart_in_the_record(cfg, session_dir):
+    """No event said which run it came from, and a `tool_end` not even which tool, so
+    the record of two delegations at once read as one run."""
+    sink = RecordedEvents()
+    kf = Kingfisher(cfg, graph=_twice(cfg, session_dir), sessions=LocalSessions(), run_events=sink)
+
+    kf.run(Request("go", session_id=session_dir.name))
+
+    models = sink.named("model_call")
+    assert Counter(_where(e) for e in models) == {
+        (None, ()): 2,
+        ("reviewer", ("t1",)): 1,
+        ("reviewer", ("t2",)): 1,
+    }
+    assert (models[0]["tool_calls"], models[0]["calls"]) == (["task", "task"], ["t1", "t2"])
+    tools = [e for e in sink.events if e["event"] in ("tool_start", "tool_end")]
+    assert sorted((e["event"], e["tool"], e["call"], *_where(e)) for e in tools) == [
+        (kind, "task", call, None, ())
+        for kind in ("tool_end", "tool_start")
+        for call in ("t1", "t2")
+    ]
+
+
+def test_a_helpers_events_carry_the_whole_chain_in_the_record(scripted):
+    """The innermost id alone would make two helpers of one subagent look alike again,
+    and a `task` call filed under the delegation it starts would be inside itself."""
+    _define(scripted, REVIEWER, HELPER)
+    an_agent(scripted, subagents="[reviewer, second-opinion]", **EVERY_TOOL)
+    start(scripted, "s")
+    Scripted.script.extend(
+        [
+            AIMessage(content="", tool_calls=[_task("reviewer", "check it", "t-r")]),
+            AIMessage(content="", tool_calls=[_task("second-opinion", "again", "t-h")]),
+            AIMessage(content="HELPER-DONE"),
+            AIMessage(content="REVIEWER-DONE"),
+            AIMessage(content="done"),
+        ]
+    )
+    sink = RecordedEvents()
+
+    Kingfisher(scripted, sessions=LocalSessions(), run_events=sink).run(
+        Request("go", agent="only", session_id="s")
+    )
+
+    assert [_where(e) for e in sink.named("model_call")] == [
+        (None, ()),
+        ("reviewer", ("t-r",)),
+        ("second-opinion", ("t-r", "t-h")),
+        ("reviewer", ("t-r",)),
+        (None, ()),
+    ]
+    assert [(e["call"], *_where(e)) for e in sink.named("tool_start")] == [
+        ("t-r", None, ()),
+        ("t-h", "reviewer", ("t-r",)),
+    ]
+
+
+def test_the_callers_agent_is_named_in_the_record_as_on_the_stream(cfg, session_dir):
+    """A graph built with a `name` stamps it on its own calls, and read off them the
+    record said a subagent of that name had made them: the stream names none."""
+    graph = create_deep_agent(
+        model=FakeToolCallingModel(responses=[AIMessage(content="done")]),
+        backend=backend_at(cfg, session_dir),
+        name="planner",
+    )
+    sink = RecordedEvents()
+
+    Kingfisher(cfg, graph=graph, sessions=LocalSessions(), run_events=sink).run(
+        Request("go", session_id=session_dir.name)
+    )
+
+    assert [_where(e) for e in sink.named("model_call")] == [(None, ())]
+
+
+def test_a_subagents_pause_is_no_tool_error_in_the_record(cfg, session_dir):
+    """A pause inside a subagent reaches its `task` call as an exception, and the record
+    logged `tool_error` "GraphInterrupt: ..." for a turn that had failed nothing."""
+    sink = RecordedEvents()
+    graph = _gated_beside_ungated(cfg, session_dir)
+    kf = Kingfisher(cfg, graph=graph, sessions=LocalSessions(), run_events=sink)
+    paused = kf.run(Request("go", session_id=session_dir.name))
+    assert paused.pending, "scribe never paused"
+    answers = tuple(Decision(call_id=one.call_id, action="approve") for one in paused.pending)
+
+    resumed = kf.run(Resume(session_id=paused.session_id, decisions=answers))
+
+    assert sink.named("tool_error") == []
+    # `run_end` was written before the pause was read off the saved state.
+    assert [e["stop_reason"] for e in sink.named("run_end")] == ["awaiting_decision", "end_turn"]
+    delegated = [
+        (e["turn_id"], e["event"], e["call"])
+        for e in sink.events
+        if e["event"].startswith("tool_") and e["tool"] == "task"
+    ]
+    assert sorted(delegated) == sorted(
+        [
+            (paused.turn_id, "tool_start", "p0"),
+            (paused.turn_id, "tool_start", "p1"),
+            (paused.turn_id, "tool_end", "p1"),
+            (resumed.turn_id, "tool_start", "p0"),
+            (resumed.turn_id, "tool_end", "p0"),
+        ]
+    )
+
+
+def test_run_end_says_the_turn_was_cut_off(scripted):
+    """`max_tokens` is read off the saved state, which `run_end` was written before, so a
+    turn whose answer was cut off three times ended in the record as `end_turn`."""
+    an_agent(scripted, **EVERY_TOOL)
+    start(scripted, "s")
+    Scripted.script.extend(reply(text=said) for said in ("First try", "Second try", "Third"))
+    sink = RecordedEvents()
+
+    result = Kingfisher(scripted, sessions=LocalSessions(), run_events=sink).run(
+        Request("go", agent="only", session_id="s")
+    )
+
+    assert result.stop_reason == "max_tokens"
+    assert [e["stop_reason"] for e in sink.named("run_end")] == ["max_tokens"]
+
+
+class _Broken(StubAgent):
+    def stream(self, *_args, **_kwargs):
+        msg = "the graph fell over"
+        raise RuntimeError(msg)
+        yield  # pragma: no cover -- a generator that raises before its first yield
+
+
+def _unreadable(self, prepared):
+    msg = "the saver could not be read"
+    raise RuntimeError(msg)
+
+
+@pytest.mark.parametrize("where", ["graph", "ending"])
+def test_a_turn_that_failed_before_its_reason_was_known_still_ends_with_none(
+    cfg, monkeypatch, where
+):
+    """`run_end` waits for the saved state, and a failure reading it would have left a
+    `run_start` with no end; a turn that failed, said to stop at `end_turn`, read as one
+    that had finished."""
+    if where == "ending":
+        monkeypatch.setattr(running.Running, "_settled", _unreadable)
+    graph = _Broken("ok") if where == "graph" else StubAgent("42")
+    sink = RecordedEvents()
+    start(cfg, "s")
+    kf = Kingfisher(cfg, graph=graph, sessions=LocalSessions(), run_events=sink)
+
+    with pytest.raises(RuntimeError):
+        kf.run(Request("t", session_id="s"))
+
+    assert [e["event"] for e in sink.events] == ["run_start", "run_end"]
+    assert sink.events[-1]["stop_reason"] is None

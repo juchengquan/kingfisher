@@ -613,7 +613,7 @@ def test_the_turns_ending_runs_to_the_end_however_often_it_is_cancelled(cfg, mon
     asyncio.run(kf.arun(asked))
     monkeypatch.setattr(steps_module, "_awaited", real)
     names = [getattr(getattr(step, "fn", None), "__name__", "") for step in made]
-    ending = names.index("run_end")
+    ending = names.index("_settled")
     # The control: an ending of a step or two would be cancelled at a step or two.
     assert len(made) - ending >= 5, f"the ending made {len(made) - ending} async steps"
 

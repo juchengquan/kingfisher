@@ -232,11 +232,6 @@ def tool_calls(
     )
 
 
-def tool_names(message: Any) -> tuple[str, ...]:
-    """Names of the tools a message asks for, or an empty tuple."""
-    return tool_calls(message)[0]
-
-
 def cut_off(message: Any) -> bool:
     """Whether a reply stopped because it reached the model's output cap.
 
@@ -372,16 +367,19 @@ class SubagentNames:
 
 
 class Delegations:
-    """Which delegations a chunk came from inside, learned from the stream as it arrives.
+    """Which delegations a chunk or a callback came from inside, learned as the turn runs.
 
     A namespace names each graph a chunk passed through by the id of the task that ran
-    it, and langgraph announces a step's tasks, a `tools` task with the call it runs,
-    before running any: so a `task` call's id is known before anything inside it streams,
-    and again for each one a resumed turn re-enters.
+    it, and a `task` call's id is known before anything inside it runs: langgraph
+    announces a step's tasks, a `tools` task with the call it runs, before running any,
+    and a tool's start callback carries its call's id beside its task's. So it is known
+    again for each one a resumed turn re-enters.
     """
 
     def __init__(self) -> None:
         self._calls: dict[str, str] = {}
+        #: Tasks seen running more than one `task` call.
+        self._shared: set[str] = set()
 
     def started(self, namespace: Any, chunk: Any) -> RunEvent | None:
         """The `delegation_start` a `tasks` chunk announces, or `None`."""
@@ -391,7 +389,7 @@ class Delegations:
         if call is None or call.get("name") != TASK_TOOL:
             return None
         made = str(call.get("id") or "")
-        self._calls[str(chunk.get("id"))] = made
+        self.entered(str(chunk.get("id")), made)
         asked = call.get("args") or {}
         return RunEvent(
             kind="delegation_start",
@@ -400,6 +398,13 @@ class Delegations:
             delegations=(*self.within(namespace), made),
         )
 
+    def entered(self, task: str, call: str) -> None:
+        """Note that the `tools` task `task` runs the `task` call `call`. A task seen
+        running a second stands for neither: a tool's start arrives one call at a time,
+        and nothing would say which a chunk inside belonged to."""
+        if self._calls.setdefault(task, call) != call:
+            self._shared.add(task)
+
     def within(self, namespace: Any) -> tuple[str, ...]:
         """The delegations a chunk came from inside, outermost first; `()` for the main
         agent. A segment no `task` call started, a supplied graph's own subgraph, adds
@@ -407,7 +412,7 @@ class Delegations:
         return tuple(
             self._calls[ran]
             for segment in namespace or ()
-            if (ran := str(segment).partition(":")[2]) in self._calls
+            if (ran := str(segment).partition(":")[2]) in self._calls and ran not in self._shared
         )
 
 
