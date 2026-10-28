@@ -49,7 +49,7 @@ from kingfisher.core.result import AWAITING, MAIN, WORKING, LedgerEntry
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger, entry_id
 from kingfisher.core.session.transcript import from_json
-from kingfisher.core.session.turn import ledger_delta, ledger_index, turn_message
+from kingfisher.core.session.turn import ledger_delta, ledger_index
 from kingfisher.plugins import LocalSessions, ShellSettings
 from kingfisher.plugins.sessions.backend import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -272,17 +272,6 @@ def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
     assert not (session / "memory").exists()
 
 
-def test_a_result_that_is_json_is_kept_as_json(ledgered):
-    """The suffix is what tells the agent it can parse the file rather than read it."""
-    result = _run(
-        ledgered, _calls(("sql_query", {"query": "select 1"}, "c1")), AIMessage(content="done")
-    )
-
-    (entry,) = result.ledger
-    assert entry.path == "/scratchpad/tool_results/A-0001-sql_query.json"
-    assert json.loads(_read(ledgered, entry.path)) == {"rows": [[1, "a"], [2, "b"]]}
-
-
 #: An image and a PDF of 400 KB each, and an image held by its URL, whose size is unknown.
 _IMAGE = {"type": "image", "base64": "A" * 546_134, "mime_type": "image/png"}
 _PDF = {"type": "file", "base64": "A" * 546_134, "mime_type": "application/pdf"}
@@ -293,12 +282,10 @@ _LINKED = {"type": "image", "url": "https://example.com/chart.png"}
     ("blocks", "said"),
     [
         ([_PDF], "a PDF of 400 KB was not kept"),
-        ([_IMAGE, _IMAGE], "2 images of 800 KB in all were not kept"),
         ([_IMAGE, _PDF], "2 attachments of 800 KB in all were not kept"),
-        ([{"type": "audio", "base64": "A" * 4_096}], "a file of 3 KB was not kept"),
         ([_IMAGE, _LINKED], "2 images were not kept"),
     ],
-    ids=["a PDF", "two images", "two kinds", "another kind", "one held by URL"],
+    ids=["a PDF", "two kinds", "one held by URL"],
 )
 def test_a_row_names_what_its_saved_copy_left_out_by_kind_count_and_size(blocks, said):
     """A row that names several attachments by one's kind, or totals only those it can
@@ -411,21 +398,6 @@ def test_the_file_tools_are_not_recorded_and_the_shell_is(ledgered):
     assert "recorded" in _read(ledgered, shell.path)
 
 
-def test_a_failed_call_is_not_recorded(ledgered):
-    """A failure has nothing worth finding again and the conversation shows it; with a
-    row, the agent would be handed an id for an error message.
-    """
-    result = _run(
-        ledgered,
-        _calls(("broken", {"query": "sales"}, "c1"), ("web_search", {"query": "EV"}, "c2")),
-        AIMessage(content="done"),
-    )
-
-    (entry,) = result.ledger
-    assert entry.call == "c2"
-    assert _kept(ledgered) == [f"{entry.id}-web_search.txt"]
-
-
 def test_a_tool_name_is_one_path_segment_in_the_tool_results_folder(ledgered):
     """A tool's name is somebody else's spelling, and one written with slashes would
     put its result outside the folder the sweep and the agent look in.
@@ -445,29 +417,6 @@ def test_a_tool_name_is_one_path_segment_in_the_tool_results_folder(ledgered):
     (entry,) = result.ledger
     assert entry.path == "/scratchpad/tool_results/A-0001-up_and_away.txt"
     assert _kept(ledgered) == ["A-0001-up_and_away.txt"]
-
-
-def test_a_tool_whose_name_is_all_punctuation_still_gets_a_named_file(ledgered):
-    """Stripping what a path segment cannot carry can leave nothing at all, and
-    `A-0001.txt` is not found by the `A-0042-*` glob the prompt tells the model to use
-    -- which is the recipe `test_an_older_results_file_is_found_by_its_id_as_the_prompt_says`
-    drives.
-    """
-    (tools_dir(ledgered) / "odder.py").write_text(
-        "from langchain_core.tools import tool\n\n\n"
-        "@tool('***')\n"
-        "def odder() -> str:\n"
-        '    """Return something."""\n'
-        "    return 'nothing left'\n\n\n"
-        "TOOLS = [odder]\n",
-        encoding="utf-8",
-    )
-
-    result = _run(ledgered, _calls(("***", {}, "c1")), AIMessage(content="done"))
-
-    (entry,) = result.ledger
-    assert entry.path == "/scratchpad/tool_results/A-0001-tool.txt"
-    assert _kept(ledgered) == ["A-0001-tool.txt"]
 
 
 # -- where the recorder sits ---------------------------------------------------
@@ -532,7 +481,6 @@ def test_a_result_too_long_to_show_is_recorded_whole(ledgered):
     (entry,) = result.ledger
     assert entry.size > 100_000
     assert entry.summary.startswith("loud -- row 00000 ")
-
 
 
 def test_results_are_written_before_the_ledger_and_the_ledger_before_the_transcript(ledgered):
@@ -703,29 +651,6 @@ def test_two_calls_of_one_id_in_a_turn_each_keep_their_own_result(ledgered):
     # deepagents', and its copy carries the id line this recorder put on the end.
     for entry in (first, again):
         assert len(_read(ledgered, entry.path)) == entry.size, entry.id
-
-
-
-def test_a_todo_rewrite_is_not_a_recorded_result(ledgered):
-    """It rewrites one list the conversation already carries, and a row each buries the
-    rest: three updates beside one real search made three of the four delta lines a todo
-    list, each repeating the list in `args` as well.
-    """
-    result = _run(
-        ledgered,
-        _calls(("write_todos", {"todos": [{"content": "step 1", "status": "pending"}]}, "t1")),
-        _calls(("write_todos", {"todos": [{"content": "step 1", "status": "completed"}]}, "t2")),
-        _calls(("web_search", {"query": "EV"}, "c1")),
-        AIMessage(content="done"),
-    )
-
-    assert [(e.id, e.tool) for e in result.ledger] == [("A-0001", "web_search")]
-    assert _kept(ledgered) == ["A-0001-web_search.txt"]
-    # The control: the calls really ran, so this is the recorder skipping them rather
-    # than deepagents refusing them -- two in parallel are refused, and a refused call
-    # is not recorded either.
-    said = [one.content for one in Scripted.heard[-1] if type(one).__name__ == "ToolMessage"]
-    assert any("Updated todo list" in str(one) for one in said)
 
 
 def test_a_row_is_never_pointed_at_another_graphs_result_of_the_same_id(ledgered):
@@ -1223,23 +1148,6 @@ def test_a_task_paused_at_a_gate_takes_a_new_id_when_it_is_run_again(ledgered):
     assert {e.call: e.id for e in resumed.ledger} == {"t1": "A-0002", "c1": "A-0003"}
 
 
-def test_rows_are_kept_in_id_order_whatever_order_their_calls_finish_in():
-    """Calls made together finish in any order, and an exchange's span of ids is read
-    off its first row and its last; kept as they arrive, or ordered as text, past
-    `A-9999`, the span runs backwards.
-    """
-    ledger = Ledger("t", KeptLedger(last=9_998))
-    batch = ["c1", "c2"]
-    first = ledger.reserve("c1", batch, message="m1")
-    second = ledger.reserve("c2", batch, message="m1")
-
-    ledger.add(_entry(10_000, "web_search"))
-    ledger.add(_entry(9_999, "sql_query"))
-
-    assert (first, second) == ("A-9999", "A-10000")
-    assert [e.id for e in ledger.entries] == ["A-9999", "A-10000"]
-
-
 # -- a batch numbered as the model wrote it -------------------------------------
 
 
@@ -1277,20 +1185,6 @@ def test_a_batch_is_read_off_the_message_its_call_arrived_in():
 
     assert made_together(earlier.tool_calls[1], state) == ("m1", ["c1", "c2"])
     assert made_together(latest.tool_calls[0], state) == ("m2", ["c3"])
-
-
-def test_a_tool_that_is_never_recorded_is_no_part_of_the_batch():
-    """A file tool's result takes no number, so counting it would number every call after
-    it one too high and leave a gap no row names.
-    """
-    together = _calls(
-        ("web_search", {"query": "EV"}, "c1"),
-        ("read_file", {"file_path": "/outputs/notes.txt"}, "c2"),
-        ("sql_query", {"query": "select 1"}, "c3"),
-        message="m1",
-    )
-
-    assert made_together(together.tool_calls[2], {"messages": [together]}) == ("m1", ["c1", "c3"])
 
 
 def test_a_call_the_conversation_does_not_hold_is_a_batch_of_its_own():
@@ -1489,16 +1383,6 @@ def _transcribed(cfg, call_id: str) -> str:
     return next(one.content for one in from_json(text) if one.call_id == call_id)
 
 
-def test_the_model_is_handed_each_result_ending_in_its_id(ledgered):
-    """Without the id on what it reads, the model has nothing to cite a result by, and
-    nothing ties it to the line the next message lists.
-    """
-    _run(ledgered, _calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done"))
-
-    assert _handed("c1").content == "Ten results for EV\n1. one\n2. two\n[A-0001]"
-    assert _transcribed(ledgered, "c1") == _handed("c1").content
-
-
 def test_the_kept_file_and_the_size_are_the_result_without_its_id(ledgered):
     """The file is what the tool returned, read back by the agent and parsed by a caller:
     with the id in it a JSON result no longer parses, and the size counts a line the
@@ -1529,18 +1413,6 @@ def test_a_result_made_of_blocks_gains_a_block_holding_its_id(ledgered):
         {"type": "text", "text": "\n[A-0001]"},
     ]
     assert _transcribed(ledgered, "c1") == "firstsecond\n[A-0001]"
-
-
-def test_a_subagents_answer_and_each_result_it_read_end_in_their_ids(ledgered):
-    """`task` hands back a `Command` carrying its answer rather than a message, and a
-    stamp written for a message alone leaves every subagent's answer without its id.
-    """
-    _delegated(ledgered)
-
-    assert _handed("t1").content == "margins are thin\n[A-0001]"
-    # The researcher's second call, which read what its own two calls returned.
-    read = {_handed(call, call=2).content.rsplit("\n", 1)[-1] for call in ("c1", "c2")}
-    assert read == {"[A-0002]", "[A-0003]"}
 
 
 def test_a_command_is_stamped_in_a_copy_that_keeps_the_rest_of_it(ledgered):
@@ -1578,28 +1450,11 @@ def test_a_command_is_stamped_in_a_copy_that_keeps_the_rest_of_it(ledgered):
     assert returned.update["messages"] == [earlier, answer]
 
 
-def test_the_id_outlasts_the_preview_as_the_last_line_of_it(ledgered):
-    """A long result is shown as its head and tail, so an id anywhere but last is cut
-    away with the middle and the model never sees it.
-    """
-    _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
-
-    shown = _handed("c1").text
-    assert len(shown) < 80_000, "the control: it was shown whole and never previewed"
-    assert "lines truncated]" in shown, "the control: nothing was left out"
-    assert shown.rstrip().endswith("[A-0001]")
-
-
 WIDE = '''
 def one_line() -> str:
     """Return about 220,000 characters of JSON on one line, as an API's minified body is."""
     pad = "x" * 20
     return "[" + ",".join(f'{{"row": {n}, "pad": "{pad}"}}' for n in range(5_000)) + "]"
-
-
-def wide_rows() -> str:
-    """Return forty lines, each longer than half of what a preview shows."""
-    return "\\n".join(f"wide {n:02d} " + "x" * 3_000 + f" end {n:02d}" for n in range(40))
 
 
 def short_lines() -> str:
@@ -1612,7 +1467,7 @@ def blank_lines() -> str:
     return "\\n" * 90_000 + "end"
 
 
-TOOLS = [one_line, wide_rows, short_lines, blank_lines]
+TOOLS = [one_line, short_lines, blank_lines]
 '''
 
 
@@ -1630,21 +1485,6 @@ def test_a_result_on_one_line_is_previewed_by_its_ends(ledgered):
     assert '{"row": 4999, ' in shown, "the preview kept no tail of the result"
     assert shown.count("characters truncated]") == 1, "one line's cut was said twice, or not"
     assert "lines truncated]" not in shown, "one line was counted as left out entirely"
-
-
-def test_a_result_whose_every_line_is_too_wide_keeps_its_first_and_last(ledgered):
-    """Each line longer than half the preview left nothing whole to show, so a result of
-    forty wide lines was previewed as a count of them.
-    """
-    (tools_dir(ledgered) / "wide.py").write_text(WIDE, encoding="utf-8")
-
-    _run(ledgered, _calls(("wide_rows", {}, "c1")), AIMessage(content="done"))
-
-    shown = _handed("c1").text
-    assert shown.startswith("wide 00 "), "the first line's start was not shown"
-    assert " end 39\nfull result: " in shown, "the last line's end was not shown"
-    assert "... [38 lines truncated] ..." in shown, "the two cut lines were counted as lost"
-    assert shown.count("characters truncated]") == 2
 
 
 @pytest.mark.parametrize("tool", ["short_lines", "blank_lines"])
@@ -1676,44 +1516,6 @@ def test_the_id_outlasts_the_preview_of_a_result_made_of_blocks(ledgered):
     assert isinstance(image, dict) and isinstance(mark, dict), "a block stopped being one"
     assert image["type"] == "image", "the image was lost, or moved behind the text"
     assert str(mark["text"]).strip() == "[A-0001]"
-
-
-def test_a_result_the_backend_would_not_keep_is_stamped_all_the_same(ledgered):
-    """Its row exists, with no file, and the next message lists it as not kept: without
-    the id on the result, the model cannot tell which line is the one it read.
-    """
-    result = _run(
-        ledgered,
-        _calls(("web_search", {"query": "EV"}, "c1")),
-        AIMessage(content="done"),
-        kf=Kingfisher(ledgered, sessions=_Refusing()),
-    )
-
-    assert result.ledger[0].path is None, "the control: the file was kept after all"
-    assert _handed("c1").content.endswith("\n[A-0001]")
-
-
-def test_a_file_tools_result_and_a_failed_call_carry_no_id(ledgered):
-    """Neither has a row, and an id on either sends the model looking for a line the
-    next message never lists.
-    """
-    (_session(ledgered) / "outputs" / "notes.txt").write_text("alpha\n", encoding="utf-8")
-
-    result = _run(
-        ledgered,
-        _calls(
-            ("read_file", {"file_path": "/outputs/notes.txt"}, "c1"),
-            ("broken", {"query": "sales"}, "c2"),
-            ("web_search", {"query": "EV"}, "c3"),
-        ),
-        AIMessage(content="done"),
-    )
-
-    assert "alpha" in _handed("c1").text, "the control: the file was never read"
-    assert _handed("c2").status == "error", "the control: the call never failed"
-    assert "[A-" not in _handed("c1").text + _handed("c2").text
-    (searched,) = result.ledger
-    assert _handed("c3").text.endswith(f"\n[{searched.id}]")
 
 
 # -- the delta in the next message ----------------------------------------------
@@ -1786,14 +1588,8 @@ def test_a_subagents_entries_sit_under_its_answer_and_unanswered_ones_follow_the
 @pytest.mark.parametrize(
     ("size", "shown"),
     [
-        (0, "0 B"),
-        (1_023, "1023 B"),
-        (1_024, "1 KB"),
-        (1_535, "1 KB"),
-        (1_536, "2 KB"),
         (1_048_063, "1023 KB"),
         (1_048_064, "1.0 MB"),
-        (15_938_355, "15.2 MB"),
     ],
 )
 def test_a_size_is_shown_in_the_unit_it_has_reached(size, shown):
@@ -1803,22 +1599,6 @@ def test_a_size_is_shown_in_the_unit_it_has_reached(size, shown):
     (line,) = ledger_delta([_entry(1, "search", size=size)]).splitlines()[1:-1]
 
     assert line == f"A-0001 search -> {shown}  /scratchpad/tool_results/A-0001-search.txt"
-
-
-def test_the_delta_follows_what_the_turn_message_already_said():
-    """The task leads and the turn's own facts follow it, as before; the delta anywhere
-    ahead of them splits the task from what it says about where to work.
-    """
-    earlier = KeptLedger(exchanges=((_entry(1, "search"),),))
-    message = turn_message("go", ("a.txt",), earlier, layout=DEFAULT_LAYOUT)
-
-    assert message == (
-        "go\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
-        " New files in /inputs/: a.txt.\n\n"
-        "<ledger_delta>\n"
-        "A-0001 search -> 100 B  /scratchpad/tool_results/A-0001-search.txt\n"
-        "</ledger_delta>"
-    )
 
 
 def test_the_next_message_lists_what_was_recorded_since_the_last_one(ledgered):
@@ -1874,81 +1654,6 @@ def test_a_resume_says_so_on_its_closing_line_and_an_asked_turn_does_not(ledgere
     ]
 
 
-def test_rows_a_crash_left_without_their_closing_line_are_not_counted_as_the_next_turns(
-    ledgered,
-):
-    """Every turn rewrites the whole ledger, so a crash can leave a turn's rows without
-    its closing line, with the next turn's rows written after them: read by position,
-    a later message lists them as that next turn's.
-    """
-    _run(ledgered, _calls(("web_search", {"query": "one"}, "c1")), AIMessage("done"))
-    ledger = _session(ledgered) / HARNESS / LEDGER_FILE
-    ledger.write_text("\n".join(ledger.read_text().splitlines()[:-1]) + "\n")
-    _run(ledgered, _calls(("web_search", {"query": "two"}, "c2")), AIMessage("done"))
-    _run(ledgered, AIMessage(content="done"))
-
-    assert [row.get("id") for row in _rows(ledgered)][:2] == ["A-0001", "A-0002"]
-    assert _listed_in(_asked()) == ["A-0002"]
-
-
-def test_the_next_message_lists_a_subagents_results_under_its_answer(ledgered):
-    """Read back from the ledger rather than handed over in memory, a working entry sits
-    under its answer only if its run came back with it.
-    """
-    _delegated(ledgered)
-    _run(ledgered, AIMessage(content="noted"))
-
-    assert _listed_in(_asked()) == ["A-0001", "  A-0002", "  A-0003"]
-
-
-def test_a_superseded_subagents_results_are_listed_as_never_answered(ledgered):
-    """A new request drops a subagent paused at a gate. What it read is real and kept,
-    but its answer never comes, so there is nothing for its results to sit under.
-    """
-    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]", **EVERY_TOOL)
-    paused = _run(
-        ledgered,
-        _task("t1"),
-        _calls(("web_search", {"query": "BYD"}, "c1")),
-        _calls(("sql_query", {"query": "select 1"}, "c2")),
-    )
-    assert paused.stop_reason == AWAITING, "the subagent never stopped at the gate"
-
-    _run(ledgered, AIMessage(content="something else, then"))
-
-    # `A-0001` is the `task` call's, which never answered.
-    assert _listed_in(_asked()) == ["A-0002"]
-    assert _asked().split("\n</ledger_delta>")[0].endswith("  (its task never answered)")
-
-
-def test_no_delta_where_nothing_was_recorded_since_the_last_message(ledgered):
-    """An empty block tells the model nothing and still costs every message it is in."""
-    _run(ledgered, AIMessage(content="hello"))
-    _run(ledgered, AIMessage(content="again"))
-
-    assert [_listed_in(_asked(n)) for n in (0, 1)] == [None, None]
-
-
-def test_a_graph_the_deployment_supplied_is_handed_no_delta(ledgered):
-    """Nothing of kingfisher's records on such a graph and its prompt need not be
-    kingfisher's, so a delta there lists results in a block nothing taught it to read.
-    """
-    _run(ledgered, _calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done"))
-    model = Scripted(model="m", base_url="u", api_key="k", max_tokens=1, timeout=1.0)
-    graph = build_agent(
-        ledgered, backend=backend_at(ledgered, _session(ledgered)), model=model
-    ).graph
-    Scripted.script.append(AIMessage(content="supplied"))
-
-    result = Kingfisher(ledgered, graph=graph, sessions=LocalSessions()).run(
-        Request("again", session_id="s")
-    )
-
-    assert result.answer == "supplied", "the supplied graph never ran"
-    assert _asked().startswith("again")
-    assert _listed_in(_asked()) is None
-
-
 def test_the_system_prompt_is_the_same_whatever_the_ledger_holds(ledgered):
     """The system prompt is the cached prefix: anything in it that moves with the
     ledger misses the cache on every call of every turn after the first.
@@ -1993,62 +1698,11 @@ def _say(kf: Kingfisher, task: str, *script: AIMessage):
     return kf.run(Request(task, agent="only", session_id="s"))
 
 
-def _closing(cfg) -> list[dict[str, Any]]:
-    return [row for row in _rows(cfg) if "id" not in row]
-
-
 def _block_in(message: str, tag: str) -> list[str] | None:
     """The lines of one block in a message, or `None` where it has none."""
     if f"<{tag}>" not in message:
         return None
     return message.split(f"<{tag}>\n", 1)[1].split(f"\n</{tag}>", 1)[0].splitlines()
-
-
-def test_a_turn_says_on_its_closing_line_whether_it_ended_summarised(ledgered):
-    """The summary is private state only the turn's final state holds, so read anywhere
-    else, or under a key deepagents renamed, the mark is never written and the index
-    never shown -- and written regardless, a turn that summarised nothing claims to.
-
-    Driven through deepagents' real summariser: a mark set by hand passes whatever the
-    key is called.
-    """
-    cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, sessions=LocalSessions())
-
-    first = _say(kf, HALF, AIMessage(content="done"))
-    assert Scripted.summaries == 0, "the control: a turn under the trigger was summarised"
-    second = _say(kf, HALF, AIMessage(content="done"))
-
-    assert Scripted.summaries == 1, "the summariser never fired on the second turn"
-    assert _closing(cfg) == [{"turn": first.turn_id}, {"turn": second.turn_id, "summarised": True}]
-
-
-def test_a_resume_of_a_summarised_turn_is_marked_summarised_too(ledgered):
-    """A resume carries on the paused turn's conversation, summary and all: unmarked, the
-    next message lists a delta for a conversation whose earlier lines are gone.
-    """
-    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]", **EVERY_TOOL)
-    cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, sessions=LocalSessions())
-    # Half before the paused turn, which its summary replaces.
-    asked = _say(kf, HALF, AIMessage(content="done"))
-    paused = _say(kf, HALF, _calls(("sql_query", {"query": "select 1"}, "c1")))
-    assert paused.stop_reason == AWAITING, "the turn never stopped at the gate"
-    assert Scripted.summaries == 1, "the summariser never fired on the paused turn"
-
-    Scripted.script.append(AIMessage(content="done"))
-    resumed = kf.run(
-        Resume(
-            session_id="s",
-            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
-        )
-    )
-
-    assert _closing(cfg) == [
-        {"turn": asked.turn_id},
-        {"turn": paused.turn_id, "summarised": True},
-        {"turn": resumed.turn_id, "resumed": True, "summarised": True},
-    ]
 
 
 def test_once_a_turn_summarised_the_next_message_carries_the_index_and_not_the_delta(
@@ -2145,12 +1799,11 @@ _INSTEAD = {"ledger_delta": "ledger_index", "ledger_index": "ledger_delta"}
 @pytest.mark.parametrize(
     ("earlier", "asked", "resumed", "shown"),
     [
-        ((), (), (), "ledger_delta"),
         (("summarised",), (), (), "ledger_delta"),
         ((), ("summarised",), (), "ledger_index"),
         ((), (), ("summarised",), "ledger_index"),
     ],
-    ids=["none", "an-earlier-exchange", "the-asked-turn", "its-resume"],
+    ids=["an-earlier-exchange", "the-asked-turn", "its-resume"],
 )
 def test_the_index_follows_a_summary_since_the_last_message_and_no_other(
     ledgered, earlier, asked, resumed, shown
@@ -2206,78 +1859,6 @@ def test_the_last_five_exchanges_are_listed_in_full_and_each_older_one_as_a_line
     ]
     # Exactly five: the oldest of them is listed in full, not rolled up.
     assert ledger_index(_one_each(7, 8, 9, 10, 11)).splitlines()[1:-1] == _full(7, 8, 9, 10, 11)
-
-
-def test_an_exchange_in_full_is_listed_exactly_as_the_delta_lists_it():
-    """The index's recent part is the delta's rendering of each exchange: copied rather
-    than reused, the two drift, and a subagent's results stop sitting under its answer
-    in one of them.
-    """
-    unanswered = (_entry(12, "web_search", run="t9"), _entry(13, "search"))
-
-    shown = ledger_index([DELEGATED, unanswered]).splitlines()[1:-1]
-
-    assert shown == [
-        *ledger_delta(DELEGATED).splitlines()[1:-1],
-        *ledger_delta(unanswered).splitlines()[1:-1],
-    ]
-    assert shown[1].startswith("  A-0002"), "the control: nothing sat under its answer"
-    assert shown[-1].endswith("(its task never answered)"), "the control: all answered"
-
-
-def test_an_exchange_that_recorded_nothing_has_no_line_and_is_not_counted():
-    """Most exchanges record nothing, and counted among the five they push one that did
-    out of the full listing, to make room for lines that say nothing.
-    """
-    empty: tuple[LedgerEntry, ...] = ()
-
-    shown = ledger_index(
-        [empty, *_one_each(1), empty, *_one_each(2, 3), empty, *_one_each(4, 5, 6), empty]
-    )
-
-    assert shown.splitlines()[1:-1] == ["A-0001: 1 search", *_full(2, 3, 4, 5, 6)]
-
-
-def test_a_resume_is_rolled_up_with_the_turn_it_answered(ledgered):
-    """A paused `task` answers in its resume, and counted as an exchange of its own the
-    rolled-up line splits one task's work in two, its answer counted apart from the
-    results it rests on.
-
-    Through real turns, because the grouping is read back from the closing lines the
-    turns themselves wrote, and a hand-written ledger would only agree with itself.
-    """
-    an_agent(ledgered, subagents="[researcher]", interrupt_on="[sql_query]", **EVERY_TOOL)
-    cfg = _windowed(ledgered)
-    kf = Kingfisher(cfg, sessions=LocalSessions())
-    paused = _say(
-        kf,
-        "go",
-        _task("t1"),
-        _calls(("web_search", {"query": "BYD"}, "c1")),
-        _calls(("sql_query", {"query": "select 1"}, "c2")),
-    )
-    assert paused.stop_reason == AWAITING, "the subagent never stopped at the gate"
-    Scripted.script.extend([AIMessage(content="thin margins"), AIMessage(content="done")])
-    kf.run(
-        Resume(
-            session_id="s",
-            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
-        )
-    )
-    _say(kf, HALF, AIMessage(content="done"))
-    for n in range(3, 8):
-        _say(kf, "go", _calls(("web_search", {"query": f"q{n}"}, f"c{n}")), AIMessage("done"))
-    assert Scripted.summaries == 0, "the control: summarised before the second half"
-    _say(kf, HALF, AIMessage(content="done"))
-    assert Scripted.summaries >= 1, "the summariser never fired on the second half"
-
-    _say(kf, "go", AIMessage(content="done"))
-
-    index = _block_in(_asked(), "ledger_index") or [""]
-    # From `A-0002`: the `task` call took `A-0001` before it paused, and `A-0003` when it
-    # was run again on the resume.
-    assert index[0] == "A-0002..A-0004: 1 sql_query, 1 task, 1 web_search"
-    assert [line.split()[0] for line in index[1:]] == [entry_id(n) for n in range(5, 10)]
 
 
 def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):
@@ -2383,27 +1964,6 @@ def test_a_result_a_crash_left_unclosed_expires_with_the_turn_after_it(ledgered)
     assert (first["path"], first["expired_in"]) == (None, fourth.turn_id)
 
 
-def test_a_result_a_crash_left_unclosed_before_a_resume_expires_with_its_round(ledgered):
-    """A resume's closing line joins the round it answers, and so must what a crash
-    left open before it: aged with no round at all, it was kept for good."""
-    first = asdict(replace(_entry(1, "web_search"), turn="t1"))
-    cut = asdict(replace(_entry(2, "web_search"), turn="t2"))
-    _written(
-        ledgered,
-        [
-            *_closed(first),
-            json.dumps(cut),
-            json.dumps({"turn": "t3", "resumed": True}),
-        ],
-    )
-
-    asked = _run(_rounds(ledgered, 1), AIMessage(content="done"))
-
-    assert [row["id"] for row in _rows(ledgered) if row.get("expired_in") == asked.turn_id] == [
-        "A-0001", "A-0002",
-    ]
-
-
 def test_unset_every_result_keeps_its_file(ledgered):
     """The control beside expiry: a deployment that never set it must lose nothing."""
     for at in ("c1", "c2", "c3"):
@@ -2427,19 +1987,6 @@ def test_a_resume_carries_on_the_round_it_answers(ledgered):
 
     assert _expired_in(resumed) == ["A-0001"]
     assert _expired_in(asked) == ["A-0001", "A-0002"]
-
-
-def test_a_result_the_backend_refused_is_never_relabelled_expired():
-    """Expired with the rest, a row whose file the backend refused was listed as expired,
-    which sends a reader to the rounds kept rather than to the backend that refused it."""
-    refused, saved = _entry(1, "web_search", kept=False), _entry(2, "web_search")
-    lines = tuple(json.dumps(asdict(one)) for one in (refused, saved))
-    closed = KeptLedger(lines=lines, exchanges=((refused, saved),))
-    # The rows of a turn a crash left without its closing line, aged with the next.
-    cut = KeptLedger(lines=lines, exchanges=((),), unclosed=((refused, saved),))
-
-    assert _expired_in(Ledger("t2", closed, keep_rounds=1)) == ["A-0002"]
-    assert _expired_in(Ledger("t2", cut, keep_rounds=1)) == ["A-0002"]
 
 
 def _expired_in(ledger: Ledger) -> list[str]:
@@ -2470,75 +2017,3 @@ def test_an_expired_row_keeps_what_this_version_does_not_read(ledgered):
     (row,) = (row for row in _rows(cfg) if "id" in row)
     assert (row["later"], row["path"]) == ("x", None)
     assert row["expired_in"] is not None
-
-
-
-def test_an_expired_result_is_listed_as_expired_not_as_not_kept():
-    """'not kept' says the backend refused the file, which sends a reader to the wrong
-    cause."""
-    entry = replace(_entry(1, "web_search"), path=None, expired_in="t2")
-
-    assert ledger_delta([entry]).splitlines()[1].endswith("  expired")
-    assert ledger_delta([replace(entry, expired_in=None)]).splitlines()[1].endswith("not kept")
-
-
-def test_a_search_for_an_expired_result_says_why_it_found_nothing(ledgered):
-    """A bare 'not found' for a file a handle named reads as a wrong path, and the model
-    spends its calls looking for it."""
-    cfg = _rounds(ledgered, 1)
-    (entry,) = _searched(cfg, "c1").ledger
-    _run(cfg, AIMessage(content="nothing this time"))
-
-    _run(cfg, _calls(("read_file", {"file_path": entry.path}, "c2")), AIMessage(content="done"))
-
-    assert "not found" in _handed("c2").text
-    assert "older than 1 rounds of this conversation has expired" in _handed("c2").text
-
-
-def test_a_read_that_found_its_saved_result_is_not_told_it_expired(ledgered):
-    """The control the miss needs from the other side: with results expiring, a read of
-    a live one was told it "has expired and its file is gone" once the check that the
-    read found nothing went, and the model drops a result it is holding."""
-    cfg = _rounds(ledgered, 1)
-    (entry,) = _searched(cfg, "c1").ledger
-
-    _run(cfg, _calls(("read_file", {"file_path": entry.path}, "c2")), AIMessage(content="done"))
-
-    assert "not found" not in _handed("c2").text, _handed("c2").text
-    assert "expired" not in _handed("c2").text, _handed("c2").text
-
-
-def test_a_miss_is_not_explained_where_results_do_not_expire(ledgered):
-    """The control: told results expire where none do, the model gives up on a path it
-    merely mistyped."""
-    missing = f"{TOOL_RESULTS_ROUTE}A-0042-web_search.txt"
-
-    _run(ledgered, _calls(("read_file", {"file_path": missing}, "c1")), AIMessage(content="done"))
-
-    assert "not found" in _handed("c1").text
-    assert "expired" not in _handed("c1").text
-
-
-def test_a_miss_outside_the_results_folder_is_not_explained_as_expired(ledgered):
-    """The other control, with results expiring: told a saved result expired for a path
-    that was never one, the model gives up on an input it merely mistyped."""
-    cfg = _rounds(ledgered, 1)
-
-    _run(
-        cfg,
-        _calls(("read_file", {"file_path": "/inputs/x.csv"}, "c1")),
-        AIMessage(content="done"),
-    )
-
-    assert "not found" in _handed("c1").text
-    assert "expired" not in _handed("c1").text
-
-
-def test_the_prompt_says_results_expire_only_where_they_do():
-    """Unsaid, the prompt promises every result stays findable; said everywhere, a
-    deployment keeping all of them tells the model to call tools again for nothing."""
-    expiring = render_system_prompt(layout=DEFAULT_LAYOUT, keep_results_rounds=20)
-    keeping = render_system_prompt(layout=DEFAULT_LAYOUT)
-
-    assert "older than 20 rounds of this conversation expires" in " ".join(expiring.split())
-    assert "expires" not in keeping

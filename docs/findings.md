@@ -438,7 +438,8 @@ for the next reader who reaches for one.*
   now, and `test_the_share_a_request_may_fill_is_the_one_deepagents_applies` drives
   their own `_input_budget` so the mirrored 0.95 cannot go stale quietly. The ledger's
   `summarised` mark rests on this, and
-  `test_a_turn_says_on_its_closing_line_whether_it_ended_summarised` holds it.
+  `test_once_a_turn_summarised_the_next_message_carries_the_index_and_not_the_delta`
+  holds it.
   *(2026-10-12, deepagents 0.7.6; the budget 2026-10-13, deepagents 0.7.22.)*
 - **A PDF reaches the model whole, and is counted at a quarter of its base64.**
   `read_file` returns a PDF as one `file` block whatever `offset` and `limit` say:
