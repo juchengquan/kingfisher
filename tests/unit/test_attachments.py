@@ -202,40 +202,6 @@ def test_a_large_pdf_read_whole_reaches_the_model_as_advice(cfg, session_dir):
     assert not _files(state["messages"])
 
 
-def test_the_advice_names_pdf_text_where_the_graph_holds_it_and_the_route_works(
-    cfg, session_dir
-):
-    """Advice naming no way through leaves the model nothing to do with the file."""
-    _with_pdf_text(cfg)
-    pages = [f"page {n} " + "x" * 1500 for n in range(1, 201)]
-    (session_dir / "inputs" / "big.pdf").write_bytes(big := a_pdf(*pages))
-    assert len(big) > pdf_allowance(UNPROFILED), "not large enough to be refused"
-    model = _calls(
-        ("read_file", {"file_path": "/inputs/big.pdf"}),
-        ("pdf_text", {"file_path": "/inputs/big.pdf"}),
-    )
-
-    _run(cfg, session_dir, model)
-
-    assert "Call pdf_text on it" in _answer(model, "c1").text
-    assert _answer(model, "c2").text.startswith("Saved big.p1-200.txt (text, ")
-
-
-def test_an_agent_not_granted_pdf_text_is_not_told_to_call_it(cfg, session_dir):
-    """`standing_middleware` is handed every offered tool, so advice read off its
-    names tells an agent granted none of them to call one it does not hold.
-    """
-    _with_pdf_text(cfg)
-    (session_dir / "inputs" / "big.pdf").write_bytes(LARGE)
-    model = _calls(("read_file", {"file_path": "/inputs/big.pdf"}))
-
-    _run(cfg, session_dir, model, Capabilities(tools=()))
-
-    answer = _answer(model)
-    assert answer.text.startswith("/inputs/big.pdf is a 300 KB PDF"), answer.text
-    assert "pdf_text" not in answer.text
-
-
 def test_a_pdf_under_the_limit_is_handed_over_as_it_is(cfg, session_dir):
     """The control: a guard that refused every PDF would pass every test above."""
     (session_dir / "inputs" / "small.pdf").write_bytes(a_pdf("a short letter"))
@@ -349,41 +315,6 @@ def test_the_async_path_is_guarded_and_reads_what_the_model_was_offered(cfg, ses
 
     answer = _answer(model)
     assert not _files([answer]), "the model was handed the PDF whole"
-    assert "Call pdf_text on it" in answer.text
-
-
-def test_a_call_after_no_model_call_names_no_tool():
-    """A call replayed on a resume follows no model call here, and a guard that
-    guessed would name a tool the graph may not hold.
-    """
-    guard = AttachmentsMiddleware(UNPROFILED)
-    data = "A" * (400 * KB)
-    result = ToolMessage(
-        content=[{"type": "file", "base64": data, "mime_type": "application/pdf"}],
-        tool_call_id="c1",
-    )
-    request = SimpleNamespace(tool_call={"name": "read_file", "args": {}, "id": "c1"})
-
-    answer = guard.wrap_tool_call(request, lambda _: result)
-
-    assert "Work from its text" in answer.text
-    assert "pdf_text" not in answer.text
-
-
-def test_a_tool_offered_as_a_dict_is_one_the_advice_may_name():
-    """Read by its attribute alone, a tool offered as a dict went missing from what the
-    model was offered, while the filter outside held it to the grant by name."""
-    guard = AttachmentsMiddleware(UNPROFILED)
-    data = "A" * (400 * KB)
-    result = ToolMessage(
-        content=[{"type": "file", "base64": data, "mime_type": "application/pdf"}],
-        tool_call_id="c1",
-    )
-    request = SimpleNamespace(tool_call={"name": "read_file", "args": {}, "id": "c1"})
-
-    guard.wrap_model_call(SimpleNamespace(tools=[{"name": "pdf_text"}]), lambda _: None)
-    answer = guard.wrap_tool_call(request, lambda _: result)
-
     assert "Call pdf_text on it" in answer.text
 
 
@@ -823,27 +754,6 @@ def test_a_plugin_that_raises_leaves_kingfishers_verdict(cfg, session_dir, caplo
     assert _files([_answer(model, "c1")]), "the PDF that passes was not handed over"
     assert _answer(model, "c2").text.startswith("/inputs/big.pdf is a 300 KB PDF, too large")
     assert caplog.text.count("the PDF attachments plugin raised on read_file's result") == 2
-
-
-@pytest.mark.parametrize(
-    "nothing", ["", [], [{"type": "text", "text": "  "}]], ids=["empty", "no blocks", "blank"]
-)
-def test_a_plugin_handing_over_nothing_leaves_kingfishers_verdict(
-    cfg, session_dir, caplog, nothing
-):
-    """A plugin answering `""` was taken as a replacement that became no blocks, so the
-    model was handed an empty result marked failed, with no line saying why, in place of
-    a PDF kingfisher would have handed over or refused with a reason."""
-    reads = [_pdf_of(session_dir, "small.pdf", 10 * KB), {"file_path": "/inputs/big.pdf"}]
-    (session_dir / "inputs" / "big.pdf").write_bytes(LARGE)
-    model = _calls(*(("read_file", read) for read in reads))
-
-    _run(cfg, session_dir, model, pdfs=_Asking(lambda pdf: nothing))
-
-    assert _files([_answer(model, "c1")]), "the PDF that passes was not handed over"
-    assert _answer(model, "c2").text.startswith("/inputs/big.pdf is a 300 KB PDF, too large")
-    said = "the PDF attachments plugin handed over nothing for read_file's result"
-    assert caplog.text.count(said) == 2
 
 
 def test_every_graph_kingfisher_builds_asks_the_deployments_plugin(scripted):

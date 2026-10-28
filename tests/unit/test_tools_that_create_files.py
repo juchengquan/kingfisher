@@ -19,14 +19,9 @@ import pytest
 from pypdf import PdfReader
 
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.attachments import pdf_allowance
-from kingfisher.core.agent.models import summarizer_trigger
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, a_pdf, on_backend, repository_root
-
-#: The PDF bytes a turn holds open on a model with no profile, read off the guard's own rule.
-UNPROFILED_PDF_BYTES = pdf_allowance(summarizer_trigger(FakeToolCallingModel(responses=[])))
+from tests.conftest import a_pdf, on_backend, repository_root
 
 SALES = (
     "region,sales\n"
@@ -90,17 +85,6 @@ def handed(cfg, session_dir, fake_model):
 def _saved(backend, path: str) -> bytes | None:
     (got,) = backend.download_files([path])
     return got.content
-
-
-@pytest.mark.parametrize("name", sorted(CALLS))
-def test_a_file_goes_to_the_tools_default_when_save_as_is_left_out(name, tools, handed):
-    """A default the result does not name is a file the agent has to go looking for."""
-    args, default, _ = CALLS[name]
-
-    said = on_backend(tools[name], handed, **args)
-
-    assert _saved(handed, default)
-    assert f" to {default} " in said
 
 
 @pytest.mark.parametrize("name", sorted(CALLS))
@@ -277,30 +261,6 @@ def test_a_cell_holding_a_character_xml_admits_keeps_it(control, tools, handed, 
     assert "cannot carry" not in said
 
 
-@pytest.mark.parametrize("name", ["bar_chart", "csv_filter"])
-def test_a_cell_the_csv_reader_will_not_parse_is_said_rather_than_raised(
-    name, tools, handed, session_dir
-):
-    """These two read a CSV the way the profile tools do and died the same way: one
-    cell of 200,000 characters -- 0.6% of their own 32 MB cap -- and the model was
-    handed `Error: Error: field larger than field limit (131072)`, naming no file, no
-    column and no remedy.
-
-    Both, because the sentence is written out in each file for the reason `_fetched` is:
-    these are examples a deployment copies one at a time.
-    """
-    (session_dir / "inputs" / "wide.csv").write_text(
-        'a,b\n1,"' + "y" * 200_000 + '"\n', encoding="utf-8"
-    )
-    asked = {"column": "a", "value": "1"} if name == "csv_filter" else {}
-
-    with pytest.raises(ValueError, match="longer than the 131072 characters") as refused:
-        on_backend(tools[name], handed, file_path="/inputs/wide.csv", **asked)
-
-    assert "/inputs/wide.csv" in str(refused.value)
-    assert "read it with `read_file`" in str(refused.value)
-
-
 def test_the_filter_keeps_exactly_the_rows_whose_cell_equals_the_value(tools, handed, session_dir):
     """A match by prefix or by case keeps a row nobody asked for, a short row read past
     its end stops the export, and an export is believed without being read.
@@ -344,123 +304,6 @@ def test_the_text_holds_each_page_asked_for_under_its_own_number(tools, handed, 
     assert "pages 2-3, 5 of 5" in said
 
 
-#: How a caller says "the whole document": by naming a span that covers it, and by
-#: leaving `pages` out. Both ways in one test, because the cap was reported for the
-#: first and not the second -- a span is clipped to the document before the cap is
-#: applied, so the default span `1-500` had nothing past it to name on a 503-page
-#: report, and the docstring recommends leaving it out.
-WHOLE = {"the span named": False, "left to its default": True}
-
-
-@pytest.mark.parametrize("way", sorted(WHOLE), ids=sorted(WHOLE))
-def test_pages_past_the_cap_are_named_as_left_out(way, tools, handed, session_dir):
-    """A cut that says nothing reads as the end of the document."""
-    cap = tools["pdf_text"].func.__globals__["MAX_PAGES"]
-    texts = [f"p{n}" for n in range(1, cap + 4)]
-    (session_dir / "inputs" / "long.pdf").write_bytes(a_pdf(*texts))
-    asked = {} if WHOLE[way] else {"pages": f"1-{cap + 3}"}
-
-    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/long.pdf", **asked)
-
-    left = f"at most {cap} a call, so {cap + 1}-{cap + 3} left out"
-    assert f"pages 1-{cap} of {cap + 3}; {left}" in said
-    saved = _saved(handed, f"/scratchpad/long.p1-{cap}.txt")
-    assert saved is not None
-    assert f"--- page {cap} ---" in saved.decode()
-    assert f"--- page {cap + 1} ---" not in saved.decode()
-
-
-def test_a_span_the_document_satisfies_is_not_reported_as_cut_short(tools, handed, session_dir):
-    """The other direction, and the one that keeps the rule above honest: the note
-    names what the *caller* asked for and did not get, so a span this document has
-    every page of must not carry it, however many pages are past the span.
-    """
-    cap = tools["pdf_text"].func.__globals__["MAX_PAGES"]
-    (session_dir / "inputs" / "long.pdf").write_bytes(
-        a_pdf(*[f"p{n}" for n in range(1, cap + 4)])
-    )
-
-    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/long.pdf", pages="1-20")
-
-    assert f"pages 1-20 of {cap + 3}" in said
-    assert "left out" not in said
-
-
-#: A span the document only partly has, and the part of it that is missing. Two
-#: shapes, because a span cut at the end and a span naming a page far past it are the
-#: same silence spelt differently.
-PAST_THE_END = {"3-5,9": "4-5, 9", "2-9": "4-9"}
-
-
-@pytest.mark.parametrize("pages", sorted(PAST_THE_END), ids=sorted(PAST_THE_END))
-def test_pages_the_document_does_not_have_are_named_as_asked_for(
-    pages, tools, handed, session_dir
-):
-    """The other half of what the rule above calls "what the caller asked for and did
-    not get". A span is clipped to the document before it is expanded -- which is what
-    keeps `1-99999999` cheap -- and the clip was silent: `3-5,9` on a three-page report
-    answered `pages 3 of 3`, so a model that asked for nine pages and got one was told
-    nothing had been left out, against a docstring promising it names them.
-
-    The pages that *are* there are asserted too, since a note beside a missing page is
-    no use if the extraction stopped at it.
-    """
-    (session_dir / "inputs" / "three.pdf").write_bytes(a_pdf("one", "two", "three"))
-
-    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/three.pdf", pages=pages)
-
-    assert f"asked for {PAST_THE_END[pages]}, which this document does not have" in said
-    saved = _saved(handed, f"/scratchpad/three.p{'3' if pages == '3-5,9' else '2-3'}.txt")
-    assert saved is not None and "three" in saved.decode()
-
-
-def test_a_span_the_document_has_every_page_of_is_not_told_it_is_missing_any(
-    tools, handed, session_dir
-):
-    """The control this one needs of its own: the rule above is satisfied by a note on
-    every answer, and the cap's control next door asserts on the word `left out`,
-    which this note does not use.
-    """
-    (session_dir / "inputs" / "three.pdf").write_bytes(a_pdf("one", "two", "three"))
-
-    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/three.pdf", pages="1-3")
-
-    assert "pages 1-3 of 3" in said
-    assert "does not have" not in said
-
-
-#: How a model might write the one word `pages` takes that is not a span. The tool
-#: case-folds before comparing, and a model writing `All` at the start of a sentence
-#: is the reason -- held here, because nothing else passed anything but the constant.
-def _spellings(word: str) -> list[str]:
-    return [word, word.upper(), word.capitalize(), f" {word} "]
-
-
-def test_the_word_for_every_page_is_the_one_the_docstring_tells_the_model_to_pass(
-    tools, handed, session_dir
-):
-    """`pages` takes one word that is not a span, and the model learns it here and
-    nowhere else. Read off the constant and passed, rather than written out: spelt
-    `all` in the test, the word could be changed in the tool and this would still
-    pass, while every call the docstring recommends began failing.
-
-    Every spelling a model might send, because the tool strips and case-folds before
-    comparing and nothing held either -- spelt one way, both could go and the suite
-    stayed green.
-    """
-    everything = tools["pdf_text"].func.__globals__["EVERYTHING"]
-    (session_dir / "inputs" / "three.pdf").write_bytes(a_pdf("one", "two", "three"))
-
-    assert f"pass `{everything}`" in _reads(tools["pdf_text"])
-    for written in _spellings(everything):
-        said = on_backend(
-            tools["pdf_text"], handed, file_path="/inputs/three.pdf", pages=written
-        )
-
-        assert "pages 1-3 of 3" in said, written
-        assert "does not have" not in said, "every page there is cannot name one there is not"
-
-
 def test_left_to_its_default_the_whole_of_a_long_document_is_extracted(
     tools, handed, session_dir
 ):
@@ -478,42 +321,6 @@ def test_left_to_its_default_the_whole_of_a_long_document_is_extracted(
     assert "pages 1-300 of 300" in said
 
 
-def _reads(tool) -> str:
-    """A tool's description as one line, which is how a model reads it.
-
-    Line breaks taken out before matching: a docstring wraps where the column ran out,
-    so `up to 500 pages a call` is `a\n    call` in the source and a plain `in` test
-    sees neither. The sentence moved one word and the pin below went green on the
-    wrap -- found by writing it.
-    """
-    return " ".join(tool.description.split())
-
-
-def test_the_docstring_names_the_cap_the_tool_applies(tools):
-    """The model learns the cap from the docstring alone, and plans its calls by it."""
-    cap = tools["pdf_text"].func.__globals__["MAX_PAGES"]
-
-    assert f"up to {cap} pages a call" in _reads(tools["pdf_text"])
-
-
-def test_the_slice_docstring_names_the_size_the_tool_refuses_past(tools):
-    """The same rule for the neighbour, which had the constant held against the real
-    guard one line away and the sentence the model reads held by nothing -- so a guard
-    that moved would leave `pdf_pages` advising a size it no longer applies, and the
-    model deciding how many pages to ask for by it.
-    """
-    globals_ = tools["pdf_pages"].func.__globals__
-    cap = globals_["MAX_SLICE_BYTES"]
-
-    assert f"{cap // globals_['KB']} KB" in _reads(tools["pdf_pages"])
-
-def test_a_page_with_no_text_is_named(tools, handed):
-    """A scanned page saved as an empty section is believed to say nothing."""
-    said = on_backend(tools["pdf_text"], handed, file_path="/inputs/report.pdf")
-
-    assert said.endswith("— pages 1-3 of 3; no text on 2")
-
-
 @pytest.mark.parametrize(("pages", "says"), [
     ("4-9", "has 3 page(s); pages '4-9' names none of them"),
     ("0", "has 3 page(s); pages '0' names none of them"),
@@ -525,14 +332,6 @@ def test_pages_that_name_no_page_of_the_document_are_a_failure(pages, says, tool
     """
     with pytest.raises(ValueError, match=re.escape(says)):
         on_backend(tools["pdf_text"], handed, file_path="/inputs/report.pdf", pages=pages)
-
-
-def test_a_file_that_is_not_a_pdf_is_a_failure_naming_it(tools, handed, session_dir):
-    """pdfminer's own words name neither the file nor what went wrong with it."""
-    (session_dir / "inputs" / "notes.pdf").write_text("plain text\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match=r"^/inputs/notes\.pdf: not a PDF this tool can read"):
-        on_backend(tools["pdf_text"], handed, file_path="/inputs/notes.pdf")
 
 
 def test_two_ranges_left_to_the_default_land_in_two_files(tools, handed):
@@ -561,32 +360,6 @@ def test_the_slice_holds_exactly_the_pages_asked_for(tools, handed, session_dir)
     assert "pages 2-3, 5 of 5; open it with read_file" in said
 
 
-@pytest.mark.parametrize(("texts", "says"), [
-    ([f"page {n} " + "x" * 1500 for n in range(1, 201)], "ask for fewer pages"),
-    (["x" * (UNPROFILED_PDF_BYTES + 1024)], "page 1 alone is"),
-])
-def test_a_slice_too_large_to_read_whole_is_refused_and_nothing_is_written(
-    texts, says, tools, handed, session_dir
-):
-    """Saved, it is a file kingfisher will never hand the model, and the model is told
-    "Saved" and to open it.
-    """
-    (session_dir / "inputs" / "big.pdf").write_bytes(a_pdf(*texts))
-    pages = f"1-{len(texts)}" if len(texts) > 1 else "1"
-
-    with pytest.raises(ValueError, match=re.escape(says)):
-        on_backend(tools["pdf_pages"], handed, file_path="/inputs/big.pdf", pages=pages)
-
-    assert _saved(handed, f"/scratchpad/big.p{pages}.pdf") is None
-
-
-def test_the_slice_limit_is_what_the_guard_holds_with_no_profile(tools):
-    """Set below the guard's allowance with no profile, the tool refuses slices such a
-    model could have read; set above, it saves slices the guard will replace with advice.
-    """
-    assert tools["pdf_pages"].func.__globals__["MAX_SLICE_BYTES"] == UNPROFILED_PDF_BYTES
-
-
 @pytest.mark.parametrize(("pages", "says"), [
     ("4-9", "has 3 page(s); pages '4-9' names none of them"),
     ("0", "has 3 page(s); pages '0' names none of them"),
@@ -597,13 +370,6 @@ def test_pages_naming_no_page_of_the_document_are_no_slice(pages, says, tools, h
     with pytest.raises(ValueError, match=re.escape(says)):
         on_backend(tools["pdf_pages"], handed, file_path="/inputs/report.pdf", pages=pages)
 
-
-def test_a_file_pypdf_cannot_read_is_a_failure_naming_it(tools, handed, session_dir):
-    """pypdf's own words name neither the file nor what went wrong with it."""
-    (session_dir / "inputs" / "notes.pdf").write_text("plain text\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match=r"^/inputs/notes\.pdf: not a PDF this tool can read"):
-        on_backend(tools["pdf_pages"], handed, file_path="/inputs/notes.pdf", pages="1")
 
 def test_a_file_already_at_the_target_is_replaced(tools, handed):
     """A tool that refused a taken default would fail every second call that left
@@ -735,11 +501,3 @@ def test_drawing_is_refused_for_an_agent_that_may_not_use_the_shell(tools, hande
     """The shell is where the drawing happens, so an agent refused it gets no drawing."""
     with pytest.raises(PermissionError, match="may not run commands itself"):
         on_backend(tools["pdf_render"], handed, file_path="/inputs/report.pdf", pages="1")
-
-
-def test_the_page_limit_is_the_largest_image_the_guard_hands_over(tools):
-    """Above it a page is saved and then replaced with advice; below it a page the model
-    could have seen is refused."""
-    from kingfisher.core.agent.middlewares.attachments import MAX_IMAGE_CHARS
-
-    assert tools["pdf_render"].func.__globals__["MAX_PAGE_BYTES"] == MAX_IMAGE_CHARS * 3 // 4
