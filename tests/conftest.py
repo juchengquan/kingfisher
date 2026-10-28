@@ -13,6 +13,7 @@ import yaml
 from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
+from kingfisher.core.access import ALL
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
 from kingfisher.core.interfaces import RunEvents
@@ -622,6 +623,47 @@ def withheld_told(events) -> tuple[tuple[str, tuple[str, ...]], ...]:
 
 #: Both tool lists at `["*"]`, for an `an_agent` that has to act: left out, each grants none.
 EVERY_TOOL = {"builtin_tools": '["*"]', "tools": '["*"]'}
+
+#: The settings one build's graphs share, as a build wiring none of them passes each. The
+#: three functions take no default for them, so a call site in the package that forgets one
+#: is refused rather than built under no rule; a test about something else says "none" here.
+STANDING_UNWIRED: dict[str, Any] = {
+    "permissions": None,
+    "keep_results_rounds": None,
+    "recorder": None,
+    "clearing": None,
+    "tools": None,
+    "gated": (),
+    "skills": None,
+    "pdf_attachments": None,
+    "scratch_run_limit": None,
+    "turn_text": None,
+}
+COMPILED_UNWIRED: dict[str, Any] = {
+    "endpoints": ALL,
+    "tools": ALL,
+    "paths": None,
+    "held": None,
+    "gated": (),
+}
+SUBAGENT_UNWIRED: dict[str, Any] = {
+    **COMPILED_UNWIRED,
+    "builtin_tools": ALL,
+    "backend": None,
+    "permissions": None,
+    "recorder": None,
+    "ledger": None,
+    "instructions": "",
+    "turn_text": None,
+    "pdf_attachments": None,
+    "scratch_run_limit": None,
+    "budget": None,
+}
+
+
+def unwired(shared: dict[str, Any], **given: Any) -> dict[str, Any]:
+    """`shared`, with `given` for the settings the test is about."""
+    return {**shared, **given}
 
 
 def an_agent(cfg, name: str = "only", **fields: str) -> str:

@@ -16,7 +16,13 @@ from kingfisher.core.definitions.subagents.spec import (
     declared,
 )
 from kingfisher.plugins import backend_at
-from tests.conftest import FAKE_KEY_VAR, FakeToolCallingModel, declared_subagents
+from tests.conftest import (
+    COMPILED_UNWIRED,
+    FAKE_KEY_VAR,
+    FakeToolCallingModel,
+    declared_subagents,
+    unwired,
+)
 from tests.unit.test_gate_declaration import _agent
 
 COMPILED = '''"""A subagent its definition assembled."""
@@ -422,7 +428,7 @@ def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
     )
 
     with pytest.raises(SubagentError, match="not a graph"):
-        compiled(spec, cfg)
+        compiled(spec, cfg, **COMPILED_UNWIRED)
 
 
 def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
@@ -440,7 +446,7 @@ def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
         name="researcher", description="d", system_prompt="", build=lambda model, tools: not_a_graph
     )
 
-    subagent = compiled(spec, cfg)
+    subagent = compiled(spec, cfg, **COMPILED_UNWIRED)
 
     assert subagent["runnable"] is not_a_graph
 
@@ -607,7 +613,7 @@ def test_a_compiled_subagent_is_handed_the_tool_it_named_either_way(cfg):
         spec,
         cfg,
         catalogue=(FoundTool(tool=probe, source="probe.py"),),
-        tools=("probe",),
+        **unwired(COMPILED_UNWIRED, tools=("probe",)),
     )
 
     assert [tool_name(one) for one in handed] == ["probe"]

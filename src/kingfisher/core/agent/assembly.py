@@ -879,6 +879,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                     ),
                     tools=permitted,
                     gated=gated,
+                    skills=None,
                     turn_text=turn_text,
                 )
             ),

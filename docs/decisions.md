@@ -445,6 +445,17 @@ deepagents fills a spec naming no tools from the parent, so `general-purpose` he
 agent's tool objects with no host-path guard, no error guard and no path translation.
 `standing_middleware` builds all three, so a fourth cannot be written half-right.
 
+**And what every graph shares is said at each call, never defaulted.** `standing_middleware`,
+`as_subagent` and `compiled` take no default for the settings one build's graphs share --
+file rules, gates, the caller's ceilings and source ids, the budget, ledger and recorder,
+the turn's text, the deployment's PDF and run limits -- because each default meant no rule.
+Dropped one at a time from each call site, 25 of 28 omissions failed a test; `permissions`,
+dropped at any of the three, passed the whole suite, and the subagent then wrote into
+`/skills/` and the saved tool results. Forgetting one is now refused by `ty` and by every
+build, and `None` is still an answer, said out loud. A test says "none of it" through the
+`*_UNWIRED` sets in `tests/conftest.py`; `test_no_setting_every_graph_shares_has_a_default`
+holds the signatures. *(Measured 2026-10-28.)*
+
 **A compiled subagent's tools are wrapped, because it is the fourth graph.** It has no
 middleware -- deepagents runs it as given -- and the shipped `show-your-work`'s first
 path-taking call died with `FileNotFoundError`, ending the run. `GuardedTool` carries

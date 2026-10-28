@@ -29,6 +29,7 @@ from kingfisher.core.inventory import inventory
 from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, DEFAULT_LAYOUT, SKILLS_ROUTE
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
+    COMPILED_UNWIRED,
     FakeToolCallingModel,
     a_subagent,
     agent_named,
@@ -1560,6 +1561,7 @@ def test_a_compiled_subagents_bundle_wins_a_name_the_catalogue_also_defines(cfg,
         cfg,
         catalogue=LocalToolRepository(tmp_path / "shared").found,
         private=LocalToolRepository(tmp_path / "own").found,
+        **COMPILED_UNWIRED,
     )
 
     # `tool_name` rather than an attribute, and invoked rather than called: a compiled

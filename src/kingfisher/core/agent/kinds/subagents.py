@@ -180,18 +180,18 @@ def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfi
     spec: SubagentSpec,
     cfg: Config,
     *,
-    endpoints: Selection = ALL,
-    tools: Selection = ALL,
+    endpoints: Selection,
+    tools: Selection,
     catalogue: Sequence[FoundTool] = (),
     #: This subagent's own tools, held whatever the request granted, as on the assembled path.
     private: Sequence[FoundTool] = (),
     #: What its tools resolve paths against: a compiled subagent has no middleware to do it.
-    paths: SessionPaths | None = None,
+    paths: SessionPaths | None,
     run_on: RunOn | None = None,
     default_model: Any = None,
-    held: frozenset[str] | None = None,
+    held: frozenset[str] | None,
     #: What the agent stops on, as the names calls carry.
-    gated: Collection[str] = (),
+    gated: Collection[str],
 ) -> dict[str, Any]:
     """A subagent its definition built itself, wrapped the way deepagents takes one."""
     model = model_object(
@@ -242,13 +242,13 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     #: What it runs: its own model, else its summoner's, which deepagents hands a spec
     #: naming none. Its summariser sizes the PDFs this subagent's turn may hold open.
     runs: Any,
-    endpoints: Selection = ALL,
-    builtin_tools: Selection = ALL,
-    tools: Selection = ALL,
-    backend: Any = None,
+    endpoints: Selection,
+    builtin_tools: Selection,
+    tools: Selection,
+    backend: Any,
     #: The deployment's filesystem rules, handed to the `FilesystemMiddleware` this
     #: subagent's stack replaces: its own spec carries none, so these are the agent's.
-    permissions: Any = None,
+    permissions: Any,
     skills: Selection = None,
     # `Any`: deepagents' `SubAgent` is a TypedDict a plain dict cannot satisfy without
     # restating its schema.
@@ -265,34 +265,34 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     private_skills: tuple[tuple[str, ...], tuple[tuple[str, str], ...]] | None = None,
     skill_sources: list[Any] | None = None,
     #: The parent's: a subagent runs in the parent's session on the parent's backend.
-    paths: SessionPaths | None = None,
+    paths: SessionPaths | None,
     #: Where this request wants it to run, replacing the file's answer; `None` lets the file
     #: decide.
     run_on: RunOn | None = None,
     extra_middleware: list[Any] | None = None,
     #: The caller's source ids, for this definition's own audiences. `tools` is the agent's
     #: ceiling and is never narrowed by these.
-    held: frozenset[str] | None = None,
+    held: frozenset[str] | None,
     #: The turn's recorder for this definition. A compiled subagent's calls go unrecorded;
     #: its parent records its answer as the result of `task`.
-    recorder: RecorderMiddleware | None = None,
+    recorder: RecorderMiddleware | None,
     #: The turn's, whose rows its cleared results' handles name; `None` clears nothing.
-    ledger: Ledger | None = None,
+    ledger: Ledger | None,
     #: As `clearing_mark` reads it for this subagent.
     clear_results_at: int | None = None,
     #: The deployment's instructions, which every subagent is given ahead of its own.
-    instructions: str = "",
+    instructions: str,
     #: The session's, as `standing_middleware` takes them.
-    turn_text: str | None = None,
+    turn_text: str | None,
     #: What the deployment hands over in place of a PDF, asked by every subagent built here.
-    pdf_attachments: PdfAttachments | None = None,
+    pdf_attachments: PdfAttachments | None,
     #: Which graphs' offered tools the deployment refuses a run, asked of this one by name.
-    scratch_run_limit: ScratchRunLimit | None = None,
+    scratch_run_limit: ScratchRunLimit | None,
     #: What the agent stops on, which every subagent it reaches stops on too.
-    gated: Collection[str] = (),
+    gated: Collection[str],
     #: The build's, which the agent's compiled graph measures; `None` assumes the default
     #: stack's cost.
-    budget: StepBudget | None = None,
+    budget: StepBudget | None,
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`."""
     if spec.build is not None:
