@@ -18,7 +18,7 @@ from kingfisher.core.definitions.importing import (
 from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository
 from kingfisher.core.definitions.tools.spec import SEPARATOR, reference
 
-from . import reading
+from . import GENERAL_PURPOSE, reading
 from .spec import BUNDLE_KEYS, EXPORT, SubagentError, SubagentSpec, declared
 
 #: The folders a bundle keeps its own tools and skills in, which the definition walk must
@@ -128,6 +128,16 @@ class LocalSubagentRepository:
             read.append((reading.read(DefinitionText.at(path)), where))
         # Counted with the documents: both formats share one namespace of names.
         read.extend(_declared_in(directory))
+        # Here, where every format arrives, and not on `SubagentSpec`: kingfisher builds its
+        # own under this name.
+        for spec, where in read:
+            if spec.name == GENERAL_PURPOSE:
+                msg = (
+                    f"{where}: {GENERAL_PURPOSE!r} is kingfisher's own helper, the one every "
+                    "agent holding `task` is given, so no subagent may take the name -- "
+                    "give this one another"
+                )
+                raise SubagentError(msg)
 
         counted: dict[str, int] = {}
         for spec, _ in read:

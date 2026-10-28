@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.definitions.subagents import GENERAL_PURPOSE
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, subagents_dir
 
@@ -181,3 +185,50 @@ def test_subtracting_one_of_the_pair_leaves_a_workable_roster(cfg, session_dir):
     offered = tuple(LocalSubagentRepository(subagents_dir(cfg)).specs)
 
     _build(cfg, session_dir, all_but(("vendor/surveyor.yaml::surveyor",), offered=offered))
+
+
+# -- the name kingfisher's own helper answers to ------------------------------
+
+#: A deployment's own `general-purpose`, in each way one can be declared.
+TAKES_GENERAL_PURPOSE = {
+    "yaml": ("general-purpose.yaml", SPEC.format(name="general-purpose", vendor="our")),
+    "portable": (
+        "ours.py",
+        "SUBAGENTS = [{'name': 'general-purpose', 'description': 'd', 'system_prompt': 'Go.'}]\n",
+    ),
+    "compiled": (
+        "ours.py",
+        "SUBAGENTS = [{'name': 'general-purpose', 'description': 'd', "
+        "'build': lambda model, tools: None}]\n",
+    ),
+}
+
+
+@pytest.mark.parametrize("declared", list(TAKES_GENERAL_PURPOSE))
+def test_a_subagent_taking_general_purpose_is_refused_at_load(cfg, declared):
+    """It loaded, and every agent naming it, or `["*"]`, then died at build on deepagents'
+    "Duplicate subagent name 'general-purpose'", which says nothing of the file to rename."""
+    filename, text = TAKES_GENERAL_PURPOSE[declared]
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / filename).write_text(text, encoding="utf-8")
+
+    with pytest.raises(SubagentError, match=rf"^{re.escape(filename)}: .*give this one another"):
+        _ = LocalSubagentRepository(subagents_dir(cfg)).specs
+
+
+def test_a_name_beside_general_purpose_still_loads(cfg):
+    """The control: the refusal is the name, not a prefix or the file the name came from."""
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "general-purpose.yaml").write_text(
+        SPEC.format(name="general-purpose-research", vendor="our"), encoding="utf-8"
+    )
+
+    assert set(LocalSubagentRepository(subagents_dir(cfg)).specs) == {"general-purpose-research"}
+
+
+def test_the_reserved_name_is_the_one_deepagents_gives_its_helper():
+    """deepagents renaming its helper would leave the refusal guarding a name nothing uses,
+    and the duplicate-name crash back under whatever the helper is called now."""
+    from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
+
+    assert GENERAL_PURPOSE_SUBAGENT["name"] == GENERAL_PURPOSE

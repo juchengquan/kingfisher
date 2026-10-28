@@ -693,7 +693,7 @@ on the spot, so every entry after the first would be unreachable.
 
 | Field | | |
 | --- | --- | --- |
-| `name` | required | What a request activates it by. Authoritative — the filename is not |
+| `name` | required | What a request activates it by. Authoritative — the filename is not. `general-purpose` is refused: it is kingfisher's own helper, given to every agent holding `task` |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
 | `system_prompt` | required | The subagent's own instruction, written after `\|`, or [long](#text-that-depends-on-the-caller--system_prompt-written-long). It is sent behind the session's folders and the deployment's instructions |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table above. `["*"]` is all of them. Unset grants **none**, as `[]` does. `eval` is refused here: the code sandbox is the agent's alone, and no subagent is handed it |

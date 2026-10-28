@@ -431,6 +431,18 @@ Refusing at load, as a helper listed without `task` is, was not taken: that shap
 work in any catalogue, while this one is one file at odds with the rest, and refusing it
 would stop every request over a definition none of them may use. *(2026-10-12.)*
 
+**No subagent may be called `general-purpose`, and one that is stops the deployment at
+load.** deepagents adds a helper by that name beside every `task` tool, and kingfisher
+supplies its own in that place, so a deployment's file of the name loaded without a word
+and every agent naming it, or `["*"]`, then died at build on deepagents' "Duplicate
+subagent name 'general-purpose'", which names no file. Measured 2026-10-28, an agent naming
+none as the control. Reserved rather than allowed to replace kingfisher's: the helper holds
+what its caller holds, and a fixed definition would be one subagent whoever called it.
+Refused at load, unlike a name nothing answers to, because this shape works in no
+catalogue: an agent naming any subagent holds `task`, so kingfisher's helper is always
+beside it. Refused in `LocalSubagentRepository`, where both formats arrive, and not on
+`SubagentSpec`, so kingfisher can build its own helper as one. *(2026-10-29.)*
+
 **A subagent may be a compiled graph rather than a spec**, told apart by
 extension. `SUBAGENTS` is declared and never inferred; name and description are
 static text and only the graph comes from a function; the function receives the

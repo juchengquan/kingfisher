@@ -143,6 +143,10 @@ def a_bundle_holding_two_definitions(cfg):
     _write(_root(cfg, "subagents") / "s" / "t.yaml", SUBAGENT.format(name="t"))
 
 
+def a_subagent_taking_the_helpers_name(cfg):
+    _write(_root(cfg, "subagents") / "ours.yaml", SUBAGENT.format(name="general-purpose"))
+
+
 def a_subagent_filed_as_yml(cfg):
     _write(_root(cfg, "subagents") / "near.yml", SUBAGENT.format(name="near"))
 
@@ -342,6 +346,8 @@ REFUSALS: dict[str, Refusal] = {
         2, defect=two_files_defining_a_middleware_of_a_name),
     "core/definitions/middlewares/catalogue.py::_refuse_unless_buildable": Refusal(
         2, defect=a_middleware_that_is_not_one),
+    "core/definitions/subagents/catalogue.py::LocalSubagentRepository._defined": Refusal(
+        1, defect=a_subagent_taking_the_helpers_name),
     "core/definitions/subagents/catalogue.py::LocalSubagentRepository.bundles": Refusal(
         1, defect=a_bundle_holding_two_definitions),
     "core/definitions/subagents/catalogue.py::_declared_in": Refusal(
