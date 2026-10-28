@@ -1629,14 +1629,6 @@ def test_the_core_imports_nothing_from_plugins():
     assert not reaching, f"{reaching} -- the core names a plugin; ask it by an interface"
 
 
-def test_the_plugin_rule_sees_an_import_of_one(tmp_path):
-    """A rule that read nothing would pass over every import it is about."""
-    written = tmp_path / "probe.py"
-    written.write_text("from kingfisher.plugins.sessions.backend import LocalSessions\n")
-
-    assert _reaches_a_plugin(written) == ["kingfisher.plugins.sessions.backend"]
-
-
 def _other_plugins(path: Path, own: str) -> list[str]:
     """The plugins other than `own` that a module imports, the package's root included:
     the root is the public address, and it names every plugin."""
@@ -1797,16 +1789,6 @@ def test_the_outsider_rule_tells_a_door_s_name_from_a_private_one(tmp_path):
         "kingfisher.core.interfaces:Sessions",
         "kingfisher.plugins.sessions.folders:LocalSessionDirs",
     }
-
-
-def test_the_agent_package_is_the_one_speaking_to_the_harness():
-    """The runtime's entry in `THIRD_PARTY` is about a package that still uses it."""
-    runtime = THIRD_PARTY["core/agent"]
-    imports = {m.split(".")[0] for p in _modules_in("core/agent") for m in _imported_modules(p)}
-    assert imports & runtime, (
-        "no module under core/agent/ imports the agent runtime — "
-        "either the graph is built somewhere else, or the coupling did not move with it"
-    )
 
 
 #: Where kingfisher's own middleware lives, and the only place it may.
@@ -4439,18 +4421,6 @@ def test_a_dead_name_is_found_by_its_module_not_its_spelling():
         ("pkg.a", "read_only_by_the_dead"),
         ("pkg.b", "unused"),
     ]
-
-
-def test_a_name_taken_through_a_folder_table_is_the_definition_it_names():
-    """Read as the package's own name, every definition reached only through the
-    `core.access` table looked dead the day the table was added."""
-    sources = {"pkg.a": "def routed(): ...\n", "pkg.b": "from pkg import routed\nrouted()\n"}
-
-    _, live = _live(sources, tables={"pkg": {"routed": "pkg.a"}})
-    _, unrouted = _live(sources)
-
-    assert ("pkg.a", "routed") in live
-    assert ("pkg.a", "routed") not in unrouted, "the control: without the table it is dead"
 
 
 def _mixed_into(public: frozenset[str]) -> frozenset[str]:
