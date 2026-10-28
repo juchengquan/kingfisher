@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `general-purpose` is told the agent's skills, after #1147
+
+- **`general-purpose` is now handed the agent's skills index**: every skill where the
+  agent's grant is `["*"]`, the named ones where it narrows, none where it grants none or
+  skills are off. It can open them with `read_file`, as the agent can. Before, it was told
+  of none. Its prompt grows by a line per skill; nothing else changes.
+
 ## A subagent may hold the to-do list, after #1146
 
 - **A subagent whose `builtin_tools` grants `write_todos`, or is `["*"]`, now holds the

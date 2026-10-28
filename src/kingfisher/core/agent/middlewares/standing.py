@@ -147,12 +147,6 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     if kind != "agent" and reachable is not None:
         msg = f"the declared-subagent check is the agent's, not a {kind}'s"
         raise ValueError(msg)
-    if kind == "general-purpose" and skills is not None:
-        msg = (
-            "general-purpose is handed no skills index, the agent's or its own, so has none "
-            "to narrow"
-        )
-        raise ValueError(msg)
     # Whatever this turn's text: refused only on some sessions, it would look intermittent.
     if turn_text is not None and any(m.name == CACHING for m in inner):
         msg = (

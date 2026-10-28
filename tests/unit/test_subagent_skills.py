@@ -7,14 +7,24 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.narrowing import (
     GrantedOnlyMiddleware,
     NarrowedSkillsMiddleware,
 )
-from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, a_subagent, middleware_of, tools_dir
+from kingfisher.plugins import LocalSessions, backend_at
+from tests.conftest import (
+    EVERY_TOOL,
+    FakeToolCallingModel,
+    a_subagent,
+    an_agent,
+    middleware_of,
+    start,
+    tools_dir,
+)
+from tests.unit.scripted import Scripted
 
 
 def define(cfg, body: str, name: str = "reviewer") -> None:
@@ -276,3 +286,36 @@ def test_the_field_parses_in_both_yaml_forms():
     )
 
     assert inline.skills == block.skills == ("a", "b")
+
+
+@pytest.mark.parametrize(
+    ("grant", "told"),
+    [
+        ({"skills": '["*"]'}, {"tabular-qa", "postmortem"}),
+        ({"skills": "[tabular-qa]"}, {"tabular-qa"}),
+        ({}, set()),
+    ],
+    ids=["every", "one", "none"],
+)
+def test_general_purpose_is_told_the_skills_its_caller_is(scripted, grant, told):
+    """`general-purpose` was handed no skills index whatever its caller held, so work
+    delegated to it could not follow a procedure the agent could."""
+    wired = replace(scripted, skills_enabled=True)
+    offer_skills(wired, "tabular-qa", "postmortem")
+    an_agent(wired, **EVERY_TOOL, **grant)
+    call = {"description": "a job", "subagent_type": "general-purpose"}
+    Scripted.script.extend(
+        [
+            AIMessage(content="", tool_calls=[{"name": "task", "args": call, "id": "t"}]),
+            AIMessage(content="helped"),
+            AIMessage(content="done"),
+        ]
+    )
+    start(wired, "s")
+
+    Kingfisher(wired, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
+
+    (system,) = [
+        heard[0].text for heard in Scripted.heard if "In order to complete" in heard[0].text
+    ]
+    assert {one for one in ("tabular-qa", "postmortem") if one in system} == told

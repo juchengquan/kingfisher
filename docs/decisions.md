@@ -732,7 +732,16 @@ and `["*"]` included, while `builtin_tools` leaves `read_file` out, beside the `
 and whatever the skills switch says. A *request* narrowing it away is told of no skills --
 no index, no skills text in the prompt, none reported withheld -- and a subagent loses its
 own as well, though those skip the switch: an index it cannot follow is only refusals.
-`general-purpose`, measured, is handed no skills index. *(2026-10-18.)*
+`general-purpose`, measured, is handed no skills index. *(2026-10-18. Reversed 2026-10-29,
+next entry.)*
+
+**`general-purpose` is told the skills its caller is.** It had no index -- found, never
+chosen: kingfisher supplies its own with no `skills`, and the agent's index is middleware it
+never received -- so work delegated to it could not follow a procedure the agent could, where
+deepagents' own is handed the agent's skills. It now gets the agent's: every skill's index
+where the agent's grant is `["*"]`, the named ones where it narrows, and none where it grants
+none or the deployment has skills off, read through the same denials. The price is a line per
+skill in its prompt. *(2026-10-29.)*
 
 **A subagent may not list `eval`.** No subagent holds the sandbox in any configuration:
 deepagents builds a subagent's stack from its own spec, `general-purpose` carries the

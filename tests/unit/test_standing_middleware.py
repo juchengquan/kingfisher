@@ -126,6 +126,7 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
         "AttachmentsMiddleware",
         "FilesystemMiddleware",
         "BuiltinToolsMiddleware",
+        "NarrowedSkillsMiddleware",
         "_Offered",
         "PromptCachingMiddleware",
         "OfferedToolFailureMiddleware",
@@ -137,7 +138,6 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
     [
         ("subagent", {"reachable": ("helper",)}),
         ("general-purpose", {"reachable": ("helper",)}),
-        ("general-purpose", {"skills": ("tabular-qa",)}),
     ],
 )
 def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
