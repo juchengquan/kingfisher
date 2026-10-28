@@ -468,6 +468,20 @@ build, and `None` is still an answer, said out loud. A test says "none of it" th
 `*_UNWIRED` sets in `tests/conftest.py`; `test_no_setting_every_graph_shares_has_a_default`
 holds the signatures. *(Measured 2026-10-28.)*
 
+**`general-purpose` is built by the builder a declared subagent is.** Assembled apart, it
+twice went without what declared subagents were given -- the path guards above, then the
+deployment's instructions -- and its 51 lines were edited by 22 commits in the 12 days
+before, nearly every one a setting each graph must get. `as_subagent` now builds it from
+deepagents' own name, description and prompt, holding every built-in and offered tool its
+caller holds. Compared before and after, deepagents is handed the same prompt, the same
+middleware in the same order, the same tools, gates and model. The builder takes two labels
+for it: `kind`, since a `ScratchRunLimit` is asked about `general-purpose` by that kind, and
+whom a refusal names, `this request`, since it withholds nothing of its own. Where the grant
+is unrestricted its allowlist now names what it holds rather than nothing, today the same
+set. **Not taken: deepagents' default in its place.** It carries none of the standing
+middleware and not the instructions; supplied, 44 tests failed, and a shell command the
+request withheld ran. *(2026-10-29.)*
+
 **A compiled subagent's tools are wrapped, because it is the fourth graph.** It has no
 middleware -- deepagents runs it as given -- and the shipped `show-your-work`'s first
 path-taking call died with `FileNotFoundError`, ending the run. `GuardedTool` carries
