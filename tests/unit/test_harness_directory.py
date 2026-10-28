@@ -160,7 +160,7 @@ def test_the_pin_and_the_claim_go_with_the_session(cfg):
     directory = cfg.workspace / "sessions" / session_id
     assert agent_snapshot(directory).is_file()
 
-    Through(service, "sync").delete(session_id)
+    Through(service).delete(session_id)
 
     assert not agent_snapshot(directory).exists()
     assert not (directory / HARNESS / CLAIM).exists()

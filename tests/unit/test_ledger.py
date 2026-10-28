@@ -837,14 +837,9 @@ class _Raising(LocalSessions):
         return opened
 
 
-@pytest.mark.parametrize(
-    ("sessions", "awaited"),
-    # `_Refusing` refuses the sync save only, so the awaited half goes through `_Raising`.
-    [(_Refusing, False), (_Raising, False), (_Raising, True)],
-    ids=["refused", "raised", "raised-arun"],
-)
+@pytest.mark.parametrize("sessions", [_Refusing, _Raising], ids=["refused", "raised"])
 def test_a_long_result_the_backend_would_not_keep_is_previewed_saying_so(
-    ledgered, sessions, awaited
+    ledgered, sessions
 ):
     """Handed whole, a result nothing kept could overflow the window, being any size; and
     previewed with a `full result:` line, it named a file that was never written.
@@ -853,7 +848,7 @@ def test_a_long_result_the_backend_would_not_keep_is_previewed_saying_so(
     request = Request("go", agent="only", session_id="s")
     Scripted.script.extend([_calls(("loud", {}, "c1")), AIMessage(content="done")])
 
-    result = asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+    result = kf.run(request)
 
     assert result.answer == "done", "the save failing failed the call"
     shown = _handed("c1").text
@@ -865,12 +860,11 @@ def test_a_long_result_the_backend_would_not_keep_is_previewed_saying_so(
     assert shown.endswith("\nfull result not kept; call loud again for less\n[A-0001]")
 
 
-@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
 def test_a_save_that_raises_does_not_fail_the_call_the_model_is_about_to_read(
-    ledgered, caplog, awaited
+    ledgered, caplog
 ):
     """The note on that `except` reads "a save must never fail the call", and narrowing
-    it away left the whole suite green on both halves: `_Refusing` drives the response
+    it away left the whole suite green: `_Refusing` drives the response
     that carries an error, and nothing drove a backend that throws. The call has already
     run, so a save failing the call is a tool the model may run a second time.
     """
@@ -881,7 +875,7 @@ def test_a_save_that_raises_does_not_fail_the_call_the_model_is_about_to_read(
     )
 
     with caplog.at_level(logging.WARNING):
-        result = asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+        result = kf.run(request)
 
     assert result.answer == "done"
     (entry,) = result.ledger
@@ -916,7 +910,7 @@ def test_a_graph_the_deployment_supplied_records_nothing(ledgered):
 # -- subagents -------------------------------------------------------------------
 
 
-def _delegated(cfg, *, awaited: bool = False):
+def _delegated(cfg):
     """One turn: `task` into `researcher`, which makes two calls together."""
     Scripted.script.extend(
         [
@@ -931,16 +925,15 @@ def _delegated(cfg, *, awaited: bool = False):
     )
     kf = Kingfisher(cfg, sessions=LocalSessions())
     request = Request("go", agent="only", session_id="s")
-    return asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+    return kf.run(request)
 
 
-@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
-def test_a_subagents_results_are_working_entries_of_the_run_that_started_it(ledgered, awaited):
+def test_a_subagents_results_are_working_entries_of_the_run_that_started_it(ledgered):
     """The run is told to the subagent's recorders through a context variable, which
     has to reach the threads (sync) and tasks (async) calls made together run on --
     lost, a subagent's results read as the agent's own, under no run at all.
     """
-    result = _delegated(ledgered, awaited=awaited)
+    result = _delegated(ledgered)
 
     assert sorted((e.tool, e.role, e.run) for e in result.ledger) == [
         ("sql_query", "working", "t1"),
@@ -1116,9 +1109,8 @@ def _named(cfg, **fields: str) -> Kingfisher:
     return Kingfisher(cfg, sessions=LocalSessions(), middlewares={"namer": _Namer})
 
 
-@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
 def test_a_middleware_inside_the_recorder_is_told_the_id_before_the_call_runs(
-    ledgered, awaited
+    ledgered
 ):
     """Numbered only once the result is back, a middleware inside the recorder has no
     name to give what it writes; told the id of another call made beside it, it names
@@ -1138,7 +1130,7 @@ def test_a_middleware_inside_the_recorder_is_told_the_id_before_the_call_runs(
     )
     request = Request("go", agent="only", session_id="s")
 
-    result = asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+    result = kf.run(request)
 
     assert dict(_TOLD) == {**{e.call: e.id for e in result.ledger}, "c3": None}
     assert {e.call for e in result.ledger} == {"c1", "c2"}, "the control: a call failed"
@@ -1539,12 +1531,11 @@ def test_a_result_made_of_blocks_gains_a_block_holding_its_id(ledgered):
     assert _transcribed(ledgered, "c1") == "firstsecond\n[A-0001]"
 
 
-@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
-def test_a_subagents_answer_and_each_result_it_read_end_in_their_ids(ledgered, awaited):
+def test_a_subagents_answer_and_each_result_it_read_end_in_their_ids(ledgered):
     """`task` hands back a `Command` carrying its answer rather than a message, and a
     stamp written for a message alone leaves every subagent's answer without its id.
     """
-    _delegated(ledgered, awaited=awaited)
+    _delegated(ledgered)
 
     assert _handed("t1").content == "margins are thin\n[A-0001]"
     # The researcher's second call, which read what its own two calls returned.

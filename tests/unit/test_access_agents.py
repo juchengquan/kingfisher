@@ -153,7 +153,7 @@ def test_that_refusal_is_word_for_word_a_session_that_is_not_there(two_agents):
     with pytest.raises(UnknownSessionError) as refused:
         _first_event(kf, Request(task="again", session_id=session_id), ("B",))
     with pytest.raises(UnknownSessionError) as absent:
-        Through(kf, "sync").pending(invented, source_ids=("B",))
+        Through(kf).pending(invented, source_ids=("B",))
 
     assert str(refused.value) == str(absent.value).replace(invented, session_id)
 
@@ -224,7 +224,7 @@ def test_a_first_turn_is_refused_however_the_ids_are_written(two_agents, held):
         _first_event(kf, Request(task="t", agent="assistant"), held)
 
 
-def test_reading_a_session_without_saying_who_is_calling_is_refused(two_agents, way):
+def test_reading_a_session_without_saying_who_is_calling_is_refused(two_agents):
     """The door that answered. Running a turn and asking for an agent both refuse a call
     that names nobody; reading one session took the same argument, ignored its absence,
     and answered for a session pinned to an agent the caller could not open -- because
@@ -233,19 +233,19 @@ def test_reading_a_session_without_saying_who_is_calling_is_refused(two_agents, 
     kf = Kingfisher(two_agents, sessions=LocalSessions())
 
     with pytest.raises(CallerError, match="source_ids="):
-        Through(kf, way).session(_pinned_by_a(kf))
+        Through(kf).session(_pinned_by_a(kf))
 
 
-def test_an_operator_reads_a_session_by_saying_so(two_agents, way):
+def test_an_operator_reads_a_session_by_saying_so(two_agents):
     """`UNSCOPED` is what a caller writes to mean no caller, and housekeeping on the
     machine is exactly that -- which is what `kingfisher reap` passes.
     """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
 
-    assert Through(kf, way).session(_pinned_by_a(kf), source_ids=UNSCOPED) is not None
+    assert Through(kf).session(_pinned_by_a(kf), source_ids=UNSCOPED) is not None
 
 
-def test_listing_sessions_stays_the_operators(two_agents, way):
+def test_listing_sessions_stays_the_operators(two_agents):
     """The two housekeeping calls take no caller at all, so there is nothing to forget.
     Stated here because the refusal above makes the difference deliberate rather than an
     oversight in the same area.
@@ -254,27 +254,27 @@ def test_listing_sessions_stays_the_operators(two_agents, way):
     session_id = _pinned_by_a(kf)
 
     assert [info.id for info in kf.sessions()] == [session_id]
-    assert Through(kf, way).delete(session_id) is None
+    assert Through(kf).delete(session_id) is None
 
 
 @pytest.mark.parametrize("held", [("B",), ["B"]], ids=["tuple", "list"])
-def test_a_session_out_of_reach_is_hidden_however_the_ids_are_written(two_agents, held, way):
+def test_a_session_out_of_reach_is_hidden_however_the_ids_are_written(two_agents, held):
     """And reading one: `["B"]` was shown a session pinned to A's agent."""
     kf = Kingfisher(two_agents, sessions=LocalSessions())
 
-    assert Through(kf, way).session(_pinned_by_a(kf), source_ids=held) is None
+    assert Through(kf).session(_pinned_by_a(kf), source_ids=held) is None
 
 
 @pytest.mark.parametrize("held", [("A",), ["A"]], ids=["tuple", "list"])
-def test_a_caller_in_reach_is_let_in_however_the_ids_are_written(two_agents, held, way):
+def test_a_caller_in_reach_is_let_in_however_the_ids_are_written(two_agents, held):
     """So the refusals above are not passing because a list is turned away outright."""
     kf = Kingfisher(two_agents, sessions=LocalSessions())
 
     assert agent_named(kf, "assistant", source_ids=held) is not None
-    assert Through(kf, way).session(_pinned_by_a(kf), source_ids=held) is not None
+    assert Through(kf).session(_pinned_by_a(kf), source_ids=held) is not None
 
 
-def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_agents, way):
+def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_agents):
     """Naming an agent and reading a session let `"B"` through unfiltered, and the
     listing spelled it out a letter at a time, because a string is a sequence too.
     """
@@ -286,7 +286,7 @@ def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_a
     with pytest.raises(CallerError, match="not a string"):
         agent_named(kf, "assistant", source_ids="B")
     with pytest.raises(CallerError, match="not a string"):
-        Through(kf, way).session(session_id, source_ids="B")
+        Through(kf).session(session_id, source_ids="B")
     with pytest.raises(CallerError, match="not a string"):
         inventory(two_agents, source_ids="B")
 
@@ -294,40 +294,40 @@ def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_a
 # -- a session out of reach reads as one that is not there ------------------
 
 
-def test_a_session_whose_agent_is_out_of_reach_reads_as_missing(two_agents, way):
+def test_a_session_whose_agent_is_out_of_reach_reads_as_missing(two_agents):
     """A session you cannot run must be indistinguishable from one that was never there."""
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     session_id = start(two_agents, "pinned")
     pin(kf, session_id, "assistant")
 
-    assert Through(kf, way).session(session_id, source_ids=("A",)) is not None
-    assert Through(kf, way).session(session_id, source_ids=("B",)) is None
+    assert Through(kf).session(session_id, source_ids=("A",)) is not None
+    assert Through(kf).session(session_id, source_ids=("B",)) is None
 
 
-def test_a_session_is_visible_where_there_is_no_vocabulary(cfg, way):
+def test_a_session_is_visible_where_there_is_no_vocabulary(cfg):
     """Every deployment that predates this keeps answering as it did."""
     an_agent(cfg, "assistant")
     kf = Kingfisher(cfg, sessions=LocalSessions())
     session_id = start(cfg, "pinned")
     pin(kf, session_id, "assistant")
 
-    assert Through(kf, way).session(session_id) is not None
+    assert Through(kf).session(session_id) is not None
 
 
-def test_unscoped_sees_a_session_whatever_it_runs(two_agents, way):
+def test_unscoped_sees_a_session_whatever_it_runs(two_agents):
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     session_id = start(two_agents, "pinned")
     pin(kf, session_id, "assistant")
 
-    assert Through(kf, way).session(session_id, source_ids=UNSCOPED) is not None
+    assert Through(kf).session(session_id, source_ids=UNSCOPED) is not None
 
 
-def test_a_session_with_nothing_pinned_stays_visible(two_agents, way):
+def test_a_session_with_nothing_pinned_stays_visible(two_agents):
     """It has no agent to be out of reach of."""
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     session_id = start(two_agents, "unpinned")
 
-    assert Through(kf, way).session(session_id, source_ids=("B",)) is not None
+    assert Through(kf).session(session_id, source_ids=("B",)) is not None
 
 
 # -- a lock is in force wherever it is written ---------------------------------

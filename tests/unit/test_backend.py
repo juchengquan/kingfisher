@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 import platform
 from pathlib import Path
@@ -321,14 +320,13 @@ def test_scratch_is_created_private(cfg, session_dir):
     assert (session_dir / "scratchpad").stat().st_mode & 0o077 == 0
 
 
-def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir, way):
+def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir):
     """The guard exists to correct the model mid-turn, and its message names the virtual
     path to use.
 
-    Both ways, because `GuardedCallsMiddleware` catches in two hooks and only the sync one was
-    driven: making `awrap_tool_call` re-raise instead of correcting left the whole suite
-    green, while the same change to `wrap_tool_call` reddened this test and one more.
-    An async turn is the one a service runs.
+    `awrap_tool_call` is a copy of `wrap_tool_call`, which `test_async_twins.py` holds:
+    driven by no test, making it re-raise instead of correcting once left the whole suite
+    green, and an async turn is the one a service runs.
     """
     from langchain_core.messages import AIMessage
 
@@ -351,11 +349,7 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir,
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=responses)).graph
     asked = {"messages": [{"role": "user", "content": "go"}]}
-    out = (
-        agent.invoke(asked, config={"recursion_limit": 12})
-        if way == "sync"
-        else asyncio.run(agent.ainvoke(asked, config={"recursion_limit": 12}))
-    )
+    out = agent.invoke(asked, config={"recursion_limit": 12})
 
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
     assert "is a host path" in transcript  # the correction reached the model
@@ -587,17 +581,15 @@ def _entries(result):
     return result.entries
 
 
-def _asked(backend, way: str, name: str, *args, **kwargs):
-    """One file tool, through whichever of its twins `way` names.
+def _asked(backend, name: str, *args, **kwargs):
+    """One file tool.
 
-    Every test below goes through this, so a fix landing on one half is a test that
-    fails on the other. The three sync overrides were written and the three async ones
-    were not, for a release: `aglob` handed the model a file twice and `als` the
-    whole root twice, and a suite that only ever asked the sync half could not see it.
+    The three sync overrides were once written and the three async ones were not, for a
+    release: `aglob` handed the model a file twice and `als` the whole root twice, and a
+    suite that only ever asked the sync half could not see it. `test_async_twins.py`
+    holds each async one to its sync twin now.
     """
-    if way == "sync":
-        return getattr(backend, name)(*args, **kwargs)
-    return asyncio.run(getattr(backend, f"a{name}")(*args, **kwargs))
+    return getattr(backend, name)(*args, **kwargs)
 
 
 #: Every readable route that lives under the session root, and so was doubled.
@@ -627,7 +619,7 @@ def _a_bundle_with_a_skill(cfg) -> None:
     )
 
 
-def test_a_scoped_search_reaches_a_route_below_the_path(cfg, session_dir, way):
+def test_a_scoped_search_reaches_a_route_below_the_path(cfg, session_dir):
     """A bundle's skills are mounted under `/skills/subagents/<bundle>/`, and the
     composite routes a scoped search to the one backend owning the longest matching
     prefix -- so a search of `/skills`, which is where the prompt sends an agent looking
@@ -642,8 +634,8 @@ def test_a_scoped_search_reaches_a_route_below_the_path(cfg, session_dir, way):
     backend = backend_at(cfg, session_dir)
     bundled = "/skills/subagents/surveyor/sampling/SKILL.md"
 
-    found = _asked(backend, way, "glob", "**/SKILL.md", "/skills")
-    said = _asked(backend, way, "grep", "Samples rows", "/skills")
+    found = _asked(backend, "glob", "**/SKILL.md", "/skills")
+    said = _asked(backend, "grep", "Samples rows", "/skills")
     globbed = [one["path"] for one in found.matches]
     grepped = [one["path"] for one in said.matches]
 
@@ -652,7 +644,7 @@ def test_a_scoped_search_reaches_a_route_below_the_path(cfg, session_dir, way):
     assert grepped == [bundled]
 
 
-def test_a_scoped_search_keeps_the_anchor_of_its_pattern(cfg, session_dir, way):
+def test_a_scoped_search_keeps_the_anchor_of_its_pattern(cfg, session_dir):
     """A leading slash anchors a pattern to the directory searched, and a route nested
     below it is deeper than the anchor allows -- so asking the routes below must not
     answer with files the pattern does not reach. deepagents' own rule decides it; this
@@ -662,14 +654,14 @@ def test_a_scoped_search_keeps_the_anchor_of_its_pattern(cfg, session_dir, way):
     (cfg.definitions / "skills" / "loose.md").write_text("top level", encoding="utf-8")
     backend = backend_at(cfg, session_dir)
 
-    found = [one["path"] for one in _asked(backend, way, "glob", "/*.md", "/skills").matches]
+    found = [one["path"] for one in _asked(backend, "glob", "/*.md", "/skills").matches]
 
     assert found == ["/skills/loose.md"], "an anchored pattern reached past its anchor"
     # Which is the file it would have reached, two levels deeper than `/*.md` allows.
     assert (cfg.definitions / "subagents" / "surveyor" / "skills" / "inside.md").exists()
 
 
-def test_a_scoped_search_survives_a_route_whose_folder_is_not_there(cfg, session_dir, way):
+def test_a_scoped_search_survives_a_route_whose_folder_is_not_there(cfg, session_dir):
     """`/scratchpad/blobs/` and `/scratchpad/large_tool_results/` are mounted and never
     made, and asking a route below the path searched now asks them too.
 
@@ -681,8 +673,8 @@ def test_a_scoped_search_survives_a_route_whose_folder_is_not_there(cfg, session
     (session_dir / "scratchpad" / "notes.txt").write_text("a note", encoding="utf-8")
     backend = backend_at(cfg, session_dir)
 
-    globbed = _asked(backend, way, "glob", "**/*", SCRATCH_ROUTE)
-    grepped = _asked(backend, way, "grep", "a note", SCRATCH_ROUTE)
+    globbed = _asked(backend, "glob", "**/*", SCRATCH_ROUTE)
+    grepped = _asked(backend, "grep", "a note", SCRATCH_ROUTE)
 
     assert globbed.error is None and grepped.error is None
     assert [one["path"] for one in globbed.matches] == [f"{SCRATCH_ROUTE}notes.txt"]
@@ -725,7 +717,7 @@ class _Failing:
 
 
 def test_a_route_below_the_path_whose_search_fails_is_answered_not_swallowed(
-    cfg, session_dir, way
+    cfg, session_dir
 ):
     """Asking the routes below a path means a route the caller never named can fail the
     search, and the alternative is worse: an answer holding what the other routes
@@ -740,8 +732,8 @@ def test_a_route_below_the_path_whose_search_fails_is_answered_not_swallowed(
         backend.routes.items(), key=lambda one: len(one[0]), reverse=True
     )
 
-    globbed = _asked(backend, way, "glob", "**/*", SCRATCH_ROUTE)
-    grepped = _asked(backend, way, "grep", "anything", SCRATCH_ROUTE)
+    globbed = _asked(backend, "glob", "**/*", SCRATCH_ROUTE)
+    grepped = _asked(backend, "grep", "anything", SCRATCH_ROUTE)
 
     assert globbed.error == "the sandbox is gone"
     assert grepped.error == "the sandbox is gone"
@@ -774,7 +766,7 @@ class _Unasked:
         return self.grep(pattern, path, glob, max_count=max_count)
 
 
-def test_a_scoped_search_whose_budget_runs_out_says_it_stopped_short(cfg, session_dir, way):
+def test_a_scoped_search_whose_budget_runs_out_says_it_stopped_short(cfg, session_dir):
     """deepagents' grep always passes a `max_count`, and a search that filled it before
     the routes below the path were asked answered as complete, though a route it never
     reached held a match. Filled exactly, so the outer answer is not cut short itself:
@@ -789,14 +781,14 @@ def test_a_scoped_search_whose_budget_runs_out_says_it_stopped_short(cfg, sessio
     )
     _Unasked.asked = 0
 
-    said = _asked(backend, way, "grep", "needle", SCRATCH_ROUTE, max_count=2)
+    said = _asked(backend, "grep", "needle", SCRATCH_ROUTE, max_count=2)
 
     assert len(said.matches) == 2
     assert said.truncated, "a search that left routes unasked said it was complete"
     assert _Unasked.asked == 0, "the control: the budget was spent before the route"
 
 
-def test_a_file_under_a_route_inside_the_default_root_is_found_once(cfg, session_dir, way):
+def test_a_file_under_a_route_inside_the_default_root_is_found_once(cfg, session_dir):
     """The scoped half of what the overrides are for: a recorded result lives under a
     route *and* under the default backend's own root, so asking both for it hands the
     model the same file twice.
@@ -805,8 +797,8 @@ def test_a_file_under_a_route_inside_the_default_root_is_found_once(cfg, session
     kept.write_text("as written", encoding="utf-8")
     backend = backend_at(cfg, session_dir)
 
-    found = _asked(backend, way, "glob", "**/*.txt", SCRATCH_ROUTE)
-    said = _asked(backend, way, "grep", "as written", SCRATCH_ROUTE)
+    found = _asked(backend, "glob", "**/*.txt", SCRATCH_ROUTE)
+    said = _asked(backend, "grep", "as written", SCRATCH_ROUTE)
     globbed = [one["path"] for one in found.matches]
     grepped = [one["path"] for one in said.matches]
 
@@ -814,7 +806,7 @@ def test_a_file_under_a_route_inside_the_default_root_is_found_once(cfg, session
     assert grepped == [f"{DEFAULT_LAYOUT.tool_results_route}1-execute.txt"]
 
 
-def test_a_routed_file_is_globbed_once(cfg, session_dir, way):
+def test_a_routed_file_is_globbed_once(cfg, session_dir):
     """Measured before this: `--input orders.csv` reached the model as
     `['/inputs/orders.csv', '/inputs/orders.csv']`, on every pattern tried.
     """
@@ -825,13 +817,13 @@ def test_a_routed_file_is_globbed_once(cfg, session_dir, way):
         (where / "probe.txt").write_text("needle\n", encoding="utf-8")
 
         found = [
-            one["path"] for one in _rows(_asked(backend, way, "glob", f"{route}/probe.txt"))
+            one["path"] for one in _rows(_asked(backend, "glob", f"{route}/probe.txt"))
         ]
 
         assert found == [f"{route}/probe.txt"], route
 
 
-def test_a_routed_file_is_grepped_once(cfg, session_dir, way):
+def test_a_routed_file_is_grepped_once(cfg, session_dir):
     """From the root, which is where the two answers meet."""
     backend = backend_at(cfg, session_dir)
     for route, parts in INSIDE_THE_ROOT.items():
@@ -840,7 +832,7 @@ def test_a_routed_file_is_grepped_once(cfg, session_dir, way):
         (where / "probe.txt").write_text("needle\n", encoding="utf-8")
 
         found = [
-            one["path"] for one in _rows(_asked(backend, way, "grep", "needle", path="/"))
+            one["path"] for one in _rows(_asked(backend, "grep", "needle", path="/"))
         ]
 
         # Taken away again before the next route: this greps from the root, so a probe
@@ -850,7 +842,7 @@ def test_a_routed_file_is_grepped_once(cfg, session_dir, way):
         assert found == [f"{route}/probe.txt"]
 
 
-def test_the_root_names_each_directory_it_holds_once(cfg, session_dir, way):
+def test_the_root_names_each_directory_it_holds_once(cfg, session_dir):
     """`ls /` answered eleven rows for seven directories: three of the routes point at
     real directories under the session, so each arrived once from the route and once
     from the default backend walking past it, told apart only by an empty
@@ -858,37 +850,37 @@ def test_the_root_names_each_directory_it_holds_once(cfg, session_dir, way):
     """
     backend = backend_at(cfg, session_dir)
 
-    found = [one["path"] for one in _entries(_asked(backend, way, "ls", "/"))]
+    found = [one["path"] for one in _entries(_asked(backend, "ls", "/"))]
 
     assert found == sorted(set(found)), "a directory named twice at the root"
     assert "/inputs/" in found, "and the control: the routes are listed at all"
 
 
-def test_the_root_holds_no_path_that_is_not_in_it(cfg, session_dir, way):
+def test_the_root_holds_no_path_that_is_not_in_it(cfg, session_dir):
     """deepagents adds a row for every route at the root, nested ones included, while
     its own `ls` is non-recursive -- so `/scratchpad/tool_results/` was a top-level
     entry of `/`, beside the folder that holds it.
     """
     backend = backend_at(cfg, session_dir)
 
-    found = [one["path"] for one in _entries(_asked(backend, way, "ls", "/"))]
+    found = [one["path"] for one in _entries(_asked(backend, "ls", "/"))]
 
     deeper = [one for one in found if one.strip("/").count("/")]
     assert not deeper, f"{deeper} are not in `/`, and `ls` does not recurse"
 
 
-def test_a_route_below_another_is_listed_under_the_one_above_it(cfg, session_dir, way):
+def test_a_route_below_another_is_listed_under_the_one_above_it(cfg, session_dir):
     """The other half: a nested route's row belongs under the directory that holds it,
     not at the root beside it.
     """
     backend = backend_at(cfg, session_dir)
 
-    found = [one["path"] for one in _entries(_asked(backend, way, "ls", SCRATCH_ROUTE))]
+    found = [one["path"] for one in _entries(_asked(backend, "ls", SCRATCH_ROUTE))]
 
     assert DEFAULT_LAYOUT.tool_results_route in found
 
 
-def test_a_route_whose_folder_is_not_there_is_not_listed(cfg, session_dir, way):
+def test_a_route_whose_folder_is_not_there_is_not_listed(cfg, session_dir):
     """A mounted route is no folder. #1036 mounted two kept records no session was made
     with, and `ls /scratchpad` then named four folders where two existed, the model being
     told `path_not_found` about either of the others when it opened one.
@@ -899,28 +891,28 @@ def test_a_route_whose_folder_is_not_there_is_not_listed(cfg, session_dir, way):
     backend = backend_at(cfg, session_dir)
     absent = f"{SCRATCH_ROUTE}blobs/"
 
-    found = [one["path"] for one in _entries(_asked(backend, way, "ls", SCRATCH_ROUTE))]
+    found = [one["path"] for one in _entries(_asked(backend, "ls", SCRATCH_ROUTE))]
     assert absent not in found, "a folder the model cannot open was named"
     assert DEFAULT_LAYOUT.tool_results_route in found, "and the control: made, so named"
 
     backend.upload_files([(f"{absent}0f1e2d", b"payload")])
-    after = [one["path"] for one in _entries(_asked(backend, way, "ls", SCRATCH_ROUTE))]
+    after = [one["path"] for one in _entries(_asked(backend, "ls", SCRATCH_ROUTE))]
     assert absent in after, "written to, and the folder it made went unnamed"
 
 
-def test_a_route_outside_the_session_is_still_named_at_the_root(cfg, session_dir, way):
+def test_a_route_outside_the_session_is_still_named_at_the_root(cfg, session_dir):
     """What the rule above must not take with it, and the reason dropping deepagents'
     route rows costs nothing: `/skills/` is a directory the default backend never walks
     past, and deepagents names it at the root itself.
     """
     backend = backend_at(cfg, session_dir)
 
-    found = [one["path"] for one in _entries(_asked(backend, way, "ls", "/"))]
+    found = [one["path"] for one in _entries(_asked(backend, "ls", "/"))]
 
     assert SKILLS_ROUTE in found
 
 
-def test_a_directory_still_lists_what_it_actually_holds(cfg, session_dir, way):
+def test_a_directory_still_lists_what_it_actually_holds(cfg, session_dir):
     """The control the two rules above need: a filter keeping only direct children
     passes both of them by answering nothing at all.
     """
@@ -929,15 +921,15 @@ def test_a_directory_still_lists_what_it_actually_holds(cfg, session_dir, way):
     inside.mkdir(parents=True, exist_ok=True)
     (inside / "probe.txt").write_text("needle\n", encoding="utf-8")
 
-    assert [one["path"] for one in _entries(_asked(backend, way, "ls", "/outputs"))] == [
+    assert [one["path"] for one in _entries(_asked(backend, "ls", "/outputs"))] == [
         "/outputs/deep/"
     ]
-    assert [one["path"] for one in _entries(_asked(backend, way, "ls", "/outputs/deep"))] == [
+    assert [one["path"] for one in _entries(_asked(backend, "ls", "/outputs/deep"))] == [
         "/outputs/deep/probe.txt"
     ]
 
 
-def test_a_route_does_not_list_itself_among_its_contents(cfg, session_dir, way):
+def test_a_route_does_not_list_itself_among_its_contents(cfg, session_dir):
     """`_directly_under` excludes the directory asked about, and `/outputs` cannot show
     that: it is not a route, so no stand-in row is ever added for it and the control
     above passes whether that exclusion is there or not.
@@ -953,7 +945,7 @@ def test_a_route_does_not_list_itself_among_its_contents(cfg, session_dir, way):
     where.mkdir(parents=True, exist_ok=True)
     (where / "given.txt").write_text("as written\n", encoding="utf-8")
 
-    listed = [one["path"] for one in _entries(_asked(backend, way, "ls", "/inputs"))]
+    listed = [one["path"] for one in _entries(_asked(backend, "ls", "/inputs"))]
 
     assert listed == ["/inputs/given.txt"], "a route listed its own stand-in row"
 

@@ -41,18 +41,18 @@ def test_a_turn_disposes_of_nothing(cfg):
     assert (cfg.workspace / "sessions" / quiet).is_dir()
 
 
-def test_delete_session_removes_the_directory(cfg, way):
+def test_delete_session_removes_the_directory(cfg):
     """Deleting a session through the service leaves nothing of it on disk."""
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
     session_id = kf.run(Request("go")).session_id
 
-    assert Through(kf, way).delete(session_id) is None
+    assert Through(kf).delete(session_id) is None
     assert not (cfg.workspace / "sessions" / session_id).exists()
 
 
-def test_deleting_an_unknown_session_is_not_an_error(cfg, way):
+def test_deleting_an_unknown_session_is_not_an_error(cfg):
     """A caller that retries a delete should not have to care."""
-    assert Through(service(cfg), way).delete("never-existed") is None
+    assert Through(service(cfg)).delete("never-existed") is None
 
 
 def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
@@ -501,23 +501,23 @@ def test_a_sweep_leaves_no_claim_behind(cfg):
     assert not (cfg.workspace / "sessions" / crashed).exists()
 
 
-def test_deleting_a_session_takes_its_claim_with_it(cfg, way):
+def test_deleting_a_session_takes_its_claim_with_it(cfg):
     kf = service(cfg)
     session = start(cfg, "s")
     claim = _claim(cfg, session)
     claim.mkdir(parents=True, exist_ok=True)
 
-    Through(kf, way).delete(session)
+    Through(kf).delete(session)
 
     assert not claim.exists()
 
 
-def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg, way):
+def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg):
     """Why the leftover mattered rather than merely accumulated."""
     kf = service(cfg)
     start(cfg, "reused")
     _claim(cfg, "reused").mkdir(parents=True, exist_ok=True)
-    Through(kf, way).delete("reused")
+    Through(kf).delete("reused")
 
     start(cfg, "reused")
 

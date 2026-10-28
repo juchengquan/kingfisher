@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import anthropic
@@ -165,39 +164,36 @@ def _queue(*script: Any) -> None:
     Scripted.script.extend(script)
 
 
-def _turn(cfg: Any, *script: Any, way: str = "sync") -> Any:
+def _turn(cfg: Any, *script: Any) -> Any:
     _queue(*script)
     service = Kingfisher(cfg, sessions=LocalSessions())
     request = Request("go", agent="only", session_id="s")
-    return asyncio.run(service.arun(request)) if way == "async" else service.run(request)
+    return service.run(request)
 
 
-@pytest.mark.parametrize("way", ["sync", "async"])
-def test_a_refused_model_call_stops_the_turn_rather_than_raising(refusing, way):
+def test_a_refused_model_call_stops_the_turn_rather_than_raising(refusing):
     """A 429 escaped `run` as the SDK's exception, and the command printed two tracebacks
     and exited 1, the code it keeps for a turn stopped at a bound."""
-    result = _turn(refusing, RefusedError(429, "quota"), way=way)
+    result = _turn(refusing, RefusedError(429, "quota"))
 
     assert result.stop_reason == "model_unavailable"
     assert not result.completed
 
 
-@pytest.mark.parametrize("way", ["sync", "async"])
-def test_a_refusal_of_the_asking_again_after_a_cut_answer_is_the_stop_too(refusing, way):
+def test_a_refusal_of_the_asking_again_after_a_cut_answer_is_the_stop_too(refusing):
     """The refusal read only on the first call a reply takes, so a provider refusing the
     second asking raised its SDK's exception out of the turn."""
     from tests.unit.test_cut_replies import reply
 
-    result = _turn(refusing, reply(text="The findings are: first, the"), RefusedError(429), way=way)
+    result = _turn(refusing, reply(text="The findings are: first, the"), RefusedError(429))
 
     assert result.stop_reason == "model_unavailable"
 
 
-@pytest.mark.parametrize("way", ["sync", "async"])
-def test_a_turn_the_model_never_answered_has_no_answer(refusing, way):
+def test_a_turn_the_model_never_answered_has_no_answer(refusing):
     """A turn whose first model call was refused reported the caller's own message as its
     answer, and the command printed it as what had been reached."""
-    result = _turn(refusing, RefusedError(429), way=way)
+    result = _turn(refusing, RefusedError(429))
 
     assert result.stop_reason == "model_unavailable"
     assert result.answer == ""
@@ -208,9 +204,8 @@ def test_a_turn_the_model_never_answered_has_no_answer(refusing, way):
     [("Listing the folders first.", "Listing the folders first."), ("", "")],
     ids=["said-something", "only-called"],
 )
-@pytest.mark.parametrize("way", ["sync", "async"])
 def test_a_turn_stopped_after_a_tool_answers_with_what_the_model_said(
-    refusing, way, said, answer
+    refusing, said, answer
 ):
     """A turn stopped just after a tool ran reported that tool's output as its answer.
 
@@ -221,7 +216,7 @@ def test_a_turn_stopped_after_a_tool_answers_with_what_the_model_said(
     listing = AIMessage(content=said, tool_calls=[{**ls, "id": "l1"}])
     again = AIMessage(content="", tool_calls=[{**ls, "id": "l2"}])
 
-    result = _turn(refusing, listing, again, RefusedError(429), way=way)
+    result = _turn(refusing, listing, again, RefusedError(429))
 
     assert result.stop_reason == "model_unavailable"
     assert result.answer == answer
@@ -241,24 +236,22 @@ def test_the_stop_says_what_the_provider_said(refusing):
     assert "run it again on this session" in said
 
 
-@pytest.mark.parametrize("way", ["sync", "async"])
-def test_an_overload_inside_a_stream_stops_the_turn_rather_than_raising(refusing, way):
+def test_an_overload_inside_a_stream_stops_the_turn_rather_than_raising(refusing):
     """Anthropic's `overloaded_error` sent after a 200 escaped `run` as the SDK's
     exception, because its status read as a success."""
-    result = _turn(refusing, streamed("overloaded_error"), way=way)
+    result = _turn(refusing, streamed("overloaded_error"))
 
     assert result.stop_reason == "model_unavailable"
     assert not result.completed
 
 
-@pytest.mark.parametrize("way", ["sync", "async"])
-def test_a_bad_request_inside_a_stream_is_refused_as_a_400_is(refusing, way):
+def test_a_bad_request_inside_a_stream_is_refused_as_a_400_is(refusing):
     """Anthropic's `invalid_request_error` sent after a 200 escaped `run` as the SDK's
     exception, where the same error sent as a 400 is a configuration error."""
     with pytest.raises(ConfigError) as streamed_400:
-        _turn(refusing, streamed("invalid_request_error", "prompt is too long"), way=way)
+        _turn(refusing, streamed("invalid_request_error", "prompt is too long"))
     with pytest.raises(ConfigError) as plain_400:
-        _turn(refusing, RefusedError(400, "prompt is too long"), way=way)
+        _turn(refusing, RefusedError(400, "prompt is too long"))
 
     assert str(streamed_400.value) == str(plain_400.value).replace(
         "(400)", "(invalid_request_error)"
@@ -279,8 +272,7 @@ def test_a_failure_that_will_not_pass_still_raises(refusing):
         _turn(refusing, RefusedError(400))
 
 
-@pytest.mark.parametrize("way", ["sync", "async"])
-def test_a_subagents_refused_call_is_handed_back_and_the_turn_goes_on(refusing, way):
+def test_a_subagents_refused_call_is_handed_back_and_the_turn_goes_on(refusing):
     """A subagent's refused call took the whole turn down with it, and the parent never
     heard; it is the parent's to go on without that part."""
     subagents_dir(refusing).mkdir(parents=True, exist_ok=True)
@@ -294,7 +286,7 @@ def test_a_subagents_refused_call_is_handed_back_and_the_turn_goes_on(refusing, 
     asked = {"description": "go", "subagent_type": "helper"}
     to_helper = AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}])
 
-    result = _turn(refusing, to_helper, RefusedError(429), AIMessage("carried on"), way=way)
+    result = _turn(refusing, to_helper, RefusedError(429), AIMessage("carried on"))
 
     told = [m for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
     assert "'helper' could not reach its model (429: rate limited)" in str(told[-1].content)

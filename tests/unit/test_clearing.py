@@ -10,7 +10,6 @@ wherever the test did.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import replace
 from typing import Any
@@ -812,7 +811,6 @@ def _overflowing(
     *errors: Exception,
     high: int = 1_000_000,
     tools: tuple[str, ...] | None = None,
-    way: str = "sync",
 ) -> tuple[list[list[Any]], Exception | dict[str, Any] | None]:
     """What each model call was sent while the model raised `errors` in turn and then
     answered, and the error that came out or the state update that came back.
@@ -841,10 +839,7 @@ def _overflowing(
 
     clearing = ResultClearingMiddleware(talk.ledger, high, tools, count=FAKE_COUNT)
     try:
-        if way == "async":
-            returned = asyncio.run(clearing.awrap_model_call(request, amodel))
-        else:
-            returned = clearing.wrap_model_call(request, model)
+        returned = clearing.wrap_model_call(request, model)
     except Exception as exc:  # noqa: BLE001 -- the error is what the test reads
         return heard, exc
     if isinstance(returned, ExtendedModelResponse):
@@ -879,14 +874,13 @@ def _latest_heavy() -> tuple[Talk, list[str], str]:
     ],
     ids=["langchain", "sdk-400", "gateway-422"],
 )
-@pytest.mark.parametrize("way", ["sync", "async"])
-def test_a_refusal_for_length_is_asked_once_more_with_the_latest_batch_cleared(error, way):
+def test_a_refusal_for_length_is_asked_once_more_with_the_latest_batch_cleared(error):
     """Refused, the call went to deepagents' summariser, which summarises the conversation
     and writes the batch to `large_tool_results/` under a call id. The errors are the ones
     deepagents itself takes for a refusal for length, so the two cannot disagree."""
     talk, latest, older = _latest_heavy()
 
-    heard, update = _overflowing(talk, error, way=way)
+    heard, update = _overflowing(talk, error)
 
     first, retry = heard
     assert first == talk.messages
@@ -934,42 +928,42 @@ def test_an_unseen_result_names_only_a_tool_its_graph_holds():
     assert _of(after, found).content.endswith("too long for it; call grep again narrowed")
 
 
-def test_a_second_refusal_hands_deepagents_the_first(way):
+def test_a_second_refusal_hands_deepagents_the_first():
     """One retry: refused again, clearing can do no more, and deepagents is handed what it
     would have been handed without it, to summarise as before."""
     talk, _, _ = _latest_heavy()
     first, second = _too_long(), _too_long()
 
-    heard, raised = _overflowing(talk, first, second, way=way)
+    heard, raised = _overflowing(talk, first, second)
 
     assert raised is first
     assert len(heard) == 2
 
 
-def test_a_retry_failing_otherwise_raises_its_own_error(way):
+def test_a_retry_failing_otherwise_raises_its_own_error():
     """A retry refused for something else -- a rate limit, a dropped connection -- is that
     failure, which the turn reports as it would any other; the refusal for length is past."""
     talk, _, _ = _latest_heavy()
     other = BadRequestError("tools.0: invalid schema")
 
-    _, raised = _overflowing(talk, _too_long(), other, way=way)
+    _, raised = _overflowing(talk, _too_long(), other)
 
     assert raised is other
 
 
-def test_an_error_not_about_length_is_never_asked_again(way):
+def test_an_error_not_about_length_is_never_asked_again():
     """A 400 for anything else, or an error with no status, is not the conversation's
     size: asked again, it fails again and the turn spends a model call on it."""
     for error in (BadRequestError("tools.0: invalid schema"), RuntimeError("prompt is too long")):
         talk, _, _ = _latest_heavy()
 
-        heard, raised = _overflowing(talk, error, way=way)
+        heard, raised = _overflowing(talk, error)
 
         assert raised is error
         assert len(heard) == 1
 
 
-def test_with_nothing_left_to_clear_the_refusal_is_handed_on_unasked(way):
+def test_with_nothing_left_to_clear_the_refusal_is_handed_on_unasked():
     """A refusal on a conversation already all handles: a retry would send the same
     request, and a handle is never cleared again."""
     talk, _, _ = _latest_heavy()
@@ -977,7 +971,7 @@ def test_with_nothing_left_to_clear_the_refusal_is_handed_on_unasked(way):
     talk.messages = _applied(talk.messages, _update(update))
     refusal = _too_long()
 
-    heard, raised = _overflowing(talk, refusal, way=way)
+    heard, raised = _overflowing(talk, refusal)
 
     assert raised is refusal
     assert len(heard) == 1
@@ -1091,12 +1085,13 @@ def _marked(cfg: Any, model: str | None = None, **fields: Any) -> Any:
     return replace(cfg, models=replace(models, models={**models.models, name: entry}))
 
 
-def _turn(cfg: Any, *script: AIMessage | Exception, way: str = "sync") -> Any:
-    """One turn, through `run` or `arun`: the two loops call different hooks."""
+def _turn(cfg: Any, *script: AIMessage | Exception) -> Any:
+    """One turn, through `run`: the hooks `arun` calls instead are copies, which
+    `test_async_twins.py` holds."""
     Scripted.script.extend(script)
     service = Kingfisher(cfg, sessions=LocalSessions())
     request = Request("go", agent="only", session_id="s")
-    return asyncio.run(service.arun(request)) if way == "async" else service.run(request)
+    return service.run(request)
 
 
 def _one(name: str, at: int, **args: Any) -> AIMessage:
@@ -1108,7 +1103,7 @@ def _transcript(cfg: Any) -> list[Any]:
     return list(from_json((session / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8")))
 
 
-def test_a_turn_refused_for_length_goes_on_without_a_summary(bulky, way):
+def test_a_turn_refused_for_length_goes_on_without_a_summary(bulky):
     """Left to deepagents' summariser, the refusal summarised the conversation and wrote
     each result of the latest batch to `large_tool_results/` under its call id, a folder
     no row names. Driven through a turn, because only the stack deepagents assembles puts
@@ -1118,7 +1113,7 @@ def test_a_turn_refused_for_length_goes_on_without_a_summary(bulky, way):
         tool_calls=[{"name": "bulky", "args": {"n": n}, "id": f"c{n}"} for n in (1, 2)],
     )
 
-    result = _turn(bulky, batch, _too_long(), AIMessage(content="done"), way=way)
+    result = _turn(bulky, batch, _too_long(), AIMessage(content="done"))
 
     assert result.answer == "done"
     assert Scripted.summaries == 0
@@ -1132,14 +1127,14 @@ def test_a_turn_refused_for_length_goes_on_without_a_summary(bulky, way):
         assert f"/scratchpad/tool_results/{number}-bulky.txt" in said[call]
 
 
-def test_a_long_turn_clears_and_the_transcript_carries_the_handles(bulky, way):
+def test_a_long_turn_clears_and_the_transcript_carries_the_handles(bulky):
     """What every later turn replays is the transcript, written from the turn's own
     conversation: a handle the model was shown but the transcript did not carry would
     clear nothing that matters. Each names a file still there once the turn is over."""
     cfg = _marked(bulky, clear_results_at=12_000)
 
     calls = (_one("bulky", n, n=n) for n in range(1, 7))
-    result = _turn(cfg, *calls, AIMessage(content="done"), way=way)
+    result = _turn(cfg, *calls, AIMessage(content="done"))
 
     assert result.answer == "done"
     said = {one.call_id: one.content for one in _transcript(cfg) if one.role == "tool"}
@@ -1223,7 +1218,7 @@ def test_a_result_carrying_an_image_says_its_saved_copy_is_the_text_alone(bulky)
     assert said == f"{chart.summary}\n(16 bytes, cleared; full result: {chart.path})\n[A-0001]"
 
 
-def test_the_summariser_counts_the_cleared_conversation(bulky, way):
+def test_the_summariser_counts_the_cleared_conversation(bulky):
     """What clearing is for: from the call after a pass, the summariser counts the
     conversation it rewrote. Fifteen results that would have tripped it on a
     60,000-token window go through without a summary."""
@@ -1232,7 +1227,7 @@ def test_the_summariser_counts_the_cleared_conversation(bulky, way):
     trigger = int(60_000 * 0.85)
 
     calls = (_one("bulky", n, n=n) for n in range(1, 16))
-    result = _turn(cfg, *calls, AIMessage(content="done"), way=way)
+    result = _turn(cfg, *calls, AIMessage(content="done"))
 
     assert result.answer == "done"
     assert sum(e.size for e in result.ledger) // 4 > trigger, "would not have summarised anyway"

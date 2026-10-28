@@ -3,8 +3,6 @@ rewritten, and one entry removed under the session's claim."""
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 from deepagents.backends.protocol import FileDownloadResponse
 
@@ -92,19 +90,17 @@ def _remembering(cfg, text: str = MEMORY):
     return kf, handle
 
 
-def _call(handle, way: str, method: str, *args):
-    if way == "async":
-        return asyncio.run(getattr(handle, f"a{method}")(*args))
+def _call(handle, method: str, *args):
     return getattr(handle, method)(*args)
 
 
-def test_memory_is_the_entries_and_reading_writes_nothing(cfg, way):
+def test_memory_is_the_entries_and_reading_writes_nothing(cfg):
     """Written back, a read taken without the claim could land over a turn's edit; it
     numbers an unnumbered line in what it answers and leaves the file alone."""
     text = MEMORY + "- Prefers tables\n"
     _, handle = _remembering(cfg, text)
 
-    assert _call(handle, way, "memory") == (
+    assert _call(handle, "memory") == (
         MemoryEntry("m1", "Reports figures in EUR rounded to the nearest thousand"),
         MemoryEntry("m2", "Short answers"),
         MemoryEntry("m3", "Reviews on Mondays"),
@@ -123,30 +119,30 @@ def test_no_memory_file_is_no_entries():
     assert drive(memory_entries(Empty(), DEFAULT_LAYOUT)) == ()
 
 
-def test_forget_writes_the_file_back_without_that_entry(cfg, way):
+def test_forget_writes_the_file_back_without_that_entry(cfg):
     """Through kingfisher's own backend, so the write lands where a turn reads it."""
     _, handle = _remembering(cfg)
 
-    _call(handle, way, "forget", "m1")
+    _call(handle, "forget", "m1")
 
     assert _memory_file(cfg).read_text(encoding="utf-8") == without(MEMORY, "m1")
-    assert [one.id for one in _call(handle, way, "memory")] == ["m2", "m3"]
+    assert [one.id for one in _call(handle, "memory")] == ["m2", "m3"]
 
 
-def test_forget_gives_the_claim_back_whether_or_not_it_found_the_entry(cfg, way):
+def test_forget_gives_the_claim_back_whether_or_not_it_found_the_entry(cfg):
     """A claim kept would refuse every later turn in the session until it went stale."""
     _, handle = _remembering(cfg)
     sessions = LocalSessions()
 
-    _call(handle, way, "forget", "m1")
+    _call(handle, "forget", "m1")
     with pytest.raises(MemoryEntryError, match=r"m2, m3"):
-        _call(handle, way, "forget", "m1")
+        _call(handle, "forget", "m1")
 
     assert not sessions.held(cfg, "s", stale_after=cfg.claim_stale_after)
     assert _memory_file(cfg).read_text(encoding="utf-8") == without(MEMORY, "m1")
 
 
-def test_forget_is_refused_while_a_turn_holds_the_session(cfg, way):
+def test_forget_is_refused_while_a_turn_holds_the_session(cfg):
     """Written under a running turn, the forget would be reported as the turn's own
     removal, and an agent saving memory from the copy it loaded would bring the entry back."""
     _, handle = _remembering(cfg)
@@ -155,12 +151,12 @@ def test_forget_is_refused_while_a_turn_holds_the_session(cfg, way):
     assert token is not None
 
     with pytest.raises(SessionBusyError):
-        _call(handle, way, "forget", "m1")
+        _call(handle, "forget", "m1")
 
     assert _memory_file(cfg).read_text(encoding="utf-8") == MEMORY
     assert sessions.held(cfg, "s", stale_after=cfg.claim_stale_after), (
         "the refusal let go of the turn's claim"
     )
     sessions.release(cfg, "s", token)
-    _call(handle, way, "forget", "m1")
+    _call(handle, "forget", "m1")
     assert _memory_file(cfg).read_text(encoding="utf-8") == without(MEMORY, "m1")

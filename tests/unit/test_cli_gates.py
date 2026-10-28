@@ -497,7 +497,7 @@ def _a_paused_session_only_a_reaches(cfg):
     return policied, kf
 
 
-def test_a_caller_who_cannot_reach_the_session_is_not_shown_what_it_waits_on(cfg, way):
+def test_a_caller_who_cannot_reach_the_session_is_not_shown_what_it_waits_on(cfg):
     """It asked as nobody, so anyone holding a session id read the pending calls and
     their arguments -- the one door into a session that did not ask who was calling.
     """
@@ -505,7 +505,7 @@ def test_a_caller_who_cannot_reach_the_session_is_not_shown_what_it_waits_on(cfg
 
     _, kf = _a_paused_session_only_a_reaches(cfg)
 
-    reads = Through(kf, way)
+    reads = Through(kf)
 
     # The control beside the escape: the caller who does reach it is shown the call.
     assert [call.call_id for call in reads.pending("s-1", source_ids=("A",))] == ["abc123#0"]

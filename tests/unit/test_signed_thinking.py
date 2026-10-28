@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any
 
@@ -114,16 +113,13 @@ def _kept_as_v1(**metadata: Any) -> AIMessage:
     )
 
 
-def _turn(cfg, session_dir, way: str, earlier: AIMessage) -> tuple[dict[str, Any], dict]:
+def _turn(cfg, session_dir, earlier: AIMessage) -> tuple[dict[str, Any], dict]:
     """What a turn on the catalogue's default sends with `earlier` behind it, and the state
     it leaves."""
     model = Sent(model="fake-model", api_key="x", script=[AIMessage("done")])
     built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=model)
     asked = {"messages": [HumanMessage("first"), earlier, HumanMessage("second")]}
-    if way == "async":
-        state = asyncio.run(built.graph.ainvoke(asked, context=built.context))
-    else:
-        state = built.graph.invoke(asked, context=built.context)
+    state = built.graph.invoke(asked, context=built.context)
     return model.sent[0], state
 
 
@@ -144,12 +140,12 @@ def _sent_back(payload: dict[str, Any]) -> list[str]:
     ],
     ids=["unrecorded-other-model", "other-endpoint", "same-endpoint-other-model", "moved"],
 )
-def test_thinking_another_signer_made_is_not_sent(cfg, session_dir, way, earlier):
+def test_thinking_another_signer_made_is_not_sent(cfg, session_dir, earlier):
     """A MiniMax reply's thinking reached Claude signed by MiniMax, which Claude cannot
     check: langchain tells vendors apart by package, and both come through `ChatAnthropic`.
     So does one from another endpoint, another model on the same one, or a gateway moved
     under the same name."""
-    payload, state = _turn(cfg, session_dir, way, earlier)
+    payload, state = _turn(cfg, session_dir, earlier)
 
     assert _sent_back(payload) == ["text"]
     assert "SIGNED" not in json.dumps(payload)
@@ -162,20 +158,20 @@ def test_thinking_another_signer_made_is_not_sent(cfg, session_dir, way, earlier
     [_reply(**{SERVED_BY: HERE}), _reply(model_name="fake-model")],
     ids=["recorded", "unrecorded-same-model"],
 )
-def test_the_signers_own_thinking_goes_back_unchanged(cfg, session_dir, way, earlier):
+def test_the_signers_own_thinking_goes_back_unchanged(cfg, session_dir, earlier):
     """The control: thinking the same endpoint and model produced is the reasoning the
     model keeps between calls, and a reply from before replies were recorded is judged by
     the model the server named."""
-    payload, _ = _turn(cfg, session_dir, way, earlier)
+    payload, _ = _turn(cfg, session_dir, earlier)
 
     assert _sent_back(payload) == ["thinking", "text"]
     assert "SIGNED" in json.dumps(payload)
 
 
-def test_each_reply_records_who_served_it_and_no_request_says_so(cfg, session_dir, way):
+def test_each_reply_records_who_served_it_and_no_request_says_so(cfg, session_dir):
     """A reply that did not say who answered it could only be judged by the name a server
     reports, which a gateway moved under the same name keeps."""
-    payload, state = _turn(cfg, session_dir, way, _reply(**{SERVED_BY: HERE}))
+    payload, state = _turn(cfg, session_dir, _reply(**{SERVED_BY: HERE}))
 
     assert state["messages"][-1].response_metadata[SERVED_BY] == HERE
     assert SERVED_BY not in json.dumps(payload)
@@ -262,11 +258,11 @@ def test_a_v1_replys_redacted_thinking_goes_back_only_to_its_signer(model, serve
     assert wrapped["value"]["data"] == "REDACTED", "the conversation keeps it"
 
 
-def test_a_reply_that_was_only_another_signers_thinking_is_left_out(cfg, session_dir, way):
+def test_a_reply_that_was_only_another_signers_thinking_is_left_out(cfg, session_dir):
     """Stripped to nothing, the reply went to `ChatAnthropic` empty, which skips it only
     after joining its neighbours, so two user turns went out in a row. Left out first, the
     two are one; the conversation keeps the reply."""
-    payload, state = _turn(cfg, session_dir, way, _only_thought(**{SERVED_BY: ELSEWHERE}))
+    payload, state = _turn(cfg, session_dir, _only_thought(**{SERVED_BY: ELSEWHERE}))
 
     assert [message["role"] for message in payload["messages"]] == ["user"]
     assert "SIGNED" not in json.dumps(payload)
@@ -278,14 +274,14 @@ def test_a_reply_that_was_only_another_signers_thinking_is_left_out(cfg, session
     [{"type": "text", "text": ""}, {"type": "text", "text": " \n"}, ""],
     ids=["empty-text", "blank-text", "empty-string"],
 )
-def test_a_reply_stripped_to_blank_text_is_left_out_too(cfg, session_dir, way, beside):
+def test_a_reply_stripped_to_blank_text_is_left_out_too(cfg, session_dir, beside):
     """A reply kept for the blank text beside its thinking went to `ChatAnthropic`, which
     drops blank text and then skips the reply, so two user turns went out in a row as if
     nothing had been stripped."""
     earlier = _only_thought(**{SERVED_BY: ELSEWHERE})
     earlier = earlier.model_copy(update={"content": [*earlier.content, beside]})
 
-    payload, state = _turn(cfg, session_dir, way, earlier)
+    payload, state = _turn(cfg, session_dir, earlier)
 
     assert [message["role"] for message in payload["messages"]] == ["user"]
     assert "SIGNED" not in json.dumps(payload)

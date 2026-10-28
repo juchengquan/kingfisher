@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import pytest
@@ -35,7 +34,7 @@ def session(scripted):
     return made
 
 
-def _answer(cfg: Any, tool: str, args: dict[str, Any], way: str) -> ToolMessage:
+def _answer(cfg: Any, tool: str, args: dict[str, Any]) -> ToolMessage:
     Scripted.script.extend(
         [
             AIMessage(content="", tool_calls=[{"name": tool, "args": args, "id": "c1"}]),
@@ -44,7 +43,7 @@ def _answer(cfg: Any, tool: str, args: dict[str, Any], way: str) -> ToolMessage:
     )
     service = Kingfisher(cfg, sessions=LocalSessions())
     request = Request("go", agent="only", session_id="s")
-    asyncio.run(service.arun(request)) if way == "async" else service.run(request)
+    service.run(request)
     (said,) = {
         one.tool_call_id: one
         for heard in Scripted.heard
@@ -66,13 +65,13 @@ CALLS = [
 
 
 @pytest.mark.parametrize("call", CALLS, ids=[f"{c[0]}-{n}" for n, c in enumerate(CALLS)])
-def test_a_link_out_of_a_route_is_the_operations_error(scripted, session, way, call):
+def test_a_link_out_of_a_route_is_the_operations_error(scripted, session, call):
     """deepagents refuses a link out of a route's root with a `ValueError`, which the file
     tools let escape: a link a model left from `/memory` to its own scratchpad notes ended
     the turn with the host's paths in the error."""
     tool, args = call
 
-    answer = _answer(scripted, tool, args, way)
+    answer = _answer(scripted, tool, args)
 
     assert answer.status == "error"
     assert "a link out of its folder" in answer.text
@@ -84,7 +83,7 @@ def test_a_link_out_of_a_route_is_the_operations_error(scripted, session, way, c
 def test_a_link_that_stays_in_its_route_is_followed(scripted, session):
     """The control: refusing every link in a route would pass the test above, and a link
     inside one stays under the route's own rules, as upstream has it."""
-    answer = _answer(scripted, "read_file", {"file_path": "/memory/alias.md"}, "sync")
+    answer = _answer(scripted, "read_file", {"file_path": "/memory/alias.md"})
 
     assert answer.status == "success"
     assert "kept in memory" in answer.text

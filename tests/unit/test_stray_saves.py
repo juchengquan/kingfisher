@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import replace
 from typing import Any
 
@@ -43,11 +42,11 @@ def renamed(scripted):
     return cfg
 
 
-def _turn(cfg: Any, *script: AIMessage, way: str = "sync", sessions: Any = None) -> None:
+def _turn(cfg: Any, *script: AIMessage, sessions: Any = None) -> None:
     Scripted.script.extend(script)
     service = Kingfisher(cfg, sessions=sessions or LocalSessions())
     request = Request("go", agent="only", session_id="s")
-    asyncio.run(service.arun(request)) if way == "async" else service.run(request)
+    service.run(request)
 
 
 def _saving(at: str, tool: str, path: str) -> AIMessage:
@@ -80,7 +79,7 @@ def _answer(at: str) -> ToolMessage:
     ],
 )
 def test_a_save_outside_every_folder_is_refused_and_told_where_it_belongs(
-    renamed, way, tool, path, where
+    renamed, tool, path, where
 ):
     """Saved to an `/outputs` the layout did not have, three deliverables in four were
     kept nowhere and handed back to nobody, and each tool said it had succeeded."""
@@ -91,7 +90,7 @@ def test_a_save_outside_every_folder_is_refused_and_told_where_it_belongs(
         stray.parent.mkdir(parents=True, exist_ok=True)
         stray.write_text("a,b\n")
 
-    _turn(renamed, _saving("w1", tool, path), AIMessage("done"), way=way)
+    _turn(renamed, _saving("w1", tool, path), AIMessage("done"))
 
     answer = _answer("w1")
     assert answer.text == f"Error: {stray_save(where, RENAMED)}"
