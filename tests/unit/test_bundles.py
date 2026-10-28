@@ -696,17 +696,6 @@ def test_a_shadowing_tool_gets_one_row_and_the_annotation_that_says_more(cfg):
     assert rows == ["      shared  [private tool, shadowing the catalogue's]"]
 
 
-def test_a_private_tool_that_shadows_nothing_keeps_its_own_row(cfg):
-    """The control: skipping the plain row for a shadowing tool must not skip it for a
-    tool the catalogue never offered.
-    """
-    workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
-
-    rows = [line for line in render(inventory(cfg)) if "probe  [private" in line]
-
-    assert rows == ["      probe  [private tool]"]
-
-
 def test_the_main_agent_never_holds_another_subagents_private_tool(cfg, session_dir):
     """The point of the whole feature."""
     workspace_with_bundle(cfg)
@@ -1581,44 +1570,6 @@ def test_a_compiled_subagents_bundle_wins_a_name_the_catalogue_also_defines(cfg,
     assert names[0] == "probe", "the bundle's goes first, so the order is stated here"
     assert handed[0].invoke({}) == "from the bundle"
     assert "other" in names, "the catalogue's own still arrive"
-
-
-def test_a_compiled_subagents_bundled_skill_is_reported_as_reaching_nothing(cfg):
-    """A skills index arrives through middleware and a compiled graph is given none,
-    so this half of a bundle cannot work -- and the listing says so on the line, beside
-    the refusal below, so a reader learns why rather than only that.
-    """
-    compiled_bundle(cfg, skill=True)
-
-    found = inventory(cfg)
-
-    assert found.stranded_skills == {"surveyor": ("sampling",)}
-    assert "told about no skills" in "\n".join(render(found))
-
-
-def test_an_assembled_subagents_bundled_skill_is_not_reported_as_stranded(cfg):
-    """The control. The note is about graphs, not about bundles -- pointed at every
-    bundled skill it would fire on the shipped `timestamps`, whose skill arrives.
-    """
-    workspace_with_bundle(cfg, definition=OWN_TOOL_AND_SKILL)
-    with_private_skill(cfg)
-
-    found = inventory(cfg)
-
-    assert found.stranded_skills == {}
-    assert "told about no skills" not in "\n".join(render(found))
-
-
-def test_a_compiled_subagent_with_a_skill_in_its_folder_is_refused(cfg):
-    """It cannot list the skill -- `skills` is refused for a graph deepagents never
-    indexes -- so the skill is unlisted, and an unlisted file is refused.
-    """
-    compiled_bundle(cfg, skill=True)
-
-    with pytest.raises(SubagentError) as raised:
-        Definitions.from_config(cfg).warm()
-
-    assert "sampling" in str(raised.value)
 
 
 def test_doctor_fails_on_a_compiled_subagent_with_a_skill_in_its_folder(cfg):

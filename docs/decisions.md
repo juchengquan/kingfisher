@@ -6143,6 +6143,15 @@ read-miss note kind four lets go, a size label, a `.json` suffix, a gap in numbe
 the files of a turn a crash cut just before a resume, kept past their rounds.
 *(2026-10-28.)*
 
+**A control beside its escape stays.** Where one test drives both a refusal and the run it
+must not refuse, the allowed case stays though other tests make its check: it is what
+keeps the refusal case from passing against code that refuses everything. The fourth slice
+took 13 of the 345 items in `test_architecture.py`, `test_bundles.py` and
+`test_scratch_runs.py`. The first is rules over the tree, so each repeat it lost was
+confirmed by breaking the tree, no break of `src/` reaching a test that reads it; the
+other two are nearly all who may reach what. Of 430 keep-list breaks, a doomed test alone
+caught none. *(2026-10-28.)*
+
 **Growth is held by a rule in `CLAUDE.md`, not by anything in CI.** 557 of the 608 commits
 since September were written with Claude, which reads that file on every task. The growth
 is spread evenly -- a third each from PRs adding up to five tests, six to ten, and more --

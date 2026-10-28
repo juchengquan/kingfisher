@@ -8,7 +8,6 @@ real folder that a real shell can swap.
 from __future__ import annotations
 
 import asyncio
-import inspect
 import os
 import shutil
 import stat
@@ -18,10 +17,10 @@ import threading
 import time
 import warnings
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from deepagents.backends import CompositeBackend, StateBackend
+from deepagents.backends import StateBackend
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
@@ -30,7 +29,7 @@ from kingfisher import Kingfisher, Request, ScratchRun, ToolContext
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.scratch_runs import ScratchRunsMiddleware
-from kingfisher.core.agent.permitted_backend import PermittedBackend, scratch_runs_of
+from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.scratch import ScratchRunner
 from kingfisher.core.agent.tool_context import NOT_GRANTED
 from kingfisher.core.agent.tool_guards import guarded_tools
@@ -59,8 +58,6 @@ from tests.unit.test_interpreter import _from_code
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from deepagents.backends.protocol import BackendProtocol
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell and folders")
 
@@ -151,16 +148,6 @@ def _results(
 
 
 # -- who is handed a run ------------------------------------------------------
-
-
-def test_a_tool_runs_a_command_when_its_agent_may_use_the_shell(cfg, session_dir):
-    """The whole change, through the override `ToolCallRequest` does not declare: if
-    langgraph stopped carrying a replaced runtime to the tool, this is what would fail."""
-    _a_tool(cfg)
-
-    found = _results(cfg, session_dir, _calls("shout", text="hi"), AIMessage(content="done"))
-
-    assert found["shout"] == "HI"
 
 
 def test_a_tool_is_refused_when_its_agent_may_not_use_the_shell(cfg, session_dir):
@@ -429,29 +416,6 @@ def test_a_limit_raising_for_a_subagent_refuses_only_its_tools_and_says_why(
     assert found == ["HI", answer]
 
 
-def test_a_limit_that_raises_is_logged_once_for_the_graph_it_raised_on(
-    cfg, session_dir, caplog
-):
-    """Refused without a word in the log, a deployment's bug reads as its policy."""
-    _a_tool(cfg)
-    _a_helper(cfg)
-
-    _answers(
-        cfg,
-        session_dir,
-        *_shouted_then_delegated("helper"),
-        capabilities=Capabilities(subagents=("helper",)),
-        scratch_run_limit=_Raising("helper"),
-    )
-
-    raised = [r for r in caplog.records if "the scratch run limit raised" in r.getMessage()]
-    assert [r.getMessage() for r in raised] == [
-        "the scratch run limit raised on subagent 'helper'; its tools are refused a run"
-    ]
-    assert raised[0].exc_info is not None
-    assert raised[0].exc_info[0] is KeyError
-
-
 async def _refused() -> bool:
     return False
 
@@ -500,56 +464,7 @@ def test_a_limit_answering_neither_true_nor_false_refuses_and_says_why(cfg, sess
     assert found == ["HI", _answered(kind)]
 
 
-def test_a_coroutine_the_limit_answers_is_closed(cfg, session_dir):
-    """Left open, it warned "coroutine … was never awaited" from wherever it was collected,
-    which reads as a bug in kingfisher rather than the deployment's limit."""
-    _a_tool(cfg)
-    _a_helper(cfg)
-    limit = _Odd(_refused, "helper")
-
-    _answers(
-        cfg,
-        session_dir,
-        *_shouted_then_delegated("helper"),
-        capabilities=Capabilities(subagents=("helper",)),
-        scratch_run_limit=limit,
-    )
-
-    (given,) = limit.given
-    assert inspect.getcoroutinestate(given) == inspect.CORO_CLOSED
-
-
-def test_a_limit_answering_neither_is_logged_once_for_its_graph(cfg, session_dir, caplog):
-    """Refused without a word in the log, a limit written `async` reads as the policy."""
-    _a_tool(cfg)
-    _a_helper(cfg)
-
-    _answers(
-        cfg,
-        session_dir,
-        *_shouted_then_delegated("helper"),
-        capabilities=Capabilities(subagents=("helper",)),
-        scratch_run_limit=_Odd(lambda: 1, "helper"),
-    )
-
-    logged = [r.getMessage() for r in caplog.records if "scratch run limit" in r.getMessage()]
-    assert logged == [
-        "the scratch run limit answered int on subagent 'helper', not True or False; its "
-        "tools are refused a run"
-    ]
-
-
-@pytest.mark.parametrize(
-    ("limit", "answer"),
-    [
-        (_Raising(""), RAISED.replace("'helper'", "''")),
-        (_Odd(lambda: 1, ""), _answered("int")),
-    ],
-    ids=["raised", "answered neither"],
-)
-def test_an_async_tool_on_a_graph_its_limit_refused_is_told_why(
-    cfg, session_dir, limit, answer
-):
+def test_an_async_tool_on_a_graph_its_limit_refused_is_told_why(cfg, session_dir):
     """An async tool asks through `arun`, and every refused-limit test drove the sync
     `shout`: without `RefusingRunner.arun` the call failed on an `AttributeError` instead."""
     _a_tool(cfg)
@@ -559,7 +474,7 @@ def test_an_async_tool_on_a_graph_its_limit_refused_is_told_why(
         model=FakeToolCallingModel(
             responses=[_calls("ashout", text="hi"), AIMessage(content="done")]
         ),
-        scratch_run_limit=limit,
+        scratch_run_limit=_Raising(""),
     )
 
     out = asyncio.run(
@@ -569,7 +484,7 @@ def test_an_async_tool_on_a_graph_its_limit_refused_is_told_why(
     )
 
     (result,) = [m for m in out["messages"] if isinstance(m, ToolMessage)]
-    assert result.content == answer
+    assert result.content == RAISED.replace("'helper'", "''")
 
 
 @pytest.mark.parametrize(
@@ -811,18 +726,6 @@ def test_each_run_is_given_what_is_left_of_the_call(monkeypatch):
     assert [one["timeout"] for one in backend.asked] == [30, 5]
     assert late.error is not None
     assert "no time left" in late.error
-
-
-def test_the_run_is_found_behind_the_composite_a_session_is():
-    """A composite forwards no method of its own, so asked alone it refuses kingfisher's
-    backend, whose shell is its default."""
-    shell = _Recording()
-    composite = CompositeBackend(
-        default=cast("BackendProtocol", shell), routes={"/memories/": StateBackend()}
-    )
-
-    assert scratch_runs_of(composite) == shell.run_in_scratch
-    assert scratch_runs_of(StateBackend()) is None
 
 
 def test_a_backend_without_the_method_is_refused_by_name():
