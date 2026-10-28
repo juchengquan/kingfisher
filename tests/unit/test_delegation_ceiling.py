@@ -293,6 +293,44 @@ def test_an_unrestricted_request_delegates_as_before(cfg, session_dir):
     assert "is not a subagent this request may use" not in transcript
 
 
+@pytest.mark.parametrize("subagent", ["helper", "general-purpose"])
+@pytest.mark.parametrize(
+    ("route", "lands"),
+    [
+        # The control: a write the rules allow lands, so a refusal below is the rule's.
+        ("/outputs/written.txt", True),
+        ("/skills/written.txt", False),
+        ("/scratchpad/tool_results/written.txt", False),
+    ],
+)
+def test_a_subagent_writes_only_where_the_agent_may(cfg, session_dir, subagent, route, lands):
+    """A subagent built without the deployment's file rules wrote into the skills
+    catalogue and the saved tool results while every other test stayed green."""
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "write_file", "args": {"file_path": route, "content": "x"}, "id": "w"}
+            ],
+        ),
+        AIMessage(content="done"),
+    ]
+    wired = _with_helper(cfg)
+    graph = build_agent(
+        wired,
+        backend=backend_at(wired, session_dir),
+        model=FakeToolCallingModel(responses=responses),
+        capabilities=Capabilities(subagents=("helper",)),
+    ).graph
+
+    _subagent_graphs(graph)[subagent].invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
+    )
+
+    written = {p for root in (session_dir, wired.definitions) for p in root.rglob("written.txt")}
+    assert bool(written) is lands, written
+
+
 # -- one rule, applied at two levels --------------------------------------
 #
 # `delegation` carried its own copy of the narrowing rule -- identical to
