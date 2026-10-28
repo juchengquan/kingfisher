@@ -469,7 +469,7 @@ As of deepagents 0.7.6:
 | `grep` | Search file contents |
 | `execute` | Run a shell command |
 | `task` | Delegate to a subagent |
-| `write_todos` | Track a multi-step plan |
+| `write_todos` | Track a multi-step plan. A subagent holds it where its own line grants it, `["*"]` included; `general-purpose` never does |
 
 Four things worth knowing before you restrict this list:
 

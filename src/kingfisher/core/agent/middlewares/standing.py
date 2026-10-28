@@ -16,7 +16,7 @@ from kingfisher.core.agent.backend import (
     shell_runs_here,
     shell_told,
 )
-from kingfisher.core.agent.prompting import EXECUTE, skills_index
+from kingfisher.core.agent.prompting import EXECUTE, WRITE_TODOS, skills_index
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import NoScratchRunLimit
@@ -174,9 +174,11 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # and the reply checks, so the reply it records is the one kept and a call asked again
     # goes as they built it; and outside the caching slot, which marks what this sends.
     standing.append(SignedThinkingMiddleware(signers_of(models)))
-    if kind == "agent":
-        # Outside `BuiltinToolsMiddleware`, which takes its prose out where `write_todos`
-        # was not granted.
+    # The agent's always, since the built-ins are read off its stack; a subagent's only where
+    # its grant holds the list, since it costs a step on every call; never `general-purpose`'s,
+    # a helper for one job. Outside `BuiltinToolsMiddleware`, which takes its prose out where
+    # `write_todos` was not granted.
+    if kind == "agent" or (kind == "subagent" and (tools is None or WRITE_TODOS in tools)):
         standing.append(TodoListMiddleware())
     # Ahead of the guards, so it records the arguments the model wrote, before
     # `GuardedCallsMiddleware` rewrites them to host paths.

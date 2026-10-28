@@ -668,6 +668,18 @@ built in off the middleware its probe holds, so an offered checklist would leave
 probe and `builtin_tools: [write_todos]` would name a tool that is not there. Moving it
 waits on the built-ins being read some other way. *(2026-10-17.)*
 
+**A subagent carries the to-do list where its line grants it, and `general-purpose` never.**
+It was the agent's alone, so a subagent whose line granted `write_todos`, `["*"]` included,
+was told the tool did not exist: a grant naming nothing. Now a declared subagent's stack
+carries it where its grant holds `write_todos` or everything. Not on every subagent with the
+allowlist hiding it, which costs a graph step on every model call -- two tests ran out of
+their recursion limit -- for a tool nobody offered. `general-purpose`, a helper for one job,
+carries none whatever its caller holds. A helper also held the agent's own copy, handed over
+with the agent's tools; that was left, since nothing could see it -- the allowlist hid it
+where it was not granted, and langchain keeps one tool of a name. Not taken: naming
+`general-purpose`'s built-ins in its definition rather than reading its kind, which needs the
+offered set on every unrestricted turn, a second build. *(2026-10-29.)*
+
 **Two pairs of standing middleware are one each now.** `GuardedCallsMiddleware` turned
 both kinds of exception into a failed result, an offered tool's first so it keeps its
 type, from the outer place, so a `grep` that `BuiltinToolsMiddleware` runs as several
