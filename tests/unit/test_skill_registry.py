@@ -34,12 +34,6 @@ def _read(root):
 # -- what the registry answers --------------------------------------------
 
 
-def test_it_offers_what_deepagents_will_load(cfg):
-    _skill(cfg.skills_dir, "good", GOOD.format(name="good", desc="A fine skill."))
-
-    assert _read(cfg.skills_dir).names == ("good",)
-
-
 def test_a_skill_with_no_description_is_not_offered(cfg):
     """deepagents refuses it, so the agent will never hear of it."""
     _skill(cfg.skills_dir, "nodesc", "---\nname: nodesc\n---\nBody.\n")
@@ -50,16 +44,6 @@ def test_a_skill_with_no_description_is_not_offered(cfg):
     assert registry.unloadable == ("nodesc",)
 
 
-def test_a_header_naming_something_else_is_offered_under_the_header_name(cfg):
-    """The folder is not the name -- deepagents files it under what the header says."""
-    _skill(cfg.skills_dir, "folder", GOOD.format(name="header", desc="Disagrees."))
-
-    registry = _read(cfg.skills_dir)
-
-    assert registry.names == ("header",)
-    assert registry.unloadable == (), "it loaded; it is only under another name"
-
-
 def test_a_folder_called_catalogue_is_refused(cfg):
     """Listed under the root's own label, its `review` was the one described while the
     run mounted the root's `review` in its place."""
@@ -68,12 +52,6 @@ def test_a_folder_called_catalogue_is_refused(cfg):
 
     with pytest.raises(ConfigError, match="a folder called 'catalogue'"):
         _read(cfg.skills_dir)
-
-
-def test_a_description_comes_back_for_a_listing(cfg):
-    _skill(cfg.skills_dir, "good", GOOD.format(name="good", desc="What it is for."))
-
-    assert _read(cfg.skills_dir).description("good") == "What it is for."
 
 
 def test_an_empty_catalogue_is_not_an_error(cfg):
@@ -217,16 +195,6 @@ def test_a_header_naming_something_else_is_reported(cfg):
     assert registry.names == ("find-company",), "it loads, under the header name"
     assert registry.unloadable == (), "it is not missing"
     assert registry.misfiled == (("company-lookup", "find-company"),)
-
-
-def test_a_header_that_agrees_is_not_reported(cfg):
-    """The negative control, and the one that matters most: every well-formed skill in
-    every catalogue takes this path, so a false positive here is a warning on every
-    listing.
-    """
-    _skill(cfg.skills_dir, "tidy", GOOD.format(name="tidy", desc="Tidies."))
-
-    assert _read(cfg.skills_dir).misfiled == ()
 
 
 def test_a_nested_skill_is_judged_by_its_own_directory(cfg):

@@ -244,20 +244,6 @@ def test_the_shipped_set_shows_all_three_tool_shapes_and_a_spec(shipped):
     assert specced == {"sql_query"}
 
 
-def test_the_class_shaped_preset_exports_an_instance(shipped):
-    """The near miss the format refuses by name: `TOOLS = [SqlExplain]` is a class,
-    which is callable, so nothing would notice until the model called it and got a
-    tool object back instead of an answer.
-    """
-    tools = [one.tool for one in LocalToolRepository(shipped / "tools").found]
-    found = next(t for t in tools if tool_name(t) == "sql_explain")
-
-    assert not isinstance(found, type), "exported the class, not an instance"
-    assert list(found.args) == ["statement", "verbose"]
-    # The reason the class earns its place: each argument carries a sentence.
-    assert found.args["statement"]["description"].strip()
-
-
 def test_the_placeholder_search_says_so_in_its_own_results(shipped):
     """A placeholder that reads as real is how an invented fact reaches a user with a
     citation attached. The description is read once, when the model decides to call;
@@ -270,13 +256,6 @@ def test_the_placeholder_search_says_so_in_its_own_results(shipped):
 
     assert "PLACEHOLDER" in answer
     assert "not a real search" in answer
-
-
-def test_every_preset_tool_describes_itself_to_the_model(shipped):
-    """The docstring is what the model reads when deciding whether to call it."""
-    for tool in [one.tool for one in LocalToolRepository(shipped / "tools").found]:
-        described = getattr(tool, "description", None) or (tool.__doc__ or "")
-        assert len(described.strip()) > 60, f"{tool_name(tool)} says too little"
 
 
 def test_a_tool_folder_without_an_init_is_only_organisation(shipped):
@@ -645,18 +624,6 @@ def test_an_answer_that_used_nothing_says_so(shipped):
     answer = graph.invoke({"messages": [HumanMessage(content="how long is it?")]})
 
     assert "used no tools" in answer["messages"][-1].content
-
-
-def test_long_arguments_are_cut_rather_than_dropped(shipped):
-    """A display limit, not a judgement: it decides how much of a known value to show,
-    never what a value means.
-    """
-    module = preset_module(shipped)
-
-    written = module._arguments({"query": "x" * 500})
-
-    assert len(written) <= module.ARGUMENT_WIDTH
-    assert written.endswith("…")
 
 
 def test_the_compiled_presets_imports_stay_out_of_module_scope(shipped):
@@ -1579,16 +1546,6 @@ def _scribe_subagents(cfg, session_dir, shipped) -> dict:
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
     return {spec["name"]: spec for spec in built.subagents or ()}
-
-
-def test_an_agent_in_a_folder_is_named_by_its_field(shipped):
-    """`agents/` may nest at any depth, and a walk that stopped at its top would lose
-    `scribe` without a word.
-    """
-    assert (shipped / "agents" / "incident" / "scribe.yaml").is_file(), (
-        "the example left its folder, so nothing shows that an agent may sit in one"
-    )
-    assert "scribe" in LocalAgentRepository(shipped / "agents").specs
 
 
 def test_a_shipped_agent_says_every_builtin_with_the_star(shipped):

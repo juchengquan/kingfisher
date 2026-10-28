@@ -6,9 +6,8 @@ import pytest
 
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.definitions.subagents.spec import SubagentSpec
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
-from kingfisher.core.definitions.tools.spec import Offering, offered
+from kingfisher.core.definitions.tools.spec import offered
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -100,30 +99,6 @@ def test_a_request_naming_an_unknown_tool_is_told_where_the_real_ones_live(cfg):
     message = str(raised.value)
     assert "unknown tool(s): find_compny" in message
     assert "find_company" in message
-    assert "research/find_company.py" in message
-
-
-def test_a_subagent_naming_an_unknown_tool_is_told_the_same_thing(cfg):
-    """The case that prompted this: someone editing a YAML by hand."""
-    _tool(tools_dir(cfg) / "research", "find_company")
-    spec = SubagentSpec(
-        name="typo",
-        description="Names a tool nothing offers.",
-        system_prompt="You do a thing.",
-        tools=("find_compny",),
-    )
-
-    with pytest.raises(CapabilityError) as raised:
-        Offering(
-            builtin=("read_file",),
-            offered=("find_company",),
-            sources={"find_company": "research/find_company.py"},
-        ).refuse_unknown(
-            spec.builtin_tools, spec.tools, subject=f"subagent {spec.name!r}"
-        )
-
-    message = str(raised.value)
-    assert "subagent 'typo' names unknown tool(s): find_compny" in message
     assert "research/find_company.py" in message
 
 

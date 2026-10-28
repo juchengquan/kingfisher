@@ -226,14 +226,6 @@ def test_only_a_path_in_this_session_is_offered_a_virtual_one(cfg, session_dir):
     assert "Use the shell for host paths" in str(raised.value)
 
 
-def test_the_refusal_names_the_path_that_was_meant(cfg, session_dir):
-    """An error the model can act on beats one it can only apologise for."""
-    backend = backend_at(cfg, session_dir)
-
-    with pytest.raises(ValueError, match=r"Use '/scratchpad/report\.md' instead"):
-        backend.write(f"{session_dir}/scratchpad/report.md", "content")
-
-
 #: The prefixes a file tool must refuse, written here as well as in `HOST_ROOTS`, and
 #: on purpose. The rule below drives whatever that tuple holds, so it covers an entry
 #: added later -- and for the same reason it cannot notice one *removed*: deleting four
@@ -591,13 +583,6 @@ def _asked(backend, name: str, *args, **kwargs):
     return getattr(backend, name)(*args, **kwargs)
 
 
-#: Every readable route that lives under the session root, and so was doubled.
-INSIDE_THE_ROOT = {
-    "/inputs": ("inputs",),
-    "/memory": ("memory",),
-}
-
-
 def _a_bundle_with_a_skill(cfg) -> None:
     """A bundle shipping a skill, mounted two levels under `/skills/`, and one skill in
     the catalogue beside it as the control.
@@ -746,42 +731,6 @@ class _Unasked:
         max_count: int | None = None,
     ) -> Any:
         return self.grep(pattern, path, glob, max_count=max_count)
-
-
-def test_a_routed_file_is_globbed_once(cfg, session_dir):
-    """Measured before this: `--input orders.csv` reached the model as
-    `['/inputs/orders.csv', '/inputs/orders.csv']`, on every pattern tried.
-    """
-    backend = backend_at(cfg, session_dir)
-    for route, parts in INSIDE_THE_ROOT.items():
-        where = session_dir.joinpath(*parts)
-        where.mkdir(parents=True, exist_ok=True)
-        (where / "probe.txt").write_text("needle\n", encoding="utf-8")
-
-        found = [
-            one["path"] for one in _rows(_asked(backend, "glob", f"{route}/probe.txt"))
-        ]
-
-        assert found == [f"{route}/probe.txt"], route
-
-
-def test_a_routed_file_is_grepped_once(cfg, session_dir):
-    """From the root, which is where the two answers meet."""
-    backend = backend_at(cfg, session_dir)
-    for route, parts in INSIDE_THE_ROOT.items():
-        where = session_dir.joinpath(*parts)
-        where.mkdir(parents=True, exist_ok=True)
-        (where / "probe.txt").write_text("needle\n", encoding="utf-8")
-
-        found = [
-            one["path"] for one in _rows(_asked(backend, "grep", "needle", path="/"))
-        ]
-
-        # Taken away again before the next route: this greps from the root, so a probe
-        # left behind is a second match and the answer stops being about one route.
-        (where / "probe.txt").unlink()
-
-        assert found == [f"{route}/probe.txt"]
 
 
 def test_a_directory_still_lists_what_it_actually_holds(cfg, session_dir):

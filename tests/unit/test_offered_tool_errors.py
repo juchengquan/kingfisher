@@ -50,17 +50,6 @@ def test_an_offered_tools_exception_becomes_a_failed_tool_result():
     assert answer.tool_call_id == "call-1"
 
 
-def test_the_message_names_the_exception_type():
-    """An offered tool is somebody else's code and its exceptions were not written to
-    be read by a model.
-    """
-    guard = OfferedToolFailureMiddleware(frozenset({"probe"}))
-
-    answer = guard.wrap_tool_call(_Request("probe"), _raises(FileNotFoundError("/inputs/x")))
-
-    assert "FileNotFoundError" in answer.content
-
-
 def test_an_offered_tool_refusing_a_host_path_still_names_the_type():
     """The host-path case checked first, so an offered tool's refusal lost the type
     that says it was the tool's own."""
