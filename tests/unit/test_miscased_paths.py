@@ -44,7 +44,7 @@ def session(scripted):
     return made
 
 
-def _turn(cfg: Any, *calls: tuple[str, dict[str, Any]], way: str = "sync") -> list[ToolMessage]:
+def _turn(cfg: Any, *calls: tuple[str, dict[str, Any]]) -> list[ToolMessage]:
     Scripted.script.extend(
         [
             *(
@@ -56,7 +56,7 @@ def _turn(cfg: Any, *calls: tuple[str, dict[str, Any]], way: str = "sync") -> li
     )
     service = Kingfisher(cfg, sessions=LocalSessions())
     request = Request("go", agent="only", session_id="s")
-    asyncio.run(service.arun(request)) if way == "async" else service.run(request)
+    service.run(request)
     answers = {
         one.tool_call_id: one
         for heard in Scripted.heard
@@ -87,13 +87,13 @@ CALLS = [
 
 @pytest.mark.parametrize("call", CALLS, ids=[c[0] for c in CALLS])
 def test_a_folder_spelled_in_other_capitals_is_refused_by_every_file_tool(
-    scripted, session, way, call
+    scripted, session, call
 ):
     """On a case-insensitive disk `/.HARNESS/secret.txt` matched no deny rule and no route,
     so the default backend opened the real `.harness`, and `/scratchpad/TOOL_RESULTS/`
     wrote and rewrote saved results the rules refuse."""
     tool, args, where, meant = call
-    (answer,) = _turn(scripted, (tool, args), way=way)
+    (answer,) = _turn(scripted, (tool, args))
 
     assert answer.text == f"Error: {miscased_path(where, meant)}"
     assert answer.status == "error"

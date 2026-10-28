@@ -29,9 +29,6 @@ from tests.unit.test_subagent_helpers import HELPER, REVIEWER, _define
 #: What two runs of one subagent say, a word at a time.
 SAID = ("a0 a1 a2 a3 a4", "b0 b1 b2 b3 b4")
 
-AWAITED = pytest.mark.parametrize("awaited", [False, True], ids=["stream", "astream"])
-
-
 class Slow(GenericFakeChatModel):
     """Streams a word at a time with a pause between, so two runs at once interleave."""
 
@@ -76,26 +73,19 @@ def _twice(cfg, session_dir) -> Any:
     )
 
 
-def _drained(kf: Kingfisher, asked: Request | Resume, *, awaited: bool) -> list[RunEvent]:
-    if not awaited:
-        return list(kf.stream(asked))
-
-    async def drain() -> list[RunEvent]:
-        return [event async for event in kf.astream(asked)]
-
-    return asyncio.run(drain())
+def _drained(kf: Kingfisher, asked: Request | Resume) -> list[RunEvent]:
+    return list(kf.stream(asked))
 
 
-def _side_by_side(cfg, session_dir, *, awaited: bool = False) -> list[RunEvent]:
+def _side_by_side(cfg, session_dir) -> list[RunEvent]:
     kf = Kingfisher(cfg, graph=_twice(cfg, session_dir), sessions=LocalSessions())
-    return _drained(kf, Request("go", session_id=session_dir.name), awaited=awaited)
+    return _drained(kf, Request("go", session_id=session_dir.name))
 
 
-@AWAITED
-def test_two_runs_of_one_subagent_are_told_apart(cfg, session_dir, awaited):
+def test_two_runs_of_one_subagent_are_told_apart(cfg, session_dir):
     """Every token of both runs said `reviewer`, and the CLI printed the two answers
     merged word by word: `b0a0  b1a1  a2b2`."""
-    events = _side_by_side(cfg, session_dir, awaited=awaited)
+    events = _side_by_side(cfg, session_dir)
 
     said: dict[tuple[str, ...], str] = {}
     for event in events:
@@ -108,10 +98,9 @@ def test_two_runs_of_one_subagent_are_told_apart(cfg, session_dir, awaited):
     assert sorted(said.values()) == sorted(SAID)
 
 
-@AWAITED
-def test_a_delegation_is_announced_before_anything_inside_it(cfg, session_dir, awaited):
+def test_a_delegation_is_announced_before_anything_inside_it(cfg, session_dir):
     """What lets the CLI decide to hold a run's output before any of it has printed."""
-    events = _side_by_side(cfg, session_dir, awaited=awaited)
+    events = _side_by_side(cfg, session_dir)
 
     starts = [e for e in events if e.kind == "delegation_start"]
     assert [(e.agent, e.delegations, e.text) for e in starts] == [
@@ -208,8 +197,7 @@ def _gated_beside_ungated(cfg, session_dir) -> Any:
     )
 
 
-@AWAITED
-def test_a_resumed_turn_names_the_delegation_it_re_enters(cfg, session_dir, awaited):
+def test_a_resumed_turn_names_the_delegation_it_re_enters(cfg, session_dir):
     """A resume repeats no `model_call`, and the CLI answers an approval in a new process:
     without the announcement nothing in the resumed stream would say what `p0` was."""
     kf = Kingfisher(cfg, graph=_gated_beside_ungated(cfg, session_dir), sessions=LocalSessions())
@@ -217,7 +205,7 @@ def test_a_resumed_turn_names_the_delegation_it_re_enters(cfg, session_dir, awai
     assert paused.pending, "scribe never paused"
 
     answers = tuple(Decision(call_id=one.call_id, action="approve") for one in paused.pending)
-    events = _drained(kf, Resume(session_id=paused.session_id, decisions=answers), awaited=awaited)
+    events = _drained(kf, Resume(session_id=paused.session_id, decisions=answers))
 
     starts = {e.delegations: e.agent for e in events if e.kind == "delegation_start"}
     assert starts[("p0",)] == "scribe"

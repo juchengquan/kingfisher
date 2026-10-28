@@ -6109,9 +6109,22 @@ async test's own catch lands.
 once four that did the same in other words were respelled; `narrowing` and `model_reply`
 wrote `refused if refused is not None` where the sync half wrote `refused or`, which agree
 because a `ToolMessage` is always true. The rest are in `DIFFERS` with the reason each must
-differ, the async turn loop among them, so a test reaching one keeps its async half. The
-comparison ignores hints, an awaited handler being typed differently, and requires an
-`await`, since a twin whose `await` was dropped is otherwise its sync method exactly.
+differ, the async turn loop among them, so a test about one keeps its async half: one in
+that method's own file, one driving `GuardedTool._arun`, which only a compiled subagent's
+tools and `eval`'s calls reach, or one whose check only an async turn can fail, as a
+plugin run on the event loop is. The comparison ignores hints, an awaited handler being
+typed differently, and requires an `await`, since a twin whose `await` was dropped is
+otherwise its sync method exactly.
+
+**About one, not reaching one.** Every async turn passes through the loop, the caching and
+attachments hooks and the `Sessions` defaults on its way, and *reaching* would have kept
+212 of the 257 halves the gate let go, nearly all for code they were never written about.
+The loop is held where it is the subject, in `test_steps.py`, and the defaults by the
+checks in `tests/checks/sessions.py`. The gate alone kept one half: its breaks turn a comparison round and never
+drop a branch, and a branch dropped from `GuardedTool._arun` is the bug
+`test_an_artifact_survives_the_wrapping` records. Of its 299 mutants, a test that stays
+caught 280, nothing caught 18, and a doomed half alone caught one, the `cached` check in
+`turn_instructions.py` turned round; 231 halves went and 27 stayed. *(2026-10-28.)*
 
 **Growth is held by a rule in `CLAUDE.md`, not by anything in CI.** 557 of the 608 commits
 since September were written with Claude, which reads that file on every task. The growth

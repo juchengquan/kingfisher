@@ -32,14 +32,7 @@ from tests.conftest import FakeToolCallingModel, paths_in, tools_dir
 TOOLS = ("read_file", "write_file", "edit_file", "delete", "ls", "glob", "grep", "execute")
 
 
-@pytest.fixture(params=["sync", "async"])
-def way(request):
-    """Both halves of `wrap_tool_call`: an async turn goes through the other one, and a
-    suite asking only the sync half cannot see a fix landing on one of them."""
-    return request.param
-
-
-def _answers(cfg, session_dir, way: str, *calls: tuple[str, dict[str, Any]]) -> dict[str, str]:
+def _answers(cfg, session_dir, *calls: tuple[str, dict[str, Any]]) -> dict[str, str]:
     """Each call's answer by `<n>:<tool>`, from one turn of a real graph."""
     model = FakeToolCallingModel(
         responses=[
@@ -63,8 +56,6 @@ def _answers(cfg, session_dir, way: str, *calls: tuple[str, dict[str, Any]]) -> 
     config: Any = {"recursion_limit": 8}
     out = (
         graph.invoke(sent, config=config)
-        if way == "sync"
-        else asyncio.run(graph.ainvoke(sent, config=config))
     )
     return {
         str(one.tool_call_id): str(one.content)
@@ -84,21 +75,21 @@ def _answers(cfg, session_dir, way: str, *calls: tuple[str, dict[str, Any]]) -> 
         "/scratchpad/nope.txt",
     ],
 )
-def test_a_miss_names_the_path_that_was_asked_for(cfg, session_dir, way, asked):
+def test_a_miss_names_the_path_that_was_asked_for(cfg, session_dir, asked):
     """The composite strips a route before calling the backend holding it, and that
     backend reports its own root -- so `/inputs/nope.txt` came back as
     `File '/nope.txt' not found`, naming a path in a different place, which a model is
     left to retry or to write. Every route, because the one that matters most is
     `/inputs`, where a caller's files are and where a miss is ordinary.
     """
-    said = _answers(cfg, session_dir, way, ("read_file", {"file_path": asked}))
+    said = _answers(cfg, session_dir, ("read_file", {"file_path": asked}))
 
     assert f"'{asked}'" in said["0:read_file"], said["0:read_file"]
 
 
-def test_a_listing_that_misses_names_the_path_that_was_asked_for(cfg, session_dir, way):
+def test_a_listing_that_misses_names_the_path_that_was_asked_for(cfg, session_dir):
     """`ls` says it in its own words, so the rule cannot be a rewrite of one message."""
-    said = _answers(cfg, session_dir, way, ("ls", {"path": "/inputs/nowhere"}))
+    said = _answers(cfg, session_dir, ("ls", {"path": "/inputs/nowhere"}))
 
     assert "'/inputs/nowhere'" in said["0:ls"], said["0:ls"]
 
@@ -107,17 +98,17 @@ def test_a_listing_that_misses_names_the_path_that_was_asked_for(cfg, session_di
     ("tool", "args"),
     [("ls", {}), ("glob", {"pattern": "*"}), ("grep", {"pattern": "x"})],
 )
-def test_a_search_given_a_host_path_is_told_the_path_to_use(cfg, session_dir, way, tool, args):
+def test_a_search_given_a_host_path_is_told_the_path_to_use(cfg, session_dir, tool, args):
     """Upstream's searches route without the hook `read_file` refuses a host path in, so
     `ls` of the session's own `outputs` folder answered `path_not_found` and `glob` "No
     files found", where the same path to `read_file` was told the one to use."""
-    said = _answers(cfg, session_dir, way, (tool, {**args, "path": f"{session_dir}/outputs"}))
+    said = _answers(cfg, session_dir, (tool, {**args, "path": f"{session_dir}/outputs"}))
 
     assert "is a host path" in said[f"0:{tool}"], said[f"0:{tool}"]
     assert "Use '/outputs' instead" in said[f"0:{tool}"], said[f"0:{tool}"]
 
 
-def test_a_failure_does_not_hand_over_the_host_path(cfg, session_dir, way):
+def test_a_failure_does_not_hand_over_the_host_path(cfg, session_dir):
     """An `OSError` carries the path it failed on, which is the host's: a refused write
     answered with `/private/.../sessions/<id>/scratchpad/...`, the spelling the file
     tools exist not to have and `reject_host_path` refuses when a model writes one.
@@ -129,7 +120,6 @@ def test_a_failure_does_not_hand_over_the_host_path(cfg, session_dir, way):
         said = _answers(
             cfg,
             session_dir,
-            way,
             ("write_file", {"file_path": "/scratchpad/shut/x.txt", "content": "hi"}),
         )
     finally:
@@ -141,14 +131,14 @@ def test_a_failure_does_not_hand_over_the_host_path(cfg, session_dir, way):
     assert answer.count("'/scratchpad/shut/x.txt'") == 2, answer
 
 
-def test_a_failure_about_a_folder_above_the_path_names_it_as_asked(cfg, session_dir, way):
+def test_a_failure_about_a_folder_above_the_path_names_it_as_asked(cfg, session_dir):
     """A file standing where the path wants a folder fails on that parent, and the
     `OSError` handed over the host's `.../sessions/<id>/outputs/a.txt`: the asked path is
     not its tail, nor it the asked path's, so no rule rewrote it."""
     (session_dir / "outputs" / "a.txt").write_text("x", encoding="utf-8")
 
     said = _answers(
-        cfg, session_dir, way, ("write_file", {"file_path": "/outputs/a.txt/b.txt", "content": "y"})
+        cfg, session_dir, ("write_file", {"file_path": "/outputs/a.txt/b.txt", "content": "y"})
     )
 
     answer = said["0:write_file"]
@@ -156,7 +146,7 @@ def test_a_failure_about_a_folder_above_the_path_names_it_as_asked(cfg, session_
     assert "'/outputs/a.txt'" in answer, answer
 
 
-def test_an_edit_that_misses_names_the_string_it_was_given(cfg, session_dir, way):
+def test_an_edit_that_misses_names_the_string_it_was_given(cfg, session_dir):
     """deepagents quotes an `old_string` it did not find, and one that is a tail of the
     file's path was rewritten into the path: the model was told its file was not found,
     not the string it sent."""
@@ -165,7 +155,6 @@ def test_an_edit_that_misses_names_the_string_it_was_given(cfg, session_dir, way
     said = _answers(
         cfg,
         session_dir,
-        way,
         (
             "edit_file",
             {"file_path": "/outputs/conf.sh", "old_string": "/conf.sh", "new_string": "z"},
@@ -187,7 +176,7 @@ def test_only_an_argument_naming_a_path_is_a_spelling_to_restore():
     assert said == "Error: [Errno 13] Permission denied: '/outputs/a/b.txt'"
 
 
-def test_a_file_whose_contents_name_a_path_comes_back_whole(cfg, session_dir, way):
+def test_a_file_whose_contents_name_a_path_comes_back_whole(cfg, session_dir):
     """The reason only a failure is rewritten: a file read whole is content, and a file
     saying `/notes.txt` is not a tool talking about a path.
     """
@@ -196,12 +185,12 @@ def test_a_file_whose_contents_name_a_path_comes_back_whole(cfg, session_dir, wa
         "see '/notes.txt' for the rest\n", encoding="utf-8"
     )
 
-    said = _answers(cfg, session_dir, way, ("read_file", {"file_path": "/inputs/notes.txt"}))
+    said = _answers(cfg, session_dir, ("read_file", {"file_path": "/inputs/notes.txt"}))
 
     assert "'/notes.txt'" in said["0:read_file"], said["0:read_file"]
 
 
-def test_the_shell_keeps_its_own_spelling(cfg, session_dir, way):
+def test_the_shell_keeps_its_own_spelling(cfg, session_dir):
     """The shell's paths are the host's by design, so a command's own spelling is the one
     that would work again, and the model is handed what the shell said.
 
@@ -211,7 +200,7 @@ def test_the_shell_keeps_its_own_spelling(cfg, session_dir, way):
     case the same on every machine.
     """
     said = _answers(
-        cfg, session_dir, way, ("execute", {"command": "/bin/cat /scratchpad/missing.py"})
+        cfg, session_dir, ("execute", {"command": "/bin/cat /scratchpad/missing.py"})
     )
 
     assert "/scratchpad/missing.py" in said["0:execute"], said["0:execute"]
@@ -270,7 +259,7 @@ def test_every_refusal_that_offers_somewhere_to_write_ends_with_the_one_sentence
 
 
 @pytest.mark.parametrize("scope", DEFAULT_LAYOUT.denied_scopes())
-def test_a_refused_write_says_where_a_write_may_go(cfg, session_dir, way, scope):
+def test_a_refused_write_says_where_a_write_may_go(cfg, session_dir, scope):
     """deepagents answers a deny rule with the code and the path and nothing else, while
     kingfisher's own refusal of a path *outside* the session names what to write instead
     -- so the ordinary case, a path inside the session that is kept, was the one taught
@@ -283,7 +272,7 @@ def test_a_refused_write_says_where_a_write_may_go(cfg, session_dir, way, scope)
     """
     asked = scope.replace("**", "new.txt")
 
-    said = _answers(cfg, session_dir, way, ("write_file", {"file_path": asked, "content": "x"}))
+    said = _answers(cfg, session_dir, ("write_file", {"file_path": asked, "content": "x"}))
 
     answer = said["0:write_file"]
     assert f"on {asked}" in answer, answer
@@ -292,14 +281,14 @@ def test_a_refused_write_says_where_a_write_may_go(cfg, session_dir, way, scope)
     assert "`/scratchpad/<name>`" in answer, answer
 
 
-def test_a_refused_delete_says_it_too(cfg, session_dir, way):
+def test_a_refused_delete_says_it_too(cfg, session_dir):
     """`delete` is refused in its own words -- alone of the four it names the rule that
     refused it -- so the sentence cannot be a rewrite of one tool's message.
     """
     (session_dir / "inputs").mkdir(exist_ok=True)
     (session_dir / "inputs" / "given.txt").write_text("data", encoding="utf-8")
 
-    said = _answers(cfg, session_dir, way, ("delete", {"file_path": "/inputs/given.txt"}))
+    said = _answers(cfg, session_dir, ("delete", {"file_path": "/inputs/given.txt"}))
 
     answer = said["0:delete"]
     assert "matches deny rule(s)" in answer, answer
@@ -321,11 +310,11 @@ def test_a_refused_delete_says_it_too(cfg, session_dir, way):
         ("read_file", {"file_path": "/inputs/nope.txt"}),
     ],
 )
-def test_nothing_but_a_refused_write_is_told_where_to_write(cfg, session_dir, way, tool, args):
+def test_nothing_but_a_refused_write_is_told_where_to_write(cfg, session_dir, tool, args):
     """The controls, one per message the rule must leave alone: a rule that appended the
     sentence to every error would pass the ones above.
     """
-    said = _answers(cfg, session_dir, way, (tool, args))
+    said = _answers(cfg, session_dir, (tool, args))
 
     answer = said[f"0:{tool}"]
     assert "not yours to write" not in answer, answer
@@ -348,7 +337,7 @@ TOOLS = [opener]
 '''
 
 
-def test_an_offered_tools_failure_names_the_path_the_model_wrote(cfg, session_dir, way):
+def test_an_offered_tools_failure_names_the_path_the_model_wrote(cfg, session_dir):
     """`translated` makes a tool's `path` real on purpose, so the tool's own `OSError`
     carries the host spelling -- the one case where the leak is the common one rather
     than an edge, since every offered tool that opens a file does this.
@@ -374,11 +363,7 @@ def test_an_offered_tools_failure_names_the_path_the_model_wrote(cfg, session_di
     ).graph
     sent = {"messages": [{"role": "user", "content": "go"}]}
     config: Any = {"recursion_limit": 8}
-    out = (
-        graph.invoke(sent, config=config)
-        if way == "sync"
-        else asyncio.run(graph.ainvoke(sent, config=config))
-    )
+    out = graph.invoke(sent, config=config)
 
     (answer,) = [one for one in out["messages"] if isinstance(one, ToolMessage)]
     assert str(session_dir) not in str(answer.content), answer.content

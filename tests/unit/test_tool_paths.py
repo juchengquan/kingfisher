@@ -91,28 +91,21 @@ def test_another_session_cannot_be_named_at_all(bridge, session):
     assert "sessions/other" not in str(Path(args["path"]).relative_to(session).parts[0])
 
 
-def _refused(bridge, way: str, request) -> Any:
-    """The refusal this middleware answers with, through whichever hook `way` names.
+def _refused(bridge, request) -> Any:
+    """The refusal this middleware answers with.
 
-    Both hooks catch and both call `_refusal`, and the async one was reached by no test:
-    making it re-raise instead of correcting left the suite green, while the same change
-    to the sync hook reddened seventeen.
+    `awrap_tool_call` is a copy of this hook, which `test_async_twins.py` holds: reached
+    by no test, making it re-raise instead of correcting once left the suite green.
     """
-    if way == "sync":
-        return bridge.wrap_tool_call(request, lambda r: None)
-
-    async def nothing(_: Any) -> None:
-        return None
-
-    return asyncio.run(bridge.awrap_tool_call(request, nothing))
+    return bridge.wrap_tool_call(request, lambda r: None)
 
 
-def test_climbing_out_is_refused_with_the_rule(bridge, way):
+def test_climbing_out_is_refused_with_the_rule(bridge):
     """`..` cannot be resolved into something safe, so it is refused rather than
     silently rebased -- and the error names what to use instead, because a model that
     is told the rule can correct itself mid-turn.
     """
-    answer = _refused(bridge, way, a_call(path="../other/secret.txt"))
+    answer = _refused(bridge, a_call(path="../other/secret.txt"))
 
     assert answer.status == "error"
     assert "/inputs/<name>" in answer.content
@@ -450,7 +443,7 @@ def _through(at: str) -> str:
 
 
 @pytest.mark.parametrize("planted", PLANTED)
-def test_a_link_inside_the_session_is_refused_not_followed(session, bridge, way, planted):
+def test_a_link_inside_the_session_is_refused_not_followed(session, bridge, planted):
     """A tool was handed a link's target once it stayed in the session, so a path rule
     judging `/scratchpad/link` let a tool rewrite `.harness/agent.yaml` behind it."""
     at, target = PLANTED[planted]
@@ -458,7 +451,7 @@ def test_a_link_inside_the_session_is_refused_not_followed(session, bridge, way,
     (session / target).touch()
     (session / at).symlink_to(session / target)
 
-    answer = _refused(bridge, way, a_call(path=_through(at)))
+    answer = _refused(bridge, a_call(path=_through(at)))
 
     assert answer is not None and answer.status == "error"
     assert "runs through a link" in answer.content

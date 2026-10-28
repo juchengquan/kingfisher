@@ -105,14 +105,14 @@ def test_two_sessions_keep_separate_conversations(scripted):
     assert "question two" in two and "question one" not in two, two
 
 
-def test_deleting_a_session_takes_its_conversation_with_it(cfg, way):
+def test_deleting_a_session_takes_its_conversation_with_it(cfg):
     """No shared checkpointer involved, which is the point."""
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
     result = kf.run(Request("go"))
     directory = _session_dir(cfg, result.session_id)
     assert (directory / TRANSCRIPT).is_file()
 
-    assert Through(kf, way).delete(result.session_id) is None
+    assert Through(kf).delete(result.session_id) is None
 
     assert not directory.exists()
 

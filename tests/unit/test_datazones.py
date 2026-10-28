@@ -576,13 +576,13 @@ def _turn(kf: Kingfisher, session_id: str, datazone: str | None, extras: tuple[s
     return kf.run(request, source_ids=("A",), datazone=datazone, extra_datazones=extras)
 
 
-def test_a_session_a_zoned_turn_ran_in_is_reached_only_from_that_datazone(turns, way):
+def test_a_session_a_zoned_turn_ran_in_is_reached_only_from_that_datazone(turns):
     """A finance turn left its tools' results in a session that any caller of its agent
     could read or carry on, in no datazone or in another.
     """
     kf = Kingfisher(turns, sessions=LocalSessions())
     _turn(kf, "s", "finance")
-    reads = Through(kf, way)
+    reads = Through(kf)
 
     assert reads.session("s", source_ids=("A",), datazone="finance") is not None
     assert reads.session("s", source_ids=("A",)) is None
@@ -592,14 +592,14 @@ def test_a_session_a_zoned_turn_ran_in_is_reached_only_from_that_datazone(turns,
         _turn(kf, "s", "hr")
 
 
-def test_a_session_is_reached_only_from_exactly_the_datazones_its_turn_ran_in(turns, way):
+def test_a_session_is_reached_only_from_exactly_the_datazones_its_turn_ran_in(turns):
     """Not from fewer: `hr` alone would read what `payroll` returned to `hr` with
     `finance`. Nor from more: a caller in a zone below `hr` holds `hr` and `finance`
     besides its own, and would leave what its own zone returned for `hr` to read.
     """
     kf = Kingfisher(turns, sessions=LocalSessions())
     _turn(kf, "s", "hr", ("finance",))
-    reads = Through(kf, way)
+    reads = Through(kf)
 
     def session(datazone, *extras):
         return reads.session("s", source_ids=("A",), datazone=datazone, extra_datazones=extras)
@@ -685,7 +685,7 @@ def _pinned_before_the_reader_tightened(cfg, session_id: str) -> None:
     pin.write_text(stale, encoding="utf-8")
 
 
-def test_a_pin_the_reader_now_refuses_reaches_no_scoped_caller(turns, way, caplog):
+def test_a_pin_the_reader_now_refuses_reaches_no_scoped_caller(turns, caplog):
     """One such pin raised out of every scoped listing, so no caller got one, and quoted
     its lock to a caller asking for that session by id, which a leaked id must not do.
     """
@@ -694,19 +694,15 @@ def test_a_pin_the_reader_now_refuses_reaches_no_scoped_caller(turns, way, caplo
     _turn(kf, "s2", None)
     _pinned_before_the_reader_tightened(turns, "s1")
 
-    listed = (
-        asyncio.run(kf.asessions(source_ids=("A",)))
-        if way == "async"
-        else kf.sessions(source_ids=("A",))
-    )
+    listed = kf.sessions(source_ids=("A",))
     assert [one.id for one in listed] == ["s2"]
-    assert Through(kf, way).session("s1", source_ids=("A",)) is None
+    assert Through(kf).session("s1", source_ids=("A",)) is None
     with pytest.raises(UnknownSessionError):
         _turn(kf, "s1", None)
     assert "session s1: its pinned agent no longer reads" in caplog.text
     # The operator still sees it, so it can be cleaned up.
     assert {one.id for one in kf.sessions()} == {"s1", "s2"}
-    assert Through(kf, way).session("s1", source_ids=UNSCOPED) is not None
+    assert Through(kf).session("s1", source_ids=UNSCOPED) is not None
 
 
 def test_the_first_zoned_turn_narrows_a_session_that_had_none(turns):
@@ -1222,13 +1218,13 @@ class _Unlisted(LocalSessions):
         return tuple(row for row in super().sessions(cfg) if row[0] not in missing)
 
 
-def test_a_session_the_listing_missed_is_not_made_anew_for_another_datazone(turns, way):
+def test_a_session_the_listing_missed_is_not_made_anew_for_another_datazone(turns):
     """`create=True` took an id the listing lacked for a session nobody had made, and
     handed back a finance session to an hr caller without reading its pins."""
     sessions = _Unlisted()
     kf = Kingfisher(turns, sessions=sessions)
     _turn(kf, "s", "finance")
-    reads = Through(kf, way)
+    reads = Through(kf)
 
     sessions.missing = frozenset({"s"})
     assert reads.session("s", source_ids=("A",), datazone="hr", create=True) is None

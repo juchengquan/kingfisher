@@ -148,10 +148,10 @@ def _produced(
     return Kingfisher(cfg, sessions=backends or LocalSessions())
 
 
-def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg, way):
+def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg):
     kf = _produced(cfg, "outputs/nested/out.csv", "a,b\n")
 
-    assert Through(kf, way).artifact("s", "outputs/nested/out.csv") == b"a,b\n"
+    assert Through(kf).artifact("s", "outputs/nested/out.csv") == b"a,b\n"
 
 
 @pytest.mark.parametrize(
@@ -165,7 +165,7 @@ def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg, way):
         "outputs",
     ],
 )
-def test_only_what_a_turn_produced_can_be_fetched(cfg, name, way):
+def test_only_what_a_turn_produced_can_be_fetched(cfg, name):
     """The backend reaches `/.harness` and `/inputs` too. A caller entitled to a report is
     not thereby entitled to the pinned agent or someone's inputs.
     """
@@ -173,7 +173,7 @@ def test_only_what_a_turn_produced_can_be_fetched(cfg, name, way):
     (cfg.workspace / "sessions" / "s" / HARNESS / "agent.yaml").write_text("secret")
 
     with pytest.raises(ArtifactError):
-        Through(kf, way).artifact("s", name)
+        Through(kf).artifact("s", name)
 
 
 @pytest.mark.parametrize(
@@ -196,21 +196,21 @@ def test_a_refused_name_never_reaches_the_backend(name):
     assert asked == []
 
 
-def test_a_name_that_is_not_there_is_refused_by_name(cfg, way):
+def test_a_name_that_is_not_there_is_refused_by_name(cfg):
     kf = _produced(cfg)
 
     with pytest.raises(ArtifactError, match=r"outputs/missing\.txt"):
-        Through(kf, way).artifact("s", "outputs/missing.txt")
+        Through(kf).artifact("s", "outputs/missing.txt")
 
 
-def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg, way):
+def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg):
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(UnknownSessionError):
-        Through(kf, way).artifact("nobody", "outputs/out.txt")
+        Through(kf).artifact("nobody", "outputs/out.txt")
 
 
-def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg, way):
+def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg):
     """Checked as reading a session is. Holding only the id of a session pinned to an
     agent you cannot reach buys nothing, including its outputs.
     """
@@ -220,9 +220,9 @@ def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg, way):
     pin(kf, "s", "only_a")
 
     # The control beside the escape: the same call, by a caller who does reach it.
-    assert Through(kf, way).artifact("s", "outputs/out.txt", source_ids=("A",)) == b"result"
+    assert Through(kf).artifact("s", "outputs/out.txt", source_ids=("A",)) == b"result"
     with pytest.raises(UnknownSessionError):
-        Through(kf, way).artifact("s", "outputs/out.txt", source_ids=("B",))
+        Through(kf).artifact("s", "outputs/out.txt", source_ids=("B",))
 
 
 # -- reading one -------------------------------------------------------------
@@ -244,7 +244,7 @@ class Counting(LocalSessions):
     [lambda reads: reads.artifact("s", "outputs/out.txt"), lambda reads: reads.pending("s")],
     ids=["artifact", "pending"],
 )
-def test_reading_a_session_opens_its_backend_once(cfg, read, way):
+def test_reading_a_session_opens_its_backend_once(cfg, read):
     """Both opened the session's backend once to decide whether the caller reached it
     and again to read through, so remote sessions handed out two sandboxes
     per query.
@@ -252,23 +252,23 @@ def test_reading_a_session_opens_its_backend_once(cfg, read, way):
     counting = Counting()
     kf = _produced(cfg, backends=counting)
 
-    read(Through(kf, way))
+    read(Through(kf))
 
     assert counting.asked == ["s"]
 
 
-def test_asking_whether_a_session_exists_opens_nothing_where_nothing_narrows(cfg, way):
+def test_asking_whether_a_session_exists_opens_nothing_where_nothing_narrows(cfg):
     """Opened to read a pin no check would consult, remote sessions handed out
     a sandbox to say that a session exists.
     """
     counting = Counting()
     kf = _produced(cfg, backends=counting)
 
-    assert Through(kf, way).session("s") is not None
+    assert Through(kf).session("s") is not None
     assert counting.asked == []
 
 
-def test_a_session_is_opened_once_where_its_pinned_agent_decides(cfg, way):
+def test_a_session_is_opened_once_where_its_pinned_agent_decides(cfg):
     """The control beside the one above: under a policy the pin decides, and reading it
     takes the session's backend -- once.
     """
@@ -278,7 +278,7 @@ def test_a_session_is_opened_once_where_its_pinned_agent_decides(cfg, way):
     kf = _produced(policied, backends=counting)
     pin(kf, "s", "only_a")
 
-    assert Through(kf, way).session("s", source_ids=("A",)) is not None
+    assert Through(kf).session("s", source_ids=("A",)) is not None
     assert counting.asked == ["s"]
 
 

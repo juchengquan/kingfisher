@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 import platform
 from collections.abc import Callable, Iterator
@@ -255,27 +254,24 @@ def start(cfg, session_id: str) -> str:
 
 @pytest.fixture(params=["sync", "async"])
 def way(request) -> str:
-    """Which way into a session a test reads through: the sync methods or their twins."""
+    """Both halves, for a test about a method `DIFFERS` in `test_async_twins.py` excuses
+    from being a copy: every other async method is held by its sync half's tests."""
     return request.param
 
 
 class Through:
-    """A session's methods, on the `Session` `kf` hands out, through the way `way` names.
+    """A session's methods, on the `Session` `kf` hands out.
 
-    Shorthand for the two calls a test would otherwise write each time, and both ways
-    with one spelling. A session the caller is handed no `Session` for answers as a wrong
-    id does, with `UnknownSessionError`. `delete` and `files` act for nobody in
-    particular, as an operator's housekeeping does, and `files` makes a session that is
-    not there yet.
+    Shorthand for the two calls a test would otherwise write each time. A session the
+    caller is handed no `Session` for answers as a wrong id does, with
+    `UnknownSessionError`. `delete` and `files` act for nobody in particular, as an
+    operator's housekeeping does, and `files` makes a session that is not there yet.
     """
 
-    def __init__(self, kf, way: str) -> None:
+    def __init__(self, kf) -> None:
         self._kf = kf
-        self._awaited = way == "async"
 
     def session(self, session_id: str, **kwargs):
-        if self._awaited:
-            return asyncio.run(self._kf.asession(session_id, **kwargs))
         return self._kf.session(session_id, **kwargs)
 
     def _on(self, session_id: str, method: str, *args, **session_kwargs):
@@ -284,8 +280,6 @@ class Through:
         handle = self.session(session_id, **session_kwargs)
         if handle is None:
             raise unknown_session(session_id)
-        if self._awaited:
-            return asyncio.run(getattr(handle, f"a{method}")(*args))
         return getattr(handle, method)(*args)
 
     def pending(self, session_id: str, *, source_ids=None):
@@ -303,7 +297,7 @@ class Through:
         handle = self.session(session_id, source_ids=UNSCOPED)
         if handle is None:
             return None
-        return asyncio.run(handle.adelete()) if self._awaited else handle.delete()
+        return handle.delete()
 
     def files(self, session_id: str):
         from kingfisher.core.access.source_ids import UNSCOPED

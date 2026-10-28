@@ -397,7 +397,7 @@ def test_a_converted_failure_still_reaches_the_run_log(cfg, session_dir):
 # caught every error raised below it, and no test of a single class could see that.
 
 
-def _through(stack, call: dict, tool, way: str):
+def _through(stack, call: dict, tool, way: str = "sync"):
     """What the model reads back for `call`, through each tool hook of `stack` in the
     order langchain composes them, the first outermost."""
     from functools import partial
@@ -482,13 +482,13 @@ def _raising(exc: BaseException):
     return probe
 
 
-def test_a_built_in_refusing_a_host_path_reads_as_written_beside_an_offered_tool(stack, way):
+def test_a_built_in_refusing_a_host_path_reads_as_written_beside_an_offered_tool(stack):
     """On a graph holding an offered tool, the translator caught `read_file`'s refusal
     first and appended its own rule, after a doubled full stop."""
     refused = _raising(HostPathError("'/Users/me/x.csv' is a host path. Use '/inputs/x.csv'."))
     call = {"name": "read_file", "args": {"note": "x"}, "id": "c1"}
 
-    answer = _through(stack, call, refused, way)
+    answer = _through(stack, call, refused)
 
     assert answer.content == "Error: '/Users/me/x.csv' is a host path. Use '/inputs/x.csv'."
     assert answer.status == "error"
@@ -529,7 +529,7 @@ def _stack_around(cfg, session_dir, paths, inner):
 
 
 def test_a_deployments_middleware_that_falls_over_ends_the_turn_on_either_kind_of_tool(
-    cfg, session_dir, paths, way
+    cfg, session_dir, paths
 ):
     """It ended the turn on a built-in and came back as a failed result on an offered
     tool -- naming the tool, so a deployment's own fault read as the tool's and the turn
@@ -542,11 +542,11 @@ def test_a_deployments_middleware_that_falls_over_ends_the_turn_on_either_kind_o
 
     for name in ("probe", "read_file"):
         with pytest.raises(RuntimeError, match="fell over"):
-            _through(stack, {"name": name, "args": {"note": "x"}, "id": "c1"}, probe, way)
+            _through(stack, {"name": name, "args": {"note": "x"}, "id": "c1"}, probe)
 
 
 def test_the_tools_own_failure_is_still_answered_for_the_tool_under_that_middleware(
-    cfg, session_dir, paths, way
+    cfg, session_dir, paths
 ):
     """The control for the rule above: with a deployment's middleware installed and the
     tool itself failing, the model still reads a failed result rather than losing the turn
@@ -560,7 +560,7 @@ def test_the_tools_own_failure_is_still_answered_for_the_tool_under_that_middlew
     stack = _stack_around(cfg, session_dir, paths, [_Quiet()])
     probe = _raising(FileNotFoundError(MISSING))
 
-    answer = _through(stack, {"name": "probe", "args": {"note": "x"}, "id": "c1"}, probe, way)
+    answer = _through(stack, {"name": "probe", "args": {"note": "x"}, "id": "c1"}, probe)
 
     assert answer.status == "error"
     assert MISSING in answer.content
@@ -597,7 +597,7 @@ def test_an_offered_tool_fails_alike_through_the_stack_and_on_a_compiled_subagen
     assert middleware.status == "error"
 
 
-def test_a_split_grep_whose_path_is_refused_fails_once(stack, way):
+def test_a_split_grep_whose_path_is_refused_fails_once(stack):
     """Moved inside `BuiltinToolsMiddleware`, the guard would answer each part of `alpha|beta`
     apart, and the model would read one refusal under "matches for `alpha`" and another
     under "matches for `beta`"."""
@@ -613,7 +613,7 @@ def test_a_split_grep_whose_path_is_refused_fails_once(stack, way):
     searched = {"pattern": "alpha|beta", "path": "/Users/me/notes"}
     call = {"name": "grep", "args": searched, "id": "c1"}
 
-    answer = _through(stack, call, grep, way)
+    answer = _through(stack, call, grep)
 
     assert answer.content == f"Error: {said}"
     assert answer.status == "error"

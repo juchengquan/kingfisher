@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import Any
 
@@ -77,11 +76,11 @@ def reading(scripted, monkeypatch):
     return scripted, offered
 
 
-def _turn(cfg: Any, *script: AIMessage, way: str = "sync") -> None:
+def _turn(cfg: Any, *script: AIMessage) -> None:
     Scripted.script.extend(script)
     service = Kingfisher(cfg, sessions=LocalSessions())
     request = Request("go", agent="only", session_id="s")
-    asyncio.run(service.arun(request)) if way == "async" else service.run(request)
+    service.run(request)
 
 
 def _read(at: str, **args: Any) -> AIMessage:
@@ -95,11 +94,11 @@ def _answer(at: str) -> str:
     return said
 
 
-def test_a_read_naming_no_limit_reads_a_thousand_lines(reading, way):
+def test_a_read_naming_no_limit_reads_a_thousand_lines(reading):
     """At deepagents' 100 lines, paging through files was a third of every call a turn made."""
     cfg, _ = reading
 
-    _turn(cfg, _read("r1"), AIMessage("done"), way=way)
+    _turn(cfg, _read("r1"), AIMessage("done"))
 
     said = _answer("r1")
     assert "row 0999" in said
@@ -147,7 +146,7 @@ def test_every_graph_is_told_to_read_a_file_whole_and_shown_the_default(reading,
         ("deck.pptx", ("a .pptx file", ".pptx files")),
     ],
 )
-def test_read_file_is_not_run_on_a_file_no_model_here_takes(reading, way, name, said):
+def test_read_file_is_not_run_on_a_file_no_model_here_takes(reading, name, said):
     """Read, audio and video reach the model as one string of base64 millions of
     characters long, and a `.pptx` as a block the summarizer counts and the request drops.
     """
@@ -156,7 +155,7 @@ def test_read_file_is_not_run_on_a_file_no_model_here_takes(reading, way, name, 
     outputs = cfg.workspace / "sessions" / "s" / "outputs"
     (outputs / name).write_bytes(os.urandom(64 * 1024))
 
-    _turn(cfg, _read("r1", file_path=f"/outputs/{name}"), AIMessage("done"), way=way)
+    _turn(cfg, _read("r1", file_path=f"/outputs/{name}"), AIMessage("done"))
 
     (answer,) = [
         one
@@ -176,11 +175,11 @@ def _grep(at: str, pattern: str) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": "grep", "args": args, "id": at}])
 
 
-def test_a_pattern_joining_strings_with_a_bar_searches_for_each(reading, way):
+def test_a_pattern_joining_strings_with_a_bar_searches_for_each(reading):
     """`grep` is literal, and 63 of 97 searches that found nothing were `a|b` written anyway."""
     cfg, _ = reading
 
-    _turn(cfg, _grep("g1", "alpha|beta"), AIMessage("done"), way=way)
+    _turn(cfg, _grep("g1", "alpha|beta"), AIMessage("done"))
 
     said = _answer("g1")
     assert said.startswith("Searched `alpha|beta` as separate literal parts.")

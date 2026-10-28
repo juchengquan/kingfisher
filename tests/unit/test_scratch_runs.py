@@ -121,7 +121,7 @@ def _calls(name: str, **args: Any) -> AIMessage:
 
 
 def _results(
-    cfg, session_dir, *responses: AIMessage, way: str = "sync", **keywords: Any
+    cfg, session_dir, *responses: AIMessage, **keywords: Any
 ) -> dict[str, str]:
     """Each tool's last result in one turn, subagents' included, by tool name."""
     built = build_agent(
@@ -145,16 +145,8 @@ def _results(
         "subgraphs": True,
         "context": built.context,
     }
-    if way == "sync":
-        for _, chunk in built.graph.stream(start, **options):
-            keep(chunk)
-        return found
-
-    async def drained() -> None:
-        async for _, chunk in built.graph.astream(start, **options):
-            keep(chunk)
-
-    asyncio.run(drained())
+    for _, chunk in built.graph.stream(start, **options):
+        keep(chunk)
     return found
 
 
@@ -266,10 +258,11 @@ def test_a_compiled_subagents_tool_is_refused(cfg, session_dir):
     assert result.content == NOT_GRANTED
 
 
-def test_a_run_kept_past_its_call_runs_nothing(cfg, session_dir, way):
+def test_a_run_kept_past_its_call_runs_nothing(cfg, session_dir):
     """A tool that keeps what it was handed would otherwise hold the shell for every call
-    after, under another agent's grant or in another session's turn. Both ways, since an
-    awaited turn closes the runner in `awrap_tool_call`, which nothing ran."""
+    after, under another agent's grant or in another session's turn. An awaited turn
+    closes the runner in `awrap_tool_call`, which once nothing ran; it is a copy of the
+    sync hook now, which `test_async_twins.py` holds."""
     _a_tool(cfg)
 
     found = _results(
@@ -278,8 +271,7 @@ def test_a_run_kept_past_its_call_runs_nothing(cfg, session_dir, way):
         _calls("shout", text="hi"),
         _calls("shout_again", text="later"),
         AIMessage(content="done"),
-        way=way,
-    )
+        )
 
     assert found["shout"] == "HI"
     assert "has ended" in found["shout_again"]

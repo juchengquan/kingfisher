@@ -3,7 +3,6 @@ held to the same budget."""
 
 from __future__ import annotations
 
-import asyncio
 import re
 from dataclasses import replace
 from typing import Any
@@ -32,7 +31,7 @@ def busy(scripted):
     return scripted
 
 
-def _turn(cfg: Any, calls: int, way: str = "sync", middlewares: Any = None) -> Any:
+def _turn(cfg: Any, calls: int, middlewares: Any = None) -> Any:
     """A turn whose model lists the session `calls` times, then answers."""
     Scripted.script.extend(
         AIMessage(content="", tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": f"c{n}"}])
@@ -41,7 +40,7 @@ def _turn(cfg: Any, calls: int, way: str = "sync", middlewares: Any = None) -> A
     Scripted.script.append(AIMessage("done"))
     service = Kingfisher(cfg, sessions=LocalSessions(), middlewares=middlewares or {})
     request = Request("go", agent="only", session_id="s")
-    return asyncio.run(service.arun(request)) if way == "async" else service.run(request)
+    return service.run(request)
 
 
 def _told() -> list[int | str | None]:
@@ -55,11 +54,11 @@ def _told() -> list[int | str | None]:
     return said
 
 
-def test_a_turn_past_four_fifths_of_its_steps_is_told_on_every_call_after(busy, way):
+def test_a_turn_past_four_fifths_of_its_steps_is_told_on_every_call_after(busy):
     """A turn ran to its limit and stopped mid-work, never told it was close."""
     cfg = replace(busy, recursion_limit=30)
 
-    result = _turn(cfg, calls=20, way=way)
+    result = _turn(cfg, calls=20)
 
     told = _told()
     assert result.stop_reason == "max_steps"
@@ -103,13 +102,13 @@ STACKS = {
         ("both", [None] * 9 + [2, 1, "last"]),
     ],
 )
-def test_a_hook_beside_the_model_call_is_counted_in_what_is_left(busy, hooks, told, way):
+def test_a_hook_beside_the_model_call_is_counted_in_what_is_left(busy, hooks, told):
     """Three steps a call were assumed whatever the stack, so a turn with an approval gate
     was told it had a call left on its last one."""
     an_agent(busy, **EVERY_TOOL, **STACKS[hooks])
     cfg = replace(busy, recursion_limit=60)
 
-    result = _turn(cfg, calls=30, way=way, middlewares={"hooked": Hooked})
+    result = _turn(cfg, calls=30, middlewares={"hooked": Hooked})
 
     assert result.stop_reason == "max_steps"
     assert _told() == told, _told()
@@ -147,11 +146,11 @@ def consulting(busy):
     return busy
 
 
-def _run(cfg: Any, *script: AIMessage, way: str = "sync", middlewares: Any = None) -> Any:
+def _run(cfg: Any, *script: AIMessage, middlewares: Any = None) -> Any:
     Scripted.script.extend(script)
     service = Kingfisher(cfg, sessions=LocalSessions(), middlewares=middlewares or {})
     request = Request("go", agent="only", session_id="s")
-    return asyncio.run(service.arun(request)) if way == "async" else service.run(request)
+    return service.run(request)
 
 
 def _ask(who: str) -> AIMessage:
@@ -174,11 +173,11 @@ def _handed_back() -> str:
 
 
 @pytest.mark.parametrize("who", ["helper", "general-purpose"])
-def test_a_subagent_at_the_end_of_its_budget_hands_back_what_it_has(consulting, who, way):
+def test_a_subagent_at_the_end_of_its_budget_hands_back_what_it_has(consulting, who):
     """Not bound by the turn's limit, a subagent made 41 calls inside a 30-step turn."""
     cfg = replace(consulting, recursion_limit=30)
 
-    result = _run(cfg, _ask(who), *(_listing(n) for n in range(10)), AIMessage("done"), way=way)
+    result = _run(cfg, _ask(who), *(_listing(n) for n in range(10)), AIMessage("done"))
 
     # The agent's call, the subagent's ten, the agent's answer.
     assert _told() == [None] + [None] * 8 + [1, "last"] + [None]
@@ -213,14 +212,14 @@ def _windowed(cfg: Any) -> Any:
     return replace(cfg, models=replace(cfg.models, models=models))
 
 
-def test_a_subagent_summarised_partway_is_still_held_to_its_budget(consulting, way):
+def test_a_subagent_summarised_partway_is_still_held_to_its_budget(consulting):
     """After a summary the count restarted, so a subagent was never warned or stopped: 41
     calls on a 10-call budget."""
     cfg = _windowed(replace(consulting, recursion_limit=30))
     padded = (_listing(n, " " + "x" * 6_000) for n in range(10))
 
     # Two answers, so a subagent that runs past its budget fails the asserts, not the script.
-    _run(cfg, _ask("helper"), *padded, AIMessage("done"), AIMessage("done"), way=way)
+    _run(cfg, _ask("helper"), *padded, AIMessage("done"), AIMessage("done"))
 
     # First: a subagent never summarised before its warning passes whatever the count reads.
     first_warned = Scripted.heard[9]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -668,29 +667,21 @@ def test_two_sessions_send_the_agent_one_system_message(scripted, backends, shar
     assert (first == second) is shared
 
 
-def _asked(way: str, request: Any) -> Any:
-    """The request `BuiltinToolsMiddleware` passes on, through whichever model hook `way` names.
+def _asked(request: Any) -> Any:
+    """The request `BuiltinToolsMiddleware` passes on.
 
-    Both ways, because the hook is two methods and the async one was reached by nothing:
-    making `awrap_model_call` pass the request on untold left the whole suite green,
-    while the same change to its sync twin reddened the rules above.
+    `awrap_model_call` is a copy of this hook, which `test_async_twins.py` holds: reached
+    by nothing, making it pass the request on untold once left the whole suite green.
     """
     asked: list[Any] = []
     middleware = BuiltinToolsMiddleware(
         Layout(), kingfishers_shell(fenced=True), longest=120, here=False
     )
-    if way == "sync":
-        middleware.wrap_model_call(request, asked.append)
-        return asked[0]
-
-    async def noting(passed: Any) -> None:
-        asked.append(passed)
-
-    asyncio.run(middleware.awrap_model_call(request, noting))
+    middleware.wrap_model_call(request, asked.append)
     return asked[0]
 
 
-def _handed_on(way: str, system: SystemMessage) -> SystemMessage:
+def _handed_on(system: SystemMessage) -> SystemMessage:
     """The system message `BuiltinToolsMiddleware` passes to a shell that is not on this host.
 
     Driven through the hook rather than the helper under it, because `here=False` is
@@ -698,7 +689,6 @@ def _handed_on(way: str, system: SystemMessage) -> SystemMessage:
     from nowhere else.
     """
     return _asked(
-        way,
         ModelRequest(
             model=GenericFakeChatModel(messages=iter([])),
             messages=[HumanMessage("go")],
@@ -707,7 +697,7 @@ def _handed_on(way: str, system: SystemMessage) -> SystemMessage:
     ).system_message
 
 
-def test_a_mappings_section_merged_into_other_prose_is_left_whole(way):
+def test_a_mappings_section_merged_into_other_prose_is_left_whole():
     """Cutting the text instead of dropping the block leaves nothing red: the section
     goes either way, so the rule above passes, while the prose deepagents merged it into
     silently loses its tail. The first half is the control -- without it, a middleware
@@ -716,7 +706,6 @@ def test_a_mappings_section_merged_into_other_prose_is_left_whole(way):
     section = f"{MAPPINGS}\n- /inputs -> /host/in\n"
 
     on_its_own = _handed_on(
-        way,
         SystemMessage(
             content_blocks=[
                 {"type": "text", "text": "You work."},
@@ -727,7 +716,6 @@ def test_a_mappings_section_merged_into_other_prose_is_left_whole(way):
     assert list(on_its_own.content_blocks) == [{"type": "text", "text": "You work."}]
 
     merged = _handed_on(
-        way,
         SystemMessage(content_blocks=[{"type": "text", "text": f"You work.\n\n{section}"}]),
     )
     assert list(merged.content_blocks) == [
@@ -750,31 +738,23 @@ MISSED = "tail: /inputs/api.log: No such file or directory"
 
 
 
-def _answered(way: str, name: str, result: Any) -> Any:
-    """What `BuiltinToolsMiddleware` hands back for one tool's result, through the hook `way` names.
+def _answered(name: str, result: Any) -> Any:
+    """What `BuiltinToolsMiddleware` hands back for one tool's result.
 
-    Both ways, because the correction is two methods and the async one was reached by
-    nothing: making `awrap_tool_call` return the result uncorrected left the whole suite
-    green, while the same change to its sync twin reddened the rules above.
+    `awrap_tool_call` is a copy of this hook, which `test_async_twins.py` holds: reached
+    by nothing, making it return the result uncorrected once left the whole suite green.
     """
     middleware = BuiltinToolsMiddleware(
         Layout(), kingfishers_shell(fenced=True), longest=120, root=SESSION
     )
     request = Call(tool_call={"name": name, "args": {}, "id": "c1"})
-    if way == "sync":
-        return middleware.wrap_tool_call(request, lambda _: result)
-
-    async def answering(_: Any) -> Any:
-        return result
-
-    return asyncio.run(middleware.awrap_tool_call(request, answering))
+    return middleware.wrap_tool_call(request, lambda _: result)
 
 
-def _told_tools(way: str, tools: list[Any]) -> list[Any]:
-    """The tools `BuiltinToolsMiddleware` passes on, through whichever model hook `way` names."""
+def _told_tools(tools: list[Any]) -> list[Any]:
+    """The tools `BuiltinToolsMiddleware` passes on."""
     return list(
         _asked(
-            way,
             ModelRequest(
                 model=GenericFakeChatModel(messages=iter([])),
                 messages=[HumanMessage("go")],
@@ -808,7 +788,7 @@ def test_the_shell_rule_reaches_execute_and_no_other_tool(shelled):
     assert carrying == {"execute"}
 
 
-def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name(way):
+def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name():
     """deepagents may offer a tool as a mapping rather than a `BaseTool`, and no graph
     the suite builds offers one: mutating the mapping branch's name check away leaves
     the whole suite green, so a file tool offered that way would carry the shell's rule.
@@ -817,7 +797,6 @@ def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name(way):
     assert rule is not None
 
     told = _told_tools(
-        way,
         [
             {"name": "execute", "description": "Run a command."},
             {"name": "read_file", "description": "Read a file."},
@@ -830,15 +809,15 @@ def test_a_tool_offered_as_a_mapping_is_told_the_rule_by_name(way):
     ]
 
 
-def test_a_correction_reaches_the_shells_result_and_no_other_tools(way):
+def test_a_correction_reaches_the_shells_result_and_no_other_tools():
     """Without the name gate any tool's result gains the shell's advice: an offered tool
     printing a path it could not open had the model told about shell spellings on a tool
     that is not a shell. The rule driving `execute` alone passes either way.
     """
-    corrected = _answered(way, "execute", ToolMessage(MISSED, tool_call_id="c1"))
+    corrected = _answered("execute", ToolMessage(MISSED, tool_call_id="c1"))
     assert hint("/inputs/api.log") in corrected.text
 
-    left = _answered(way, "line_count", ToolMessage(MISSED, tool_call_id="c1"))
+    left = _answered("line_count", ToolMessage(MISSED, tool_call_id="c1"))
     assert left.text == MISSED
 
 
@@ -847,15 +826,13 @@ def test_a_correction_reaches_the_shells_result_and_no_other_tools(way):
 KEPT = f"/bin/sh: {SESSION}/inputs/new.txt: Operation not permitted"
 
 
-def test_a_fence_refusal_tells_the_shells_result_which_folder_is_kept(way):
-    """Both hooks, as the spelling correction needs: the async one was once reached by
-    nothing at all, and a note added on one of them is invisible to a suite driving the
-    other.
-    """
-    corrected = _answered(way, "execute", ToolMessage(KEPT, tool_call_id="c1"))
+def test_a_fence_refusal_tells_the_shells_result_which_folder_is_kept():
+    """The fence names a host path, and without the note a model cannot tell it is the
+    kept folder its prompt named; a tool other than the shell is left alone."""
+    corrected = _answered("execute", ToolMessage(KEPT, tool_call_id="c1"))
     assert kept_note("inputs", Layout()) in corrected.text
 
-    left = _answered(way, "line_count", ToolMessage(KEPT, tool_call_id="c1"))
+    left = _answered("line_count", ToolMessage(KEPT, tool_call_id="c1"))
     assert left.text == KEPT
 
 
@@ -863,14 +840,13 @@ def test_a_fence_refusal_tells_the_shells_result_which_folder_is_kept(way):
 STRAYED = f"/bin/sh: {SESSION}/out.csv: Operation not permitted"
 
 
-def test_a_refusal_no_folder_holds_tells_the_shells_result_where_writes_go(way):
-    """Both hooks, as the other notes need: a note added on one of them is invisible to a
-    suite driving the other.
-    """
-    corrected = _answered(way, "execute", ToolMessage(STRAYED, tool_call_id="c1"))
+def test_a_refusal_no_folder_holds_tells_the_shells_result_where_writes_go():
+    """A refused path no folder holds is the same mistake one step out, and gets the same
+    note; a tool other than the shell is left alone."""
+    corrected = _answered("execute", ToolMessage(STRAYED, tool_call_id="c1"))
     assert stray_note("/out.csv", Layout()) in corrected.text
 
-    left = _answered(way, "line_count", ToolMessage(STRAYED, tool_call_id="c1"))
+    left = _answered("line_count", ToolMessage(STRAYED, tool_call_id="c1"))
     assert left.text == STRAYED
 
 
@@ -885,13 +861,13 @@ def test_a_refusal_no_folder_holds_tells_the_shells_result_where_writes_go(way):
     ],
     ids=["history", "outputs"],
 )
-def test_the_note_names_the_folder_the_fence_keeps(way, output, folder):
+def test_the_note_names_the_folder_the_fence_keeps(output, folder):
     """Which folders the middleware hands `kept_under` is its own choice, and only `/inputs`
     was driven through it, which every candidate holds: handed the session's folders
     instead, a refused history write was told `/scratchpad/` is not the agent's to write,
     and a file under `/outputs` it could not replace that `/outputs/` is not.
     """
-    corrected = _answered(way, "execute", ToolMessage(output, tool_call_id="c1"))
+    corrected = _answered("execute", ToolMessage(output, tool_call_id="c1"))
 
     if folder is None:
         assert corrected.text == output
@@ -903,31 +879,31 @@ def test_the_note_names_the_folder_the_fence_keeps(way, output, folder):
 CURLY = f"cp: cannot create regular file {LQ}inputs/a.csv{RQ}: Permission denied"
 
 
-def test_a_refusal_in_curly_quotes_is_told_its_kept_folder(way):
+def test_a_refusal_in_curly_quotes_is_told_its_kept_folder():
     """GNU tools quote a name in curly quotes under the shell's UTF-8 locale, and the
     opening one was read as part of the path: the model was told `/\u2018inputs/a.csv` was
     outside every folder instead of that `/inputs/` is kept.
     """
-    corrected = _answered(way, "execute", ToolMessage(CURLY, tool_call_id="c1"))
+    corrected = _answered("execute", ToolMessage(CURLY, tool_call_id="c1"))
 
     assert kept_note("inputs", Layout()) in corrected.text
     assert f"{LQ}inputs" not in corrected.text.removeprefix(CURLY)
 
 
-def test_a_kept_folder_is_named_before_a_path_no_folder_holds(way):
+def test_a_kept_folder_is_named_before_a_path_no_folder_holds():
     """A command that wrote twice -- `echo x > out.csv; echo y > inputs/b` -- has both
     notes to choose from. The kept folder is the more specific answer, and two notes at
     once read as two separate problems.
     """
     both = f"{STRAYED}\n{KEPT}"
 
-    corrected = _answered(way, "execute", ToolMessage(both, tool_call_id="c1"))
+    corrected = _answered("execute", ToolMessage(both, tool_call_id="c1"))
 
     assert kept_note("inputs", Layout()) in corrected.text
     assert "`/out.csv`" not in corrected.text
 
 
-def test_a_misspelt_path_is_told_the_spelling_rather_than_which_folder_is_kept(way):
+def test_a_misspelt_path_is_told_the_spelling_rather_than_which_folder_is_kept():
     """Where a command writes twice, once with the file tools' spelling and once with the
     shell's -- `echo x > /inputs/a; echo y > inputs/b` -- both corrections have something
     to say and only the spelling is worth saying: the first write was never going to run
@@ -935,32 +911,32 @@ def test_a_misspelt_path_is_told_the_spelling_rather_than_which_folder_is_kept(w
     """
     both = f"sh: /inputs/a: Operation not permitted\n{KEPT}"
 
-    corrected = _answered(way, "execute", ToolMessage(both, tool_call_id="c1"))
+    corrected = _answered("execute", ToolMessage(both, tool_call_id="c1"))
 
     assert hint("/inputs/a") in corrected.text
     assert "is not yours to write" not in corrected.text
 
 
-def test_a_command_that_ran_is_told_nothing(way):
+def test_a_command_that_ran_is_told_nothing():
     """The control: a note on a command that worked reads as a correction, and the rules
     above would pass a middleware that appended it to everything.
     """
     ran = ToolMessage("wrote 3 rows", tool_call_id="c1")
 
-    assert _answered(way, "execute", ran).text == "wrote 3 rows"
+    assert _answered("execute", ran).text == "wrote 3 rows"
 
 
-def test_a_result_the_shell_could_not_have_returned_is_handed_back_untouched(way):
+def test_a_result_the_shell_could_not_have_returned_is_handed_back_untouched():
     """Two shape checks, each load-bearing and each reached by nothing. `missed` calls
     `splitlines`, so content arriving as blocks raises `AttributeError`, and a `Command`
     has no `.content` to read at all. Neither shape comes from `execute`, but a
     deployment's own middleware runs below this one and may return either.
     """
     blocks = ToolMessage(content=[{"type": "text", "text": MISSED}], tool_call_id="c1")
-    assert _answered(way, "execute", blocks) is blocks
+    assert _answered("execute", blocks) is blocks
 
     command = Command(update={"messages": []})
-    assert _answered(way, "execute", command) is command
+    assert _answered("execute", command) is command
 
 
 # -- how long a command may ask to run -------------------------------------
@@ -971,7 +947,7 @@ def _asking(seconds: int) -> AIMessage:
 
 
 @pytest.mark.parametrize("graph", ["agent", "checker", "general-purpose"])
-def test_no_graph_runs_a_command_asking_for_longer_than_the_setting(shelled, way, graph):
+def test_no_graph_runs_a_command_asking_for_longer_than_the_setting(shelled, graph):
     """deepagents let `execute` ask for up to an hour whatever the setting, so a command
     started near the deadline outlived the claim `claim_stale_after` sized to it."""
     cfg, _ = shelled
@@ -985,10 +961,7 @@ def test_no_graph_runs_a_command_asking_for_longer_than_the_setting(shelled, way
     Scripted.script.extend(script)
     kf = Kingfisher(bounded, sessions=LocalSessions())
     turn = Request("go", agent="only", session_id="s")
-    if way == "sync":
-        kf.run(turn)
-    else:
-        asyncio.run(kf.arun(turn))
+    kf.run(turn)
 
     (said,) = [m for m in Scripted.heard[held] if isinstance(m, ToolMessage)][-1:]
     assert said.status == "error"

@@ -3,8 +3,6 @@ once, and refusing what it cannot do once the session has gone."""
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
 from kingfisher import Kingfisher, UnknownSessionError
@@ -26,17 +24,15 @@ def _pinned_to_a(kf, session_id: str = "mine") -> str:
     return session_id
 
 
-def _call(handle, way: str, method: str, *args):
-    if way == "async":
-        return asyncio.run(getattr(handle, f"a{method}")(*args))
+def _call(handle, method: str, *args):
     return getattr(handle, method)(*args)
 
 
-def test_asking_makes_a_session_only_when_told_to(cfg, way):
+def test_asking_makes_a_session_only_when_told_to(cfg):
     """A lookup that made the session it asked about would be a write nobody asked for,
     and an empty session listed and kept for a typo."""
     kf = Kingfisher(cfg, sessions=LocalSessions())
-    reads = Through(kf, way)
+    reads = Through(kf)
 
     assert reads.session("fresh") is None
     assert kf.sessions() == ()
@@ -48,12 +44,12 @@ def test_asking_makes_a_session_only_when_told_to(cfg, way):
     assert [s.id for s in kf.sessions()] == ["fresh"]
 
 
-def test_create_does_not_reveal_a_session_out_of_reach(policied, way):
+def test_create_does_not_reveal_a_session_out_of_reach(policied):
     """A handle for a session that exists and is someone else's would confirm the id,
     which is what answering `None` for both is for."""
     kf = Kingfisher(policied, sessions=LocalSessions())
     session_id = _pinned_to_a(kf)
-    reads = Through(kf, way)
+    reads = Through(kf)
 
     assert reads.session(session_id, source_ids=("B",), create=True) is None
     assert reads.session(session_id, source_ids=("A",), create=True) is not None
@@ -64,7 +60,7 @@ def test_create_does_not_reveal_a_session_out_of_reach(policied, way):
     [("pending", ()), ("artifact", ("outputs/a.txt",)), ("files", ()), ("size", ())],
     ids=["pending", "artifact", "files", "size"],
 )
-def test_a_handle_whose_session_has_gone_answers_as_a_wrong_id_does(cfg, way, method, args):
+def test_a_handle_whose_session_has_gone_answers_as_a_wrong_id_does(cfg, method, args):
     """Read through the backend it kept, it found no pause and no files; opened again,
     it would have made the session it had been told was gone."""
     kf = Kingfisher(cfg, sessions=LocalSessions())
@@ -74,21 +70,21 @@ def test_a_handle_whose_session_has_gone_answers_as_a_wrong_id_does(cfg, way, me
     assert handle.delete() is None
 
     with pytest.raises(UnknownSessionError):
-        _call(handle, way, method, *args)
+        _call(handle, method, *args)
     assert kf.sessions() == (), "a read made the session again"
 
 
-def test_deleting_twice_is_not_an_error(cfg, way):
+def test_deleting_twice_is_not_an_error(cfg):
     """A caller that retries a delete should not have to care."""
     kf = Kingfisher(cfg, sessions=LocalSessions())
     start(cfg, "twice")
     handle = kf.session("twice")
 
-    assert _call(handle, way, "delete") is None
-    assert _call(handle, way, "delete") is None
+    assert _call(handle, "delete") is None
+    assert _call(handle, "delete") is None
 
 
-def test_the_listing_narrows_to_a_caller_only_when_one_is_named(policied, way):
+def test_the_listing_narrows_to_a_caller_only_when_one_is_named(policied):
     """Naming nobody is the operator's view of every session; naming a caller leaves out
     a session pinned to an agent they cannot run, as asking for it by id does."""
     kf = Kingfisher(policied, sessions=LocalSessions())
@@ -96,7 +92,7 @@ def test_the_listing_narrows_to_a_caller_only_when_one_is_named(policied, way):
     anyones = start(policied, "open")
 
     def listed(**kwargs) -> set[str]:
-        found = asyncio.run(kf.asessions(**kwargs)) if way == "async" else kf.sessions(**kwargs)
+        found = kf.sessions(**kwargs)
         return {s.id for s in found}
 
     assert listed() == {mine, anyones}
@@ -104,16 +100,16 @@ def test_the_listing_narrows_to_a_caller_only_when_one_is_named(policied, way):
     assert listed(source_ids=("A",)) == {mine, anyones}
 
 
-def test_a_session_s_size_is_its_backend_s_count(cfg, way):
-    """Both ways, since the listing the command prints sizes beside reads this."""
+def test_a_session_s_size_is_its_backend_s_count(cfg):
+    """The listing the command prints sizes beside reads this."""
     kf = Kingfisher(cfg, sessions=LocalSessions())
     start(cfg, "s")
     (cfg.workspace / "sessions" / "s" / "outputs" / "a.txt").write_text("x" * 100)
 
-    assert Through(kf, way).size("s") >= 100
+    assert Through(kf).size("s") >= 100
 
 
-def test_a_narrowed_read_opens_the_session_once(policied, way):
+def test_a_narrowed_read_opens_the_session_once(policied):
     """Deciding whether the caller reaches the session opens its backend; reading through
     a second opening was a second sandbox per query on a remote store."""
     counting = Counting()
@@ -121,6 +117,6 @@ def test_a_narrowed_read_opens_the_session_once(policied, way):
     session_id = _pinned_to_a(kf)
     counting.asked.clear()
 
-    Through(kf, way).pending(session_id, source_ids=("A",))
+    Through(kf).pending(session_id, source_ids=("A",))
 
     assert counting.asked == [session_id]

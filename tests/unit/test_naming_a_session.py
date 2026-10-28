@@ -124,8 +124,8 @@ def test_reading_a_session_nobody_has_made_answers_no_session_and_makes_none(cfg
 
     assert kf.session("never-made") is None
     with pytest.raises(UnknownSessionError, match="no session 'never-made'"):
-        Through(kf, "sync").pending("never-made")
-    assert Through(kf, "sync").delete("never-made") is None
+        Through(kf).pending("never-made")
+    assert Through(kf).delete("never-made") is None
 
     assert kf.sessions() == ()
     assert not (cfg.workspace / "sessions" / "never-made").exists()

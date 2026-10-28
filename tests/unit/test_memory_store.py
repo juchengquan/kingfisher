@@ -3,7 +3,6 @@ and what the turn changed handed back at its end."""
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import replace
 from typing import Any
 
@@ -80,19 +79,12 @@ def _kingfisher(scripted, store: Any, *, memory: bool = True) -> Kingfisher:
 
 
 def _turn(
-    kf: Kingfisher, *script: Any, session: str = "s", user: str | None = "ana", way: str = "sync"
+    kf: Kingfisher, *script: Any, session: str = "s", user: str | None = "ana"
 ) -> tuple[Any, list[Any]]:
     Scripted.script.extend(script)
     context = {"user_id": user} if user is not None else {}
     request = Request("go", agent="only", session_id=session, context=context)
-    if way == "async":
-
-        async def drained() -> list[Any]:
-            return [one async for one in kf.astream(request)]
-
-        events = asyncio.run(drained())
-    else:
-        events = list(kf.stream(request))
+    events = list(kf.stream(request))
     (finished,) = [one for one in events if one.kind == "finished"]
     return finished.result, events
 
@@ -124,14 +116,14 @@ EUR = MemoryEntry("m1", "Likes EUR")
 SHORT = MemoryEntry("m2", "Short answers")
 
 
-def test_a_turn_starts_from_the_users_entries(scripted, way):
+def test_a_turn_starts_from_the_users_entries(scripted):
     """Loaded after the start's numbering, the user's entries would never reach the model
     this turn; loaded and not counted as the baseline, each would read as added by it."""
     shelf = Shelf(ana=(EUR, SHORT))
     kf = _kingfisher(scripted, shelf)
     start(scripted, "s")
 
-    result, events = _turn(kf, AIMessage(content="hello"), way=way)
+    result, events = _turn(kf, AIMessage(content="hello"))
 
     assert "- [m1] Likes EUR" in _heard() and "- [m2] Short answers" in _heard()
     assert _memory_file(scripted).read_text(encoding="utf-8") == (
@@ -143,7 +135,7 @@ def test_a_turn_starts_from_the_users_entries(scripted, way):
     assert [call[0] for call in shelf.calls] == ["key", "load"]
 
 
-def test_an_entry_the_agent_adds_reaches_the_store_as_added(scripted, way):
+def test_an_entry_the_agent_adds_reaches_the_store_as_added(scripted):
     """Only what changed is handed over: a whole list would undo what another session of
     the user saved since this one loaded."""
     shelf = Shelf(ana=(EUR,))
@@ -151,7 +143,7 @@ def test_an_entry_the_agent_adds_reaches_the_store_as_added(scripted, way):
     start(scripted, "s")
 
     result, _ = _turn(
-        kf, _adds("- Reviews on Mondays", after="- [m1] Likes EUR\n"), AIMessage("noted"), way=way
+        kf, _adds("- Reviews on Mondays", after="- [m1] Likes EUR\n"), AIMessage("noted")
     )
 
     added = MemoryEntry("m2", "Reviews on Mondays")

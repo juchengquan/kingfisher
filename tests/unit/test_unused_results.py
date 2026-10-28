@@ -222,16 +222,15 @@ class Raising(UnusedResults):
         raise RuntimeError(msg)
 
 
-@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
 def test_a_plugin_that_raises_is_logged_and_the_turn_keeps_its_answer(
-    workspace, caplog, awaited
+    workspace, caplog
 ):
     """The turn has run: failing it over files the next turn offers again would lose an
     answer the conversation already holds."""
     kf = Kingfisher(workspace, sessions=LocalSessions(), unused_results=Raising())
 
     with caplog.at_level(logging.WARNING):
-        result = _turn(kf, *_searched(), awaited=awaited)
+        result = _turn(kf, *_searched())
 
     assert (result.answer, result.completed) == ("done", True)
     assert "session s" in caplog.text

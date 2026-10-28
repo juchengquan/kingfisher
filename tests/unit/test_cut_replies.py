@@ -9,7 +9,6 @@ real turns, because the refusal, the stop and the report each happen somewhere e
 
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import replace
 from typing import Any
@@ -184,12 +183,13 @@ def writing(scripted):
     return scripted
 
 
-def _turn(cfg: Any, *script: AIMessage, way: str = "sync", events: Any = None) -> Any:
-    """One turn, through `run` or `arun`: the two loops call different hooks."""
+def _turn(cfg: Any, *script: AIMessage, events: Any = None) -> Any:
+    """One turn, through `run`: the hooks `arun` calls instead are copies, which
+    `test_async_twins.py` holds."""
     Scripted.script.extend(script)
     service = Kingfisher(cfg, sessions=LocalSessions(), run_events=events)
     request = Request("go", agent="only", session_id="s")
-    return asyncio.run(service.arun(request)) if way == "async" else service.run(request)
+    return service.run(request)
 
 
 def _written(cfg: Any) -> set[str]:
@@ -217,9 +217,9 @@ ASKED = (
 
 
 @pytest.mark.parametrize("wire", sorted(STOPPED))
-def test_a_cut_write_is_not_run_and_the_agent_is_told_why(writing, way, wire):
+def test_a_cut_write_is_not_run_and_the_agent_is_told_why(writing, wire):
     """The bug: the shortened file saved and the tool said it had."""
-    result = _turn(writing, reply(write(1), wire=wire), AIMessage("done"), way=way)
+    result = _turn(writing, reply(write(1), wire=wire), AIMessage("done"))
 
     assert _written(writing) == set()
     assert _said(writing)["c1"].startswith(REFUSED)
@@ -264,7 +264,7 @@ def test_the_whole_calls_before_the_cut_one_run(writing):
     assert _said(writing)["c2"].startswith(REFUSED)
 
 
-def test_three_cut_replies_in_a_row_stop_the_turn_and_run_nothing_of_the_third(writing, way):
+def test_three_cut_replies_in_a_row_stop_the_turn_and_run_nothing_of_the_third(writing):
     """Each cut reply spends the whole reservation; one session retried a whole-file write
     a dozen times before writing in pieces."""
     result = _turn(
@@ -272,8 +272,7 @@ def test_three_cut_replies_in_a_row_stop_the_turn_and_run_nothing_of_the_third(w
         reply(write(1)),
         reply(write(2)),
         reply(write(3), write(4), text="Writing it now."),
-        way=way,
-    )
+        )
 
     assert result.stop_reason == "max_tokens"
     assert not result.completed
@@ -299,14 +298,14 @@ def test_a_reply_that_was_not_cut_starts_the_count_again(writing):
 
 
 def test_a_cut_answer_is_asked_for_again_shorter_and_kept_out_of_the_conversation(
-    writing, way
+    writing
 ):
     """A final answer cut mid-sentence was reported as complete, and its text kept would be
     sent again on every later call, since clearing never touches the agent's own text."""
     shorter = "Three findings; the full list is in /outputs/findings.md."
     cut = reply(text="The three findings are: first, the")
 
-    result = _turn(writing, cut, AIMessage(shorter), way=way)
+    result = _turn(writing, cut, AIMessage(shorter))
 
     assert result.stop_reason == "end_turn"
     assert result.answer == shorter
@@ -393,7 +392,7 @@ ASKED_THINKING = (
 @pytest.mark.parametrize(
     "beside", [[], [{"type": "text", "text": " "}]], ids=["only-thinking", "and-blank-text"]
 )
-def test_a_reply_cut_while_thinking_is_asked_again_as_one_user_turn(cfg, session_dir, way, beside):
+def test_a_reply_cut_while_thinking_is_asked_again_as_one_user_turn(cfg, session_dir, beside):
     """Its empty answer went back to `ChatAnthropic`, which skipped it after joining its
     neighbours, so the task and the note went out as two user turns, and the note told the
     model an answer it never wrote was cut off and to make it shorter."""
@@ -406,10 +405,7 @@ def test_a_reply_cut_while_thinking_is_asked_again_as_one_user_turn(cfg, session
     built = build_agent(cfg, backend=backend_at(cfg, session_dir), model=model)
     asked: dict[str, Any] = {"messages": [{"role": "user", "content": "summarise the report"}]}
 
-    if way == "async":
-        asyncio.run(built.graph.ainvoke(asked, context=built.context))
-    else:
-        built.graph.invoke(asked, context=built.context)
+    built.graph.invoke(asked, context=built.context)
 
     (again,) = model.sent[1]["messages"]
     assert again["role"] == "user"
@@ -463,7 +459,7 @@ def test_a_subagent_that_gives_up_hands_back_its_cut_answer_marked_and_the_turn_
     assert result.answer == "done"
 
 
-def test_a_subagent_told_its_budget_is_stopped_by_its_third_cut_reply_at_once(writing, way):
+def test_a_subagent_told_its_budget_is_stopped_by_its_third_cut_reply_at_once(writing):
     """The bug: the step budget's note, put last in the request, ended the count of cut
     replies at none, so a subagent near its budget was asked twice more after its third and
     still handed back "3 times in a row"."""
@@ -493,8 +489,7 @@ def test_a_subagent_told_its_budget_is_stopped_by_its_third_cut_reply_at_once(wr
         reply(text="The report so far"),
         AIMessage("done"),
         AIMessage("x"),
-        way=way,
-    )
+        )
 
     # The witness that the third was asked with the note last, without which this passes
     # whatever the count reads.

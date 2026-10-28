@@ -67,7 +67,7 @@ class Sandboxes(Elsewhere):
         )
 
 
-def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
+def test_files_for_opens_the_session_with_the_deployments_runner(cfg):
     """Opened without the runner the deployment wired, the caller's backend would be
     well-formed and run its commands somewhere nobody chose.
     """
@@ -89,7 +89,7 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
     kf = Kingfisher(cfg, sessions=counting)
     start(cfg, "s")
 
-    files = Through(kf, way).files("s")
+    files = Through(kf).files("s")
 
     assert files is counting.opened[0]
     assert counting.asked == ["s"]
@@ -98,7 +98,7 @@ def test_files_for_opens_the_session_with_the_deployments_runner(cfg, way):
 
 @pytest.mark.parametrize("session_id", UNNAMABLE)
 def test_files_for_an_id_that_cannot_name_a_folder_lays_nothing_out(
-    cfg, tmp_path, way, session_id
+    cfg, tmp_path, session_id
 ):
     """`files_for("..")` laid a session out in the workspace's own folder, and an
     absolute id one wherever it pointed.
@@ -110,13 +110,13 @@ def test_files_for_an_id_that_cannot_name_a_folder_lays_nothing_out(
     before = sorted(tmp_path.rglob("*"))
 
     with pytest.raises(UnknownSessionError, match="cannot name a session"):
-        Through(kf, way).files(session_id)
+        Through(kf).files(session_id)
 
     assert sorted(tmp_path.rglob("*")) == before
 
 
 @pytest.mark.parametrize("door", DOORS)
-def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door, way):
+def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door):
     """Every turn opened the session's backend itself, so a caller using one around the
     turn held a second sandbox on a remote backend, and the agent ran in the other.
     """
@@ -132,7 +132,7 @@ def test_a_turn_handed_its_files_opens_no_others(cfg, monkeypatch, door, way):
     counting = Counting()
     kf = Kingfisher(cfg, sessions=counting)
     start(cfg, "s")
-    files = Through(kf, way).files("s")
+    files = Through(kf).files("s")
 
     result = _turn(kf, door, Request("go", agent=named, session_id="s"), files=files)
 
@@ -184,14 +184,14 @@ def test_files_for_the_default_session_serve_a_request_naming_none(cfg, monkeypa
     assert counting.asked == ["default"]
 
 
-def test_files_for_a_session_no_turn_has_made_makes_it(cfg, way):
+def test_files_for_a_session_no_turn_has_made_makes_it(cfg):
     """Catches `files_for` refusing a session no turn has made yet, which left a caller
     no way to place its inputs before the first turn.
     """
     counting = Counting()
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=counting)
 
-    files = Through(kf, way).files("q3-report")
+    files = Through(kf).files("q3-report")
     files.upload_files([("/outputs/placed.txt", b"placed")])
 
     assert [s.id for s in kf.sessions()] == ["q3-report"]
@@ -199,7 +199,7 @@ def test_files_for_a_session_no_turn_has_made_makes_it(cfg, way):
     assert kf.run(Request("go", session_id="q3-report")).session_id == "q3-report"
 
 
-def test_files_for_a_session_a_turn_made_opens_it(cfg, way):
+def test_files_for_a_session_a_turn_made_opens_it(cfg):
     """Catches `files_for` opening some other session than the one a turn ran in, which
     would leave `files=` holding files the turn never sees.
     """
@@ -207,7 +207,7 @@ def test_files_for_a_session_a_turn_made_opens_it(cfg, way):
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=counting)
     issued = kf.run(Request("go")).session_id
 
-    files = Through(kf, way).files(issued)
+    files = Through(kf).files(issued)
 
     assert counting.asked == [issued, issued]
     assert files is counting.opened[-1]
@@ -230,14 +230,14 @@ class Watching(Counting):
 
 
 @pytest.mark.parametrize("door", DOORS)
-def test_files_opened_for_one_session_are_refused_by_a_turn_in_another(cfg, door, way):
+def test_files_opened_for_one_session_are_refused_by_a_turn_in_another(cfg, door):
     """Catches `files=` from session a run as session b: the turn wrote b's transcript
     into a, claimed b and left a unclaimed for a second turn to run on concurrently.
     """
     watching = Watching()
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=watching)
     start(cfg, "b")
-    files = Through(kf, way).files("a")
+    files = Through(kf).files("a")
 
     with pytest.raises(UnknownSessionError, match="opened for session 'a'"):
         _turn(kf, door, Request("go", session_id="b"), files=files)
@@ -272,12 +272,12 @@ class Unkeyed(Counting):
 
 
 @pytest.mark.parametrize("door", DOORS)
-def test_files_that_cannot_record_their_session_still_serve_it(cfg, door, way):
+def test_files_that_cannot_record_their_session_still_serve_it(cfg, door):
     """Catches recording whose files these are refusing every backend that cannot be
     weakly keyed, at `files()` and again at the turn.
     """
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=Unkeyed())
-    files = Through(kf, way).files("s")
+    files = Through(kf).files("s")
 
     assert _turn(kf, door, Request("go", session_id="s"), files=files).completed
 
