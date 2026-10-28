@@ -839,7 +839,9 @@ there as the stream's copy learns it from `tasks`. The recorder's `RUN` is no so
 holds only the outermost run, and only in a graph kingfisher builds. An end callback
 carries no metadata, so an end takes its fields from its start, matched by run id. A
 task seen running two `task` calls stands for neither, since a tool's start arrives one
-call at a time; on the stream such a task is refused up front. *(2026-10-28, #1138.)*
+call at a time; on the stream such a task is refused up front. A subagent's pause
+reaches its `task` call as an exception and is written as nothing: it failed nothing,
+and the `tool_error` it was written as read as one that had. *(2026-10-28, #1138.)*
 
 **Not covered: a program's subagents, and an approval's subagent with two open.** A
 subagent a program starts with `task()` inside `eval` reaches neither the stream nor the

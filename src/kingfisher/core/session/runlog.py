@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
+from langgraph.errors import GraphInterrupt
 
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.interfaces import RunEvents
@@ -180,11 +181,12 @@ class RunLogger(BaseCallbackHandler):
         self._write("tool_end", **self._tools.pop(run_id, {}), output_preview=str(output)[:400])
 
     def on_tool_error(self, error: BaseException, *, run_id: Any = None, **_: Any) -> None:
-        self._write(
-            "tool_error",
-            **self._tools.pop(run_id, {}),
-            error=f"{type(error).__name__}: {error}",
-        )
+        held = self._tools.pop(run_id, {})
+        # A subagent's pause reaches its `task` call as an exception, and fails nothing:
+        # the call is left started, and the turn that resumes it starts it again.
+        if isinstance(error, GraphInterrupt):
+            return
+        self._write("tool_error", **held, error=f"{type(error).__name__}: {error}")
 
     def on_llm_error(self, error: BaseException, *, run_id: Any = None, **_: Any) -> None:
         self._write(

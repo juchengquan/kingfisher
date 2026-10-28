@@ -14,7 +14,7 @@ from langchain_core.outputs import ChatGeneration, LLMResult
 
 from kingfisher import Kingfisher
 from kingfisher.core.interfaces import RunEvents
-from kingfisher.core.request import Request
+from kingfisher.core.request import Decision, Request, Resume
 from kingfisher.core.session.runlog import (
     RUN_LOGGER,
     LoggedRunEvents,
@@ -33,7 +33,7 @@ from tests.conftest import (
 )
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
-from tests.unit.test_stream_delegations import _task, _twice
+from tests.unit.test_stream_delegations import _gated_beside_ungated, _task, _twice
 from tests.unit.test_subagent_helpers import HELPER, REVIEWER, _define
 
 
@@ -441,3 +441,32 @@ def test_the_callers_agent_is_named_in_the_record_as_on_the_stream(cfg, session_
     )
 
     assert [_where(e) for e in sink.named("model_call")] == [(None, ())]
+
+
+def test_a_subagents_pause_is_no_tool_error_in_the_record(cfg, session_dir):
+    """A pause inside a subagent reaches its `task` call as an exception, and the record
+    logged `tool_error` "GraphInterrupt: ..." for a turn that had failed nothing."""
+    sink = RecordedEvents()
+    graph = _gated_beside_ungated(cfg, session_dir)
+    kf = Kingfisher(cfg, graph=graph, sessions=LocalSessions(), run_events=sink)
+    paused = kf.run(Request("go", session_id=session_dir.name))
+    assert paused.pending, "scribe never paused"
+    answers = tuple(Decision(call_id=one.call_id, action="approve") for one in paused.pending)
+
+    resumed = kf.run(Resume(session_id=paused.session_id, decisions=answers))
+
+    assert sink.named("tool_error") == []
+    delegated = [
+        (e["turn_id"], e["event"], e["call"])
+        for e in sink.events
+        if e["event"].startswith("tool_") and e["tool"] == "task"
+    ]
+    assert sorted(delegated) == sorted(
+        [
+            (paused.turn_id, "tool_start", "p0"),
+            (paused.turn_id, "tool_start", "p1"),
+            (paused.turn_id, "tool_end", "p1"),
+            (resumed.turn_id, "tool_start", "p0"),
+            (resumed.turn_id, "tool_end", "p0"),
+        ]
+    )

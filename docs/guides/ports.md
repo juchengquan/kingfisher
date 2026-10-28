@@ -277,6 +277,10 @@ one subagent at once share an `agent` and differ in `delegations`. `tool_start`,
 to its start by `call`; `model_call` carries `calls`, the id of each call its reply
 makes, lined up with `tool_calls` and `""` where the provider gave none.
 
+A `task` call whose subagent stopped for a decision has a `tool_start` and no end in
+the turn that paused. The turn that resumes it writes a `tool_start` for it again, with
+the same `call`, and then its end.
+
 **Wire nothing and they go to the `kingfisher.run` logger**, one JSON line per event
 at `INFO`, with the mapping itself on the record as `run_event` for a handler that
 ships structured logs. Python's default configuration drops `INFO`, so a
