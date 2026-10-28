@@ -6,6 +6,7 @@ import ast
 import inspect
 import re
 import sys
+from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
 from functools import cache
 from itertools import pairwise
@@ -2645,6 +2646,117 @@ def test_the_cycle_finder_finds_one_in_this_tree():
     assert any("kingfisher.core.access.capabilities" in group for group in found), (
         f"the finder found {found}, none of it the loop that was added"
     )
+
+
+#: What an agent is built from, and the code that builds one and runs a turn on it. `core/access`
+#: is on the definitions' side because they read every grant through it.
+BUILT_FROM = ("kingfisher.core.definitions", "kingfisher.core.access")
+THE_BUILD = ("kingfisher.core.agent", "kingfisher.core.session", "kingfisher.core.service")
+
+
+def _under(module: str, packages: Sequence[str]) -> bool:
+    return any(module == one or module.startswith(f"{one}.") for one in packages)
+
+
+def _every_import(path: Path) -> frozenset[str]:
+    """The package's modules a file names in any import, deferred and `TYPE_CHECKING` ones
+    included: they load nothing, which is why `_package_graph` leaves them out, and they
+    still make one side depend on the other."""
+    package = _package_of(path)
+    return frozenset(
+        found
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Import | ast.ImportFrom)
+        for dotted in _dotted(node, package)
+        if dotted.split(".")[0] == "kingfisher" and (found := _loaded_by(dotted))
+    )
+
+
+def _route_into_the_build(graph: Mapping[str, frozenset[str]], start: str) -> tuple[str, ...]:
+    """The shortest chain of imports from `start` into `THE_BUILD`, or `()`."""
+    came_from: dict[str, str] = {}
+    pending = deque([start])
+    while pending:
+        current = pending.popleft()
+        if _under(current, THE_BUILD):
+            route = [current]
+            while route[-1] != start:
+                route.append(came_from[route[-1]])
+            return tuple(reversed(route))
+        for onward in sorted(graph.get(current, frozenset())):
+            if onward != start and onward not in came_from:
+                came_from[onward] = current
+                pending.append(onward)
+    return ()
+
+
+def _into_the_build(graph: Mapping[str, frozenset[str]]) -> list[tuple[str, ...]]:
+    """Each import leaving `BUILT_FROM` for a module that reaches `THE_BUILD`, as its route.
+
+    Followed past the first module, because a reader importing `core.reporting` reaches
+    `core.agent` as surely as one importing it by name.
+    """
+    return [
+        (module, *route)
+        for module in sorted(graph)
+        if _under(module, BUILT_FROM)
+        for onward in sorted(graph[module])
+        if not _under(onward, BUILT_FROM) and (route := _route_into_the_build(graph, onward))
+    ]
+
+
+def test_the_definitions_never_reach_the_code_that_builds_from_them():
+    """A definitions or access module importing the code that builds or runs an agent,
+    directly or through another module -- which every check passed when tried on
+    2026-10-28, while `TASK_TOOL` and `READ_FILE` sat in `core/definitions` to prevent it."""
+    graph = {module: _every_import(path) for module, path in _module_paths().items()}
+    _every([_module_paths()[m] for m in graph if _under(m, BUILT_FROM)], "BUILT_FROM")
+
+    found = _into_the_build(graph)
+
+    assert not found, (
+        f"{found} -- an agent is built from the definitions, so they import nothing that "
+        "builds one; move what both need to the definitions' side, as `TASK_TOOL` was"
+    )
+
+
+def test_the_build_rule_sees_a_late_import_and_a_route_through_another_module(tmp_path):
+    """Driven, because the rule above runs over a tree with nothing to find.
+
+    The routes are the real graph with one edge added, as the cycle finder's is:
+    `core.reporting` reaches `core.agent` today, so the second is a route this package
+    could grow, and one a rule reading direct imports alone would pass.
+    """
+    written = tmp_path / "probe.py"
+    written.write_text(
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    from kingfisher.core.session.turn import Turn\n"
+        "def later():\n"
+        "    from kingfisher.core.agent.prompting import EDIT_FILE\n"
+    )
+    assert _every_import(written) == {
+        "kingfisher.core.session.turn",
+        "kingfisher.core.agent.prompting",
+    }, "an import that loads nothing at import time is still one side naming the other"
+
+    graph = {module: _every_import(path) for module, path in _module_paths().items()}
+    reader = "kingfisher.core.definitions.subagents.spec"
+    assert reader in graph, "the edges below are about nothing"
+
+    def added_by(onward: str) -> set[tuple[str, ...]]:
+        # Less what the tree already holds, so a wrong tree reddens the rule and not this.
+        return set(_into_the_build({**graph, reader: graph[reader] | {onward}})) - set(
+            _into_the_build(graph)
+        )
+
+    assert added_by("kingfisher.core.agent.prompting") == {
+        (reader, "kingfisher.core.agent.prompting")
+    }
+
+    [route] = added_by("kingfisher.core.reporting")
+    assert route[:2] == (reader, "kingfisher.core.reporting"), route
+    assert _under(route[-1], THE_BUILD), route
 
 
 #: What building or running an agent loads, and what makes it cost a second and about

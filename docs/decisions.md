@@ -5709,6 +5709,11 @@ table, since no plugin takes anything from `core/access`. *(2026-10-19.)*
     write, so a move fails rather than excusing nothing.
   - **`test_only_one_module_changes_a_mode`**, over the whole package: scoped to a
     folder, it went on passing over one that no longer held the owner.
+  - **The definitions never reach what builds from them**: nothing in `core/definitions/`
+    or `core/access/` imports `core.agent`, `core.session` or `core.service`, at any
+    scope or through any module between, since importing `core.reporting` reaches
+    `core.agent` without naming it.
+    `test_the_definitions_never_reach_the_code_that_builds_from_them`.
   - The two plugin rules above, and `WITNESSES`.
 
   Gone with what they described: the layer rules, `HARNESS_EDGES`, and the domain
@@ -5727,10 +5732,9 @@ names them, `test_kinds_holds_exactly_the_kinds` holds the folder to it both way
 `core.agent.kinds`, a module per kind -- except skills, which deepagents reads itself
 and `core.definitions.skills.registry` asks, and agents, which are the graph
 `core.agent.assembly` builds. `declared_middleware` keeps its prefix so it does not read
-as a second `middlewares`. No rule names that direction: `core/definitions/` and
-`core/access/` import nothing from `core.agent`, `core.session` or `core.service`
-today, and the startup check would refuse a module-scope import of the runtime there
-but pass a deferred one. *(Measured 2026-10-17.)*
+as a second `middlewares`. The direction is held by the rule above: until it was, an
+import of `core.agent.prompting` at the top of `core.definitions.subagents.spec`
+passed ruff, ty and the whole suite. *(Measured 2026-10-17; held 2026-10-28.)*
 
 **The kinds do not share an implementation.** Each resolves `source::name` its own way
 -- `split_reference`, `split_qualified` -- so a change for one is not argued past the
