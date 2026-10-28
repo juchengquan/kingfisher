@@ -425,6 +425,25 @@ is no edge. Resolving the shared one to every file it could mean was not taken: 
 refuses the whole catalogue over a loop that exists only if the choice goes one way, and
 the build refuses the same name before following it. *(2026-10-12.)*
 
+**A subagent holding `task` has a `general-purpose` of its own, beside the helpers it
+names.** So that a subagent can split its work as the agent does, and by agreement nothing
+a definition writes. It is the subagent's copy: its own lines under deepagents' name and
+prompt, so it holds the subagent's tools, its folder's and its skills, runs its model, is
+recorded under it, and holds nothing the subagent does not -- deepagents' own would hold the
+agent's, the shell among them. It is told deepagents' helper text and the deployment's
+instructions, not the subagent's prompt, which describes the subagent's job rather than the
+helper's. It cannot hand work on, being given no helpers and so no `task`, and holds no
+to-do list. Built at every level a definition is, never beside a compiled subagent.
+
+It is the exception to *An agent grants the helpers its subagents consult*: holding `task`
+brings a helper nobody named. Taken because it can never exceed its caller, and it still
+fails closed: a line leaving `task` out, or a request withholding it, has none. Measured,
+it costs about 4-5 ms of build per such subagent per turn, and `task`'s description, about
+1,400 characters, on every call of a subagent that named no helper before. Unlike a named
+helper it is handed no tool objects off the probe: its stack's own file tools serve it, and
+the agent's objects would hand it the agent's to-do list. Not taken: a switch for a
+deployment, which nothing has asked for. *(2026-10-29.)*
+
 **A subagent name nothing answers to is reported, not refused at load.** It loads, the
 run reaching it refuses it, and `kingfisher list` names who wrote it and exits 1.
 Refusing at load, as a helper listed without `task` is, was not taken: that shape cannot

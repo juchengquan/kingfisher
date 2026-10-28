@@ -402,7 +402,7 @@ Things to know:
   the request's `context`, the caller's source ids and datazone, and `started`, when the
   turn started in UTC ([`tools.md`](tools.md#who-the-turn-is-for)).
 - **Every graph the turn builds is sent the same text**: the agent, each subagent it
-  declares and their helpers, and `general-purpose`. A compiled subagent is not sent it,
+  declares and their helpers, and every `general-purpose`. A compiled subagent is not sent it,
   as it is not sent `INSTRUCTIONS.md`: its `build` writes its prompt. No definition says
   anything about it, so a definition works the same whatever the deployment's hook says.
 - **Write any caution into the text yourself.** Kingfisher adds nothing to it. The
@@ -471,7 +471,7 @@ instead: a string, or content blocks, as a tool may return.
 Things to know:
 
 - **It is asked of every PDF**, from `read_file` and offered tools alike, inside a
-  `Command` too, on the agent, every subagent a definition declares, and
+  `Command` too, on the agent, every subagent a definition declares, and every
   `general-purpose`. Not on a compiled subagent, which deepagents runs as it was built.
 - **What it returns is judged again**, by the same limits, and it is never asked about
   its own answer: a PDF handed back past what the turn holds is still refused. What it
@@ -560,8 +560,9 @@ which allows every graph kingfisher would hand a run.
 
 `allows` is told the graph's `name` and its `kind`: `"agent"` with the agent's name,
 empty for a request naming none; `"subagent"` with the name a definition gives it; or
-`"general-purpose"`, by that name, for deepagents' own, which is handed the agent's
-tools.
+`"general-purpose"`, by that name, for each `general-purpose`: the agent's, handed the
+agent's tools, and the one beside every subagent holding `task`, handed that subagent's. One
+answer for the name answers for all of them.
 
 Things to know:
 

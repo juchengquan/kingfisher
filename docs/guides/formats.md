@@ -484,6 +484,11 @@ Four things worth knowing before you restrict this list:
   how delegation happens. A definition whose `subagents:` names any while its
   `builtin_tools` does not hold `task` — a list without it, or no line at all —
   is refused when the catalogue loads.
+- **Holding `task` also gives a subagent a `general-purpose`** of its own, beside any
+  helpers it names, as the agent has one: a copy of the subagent — its tools, its
+  folder's, its skills and its model — told deepagents' helper text and the deployment's
+  instructions, not the subagent's prompt. It cannot hand work on and holds no to-do
+  list. A subagent that should not split its work leaves `task` out.
 - **`execute` is the one that matters for isolation.** It bypasses the
   filesystem permission layer entirely, so a request that activates the shell
   can reach anything the process can, including skills it did not activate. Deny
