@@ -21,8 +21,6 @@ from kingfisher.core.agent.prompting import (
 )
 from kingfisher.core.interfaces import Instructions
 from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS, OUTPUTS, SCRATCH, Layout
-from kingfisher.core.session.store import entry_id
-from kingfisher.core.session.turn import ledger_delta, ledger_index
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from kingfisher.plugins.sessions.shell import kingfishers_shell
 from tests.conftest import FakeToolCallingModel, a_subagent, an_agent, start, subagents_dir
@@ -61,31 +59,6 @@ def test_the_memory_block_says_memory_lasts_only_this_conversation():
         told = " ".join(memory_guidelines(tools, DEFAULT_LAYOUT).split())
         assert "kept for later turns of this conversation" in told
         assert "future" not in told.lower()
-
-
-#: What the harness said of who the agent is and how it should behave, which is the
-#: agent's own prompt's and the deployment's instructions' to say.
-NOT_THE_HARNESS = (
-    "You are kingfisher",
-    "Deciding when to act",
-    "Nobody is watching",
-    "Match the effort",
-    "That is the deliverable",
-    "manufacture files",
-    "Every claim you make",
-)
-
-
-def test_the_harness_says_nothing_of_who_the_agent_is_or_how_it_behaves():
-    """It opened every agent's prompt as "kingfisher, a general-purpose agent", ahead of
-    the agent's own, and told every agent nobody was watching -- the shipped `operator`,
-    whose every command a person approves, among them."""
-    said = " ".join(shipped(shell=kingfishers_shell(fenced=True)).split())
-
-    for phrase in NOT_THE_HARNESS:
-        assert phrase not in said, phrase
-    # The control: the harness still says what it is.
-    assert "## The session" in said
 
 
 def test_structural_contract_survives_every_combination():
@@ -180,47 +153,6 @@ def test_the_prompt_names_the_folder_deepagents_writes_on_its_own(cfg, session_d
     assert "large_tool_results" not in text, "a folder read through its stubs is named"
 
 
-def test_each_kept_record_is_said_to_be_the_models_to_read_and_not_to_write():
-    """Said because the prompt sends the model to both folders -- to search the
-    conversation kept aside, and to read a result back -- so an agent tidying its
-    scratchpad would otherwise learn whose they are from a refusal.
-
-    With a subject, which is the part that went wrong: the clause arrived at the end of
-    the `/scratchpad` bullet with none, and the bullet's own subject is the folder the
-    agent works in, so it read as a rule against writing the scratchpad at all -- against
-    which the paragraph below it says nothing else in the session is the agent's to
-    write. One sentence per folder, where that folder is introduced.
-    """
-    # Joined: the prompt wraps at 88 columns, so a sentence this long is never on one
-    # line and a plain `in` reads as an absence.
-    said = " ".join(shipped().split())
-
-    assert "That folder is yours to read and not to write -- it says what happened" in said
-    assert "That folder is yours to read and not to write, for the same reason" in said
-    # The control: the scratchpad itself is still the agent's, in the same breath.
-    assert "working files: intermediates, downloads, anything you need while you think" in said
-
-
-def test_the_catalogue_is_said_to_be_the_models_to_read_and_not_to_write():
-    """The skills section handed the model the catalogue, said how to run a script a skill
-    ships and told it to prefer an existing procedure over inventing one -- which invites
-    editing one -- and said nothing about writing, while `/skills/**` is denied. Of the
-    folders the prompt names it was the only one refused without saying so, and a model
-    not told a place is read-only spends a call finding out.
-
-    What to do instead is an answer and not a file: the refusal names the two folders a
-    write may land in, and the index says what to do instead.
-    """
-    # Joined: the prompt wraps at 88 columns, so a sentence this long is never on one line
-    # and a plain `in` reads as an absence.
-    said = " ".join(skills_index(DEFAULT_LAYOUT, None, shelled=False).split())
-
-    assert "The catalogue is yours to read and not to write" in said
-    assert "Say what a procedure should say differently in your answer" in said
-    # The control: the index still says where a skill's instructions are, in the same breath.
-    assert "what it says to do is in its `SKILL.md`" in said
-
-
 @pytest.mark.parametrize("layout", [DEFAULT_LAYOUT, Layout(outputs="results")])
 def test_a_requested_file_name_is_saved_in_the_outputs(layout):
     """Told to follow a request's file names exactly, with nothing in the prompt
@@ -232,32 +164,6 @@ def test_a_requested_file_name_is_saved_in_the_outputs(layout):
 
     assert f"asked for `/<name>`, save `/{layout.outputs}/<name>`" in said
     assert "nothing here overrides" not in said
-
-
-def test_the_prompt_names_a_recorded_result_as_the_ledger_does():
-    """The folder, the id and the tag are each the recorder's or the delta's spelling;
-    renamed on one side alone, the agent is told to look for something never written.
-
-    Read off the code that writes each, since a literal here would be renamed along
-    with the prompt, or not at all, and pass either way.
-    """
-    text = shipped()
-
-    assert f"`{DEFAULT_LAYOUT.tool_results_route}`" in text
-    assert f"`[{entry_id(42)}]`" in text
-    for block in (ledger_delta(()), ledger_index(())):
-        assert f"`{block.splitlines()[0]}`" in text
-
-
-def test_the_prompt_lets_the_model_cite_a_result_and_does_not_tell_it_to():
-    """Worded as an instruction, the model hangs an id on every claim whether or not the
-    reader wants one; the owner asked for the sentence to give permission instead.
-    """
-    # As read, not as wrapped in the file.
-    text = " ".join(shipped().split())
-
-    assert "You can cite it by that id when you rely on that result." in text
-    assert "Cite it" not in text
 
 
 def test_a_deployment_that_does_not_cite_is_not_told_it_may(cfg):
@@ -288,13 +194,6 @@ def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
         SMOKE_TASK,
     ):
         assert "run directory" not in text
-
-
-def test_instructions_are_appended_to_the_harness_prompt(cfg):
-    text = system_prompt(cfg, instructions="Prefer polars over pandas in this project.")
-    assert "Prefer polars over pandas" in text
-    # Appended, not replacing the structural contract.
-    assert "/outputs" in text
 
 
 def test_no_instructions_leave_the_base_prompt_untouched(cfg):
@@ -423,34 +322,6 @@ def test_a_subagent_is_given_the_deployments_instructions(cfg):
     assert prompt.index("You review analyses") < prompt.index("Always cite the file.")
 
 
-def test_a_deployment_with_no_instructions_adds_no_empty_part(cfg):
-    """The definition's own text, then the session's folders, byte for byte -- no second
-    separator where the instructions would be, no blank part."""
-    assert _subagent_prompt(cfg) == (
-        f"You review analyses for arithmetic errors.\n\n---\n\n{session_section(cfg.layout)}"
-    )
-
-
-#: Each part of the harness a subagent is not handed, by its heading.
-AGENTS_ALONE = (
-    "## The file tools",
-    "## The shell",
-    "## What your tools returned",
-    "## Files a request names",
-)
-
-
-def test_a_subagent_is_given_the_sessions_folders_and_nothing_else_of_the_harness(cfg):
-    """The shell table would sit beside `execute`'s own statement of the same rule, and
-    the ledger paragraphs describe messages a subagent never receives."""
-    prompt = _subagent_prompt(cfg, "Always cite the file.")
-
-    assert prompt.endswith(session_section(cfg.layout))
-    assert prompt.index("Always cite the file.") < prompt.index("## The session")
-    told = [part for part in AGENTS_ALONE if part in prompt]
-    assert told == []
-
-
 def test_the_agent_and_its_subagents_are_told_the_same_folders(cfg):
     """Two copies of the section would drift, and a subagent would be told a folder the
     agent was not."""
@@ -466,43 +337,13 @@ def test_both_levels_separate_the_addition_the_same_way(cfg):
     assert "Always cite the file.\n\n---\n\n## The session" in subagent
 
 
-def test_the_prompt_does_not_promise_other_sessions_are_out_of_reach():
-    """It told the agent another session's files were not reachable from any path it
-    could write. The macOS shell can read and change them, and so can any unfenced one.
-    """
-    text = shipped()
-    assert "another session's files" not in text
-
-
-def test_the_prompt_claims_about_inputs_only_what_holds_with_no_fence():
-    """It said writes under the inputs folder are denied "at the tool level **and by
-    the filesystem itself**". The second half is a fence, and `off` and `external` are
-    supported settings: measured, with the sandbox off, `chmod u+w` and the same write
-    replaced the caller's file and `rm -rf` took the folder, both exit 0.
-
-    `core/agent/assembly.py` records that exact measurement in the present tense a few lines
-    from the code that drops the bits -- so the prompt was contradicted by its own
-    repository. This is the fifth sighting of that sentence: #743 corrected it in the
-    permissions helper, a test docstring and the contract kit, and left it in the text
-    the model reads every turn.
-
-    The file-tool half holds on every run, and that is what the prompt says now. What
-    the fence does is the operator's to know, and `doctor` is where they hear it.
-    """
-    text = shipped()
-
-    assert "every file tool\n  refuses a write under it" in text
-    assert "by the filesystem itself" not in text
-
-
 @pytest.mark.parametrize("sandbox", ["auto", "off", "external"])
 def test_the_half_the_prompt_still_claims_holds_with_no_fence_at_all(
     sandbox, cfg, session_dir
 ):
-    """The other half of the rule above: the sentence was corrected rather than
-    deleted, so what it now claims has to be driven -- and driven in the settings the
-    old claim was false in, which is where a wording fix would otherwise just move the
-    untruth.
+    """The prompt's claim that every file tool refuses a write under the inputs folder,
+    driven in the settings where its older claim, that the filesystem refused it too, was
+    false -- which is where a wording fix would otherwise just move the untruth.
 
     A real build, a real `write_file`, one confinement mode each. The file tools carry
     the deny rule whatever runs the shell, because it is a rule on the backend and not
@@ -538,23 +379,6 @@ def test_the_half_the_prompt_still_claims_holds_with_no_fence_at_all(
     assert (session_dir / INPUTS / "given.csv").read_text(encoding="utf-8") == "caller,data\n"
 
 
-def test_the_prompt_does_not_count_the_places_a_turn_may_write():
-    """"One of two places, and never anywhere else" is false the moment memory is on:
-    the agent is then told to save to it, and `write_file("/memory/AGENTS.md", ...)`
-    succeeds and comes back as an artifact.
-
-    An absolute claim in the base document that an optional section contradicts is the
-    composition hazard #760 fixed for the shell's four claims. Named rather than
-    counted now -- what is *not* the agent's to write does not change with a
-    capability, and the sections that grant a place say so where they grant it.
-    """
-    text = shipped()
-
-    assert "never anywhere else" not in text
-    assert "Nothing else in the session is yours to write" in text
-    assert "Save to it with `edit_file`" in memory_guidelines(None, DEFAULT_LAYOUT)
-
-
 # -- a deployment's own instructions ---------------------------------------------
 
 
@@ -567,11 +391,6 @@ def test_the_instructions_come_before_the_harness(cfg):
     assert with_it.index("House rule:") < with_it.index("## The session")
     # The structural contract is still there -- the addition did not replace it.
     assert f"/{INPUTS}" in with_it
-
-
-def test_no_instructions_change_nothing(cfg):
-    """Empty is byte-for-byte the prompt without them."""
-    assert system_prompt(cfg) == system_prompt(cfg, instructions="")
 
 
 def test_the_agents_own_line_leads_the_instructions(cfg):
@@ -631,16 +450,6 @@ def test_an_agent_is_told_only_of_the_built_in_tools_it_holds(scripted, granted,
 
     assert {section for section in SECTIONS if section in system} == told
     assert "You do the task." in system
-
-
-def test_the_file_tools_section_names_only_the_file_tools_held(scripted):
-    """Named whole, the section told an agent holding `read_file` and `grep` of five
-    file tools it does not hold.
-    """
-    (system,) = _told(scripted, builtin_tools="[grep, read_file]")
-
-    assert "The file tools (`read_file`, `grep`)\n" in system
-    assert "`write_file`" not in system
 
 
 @pytest.mark.parametrize(
@@ -774,81 +583,6 @@ def test_every_subagent_is_told_the_sessions_folders_in_its_layouts_names(
 
 
 # -- told to read back and save only with the tools it holds ------------------------
-
-#: How each tool that reads a saved result back is told of, as the prompt reads.
-READ_BACK = {
-    "read_file": "Read one back with `read_file`",
-    "grep": "Search them with `grep`",
-    "glob": "`glob` for `A-0042-*`",
-}
-
-
-@pytest.mark.parametrize(
-    ("granted", "told"),
-    [
-        (None, {"read_file", "grep", "glob"}),
-        (("read_file",), {"read_file"}),
-        (("grep",), {"grep"}),
-        (("glob",), set()),
-        ((), set()),
-        (("execute",), set()),
-    ],
-    ids=["every", "read_file", "grep", "glob", "none", "shell only"],
-)
-def test_an_agent_is_told_to_read_a_result_back_only_with_tools_it_holds(
-    scripted, granted, told
-):
-    """Every agent was told to read a saved result back with `read_file`, `grep` and `glob`,
-    and one holding none of them spent a call on each refusal; one holding the shell is not
-    told that nothing it holds reads the files."""
-    builtin = '["*"]' if granted is None else f"[{', '.join(granted)}]"
-    (system,) = _told(scripted, builtin_tools=builtin)
-    flat = " ".join(system.split())
-
-    assert {tool for tool, said in READ_BACK.items() if said in flat} == told
-    shelled = granted is None or "execute" in granted
-    assert ("None of your tools reads these files" in flat) is (not told and not shelled)
-    assert ("Read that file" in flat) is ("read_file" in told)
-    for tool in set(READ_BACK) - set(READ_BACK if granted is None else granted):
-        assert f"`{tool}`" not in flat, tool
-
-
-@pytest.mark.parametrize(
-    "granted",
-    [None, ("read_file", "grep"), ("grep",), ("read_file",), ()],
-    ids=["every", "read_file and grep", "grep", "read_file", "none"],
-)
-def test_a_cleared_result_is_told_back_only_the_way_its_handle_says(scripted, granted):
-    """An agent holding `grep` was told to "`grep` for the id where the handle says to",
-    which no handle has said since every result became kingfisher's own (#1018): the
-    model was sent looking for a pointer that was never written.
-
-    Driven against the handle clearing writes for the same grant, so a handle that names
-    a new way back and a prompt that does not, or the other way round, fail here."""
-    from kingfisher.core.agent.middlewares.clearing import ResultClearingMiddleware
-    from kingfisher.core.agent.models import summarizer_count
-    from kingfisher.core.result import LedgerEntry
-    from kingfisher.core.session.ledger import Ledger
-    from kingfisher.core.session.store import KeptLedger
-
-    row = LedgerEntry(
-        id="A-0001", turn="t", call="c1", run=None, role="main", tool="web_search",
-        args="query=q", access=None, size=90_000,
-        path="/scratchpad/tool_results/A-0001-web_search.txt", summary="web_search(q)",
-    )
-    count = summarizer_count(FakeToolCallingModel(responses=[]))
-    clearing = ResultClearingMiddleware(Ledger("t", KeptLedger()), 64_000, granted, count=count)
-    handle = clearing._row_handle(row)
-    builtin = '["*"]' if granted is None else f"[{', '.join(granted)}]"
-    (system,) = _told(scripted, builtin_tools=builtin)
-    (recovering,) = (p for p in system.split("\n\n") if "cleared to a short handle" in p)
-    recovering = " ".join(recovering.split())
-
-    assert handle is not None, "no handle was written, so the rest is vacuous"
-    assert ("Read that file" in recovering) is ("full result:" in handle)
-    # A tool named in backticks is a way back the handle would have to name too.
-    named = {tool for tool in READ_BACK if f"`{tool}`" in recovering}
-    assert named <= {tool for tool in READ_BACK if tool in handle}, named
 
 
 @pytest.mark.parametrize(

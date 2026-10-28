@@ -6152,6 +6152,19 @@ confirmed by breaking the tree, no break of `src/` reaching a test that reads it
 other two are nearly all who may reach what. Of 430 keep-list breaks, a doomed test alone
 caught none. *(2026-10-28.)*
 
+**Worse is kind four; lost is not.** A prompt section, a tool's note on what it left out,
+advice on a refused file: each is kind four where the model is told something worse, and
+stays where the model loses its way to something -- the folder its writes land in, a PDF's
+page it sees only through `pdf_pages`, a skill script reached only by
+`$KINGFISHER_SKILLS`. A host path in what the model is told is a leak, as it is in a
+ledger row. A test this file names as holding a decision goes only with the decision, as
+`test_the_memory_block_says_memory_lasts_only_this_conversation` holds memory's lifetime.
+The fifth slice took 53 of the 186 items in `test_prompt.py`,
+`test_tools_that_create_files.py` and `test_attachments.py`. The gate broke
+`attachments.py` too, which guards what a turn sends: of 656 breaks, a doomed test alone
+caught two, both a plugin's empty answer handed to the model for one call with the PDF
+withheld, which loses nothing. *(2026-10-28.)*
+
 **Growth is held by a rule in `CLAUDE.md`, not by anything in CI.** 557 of the 608 commits
 since September were written with Claude, which reads that file on every task. The growth
 is spread evenly -- a third each from PRs adding up to five tests, six to ten, and more --
@@ -6159,11 +6172,13 @@ so a limit per PR reaches a third of it, and a cap on the total invites merging 
 fit under it. Measured again a month on: if the weekly rate is not well under 430, a count
 per PR goes into CI.
 
-**The async halves go first**, then the other kinds a few files a slice, the files that grew
-most first, and the half older than September last, so the tree holds one standard rather
-than a deletable test kept beside one the rule refuses. Merging tests and trimming
-docstrings are out: about 5% of lines between them, and a merged test names more than one
-failure.
+**The async halves go first**, then the other kinds a few files a slice -- the files that
+grew most first until 2026-10-28, when two slices took 18% and then 4% for the same cost,
+and since then the files about what the model is shown, leaving out those the keep-list
+holds nearly whole -- and the half older than September last, so the tree holds one
+standard rather than a deletable test kept beside one the rule refuses. Merging tests and
+trimming docstrings are out: about 5% of lines between them, and a merged test names more
+than one failure.
 
 **Nothing in the suite was redundant, by the strict test, in September** -- which is still
 the answer to that test. Counted on the tree of the date below: 2,431 tests against 89 modules, and
