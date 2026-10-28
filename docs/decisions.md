@@ -829,14 +829,22 @@ process, so without it nothing in the resumed stream would say what `p0` was, or
 two delegations were open. The `tool_result` whose `call` is the delegation's id ends
 it; a pause is not an end. *(2026-10-27, #1130.)*
 
-**Not covered: the run-events record, a program's subagents, and an approval's subagent
-with two open.** `RunEvents` is built from langchain's callbacks rather than the stream,
-so telling parallel calls apart there needs a mechanism of its own; the ledger already
-files a subagent's results under the call that started it, so the record after the fact
-was never blind the way the live stream was. `ONGOING.md` keeps it. A subagent a program
-starts with `task()` inside `eval` does not reach the stream at all.
-`PendingDecision.agent` stays `None` while two delegations are open, for the reason
-`_subagent_behind` gives. *(2026-10-27.)*
+**The run-events record says the same, read off the callbacks rather than the stream.**
+Each model and tool event carries `agent` and `delegations` as the stream means them;
+each tool event, its end too, carries `tool` and `call`; and `model_call` carries
+`calls` beside `tool_calls`, which keeps its published name. All of it comes from
+langchain's callbacks alone: a tool's start carries its call's id and the namespace of
+the task running it, before anything inside runs, so `Delegations` learns the chain
+there as the stream's copy learns it from `tasks`. The recorder's `RUN` is no source: it
+holds only the outermost run, and only in a graph kingfisher builds. An end callback
+carries no metadata, so an end takes its fields from its start, matched by run id. A
+task seen running two `task` calls stands for neither, since a tool's start arrives one
+call at a time; on the stream such a task is refused up front. *(2026-10-28, #1138.)*
+
+**Not covered: a program's subagents, and an approval's subagent with two open.** A
+subagent a program starts with `task()` inside `eval` reaches neither the stream nor the
+run-events record. `PendingDecision.agent` stays `None` while two delegations are open,
+for the reason `_subagent_behind` gives. *(2026-10-27.)*
 
 ## Packaging: where the definitions live
 

@@ -269,6 +269,14 @@ where it runs one, and elsewhere the main agent's. `model_call` carries `input_t
 `output_tokens` and `cache_read`, which is what a bill is totalled from, and `cut_off`,
 true for a reply that stopped at the model's output cap.
 
+Every model and tool event says where it came from, in the stream's words: `agent` is
+the subagent that made it, `null` for the agent the caller asked, and `delegations` the
+`task` calls it came from inside, outermost first, each by its call's id. Two runs of
+one subagent at once share an `agent` and differ in `delegations`. `tool_start`,
+`tool_end` and `tool_error` carry `tool` and `call`, the call's id, so an end is matched
+to its start by `call`; `model_call` carries `calls`, the id of each call its reply
+makes, lined up with `tool_calls` and `""` where the provider gave none.
+
 **Wire nothing and they go to the `kingfisher.run` logger**, one JSON line per event
 at `INFO`, with the mapping itself on the record as `run_event` for a handler that
 ships structured logs. Python's default configuration drops `INFO`, so a

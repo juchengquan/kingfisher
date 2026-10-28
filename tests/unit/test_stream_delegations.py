@@ -275,3 +275,18 @@ def test_a_cut_reply_inside_a_delegation_says_which():
 
     assert cut.cut_off
     assert cut.delegations == ("t1",)
+
+
+@pytest.mark.parametrize(
+    ("calls", "filed"),
+    [(("t1", "t2"), ()), (("t1", "t1"), ("t1",))],
+    ids=["two-calls", "one-call-started-again"],
+)
+def test_a_task_seen_running_two_task_calls_stands_for_neither(calls, filed):
+    """A tool's start arrives one call at a time, so a `tools` task running two -- a
+    supplied graph's own `ToolNode` -- filed everything inside under the later."""
+    delegations = runtime.Delegations()
+    for call in calls:
+        delegations.entered("abc", call)
+
+    assert delegations.within(("tools:abc",)) == filed
