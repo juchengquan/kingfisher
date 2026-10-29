@@ -9,11 +9,15 @@ the server said it was.
 The server is `http.server` on the loopback at a port the kernel picks, so no rule
 here reaches the network -- which is also why the refusals are asserted against hosts
 that do not exist: a redirect this tool refuses is refused before anything is fetched.
+The tool refuses the loopback as shipped, so `serving` lets it reach that one address,
+as a deployment names a service of its own.
 """
 
 from __future__ import annotations
 
 import http.server
+import ipaddress
+import socket
 import socketserver
 import threading
 import time
@@ -78,6 +82,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     #: Set by the fixture: how long to wait between bytes on `/dribble`.
     pause: float = 0.2
 
+    #: Every path asked for, reset by `serving`.
+    asked: list[str] = []
+
     def log_message(self, format: str, *args: Any) -> None:
         """Quiet: the server's own logging goes to stderr and says nothing useful."""
 
@@ -94,6 +101,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
+        self.asked.append(self.path)
         if self.path in BODIES:
             self._sent(*BODIES[self.path])
         elif self.path.startswith("/sized/"):
@@ -121,6 +129,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self._redirect("ftp://nowhere.invalid/welcome.msg")
         elif self.path == "/to-plain":
             self._redirect("/plain")
+        elif self.path == "/to-inside":
+            # The loopback, and not the one address `serving` lets the tool reach.
+            self._redirect(f"http://127.0.0.2:{self.server.server_address[1]}/plain")
         else:  # pragma: no cover -- every route a rule asks for is above
             self.send_error(404)
 
@@ -130,8 +141,13 @@ class _Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 @pytest.fixture
-def serving():
-    """A server on the loopback, and the base URL to reach it at."""
+def serving(fetch, monkeypatch):
+    """A server on the loopback, which the tool is let reach, and the base URL to reach
+    it at."""
+    monkeypatch.setitem(
+        _globals(fetch), "ALLOWED_PRIVATE_NETWORKS", (ipaddress.ip_network("127.0.0.1/32"),)
+    )
+    monkeypatch.setattr(_Handler, "asked", [])
     server = _Server(("127.0.0.1", 0), _Handler)
     # `shutdown` waits out a poll, half a second by default, in every test that serves.
     thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
@@ -190,6 +206,53 @@ def test_a_url_this_tool_does_not_fetch_is_refused_before_anything_is_asked(fetc
     """
     assert fetch.func(url="file:///etc/hosts").startswith("refused:")
     assert fetch.func(url="ftp://nowhere.invalid/x").startswith("refused:")
+
+
+@pytest.mark.parametrize("scheme", ["http", "https"])
+def test_an_address_on_this_machine_is_refused_without_being_connected_to(fetch, scheme):
+    """The metadata address `169.254.169.254` hands a plain GET the machine's credentials
+    on AWS, and a run on a real model sent this tool to eighteen URLs on the loopback of
+    the host it ran on. Refused before connecting, or a model learns which ports are open
+    from which refusal it gets.
+    """
+    # Port 9, where nothing listens: connected to, it answers "connection refused".
+    answer = fetch.func(url=f"{scheme}://127.0.0.1:9/")
+
+    assert answer == (
+        "refused: 127.0.0.1 is on this machine or a private network, and this tool "
+        "fetches public addresses only"
+    )
+
+
+def test_a_redirect_into_this_machine_is_refused(fetch, serving):
+    """A public page answering 302 to the metadata address would otherwise be fetched."""
+    answer = fetch.func(url=f"{serving}/to-inside")
+
+    assert answer.startswith("refused: 127.0.0.2 is on this machine")
+    assert _Handler.asked == ["/to-inside"]
+
+
+def test_a_name_that_answers_privately_when_connected_to_is_refused(
+    fetch, serving, monkeypatch
+):
+    """A name can answer a public address when it is checked and a private one when it
+    is connected to; checked by name alone, this fetched from the loopback. Nothing may
+    be asked of the address reached: a GET to an internal service can change it.
+    """
+    monkeypatch.setitem(_globals(fetch), "ALLOWED_PRIVATE_NETWORKS", ())
+    looked_up = socket.getaddrinfo
+    answers = iter(["93.184.215.14"])
+
+    def rebinding(host, *args, **kwargs):
+        return looked_up(next(answers, "127.0.0.1"), *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", rebinding)
+    port = serving.rsplit(":", 1)[1]
+
+    answer = fetch.func(url=f"http://rebinding.invalid:{port}/plain")
+
+    assert answer.startswith("refused: rebinding.invalid (127.0.0.1) is on")
+    assert _Handler.asked == []
 
 
 def test_a_page_comes_back_as_its_text(fetch, serving):
