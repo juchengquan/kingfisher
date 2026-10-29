@@ -552,6 +552,15 @@ write out as YAML: every list kept to the listing, a `["*"]` kept as one, add-on
 [slots](formats.md#text-that-depends-on-the-caller--system_prompt-written-long) filled for
 this caller. An agent out of their reach answers `None`, as a name nothing defines does.
 
+`reachable.check_agent(text)` is everything wrong with `text` as an agent file this
+caller drafted, or `()`. It reads the text as startup reads a file in `agents/`, then
+holds every name to the listing: a tool, skill, subagent, add-on, model or gate this
+caller cannot use, a name an agent they can see already has, and a tool named by a file
+where the listing names it bare. A name out of their reach is refused in the words a
+typo is. Any `source_ids:` or `datazone:` is refused, whatever it says, since who may use
+a drafted agent is for whoever installs it. A copy from `agent(name)`, renamed and with
+its prompt written as a `|` block, passes.
+
 **Nothing either answers names a source id**: no `source_ids:` line, no audience on a
 `skills:` entry, no slot's rule. Which names open what is the deployment's policy, and
 a caller shown it could guess at it. A prompt filled for this caller is the text *they*
