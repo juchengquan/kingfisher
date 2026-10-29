@@ -701,6 +701,13 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
   before the subagent starts is in all of them. The ledger's `RUN` rests on this, and
   `test_a_subagents_results_are_working_entries_of_the_run_that_started_it` holds
   both paths. *(2026-10-12, langgraph 1.2.11, langchain 1.3.15, deepagents 0.7.6.)*
+- **`FilesystemBackend` writes a file in place, so two calls at one file at once can
+  break it.** `write` and `upload_files` open with `O_TRUNC` and then write; `edit` reads
+  the file whole and writes it back the same way. Calls made together run at once, as
+  above. In 300 tries each: two writes of 3 KB and 37 bytes left the shorter followed by
+  the end of the longer 124 times, two `upload_files` 113 times, and two edits of
+  different lines kept only one 280 times. Every call answered success. A lock per file
+  around the three: none in 300. *(2026-10-29, deepagents 0.7.22.)*
 
 ## The Linux fence
 

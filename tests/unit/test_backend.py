@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import platform
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -803,3 +804,70 @@ def test_an_unconfined_shell_says_what_it_means_for_the_other_sessions(cfg, sess
 
     with pytest.warns(UserWarning, match="read and change the other sessions' files"):
         backend_at(cfg, session_dir, shell=ShellSettings(sandbox="off"))
+
+
+LONG = "# Sales, week 43\n" + "".join(f"| store {n:03} | {n % 90} orders |\n" for n in range(120))
+SHORT = "# Sales, week 43\nTotal: 1,204 orders\n"
+EDITED = "Orders: 1,250\nTop region: APAC\n"
+
+
+def _held_after_emptying(monkeypatch, first, second):
+    """Run `second` until it has emptied its file, then `first`, then let `second` write.
+
+    Held where the damage is done rather than raced, so a missing lock fails every time
+    and not one time in three.
+    """
+    emptied, first_done = threading.Event(), threading.Event()
+    opened = os.fdopen
+
+    def fdopen(fd, mode="r", *args, **kwargs):
+        if threading.current_thread().name == "second" and "w" in mode:
+            emptied.set()
+            # Not forever: behind the lock, `first` is waiting for this one to finish.
+            first_done.wait(timeout=0.25)
+        return opened(fd, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "fdopen", fdopen)
+    held = threading.Thread(target=second, name="second")
+    held.start()
+    assert emptied.wait(timeout=5), "upstream no longer writes through os.fdopen"
+    first()
+    first_done.set()
+    held.join()
+
+
+@pytest.mark.parametrize(
+    ("path", "op"),
+    [
+        ("/outputs/summary.md", "write"),
+        ("/outputs/summary.md", "edit"),
+        ("/outputs/summary.md", "upload"),
+        ("/memory/summary.md", "write"),
+    ],
+)
+def test_two_writes_at_one_file_at_once_leave_it_whole(
+    cfg, session_dir, monkeypatch, path, op
+):
+    """Upstream empties a file and then writes it: the agent builder saved one draft twice
+    at once and kept the shorter draft with the longer one's last 20 bytes after it, which
+    startup refused. Two edits at once kept only one, and both were told they succeeded.
+    """
+    backend = backend_at(cfg, session_dir)
+    on_disk = session_dir / path.lstrip("/")
+    if op == "edit":
+        backend.write(path, "Orders: 1,204\nTop region: EMEA\n")
+        _held_after_emptying(
+            monkeypatch,
+            lambda: backend.edit(path, "1,204", "1,250"),
+            lambda: backend.edit(path, "EMEA", "APAC"),
+        )
+        assert on_disk.read_text() == EDITED
+        return
+    if op == "write":
+        def put(text):
+            return lambda: backend.write(path, text)
+    else:
+        def put(text):
+            return lambda: backend.upload_files([(path, text.encode())])
+    _held_after_emptying(monkeypatch, put(LONG), put(SHORT))
+    assert on_disk.read_text() in (LONG, SHORT)

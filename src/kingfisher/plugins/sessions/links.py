@@ -6,10 +6,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from deepagents.backends import FilesystemBackend
+from .writes import OneWriterPerFile
 
 
-class UnlinkedBackend(FilesystemBackend):
+class UnlinkedBackend(OneWriterPerFile):
     """A `FilesystemBackend` that reaches a file only at the path it was named by.
 
     The deny rules judge the path typed, and upstream follows a link anywhere under the
@@ -37,7 +37,7 @@ class UnlinkedBackend(FilesystemBackend):
         return super()._to_virtual_path(path)
 
 
-class RootedBackend(FilesystemBackend):
+class RootedBackend(OneWriterPerFile):
     """A `FilesystemBackend` that answers a link out of its root as the operation's error.
 
     Upstream refuses one with `ValueError`, which `read`, `write`, `edit`, `delete` and
