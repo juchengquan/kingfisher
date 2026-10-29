@@ -14,7 +14,11 @@ written, and say what the arguments mean in the words a caller would use.
 from __future__ import annotations
 
 import codecs
+import http.client
+import ipaddress
 import re
+import socket
+import ssl
 import time
 import unicodedata
 import urllib.error
@@ -101,6 +105,76 @@ class _HttpRedirectsOnly(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+#: Private networks this tool may still reach: none, as shipped. A deployment that fetches
+#: from a service of its own names that network here in its copy, as
+#: `ipaddress.ip_network("10.1.0.0/16")`. Behind a proxy the address checked is the
+#: proxy's, so a proxy on a private address is named here too.
+ALLOWED_PRIVATE_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = ()
+
+
+class _PrivateAddressError(OSError):
+    """An address on this machine or a private network, refused before anything is sent.
+
+    An `OSError`, because that is what urllib carries out of a connection as the reason
+    in a `URLError`.
+    """
+
+
+def _public(address: str) -> bool:
+    found = ipaddress.ip_address(address)
+    return found.is_global or any(found in network for network in ALLOWED_PRIVATE_NETWORKS)
+
+
+def _refused(host: str, address: str) -> _PrivateAddressError:
+    where = address if host == address else f"{host} ({address})"
+    return _PrivateAddressError(
+        f"{where} is on this machine or a private network, and this tool fetches public "
+        "addresses only"
+    )
+
+
+class _PublicConnection(http.client.HTTPConnection):
+    """A connection to a public address, or to none.
+
+    Every address the name has is checked before connecting, so a private one is never
+    touched, and the address reached again before the request is sent: a name can answer
+    differently the second time it is asked.
+    """
+
+    def connect(self) -> None:
+        try:
+            found = socket.getaddrinfo(self.host, self.port, type=socket.SOCK_STREAM)
+        except OSError:
+            # Left to the connection below, which says why in its own words.
+            found = []
+        for *_, where in found:
+            if not _public(address := str(where[0])):
+                raise _refused(self.host, address)
+        super().connect()
+        reached = self.sock.getpeername()[0]
+        if not _public(reached):
+            self.close()
+            raise _refused(self.host, reached)
+
+
+class _PublicTLSConnection(_PublicConnection, http.client.HTTPSConnection):
+    """The same for HTTPS, checked again once the handshake is done."""
+
+
+class _PublicHandler(urllib.request.HTTPHandler):
+    def http_open(self, req: Any) -> Any:
+        return self.do_open(_PublicConnection, req)
+
+
+class _PublicTLSHandler(urllib.request.HTTPSHandler):
+    def __init__(self) -> None:
+        self._tls = ssl.create_default_context()
+        super().__init__(context=self._tls)
+
+    def https_open(self, req: Any) -> Any:
+        return self.do_open(_PublicTLSConnection, req, context=self._tls)
+
+
 def _charset(response: Any) -> str:
     """The encoding the response declares, or UTF-8 where it declares none usable.
 
@@ -175,9 +249,10 @@ def _cut(text: str) -> str:
 def http_fetch(url: str) -> str:
     """Fetch a URL over HTTP(S) and return its body as text.
 
-    Use for reading a public web page or API response. Returns at most
-    20,000 characters, and gives up after 30 seconds. A page longer than that
-    comes back cut, with a last line saying so. A body that does not read as
+    Use for reading a public web page or API response; an address on this
+    machine or a private network is refused. Returns at most 20,000
+    characters, and gives up after 30 seconds. A page longer than that comes
+    back cut, with a last line saying so. A body that does not read as
     text, such as an image or a PDF, is refused rather than answered. Does not
     run JavaScript, so a page that renders client-side will come back close to
     empty.
@@ -185,16 +260,18 @@ def http_fetch(url: str) -> str:
     if not _is_http(url):
         return f"refused: {url!r} is not an http(s) URL"
 
-    # One opener, so the redirect rule applies to the request this call makes. The
-    # check above is about the URL the model wrote; this is about every URL that one
-    # leads to, and the two are not the same question.
-    opener = urllib.request.build_opener(_HttpRedirectsOnly)
+    # One opener, so the redirect rule and the address rule apply to every request this
+    # call makes. The check above is about the URL the model wrote; these are about every
+    # URL that one leads to, and the two are not the same question.
+    opener = urllib.request.build_opener(_HttpRedirectsOnly, _PublicHandler, _PublicTLSHandler)
     try:
         with opener.open(url, timeout=TIMEOUT_S) as response:
             body, more = _read_by(time.monotonic() + MAX_SECONDS, response)
             text = body.decode(_charset(response), errors="replace")
             kind = response.headers.get_content_type()
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        if isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, _PrivateAddressError):
+            return f"refused: {exc.reason}"
         # Returned rather than raised, so the message names the URL -- a
         # `URLError` alone does not say which fetch failed. Raising would not
         # have ended the turn: the failure guard turns an offered tool's

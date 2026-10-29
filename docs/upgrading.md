@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `http_fetch` refuses this machine and private networks, after #1158
+
+- **A deployment that fetches from a service of its own**, or through a proxy on a
+  private address, names that network in `ALLOWED_PRIVATE_NETWORKS` in its copy of
+  `tools/http_fetch.py`, as `ipaddress.ip_network("10.1.0.0/16")`.
+- **A copy seeded before still fetches anything** until it seeds again, which replaces
+  the file, an edited copy included.
+
 ## The agent builder can check a draft without saving it, after #1157
 
 - **`agent-builder` has a fourth tool, `check_agent_draft`**, which runs the save's check

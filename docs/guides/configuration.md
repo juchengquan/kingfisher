@@ -166,7 +166,8 @@ the shipped image does. Where Landlock cannot run, `auto` falls back to
 bubblewrap, which needs a seccomp profile permitting user namespaces — Docker's
 default denies them. bubblewrap also closes the shell's network, so a script the
 agent runs through `execute` can no longer download anything; `http_fetch` is a
-registered tool and is unaffected. Set `bubblewrap` to get that closed network
+registered tool and is unaffected, though it refuses this machine and private
+networks itself. Set `bubblewrap` to get that closed network
 even where Landlock would run. `kingfisher doctor` names the mechanism it settled
 on and says why when it settled on nothing.
 

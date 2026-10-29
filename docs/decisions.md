@@ -2449,6 +2449,18 @@ fetch `http://169.254.169.254/` or anything in its network, which a deployment e
 it must decide; it is an example of a narrow grant, not of a safe one.
 *(2026-10-15, from an architecture review.)*
 
+**Reversed: `http_fetch` fetches public addresses only.** Left to each deployment, nobody
+decided it: a plain `seed` copies the tool, and the shipped `general` and `operator` hold
+it through `tools: ["*"]`. On a real model, a helper looking for how agent files are
+written sent it to eighteen URLs on the host's own loopback, unasked. Every address a
+name has is checked before connecting, so a private one is never touched and a model
+cannot tell an open port from a closed one; the address reached is checked again before
+the request is sent, since a name can answer differently the second time. In the
+connection, so every redirect and both schemes are held to it. A deployment reaching a
+service of its own names that network in `ALLOWED_PRIVATE_NETWORKS`, in its copy of the
+file rather than a setting: the tool reads no configuration, and the copy is the
+deployment's. Behind a proxy the proxy's address is the one checked. *(2026-10-29, #1158.)*
+
 **Three shipped tools answered wrongly about a file a real deployment holds, and the
 bound was never the one the row count suggested.** Each found by handing the tool the
 input.
