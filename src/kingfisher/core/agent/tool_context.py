@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.reachable import Reachable
+
 if TYPE_CHECKING:
     from kingfisher.core.interfaces import ScratchRun
 
@@ -52,6 +54,8 @@ class ToolContext:
     scratch: Any = None
     #: Who the turn runs for. `None` only for a build no turn asked for.
     caller: Caller | None = None
+    #: What `caller` can use this turn, worked out only when a tool asks.
+    reachable: Reachable | None = None
 
     def run(
         self,

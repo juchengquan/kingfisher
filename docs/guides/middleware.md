@@ -232,6 +232,11 @@ whether a key looks harmless but whether *more* or *different* is a failure mode
 count is written, so a definition choosing a lower one chooses more summaries, for
 its own agent and nobody else's.
 
+**Keep secrets out of `settings:`.** A tool reading `reachable.agent(...)`, which
+[`tools.md`](tools.md#what-the-caller-can-use) describes, shows a caller what an agent
+they reach writes there, as it shows the rest of that file. A key, a token or an address
+belongs in `defaults` or in the environment the class reads, where no definition writes it.
+
 **A definition that writes `["*"]` gets everything registered and granted.** That
 is worth knowing before adding an entry to the dict: registering a new middleware
 attaches it to every definition holding a star, and no file mentions it. A file

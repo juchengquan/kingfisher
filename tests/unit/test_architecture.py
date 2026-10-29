@@ -2091,6 +2091,10 @@ WITNESSES: dict[str, dict[str, str]] = {
         "ScratchRun": "embedder",
         # What `ToolContext.caller` is, which `tools.md` reads `.context` and `.source_ids` off.
         "Caller": "embedder",
+        # What `ToolContext.reachable` is, which `tools.md` calls `.listing()` and `.agent()`
+        # on, and what `.listing()` answers.
+        "Reachable": "embedder",
+        "Listing": "embedder",
         # `tools.md` writes `ToolSpec(...)` for a tool that says who may use it or what it
         # is called, in a tool file of the deployment's own, as `ToolContext` above is.
         "ToolSpec": "document",

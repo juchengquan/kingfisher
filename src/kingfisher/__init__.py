@@ -44,6 +44,9 @@ _EXPORTS = {
     "Request": "kingfisher.core.request",
     # What a tool reads off `runtime.context.caller`.
     "Caller": "kingfisher.core.agent.tool_context",
+    # What a tool reads off `runtime.context.reachable`, and what its `listing` answers.
+    "Reachable": "kingfisher.core.reachable",
+    "Listing": "kingfisher.core.reachable",
     # What a caller holding a paused session needs to answer the gated call.
     "Resume": "kingfisher.core.request",
     "Decision": "kingfisher.core.request",
@@ -109,6 +112,7 @@ __all__ = [
     "Kingfisher",
     "Landing",
     "LedgerEntry",
+    "Listing",
     "MemoryChanges",
     "MemoryEntry",
     "MemoryEntryError",
@@ -121,6 +125,7 @@ __all__ = [
     "PendingDecision",
     "PortableSubagent",
     "QuotaExceededError",
+    "Reachable",
     "Request",
     "Resume",
     "RunEvent",
@@ -184,6 +189,8 @@ if TYPE_CHECKING:
     from kingfisher.core.inventory import inventory as inventory
     from kingfisher.core.origins import Origin as Origin
     from kingfisher.core.origins import Origins as Origins
+    from kingfisher.core.reachable import Listing as Listing
+    from kingfisher.core.reachable import Reachable as Reachable
     from kingfisher.core.request import Decision as Decision
     from kingfisher.core.request import DecisionError as DecisionError
     from kingfisher.core.request import Request as Request
