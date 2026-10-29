@@ -78,10 +78,6 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   model calls work, since httpx carries certifi. Proposed: the system store when it has
   certificates, certifi's bundle otherwise, a clear error with neither, and a `doctor`
   check. Deferred by the owner. *(2026-10-17.)*
-- **A subagent started by `task()` from inside `eval` is recorded as the agent's own
-  work**, with no run: `_running` in `recorder.py` starts a run only for `task`.
-  Measured, starting one for `eval` too files it under the `eval` call, in both loops,
-  with no change to how the delta is drawn. *(2026-10-17.)*
 - **`decisions.md` still says expiry removes deepagents' offloaded copy**, in *Marked
   when the turn's ledger is built, removed by the sweep*. Nothing has been offloaded
   since 2026-10-21, so that sentence describes code that is gone. *(2026-10-23.)*

@@ -48,6 +48,7 @@ from kingfisher.core.agent.kinds.tools import (
 )
 from kingfisher.core.agent.middlewares.clearing import result_clearing
 from kingfisher.core.agent.middlewares.narrowing import CatalogueSkillsMiddleware
+from kingfisher.core.agent.middlewares.program_dispatch import ProgramDispatchMiddleware
 from kingfisher.core.agent.middlewares.recorder import (
     Audiences,
     RecorderMiddleware,
@@ -525,6 +526,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         # among the built-ins, and the grant is not resolved until after it.
         interpreter_at = len(switched)
         switched.append(interpreter(cfg, None))
+        switched.append(ProgramDispatchMiddleware())
 
     # Before the first build, which binds a tool's runs under the gates.
     gated = _gates_for(agent, checkpointer)

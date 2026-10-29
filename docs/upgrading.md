@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A program's subagents are in the run-events record, after #1149
+
+- **A subagent a program starts with `task()` inside `eval` is now in `RunEvents`**: the
+  `task` call that started it, and its model and tool calls under its own `agent`. Before,
+  none of it was, so a sink totalling a turn's tokens missed every one such a subagent
+  spent, and a tracer in the run's config never saw it. Only a deployment that turns the
+  sandbox on, with `KINGFISHER_INTERPRETER_ENABLED`, is affected.
+- **On the stream, its events now name it, and its tokens stream.** Before, its tool
+  calls and results came with `agent` `None`, as the caller's own, and it sent no tokens.
+  Its `delegations` are still empty.
+
 ## Every subagent holding `task` has a `general-purpose` of its own, after #1148
 
 - **A subagent whose `builtin_tools` holds `task`, or is `["*"]`, can now hand work to a

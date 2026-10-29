@@ -364,6 +364,31 @@ def test_a_call_from_code_or_a_compiled_subagent_is_logged_once(scripted, route,
     assert len(sink.named("tool_end")) == len(started), "a call ended more often than it began"
 
 
+def test_a_subagent_a_program_starts_is_in_the_record(scripted):
+    """The sandbox's `task()` ran its subagent with no callbacks, so the subagent's model
+    calls were missing from the record, and the tokens they spent with them."""
+    cfg = replace(scripted, interpreter_enabled=True)
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(
+        "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n", encoding="utf-8"
+    )
+    an_agent(cfg, subagents="[helper]", builtin_tools="[eval, task]")
+    start(cfg, "s")
+    program = "(async () => await task({description: 'go', subagentType: 'helper'}))()"
+    Scripted.script.extend([
+        _called("eval", {"code": program}, "e1"),
+        AIMessage(content="helped"),
+        AIMessage(content="done"),
+    ])
+    sink = RecordedEvents()
+
+    Kingfisher(cfg, sessions=LocalSessions(), run_events=sink).run(
+        Request("go", agent="only", session_id="s")
+    )
+
+    assert [e["agent"] for e in sink.named("model_call")] == [None, "helper", None]
+
+
 # -- delegations side by side, in the record ------------------------------------
 
 
