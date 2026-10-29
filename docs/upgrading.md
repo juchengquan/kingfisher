@@ -18,6 +18,22 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A program's subagents are told apart, after #1150
+
+- **A subagent a program starts with `task()` now carries `delegations`**: the `eval`
+  call's id, then the dispatch's own, such as `("e1", "ptc_task_5fea…")`, on the stream
+  and in `RunEvents` alike, with its helpers' calls further down the chain. Before, the
+  stream gave `()`, and the record the dispatch's id alone, or nothing once the program
+  had started a second. `delegations[0]` is still what the ledger's `run` records: it
+  files a program's subagents under the `eval` call.
+- **Each dispatch is announced and ended on the stream as a `task` call is**: a
+  `delegation_start` with the subagent and what it was asked, and a `tool_result` whose
+  `call` is the dispatch's id, carrying its answer or its error. No `model_call` makes
+  that call, since the program does; the `delegation_start` is all that announces it. A
+  pause sends no result, and the resumed turn announces the dispatch again.
+- **`kingfisher run` and `decide` hold a program's dispatches side by side as blocks**,
+  as they have held `task` calls since #1130. Only stderr changes.
+
 ## A program's subagents are in the run-events record, after #1149
 
 - **A subagent a program starts with `task()` inside `eval` is now in `RunEvents`**: the

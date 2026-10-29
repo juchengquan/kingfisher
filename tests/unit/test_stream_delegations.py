@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import time
+from dataclasses import replace
 from typing import Any
 
 import pytest
 from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, AIMessageChunk
 from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher
@@ -214,6 +215,95 @@ def test_a_resumed_turn_names_the_delegation_it_re_enters(cfg, session_dir):
     assert [e.call for e in events if e.kind == "tool_result" and e.tool == "task"][-1] == "p0"
 
 
+# -- a program's dispatches, which pass no `ToolNode` -----------------------------
+
+#: Two dispatches one program starts at once.
+TWICE = """(async () => await Promise.all([
+  task({description: 'check the draft', subagentType: 'reviewer'}),
+  task({description: 'check the tests', subagentType: 'reviewer'}),
+]))()"""
+
+#: What the two reviewers answer, then the agent.
+TWO_ANSWERS = (AIMessage("answer A"), AIMessage("answer B"), AIMessage("done"))
+
+WRITE = {"name": "write_file", "args": {"file_path": "/outputs/r.txt", "content": "x"}}
+
+
+def _dispatching(scripted, program: str, *script: AIMessage | Exception, **agent: str) -> Any:
+    """`reviewer`, and an agent whose first reply runs `program` as the call `e1`."""
+    cfg = replace(scripted, interpreter_enabled=True)
+    _define(cfg, "name: reviewer\ndescription: Reviews.\nbuiltin_tools: [write_file]\n"
+            "system_prompt: |\n  You review.\n")
+    an_agent(cfg, subagents="[reviewer]", builtin_tools="[eval, task, write_file]", **agent)
+    start(cfg, "s")
+    called = {"name": "eval", "args": {"code": program}, "id": "e1"}
+    Scripted.script.extend([AIMessage(content="", tool_calls=[called]), *script])
+    return cfg
+
+
+def test_two_dispatches_one_program_starts_at_once_are_told_apart(scripted):
+    """No `tasks` chunk announces a program's dispatch, so two at once carried no
+    delegation: the CLI held neither, and printed both live under one tag."""
+    cfg = _dispatching(scripted, TWICE, *TWO_ANSWERS)
+
+    asked = Request("go", agent="only", session_id="s")
+    events = _drained(Kingfisher(cfg, sessions=LocalSessions()), asked)
+
+    starts = {e.delegations: e.text for e in events if e.kind == "delegation_start"}
+    assert sorted(starts.values()) == ["check the draft", "check the tests"]
+    assert {chain[0] for chain in starts} == {"e1"}
+    reviewed = [e.delegations for e in events if e.kind == "model_call" and e.agent == "reviewer"]
+    assert sorted(reviewed) == sorted(starts)
+    ended = [e for e in events if e.kind == "tool_result" and e.tool == "task"]
+    assert sorted(str(e.call) for e in ended) == sorted(chain[-1] for chain in starts)
+    # Which dispatch got which reply is the scheduler's choice.
+    assert sorted(e.text for e in ended) == ["answer A", "answer B"]
+
+
+def test_a_dispatch_that_pauses_has_not_ended(scripted):
+    """A pause reaches the dispatch as an exception, and a result written for one would
+    end a delegation still waiting on a person; the resumed turn's is the control."""
+    cfg = _dispatching(
+        scripted,
+        "(async () => await task({description: 'go', subagentType: 'reviewer'}))()",
+        AIMessage(content="", tool_calls=[{**WRITE, "id": "w1"}]),
+        AIMessage("reviewed"),
+        AIMessage("done"),
+        interrupt_on="[write_file]",
+    )
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+
+    first = _drained(kf, Request("go", agent="only", session_id="s"))
+    paused = first[-1].result
+    assert paused is not None and paused.pending, "the reviewer never paused"
+    answers = tuple(Decision(call_id=one.call_id, action="approve") for one in paused.pending)
+    second = _drained(kf, Resume(session_id="s", decisions=answers))
+
+    (chain,) = {e.delegations for e in first if e.kind == "delegation_start"}
+    assert [e for e in first if e.kind == "tool_result" and e.tool == "task"] == []
+    assert [(e.call, e.text) for e in second if e.kind == "tool_result" and e.tool == "task"] == [
+        (chain[-1], "reviewed")
+    ]
+
+
+def test_a_dispatch_that_fails_ends_with_its_error(scripted):
+    """The program catches the failure and goes on, so a failed dispatch with no result
+    stayed open for the rest of the turn, and held any dispatch started after it."""
+    program = """(async () => {
+      try { return await task({description: 'go', subagentType: 'reviewer'}); }
+      catch (e) { return 'caught: ' + e; }
+    })()"""
+    cfg = _dispatching(scripted, program, ValueError("the reviewer broke"), AIMessage("done"))
+
+    asked = Request("go", agent="only", session_id="s")
+    events = _drained(Kingfisher(cfg, sessions=LocalSessions()), asked)
+
+    (chain,) = {e.delegations for e in events if e.kind == "delegation_start"}
+    assert [(e.call, e.text) for e in events if e.kind == "tool_result" and e.tool == "task"] == [
+        (chain[-1], "ValueError: the reviewer broke")
+    ]
+
+
 # -- the map, where a real graph cannot reach -----------------------------------
 
 
@@ -262,6 +352,18 @@ def test_a_delegation_start_prints_as_its_header():
 
     assert str(event) == "[reviewer] check the tests"
     assert len(str(RunEvent(kind="delegation_start", agent="r", text="y" * 300))) < 120
+
+
+def test_the_chunk_that_names_a_dispatch_is_filed_under_it():
+    """A program's dispatch is named by its first `messages` chunk, and that chunk read
+    with what was known before it printed its first words outside the dispatch's block."""
+    stamped = (AIMessageChunk(content="first"), {runtime.DISPATCH: ["e1", "ptc_a"]})
+
+    (token,) = runtime.events_in(
+        ("tools:abc",), "messages", stamped, delegations=runtime.Delegations()
+    )
+
+    assert token.delegations == ("e1", "ptc_a")
 
 
 def test_a_cut_reply_inside_a_delegation_says_which():

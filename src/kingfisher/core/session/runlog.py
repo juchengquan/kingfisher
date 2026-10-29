@@ -118,7 +118,10 @@ class RunLogger(BaseCallbackHandler):
         named = metadata.get("lc_agent_name") if namespace else None
         return {
             "agent": str(named) if named else None,
-            "delegations": list(self._delegations.within(namespace)),
+            "delegations": [
+                *(str(one) for one in metadata.get(runtime.DISPATCH) or ()),
+                *self._delegations.within(namespace),
+            ],
         }
 
     def run_start(self, task: str) -> None:
@@ -168,9 +171,14 @@ class RunLogger(BaseCallbackHandler):
         **_: Any,
     ) -> None:
         name = (serialized or {}).get("name", "?")
-        found = metadata or {}
+        found = dict(metadata or {})
         *namespace, node = _segments(found)
-        if name == TASK_TOOL and tool_call_id:
+        stamp = found.get(runtime.DISPATCH) or ()
+        if name == TASK_TOOL and tool_call_id and stamp and stamp[-1] == tool_call_id:
+            # A program's dispatch, filed by the stamp on every run inside it; the call
+            # itself is the program's. Entered too, a lone one would name itself twice.
+            del found[runtime.DISPATCH]
+        elif name == TASK_TOOL and tool_call_id:
             # Before anything inside it runs, whose events are filed under it from here.
             self._delegations.entered(node.partition(":")[2], tool_call_id)
         held = {"tool": name, "call": tool_call_id or None, **self._where(namespace, found)}

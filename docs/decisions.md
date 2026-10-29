@@ -883,8 +883,8 @@ files two helpers one subagent runs at once under one id. `delegations[0]` is th
 the ledger files a subagent's results under. The chain comes from langgraph's `tasks`
 stream, because deepagents passes a subagent no call id; `findings.md` has what that
 stream carries. A namespace segment no `task` call started, a supplied graph's own
-subgraph, adds nothing, or every event of that graph would read as delegated.
-*(2026-10-27, #1130.)*
+subgraph, adds nothing, or every event of that graph would read as delegated. A
+program's dispatch adds its `eval` call's id as well, below. *(2026-10-27, #1130.)*
 
 **Calls and results carry their ids, for every tool, and the field is not `call_id`.** A
 `model_call` has `calls`, index-aligned with `tools` and refused out of step by the
@@ -905,6 +905,21 @@ readable: a resume repeats no `model_call`, and the command answers an approval 
 process, so without it nothing in the resumed stream would say what `p0` was, or that
 two delegations were open. The `tool_result` whose `call` is the delegation's id ends
 it; a pause is not an end. *(2026-10-27, #1130.)*
+
+**A program's dispatch is a delegation inside its `eval` call, as `("e1",
+"ptc_task_…")`.** A subagent a program starts with `task()` sits under the id of the
+`eval` call that ran the program, then the dispatch's own, which the library derives
+from the program, so a resumed turn running it again dispatches under the same one. The
+dispatch's id alone told two at once apart as well, but `delegations[0]` would then be
+an id the ledger never files under: it files a program's subagents under the `eval`
+call. No `ToolNode` sees a dispatch, so no `tasks` chunk announces it and no `updates`
+chunk answers it. `ProgramDispatchMiddleware` stamps the chain on the metadata of every
+run inside, which the record reads off each callback and the stream off the `messages`
+chunks, the only ones carrying metadata, and writes to the `custom` stream the
+dispatch's `delegation_start` and the `tool_result` ending it, with the subagent's
+answer or its error, since the answer itself goes back into the program. The program's
+own calls, the dispatch's among them, stay `()`, as the `eval` call is. *(2026-10-29,
+#1150.)*
 
 **The run-events record says the same, read off the callbacks rather than the stream.**
 Each model and tool event carries `agent` and `delegations` as the stream means them;
@@ -929,13 +944,10 @@ from a `finally`, so every `run_start` keeps its end. A turn that failed before 
 reason was known says `null`: `end_turn` would read as one that finished.
 *(2026-10-28, #1138.)*
 
-**Not covered: a program's subagents side by side, and an approval's subagent with two
-open.** A subagent a program starts with `task()` inside `eval` reaches the stream and
-the run-events record under its own name, and the record names its dispatch until the
-program starts a second. The stream never does, so the terminal holds none of them, and
-several side by side print interleaved. `PendingDecision.agent` stays `None` while two
-delegations are open, for the reason `_subagent_behind` gives. *(2026-10-27, narrowed
-2026-10-29, #1149.)*
+**Not covered: an approval's subagent with two open, or a program's.**
+`PendingDecision.agent` stays `None` while two delegations are open, for the reason
+`_subagent_behind` gives, and for a subagent a program started, whose name is in the
+program rather than in any message. *(2026-10-27, narrowed 2026-10-29, #1149, #1150.)*
 
 ## Packaging: where the definitions live
 

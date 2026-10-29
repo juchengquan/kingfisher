@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -111,6 +111,12 @@ STREAM_MODES: list[StreamMode] = ["updates", "values", "messages", "custom", "ta
 #: The key a middleware writes to the `custom` stream under, for a cut answer it asked
 #: again and so kept out of the state, where a `model_call` event is otherwise read from.
 CUT_OFF_MARK = "kingfisher.cut_off"
+
+#: A program's `task()` dispatch, by its chain: the `eval` call's id, then its own. The
+#: key on the metadata of every run inside it, and on the `custom` chunks announcing its
+#: start and its answer, which no `tasks` or `updates` chunk carries: the sandbox calls
+#: `task` past the `ToolNode`.
+DISPATCH = "kingfisher.dispatch"
 
 
 #: The `lc_source` deepagents' summariser tags its model's calls with, and the summary
@@ -252,6 +258,16 @@ def output_limit(message: Any) -> str:
     return f"the {spent:,}-token output limit" if spent else "the output limit"
 
 
+def dispatch_started(chain: Sequence[str], agent: str, asked: str) -> dict[str, Any]:
+    """The `custom` chunk read as a program's dispatch's `delegation_start`."""
+    return {DISPATCH: {"chain": list(chain), "agent": agent, "asked": asked}}
+
+
+def dispatch_answered(call: str, answer: str) -> dict[str, Any]:
+    """The `custom` chunk read as the `tool_result` ending a program's dispatch."""
+    return {DISPATCH: {"call": call, "answer": answer}}
+
+
 def cut_off_mark(reply: Any) -> dict[str, Any]:
     """What the `custom` stream is handed for a cut reply the state will never hold."""
     return {CUT_OFF_MARK: usage_of(reply)}
@@ -380,6 +396,8 @@ class Delegations:
         self._calls: dict[str, str] = {}
         #: Tasks seen running more than one `task` call.
         self._shared: set[str] = set()
+        #: The chain of the program's dispatch each namespace seen stamped is inside.
+        self._dispatches: dict[tuple[str, ...], tuple[str, ...]] = {}
 
     def started(self, namespace: Any, chunk: Any) -> RunEvent | None:
         """The `delegation_start` a `tasks` chunk announces, or `None`."""
@@ -405,14 +423,28 @@ class Delegations:
         if self._calls.setdefault(task, call) != call:
             self._shared.add(task)
 
+    def dispatched(self, namespace: Any, metadata: Any) -> None:
+        """Note which program's dispatch a namespace is inside, off a chunk stamped with
+        it: the one kind that is, and the only word of it an `updates` chunk inside gets."""
+        if isinstance(metadata, Mapping) and (chain := metadata.get(DISPATCH)):
+            self._dispatches[tuple(namespace or ())] = tuple(str(one) for one in chain)
+
     def within(self, namespace: Any) -> tuple[str, ...]:
         """The delegations a chunk came from inside, outermost first; `()` for the main
         agent. A segment no `task` call started, a supplied graph's own subgraph, adds
         nothing."""
-        return tuple(
-            self._calls[ran]
-            for segment in namespace or ()
-            if (ran := str(segment).partition(":")[2]) in self._calls and ran not in self._shared
+        key = tuple(namespace or ())
+        # The longest: a second dispatch from one program runs a segment below the first.
+        roots = [root for root in self._dispatches if key[: len(root)] == root]
+        dispatch = self._dispatches[max(roots, key=len)] if roots else ()
+        return (
+            *dispatch,
+            *(
+                self._calls[ran]
+                for segment in key
+                if (ran := str(segment).partition(":")[2]) in self._calls
+                and ran not in self._shared
+            ),
         )
 
 
@@ -466,6 +498,27 @@ def _token_event(chunk: Any) -> RunEvent | None:
     return RunEvent(kind="token", text=text) if text else None
 
 
+def _dispatch_event(
+    said: Mapping[str, Any], *, agent: str | None, delegations: tuple[str, ...]
+) -> RunEvent:
+    """A program's dispatch starting or answering, written where its `eval` call runs."""
+    if "chain" in said:
+        return RunEvent(
+            kind="delegation_start",
+            text=str(said.get("asked") or ""),
+            agent=str(said.get("agent") or "") or None,
+            delegations=(*delegations, *(str(one) for one in said["chain"])),
+        )
+    return RunEvent(
+        kind="tool_result",
+        tool=TASK_TOOL,
+        text=str(said.get("answer") or "")[:PREVIEW],
+        call=str(said.get("call") or "") or None,
+        agent=agent,
+        delegations=delegations,
+    )
+
+
 def events_in(  # noqa: PLR0912, PLR0913 -- a branch per mode, and what the stream taught
     namespace: Any,
     mode: str,
@@ -488,7 +541,9 @@ def events_in(  # noqa: PLR0912, PLR0913 -- a branch per mode, and what the stre
             seen.held(namespace, chunk)
         return
     if mode == "custom":
-        if isinstance(chunk, Mapping) and isinstance(usage := chunk.get(CUT_OFF_MARK), Mapping):
+        if not isinstance(chunk, Mapping):
+            return
+        if isinstance(usage := chunk.get(CUT_OFF_MARK), Mapping):
             yield RunEvent(
                 kind="model_call",
                 usage=dict(usage),
@@ -496,15 +551,17 @@ def events_in(  # noqa: PLR0912, PLR0913 -- a branch per mode, and what the stre
                 agent=named,
                 delegations=within,
             )
+        elif isinstance(said := chunk.get(DISPATCH), Mapping):
+            yield _dispatch_event(said, agent=named, delegations=within)
         return
     if mode == "messages":
-        if (
-            subagent_names is not None
-            and isinstance(chunk, tuple)
-            and len(chunk) == TOKEN_CHUNK_PARTS
-        ):
-            # Only a `messages` chunk carries `lc_agent_name`, so the map learns here.
-            named = subagent_names.name(namespace, chunk[1])
+        if isinstance(chunk, tuple) and len(chunk) == TOKEN_CHUNK_PARTS:
+            # Only a `messages` chunk carries metadata, so the maps learn here.
+            if subagent_names is not None:
+                named = subagent_names.name(namespace, chunk[1])
+            if delegations is not None:
+                delegations.dispatched(namespace, chunk[1])
+                within = delegations.within(namespace)
         if (event := _token_event(chunk)) is not None:
             yield replace(event, agent=named, delegations=within)
         return
