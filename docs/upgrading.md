@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Two writes at one file wait for each other, after #1156
+
+- **Nothing to change for kingfisher's own sessions.** Two writes, edits or uploads at
+  one file now run one after the other, where two a model sent in one message could
+  break the file or lose an edit.
+- **A `Sessions` that builds its own backend gets no lock.** deepagents'
+  `FilesystemBackend` has the same problem; see `OneWriterPerFile` in
+  `kingfisher.plugins.sessions.writes` for what kingfisher's own does.
+
 ## `kingfisher seed` ships an agent builder, after #1155
 
 - **`seed` copies a new subagent, `agent-builder`**, with three tools in its own folder.

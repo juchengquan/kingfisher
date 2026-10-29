@@ -4841,6 +4841,19 @@ source, for a wiring mistake that does not change between turns. **Bundles and m
 from one list, `skill_mounts`**, which `backend_at` mounts and the check reads.
 *(2026-10-11.)*
 
+**Two writes at one file wait for each other.** deepagents empties a file and then writes
+it, and an edit reads a file whole and writes it back, so two calls a model sends in one
+message, which run at once, can tear a file or lose an edit, and each is told it worked.
+The agent builder saved one draft twice at once and kept the shorter with the end of the
+longer after it, which startup refused. Both of kingfisher's own backends take a lock per
+file around upstream's `write`, `edit` and `upload_files`, which they call unchanged. Not
+chosen: writing beside the file and renaming over it, as `write_atomically` does the
+shell's profile, which keeps a file whole but still loses an edit, and copies upstream's
+write instead of calling it. The locks are the process's and found by path, since two
+backends can be open over one folder, and a fixed number of them, so a service keeps no
+lock per file it ever wrote. Not across processes: a session runs one turn at a time, and
+a command in the shell can still race a file tool. *(2026-10-29, #1156.)*
+
 ## A tool's path is the backend's path
 
 **An offered tool's `path` is resolved by the session's backend, under the turn's rules,
