@@ -66,6 +66,7 @@ def test_every_preset_subagent_parses(shipped):
         "redactor",
         "show-your-work",
         "quarters",
+        "agent-builder",
     }
     for spec in specs.values():
         assert spec.description.strip()
@@ -1584,7 +1585,8 @@ def test_every_shipped_subagent_is_named_by_some_agent(shipped):
     directly, so nothing noticed that no shipped agent could reach them.
     """
     subagents = LocalSubagentRepository(shipped / "subagents").specs
-    named: set[str] = set()
+    # It copies any agent its user reaches, prompt included, so a deployment names it.
+    named: set[str] = {"agent-builder"}
     for agent in LocalAgentRepository(shipped / "agents").specs.values():
         # Each agent's own list, not the chain below it. The build activates what an
         # agent names; whether a helper arrives unnamed is a separate question, and

@@ -566,6 +566,12 @@ its prompt written as a `|` block, passes.
 a caller shown it could guess at it. A prompt filled for this caller is the text *they*
 are sent, so a sentence written for callers like them reads as plain text in the copy.
 
+`kingfisher seed` ships a subagent built on these three, `agent-builder`. Its tools sit
+in its own folder, so an agent writing `tools: ["*"]` does not hold them. It saves a
+draft to `/outputs/<its name>.yaml` only once `check_agent` passes it, and holds no other
+way to write. No shipped agent names it: to let an agent draft agents, name it under that
+agent's `subagents:`.
+
 ## A tool that runs a command
 
 Some work should not happen in kingfisher's process: drawing a PDF page is native code
