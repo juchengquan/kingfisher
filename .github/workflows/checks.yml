@@ -196,8 +196,8 @@ jobs:
       # Loading, not the suite: the suite also reads data a release ships, such
       # as a provider's model windows, so a floor run would answer for that too.
       # Every public name reaches the private imports a floor has to cover;
-      # `tool_guards.py`'s import of `_signature_parameters` is what holds
-      # `langchain-core` at 1.6.7, and this is the step it fails.
+      # `tool_guards.py`'s import of `_signature_parameters` needs
+      # `langchain-core` 1.6.7, and this is the step it fails.
       - name: Every public name loads
         run: |
           /tmp/floors/bin/python -c "
