@@ -57,7 +57,7 @@ from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.subagents.spec import RunOn, opens_skills
+from kingfisher.core.definitions.subagents.spec import RunOn, SubagentSpec, opens_skills
 from kingfisher.core.definitions.tools.spec import FoundTool, audienced, own_audiences
 from kingfisher.core.interfaces import AgentsMiddlewares
 from kingfisher.core.layout import Layout
@@ -86,7 +86,7 @@ from .models import (
     summarizer_trigger,
 )
 from .permitted_backend import PermittedBackend
-from .prompting import EXECUTE, memory_guidelines, skills_index, subagent_prompt, system_prompt
+from .prompting import EXECUTE, memory_guidelines, skills_index, system_prompt
 from .session_paths import SessionPaths
 from .tool_context import Caller, ToolContext
 from .tool_guards import guarded_tools
@@ -97,7 +97,6 @@ if TYPE_CHECKING:
 
     from langgraph.graph.state import CompiledStateGraph
 
-    from kingfisher.core.definitions.subagents.spec import SubagentSpec
     from kingfisher.core.interfaces import (
         PdfAttachments,
         ScratchRunLimit,
@@ -835,55 +834,47 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         ]
 
     # deepagents adds a `general-purpose` subagent with the agent's capabilities and none
-    # of our middleware whenever `task` is offered. One supplied by that name replaces
-    # it, so it keeps working under the caller's ceiling rather than being withheld.
+    # of our middleware whenever `task` is offered. One supplied by that name replaces it,
+    # built by the builder a declared subagent is, so it cannot miss what they are given.
     supplied = list(extras.get("subagents", ()))
-    # Its own instances: two graphs sharing one would share its state.
-    general = _deployment_middleware(
-        agent, middlewares, capabilities.middlewares, provisions=agent_provisions
-    )
-    generals_trigger = summarizer_trigger(running, general)
     supplied.append(
-        {
-            **GENERAL_PURPOSE_SUBAGENT,
-            "system_prompt": subagent_prompt(
-                GENERAL_PURPOSE_SUBAGENT["system_prompt"], instructions, cfg.layout
+        as_subagent(
+            SubagentSpec(
+                name=GENERAL_PURPOSE_SUBAGENT["name"],
+                description=GENERAL_PURPOSE_SUBAGENT["description"],
+                system_prompt=GENERAL_PURPOSE_SUBAGENT["system_prompt"],
+                builtin_tools=ALL,
+                tools=ALL,
             ),
-            # deepagents hands it the agent's own tool objects, so it needs the same guards.
-            "middleware": (
-                # The agent's recorder: these are the agent's tools, under its audiences.
-                standing_middleware(
-                    "general-purpose",
-                    name="general-purpose",
-                    inner=general,
-                    names=guarded,
-                    paths=paths,
-                    layout=cfg.layout,
-                    backend=backend,
-                    budget=budget,
-                    execution_timeout_s=cfg.execution_timeout_s,
-                    models=cfg.models,
-                    permissions=permissions,
-                    keep_results_rounds=cfg.keep_results_rounds,
-                    trigger=generals_trigger,
-                    pdf_attachments=pdf_attachments,
-                    scratch_run_limit=scratch_run_limit,
-                    recorder=recording(agent),
-                    # The agent's model and its entry's mark, read against its own stack.
-                    clearing=result_clearing(
-                        ledger,
-                        generals_trigger,
-                        mark,
-                        count=summarizer_count(running, general),
-                        subject="general-purpose",
-                    ),
-                    tools=permitted,
-                    gated=gated,
-                    skills=None,
-                    turn_text=turn_text,
-                )
+            cfg,
+            kind="general-purpose",
+            # It withholds nothing of its own, so whatever it is refused, the request refused.
+            refused_by="this request",
+            runs=running,
+            instructions=instructions,
+            turn_text=turn_text,
+            pdf_attachments=pdf_attachments,
+            scratch_run_limit=scratch_run_limit,
+            backend=backend,
+            permissions=permissions,
+            gated=gated,
+            endpoints=capabilities.endpoints,
+            builtin_tools=surface.granted_builtin,
+            tools=surface.offered_grant,
+            catalogue=walked,
+            paths=paths,
+            held=held,
+            # The agent's recorder: these are the agent's tools, under its audiences.
+            recorder=recording(agent),
+            ledger=ledger,
+            # Read beside the agent's model, which it runs.
+            clear_results_at=mark,
+            budget=budget,
+            # Its own instances: two graphs sharing one would share its state.
+            extra_middleware=_deployment_middleware(
+                agent, middlewares, capabilities.middlewares, provisions=agent_provisions
             ),
-        }
+        )
     )
     extras["subagents"] = supplied
     # Kingfisher's order: what it guarantees, then what the deployment's settings switch

@@ -6,7 +6,7 @@ Nothing here calls into `assembly.py`: a call back that way would make the two o
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlsplit
 
 from deepagents.middleware import SubAgentMiddleware
@@ -239,6 +239,10 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     spec: SubagentSpec,
     cfg: Config,
     *,
+    #: What a deployment's plugins are told it is: deepagents' own is `general-purpose`.
+    kind: Literal["subagent", "general-purpose"] = "subagent",
+    #: Whom a refused tool is said to be withheld by; `None` names this subagent.
+    refused_by: str | None = None,
     #: What it runs: its own model, else its summoner's, which deepagents hands a spec
     #: naming none. Its summariser sizes the PDFs this subagent's turn may hold open.
     runs: Any,
@@ -370,7 +374,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     # A helper's summariser goes outside them, where deepagents puts its own in every other
     # stack: clearing measures the request that summariser counted.
     subagent["middleware"] = summarizing + standing_middleware(
-        "subagent",
+        kind,
         name=spec.name,
         # Inside every standing one: deepagents gives a subagent no `task` tool, and
         # `middleware` is the only spec field that carries code, so `task` comes the way
@@ -408,7 +412,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         + tuple(one.name for one in private),
         # The agent's: a subagent's own `interrupt_on` is copied from them below.
         gated=gated,
-        tools_subject=f"the {spec.name!r} subagent",
+        tools_subject=refused_by or f"the {spec.name!r} subagent",
         # The parent's sources, passed in rather than rebuilt: two walks could disagree
         # and offer the subagent a different skill than the one named.
         skills=None
