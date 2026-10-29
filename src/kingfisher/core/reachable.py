@@ -7,15 +7,30 @@ import inspect
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import ALL, Capabilities, Selection, narrowed
+from kingfisher.core.access import (
+    ALL,
+    Capabilities,
+    CapabilityError,
+    Selection,
+    approved_settings,
+    narrowed,
+)
 
 if TYPE_CHECKING:
     from kingfisher.core.definitions.catalogue import Definitions
 
     from .config import Config
     from .inventory import Grant, Inventory
+
+
+#: What a refusal of a draft names, which has no file yet.
+DRAFT = Path("draft.yaml")
+
+#: The lines that say who may use something.
+_LOCKS = ("source_ids", "datazone")
 
 
 @dataclass(frozen=True)
@@ -54,6 +69,33 @@ def _written(grant: Grant, today: Iterable[str]) -> list[str]:
         return [ALL]
     kept = set(today)
     return [one for one in grant.names if one in kept]
+
+
+def _locks_written(document: Mapping[str, object]) -> tuple[str, ...]:
+    """Where a draft says who may use something: every place a definition can.
+
+    Not every key at every depth: `metadata` is the author's own, and may well use the words.
+    """
+    where = ["the top level"] if any(key in document for key in _LOCKS) else []
+    for field in ("tools", "skills", "subagents", "middlewares"):
+        entries = document.get(field)
+        for entry in entries if isinstance(entries, list) else ():
+            if isinstance(entry, Mapping) and any(key in entry for key in _LOCKS):
+                where.append(f"the {field} entry {entry.get('name')!r}")
+    prompt = document.get("system_prompt")
+    slots = prompt.get("slots") if isinstance(prompt, Mapping) else None
+    for slot, entries in slots.items() if isinstance(slots, Mapping) else ():
+        if any(
+            isinstance(entry, Mapping) and any(key in entry for key in _LOCKS)
+            for entry in (entries if isinstance(entries, list) else ())
+        ):
+            where.append(f"the slot {slot!r}")
+    return tuple(where)
+
+
+def _unusable(field: str, name: str) -> str:
+    """One name a draft may not write, worded alike whether it is out of reach or nowhere."""
+    return f"{field}: {name!r} is not one this user can use"
 
 
 class Reachable:
@@ -182,3 +224,77 @@ class Reachable:
             copied["metadata"] = dict(spec.metadata)
         copied["system_prompt"] = spec.prompt_for(self.held)
         return copied
+
+    def check_agent(self, text: str) -> tuple[str, ...]:
+        """What is wrong with `text` as an agent file this caller drafted, or nothing.
+
+        Read by the reader startup uses, then every name checked against this listing, so
+        one out of reach and one nothing defines are refused in the same words.
+        """
+        # Here, not at the top: a tool file loads this module for its annotation.
+        from kingfisher.core.definitions import documents  # noqa: PLC0415
+        from kingfisher.core.definitions.agents import reading  # noqa: PLC0415
+        from kingfisher.core.definitions.agents.spec import AgentError  # noqa: PLC0415
+        document = documents.decode(text)
+        # Before anything reads them, and never against the deployment's: an answer that
+        # told a real id from a made-up one would let a caller find the real ones by guessing.
+        if isinstance(document, dict) and (where := _locks_written(document)):
+            return (
+                "who may use this agent is decided by whoever installs it: remove "
+                f"`source_ids:` and `datazone:` from {', '.join(where)}",
+            )
+        try:
+            spec = reading.read(documents.DefinitionText(text, DRAFT))
+        except (AgentError, CapabilityError) as exc:
+            return (str(exc),)
+
+        listing = self._listing
+        problems: list[str] = []
+        if spec.name in listing.agents:
+            problems.append(f"an agent called {spec.name!r} already exists: choose another name")
+        builtin, offered = set(listing.builtin_tools), set(listing.tools)
+        if isinstance(spec.builtin_tools, tuple):
+            problems += [
+                _unusable("builtin_tools", one)
+                for one in spec.builtin_tools
+                if one not in builtin
+            ]
+        # As the listing spells it, not resolved: a `where::what` naming the wrong file
+        # loads, and the agent runs without the tool.
+        if isinstance(spec.tools, tuple):
+            problems += [_unusable("tools", one) for one in spec.tools if one not in offered]
+        registry = self.catalogue.registry
+        listed = {registry.identity(one) for one in listing.skills}
+        if isinstance(spec.skills, tuple):
+            problems += [
+                _unusable("skills", one)
+                for one in spec.skills
+                if registry.identity(one) not in listed
+            ]
+        if isinstance(spec.subagents, tuple):
+            problems += [
+                _unusable("subagents", one)
+                for one in spec.subagents
+                if one not in listing.subagents
+            ]
+        for one in spec.middlewares if isinstance(spec.middlewares, tuple) else ():
+            if one not in listing.middlewares:
+                problems.append(_unusable("middlewares", one))
+                continue
+            try:
+                approved_settings(
+                    spec.middleware_settings.get(one) or {},
+                    settable=getattr(self.middlewares[one], "yaml_settable", None) or (),
+                    subject="this draft",
+                    registered_as=one,
+                )
+            except CapabilityError as exc:
+                problems.append(str(exc))
+        if spec.wanted is not None and spec.wanted not in listing.models:
+            problems.append(_unusable("model", spec.wanted))
+        problems += [
+            _unusable("interrupt_on", one)
+            for one in spec.interrupt_on
+            if one not in builtin and one not in offered
+        ]
+        return tuple(problems)

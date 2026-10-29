@@ -18,6 +18,12 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A tool can check an agent file its caller drafted, after #1154
+
+- **`Reachable` has a new method, `check_agent(text)`**: everything wrong with `text` as
+  an agent file the caller drafted, or `()`. New, so nothing that exists calls it.
+  `tools.md` says what it refuses.
+
 ## A tool can ask what its caller can use, after #1152
 
 - **`ToolContext` has a new field, `reachable`**, which a tool reads as

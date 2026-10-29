@@ -1876,6 +1876,20 @@ dataclass's field types when a tool naming `ToolContext` is bound, and importing
 the module every tool file loads from 8 ms to 32 ms; as a plain class it is 9.5.
 *(2026-10-29, #1152.)*
 
+**A drafted agent is checked against what its drafter can use, by the reader startup
+uses.** `Reachable.check_agent` reads the text with the agent reader, so the format, the
+`|` prompt and the rules between fields have one copy, then holds each name to the
+listing, so a name out of reach and a name nothing defines get one wording. **Any
+`source_ids:` or `datazone:` is refused before it is read, never checked**: who may use a
+draft is decided by whoever installs it, and an answer telling a real id from a made-up
+one would let a caller find the real ones by guessing. The places a definition can say
+it, not every key: `metadata` is the author's own. **A name an agent the caller can see
+already has is refused, and one they cannot see is not**, since refusing it would tell
+them it exists; installing that draft is refused at startup instead. **A tool is named as
+the listing names it**, not resolved: `where::what` naming a file the tool is not in still
+loads, and the agent runs without the tool. No trial build: the checks are startup's,
+and a build would start interpreters on every check. *(2026-10-29, #1154.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds
