@@ -40,6 +40,13 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   without `line_count` and nothing refuses. Measured through `build_agent`; one spelling
   on both sides keeps it. Spelling both before the intersect changes what a run is
   handed, so it is the owner's call. *(2026-10-27.)*
+- **The suite at the floors, in the `floors` job.** The job loads every public name and
+  runs no tests, so a floor that installs and loads but behaves wrongly passes it:
+  `langchain-anthropic` 1.7.5 did, with a window five times too large, and only a local
+  run of the suite at the floors found it. Since #1128 the whole suite passes there.
+  Running it in the job means a PR whose test relies on a newer release must raise that
+  floor in the same PR, which is the catch, and costs one more suite run per PR.
+  *(2026-10-29.)*
 
 ## Waiting on a run
 
