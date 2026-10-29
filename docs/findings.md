@@ -844,6 +844,10 @@ directly, and `filter_tools_for_ptc` called on its own.*
   the sandbox when the model is called, and a resume runs `eval` before any model call,
   so the program raises `ReferenceError: tools is not defined`. *(2026-10-29,
   langchain-quickjs 0.3.8.)*
+- **A subagent's pause caught inside its dispatch pauses nothing else.** Turned into an
+  error there, it fails the dispatch alone: the turn runs on and ends with nothing
+  pending, the gated call never runs, and the session's next turn is unaffected.
+  *(2026-10-29, langchain-quickjs 0.3.8, langgraph 1.2.15.)*
 
 - **The sandbox snapshots 1,280KB a turn whether or not `eval` runs.** A floor rather than a
   cost that scales with the work: one run called it zero times in forty-five tool calls and

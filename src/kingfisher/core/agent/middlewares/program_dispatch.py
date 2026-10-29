@@ -47,16 +47,16 @@ class _Dispatching:
         # Inherited by every run inside, which is how the record and the stream find it.
         keywords["metadata"] = {**(keywords.get("metadata") or {}), DISPATCH: chain}
         asked = tool_input if isinstance(tool_input, Mapping) else {}
-        self._write(
-            dispatch_started(
-                chain, str(asked.get(SUBAGENT_TYPE_ARG) or ""), str(asked.get("description") or "")
-            )
-        )
+        subagent = str(asked.get(SUBAGENT_TYPE_ARG) or "")
+        self._write(dispatch_started(chain, subagent, str(asked.get("description") or "")))
         try:
             result = await self._tool.arun(tool_input, **keywords)
-        except GraphInterrupt:
-            # A pause is not an end: the resumed turn runs the program, and so this, again.
-            raise
+        except GraphInterrupt as paused:
+            # Refused, not taken: the turn resuming it would run the whole program again,
+            # and every `tools.*` call the program made before the pause with it.
+            refused = RuntimeError(_refusal(subagent, paused))
+            self._write(dispatch_answered(dispatched, f"{type(refused).__name__}: {refused}"))
+            raise refused from paused
         except Exception as exc:
             self._write(dispatch_answered(dispatched, f"{type(exc).__name__}: {exc}"))
             raise
@@ -64,6 +64,22 @@ class _Dispatching:
         answer = answer_in(result, dispatched)
         self._write(dispatch_answered(dispatched, str(result if answer is None else answer.text)))
         return result
+
+
+def _refusal(subagent: str, paused: GraphInterrupt) -> str:
+    """What the model is told of a dispatch refused at a gate, and what to do instead."""
+    gated = [
+        f"`{request.get('name')}`"
+        for one in (paused.args[0] if paused.args else ())
+        if isinstance(value := getattr(one, "value", None), Mapping)
+        for request in value.get("action_requests") or ()
+        if isinstance(request, Mapping) and request.get("name")
+    ]
+    waited = f"approval of {', '.join(gated)}" if gated else "decision"
+    return (
+        f"`{subagent}` stopped for a person's {waited}, which a program cannot wait for. "
+        f"Hand this work to `{subagent}` with the `task` tool instead."
+    )
 
 
 class ProgramDispatchMiddleware(AgentMiddleware):
