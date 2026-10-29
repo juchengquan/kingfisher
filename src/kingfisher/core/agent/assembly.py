@@ -448,6 +448,8 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     switched: list[Any] = []
     narrowed_skills: tuple[str, ...] | None = None
     narrowed_sources: list[Any] = []
+    # The skills this agent is told of, by identity, for the `general-purpose` it is given.
+    agents_skills: tuple[str, ...] | None = None
     extras: dict[str, Any] = {}
 
     # One answer to "are skills on", for this agent's index and prompt and every subagent it
@@ -500,6 +502,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             extras["skills"] = sources
             skills_at = len(switched)
             switched.append(indexing(sources, None))
+            agents_skills = tuple(registry.offered)
         elif capabilities.skills is None:
             # None granted is every skill denied, or each is a `read_file` away unnamed.
             permissions.extend(skill_denials((), registry))
@@ -511,6 +514,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             # argument makes deepagents construct its own SkillsMiddleware,
             # leaving no way to substitute a filtered one.
             narrowed_skills, narrowed_sources = activated, sources
+            agents_skills = activated
             permissions.extend(skill_denials(activated, registry))
 
     interpreter_at: int | None = None
@@ -862,6 +866,9 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             builtin_tools=surface.granted_builtin,
             tools=surface.offered_grant,
             catalogue=walked,
+            # Its caller's, as deepagents hands its own: a copy knows what its caller can do.
+            skills=agents_skills,
+            skill_sources=narrowed_sources or extras.get("skills"),
             paths=paths,
             held=held,
             # The agent's recorder: these are the agent's tools, under its audiences.
