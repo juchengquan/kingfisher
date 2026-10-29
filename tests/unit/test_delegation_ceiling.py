@@ -22,7 +22,13 @@ from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.skills.registry import Listed, SkillRegistry
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, a_subagent, subagents_dir
+from tests.conftest import (
+    SUBAGENT_UNWIRED,
+    FakeToolCallingModel,
+    a_subagent,
+    subagents_dir,
+    unwired,
+)
 
 HELPER = """name: helper
 description: Asks for every tool, so it holds whatever it is given.
@@ -400,7 +406,9 @@ def test_a_subagent_is_narrowed_by_it(cfg):
         )
 
         runs = FakeToolCallingModel(responses=[])
-        built = as_subagent(spec, cfg, runs=runs, tools=cap, builtin_tools=cap)
+        built = as_subagent(
+            spec, cfg, runs=runs, **unwired(SUBAGENT_UNWIRED, tools=cap, builtin_tools=cap)
+        )
 
         allowlists = [
             m for m in built.get("middleware", []) if isinstance(m, GrantedOnlyMiddleware)

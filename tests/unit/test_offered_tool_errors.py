@@ -20,6 +20,7 @@ from kingfisher.core.agent.middlewares.guarded_calls import (
     OfferedToolFailureMiddleware,
 )
 from kingfisher.plugins import backend_at
+from tests.conftest import STANDING_UNWIRED
 
 
 class _Request:
@@ -456,6 +457,7 @@ def stack(cfg, session_dir, paths):
         execution_timeout_s=cfg.execution_timeout_s,
         models=cfg.models,
         trigger=170_000,
+        **STANDING_UNWIRED,
     )
 
 
@@ -514,6 +516,7 @@ def _stack_around(cfg, session_dir, paths, inner):
         models=cfg.models,
         trigger=170_000,
         inner=inner,
+        **STANDING_UNWIRED,
     )
 
 

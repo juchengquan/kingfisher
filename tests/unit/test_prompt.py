@@ -23,7 +23,15 @@ from kingfisher.core.interfaces import Instructions
 from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS, OUTPUTS, SCRATCH, Layout
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from kingfisher.plugins.sessions.shell import kingfishers_shell
-from tests.conftest import FakeToolCallingModel, a_subagent, an_agent, start, subagents_dir
+from tests.conftest import (
+    SUBAGENT_UNWIRED,
+    FakeToolCallingModel,
+    a_subagent,
+    an_agent,
+    start,
+    subagents_dir,
+    unwired,
+)
 from tests.unit.scripted import Scripted
 
 
@@ -254,7 +262,8 @@ system_prompt: |
 def _subagent_prompt(cfg, instructions: str = ""):
     spec = a_subagent(SUBAGENT, "reviewer.yaml")
     runs = FakeToolCallingModel(responses=[])
-    return as_subagent(spec, cfg, runs=runs, instructions=instructions)["system_prompt"]
+    shared = unwired(SUBAGENT_UNWIRED, instructions=instructions)
+    return as_subagent(spec, cfg, runs=runs, **shared)["system_prompt"]
 
 
 def test_a_subagent_is_given_the_deployments_instructions(cfg):

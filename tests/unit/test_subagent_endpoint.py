@@ -18,7 +18,13 @@ from kingfisher.core.definitions.subagents.catalogue import LocalSubagentReposit
 from kingfisher.core.definitions.subagents.spec import SubagentSpec
 from kingfisher.core.environment import config_from_env
 from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, subagent_of, subagents_dir
+from tests.conftest import (
+    COMPILED_UNWIRED,
+    FakeToolCallingModel,
+    subagent_of,
+    subagents_dir,
+    unwired,
+)
 
 #: A second endpoint, on a different wire format, so a test can tell "went
 #: elsewhere" from "went to the default" by which attribute the value landed on.
@@ -287,9 +293,10 @@ def test_a_built_subagent_naming_no_model_is_held_to_the_endpoints_too(
 
     if refused:
         with pytest.raises(CapabilityError, match="the default model 'fake-model'"):
-            compiled(spec, cfg, endpoints=endpoints)
+            compiled(spec, cfg, **unwired(COMPILED_UNWIRED, endpoints=endpoints))
     else:
-        assert compiled(spec, cfg, endpoints=endpoints)["name"] == "researcher"
+        built = compiled(spec, cfg, **unwired(COMPILED_UNWIRED, endpoints=endpoints))
+        assert built["name"] == "researcher"
 
 
 def test_grants_clamp_endpoints_like_everything_else():

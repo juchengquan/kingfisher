@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import replace
 
 import pytest
@@ -10,13 +11,21 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.kinds.subagents import as_subagent, compiled
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
 from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, subagent_of, subagents_dir, tools_dir
+from tests.conftest import (
+    STANDING_UNWIRED,
+    FakeToolCallingModel,
+    subagent_of,
+    subagents_dir,
+    tools_dir,
+    unwired,
+)
 from tests.unit.test_subagent_skills import offer_skills
 
 
@@ -146,7 +155,7 @@ def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
             execution_timeout_s=cfg.execution_timeout_s,
             models=cfg.models,
             trigger=170_000,
-            **given,
+            **unwired(STANDING_UNWIRED, **given),
         )
 
 
@@ -168,7 +177,7 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
         execution_timeout_s=cfg.execution_timeout_s,
         models=cfg.models,
         trigger=170_000,
-        tools=("read_file",),
+        **unwired(STANDING_UNWIRED, tools=("read_file",)),
     )
     searched: list[str] = []
 
@@ -185,3 +194,81 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
         "Error: grep is not available for this request. Available tools: read_file."
     )
     assert searched == []
+
+
+#: The settings every graph of one build shares, by the function each is handed to. Each
+#: has a default that means no rule -- no file rules, no gate, no ceiling, a fresh budget.
+SHARED_SETTINGS = {
+    standing_middleware: frozenset(
+        {
+            "permissions",
+            "keep_results_rounds",
+            "recorder",
+            "clearing",
+            "tools",
+            "gated",
+            "skills",
+            "pdf_attachments",
+            "scratch_run_limit",
+            "turn_text",
+        }
+    ),
+    as_subagent: frozenset(
+        {
+            "endpoints",
+            "builtin_tools",
+            "tools",
+            "backend",
+            "permissions",
+            "paths",
+            "held",
+            "recorder",
+            "ledger",
+            "instructions",
+            "turn_text",
+            "pdf_attachments",
+            "scratch_run_limit",
+            "gated",
+            "budget",
+        }
+    ),
+    compiled: frozenset({"endpoints", "tools", "paths", "held", "gated"}),
+}
+
+
+def _defaulted(function, names) -> list[str]:
+    """Which of `names` `function` gives a default, or no longer takes at all."""
+    taken = inspect.signature(function).parameters
+    return sorted(
+        name
+        for name in names
+        if name not in taken or taken[name].default is not inspect.Parameter.empty
+    )
+
+
+def test_no_setting_every_graph_shares_has_a_default():
+    """A default put back lets a call site that forgets the setting build a graph under no
+    rule: dropping `permissions` where a subagent is built passed the whole suite, and the
+    subagent wrote into `/skills/` and the saved tool results (measured 2026-10-28).
+    """
+    found = {
+        function.__name__: defaulted
+        for function, names in SHARED_SETTINGS.items()
+        if (defaulted := _defaulted(function, names))
+    }
+
+    assert not found, (
+        f"{found} -- a setting every graph shares takes no default, so a call site has to "
+        "say it, `None` included; or the name moved, and this table with it"
+    )
+
+
+def test_the_shared_settings_rule_tells_a_default_from_a_required_one():
+    """Driven, because the rule above runs over a tree with nothing to find."""
+
+    def built(*, required, given=None, gone_soon=()):
+        return required, given, gone_soon
+
+    assert _defaulted(built, {"required"}) == []
+    assert _defaulted(built, {"required", "given", "gone_soon"}) == ["given", "gone_soon"]
+    assert _defaulted(built, {"renamed"}) == ["renamed"], "a stale entry is not a pass"

@@ -39,6 +39,7 @@ from kingfisher.plugins import LocalSessions, ReturnedPdf
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
     EVERY_TOOL,
+    STANDING_UNWIRED,
     FakeToolCallingModel,
     a_pdf,
     an_agent,
@@ -46,6 +47,7 @@ from tests.conftest import (
     start,
     subagents_dir,
     tools_dir,
+    unwired,
 )
 from tests.unit.scripted import Scripted
 from tests.unit.test_offered_tool_errors import _through
@@ -343,6 +345,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
 
     ledger = Ledger("t", KeptLedger())
     backend = backend_at(cfg, session_dir)
+    recorder = RecorderMiddleware(ledger, backend, None, cfg.layout.tool_results_route)
     stack = standing_middleware(
         "agent",
         name="",
@@ -354,7 +357,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
         execution_timeout_s=cfg.execution_timeout_s,
         models=cfg.models,
         trigger=UNPROFILED,
-        recorder=RecorderMiddleware(ledger, backend, None, cfg.layout.tool_results_route),
+        **unwired(STANDING_UNWIRED, recorder=recorder),
     )
     call = {"name": "export_pdf", "args": {"note": "x"}, "id": "c1"}
 
@@ -605,6 +608,7 @@ def _stacked(cfg, session_dir, pdfs) -> tuple[list, Ledger]:
     """What `standing_middleware` builds around an offered tool, recording into a ledger."""
     backend = backend_at(cfg, session_dir)
     ledger = Ledger("t", KeptLedger())
+    recorder = RecorderMiddleware(ledger, backend, None, cfg.layout.tool_results_route)
     stack = standing_middleware(
         "agent",
         name="",
@@ -616,8 +620,7 @@ def _stacked(cfg, session_dir, pdfs) -> tuple[list, Ledger]:
         execution_timeout_s=cfg.execution_timeout_s,
         models=cfg.models,
         trigger=UNPROFILED,
-        recorder=RecorderMiddleware(ledger, backend, None, cfg.layout.tool_results_route),
-        pdf_attachments=pdfs,
+        **unwired(STANDING_UNWIRED, recorder=recorder, pdf_attachments=pdfs),
     )
     return stack, ledger
 
