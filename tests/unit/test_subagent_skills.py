@@ -22,6 +22,7 @@ from tests.conftest import (
     an_agent,
     middleware_of,
     start,
+    subagents_dir,
     tools_dir,
 )
 from tests.unit.scripted import Scripted
@@ -319,3 +320,59 @@ def test_general_purpose_is_told_the_skills_its_caller_is(scripted, grant, told)
         heard[0].text for heard in Scripted.heard if "In order to complete" in heard[0].text
     ]
     assert {one for one in ("tabular-qa", "postmortem") if one in system} == told
+
+
+@pytest.mark.parametrize(
+    ("skills_on", "told"),
+    [(True, {"tabular-qa", "own-check"}), (False, {"own-check"})],
+    ids=["skills-on", "skills-off"],
+)
+def test_a_subagents_general_purpose_is_told_the_skills_its_subagent_is(
+    scripted, skills_on, told
+):
+    """A subagent's `general-purpose` is its copy. Told the agent's skills, it would know
+    procedures its subagent was never given; without the subagent's own folder's, it could
+    not follow the ones it was. That folder is mounted with skills off too, so both keep
+    it. The agent, told `postmortem`, is the control that there was one to leak."""
+    wired = replace(scripted, skills_enabled=skills_on)
+    offer_skills(wired, "tabular-qa", "postmortem")
+    folder = subagents_dir(wired) / "reviewer"
+    (folder / "skills" / "own-check").mkdir(parents=True)
+    (folder / "skills" / "own-check" / "SKILL.md").write_text(
+        "---\nname: own-check\ndescription: A procedure.\n---\nBody.\n", encoding="utf-8"
+    )
+    (folder / "reviewer.yaml").write_text(
+        "name: reviewer\ndescription: Checks figures.\nbuiltin_tools: [read_file, task]\n"
+        "skills: [tabular-qa, {name: own-check, source: bundled}]\n"
+        "system_prompt: |\n  REVIEWER-OWN-PROMPT.\n",
+        encoding="utf-8",
+    )
+    an_agent(wired, subagents="[reviewer]", skills='["*"]', **EVERY_TOOL)
+
+    def task(who: str) -> AIMessage:
+        asked = {"description": "a job", "subagent_type": who}
+        return AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": who}])
+
+    Scripted.script.extend(
+        [
+            task("reviewer"),
+            task("general-purpose"),
+            AIMessage(content="helped"),
+            AIMessage(content="checked"),
+            AIMessage(content="done"),
+        ]
+    )
+    start(wired, "s")
+
+    Kingfisher(wired, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
+
+    def told_in(texts: set[str]) -> set[str]:
+        (text,) = texts
+        return {one for one in ("tabular-qa", "postmortem", "own-check") if one in text}
+
+    prompts = [str(heard[0].text) for heard in Scripted.heard]
+    copy = {one for one in prompts if "In order to complete" in one}
+    subagent = {one for one in prompts if "REVIEWER-OWN-PROMPT" in one}
+    agent = set(prompts) - copy - subagent
+    assert told_in(copy) == told_in(subagent) == told
+    assert told_in(agent) == ({"tabular-qa", "postmortem"} if skills_on else set())
