@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A subagent may hold the to-do list, after #1146
+
+- **A subagent whose `builtin_tools` grants `write_todos`, or is `["*"]`, now holds the
+  to-do list** and is told how to use it, as the agent is. Before, the grant named a tool
+  that was not there, and every call was refused as not a valid tool. A subagent written
+  with `["*"]` gains it; to keep one without it, list its built-ins instead of the star.
+  `general-purpose` still holds none.
+
 ## A subagent may not be called `general-purpose`, after #1144
 
 - **A subagent named `general-purpose` is refused when the deployment loads**, from a yaml

@@ -974,3 +974,49 @@ def test_a_helper_naming_no_filesystem_middleware_runs_kingfishers(cfg, session_
     assert type(own) is FilesystemMiddleware
     assert own._tool_token_limit_before_evict is None
     assert helper[0].name == SUMMARIZER
+
+
+def _task(who: str, n: int) -> AIMessage:
+    call = {"description": f"job {n}", "subagent_type": who}
+    return AIMessage(content="", tool_calls=[{"name": "task", "args": call, "id": f"t{n}"}])
+
+
+@pytest.mark.parametrize(
+    ("who", "line", "plans"),
+    [
+        ("reviewer", '["*"]', True),
+        ("reviewer", "[read_file, write_todos]", True),
+        ("reviewer", "[read_file]", False),
+        ("second-opinion", '["*"]', True),
+        ("second-opinion", "[read_file]", False),
+        ("general-purpose", '["*"]', False),
+    ],
+)
+def test_a_subagent_holds_the_to_do_list_where_its_line_grants_it(scripted, who, line, plans):
+    """A subagent granted `write_todos` was told it was no tool at all: only the agent's
+    stack carried the list, and `general-purpose` must still carry none."""
+    helper = HELPER.replace('builtin_tools: ["*"]', f"builtin_tools: {line}")
+    reviewer = REVIEWER.replace("subagents: [second-opinion]\n", "")
+    if who == "reviewer":
+        reviewer = reviewer.replace('builtin_tools: ["*"]', f"builtin_tools: {line}")
+    elif who == "second-opinion":
+        reviewer = REVIEWER
+    _define(scripted, reviewer, helper)
+    an_agent(scripted, subagents="[reviewer, second-opinion]", **EVERY_TOOL)
+    chain = {"reviewer": ["reviewer"], "second-opinion": ["reviewer", "second-opinion"]}
+    plan = {"todos": [{"content": "x", "status": "pending"}]}
+    Scripted.script.extend(
+        [
+            *(_task(one, n) for n, one in enumerate(chain.get(who, [who]))),
+            AIMessage(content="", tool_calls=[{"name": "write_todos", "args": plan, "id": "w"}]),
+            *(AIMessage(content=f"done {n}") for n in range(4)),
+        ]
+    )
+    start(scripted, "s")
+
+    Kingfisher(scripted, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
+
+    (answer,) = [
+        heard[-1] for heard in Scripted.heard if getattr(heard[-1], "tool_call_id", None) == "w"
+    ]
+    assert answer.text.startswith("Updated todo list") is plans, answer.text

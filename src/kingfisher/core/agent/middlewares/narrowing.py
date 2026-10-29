@@ -71,7 +71,7 @@ class GrantedOnlyMiddleware(AgentMiddleware):
             return failed(
                 call,
                 f"Error: {name} is not available for {self._subject}. "
-                f"Available tools: {', '.join(sorted(self._allowed))}.",
+                f"Available tools: {', '.join(sorted(self._allowed)) or 'none'}.",
             )
         if name != TASK_TOOL or self._declared is None:
             return None
