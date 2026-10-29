@@ -830,6 +830,20 @@ directly, and `filter_tools_for_ptc` called on its own.*
   `ProgramDispatchMiddleware` passes them until the library does
   (langchain-ai/deepagents#6401). The ledger is unaffected. *(2026-10-26, cause found
   2026-10-29, langchain-quickjs 0.3.8 to 0.3.11.)*
+- **Metadata handed to `task_tool.arun` reaches every run inside the dispatch**, its
+  callbacks and its `messages` chunks alike; `updates` and `tasks` chunks carry none.
+  Two dispatches one program starts at once run at the namespaces `("tools:<id>",)` and
+  `("tools:<id>", "1")`, `<id>` the task running the `eval` call, and both `task` calls
+  start in that task. *(2026-10-29, langchain-quickjs 0.3.8, langgraph 1.2.15.)*
+- **The library's own `subagent` stream events carry no answer.** `start` has the
+  dispatch's id, the subagent, a label and the description; `complete` the id and a
+  duration; `error` the error's text. *(2026-10-29, langchain-quickjs 0.3.8.)*
+- **A resumed turn runs a paused program again from the start**, and its `task()` calls
+  derive the same dispatch ids, so a subagent that paused at a gate carries on from it.
+  A program that also calls `tools.*` fails instead: the library installs `tools.*` on
+  the sandbox when the model is called, and a resume runs `eval` before any model call,
+  so the program raises `ReferenceError: tools is not defined`. *(2026-10-29,
+  langchain-quickjs 0.3.8.)*
 
 - **The sandbox snapshots 1,280KB a turn whether or not `eval` runs.** A floor rather than a
   cost that scales with the work: one run called it zero times in forty-five tool calls and

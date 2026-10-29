@@ -35,7 +35,14 @@ from tests.conftest import (
 from tests.unit.scripted import Scripted
 from tests.unit.test_cut_replies import reply
 from tests.unit.test_run import StubAgent
-from tests.unit.test_stream_delegations import _gated_beside_ungated, _task, _twice
+from tests.unit.test_stream_delegations import (
+    TWICE,
+    TWO_ANSWERS,
+    _dispatching,
+    _gated_beside_ungated,
+    _task,
+    _twice,
+)
 from tests.unit.test_subagent_helpers import HELPER, REVIEWER, _define
 
 
@@ -366,7 +373,8 @@ def test_a_call_from_code_or_a_compiled_subagent_is_logged_once(scripted, route,
 
 def test_a_subagent_a_program_starts_is_in_the_record(scripted):
     """The sandbox's `task()` ran its subagent with no callbacks, so the subagent's model
-    calls were missing from the record, and the tokens they spent with them."""
+    calls were missing from the record, and the tokens they spent with them. Its own call
+    filed as a `task` call's too, a lone dispatch named itself twice in its chain."""
     cfg = replace(scripted, interpreter_enabled=True)
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "helper.yaml").write_text(
@@ -386,7 +394,30 @@ def test_a_subagent_a_program_starts_is_in_the_record(scripted):
         Request("go", agent="only", session_id="s")
     )
 
-    assert [e["agent"] for e in sink.named("model_call")] == [None, "helper", None]
+    (dispatched,) = [e["call"] for e in sink.named("tool_start") if e["tool"] == "task"]
+    assert [_where(e) for e in sink.named("model_call")] == [
+        (None, ()),
+        ("helper", ("e1", dispatched)),
+        (None, ()),
+    ]
+
+
+def test_two_dispatches_one_program_starts_at_once_are_told_apart_in_the_record(scripted):
+    """Both dispatches' calls start in the task that runs the `eval` call, which stood
+    for neither, so the record filed both subagents under no delegation."""
+    cfg = _dispatching(scripted, TWICE, *TWO_ANSWERS)
+    sink = RecordedEvents()
+
+    Kingfisher(cfg, sessions=LocalSessions(), run_events=sink).run(
+        Request("go", agent="only", session_id="s")
+    )
+
+    dispatches = [e for e in sink.named("tool_start") if e["tool"] == "task"]
+    # The program's own calls, as the `eval` call is.
+    assert {_where(e) for e in dispatches} == {(None, ())}
+    assert sorted(_where(e) for e in sink.named("model_call") if e["agent"]) == sorted(
+        ("reviewer", ("e1", e["call"])) for e in dispatches
+    )
 
 
 # -- delegations side by side, in the record ------------------------------------

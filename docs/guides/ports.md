@@ -277,8 +277,10 @@ writes it, so every `run_start` has one.
 
 Every model and tool event says where it came from, in the stream's words: `agent` is
 the subagent that made it, `null` for the agent the caller asked, and `delegations` the
-`task` calls it came from inside, outermost first, each by its call's id. Two runs of
-one subagent at once share an `agent` and differ in `delegations`. `tool_start`,
+`task` calls it came from inside, outermost first, each by its call's id. A subagent a
+program starts with `task()` came from inside the `eval` call and the dispatch, as
+`["e1", "ptc_task_…"]`. Two runs of one subagent at once share an `agent` and differ
+in `delegations`. `tool_start`,
 `tool_end` and `tool_error` carry `tool` and `call`, the call's id, so an end is matched
 to its start by `call`; `model_call` carries `calls`, the id of each call its reply
 makes, lined up with `tool_calls` and `""` where the provider gave none.
