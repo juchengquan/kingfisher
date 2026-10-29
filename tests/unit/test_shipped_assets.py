@@ -30,7 +30,7 @@ from kingfisher.core.definitions.tools.spec import Offering, out_of_reach
 from kingfisher.core.layout import SCRATCH
 from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, middleware_of, repository_root, subagent_of
-from tests.unit.test_subagent_helpers import _subagent, _tools_of
+from tests.unit.test_subagent_helpers import _subagent, _subagents_of, _tools_of
 
 
 def test_no_shipped_skill_names_its_own_files_by_where_the_catalogue_puts_it(shipped):
@@ -531,7 +531,7 @@ def test_a_caller_naming_the_subagent_alone_gets_it_without_its_helper(
         capabilities=Capabilities(subagents=("reviewer",)),
     ).graph
 
-    assert "task" not in _tools_of(_subagent(graph, "reviewer"))
+    assert _subagents_of(_subagent(graph, "reviewer")) == {"general-purpose"}
 
 
 # -- the compiled preset ----------------------------------------------------

@@ -368,7 +368,7 @@ call should fail softly, return a failed `ToolMessage` rather than raising -- th
 what kingfisher's own guards hand back, and the model reads it as the call's result.
 
 **One graph, not one turn.** The factory runs again for each graph built: the
-agent's, each declared subagent's, and the general-purpose subagent's. A counter
+agent's, each declared subagent's, and each general-purpose subagent's. A counter
 counts that graph. `CallCap` is a per-turn cap only because the agent happens to
 be built once per turn, and a limiter that has to bound a whole turn needs
 somewhere to live that a graph does not have.

@@ -281,27 +281,35 @@ def test_a_definition_naming_itself_is_a_cycle():
         refuse_cycles({"second-opinion": a_subagent(body, "second-opinion.yaml")})
 
 
-def test_a_helper_is_built_without_a_task_tool(cfg, session_dir):
-    """The depth bound is a call that is not made, so this is what proves it: the helper
-    holds no `task`, so it could not delegate even if it tried.
+def test_delegation_stops_at_a_helpers_own_general_purpose(cfg, session_dir):
+    """The depth bound is a call that is not made, so this is what proves it: a helper's
+    `task` reaches only its own `general-purpose`, and no `general-purpose` holds `task`
+    to go further -- `reviewer`'s included, whose caller names a helper it could inherit.
 
     Asked of the helper *inside* `reviewer`, not the standalone subagent of the same
-    name -- that one has no helpers either, so it would pass whatever this change did.
+    name, which is built apart and would pass whatever this change did.
     """
-    _define(cfg, REVIEWER, HELPER)
+    from tests.unit.test_delegation_ceiling import _subagent_graphs
 
+    _define(cfg, REVIEWER, HELPER)
     graph = _build(cfg, session_dir)
 
-    assert "task" not in _tools_of(_helper(graph, "reviewer", "second-opinion"))
+    reviewers = _subagent_graphs(_subagent(graph, "reviewer"))
+    helpers = _subagent_graphs(_helper(graph, "reviewer", "second-opinion"))
+
+    assert set(helpers) == {"general-purpose"}
+    assert "task" not in _tools_of(reviewers["general-purpose"])
+    assert "task" not in _tools_of(helpers["general-purpose"])
 
 
 def test_a_helper_is_not_handed_the_parents_task_tool(cfg, session_dir):
-    """The harvested `task` is bound to the *parent's* subagent list."""
+    """The harvested `task` is bound to the *parent's* subagent list: a helper's own reaches
+    its own `general-purpose` and nothing its parent can."""
     _define(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir)
 
-    assert "task" not in _tools_of(_helper(graph, "reviewer", "second-opinion"))
+    assert _subagents_of(_helper(graph, "reviewer", "second-opinion")) == {"general-purpose"}
     assert "read_file" in _tools_of(_helper(graph, "reviewer", "second-opinion"))
 
 
@@ -318,10 +326,9 @@ def test_a_subagent_that_names_a_helper_gets_a_task_tool(cfg, session_dir):
 
 
 def test_a_subagent_that_names_none_gets_no_task_tool(cfg, session_dir):
-    """Unchanged for every subagent that does not ask, which is all of them until
-    someone writes the line.
-    """
-    _define(cfg, HELPER)
+    """A subagent whose line leaves `task` out gets none, and so no `general-purpose`:
+    the line is the switch, and nothing else turns it on."""
+    _define(cfg, HELPER.replace(STAR, "builtin_tools: [read_file, ls]\n"))
 
     graph = _build(cfg, session_dir, subagents=("second-opinion",))
 
@@ -332,12 +339,12 @@ def test_a_subagent_that_names_none_gets_no_task_tool(cfg, session_dir):
 
 
 def test_a_helper_the_caller_did_not_name_is_dropped(cfg, session_dir):
-    """Not refused."""
+    """Not refused: dropped, leaving the subagent its own `general-purpose`."""
     _define(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir, subagents=("reviewer",))
 
-    assert "task" not in _tools_of(_subagent(graph, "reviewer"))
+    assert _subagents_of(_subagent(graph, "reviewer")) == {"general-purpose"}
 
 
 def test_a_helper_nothing_defines_is_refused(cfg, session_dir):
@@ -406,20 +413,64 @@ def test_a_subagent_consults_its_helper_end_to_end(cfg, session_dir):
 # -- what nesting must not have loosened ------------------------------------
 
 
-def test_a_nested_agent_gets_no_unrestricted_subagent(cfg, session_dir):
-    """`GrantedOnlyMiddleware` is applied to the main agent and nowhere else.
+OWN_TOOL = '''
+def own_tool(text: str) -> str:
+    """A tool only this subagent's folder holds."""
+    return "OWN:" + text
 
-    Measured rather than reasoned: `create_deep_agent` adds it, and
-    `SubAgentMiddleware` does not. So the backstop stays where it is -- and this is
-    what fails if an upgrade changes that.
-    """
-    _define(cfg, REVIEWER, NESTING_HELPER, CHECKER)
 
-    graph = _build(cfg, session_dir, subagents=("reviewer", "second-opinion", "checker"))
-    nested = _subagent(graph, "reviewer")
+TOOLS = [own_tool]
+'''
 
-    assert "task" in _tools_of(nested), "a subagent with helpers needs task to reach them"
-    assert "general-purpose" not in _subagents_of(nested)
+
+@pytest.mark.parametrize(
+    ("line", "call", "runs"),
+    [
+        ("[read_file, task]", {"name": "own_tool", "args": {"text": "x"}}, "OWN:x"),
+        ("[read_file, task]", {"name": "read_file", "args": {"file_path": "/inputs/a.txt"}}, "PUT"),
+        ("[read_file, task]", {"name": "execute", "args": {"command": "echo ESCAPED"}}, None),
+        ('["*"]', {"name": "write_todos", "args": {"todos": []}}, None),
+    ],
+    ids=["its-folder", "its-built-in", "not-the-agents-shell", "never-the-to-do-list"],
+)
+def test_a_subagents_general_purpose_holds_what_it_holds_and_no_more(scripted, line, call, runs):
+    """deepagents' own `general-purpose` holds the agent's every tool, the shell and the
+    to-do list among them, and none of a subagent's own: given that one, a subagent
+    could reach past its line by handing work on."""
+    folder = subagents_dir(scripted) / "reviewer"
+    (folder / "tools").mkdir(parents=True)
+    (folder / "reviewer.yaml").write_text(
+        "name: reviewer\ndescription: Checks figures.\n"
+        f"builtin_tools: {line}\ntools: [{{name: own_tool, source: bundled}}]\n"
+        "system_prompt: |\n  REVIEWER-OWN-PROMPT.\n",
+        encoding="utf-8",
+    )
+    (folder / "tools" / "own_tool.py").write_text(OWN_TOOL, encoding="utf-8")
+    an_agent(scripted, subagents="[reviewer]", **EVERY_TOOL)
+
+    def task(who: str) -> AIMessage:
+        asked = {"description": "a job", "subagent_type": who}
+        return AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": who}])
+
+    Scripted.script.extend(
+        [
+            task("reviewer"),
+            task("general-purpose"),
+            AIMessage(content="", tool_calls=[{**call, "id": "c"}]),
+            *(AIMessage(content=f"done {n}") for n in range(3)),
+        ]
+    )
+    start(scripted, "s")
+    (scripted.workspace / "sessions" / "s" / "inputs" / "a.txt").write_text("PUT")
+
+    Kingfisher(scripted, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
+
+    (heard,) = [one for one in Scripted.heard if getattr(one[-1], "tool_call_id", None) == "c"]
+    answer = heard[-1].text
+    assert (runs in answer) if runs else answer.startswith("Error:"), answer
+    # Told deepagents' text for a helper, and not the role its caller was given.
+    assert "In order to complete the objective" in heard[0].text
+    assert "REVIEWER-OWN-PROMPT" not in heard[0].text
 
 
 def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monkeypatch):
@@ -588,9 +639,11 @@ def _helper_specs(spec) -> dict:
     return {}
 
 
-def test_a_helper_runs_the_model_of_the_subagent_that_summoned_it(cfg, session_dir):
+@pytest.mark.parametrize("below", ["second-opinion", "general-purpose"])
+def test_a_helper_runs_the_model_of_the_subagent_that_summoned_it(cfg, session_dir, below):
     """A definition naming no model runs whatever reached it, and one level down that is
-    the subagent above -- not the main agent.
+    the subagent above -- not the main agent, which for a subagent's own `general-purpose`
+    would put its every call on the expensive model.
     """
     _define(cfg, CHEAP_REVIEWER, HELPER)
     main = FakeToolCallingModel(responses=[AIMessage(content="ok")])
@@ -603,7 +656,7 @@ def test_a_helper_runs_the_model_of_the_subagent_that_summoned_it(cfg, session_d
     )
 
     parent = {spec["name"]: spec for spec in built.subagents or ()}["reviewer"]
-    helper = _helper_specs(parent)["second-opinion"]
+    helper = _helper_specs(parent)[below]
 
     assert helper["model"] is not main, "the helper inherited the main agent's model"
     assert helper["model"].model == "cheap-model"
@@ -764,7 +817,7 @@ def test_a_helpers_history_is_kept_apart_from_its_summoners(cfg, session_dir):
             AIMessage(content="REVIEWER-DONE"),
             AIMessage(content="PARENT-DONE"),
         ],
-        profile={"max_input_tokens": 8_000},
+        profile={"max_input_tokens": 8_500},
     )
     graph = build_agent(
         cfg,

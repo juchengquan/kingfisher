@@ -18,6 +18,20 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Every subagent holding `task` has a `general-purpose` of its own, after #1148
+
+- **A subagent whose `builtin_tools` holds `task`, or is `["*"]`, can now hand work to a
+  `general-purpose` of its own**, beside any helpers it names. It is a copy of that
+  subagent -- its tools, its folder's, its skills and its model -- told deepagents' helper
+  text and the deployment's instructions, and it cannot hand work on. Nothing in a
+  definition asks for it. To keep a subagent without one, leave `task` out of its line; a
+  request withholding `task` has none anywhere.
+- **What it costs:** `task`'s description, about 1,400 characters, on every model call of
+  a subagent that named no helper before, and a few milliseconds of build per such
+  subagent per turn.
+- **A `ScratchRunLimit` is asked about each one** as `"general-purpose"`, the name and the
+  kind its answer for the agent's already used, so one answer covers all of them.
+
 ## `general-purpose` is told the agent's skills, after #1147
 
 - **`general-purpose` is now handed the agent's skills index**: every skill where the

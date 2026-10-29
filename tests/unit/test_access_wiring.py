@@ -1247,7 +1247,7 @@ def test_a_subagents_own_audiences_narrow_its_skills_and_helpers_too(delegating)
     held = holding(delegated(delegating, ("C",)), "reviewer")
 
     assert held["skills"] == {"review"}
-    assert held["helpers"] == {"plain-helper", "second-opinion"}
+    assert held["helpers"] == {"plain-helper", "second-opinion", "general-purpose"}
 
 
 @pytest.mark.parametrize("name", ["insider", "ledger"])
@@ -1278,7 +1278,7 @@ def test_a_caller_every_audience_admits_gets_everything_each_subagent_names(dele
     assert held["tools"] == {"http_fetch", "sql_query"}
     assert {"http_fetch", "sql_query"} <= held["allowed"]
     assert held["skills"] == {"audit", "review"}
-    assert held["helpers"] == {"second-opinion", "plain-helper", "insider"}
+    assert held["helpers"] == {"second-opinion", "plain-helper", "insider", "general-purpose"}
     assert {"insider", "ledger"} <= built_names(built)
     assert {"http_fetch", "sql_query"} <= set(
         dispatched(subagent_of(built, "profiler")["runnable"])

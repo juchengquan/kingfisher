@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from deepagents import FilesystemPermission, MemoryMiddleware, create_deep_agent
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
@@ -21,6 +21,7 @@ from kingfisher.core.access import (
     CapabilityError,
     Selection,
     approved_middleware,
+    narrowed,
     offers,
     refuse_ungranted_models,
 )
@@ -57,6 +58,7 @@ from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.definitions.subagents.spec import RunOn, SubagentSpec, opens_skills
 from kingfisher.core.definitions.tools.spec import FoundTool, audienced, own_audiences
 from kingfisher.core.interfaces import AgentsMiddlewares
@@ -719,60 +721,111 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             # Read with `runs`, from the entry that built it.
             clear_results_at: int | None = None,
         ) -> dict[str, Any]:
-            """One subagent, with the request's ceiling on every axis."""
+            """One subagent, with the request's ceiling on every axis, and beside its helpers
+            a `general-purpose` of its own where its grant holds `task`."""
             selecting, chosen_by = _middleware_of(defined[name])
-            return as_subagent(
+
+            def built_as(  # noqa: PLR0913 -- what differs between the subagent and its copy
+                spec: SubagentSpec,
+                *,
+                kind: Literal["subagent", "general-purpose"],
+                refused_by: str | None,
+                helpers: list[Any] | None,
+                default_model: Any,
+                tool_objects: list[Any] | None,
+                run_on: RunOn | None,
+            ) -> dict[str, Any]:
+                """`spec` under `name`'s grants, folder, skills, model and records."""
+                return as_subagent(
+                    spec,
+                    cfg,
+                    kind=kind,
+                    refused_by=refused_by,
+                    runs=runs,
+                    instructions=instructions,
+                    turn_text=turn_text,
+                    pdf_attachments=pdf_attachments,
+                    scratch_run_limit=scratch_run_limit,
+                    backend=backend,
+                    permissions=permissions,
+                    gated=gated,
+                    endpoints=capabilities.endpoints,
+                    builtin_tools=surface.granted_builtin,
+                    tools=surface.offered_grant,
+                    # Behind the deployment's switch too, like the agent's own index.
+                    skills=(
+                        subagent_skills(defined[name], offered, capabilities.skills, held=held)
+                        if skills_on
+                        else None
+                    ),
+                    skill_sources=skills_sources(roots.registry.folders) if skills_on else None,
+                    helpers=helpers,
+                    default_model=default_model,
+                    tool_objects=tool_objects,
+                    catalogue=walked,
+                    # Its own folder's, looked up by the key a grant uses, which is
+                    # what `bundled_tools` is keyed by.
+                    private=private_tools(roots, name, held=held),
+                    # Not behind the switch: a bundle is the subagent's own folder, mounted
+                    # either way, so withholding its index leaves the files reachable unnamed.
+                    private_skills=private_skills(roots, name),
+                    paths=paths,
+                    run_on=run_on,
+                    held=held,
+                    recorder=recording(defined[name]),
+                    ledger=ledger,
+                    clear_results_at=clear_results_at,
+                    budget=budget,
+                    # Called per graph: two graphs sharing an instance would share its state.
+                    extra_middleware=declared_middleware(
+                        selecting,
+                        middlewares,
+                        capabilities.middlewares,
+                        kind="subagent",
+                        provisions=_provisions(
+                            runs,
+                            defined[name],
+                            cfg=cfg,
+                            endpoints=capabilities.endpoints,
+                            backend=backend,
+                        ),
+                        chosen_by=chosen_by,
+                    ),
+                )
+
+            granted = narrowed(defined[name].builtin_tools, by=surface.granted_builtin)
+            if defined[name].build is None and (granted == ALL or TASK_TOOL in (granted or ())):
+                # Its own lines under deepagents' name and prompt, so it holds what this
+                # subagent holds and no more. No helpers, so no `task`: it cannot hand work
+                # on. No tool objects: its stack's own file tools serve it, and the agent's
+                # objects would hand it the agent's to-do list.
+                general = built_as(
+                    replace(
+                        selecting,
+                        name=GENERAL_PURPOSE_SUBAGENT["name"],
+                        description=GENERAL_PURPOSE_SUBAGENT["description"],
+                        system_prompt=GENERAL_PURPOSE_SUBAGENT["system_prompt"],
+                        slots={},
+                        subagents=None,
+                        wanted=None,
+                    ),
+                    kind="general-purpose",
+                    refused_by=f"the {name!r} subagent",
+                    helpers=None,
+                    # What this subagent runs: a helper's spec must name a model.
+                    default_model=runs,
+                    tool_objects=None,
+                    run_on=None,
+                )
+                helpers = [*(helpers or ()), general]
+            return built_as(
                 defined[name],
-                cfg,
-                runs=runs,
-                instructions=instructions,
-                turn_text=turn_text,
-                pdf_attachments=pdf_attachments,
-                scratch_run_limit=scratch_run_limit,
-                backend=backend,
-                permissions=permissions,
-                gated=gated,
-                endpoints=capabilities.endpoints,
-                builtin_tools=surface.granted_builtin,
-                tools=surface.offered_grant,
-                # Behind the deployment's switch too, like the agent's own index.
-                skills=(
-                    subagent_skills(defined[name], offered, capabilities.skills, held=held)
-                    if skills_on
-                    else None
-                ),
-                skill_sources=skills_sources(roots.registry.folders) if skills_on else None,
+                kind="subagent",
+                refused_by=None,
                 helpers=helpers,
                 default_model=default_model,
                 tool_objects=tool_objects,
-                catalogue=walked,
-                # Its own folder's, looked up by the key a grant uses, which is
-                # what `bundled_tools` is keyed by.
-                private=private_tools(roots, name, held=held),
-                # Not behind the switch: a bundle is the subagent's own folder, mounted
-                # either way, so withholding its index leaves the files reachable unnamed.
-                private_skills=private_skills(roots, name),
-                paths=paths,
                 run_on=wanted.get(name),
-                held=held,
-                recorder=recording(defined[name]),
-                ledger=ledger,
-                clear_results_at=clear_results_at,
-                budget=budget,
-                extra_middleware=declared_middleware(
-                    selecting,
-                    middlewares,
-                    capabilities.middlewares,
-                    kind="subagent",
-                    provisions=_provisions(
-                        runs,
-                        defined[name],
-                        cfg=cfg,
-                        endpoints=capabilities.endpoints,
-                        backend=backend,
-                    ),
-                    chosen_by=chosen_by,
-                ),
             )
 
         # One compiled agent per definition, however many places it appears: compiling
