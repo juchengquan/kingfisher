@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A subagent may not be called `general-purpose`, after #1144
+
+- **A subagent named `general-purpose` is refused when the deployment loads**, from a yaml
+  file or a `SUBAGENTS` entry alike, with a `SubagentError` naming the file:
+  `general-purpose.yaml: 'general-purpose' is kingfisher's own helper, ...`. It stops
+  `Kingfisher(...)` at startup, and `doctor` and `kingfisher list` report the subagent
+  catalogue as not loading. Before, it loaded, and every agent naming it, or `["*"]`,
+  failed on its first build with deepagents' `Duplicate subagent name 'general-purpose'`;
+  one no agent named was never used. Rename it: its `name:`, and every `subagents:` line
+  and request naming it.
+
 ## The run-events record says which agent and delegation, after #1138
 
 - **Every model and tool event in `RunEvents` carries `agent` and `delegations`**, as

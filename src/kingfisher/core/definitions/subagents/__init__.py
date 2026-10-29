@@ -10,3 +10,6 @@ TASK_TOOL = "task"
 #: the format refuses a subagent listing it, so a default moved upstream would hand helpers
 #: the sandbox and leave the refusal guarding a name nothing registers.
 INTERPRETER_TOOL = "eval"
+
+#: The subagent deepagents adds beside every `task` tool, which kingfisher supplies itself.
+GENERAL_PURPOSE = "general-purpose"
