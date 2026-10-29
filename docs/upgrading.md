@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A program's subagents do not stop for approval, after #1151
+
+- **A subagent a program starts with `task()` that reaches a gated call now fails its
+  dispatch instead of pausing the turn.** The model is told which tool needed approval
+  and to hand the work over with the `task` tool, whose pause resumes as before; nobody
+  is asked about the refused call. Before, the turn paused, and on approval the program
+  ran again from the top: one that called `tools.*` failed with `ReferenceError: tools
+  is not defined` and the approved call never ran.
+
 ## A program's subagents are told apart, after #1150
 
 - **A subagent a program starts with `task()` now carries `delegations`**: the `eval`

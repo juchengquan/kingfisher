@@ -260,30 +260,28 @@ def test_two_dispatches_one_program_starts_at_once_are_told_apart(scripted):
     assert sorted(e.text for e in ended) == ["answer A", "answer B"]
 
 
-def test_a_dispatch_that_pauses_has_not_ended(scripted):
-    """A pause reaches the dispatch as an exception, and a result written for one would
-    end a delegation still waiting on a person; the resumed turn's is the control."""
+def test_a_dispatch_that_would_pause_is_refused(scripted):
+    """A pause inside a program was resumed by running the program again before any model
+    call had set `tools.*` up, so the approved call never ran; set up, every `tools.*`
+    call made before the pause would have run twice."""
     cfg = _dispatching(
         scripted,
         "(async () => await task({description: 'go', subagentType: 'reviewer'}))()",
         AIMessage(content="", tool_calls=[{**WRITE, "id": "w1"}]),
-        AIMessage("reviewed"),
         AIMessage("done"),
         interrupt_on="[write_file]",
     )
-    kf = Kingfisher(cfg, sessions=LocalSessions())
 
-    first = _drained(kf, Request("go", agent="only", session_id="s"))
-    paused = first[-1].result
-    assert paused is not None and paused.pending, "the reviewer never paused"
-    answers = tuple(Decision(call_id=one.call_id, action="approve") for one in paused.pending)
-    second = _drained(kf, Resume(session_id="s", decisions=answers))
+    asked = Request("go", agent="only", session_id="s")
+    events = _drained(Kingfisher(cfg, sessions=LocalSessions()), asked)
 
-    (chain,) = {e.delegations for e in first if e.kind == "delegation_start"}
-    assert [e for e in first if e.kind == "tool_result" and e.tool == "task"] == []
-    assert [(e.call, e.text) for e in second if e.kind == "tool_result" and e.tool == "task"] == [
-        (chain[-1], "reviewed")
-    ]
+    finished = events[-1].result
+    assert finished is not None and finished.pending == (), "the turn paused inside a program"
+    assert not (cfg.workspace / "sessions" / "s" / "outputs" / "r.txt").exists()
+    told = str(Scripted.heard[-1][-1].content)
+    assert "approval of `write_file`" in told and "the `task` tool" in told
+    (ended,) = [e.text for e in events if e.kind == "tool_result" and e.tool == "task"]
+    assert "approval of `write_file`" in ended
 
 
 def test_a_dispatch_that_fails_ends_with_its_error(scripted):

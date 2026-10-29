@@ -73,12 +73,6 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 
 ## Small fixes, not yet made
 
-- **A paused program that calls `tools.*` cannot be resumed.** When a subagent it
-  started with `task()` stops at a gate, the resumed turn runs the program again before
-  any model call has installed `tools.*`, so it fails with `ReferenceError: tools is not
-  defined`: the approved call never runs, and nothing the subagent did reaches the
-  program. A program calling only `task()` resumes. Agreed to fix next, after #1150;
-  `findings.md` has the mechanism. *(2026-10-29.)*
 - **`http_fetch` fails on every HTTPS address under a Python with no certificate
   store**, such as python.org's macOS build, because it uses plain `urllib`; `curl` and
   model calls work, since httpx carries certifi. Proposed: the system store when it has

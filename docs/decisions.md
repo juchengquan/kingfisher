@@ -909,7 +909,7 @@ it; a pause is not an end. *(2026-10-27, #1130.)*
 **A program's dispatch is a delegation inside its `eval` call, as `("e1",
 "ptc_task_…")`.** A subagent a program starts with `task()` sits under the id of the
 `eval` call that ran the program, then the dispatch's own, which the library derives
-from the program, so a resumed turn running it again dispatches under the same one. The
+from the program. The
 dispatch's id alone told two at once apart as well, but `delegations[0]` would then be
 an id the ledger never files under: it files a program's subagents under the `eval`
 call. No `ToolNode` sees a dispatch, so no `tasks` chunk announces it and no `updates`
@@ -920,6 +920,20 @@ dispatch's `delegation_start` and the `tool_result` ending it, with the subagent
 answer or its error, since the answer itself goes back into the program. The program's
 own calls, the dispatch's among them, stay `()`, as the `eval` call is. *(2026-10-29,
 #1150.)*
+
+**A pause inside a program's dispatch is refused, not taken.** A resumed turn runs a
+paused program again from the top. The sandbox sets `tools.*` up only when the model is
+called, so the re-run failed at its first `tools.*` call and the approved call never
+ran; set up, every `tools.*` call made before the pause would run a second time, a
+second message posted or row written, though a dispatch that had finished returns its
+answer again without running. So a subagent a program started that reaches a gate fails
+its dispatch, and the model is told which tool needed approval and to hand the work over
+with the `task` tool, whose pause resumes only the call that paused. Nobody is asked,
+just as nobody is for a gated tool, which `tools.*` never offers: a program is no place
+to wait for a person. Taking `task()` out of every program whose subagents hold a gated
+tool would also have kept anything from running twice, but kingfisher copies the agent's
+gates into every subagent, so one written with `["*"]` would lose fan-out from code for
+work that never needs approval. *(2026-10-29, #1151.)*
 
 **The run-events record says the same, read off the callbacks rather than the stream.**
 Each model and tool event carries `agent` and `delegations` as the stream means them;
@@ -944,10 +958,9 @@ from a `finally`, so every `run_start` keeps its end. A turn that failed before 
 reason was known says `null`: `end_turn` would read as one that finished.
 *(2026-10-28, #1138.)*
 
-**Not covered: an approval's subagent with two open, or a program's.**
-`PendingDecision.agent` stays `None` while two delegations are open, for the reason
-`_subagent_behind` gives, and for a subagent a program started, whose name is in the
-program rather than in any message. *(2026-10-27, narrowed 2026-10-29, #1149, #1150.)*
+**Not covered: an approval's subagent with two open.** `PendingDecision.agent` stays
+`None` while two delegations are open, for the reason `_subagent_behind` gives.
+*(2026-10-27, narrowed 2026-10-29, #1149, #1150, #1151.)*
 
 ## Packaging: where the definitions live
 
