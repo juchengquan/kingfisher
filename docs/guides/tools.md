@@ -515,6 +515,48 @@ A resume is handed the `context` the `Resume` presents, as it presents its
 capabilities again: the call a person approved runs for whoever resumed it.
 `caller` is `None` only for a graph built outside a turn.
 
+## What the caller can use
+
+`runtime.context.reachable` answers what the caller a turn runs for can use: the
+definitions their source ids reach, under this turn's grant, which is the deployment's
+narrowed by the request. It is worked out the first time a tool asks, from the walk
+`kingfisher list --as` makes, so the two cannot disagree.
+
+```python
+import json
+
+from langchain.tools import ToolRuntime
+
+from kingfisher import ToolContext
+
+
+def what_i_can_use(runtime: ToolRuntime[ToolContext]) -> str:
+    """List the tools and skills available to the user this turn runs for."""
+    listing = runtime.context.reachable.listing()
+    return json.dumps({"tools": dict(listing.tools), "skills": dict(listing.skills)})
+
+
+TOOLS = [what_i_can_use]
+```
+
+| `listing().` | What it is |
+| --- | --- |
+| `agents`, `tools`, `skills`, `subagents`, `middlewares` | each name, with the first line of what it says about itself |
+| `builtin_tools` | deepagents' own tools, by name |
+| `models` | the `models.yaml` entries on an endpoint this turn may reach |
+| `default_model` | what an agent naming no `model:` runs, or `None` where this turn may not reach it |
+
+`reachable.agent(name)` is one agent's file as this caller gets it, a mapping ready to
+write out as YAML: every list kept to the listing, a `["*"]` kept as one, add-on
+`settings` as the file writes them, and the `system_prompt` with its
+[slots](formats.md#text-that-depends-on-the-caller--system_prompt-written-long) filled for
+this caller. An agent out of their reach answers `None`, as a name nothing defines does.
+
+**Nothing either answers names a source id**: no `source_ids:` line, no audience on a
+`skills:` entry, no slot's rule. Which names open what is the deployment's policy, and
+a caller shown it could guess at it. A prompt filled for this caller is the text *they*
+are sent, so a sentence written for callers like them reads as plain text in the copy.
+
 ## A tool that runs a command
 
 Some work should not happen in kingfisher's process: drawing a PDF page is native code

@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A tool can ask what its caller can use, after #1152
+
+- **`ToolContext` has a new field, `reachable`**, which a tool reads as
+  `runtime.context.reachable`: `.listing()` is what the caller a turn runs for can use,
+  and `.agent(name)` one agent's file as they get it. It has a default, so code that
+  builds a `ToolContext` itself is unchanged. `Reachable` and `Listing` are importable
+  from `kingfisher`; `tools.md` has the rest.
+- **A tool reading `reachable.agent(...)` shows a caller what a definition writes under a
+  middleware's `settings:`**, as it shows the rest of that agent's file. Nothing shipped
+  reads it yet. Move any secret written there into the class's `defaults` or the
+  environment it reads.
+
 ## A program's subagents do not stop for approval, after #1151
 
 - **A subagent a program starts with `task()` that reaches a gated call now fails its

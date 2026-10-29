@@ -64,6 +64,7 @@ from kingfisher.core.definitions.subagents.spec import RunOn, SubagentSpec, open
 from kingfisher.core.definitions.tools.spec import FoundTool, audienced, own_audiences
 from kingfisher.core.interfaces import AgentsMiddlewares
 from kingfisher.core.layout import Layout
+from kingfisher.core.reachable import Reachable
 
 from .activation import (
     activatable_skills,
@@ -417,6 +418,11 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     # Merged once, so an agent and its subagents select from one mapping, or a name would
     # mean different things one level apart.
     middlewares = offered_middleware(middleware_registry or {}, roots.middlewares)
+    # `asked`, the turn's grant, and not the agent's: a tool is shown what its caller may
+    # use, and the agent it runs under is one of the things they may use.
+    reachable = Reachable(
+        cfg=cfg, catalogue=roots, granted=asked, held=held, middlewares=middlewares
+    )
     agent_provisions = (
         {}
         if agent is None
@@ -602,7 +608,9 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         graph = create_deep_agent(**attached)
         budget.measure(graph)
         return Assembled(
-            graph=graph, context=ToolContext(backend=under_rules, caller=caller), **attached
+            graph=graph,
+            context=ToolContext(backend=under_rules, caller=caller, reachable=reachable),
+            **attached,
         )
 
     # `asked`, not `capabilities`: combined, the agent's names are the ones this caller

@@ -740,7 +740,18 @@ def inventory(  # noqa: PLR0913 -- the caller's three, beside where to look
     # Whose view this is, before the agents are read: each one's chain is what it
     # activates for this caller.
     held = held_by(resolved.vocabulary, with_datazone(source_ids, datazone, extra_datazones))
+    return inventory_for(cfg, catalogue=resolved, held=held, sessions=sessions)
 
+
+def inventory_for(
+    cfg: Config,
+    *,
+    catalogue: Definitions,
+    held: frozenset[str] | None,
+    sessions: object | None = None,
+) -> Inventory:
+    """`inventory`, for a caller whose names a turn has already resolved."""
+    resolved = catalogue
     middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved, held)
     unresolved_subagents = _unresolved_subagents(resolved, held)

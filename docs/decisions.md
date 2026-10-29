@@ -1858,6 +1858,24 @@ on its own, and three could not bite until the fixture grew for them: an audienc
 dominated entry, a subagent carrying a tool under a lock of its own, and one narrowing a
 skill further. *(2026-10-26, #1096.)*
 
+**A tool is shown what its caller can use, from the walk `list --as` makes.**
+`ToolContext.reachable` lists, kind by kind, what the caller a turn runs for may use, and
+copies one agent as they get it: what a tool drafting an agent from its caller's own reach
+needs. It narrows `inventory_for`, the per-caller listing, by the turn's grant rather than
+walking again, since a second answer to what a caller reaches is how a name they cannot
+reach leaks. **The turn's grant as well as their ids**: a deployment carrying a user's
+permissions in the grant would otherwise see them widened, the first widening anywhere.
+**The turn's grant, not the agent's**: a tool is shown what its caller may use, whichever
+agent it runs under. **None of the policy**, as `list --as` carries none: no ids,
+audiences or slot rules, a copy's prompt is the one this caller is sent, and an agent out
+of reach answers `None`, as a name nothing defines does. A copy's gates keep to the tools
+the caller reaches rather than the copy's own, because a gate may stop a tool one of its
+subagents holds. **Worked out on first ask**: 30 to 100 ms on the shipped catalogue,
+measured, paid only by a turn whose tool asks. **Not a dataclass**: pydantic resolves a
+dataclass's field types when a tool naming `ToolContext` is bound, and importing them took
+the module every tool file loads from 8 ms to 32 ms; as a plain class it is 9.5.
+*(2026-10-29, #1152.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds
