@@ -252,7 +252,7 @@ advice too.
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `interrupt_on` | optional | Tools whose every call stops for a person before it runs — see [Approval gates](#approval-gates) |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
-| `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `skills` entries, the one entry that may say who it is for — see [Access](#access--source_ids-in-the-definitions) |
+| `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience for everything it lists — see [Access](#access--source_ids-in-the-definitions) |
 
 One rule covers every field that grants, and a subagent file follows it too:
 **leave a field out and you get none of it; write `["*"]` for everything
@@ -708,7 +708,7 @@ on the spot, so every entry after the first would be unreachable.
 | `subagents` | optional | Subagents this one may consult mid-job. Unset grants **none**. Any depth, no loops — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the subagent runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
-| `source_ids` | optional | Who may reach this subagent, wherever it is used, and the only place that is said: a `subagents:` entry naming it takes no audience. Unset means everyone. Also the default audience, and the ceiling, for its `skills` entries — see [Access](#access--source_ids-in-the-definitions) |
+| `source_ids` | optional | Who may reach this subagent, wherever it is used, and the only place that is said: a `subagents:` entry naming it takes no audience. Unset means everyone. Also the default audience for everything it lists — see [Access](#access--source_ids-in-the-definitions) |
 | `datazone` | optional | The one datazone a caller must be in to reach this subagent. Unset means any — see [Datazones](#datazones--a-second-field-beside-source-ids) |
 
 ### A subagent that consults another
@@ -1371,8 +1371,8 @@ Python are held to the same rule.
 is what grants its parts — a caller never names them, which is the point, since
 naming them would mean knowing they exist. Leaving `redactor` out of a request's
 `capabilities.subagents` declines the whole subagent; there is no finer lever, deliberately. For the same
-reason a bundled `skills:` entry takes no `source_ids`: it reaches whoever reaches the
-subagent.
+reason a bundled skill takes no lock, on its entry or in `skill_locks.yaml`: it reaches
+whoever reaches the subagent.
 
 **Only a subagent has a folder.** `source: bundled` in an agent file is refused,
 and so is the path form `file::name` on a bundled entry — the folder already says
@@ -1568,13 +1568,11 @@ switches on access control in the definitions folder it is copied into — `king
 `tools/sql_query.py` are left behind for the same reason: a lock written in Python
 counts as one, and a tool's only place to write it is there.
 
-**Audiences live in the definitions.** Each thing says who may reach *it*, in its
-own file: an agent or a subagent on its `source_ids:` line, a tool in its
-`ToolSpec`. A skill's own file is `SKILL.md`, which the model reads whole and a
-vendor's pack does not let you edit, so the definition offering it says it on the
-skill's entry. Nothing is central: the vocabulary — which names exist — is every
-name these lines write, collected at startup, so there is no second list to keep in
-step with them.
+**Audiences live with the thing they lock.** An agent or a subagent says who may
+reach it on its `source_ids:` line, a tool in its `ToolSpec`, and a skill in
+`skill_locks.yaml` beside these folders. Nothing else is central: the vocabulary —
+which names exist — is every name these lines write, collected at startup, so there
+is no second list to keep in step with them.
 
 ```yaml
 # agents/assistant.yaml
@@ -1584,10 +1582,7 @@ source_ids: [A, B]                 # who may open a session on this agent
 builtin_tools: ["*"]               # `task` reaches reviewer, `read_file` a skill
 tools: [sql_query, http_fetch]     # names: a tool's lock is in its own file
 subagents: [reviewer]              # names: a subagent's audience is its own line
-skills:
-  - name: audit
-    source_ids: [A]                # only A is told about this procedure
-  - code-review                    # a bare name means "at my audience"
+skills: [audit, code-review]       # names: a skill's lock is in skill_locks.yaml
 system_prompt: |
   ...
 ```
@@ -1595,6 +1590,12 @@ system_prompt: |
 ```python
 # tools/sql_query.py  — this tool is for A, in every agent that grants it
 TOOLS = [ToolSpec(sql_query, source_ids=["A"])]
+```
+
+```yaml
+# skill_locks.yaml  — only A is told about this procedure, in every agent listing it
+- name: audit
+  source_ids: [A]
 ```
 
 Read once at startup, so a revocation lands on restart.
@@ -1624,10 +1625,9 @@ input — there is no spelling of "give me everything" except `UNSCOPED`.
 ### The spellings, and one rule
 
 `source_ids:` on a definition is the **default audience** for everything it holds,
-since what it holds is reached only through it, and the **ceiling** on what a
-`skills:` entry may say. That one rule covers every form the selection fields
-already had, so a definition written before audiences existed keeps its exact
-meaning once a `source_ids:` line is added above it:
+since what it holds is reached only through it. That one rule covers every form the
+selection fields already had, so a definition written before audiences existed keeps
+its exact meaning once a `source_ids:` line is added above it:
 
 ```yaml
 source_ids: [A, B]
@@ -1637,90 +1637,73 @@ tools: ["*"]               # every tool, for A and B
 source_ids: [A, B]
 tools: [sql_query]         # a list — that tool, for A and B
 ```
-```yaml
-source_ids: [A, B]
-builtin_tools: [read_file] # what a skill is opened with
-skills:                    # the long form — per entry
-  - name: audit
-    source_ids: [A]            #   for A only
-  - name: review
-    source_ids: ["*"]          #   for anyone who reaches this definition
-```
 
 A tool its own file locks is held to that as well, so `sql_query` above is for
-whoever opens this agent *and* passes the tool's `ToolSpec`.
-
-**A skills entry is a name, or a mapping of `name` and `source_ids`** — the same
-shape `middlewares:` takes for its `settings`, so there is one long form to learn
-rather than one per field.
-
-The field itself stays a list. Writing the whole field as a mapping keyed by name
-is refused, and the message shows the entry to write instead: YAML collapses
-`{a: X, a: Y}` before any reader sees it, so a name written twice would lose one
-of its audiences silently, with nothing able to refuse or report it.
-
-**Only the entries you restrict need one.** An entry that says nothing inherits
-the definition's own audience, so an agent told about five skills and restricting
-one writes one `source_ids:` line rather than five:
-
-```yaml
-source_ids: [A, B]
-builtin_tools: [read_file]
-skills:
-  - name: audit
-    source_ids: [A]            # narrower than the definition
-  - review                 # a bare name, so [A, B] — the definition's own
-  - code-review
-```
-
-Mixing the two spellings in one list is the ordinary case, not a special one:
-an entry with nothing to attach writes nothing. Long entries that restrict
-nothing mean exactly what bare names mean, which is what keeps the spellings
-honest about an unrestricted name.
-
-`source_ids: []` on an entry is refused rather than read as "nobody": leaving the
-line out is how you say "no restriction", so an empty one is an unfinished edit.
-```yaml
-source_ids: [A, B]
-skills: []                 # none, as it always meant
-```
-
-An entry's audience is always an **and** with the definition's own line. The
-only way to reach an entry is through the definition holding it, and a caller
-who cannot open the agent is never told about its skills — so `audit: source_ids:
-[A]` under `source_ids: [A, B]` means "opens this agent, *and* holds A".
-
-That makes a source id from outside the definition's line useful rather than wrong:
-
-```yaml
-source_ids: [sales_db, audit_log]
-builtin_tools: [read_file]
-skills:
-  - name: pii-handling
-    source_ids: [pii]        # anyone who opens this agent, and holds pii
-```
-
-`kingfisher list` reports it, because the same line is what somebody trying to *widen*
-would write by accident:
-
-```
-access:
-  narrows past this definition's own audience,
-  so it reaches only callers holding both:
-    agent analyst: skill pii-handling  [pii]
-```
-
-Said rather than refused, because no rule can tell the two apart — `[pii]`
-meaning "and pii" and `[audit_log]` written under `[sales_db]` by somebody who
-wanted to add `audit_log` are the same shape, and only the author knows which.
+whoever opens this agent *and* passes the tool's `ToolSpec`. A skill that
+`skill_locks.yaml` locks is held the same way.
 
 **Any overlap grants.** A longer list means *more* callers, which is what
 everyone reads an access list as meaning. `["*"]` is everyone.
 
+### A skill's lock — `skill_locks.yaml`
+
+One entry per locked skill, in the words an agent's own line uses:
+
+```yaml
+- name: tabular-qa
+  source_ids: [sales_db]
+- name: legal::contract-review   # qualified where two folders offer the name
+  source_ids: [legal_team]
+  datazone: emea                 # and only callers in this datazone
+```
+
+**Beside the definitions, not in the skill's folder.** A vendor's pack is replaced
+whole on its next release, which would drop a lock kept in it without a word, and
+the agent can read everything under `/skills/`. The file sits next to `models.yaml`,
+and the shell is kept out of it as it is out of that one.
+
+**A skill this file does not name is told to everyone who opens an agent listing
+it**, as a tool with no lock is usable by them. **A lock holds wherever the skill is
+listed**, so a `skills:` entry is a name and nothing else. One writing `source_ids`
+is refused at load, with the lines to paste here:
+
+```
+analyst.yaml: skills entry 'tabular-qa' writes source_ids, which a skills entry
+does not take: [...] Write the entry as - tabular-qa, and add to skill_locks.yaml:
+  - name: tabular-qa
+    source_ids: [sales_db]
+```
+
+What that gives up is one skill told to different callers in two agents. Leave it
+off the agent that should not offer it.
+
+A lock is an **and** with the agent's own line, since a skill is reached only
+through an agent: `[pii]` on a skill listed by an agent locked to
+`[sales_db, audit_log]` reaches whoever opens that agent *and* holds `pii`.
+
+Refused when the definitions load, each because the alternative is a skill told to
+somebody its lock was written to keep it from:
+
+- a lock naming no skill here, which is what a renamed skill leaves behind;
+- a bare name two folders offer — write `research::lookup`;
+- one skill locked twice, under one spelling or two — the refusal shows both
+  audiences and keeps neither, since only the author knows which was meant;
+- an entry that locks nothing: no `source_ids:` and no `datazone:`, or `["*"]`;
+- a skill from a subagent's own folder, which reaches whoever reaches that subagent —
+  lock the subagent, or move the skill into `skills/` and lock it here.
+
+`seed` leaves the file behind unless run with `--all`, as it does every definition
+carrying a lock.
+
+Note what a lock is and is not, because a skill was never a boundary: a skill out of
+reach is not advertised, and reading it is refused for that run, but the file is
+still on disk and an agent holding `execute` can read anything. The boundary is the
+tools a skill's procedure would need, which have locks of their own.
+
 ### Which fields take an audience
 
-On an entry, `skills` alone. A tool and a subagent each say who may use them in
-their own file, and an entry under `tools:` or `subagents:` that writes
+On an entry, none. A tool, a subagent and a skill each say who may use them in one
+place, and an entry under `tools:`, `subagents:` or `skills:` that writes
 `source_ids` is refused at load, saying where the line goes instead:
 
 ```yaml
@@ -1728,9 +1711,7 @@ source_ids: [A, B]
 builtin_tools: ["*"]         # `task` and `read_file`, for the lines below
 tools: [sql_query]           # the lock is ToolSpec(sql_query, source_ids=[...])
 subagents: [reviewer]        # the audience is reviewer.yaml's own source_ids:
-skills:
-  - name: audit
-    source_ids: [A]           # only A is told this procedure exists
+skills: [audit]              # the lock is audit's entry in skill_locks.yaml
 ```
 
 So who may use a tool in an agent is three checks, each in one place: whether the
@@ -1738,17 +1719,11 @@ caller can open the agent, its own `source_ids:`; whether the agent lists the to
 its `tools:`; and whether the caller passes the tool's own lock. To answer "who can
 use `http_fetch`?" you read its tool file, not every agent that lists it. An agent
 still decides what it holds by listing it — leave a tool off and it is not this
-agent's. What that gives up is one tool locked differently in two agents, which
-listing covers when it comes up.
+agent's. A skill is the same three checks, its lock read from `skill_locks.yaml`.
 
 A skill reaches the model by a different road from a tool — it is advertised
 through a middleware rather than registered as a callable — and a skill out of
 reach is not advertised at all.
-
-Note what that is and is not, because a skill was never a boundary: removing it
-means the agent is not *told* about it. The file is still on disk, so this is
-guidance, and an agent holding `execute` can read anything. The boundary is the
-tools a skill's procedure would need, which have locks of their own.
 
 **`builtin_tools` deliberately takes none.** deepagents registers its own tools
 itself, so kingfisher can filter them but never leave them out of a graph, and a
@@ -1762,26 +1737,17 @@ whatever they ask for.
 
 ### Who reaches what, in one listing
 
-A skills entry's audience is a property of *this definition's use of it*: `reviewer`
-may tell only `[A]` about `audit` while `analyst` tells `[A, B]`, and both are
-correct. So there is no single line answering "who is told about `audit`?", and
-`kingfisher list` answers it instead, with a roll-up by skill beside the
-per-definition view, so a use quietly wider than its neighbours is visible rather
-than something you would only find by grepping. A tool's lock and a subagent's
-audience are each one line, printed once:
+Each lock is one line in one place, so `kingfisher list` prints each once, by what
+it locks:
 
 ```
 access — by definition
   agent analyst  [sales_db, audit_log]
-      skill tabular-qa  [sales_db]
   subagent ledger  [*]  datazone: finance
   subagent reviewer  [A, B]
   tool counter::count  [A]
   tool sql_query  [sales_db]
-
-access — by skill
-  tabular-qa
-      analyst  [sales_db]
+  skill tabular-qa  [sales_db]
 ```
 
 A datazone follows the source ids it is required beside, and a subagent's own tool

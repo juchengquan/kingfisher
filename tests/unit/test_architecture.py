@@ -2898,7 +2898,7 @@ def test_the_runtime_check_sees_the_runtime():
 
 
 #: Names the formats define, which the package writes because they are its own words.
-FORMAT_FILES = frozenset({"SKILL.md", "README.md", "__init__.py"})
+FORMAT_FILES = frozenset({"SKILL.md", "README.md", "__init__.py", "skill_locks.yaml"})
 
 
 def test_the_package_names_nothing_in_assets():
@@ -3547,6 +3547,8 @@ def test_the_catalogue_holds_one_module_per_kind():
 #: of them: one reads every kind into `Definitions`, the other copies a definitions folder.
 #: `prompts` reads and fills `system_prompt` written long, which `definition` declares on
 #: both kinds: two copies of the slot grammar would let a slot mean one thing per kind.
+#: `skill_locks` reads `skill_locks.yaml`, which sits beside the kinds rather than in one:
+#: inside `skills/`, the agent could read it.
 KINDS_HELPERS = frozenset(
     {
         "__init__",
@@ -3557,6 +3559,7 @@ KINDS_HELPERS = frozenset(
         "importing",
         "prompts",
         "seeding",
+        "skill_locks",
     }
 )
 
@@ -3744,7 +3747,7 @@ DEPLOYMENT_ERRORS = frozenset({
     # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
     "AgentError", "ConfigError", "HostPathError", "LoadError",
-    "MiddlewareError", "ToolError", "UnsafeReferenceError",
+    "MiddlewareError", "SkillLockError", "ToolError", "UnsafeReferenceError",
 })
 
 #: Caused by the model's provider, and never raised to a caller: a turn ends on it as a

@@ -865,7 +865,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
     assert "execute" in kinds.get("builtin tool", ())
 
 
-# -- skills take the same audience, by a different road ---------------------
+# -- a skill's own lock, applied by a different road ---------------------
 
 SKILL = """---
 name: {name}
@@ -876,23 +876,24 @@ Do it.
 """
 
 SKILLED = """name: skilled
-description: Holds two skills at different audiences.
+description: Holds two skills, one of them locked.
 source_ids: [A, B]
 builtin_tools: ["*"]
 tools: ["*"]
-skills:
-  - name: audit
-    source_ids: [A]
-  - name: review
-    source_ids: [A, B]
+skills: [audit, review]
 system_prompt: |
   You do the task.
 """
 
 
+def lock_skills(cfg, text: str) -> None:
+    """`skill_locks.yaml`, beside the skills folder as a deployment keeps it."""
+    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(text, encoding="utf-8")
+
+
 @pytest.fixture
 def with_skills(cfg):
-    """Two skills, and an agent holding them at different audiences."""
+    """Two skills, `audit` locked to `A`, and an agent listing both."""
     for name in ("audit", "review"):
         folder = cfg.skills_dir / name
         folder.mkdir(parents=True, exist_ok=True)
@@ -900,18 +901,35 @@ def with_skills(cfg):
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "skilled.yaml").write_text(SKILLED, encoding="utf-8")
+    lock_skills(cfg, "- name: audit\n  source_ids: [A]\n")
     return replace(cfg, skills_enabled=True)
 
 
-def test_a_skill_audience_narrows_the_selection(with_skills):
+def test_a_skills_own_lock_narrows_the_selection(with_skills):
     kf = Kingfisher(with_skills, sessions=LocalSessions())
+    agent = agent_named(kf, "skilled", source_ids=UNSCOPED)
 
-    assert agent_named(kf, "skilled", source_ids=UNSCOPED).declares(
-        caller_holds(kf.vocabulary, ("A",))
-    ).skills == ("audit", "review")
-    assert agent_named(kf, "skilled", source_ids=UNSCOPED).declares(
-        caller_holds(kf.vocabulary, ("B",))
-    ).skills == ("review",)
+    def told(held: tuple[str, ...]) -> object:
+        caller = caller_holds(kf.vocabulary, held)
+        return kf.catalogue.unlocked_for(agent.declares(caller), caller).skills
+
+    assert told(("A",)) == ("audit", "review")
+    assert told(("B",)) == ("review",)
+
+
+def test_a_star_keeps_every_skill_the_caller_passes_the_lock_of(with_skills):
+    """`["*"]` cannot say "all but these", so a lock under a star was the one an agent
+    writing every skill would have skipped."""
+    agent = with_skills.catalogue_roots["agents"] / "skilled.yaml"
+    agent.write_text(SKILLED.replace("skills: [audit, review]", 'skills: ["*"]'), encoding="utf-8")
+    kf = Kingfisher(with_skills, sessions=LocalSessions())
+    held = caller_holds(kf.vocabulary, ("B",))
+
+    declared = agent_named(kf, "skilled", source_ids=("B",)).declares(held)
+
+    told = kf.catalogue.unlocked_for(declared, held)
+
+    assert told.skills == ("catalogue::review",)
 
 
 def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
@@ -965,7 +983,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
 
 
 def test_a_skill_out_of_reach_is_not_reported_as_withheld(with_skills):
-    """The skills row went unfiltered after skills gained an audience, so a caller who
+    """The skills row went unfiltered after skills gained a lock, so a caller who
     could not reach `audit` was told a run had withheld it -- naming the one skill their
     source ids exist to hide.
     """
@@ -1033,15 +1051,11 @@ def test_a_skill_only_a_subagent_declares_is_not_reported_as_withheld(
     assert told == ("review",), "and the one B does reach is still named"
 
 
-def test_a_skill_audience_written_qualified_hides_the_bare_name_too(with_skills):
-    """The agent file may spell a skill `catalogue::audit` while the listing says `audit`.
-    Compared as written, the audience would hide nothing.
+def test_a_skill_lock_written_qualified_hides_the_bare_name_too(with_skills):
+    """The lock may spell a skill `catalogue::audit` while the listing says `audit`.
+    Compared as written, the lock would hide nothing.
     """
-    agent = with_skills.catalogue_roots["agents"] / "skilled.yaml"
-    agent.write_text(
-        agent.read_text(encoding="utf-8").replace("- name: audit", "- name: catalogue::audit"),
-        encoding="utf-8",
-    )
+    lock_skills(with_skills, "- name: catalogue::audit\n  source_ids: [A]\n")
     kf = Kingfisher(with_skills, sessions=LocalSessions())
 
     assert "audit" not in skills_withheld(kf, ("B",), ("review",))
@@ -1094,16 +1108,13 @@ def sql_query(q: str) -> str:
 TOOLS = [ToolSpec(sql_query, source_ids=["A", "B"])]
 '''
 
-#: `formats.md`'s example: a tool its own file keeps from `C`, a skill its entry keeps
+#: `formats.md`'s example: a tool its own file keeps from `C`, a skill its lock keeps
 #: from `C`, and a helper -- `insider` -- its own line keeps from `C`.
 REVIEWER = """name: reviewer
 description: Reviews.
 source_ids: [A, B, C]
 tools: [sql_query, http_fetch]
-skills:
-  - name: audit
-    source_ids: [A, B]
-  - name: review
+skills: [audit, review]
 builtin_tools: ["*"]
 subagents: [second-opinion, plain-helper, insider]
 system_prompt: |
@@ -1186,6 +1197,7 @@ def delegating(cfg):
     agents = cfg.catalogue_roots["agents"]
     agents.mkdir(parents=True, exist_ok=True)
     (agents / "boss.yaml").write_text(BOSS, encoding="utf-8")
+    lock_skills(cfg, "- name: audit\n  source_ids: [A, B]\n")
     return replace(cfg, skills_enabled=True)
 
 
@@ -1240,9 +1252,9 @@ def test_a_caller_in_c_gets_a_reviewer_holding_http_fetch_and_not_sql_query(dele
     assert "sql_query" not in held["allowed"]
 
 
-def test_a_subagents_own_audiences_narrow_its_skills_and_helpers_too(delegating):
-    """The other two audienced fields were read raw as well, and a helper whose own line
-    excludes the caller was built under a parent that named it.
+def test_a_subagents_skills_and_helpers_are_narrowed_for_the_caller_too(delegating):
+    """Both were read raw, and a helper whose own line excludes the caller was built under
+    a parent that named it; a subagent is told no skill whose lock shuts the caller out.
     """
     held = holding(delegated(delegating, ("C",)), "reviewer")
 

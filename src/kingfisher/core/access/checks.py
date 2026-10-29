@@ -18,7 +18,6 @@ from .source_ids import (
     Vocabulary,
     _Unscoped,
     mentioned,
-    narrowing_in,
     zone_name,
 )
 
@@ -122,17 +121,13 @@ def walked(*kinds: Kind) -> Iterator[tuple[str, str, Stated]]:
 def collected(*kinds: Kind) -> Vocabulary | None:
     """Every source id and datazone these definitions name, with which name each -- or
     `None` where none carries a lock, so nothing narrows and naming a caller is refused.
-
-    A skills entry's audience counts: it is a lock on that one use, and the only line some
-    name may appear on.
     """
     source_ids: dict[str, dict[str, None]] = {}
     datazones: dict[str, dict[str, None]] = {}
     for kind, name, said in walked(*kinds):
         who = f"{kind} {name}"
-        for audience in (said.source_ids, *said.skills.values()):
-            for one in mentioned(audience):
-                source_ids.setdefault(one, {})[who] = None
+        for one in mentioned(said.source_ids):
+            source_ids.setdefault(one, {})[who] = None
         if said.datazone is not None:
             datazones.setdefault(said.datazone, {})[who] = None
     if not source_ids and not datazones:
@@ -145,12 +140,10 @@ def collected(*kinds: Kind) -> Vocabulary | None:
 
 def audit(*kinds: Kind) -> AccessReport:
     """What this deployment's locks leave open, in one pass over the files."""
-    unrestricted: list[tuple[str, str]] = []
-    narrowed: list[tuple[str, str]] = []
-    for kind, name, said in walked(*kinds):
-        if said.source_ids == ALL and said.datazone is None:
-            unrestricted.append((kind, name))
-        narrowed.extend(
-            narrowing_in(said.skills, source_ids=said.source_ids, where=f"{kind} {name}")
+    return AccessReport(
+        unrestricted=tuple(
+            (kind, name)
+            for kind, name, said in walked(*kinds)
+            if said.source_ids == ALL and said.datazone is None
         )
-    return AccessReport(unrestricted=tuple(unrestricted), narrowed=tuple(narrowed))
+    )
