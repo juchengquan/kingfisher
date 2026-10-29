@@ -1905,6 +1905,15 @@ may write. **Its procedure is its prompt, not a skill**: skills are off unless a
 deployment turns them on, and the builder needs its procedure on every run.
 *(2026-10-29, #1155.)*
 
+**A check that saves nothing, beside the save.** On a real model, asked for an agent only
+one source id could use, which no draft may say, the builder saved about twenty drafts to
+learn what the check accepted and left nine in the user's outputs. Its prompt said to save
+none for that, and the agent that called it said to create no files. `check_agent_draft`
+runs the same check and writes nothing, and the save still checks, so nothing unchecked
+reaches the user. The tries cost the same tokens: they are the model's. Not chosen: a cap
+on saves per turn, which would also refuse a user who asked for several agents.
+*(2026-10-29, #1157.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

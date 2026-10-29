@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The agent builder can check a draft without saving it, after #1157
+
+- **`agent-builder` has a fourth tool, `check_agent_draft`**, which runs the save's check
+  and writes nothing, and its prompt tries drafts against that rather than saving them.
+  A deployment seeded before keeps its three-tool copy until it seeds again, which
+  replaces the bundle's files, an edited prompt included, and names each one it
+  overwrote.
+
 ## Two writes at one file wait for each other, after #1156
 
 - **Nothing to change for kingfisher's own sessions.** Two writes, edits or uploads at
