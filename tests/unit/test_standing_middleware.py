@@ -103,6 +103,7 @@ def test_the_agent_is_wrapped_in_standing_then_switched_then_offered(cfg, sessio
         "NarrowedSkillsMiddleware",
         "MemoryMiddleware",
         "CodeInterpreterMiddleware",
+        "ProgramDispatchMiddleware",
         "_Offered",
         "PromptCachingMiddleware",
         "OfferedToolFailureMiddleware",

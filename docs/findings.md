@@ -64,9 +64,12 @@ wrong.*
   scripted turn of 400 model calls, each reply 4,000 characters, streamed in 0.95s
   without the mode and 0.98s with it, over three trials each. *(2026-10-28, langgraph
   1.2.15.)*
-- **A subagent a program starts with `task()` inside `eval` never streams.** Two started
-  at once ran and answered, and the stream showed only the `eval` result. *(2026-10-27,
-  deepagents 0.7.22.)*
+- **A subagent a program starts with `task()` inside `eval` streams its `updates` and no
+  tokens.** They come under the `eval` call's namespace with nothing naming the subagent,
+  so they read as the caller's, and `messages` sends nothing of it: it runs with no
+  callbacks, for the reason under *The code sandbox*. Two started at once ran and
+  answered. *(2026-10-27, corrected 2026-10-29, deepagents 0.7.22, langchain-quickjs
+  0.3.8.)*
 - **An `updates` chunk carries a message written back under its own id as if it were
   new.** Clearing swaps an older result for its handle that way, and deepagents'
   summariser clips an overflowing result the same way; in the node's update either is
@@ -818,11 +821,15 @@ directly, and `filter_tools_for_ptc` called on its own.*
   same function as a `StructuredTool` reads `Promise<string>`.
 - **`task()` exists whenever `subagents=True` and the agent holds a `task` tool**, and
   dispatches inside an `eval` already approved.
-- **A `task()` from a program, and every call of the subagent it starts, are missing from
-  the run log**, though the program's own `tools.*` calls are there. Measured through
-  `Kingfisher.run` with a scripted model; the bridge hands `task_tool.arun` the `eval`
-  call's `config`, so where the callbacks go astray is not yet found. The ledger is
-  unaffected. *(2026-10-26, langchain-quickjs 0.3.8.)*
+- **A `task()` from a program runs its subagent with no callbacks**, so the dispatch and
+  every call the subagent makes are missing from the run log and from any tracer, though
+  the program's own `tools.*` calls are there. The bridge hands `task_tool.arun` the
+  `eval` call's `config` but no `callbacks`, and `arun` builds its run's callbacks from
+  that argument alone and gives the tool a config carrying those in place of the call's;
+  deepagents' `task` runs the subagent under it. A `tools.*` call is handed the callbacks.
+  `ProgramDispatchMiddleware` passes them until the library does
+  (langchain-ai/deepagents#6401). The ledger is unaffected. *(2026-10-26, cause found
+  2026-10-29, langchain-quickjs 0.3.8 to 0.3.11.)*
 
 - **The sandbox snapshots 1,280KB a turn whether or not `eval` runs.** A floor rather than a
   cost that scales with the work: one run called it zero times in forty-five tool calls and

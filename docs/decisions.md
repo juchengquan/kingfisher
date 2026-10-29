@@ -929,10 +929,13 @@ from a `finally`, so every `run_start` keeps its end. A turn that failed before 
 reason was known says `null`: `end_turn` would read as one that finished.
 *(2026-10-28, #1138.)*
 
-**Not covered: a program's subagents, and an approval's subagent with two open.** A
-subagent a program starts with `task()` inside `eval` reaches neither the stream nor the
-run-events record. `PendingDecision.agent` stays `None` while two delegations are open,
-for the reason `_subagent_behind` gives. *(2026-10-27.)*
+**Not covered: a program's subagents side by side, and an approval's subagent with two
+open.** A subagent a program starts with `task()` inside `eval` reaches the stream and
+the run-events record under its own name, and the record names its dispatch until the
+program starts a second. The stream never does, so the terminal holds none of them, and
+several side by side print interleaved. `PendingDecision.agent` stays `None` while two
+delegations are open, for the reason `_subagent_behind` gives. *(2026-10-27, narrowed
+2026-10-29, #1149.)*
 
 ## Packaging: where the definitions live
 
