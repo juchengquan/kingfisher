@@ -377,6 +377,9 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     asked = capabilities or Capabilities()
     capabilities = for_the_caller(agent, asked, held=held)
     roots = catalogue or Definitions.from_config(cfg)
+    # Before anything reads the skills, a subagent's included: it is told only what its
+    # agent was, so a skill shut here is shut to every graph in the run.
+    capabilities = roots.unlocked_for(capabilities, held)
     # Every backend: a check only some builds ran would be one nothing here exercises.
     refuse_unusable_backend(backend, cfg.layout)
     shell = shell_told(backend)

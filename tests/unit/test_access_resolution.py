@@ -17,7 +17,6 @@ from kingfisher.core.access.source_ids import (
     Vocabulary,
     jointly,
     listed,
-    narrowing_in,
     spell,
     unlisted,
 )
@@ -28,11 +27,9 @@ def vocabulary() -> Vocabulary:
     return Vocabulary(source_ids={"A": ("agent a",), "B": ("agent b",), "C": ("agent c",)})
 
 
-def spec(source_ids=ALL, skill_audiences=None, datazone=None) -> SimpleNamespace:
+def spec(source_ids=ALL, datazone=None) -> SimpleNamespace:
     """A definition by the fields every kind carrying a lock has."""
-    return SimpleNamespace(
-        source_ids=source_ids, skill_audiences=skill_audiences or {}, datazone=datazone
-    )
+    return SimpleNamespace(source_ids=source_ids, datazone=datazone)
 
 
 # -- who reaches what -------------------------------------------------------
@@ -58,87 +55,23 @@ def test_a_caller_holding_nothing_reaches_nothing():
 # -- narrowing a selection --------------------------------------------------
 
 
-def test_an_entry_with_no_audience_falls_back_to_the_definitions():
+def test_a_list_reaches_a_caller_only_as_far_as_its_definition_does():
     """What makes a plain list under a policied definition mean 'these, at my audience'
     -- so every file written before audiences keeps its meaning.
     """
-    assert reaching(
-        ("sql_query",), audiences={}, default=("A",), held=frozenset({"A"})
-    ) == ("sql_query",)
-    assert reaching(("sql_query",), audiences={}, default=("A",), held=frozenset({"B"})) == ()
-
-
-def test_an_entry_with_its_own_audience_uses_it():
-    audiences = {"sql_query": ("A",), "http_fetch": ("A", "B", "C")}
-    assert reaching(
-        ("sql_query", "http_fetch"),
-        audiences=audiences,
-        default=("A", "B", "C"),
-        held=frozenset({"C"}),
-    ) == ("http_fetch",)
+    assert reaching(("sql_query",), audience=("A",), held=frozenset({"A"})) == ("sql_query",)
+    assert reaching(("sql_query",), audience=("A",), held=frozenset({"B"})) == ()
 
 
 def test_all_passes_through_untouched():
     """`ALL` means everything available, bounded by the definition's own audience rather
     than by any entry.
     """
-    assert reaching(ALL, audiences={}, default=("A",), held=frozenset({"A"})) == ALL
+    assert reaching(ALL, audience=("A",), held=frozenset({"A"})) == ALL
 
 
 def test_none_passes_through_untouched():
-    assert reaching(None, audiences={}, default=("A",), held=frozenset({"A"})) is None
-
-
-# -- narrowing past the definition ------------------------------------------------------------
-
-
-def narrowing(entry, *, source_ids):
-    """What one skills entry asks beyond its definition."""
-    return narrowing_in({"audit": entry}, source_ids=source_ids, where="x.yaml")
-
-
-def test_an_entry_outside_the_definitions_own_audience_is_reported():
-    """Reported, not refused."""
-    assert narrowing(("C",), source_ids=("A", "B")) == (("x.yaml: skill audit", "C"),)
-
-
-def test_an_overlapping_entry_is_not_narrowing():
-    assert narrowing(("A",), source_ids=("A", "B")) == ()
-
-
-def test_nothing_narrows_when_the_definition_reaches_everyone():
-    assert narrowing(("C",), source_ids=ALL) == ()
-
-
-def test_a_star_entry_never_narrows():
-    assert narrowing(ALL, source_ids=("A",)) == ()
-
-
-def test_an_inline_set_does_not_narrow_beside_either_part():
-    """Either part, in either direction: the definition writes the set and the entry
-    names a part, or the other way about.
-    """
-    both = (frozenset({"A", "B"}),)
-    assert narrowing(("A",), source_ids=both) == ()
-    assert narrowing(both, source_ids=("A",)) == ()
-
-
-def test_an_inline_set_sharing_no_part_narrows():
-    assert narrowing(("C",), source_ids=(frozenset({"A", "B"}),)) == (
-        ("x.yaml: skill audit", "C"),
-    )
-
-
-def test_the_second_requirement_a_narrowing_states_actually_works():
-    """The whole reason the refusal went."""
-    audiences = {"export": ("C",)}
-    tools = ("export", "line_count")
-
-    both = reaching(tools, audiences=audiences, default=("A", "B"), held=frozenset({"A", "C"}))
-    one = reaching(tools, audiences=audiences, default=("A", "B"), held=frozenset({"A"}))
-
-    assert both == ("export", "line_count")
-    assert one == ("line_count",)
+    assert reaching(None, audience=("A",), held=frozenset({"A"})) is None
 
 
 # -- what a caller holds -----------------------------------------------------
@@ -235,34 +168,35 @@ def test_definitions_that_lock_nothing_add_up_to_no_vocabulary():
 
 
 def test_every_name_a_lock_writes_is_collected_with_who_writes_it():
-    """Inside a set and on a skills entry too, each definition named once however many of
+    """Inside a set and in a skill's lock too, each definition named once however many of
     its lines use a name, so the listing's row for a name is the files to open."""
     found = collected(
         ("agent", {"analyst": spec(source_ids=("A", frozenset({"B", "C"})))}),
-        ("subagent", {"auditor": spec(skill_audiences={"audit": ("A", "D")}, datazone="emea")}),
+        ("subagent", {"auditor": spec(datazone="emea")}),
+        ("skill", {"audit": spec(source_ids=("A", "D"))}),
         ("tool", {"sql_query": spec(source_ids=("A",))}),
     )
 
     assert found == Vocabulary(
         source_ids={
-            "A": ("agent analyst", "subagent auditor", "tool sql_query"),
+            "A": ("agent analyst", "skill audit", "tool sql_query"),
             "B": ("agent analyst",),
             "C": ("agent analyst",),
-            "D": ("subagent auditor",),
+            "D": ("skill audit",),
         },
         datazones={"emea": ("subagent auditor",)},
     )
 
 
 @pytest.mark.parametrize(
-    "said",
-    [spec(skill_audiences={"audit": ("A",)}), spec(datazone="emea")],
-    ids=["a skills entry", "a datazone"],
+    ("kind", "said"),
+    [("skill", spec(source_ids=("A",))), ("subagent", spec(datazone="emea"))],
+    ids=["a skill's lock", "a datazone"],
 )
-def test_one_lock_anywhere_is_enough_to_switch_checking_on(said):
-    """A skills entry's audience and a datazone are locks as surely as a definition's
-    own line: collected as nothing, a deployment using only those would run unchecked."""
-    assert collected(("subagent", {"only": said})) is not None
+def test_one_lock_anywhere_is_enough_to_switch_checking_on(kind, said):
+    """A skill's lock and a datazone are locks as surely as a definition's own line:
+    collected as nothing, a deployment using only those would run unchecked."""
+    assert collected((kind, {"only": said})) is not None
 
 
 def test_an_audience_is_written_the_way_the_listing_writes_it():

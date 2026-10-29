@@ -1,0 +1,11 @@
+# Who is told about a skill, one entry per skill, the same words an agent's own lock
+# uses. Here rather than in the skill's folder: a vendor's pack is replaced whole,
+# which would drop a lock without a word, and the agent can read everything there.
+#
+# A skill not named here is told to everyone who opens an agent listing it. A lock
+# holds wherever the skill is listed, and an agent's `skills:` entry is a name only.
+#
+# `seed` leaves this file behind, as it does `agents/analyst.yaml`: a lock switches
+# on access control in the folder it is copied into. `seed --all` copies it.
+- name: tabular-qa
+  source_ids: [sales_db]

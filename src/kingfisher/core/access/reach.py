@@ -17,17 +17,11 @@ def reaches(audience: Audience, held: frozenset[str]) -> bool:
     return any(one <= held if isinstance(one, frozenset) else one in held for one in audience)
 
 
-def reaching(
-    selection: Selection,
-    *,
-    audiences: Mapping[str, Audience],
-    default: Audience,
-    held: frozenset[str],
-) -> Selection:
-    """`selection`, keeping only the entries this caller reaches."""
+def reaching(selection: Selection, *, audience: Audience, held: frozenset[str]) -> Selection:
+    """`selection` if this caller reaches the definition holding it, else none of it."""
     if selection == ALL or selection is None:
         return selection
-    return tuple(name for name in selection if reaches(audiences.get(name, default), held))
+    return selection if reaches(audience, held) else ()
 
 
 def stated(spec: object) -> Stated:
@@ -38,7 +32,6 @@ def stated(spec: object) -> Stated:
     """
     return Stated(
         source_ids=getattr(spec, "source_ids", ALL),
-        skills=dict(getattr(spec, "skill_audiences", {})),
         datazone=getattr(spec, "datazone", None),
     )
 
@@ -52,8 +45,9 @@ def offers(
 ) -> Callable[[str], bool]:
     """Whether any definition this caller reaches offers them one entry of a catalogue.
 
-    The grant's half only: a tool's own audience is an and this cannot see, which callers
-    take out with `core.definitions.tools.spec.out_of_reach` as well. A definition writing
+    The grant's half only: a tool's or skill's own lock is an and this cannot see, which
+    callers take out with `core.definitions.tools.spec.out_of_reach` or
+    `Definitions.skills_shut` as well. A definition writing
     `["*"]` ends the walk, offering everything: `ALL` is the string `"*"`, and a union would
     collect the character. `same` compares two spellings of one entry.
 
@@ -126,18 +120,12 @@ def narrowed_for(spec: object, held: frozenset[str] | None) -> dict[str, Selecti
 
     `held` of `None` is no caller to narrow for, and every selection comes back as written.
     Not a `Capabilities`: an agent widens `models` where a subagent leaves it unset, so the
-    axes no audience touches stay with the definition. Only a skill may narrow past the
-    definition's own line: a tool's lock is applied from its file, a subagent's from its own.
+    axes no audience touches stay with the definition.
     """
     said = stated(spec)
     return {
         field: getattr(spec, field)
         if held is None
-        else reaching(
-            getattr(spec, field),
-            audiences=said.skills if field == "skills" else {},
-            default=said.source_ids,
-            held=held,
-        )
+        else reaching(getattr(spec, field), audience=said.source_ids, held=held)
         for field in AUDIENCED
     }

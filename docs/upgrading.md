@@ -18,6 +18,26 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A skill's lock is in `skill_locks.yaml`, after #1162
+
+- **A `skills:` entry writing `source_ids` stops startup.** Who is told about a skill
+  is said once, in `skill_locks.yaml` beside `models.yaml`, and holds wherever the skill
+  is listed. The refusal prints the lines to paste there and the bare name to leave in
+  the agent file. The shipped `analyst.yaml` moved its `tabular-qa` lock this way.
+- **Two agents that told one skill to different callers** paste two locks for it, which
+  is refused with both audiences shown. Keep the one you mean, and take the skill off
+  the agent that should not offer it.
+- **`kingfisher list` prints each skill's lock once**, as `skill tabular-qa  [sales_db]`
+  under *by definition*. The *by skill* section and the *narrows past this definition's
+  own audience* note are gone. In `--json`, `audiences` has a `skills` kind keyed by the
+  names the lock file writes, a definition's own entry has no `skills` map, and
+  `access_report` has no `narrowed`. `skill_locks_error` is new, and a lock file that
+  will not load makes `list` exit 1.
+- **`seed` leaves `skill_locks.yaml` behind** unless run with `--all`.
+- **For code reading definitions**: `skill_audiences` is gone from agent and subagent
+  specs, `Stated.skills` and `AccessReport.narrowed` from the access records, and
+  `Inventory.skill_locks_error` is new.
+
 ## A drafted agent's name is lowercase, after #1159
 
 - **`Reachable.check_agent` refuses a draft's name** unless it is lowercase letters and

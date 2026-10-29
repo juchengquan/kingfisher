@@ -33,10 +33,10 @@ what survives a turn, the second is how a deployment names a storage port.
 ## The definition format
 
 **An entry is a name, or a mapping of `name` and what that field lets a name
-carry.** `source_ids` for `skills`, `source` for `tools` and `skills`, `settings` for
-`middlewares`; a `subagents:` entry is a name alone. One long form, read through one
-loop, so a reader who has met one field has met them all. `tools` and `subagents`
-entries no longer take `source_ids` -- *Source-id access* has why.
+carry.** `source` for `tools` and `skills`, `settings` for `middlewares`; a
+`subagents:` entry is a name alone. One long form, read through one loop, so a reader
+who has met one field has met them all. No entry takes `source_ids` -- *Source-id
+access* has why.
 
 It replaced a field-level mapping keyed by name, because **that shape could not see a
 name written twice.** YAML collapses `{a: X, a: Y}` before any reader runs, so a tool
@@ -1261,21 +1261,20 @@ of the read output, keeps only the indentation there. *(2026-10-18.)*
 
 ## Source-id access
 
-**An audience lives in the definition it is about.** An agent or subagent writes
-`source_ids:` for who may reach it, a tool writes its lock in its own file, and an
-entry of `skills:` may be written long -- `{name: X, source_ids: [...]}` -- for who
-is told about that one, since a skill's own file is `SKILL.md`, which the model reads
-whole and a deployment may not own. Nothing is central: the vocabulary is what these
-lines write, collected at startup. An audience resolves into an ordinary
+**An audience lives with the thing it is about.** An agent or subagent writes
+`source_ids:` for who may reach it, a tool writes its lock in its own file, and a
+skill's lock is its entry in `skill_locks.yaml`, beside the definitions -- *Reversed: a
+`skills:` entry says who is told about that one* has why there. Nothing else is
+central: the vocabulary is what these lines write, collected at startup. An audience resolves into an ordinary
 `Capabilities`, so nothing downstream changed: an ungranted tool is never attached to
 the graph and an ungranted subagent is never compiled. *(2026-08-31.)*
 
 The rule that makes it safe to add to an existing definition: **`source_ids:` is the
-default audience for everything the definition holds, and the ceiling on what a
-`skills:` entry may say.** So an omitted or plain-list `tools:` keeps its exact meaning,
-and a skills entry is always an *and* with the definition's own line -- the only way to
-reach an entry is through the definition holding it, so naming a source id from outside
-that line adds a second requirement rather than replacing the first. A definition with
+default audience for everything the definition holds.** So an omitted or plain-list
+`tools:` keeps its exact meaning, and a tool's or skill's own lock is always an *and*
+with the definition's own line -- the only way to reach either is through the
+definition holding it, so naming a source id from outside that line adds a second
+requirement rather than replacing the first. A definition with
 no `source_ids:` line is reachable by everyone, and `kingfisher list` builds and prints
 the report of every such definition -- default-open must not also be silent. A plain
 start says nothing, and builds nothing for it.
@@ -1321,10 +1320,9 @@ zone. *(2026-10-16.)*
 `tool sql_query  [sales_db]`; a subagent's own tool is named `counter::count`, because
 the file it lives in sits in a folder that does not name its subagent. A datazone
 is printed beside the source ids, not folded in, because a subagent writing only
-`datazone: finance` was listed as `[*]` -- everyone. Only skills get a roll-up: a tool's
-or subagent's lock is one line in its own file with nothing that could differ from it,
-while a skills entry is a lock per use, and a use wider than its neighbours is what a
-roll-up shows. *(2026-10-17.)*
+`datazone: finance` was listed as `[*]` -- everyone. Nothing gets a roll-up: each lock
+is one line in one place, with nothing that could differ from it. *(2026-10-17; the
+skills roll-up went with per-entry skill locks, 2026-10-30.)*
 
 **A session keeps the datazone of its first zoned turn.** A datazone decided which
 tools a turn was handed and nothing after: a session answered to its pinned agent, which
@@ -1382,26 +1380,56 @@ tool's lock. **Per-agent control is by listing.** The one case lost is the same 
 locked differently in two agents, which the deployment this was decided for does not
 need.
 
-`skills:` keeps the long form, for the reasons *Not taken: a skill's lock in its own
-`SKILL.md`* gives. A long `tools:` or `subagents:` entry writing `source_ids` is refused
+A long `tools:` or `subagents:` entry writing `source_ids` is refused
 at load, saying where the lock goes, as is a compiled subagent's `tools` mapping and a
 long `subagents:` entry with nothing beside its name. A ledger stamp is the definition's own audience joined with the tool's
 lock. The shipped `analyst` grants `auditor` bare, so an `audit_log` caller of `analyst`
 reaches it, which `auditor`'s own line already admits. *(2026-08-31. Reversed
 2026-10-18.)*
 
-**Not taken: a skill's lock in its own `SKILL.md`.** Until 2026-10-18 the reason given
-for the entry was that a skill has no file of its own, which is not true. The Agent
-Skills frontmatter has a `metadata:` map, which deepagents parses and leaves out of the
-listing it shows the model, so a lock there could be read. Three things keep it on the
-entry. The listing tells the agent to read `SKILL.md`, frontmatter and all, so the
-policy would be in the model's context, where a caller is otherwise shown none of it. A
-vendor's skill pack is a file the deployment does not edit, so the entry is the one
-place it controls -- the reason `ToolSpec` wraps a tool rather than changing it. And the
-format is deepagents', unchanged, whose `metadata` holds strings only, so a requirement
-written as a set `{a, b}` would need a spelling of its own. Little is lost: a skill was
-never a boundary, and the locks that matter are on the tools its procedure needs.
-*(2026-10-18.)*
+**Reversed: a `skills:` entry says who is told about that one.** Written long,
+`{name: X, source_ids: [...]}`, an entry was a lock per agent, the last kind still
+locked that way once tools and subagents moved. A skill has one lock now, in
+`skill_locks.yaml`, and an entry is its name. **One place to read**, for the reason tools
+moved: who is told about `audit` was answered by every agent listing it, and the
+listing needed a roll-up by skill to show a use wider than its neighbours. The case lost
+is one skill told to different callers in two agents; per-agent control is by listing,
+as for tools. *(2026-08-31. Reversed 2026-10-30.)*
+
+**The lock file is the deployment's, beside the definitions, not in the skill's
+folder.** A vendor's pack is replaced whole on its next release, and a lock kept in it
+goes with the old copy without a word, so the skill is told to everyone; and the agent
+can read everything under `/skills/`, so the policy would be in its reach. Beside
+`models.yaml`, the shell is kept out of it as it is out of that one. The cost is that a
+skill folder copied to another deployment does not carry its lock, which is the right
+way round: who is told is that deployment's to decide. **YAML, not a `SkillSpec` in
+Python**: a tool's lock is Python only because the tool is, and a lock is names, which
+an agent file already writes in these words. **What fails shut**: a lock naming no
+skill, a bare name two folders offer, and one skill locked twice each stop startup, since
+a renamed skill or a second answer would otherwise leave it told to everyone or to the
+wrong people; a file that will not load shows a scoped caller no skill at all. **A
+subagent's own skill takes none**: it reaches whoever reaches that subagent, and hiding
+it from some of them would hand them a subagent its author never tested.
+
+**An old entry is refused file by file, with the lines to paste.** Refused where the
+agent file is read, not once the catalogue is whole, because some paths build from a file
+without the catalogue's check, and one of those reading the entry as a plain name would
+tell the skill to the agent's whole audience. So two agents that disagreed are not shown
+side by side: each pasted lock is accepted until the second, which `skill_locks.yaml`
+refuses with both audiences and neither picked. Converting them automatically was not
+taken: the narrower would take a skill from a caller who had it yesterday, and nobody
+would have chosen that. *(2026-10-30.)*
+
+**Not taken: a skill's lock in its own `SKILL.md`.** The Agent Skills frontmatter has a
+`metadata:` map, which deepagents parses and leaves out of the listing it shows the
+model, so a lock there could be read. Three things keep it out. The listing tells the
+agent to read `SKILL.md`, frontmatter and all, so the policy would be in the model's
+context, where a caller is otherwise shown none of it. A vendor's skill pack is a file
+the deployment does not edit -- the reason `ToolSpec` wraps a tool rather than changing
+it. And the format is deepagents', unchanged, whose `metadata` holds strings only, so a
+requirement written as a set `{a, b}` would need a spelling of its own. Little is lost: a
+skill was never a boundary, and the locks that matter are on the tools its procedure
+needs. *(2026-10-18.)*
 
 **Not taken: `sources` and `data_zone`, or an alias for either.** Asked for so a
 client's own tool spec, which spells them that way, would match `ToolSpec`. It would
@@ -1464,8 +1492,8 @@ name requires, and the scan refusing the retired `contains`/`all_of` keywords li
 *(2026-10-19.)*
 
 **Reversed: `source_ids.yaml`.** The vocabulary is collected from the definitions -- every
-name a `source_ids:` line, a `ToolSpec` or a `skills:` entry writes, and every datazone a
-subagent or tool requires -- and nobody writes it down. Two reasons. Kingfisher holds no
+name a `source_ids:` line, a `ToolSpec` or `skill_locks.yaml` writes, and every datazone a
+subagent, tool or skill lock requires -- and nobody writes it down. Two reasons. Kingfisher holds no
 model of the deployment's identities, and the file was the last place it kept one: a list
 of the names a deployment hands out. And a missing file switched every lock off in
 silence: a deleted or misnamed file left each `source_ids:` line inert and, since *A
@@ -1522,7 +1550,7 @@ caller supplies `capabilities`, so narrowing their own grant handed them the cat
 The report now asks the listing's question through the same `offers` in
 `core.access.reach`, since two readers answering what a caller reaches is how these came
 apart. With no vocabulary, or under `UNSCOPED`, `offers` admits every name. Skills are
-compared by the skill each spelling means, so an audience on `catalogue::audit` hides
+compared by the skill each spelling means, so a lock on `catalogue::audit` hides
 `audit` too. *(2026-10-13, from an architecture review.)*
 
 **A scoped view is filtered in the record, not at a renderer.** Measured through the
@@ -1820,8 +1848,8 @@ jointly with the path that reaches it, one level of subagents down as the build 
 them, which is what keeps `would` honest: under an agent open to A or B, a caller holding
 neither is told A or B opens the agent, and not that a zone alone opens a zoned tool
 beneath it. What a definition offers is read for no caller and the walk narrows it
-itself, because `declares(held)` drops a skills entry the caller fails before its lock
-is read, and `would` could then never name an id that opens a skill. Built-in tools take
+itself, because `declares(held)` drops what the caller cannot reach before its lock is
+read, and `would` could then never name an id that opens it. Built-in tools take
 no audience, so nothing opens one. Skills are walked only where one could be opened, or
 the default deployment, with skills off, would send an operator to grant a name that
 changes nothing. *(2026-10-26, #1096.)*
