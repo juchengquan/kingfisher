@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A drafted agent's name is lowercase, after #1159
+
+- **`Reachable.check_agent` refuses a draft's name** unless it is lowercase letters and
+  digits with single hyphens between them, at most 32 characters, and refuses one an
+  agent the caller can see already has in other capitals. A tool of yours drafting
+  agents gets these refusals too. Startup is unchanged: an agent file of any name still
+  loads.
+
 ## `http_fetch` refuses this machine and private networks, after #1158
 
 - **A deployment that fetches from a service of its own**, or through a proxy on a

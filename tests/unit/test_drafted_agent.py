@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from kingfisher import Capabilities
-from tests.conftest import tools_dir
+from tests.conftest import an_agent, tools_dir
 from tests.unit.test_reachable import AUDIT, SALES, _asked, _deployment
 
 CHECKS = '''import json
@@ -180,16 +180,38 @@ def test_a_name_this_turns_grant_withholds_is_refused(scripted):
 
 
 def test_a_draft_named_like_an_agent_the_caller_sees_is_refused(scripted):
-    """Installed beside an agent of its name, a draft stops the deployment starting. One out
+    """Installed beside an agent of its name, a draft stops the deployment starting, and
+    beside one differing only in capitals, on a disk that ignores them, replaces it. One out
     of the caller's reach is not refused -- that would tell them it exists -- and a caller
     who can see it is refused, the control."""
     _drafting(scripted)
+    an_agent(scripted, "Ledger")
 
     assert _checked(scripted, GOOD.replace("name: invoices", "name: pattern")) == [
         "an agent called 'pattern' already exists: choose another name"
     ]
+    assert _checked(scripted, GOOD.replace("name: invoices", "name: ledger")) == [
+        "an agent called 'Ledger' already exists: choose another name"
+    ]
     assert _checked(scripted, GOOD.replace("name: invoices", "name: hidden")) == []
     assert _checked(scripted, GOOD.replace("name: invoices", "name: hidden"), source_ids=SALES)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["Invoices", "user/invoices", "sales ops", "invoices-", "-invoices", "sales--ops", "a" * 33],
+    ids=["capital", "slash", "space", "last-hyphen", "first-hyphen", "two-hyphens", "too-long"],
+)
+def test_a_drafted_name_is_one_every_disk_spells_one_way(scripted, name):
+    """A draft is saved as `<name>.yaml`: `user/operator` landed in a folder of the user's
+    outputs, and `Operator` copied beside `operator` on a disk that ignores capitals
+    replaces it. The longest name allowed is the control, and passes."""
+    _drafting(scripted)
+
+    (refusal,) = _checked(scripted, GOOD.replace("name: invoices", f"name: {name}"))
+
+    assert refusal.startswith(f"name {name!r}: ")
+    assert _checked(scripted, GOOD.replace("name: invoices", f"name: {'a' * 32}")) == []
 
 
 def test_a_tool_named_by_a_file_is_refused_unless_two_share_its_name(scripted):

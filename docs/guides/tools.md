@@ -555,8 +555,10 @@ this caller. An agent out of their reach answers `None`, as a name nothing defin
 `reachable.check_agent(text)` is everything wrong with `text` as an agent file this
 caller drafted, or `()`. It reads the text as startup reads a file in `agents/`, then
 holds every name to the listing: a tool, skill, subagent, add-on, model or gate this
-caller cannot use, a name an agent they can see already has, and a tool named by a file
-where the listing names it bare. A name out of their reach is refused in the words a
+caller cannot use, a name an agent they can see already has, capitals aside, and a tool
+named by a file where the listing names it bare. The draft's own name must be lowercase
+letters and digits with single hyphens between them, at most 32 characters, since a file
+takes it; startup holds no agent file to that. A name out of their reach is refused in the words a
 typo is. Any `source_ids:` or `datazone:` is refused, whatever it says, since who may use
 a drafted agent is for whoever installs it. A copy from `agent(name)`, renamed and with
 its prompt written as a `|` block, passes.
