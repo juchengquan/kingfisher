@@ -1890,6 +1890,21 @@ the listing names it**, not resolved: `where::what` naming a file the tool is no
 loads, and the agent runs without the tool. No trial build: the checks are startup's,
 and a build would start interpreters on every check. *(2026-10-29, #1154.)*
 
+**The agent builder is a subagent bundle, and the check is its only writer.**
+`assets/subagents/agent-builder/` holds a tool listing what the caller can use, one
+copying an agent, and one checking a draft and saving it. **A bundle, not catalogue
+tools**: an agent writing `tools: ["*"]`, as `general` and `operator` do, would otherwise
+hold all three. **No shipped agent names it**: it shows the user every agent they reach
+and copies any of them, prompt included, so a deployment opts in on a `subagents:` line.
+**Check and save are one call**, writing only when the check passes, and the builder
+holds no `write_file`, `edit_file`, `delete` or `task`, the last because the
+general-purpose helper it brings writes. So nothing it hands the user skipped the check.
+**No `save_as`**, unlike every other shipped tool that makes a file: the draft goes to
+`/outputs/<its name>.yaml`, since a path of the model's choosing reaches anywhere the turn
+may write. **Its procedure is its prompt, not a skill**: skills are off unless a
+deployment turns them on, and the builder needs its procedure on every run.
+*(2026-10-29, #1155.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

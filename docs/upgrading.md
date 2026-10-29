@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `kingfisher seed` ships an agent builder, after #1155
+
+- **`seed` copies a new subagent, `agent-builder`**, with three tools in its own folder.
+  No shipped agent names it, so a deployment seeded again holds it unused, unless one of
+  its agents writes `subagents: ["*"]`, which then activates it. Name that agent's
+  subagents instead to keep it from drafting agents.
+
 ## A tool can check an agent file its caller drafted, after #1154
 
 - **`Reachable` has a new method, `check_agent(text)`**: everything wrong with `text` as
