@@ -17,7 +17,6 @@ from kingfisher.core.access import (
     refuse_unoffered,
     within_reach,
 )
-from kingfisher.core.agent.kinds.subagents import indistinct
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions, bundled_skill_mounts
 from kingfisher.core.definitions.skills import registry as skill_registry
@@ -29,6 +28,8 @@ from kingfisher.core.definitions.subagents.rules import (
 )
 from kingfisher.core.definitions.subagents.spec import RunOn, SubagentSpec
 from kingfisher.core.layout import SKILLS_ROUTE
+
+from .kinds.subagents import indistinct
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence

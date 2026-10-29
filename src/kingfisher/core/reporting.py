@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import (
+from .access import (
     ALL,
     Audience,
     Capabilities,
@@ -18,29 +18,27 @@ from kingfisher.core.access import (
     stated,
     withheld,
 )
-from kingfisher.core.agent.activation import (
+from .agent.activation import (
     activatable_skills,
     available_skills,
     defined_subagents,
     for_the_caller,
 )
-from kingfisher.core.agent.kinds.tools import (
+from .agent.kinds.tools import (
     offered_tool_names,
     private_tools,
     registered_tools,
 )
-from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.definitions.subagents.spec import opens_skills
-from kingfisher.core.definitions.tools.spec import Offering, admitted, out_of_reach, placed
-
+from .definitions.catalogue import Definitions
+from .definitions.subagents.spec import opens_skills
+from .definitions.tools.spec import Offering, admitted, out_of_reach, placed
 from .result import RunEvent
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from kingfisher.core.definitions.agents.spec import AgentSpec
-
     from .config import Config
+    from .definitions.agents.spec import AgentSpec
 
 
 def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is offered

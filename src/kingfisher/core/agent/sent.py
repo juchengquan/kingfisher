@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import SystemMessage
 
-from kingfisher.core.agent.middlewares.builtin_tools import MAPPINGS, TODOS
-from kingfisher.core.agent.middlewares.turn_instructions import TurnInstructionsMiddleware
 from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.result import Sent, SentBlock, SentTool
 
+from .middlewares.builtin_tools import MAPPINGS, TODOS
+from .middlewares.turn_instructions import TurnInstructionsMiddleware
 from .prompting import memory_guidelines, skills_index
 
 if TYPE_CHECKING:

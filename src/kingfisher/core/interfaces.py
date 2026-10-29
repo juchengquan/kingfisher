@@ -13,15 +13,14 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
-from kingfisher.core.session.threads import off_loop, thread_pool
+from .session.threads import off_loop, thread_pool
 
 if TYPE_CHECKING:
-    from kingfisher.core.agent.tool_context import Caller
-    from kingfisher.core.definitions.catalogue import Definitions
-    from kingfisher.core.session.unused import UnusedFiles
-
+    from .agent.tool_context import Caller
     from .config import Config
+    from .definitions.catalogue import Definitions
     from .result import MemoryChanges, MemoryEntry
+    from .session.unused import UnusedFiles
 
 
 @dataclass(frozen=True)

@@ -11,21 +11,21 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from kingfisher.core.access import SEPARATOR, CapabilityError, Selection, collected
 from kingfisher.core.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
-from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
-from kingfisher.core.definitions.agents.spec import DIRECTORY as AGENT_DIRECTORY
-from kingfisher.core.definitions.agents.spec import AgentError
-from kingfisher.core.definitions.middlewares.catalogue import LocalMiddlewareRepository
-from kingfisher.core.definitions.skills import registry as skill_registry
-from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
-from kingfisher.core.definitions.skills.registry import SkillRegistry
-from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
-from kingfisher.core.definitions.subagents.rules import refuse_miscounted
-from kingfisher.core.definitions.subagents.spec import SubagentError
-from kingfisher.core.definitions.tools.catalogue import CarriedTools, LocalToolRepository, ToolError
-from kingfisher.core.definitions.tools.spec import FoundTool, Offering, audienced, reference
 from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, RESERVED_SKILL_FOLDER, SKILLS_ROUTE
 
+from .agents.catalogue import LocalAgentRepository
+from .agents.spec import DIRECTORY as AGENT_DIRECTORY
+from .agents.spec import AgentError
+from .middlewares.catalogue import LocalMiddlewareRepository
 from .prompts import unused_names
+from .skills import registry as skill_registry
+from .skills.catalogue import LocalSkillRepository
+from .skills.registry import SkillRegistry
+from .subagents.catalogue import LocalSubagentRepository
+from .subagents.rules import refuse_miscounted
+from .subagents.spec import SubagentError
+from .tools.catalogue import CarriedTools, LocalToolRepository, ToolError
+from .tools.spec import FoundTool, Offering, audienced, reference
 
 if TYPE_CHECKING:
     from kingfisher.core.access import Vocabulary

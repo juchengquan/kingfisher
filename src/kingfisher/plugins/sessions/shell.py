@@ -23,17 +23,17 @@ from kingfisher.core.agent.prompting import ShellPrompt
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import CommandRunner, ScratchRun
-from kingfisher.plugins.sessions.sandbox import confinement
-from kingfisher.plugins.sessions.sandbox.process import run_command
 
 from .links import UnlinkedBackend
+from .sandbox import confinement
+from .sandbox.process import run_command
 from .scratch import HELD, ScratchFolder, plain, scratch_command
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from kingfisher.plugins.sessions.sandbox.bubblewrap import BubblewrapRunner
-    from kingfisher.plugins.sessions.sandbox.fence import LandlockRunner
+    from .sandbox.bubblewrap import BubblewrapRunner
+    from .sandbox.fence import LandlockRunner
 
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 
@@ -310,7 +310,7 @@ def fence_for(  # noqa: PLR0913 -- one argument per thing a fence is built from
     writable: list[Path] = []
 
     if confined.mechanism == confinement.BUBBLEWRAP:
-        from kingfisher.plugins.sessions.sandbox.bubblewrap import (  # noqa: PLC0415
+        from .sandbox.bubblewrap import (  # noqa: PLC0415
             BubblewrapRunner,
             argv_for,
         )
@@ -327,7 +327,7 @@ def fence_for(  # noqa: PLR0913 -- one argument per thing a fence is built from
 
     # Imported here: `sandlock` is a Linux-only optional install, and this runs on every
     # platform.
-    from kingfisher.plugins.sessions.sandbox.fence import (  # noqa: PLC0415
+    from .sandbox.fence import (  # noqa: PLC0415
         LandlockRunner,
         policy_for,
     )

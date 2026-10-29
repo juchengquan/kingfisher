@@ -9,9 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from kingfisher.core.agent.models import BUILT_WITH, WIRE_FORMATS, spelled_otherwise
-from kingfisher.core.definitions import fields
-
+from .agent.models import BUILT_WITH, WIRE_FORMATS, spelled_otherwise
 from .config import (
     ConfigError,
     Endpoint,
@@ -20,6 +18,7 @@ from .config import (
     Models,
     WireFormat,
 )
+from .definitions import fields
 from .wiring import built_from_setting
 from .workspace import EXAMPLE
 

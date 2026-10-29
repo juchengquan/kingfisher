@@ -8,9 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from types import MappingProxyType
 
-from kingfisher.core.access import DATAZONE_PREFIX, Capabilities, zone_in
-from kingfisher.core.agent.tool_context import Caller
-from kingfisher.core.definitions.subagents.spec import RunOn
+from .access import DATAZONE_PREFIX, Capabilities, zone_in
+from .agent.tool_context import Caller
+from .definitions.subagents.spec import RunOn
 
 
 def _context(given: Mapping[str, str], owner: object) -> None:
