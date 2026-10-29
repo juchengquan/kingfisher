@@ -96,14 +96,16 @@ def test_a_copy_is_saved_only_once_it_passes(scripted, copied):
 
 def test_the_builder_has_no_other_way_to_write(scripted):
     """A builder that could write a file itself, or hand the writing to a helper, could
-    give the user a draft no check ever read, or change one it saved after the check."""
+    give the user a draft no check ever read, or change one it saved after the check; and
+    a check that saved would replace the user's file with each draft tried against it."""
     session = _with_builder(scripted)
     (_folder(scripted, session) / "kept.yaml").write_text("name: kept\n", encoding="utf-8")
     delegated = {"description": "write it", "subagent_type": "general-purpose"}
     written = {"file_path": "/outputs/drafted.yaml", "content": "name: drafted\n"}
     climbing = "name: ../escaped\ndescription: Climbs.\nsystem_prompt: |\n  Hi.\n"
+    tried = "name: kept\ndescription: Tried.\nsystem_prompt: |\n  Hi.\n"
 
-    *_, escaped = _builder_ran(
+    *_, checked, escaped = _builder_ran(
         scripted,
         session,
         {"name": "write_file", "args": written},
@@ -116,11 +118,16 @@ def test_the_builder_has_no_other_way_to_write(scripted):
         # a helper writing.
         {"name": "task", "args": delegated},
         {"name": "write_file", "args": written},
+        {"name": "check_agent_draft", "args": {"draft": tried}},
         # A draft the check passes, named out of the outputs: refused by the backend, and
         # said to be, rather than reported saved.
         _saved(climbing),
     )
 
+    # Passed, or the file left alone below proves nothing about the check.
+    assert checked.rsplit("\n", 1)[0] == (
+        "passes: save_agent_draft would save it to /outputs/kept.yaml"
+    )
     assert "not saved to /outputs/../escaped.yaml" in escaped
     assert _outputs(scripted, session) == {"kept.yaml": "name: kept\n"}
     assert not list(scripted.workspace.rglob("escaped.yaml"))

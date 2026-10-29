@@ -98,23 +98,41 @@ def copy_agent(name: str, runtime: ToolRuntime[ToolContext]) -> str:
     return _yaml(copy)
 
 
+def _problems(draft: str, runtime: ToolRuntime[ToolContext]) -> str:
+    """Every problem the check finds in `draft`, a line each, or nothing."""
+    return "\n".join(f"- {one}" for one in _reach(runtime).check_agent(draft))
+
+
+def _saved_as(draft: str) -> str:
+    return f"{OUTPUTS}/{str(yaml.safe_load(draft)['name']).strip()}.yaml"
+
+
+def check_agent_draft(draft: str, runtime: ToolRuntime[ToolContext]) -> str:
+    """Check an agent file you drafted as save_agent_draft would, and save nothing.
+    `draft` is the whole file. Check as often as you need: this is the way to find out
+    what is accepted, since every save lands in the user's outputs."""
+    if problems := _problems(draft, runtime):
+        return f"would not be saved:\n{problems}"
+    return f"passes: save_agent_draft would save it to {_saved_as(draft)}"
+
+
 def save_agent_draft(draft: str, runtime: ToolRuntime[ToolContext]) -> str:
     """Check an agent file you drafted and save it to `/outputs/<its name>.yaml`, where
     the user is handed it. `draft` is the whole file. Saved only when it passes;
     otherwise nothing is saved and every problem is listed, to fix and save again.
     Saving a name again replaces that draft."""
-    if problems := _reach(runtime).check_agent(draft):
-        msg = "not saved:\n" + "\n".join(f"- {one}" for one in problems)
+    if problems := _problems(draft, runtime):
+        msg = f"not saved:\n{problems}"
         raise ValueError(msg)
-    name = str(yaml.safe_load(draft)["name"]).strip()
-    save_as = f"{OUTPUTS}/{name}.yaml"
+    save_as = _saved_as(draft)
+    name = save_as.removeprefix(f"{OUTPUTS}/")
     data = draft.encode("utf-8")
 
     (sent,) = runtime.context.backend.upload_files([(save_as, data)])
     if sent.error:
         msg = f"not saved to {save_as}: {sent.error}"
         raise OSError(msg)
-    return f"Saved {name}.yaml (YAML, {_size(len(data))}) to {save_as}"
+    return f"Saved {name} (YAML, {_size(len(data))}) to {save_as}"
 
 
-TOOLS = [usable_definitions, copy_agent, save_agent_draft]
+TOOLS = [usable_definitions, copy_agent, check_agent_draft, save_agent_draft]
