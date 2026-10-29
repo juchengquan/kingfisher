@@ -100,12 +100,14 @@ def test_the_builder_has_no_other_way_to_write(scripted):
     a check that saved would replace the user's file with each draft tried against it."""
     session = _with_builder(scripted)
     (_folder(scripted, session) / "kept.yaml").write_text("name: kept\n", encoding="utf-8")
+    (_folder(scripted, session) / "blocked.yaml").mkdir()
     delegated = {"description": "write it", "subagent_type": "general-purpose"}
     written = {"file_path": "/outputs/drafted.yaml", "content": "name: drafted\n"}
     climbing = "name: ../escaped\ndescription: Climbs.\nsystem_prompt: |\n  Hi.\n"
     tried = "name: kept\ndescription: Tried.\nsystem_prompt: |\n  Hi.\n"
+    blocked = "name: blocked\ndescription: In the way.\nsystem_prompt: |\n  Hi.\n"
 
-    *_, checked, escaped = _builder_ran(
+    *_, checked, escaped, unwritten = _builder_ran(
         scripted,
         session,
         {"name": "write_file", "args": written},
@@ -119,15 +121,19 @@ def test_the_builder_has_no_other_way_to_write(scripted):
         {"name": "task", "args": delegated},
         {"name": "write_file", "args": written},
         {"name": "check_agent_draft", "args": {"draft": tried}},
-        # A draft the check passes, named out of the outputs: refused by the backend, and
-        # said to be, rather than reported saved.
+        # A name climbing out of the outputs, which the check refuses.
         _saved(climbing),
+        # A draft the check passes whose file the backend cannot write: said to be, rather
+        # than reported saved.
+        _saved(blocked),
     )
 
     # Passed, or the file left alone below proves nothing about the check.
     assert checked.rsplit("\n", 1)[0] == (
         "passes: save_agent_draft would save it to /outputs/kept.yaml"
     )
-    assert "not saved to /outputs/../escaped.yaml" in escaped
+    assert "name '../escaped': " in escaped
+    assert "not saved to /outputs/blocked.yaml" in unwritten
+    (_folder(scripted, session) / "blocked.yaml").rmdir()
     assert _outputs(scripted, session) == {"kept.yaml": "name: kept\n"}
     assert not list(scripted.workspace.rglob("escaped.yaml"))

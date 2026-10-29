@@ -4,6 +4,7 @@ this turn's grant, and none of the policy that decided it."""
 from __future__ import annotations
 
 import inspect
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from functools import cached_property
@@ -31,6 +32,11 @@ DRAFT = Path("draft.yaml")
 
 #: The lines that say who may use something.
 _LOCKS = ("source_ids", "datazone")
+
+#: What a drafted agent may be called. Its file takes the name, and these are spelt one way
+#: on every disk. Startup loads any name: a draft alone is held to this.
+DRAFT_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+DRAFT_NAME_MAX = 32
 
 
 @dataclass(frozen=True)
@@ -250,8 +256,15 @@ class Reachable:
 
         listing = self._listing
         problems: list[str] = []
-        if spec.name in listing.agents:
-            problems.append(f"an agent called {spec.name!r} already exists: choose another name")
+        if len(spec.name) > DRAFT_NAME_MAX or not DRAFT_NAME.fullmatch(spec.name):
+            problems.append(
+                f"name {spec.name!r}: write lowercase letters and digits, with single hyphens "
+                f"between them, at most {DRAFT_NAME_MAX} characters, such as 'invoice-helper'"
+            )
+        # Capitals aside: on a disk that ignores them, one file replaces the other.
+        taken = {one.casefold(): one for one in listing.agents}
+        if (other := taken.get(spec.name.casefold())) is not None:
+            problems.append(f"an agent called {other!r} already exists: choose another name")
         builtin, offered = set(listing.builtin_tools), set(listing.tools)
         if isinstance(spec.builtin_tools, tuple):
             problems += [

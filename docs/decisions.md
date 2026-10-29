@@ -1914,6 +1914,16 @@ reaches the user. The tries cost the same tokens: they are the model's. Not chos
 on saves per turn, which would also refuse a user who asked for several agents.
 *(2026-10-29, #1157.)*
 
+**A drafted agent's name is one every disk spells one way.** A draft is saved as
+`<name>.yaml`, and the check passed `user/operator`, saved into a folder of the outputs,
+and `Operator` beside an agent called `operator`, which on a disk that ignores capitals
+replaces it once copied in. A draft's name is lowercase letters and digits with single
+hyphens between them, at most 32 characters -- how every shipped agent is named -- and a
+name an agent the caller sees has in any capitals is taken. **Drafts only**: startup loads
+any name, since nothing else makes a file of one, and a deployment's `sales_ops` keeps
+loading. **In the public check, not the builder's file**, so every tool checking a draft
+holds it to one rule, as it does the refusal of `source_ids:`. *(2026-10-29, #1159.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

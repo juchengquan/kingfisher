@@ -48,7 +48,9 @@ system_prompt: |
 
         Say which invoice each figure came from.
 
-  - `name` is one no agent has yet, and names the file too.
+  - `name` is lowercase letters and digits, with single hyphens between them, at
+    most 32 characters. No agent may have it yet, in any capitals, and it names the
+    file too.
   - `description` is how somebody chooses this agent: what it does and when to use
     it, on one line.
   - `system_prompt` is a literal block, `system_prompt: |`, with the prompt indented
