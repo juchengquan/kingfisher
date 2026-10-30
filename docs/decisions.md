@@ -1946,7 +1946,7 @@ Only a subagent this file names and this caller reaches, not any in the catalogu
 startup allows -- under one not named the gate never fires -- and **not a compiled
 one's**, which deepagents hands none of the gates. A bundled tool's own lock applies, so
 one shut to the caller is refused as a typo is. **Decided in the inventory**, so `list
---as` and `Reachable` give one answer. *(2026-10-30.)*
+--as` and `Reachable` give one answer. *(2026-10-30, #1165.)*
 
 ## Models and endpoints
 
