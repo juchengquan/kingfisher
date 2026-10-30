@@ -178,6 +178,19 @@ class Reachable:
         """Everything this caller can use this turn, by kind."""
         return self._listing
 
+    def _delegated(self, subagents: Iterable[str]) -> set[str]:
+        """The tools in these subagents' own folders that a gate may name for this caller.
+
+        Not a compiled one's: deepagents hands that graph none of the agent's gates.
+        """
+        found = self._found
+        return {
+            tool
+            for one in subagents
+            if one in self._listing.subagents and one not in found.compiled_subagents
+            for tool in found.bundled_tools.get(one, ())
+        }
+
     def agent(self, name: str) -> dict[str, object] | None:
         """One agent's file as this caller gets it, or `None` for one they cannot reach.
 
@@ -185,6 +198,8 @@ class Reachable:
         and the prompt with its slots filled for this caller. Out of reach reads exactly as
         a name nothing defines.
         """
+        from .definitions.subagents.spec import calls_helpers, opens_skills  # noqa: PLC0415
+
         listing = self._listing
         if name not in listing.agents:
             return None
@@ -192,6 +207,7 @@ class Reachable:
         spec = self.catalogue.agents.specs[name]
         registry = self.catalogue.registry
         builtin = _written(found.agent_builtin_tools[name], listing.builtin_tools)
+        holds: Selection = ALL if builtin == [ALL] else tuple(builtin)
         tools = _written(found.agent_tools[name], listing.tools)
         reached = spec.declares(self.held).skills
         listed = {registry.identity(one) for one in listing.skills}
@@ -200,6 +216,14 @@ class Reachable:
             if reached == ALL
             else [one for one in reached or () if registry.identity(one) in listed]
         )
+        # To the built-ins kept: the reader refuses skills without `read_file`, and
+        # subagents without `task`, so the copy would not load.
+        if not opens_skills(holds):
+            skills = []
+        subagents = _written(found.agent_subagents[name], listing.subagents)
+        if not calls_helpers(holds):
+            subagents = []
+        kept_subagents = found.agent_subagents[name].names if subagents else ()
         middlewares: list[object] = []
         if spec.middlewares == ALL:
             middlewares = [ALL]
@@ -208,8 +232,9 @@ class Reachable:
                 continue
             settings = spec.middleware_settings.get(one)
             middlewares.append({"name": one, "settings": dict(settings)} if settings else one)
-        # Not to the copy's own tools: a gate may stop a tool one of its subagents holds.
-        reachable_tools = {*listing.builtin_tools, *listing.tools}
+        # Not to the copy's own tools: a gate may stop a tool one of its subagents holds,
+        # its own bundled ones included.
+        reachable_tools = {*listing.builtin_tools, *listing.tools, *self._delegated(kept_subagents)}
         copied: dict[str, object] = {"name": spec.name, "description": spec.description}
         if spec.wanted in listing.models:
             copied["model"] = spec.wanted
@@ -217,7 +242,7 @@ class Reachable:
             ("builtin_tools", builtin),
             ("tools", tools),
             ("skills", skills),
-            ("subagents", _written(found.agent_subagents[name], listing.subagents)),
+            ("subagents", subagents),
             ("middlewares", middlewares),
             ("interrupt_on", [one for one in found.agent_gates[name] if one in reachable_tools]),
         ):
@@ -304,9 +329,12 @@ class Reachable:
                 problems.append(str(exc))
         if spec.wanted is not None and spec.wanted not in listing.models:
             problems.append(_unusable("model", spec.wanted))
+        delegated = self._delegated(
+            listing.subagents if spec.subagents == ALL else spec.subagents or ()
+        )
         problems += [
             _unusable("interrupt_on", one)
             for one in spec.interrupt_on
-            if one not in builtin and one not in offered
+            if one not in builtin and one not in offered and one not in delegated
         ]
         return tuple(problems)

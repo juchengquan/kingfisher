@@ -853,6 +853,17 @@ def inventory_for(
     # tool kept out of `tools` for this caller must not come back under whoever grants it.
     for_caller_tools = tuple(name for name in offered_tools if offers_tool(name))
     own_tools = _kept(_without(bundled_tools, held_back), for_caller_subagents)
+    # A gate also stops a call one of the agent's own subagents makes, so a tool in its bundle
+    # is a gate's to keep. Not a compiled one's: deepagents hands that graph none of the gates.
+    delegated = {
+        name: {
+            tool
+            for one in chain
+            if one in for_caller_subagents and one not in compiled_subagents
+            for tool in own_tools.get(one, ())
+        }
+        for name, chain in agent_subagents.items()
+    }
 
     return Inventory(
         # The resolved catalogue, not `cfg`, so staged definitions are listed where they are.
@@ -892,7 +903,7 @@ def inventory_for(
                     # Filtered as the tools line is: a gate names a tool, and a name this
                     # caller's locks shut out must not arrive under an agent they can open.
                     # A built-in has no audience, so it is shown to everyone.
-                    if one in builtin or offers_tool(one)
+                    if one in builtin or offers_tool(one) or one in delegated.get(name, ())
                 )
                 for name in for_caller
             }

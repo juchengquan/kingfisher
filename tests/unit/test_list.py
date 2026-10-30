@@ -1039,6 +1039,38 @@ def test_a_scoped_listing_names_no_gated_tool_out_of_reach(
     assert kept == ["execute"], f"the {form} form dropped the gate it should still name"
 
 
+#: `gatekeeper`, stopping too on a tool only a subagent's own folder holds, of a subagent
+#: kingfisher builds and of a compiled one.
+DELEGATING_GATE = GATED.replace(
+    "tools: [line_count]\n",
+    "builtin_tools: [task]\ntools: [line_count]\nsubagents: [itemiser, surveyor]\n",
+).replace("[execute, line_count]", "[execute, line_count, tally, probe]")
+
+
+def test_a_scoped_listing_names_a_gate_on_a_subagents_own_tool(
+    cfg, at_the_command_line, capsys
+):
+    """A gate stops a call one of the agent's subagents makes, so startup gates a tool only
+    that subagent's folder holds; the scoped listing dropped the gate, since no `tools:`
+    line offers the name, and so did every copy of the agent made from it. A compiled
+    subagent's is the control: deepagents hands that graph none of the gates."""
+    _workspace(cfg, DELEGATING_GATE)
+    _subagents_holding_tools(cfg)
+    root = subagents_dir(cfg)
+    _private(root / "surveyor" / "tools" / "probe.py", "probe")
+    (root / "surveyor" / "surveyor.py").write_text(
+        "def build(model, tools):\n    return None\n\n\n"
+        "SUBAGENTS = [{'name': 'surveyor', 'description': 'A compiled one.', "
+        "'build': build, 'tools': [{'name': 'probe', 'source': 'bundled'}]}]\n",
+        encoding="utf-8",
+    )
+
+    assert main(["list", "--as", "A", "--json"]) == 0
+
+    gates = json.loads(capsys.readouterr().out)["agent_gates"]["gatekeeper"]
+    assert gates == ["execute", "line_count", "tally"]
+
+
 @pytest.mark.parametrize("form", ["text", "json"])
 def test_a_scoped_listing_carries_no_tool_out_of_reach(form, cfg, at_the_command_line, capsys):
     """Neither the tool whose own lock keeps it from this caller, nor the one
