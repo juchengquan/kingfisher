@@ -18,6 +18,22 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   most of its cache; `KINGFISHER_MEMORY_EVERY` went to 4 to pay it half as often. Moving
   the block, or asking MiniMax how it matches a prefix, needs a grilling of its own.
   *(2026-10-27.)*
+- **"Remember X" waits for the memory writer.** In the trial behind
+  `KINGFISHER_MEMORY_EVERY=4`, the agent never saved what the user asked it to remember;
+  the writer did, at its next run. The agent is told how to save but not when. With a
+  `MemoryStore`, a session that ends before that run leaves the request in its own
+  `/.harness/memory_writer.json`, and the user's other sessions never see it. Running the
+  writer on the turn the user asks, or telling the agent to save such a request itself,
+  would close it. *(2026-10-30.)*
+- **The memory writer keeps some of the task in hand.** In the same trial M3's writer
+  once kept a definition the user had asked for and a one-off exchange rate, though
+  `memory_writer.md` says to leave the task out. Tighten the prompt and measure again, or
+  accept it within the 40-entry limit. *(2026-10-30.)*
+- **Who the user is, in `/outputs`.** Three turns on MiniMax-M3 with `--tell` naming the
+  user, on 2026-10-26 before the writer existed: memory kept the name, email address and
+  id out but saved the team, which the identifier check now drops; one report in
+  `/outputs` opened "Hi Ana —". Nothing checks `/outputs`. It goes back to the caller,
+  not into later sessions, so whether that matters is the owner's call. *(2026-10-30.)*
 - **One folder for everything the agent makes.** #603 put the scratchpad inside the
   returned folder, as a subfolder that is never returned; it was closed unmerged, and its
   branch is gone but GitHub keeps it: `git fetch origin pull/603/head`. Its other two
@@ -50,12 +66,12 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   input cached. Two turns on an Anthropic model, memory changed between them, settle it.
   And how often a real deployment's sessions are summarised on M2.5, whose summariser
   fires at 170,000 tokens, which needs that deployment's sessions. *(2026-10-27.)*
-- **What slots and turn text cost, on a real deployment.** A slot keyed on a name no
-  tool lock uses gives two grants with one tool list two system prompts and a cache entry
-  each; a subagent's prompt grows with every slot its grant fills. Count both on one
-  deployment's real grants. And one trial of whether the model keeps quiet about who
-  the user is: a user's name in the turn text, a task inviting a report, and a look at
-  `/outputs` and `/memory/AGENTS.md` after. *(2026-10-23.)*
+- **What slots cost, on a real deployment.** A slot keyed on a name no tool lock uses
+  gives two grants with one tool list two system prompts and a cache entry each; a
+  subagent's prompt grows with every slot its grant fills. On the shipped assets neither
+  happens: six grants opening `analyst` give three cached prefixes, all from `task`'s
+  description, the `figures` slot adds 218 characters for an EMEA caller, and no shipped
+  subagent fills a slot. Count both on one deployment's real grants. *(2026-10-30.)*
 - **The four `tm-*` clearing trials, re-run** now that clearing counts with the
   summariser's own counter. That re-run was the acceptance agreed for the change.
   *(2026-10-22.)*
@@ -75,6 +91,10 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 
 ## Small fixes, not yet made
 
+- **Test names that call the definitions folder a workspace.** 65 test names say
+  "workspace"; some mean the folder sessions live in, others the definitions, such as
+  `test_a_workspace_with_no_tools_never_assembles_the_probe`. The latter want the word
+  #1086 gave the messages. *(2026-10-30.)*
 - **`http_fetch` fails on every HTTPS address under a Python with no certificate
   store**, such as python.org's macOS build, because it uses plain `urllib`; `curl` and
   model calls work, since httpx carries certifi. Proposed: the system store when it has
