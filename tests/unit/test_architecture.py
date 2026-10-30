@@ -2092,6 +2092,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         # hands a tool the turn's backend. A tool file is in a deployment's workspace,
         # so nothing in this repository imports the name and nothing ever will.
         "ToolContext": "document",
+        # `tools.md` writes `from kingfisher import current_graph` in a tool file, as
+        # `ToolContext` above is.
+        "current_graph": "document",
         # What `ToolContext.run` returns, which `tools.md` reads `.error` and `.files` off.
         "ScratchRun": "embedder",
         # What `ToolContext.caller` is, which `tools.md` reads `.context` and `.source_ids` off.

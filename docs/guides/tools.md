@@ -515,6 +515,29 @@ A resume is handed the `context` the `Resume` presents, as it presents its
 capabilities again: the call a person approved runs for whoever resumed it.
 `caller` is `None` only for a graph built outside a turn.
 
+## Which graph called it
+
+`kingfisher.current_graph()` names the graph whose call is running: the subagent's
+name, `general-purpose` for deepagents' helper, and `None` in the agent the caller
+asked. It is set for the length of each call, so a middleware wrapping the call reads
+the same answer as the tool:
+
+```python
+from kingfisher import current_graph
+
+
+def where() -> str:
+    """Say which graph called this tool."""
+    return current_graph() or "the agent"
+
+
+TOOLS = [where]
+```
+
+A compiled subagent runs none of kingfisher's middleware, so its tools read the graph
+that called `task` — `None` where that was the agent. So does a thread a tool starts
+without `contextvars.copy_context()`.
+
 ## What the caller can use
 
 `runtime.context.reachable` answers what the caller a turn runs for can use: the

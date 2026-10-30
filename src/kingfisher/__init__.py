@@ -42,6 +42,8 @@ _EXPORTS = {
     "Kingfisher": "kingfisher.core.service",
     "ConfigError": "kingfisher.core.config",
     "Request": "kingfisher.core.request",
+    # Which graph a tool's call is made in, for a tool or a middleware to read.
+    "current_graph": "kingfisher.core.agent.tool_context",
     # What a tool reads off `runtime.context.caller`.
     "Caller": "kingfisher.core.agent.tool_context",
     # What a tool reads off `runtime.context.reachable`, and what its `listing` answers.
@@ -144,6 +146,7 @@ __all__ = [
     "UnknownSessionError",
     "WorkspacePaths",
     "config_from_env",
+    "current_graph",
     "definitions_source",
     "ensure_definitions",
     "inventory",
@@ -166,6 +169,7 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import Opening as Opening
     from kingfisher.core.agent.tool_context import Caller as Caller
     from kingfisher.core.agent.tool_context import ToolContext as ToolContext
+    from kingfisher.core.agent.tool_context import current_graph as current_graph
     from kingfisher.core.config import Config as Config
     from kingfisher.core.config import ConfigError as ConfigError
     from kingfisher.core.config import Endpoint as Endpoint

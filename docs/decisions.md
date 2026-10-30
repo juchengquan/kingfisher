@@ -476,6 +476,14 @@ deepagents fills a spec naming no tools from the parent, so `general-purpose` he
 agent's tool objects with no host-path guard, no error guard and no path translation.
 `standing_middleware` builds all three, so a fourth cannot be written half-right.
 
+**Which graph a tool call is made in is a context variable, set by standing middleware
+around each call.** `kingfisher.current_graph()` answers it: the subagent's name, `None`
+for the agent. Not a `ToolContext` field: one context is handed to every graph a turn
+runs, so a field could not tell a subagent's call from the agent's. Set on every call by every graph's own stack, rather than once
+around `task`, so a helper a subagent starts names itself. A compiled subagent's tools
+read the graph that called `task`, measured `None` from the agent's; kingfisher builds
+no stack for it to set one in. *(2026-10-30.)*
+
 **And what every graph shares is said at each call, never defaulted.** `standing_middleware`,
 `as_subagent` and `compiled` take no default for the settings one build's graphs share --
 file rules, gates, the caller's ceilings and source ids, the budget, ledger and recorder,

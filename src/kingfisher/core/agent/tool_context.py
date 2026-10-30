@@ -5,6 +5,7 @@ from __future__ import annotations
 # `datetime` and `Mapping` are not under TYPE_CHECKING: pydantic resolves `Caller`'s
 # annotations when a tool is bound.
 from collections.abc import Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -19,6 +20,17 @@ NOT_GRANTED = (
     "refused: the agent that called this tool may not run commands itself, so neither may "
     "its tools"
 )
+
+
+#: Not a `ToolContext` field: one context is handed to every graph a turn runs, a
+#: subagent's included, so only a value set per call can tell them apart.
+GRAPH: ContextVar[str | None] = ContextVar("kingfisher_current_graph", default=None)
+
+
+def current_graph() -> str | None:
+    """The name of the graph whose tool call is running here: a subagent's, or `None` in
+    the agent the caller asked and outside any tool call."""
+    return GRAPH.get()
 
 
 @dataclass(frozen=True)
