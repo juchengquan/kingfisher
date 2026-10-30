@@ -26,6 +26,7 @@ from .attachments import AttachmentsMiddleware
 from .builtin_tools import BuiltinToolsMiddleware, longest_command
 from .caching import CACHING, PromptCachingMiddleware
 from .clearing import ResultClearingMiddleware
+from .current_graph import CurrentGraphMiddleware
 from .guarded_calls import (
     GuardedCallsMiddleware,
     OfferedToolFailureMiddleware,
@@ -164,6 +165,9 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     standing: list[AgentMiddleware[Any, Any, Any]] = (
         [] if clearing is None else [clearing(granted)]
     )
+    # Ahead of every tool wrapper here and in `inner`, so a deployment's reads what the tool
+    # reads.
+    standing.append(CurrentGraphMiddleware(None if kind == "agent" else name))
     # After clearing, which measures what the summariser counted. Outside the step budget
     # and the reply checks, so the reply it records is the one kept and a call asked again
     # goes as they built it; and outside the caching slot, which marks what this sends.
