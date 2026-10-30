@@ -9,8 +9,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from kingfisher.core.access import Capabilities
-
+from .access import Capabilities
 from .layout import DEFAULT_LAYOUT, HARNESS_OWNED, SESSIONS, Layout
 
 #: The default `extra`, shared with `WireFormat.extra` because both spread into one

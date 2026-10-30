@@ -298,7 +298,8 @@ def test_a_relative_import_is_resolved_in_one_place():
 
 def _misfiled_imports(path: Path) -> list[tuple[int, str, bool]]:
     """`(line, module reached, written with a dot)` for each import on the wrong side of
-    the folder line: this folder spelled in full, or another folder reached with a dot."""
+    the folder line: this folder or one below it spelled in full, or a folder outside
+    them reached with a dot."""
     package = _package_of(path)
     holder = path.parents[len(package)]
 
@@ -312,6 +313,9 @@ def _misfiled_imports(path: Path) -> list[tuple[int, str, bool]]:
     def folder(dotted: str) -> tuple[str, ...]:
         parts = tuple(dotted.split("."))
         return parts if is_package(dotted) else parts[:-1]
+
+    def within(dotted: str) -> bool:
+        return folder(dotted)[: len(package)] == package
 
     found = []
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -330,22 +334,23 @@ def _misfiled_imports(path: Path) -> list[tuple[int, str, bool]]:
         found += [
             (node.lineno, module, dotted)
             for module in reached
-            if module.split(".")[0] == package[0] and (folder(module) == package) != dotted
+            if module.split(".")[0] == package[0] and within(module) != dotted
         ]
     return found
 
 
-def test_a_dot_means_this_folder_and_a_full_path_another():
-    """A module in this folder imported by its full path, or another folder reached with a
-    dot, which ruff refuses only as `..` and so lets the tree grow two spellings of one import."""
+def test_a_dot_reaches_down_and_a_full_path_up_or_across():
+    """A module in this folder or one below it imported by its full path, which no ruff
+    rule refuses, so the tree grows two spellings of one import -- or one outside them
+    reached with a dot."""
     # A lazy table spells each stub as its `_EXPORTS` string does, so the two read alike.
     exempt = {*LAZY_TABLES.values(), *FOLDER_TABLES.values()}
     found = [
-        f"{_module_id(path)}:{line} reaches `{module}` with a dot -- another folder, so "
-        "spell it from `kingfisher.`"
+        f"{_module_id(path)}:{line} reaches `{module}` with a dot -- outside this folder, "
+        "so spell it from `kingfisher.`"
         if dotted
-        else f"{_module_id(path)}:{line} names `{module}` in full -- this folder, so "
-        "write it with a dot"
+        else f"{_module_id(path)}:{line} names `{module}` in full -- this folder or one "
+        "below it, so write it with a dot"
         for path in _every(_package_modules(), "the package")
         if path not in exempt
         for line, module, dotted in _misfiled_imports(path)
@@ -389,8 +394,8 @@ def test_the_folder_line_is_drawn_both_ways(tmp_path):
         (3, "kingfisher.a.one", False),
         (4, "kingfisher.a", False),  # a name the folder's own `__init__` holds
         (4, "kingfisher.a.one", False),
-        (10, "kingfisher.a.inner.deep", True),
-        (11, "kingfisher.a.inner", True),
+        (5, "kingfisher.a.inner", False),
+        (6, "kingfisher.a.inner.deep", False),
         (12, "kingfisher.b", True),
         (14, "kingfisher.a.one", False),
         (16, "kingfisher.a.one", False),

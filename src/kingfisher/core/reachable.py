@@ -11,7 +11,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import (
+from .access import (
     ALL,
     Capabilities,
     CapabilityError,
@@ -21,9 +21,8 @@ from kingfisher.core.access import (
 )
 
 if TYPE_CHECKING:
-    from kingfisher.core.definitions.catalogue import Definitions
-
     from .config import Config
+    from .definitions.catalogue import Definitions
     from .inventory import Grant, Inventory
 
 
@@ -140,7 +139,7 @@ class Reachable:
 
     @cached_property
     def _listing(self) -> Listing:
-        from kingfisher.core.definitions.tools.spec import Offering, placed  # noqa: PLC0415
+        from .definitions.tools.spec import Offering, placed  # noqa: PLC0415
 
         found = self._found
         granted = self.granted
@@ -238,9 +237,9 @@ class Reachable:
         one out of reach and one nothing defines are refused in the same words.
         """
         # Here, not at the top: a tool file loads this module for its annotation.
-        from kingfisher.core.definitions import documents  # noqa: PLC0415
-        from kingfisher.core.definitions.agents import reading  # noqa: PLC0415
-        from kingfisher.core.definitions.agents.spec import AgentError  # noqa: PLC0415
+        from .definitions import documents  # noqa: PLC0415
+        from .definitions.agents import reading  # noqa: PLC0415
+        from .definitions.agents.spec import AgentError  # noqa: PLC0415
         document = documents.decode(text)
         # Before anything reads them, and never against the deployment's: an answer that
         # told a real id from a made-up one would let a caller find the real ones by guessing.

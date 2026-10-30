@@ -5953,14 +5953,20 @@ file it no longer matches loses its exemption in silence.
 until a cold import failed; `test_no_module_in_the_package_can_reach_itself` refuses
 the shape.
 
-**A dot means this folder, a full path another.** A module imports its neighbours as
-`from .store import ...`, and anything in another folder, a child folder included, from
-`kingfisher.`. Held both ways, because ruff's `TID252` refuses only `..`: `from .child.x`
-passes it, nothing asks for the dot where it belongs, and a tree allowed either spelling
-grows both. Every lazy table is exempt, a folder table as much as a door, so a stub
-names the module its `_EXPORTS` string does.
-`test_a_dot_means_this_folder_and_a_full_path_another`.
-*(2026-10-19.)*
+**A dot reaches down, a full path up or across.** A module imports its neighbours and
+anything in a folder below its own with a dot, `from .store import ...` and
+`from .middlewares.recorder import ...`, and anything else from `kingfisher.`. Held both
+ways: ruff's `TID252` refuses `..`, nothing asks for the dot where it belongs, and a
+tree allowed either spelling grows both. Every lazy table is exempt, a folder table as
+much as a door, so a stub names the module its `_EXPORTS` string does.
+`test_a_dot_reaches_down_and_a_full_path_up_or_across`.
+*(2026-10-19; a child folder was spelled in full until 2026-10-29.)*
+
+The dot reaches down for shorter lines where a folder takes from the ones below it, as
+`core/definitions/catalogue.py` takes from five. The price is a second spelling: of the
+51 modules a folder above imported, 31 were imported from beside or elsewhere too, so a
+search by a module's full path misses the import from above. A move that leaves one
+behind fails `ty` as an unresolved import, which is what makes the price small.
 
 **A file is split where its history already splits it.** Two definitions belong
 together when a commit touched both. Git's default hunk header names any line in column

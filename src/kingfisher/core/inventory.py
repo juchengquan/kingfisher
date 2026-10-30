@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from types import MappingProxyType
 
-from kingfisher.core.access import (
+from .access import (
     ALL,
     AccessReport,
     Capabilities,
@@ -26,19 +26,20 @@ from kingfisher.core.access import (
     walked,
     with_datazone,
 )
-from kingfisher.core.definitions.agents.spec import AgentError, AgentSpec
-from kingfisher.core.definitions.catalogue import (
+from .config import Config, ConfigError
+from .definitions.agents.spec import AgentError, AgentSpec
+from .definitions.catalogue import (
     Definitions,
     bundled_tool_names,
     doubled_skill,
     resolve_definitions,
 )
-from kingfisher.core.definitions.importing import defined_in_a_workspace
-from kingfisher.core.definitions.middlewares.catalogue import MiddlewareError
-from kingfisher.core.definitions.subagents.rules import miscounted, refuse_cycles
-from kingfisher.core.definitions.subagents.spec import SubagentError
-from kingfisher.core.definitions.tools.catalogue import ToolError
-from kingfisher.core.definitions.tools.spec import (
+from .definitions.importing import defined_in_a_workspace
+from .definitions.middlewares.catalogue import MiddlewareError
+from .definitions.subagents.rules import miscounted, refuse_cycles
+from .definitions.subagents.spec import SubagentError
+from .definitions.tools.catalogue import ToolError
+from .definitions.tools.spec import (
     FoundTool,
     Offering,
     admitted,
@@ -47,8 +48,6 @@ from kingfisher.core.definitions.tools.spec import (
     reference,
     split_reference,
 )
-
-from .config import Config, ConfigError
 from .origins import Origin, Origins
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
@@ -633,7 +632,7 @@ def _builtin_tools(
     cfg: Config, resolved: Definitions, found: Sequence[FoundTool] | None
 ) -> tuple[str, ...] | None:
     """The built-in set, asked of the harness that knows how to assemble one."""
-    from kingfisher.core.agent.assembly import builtin_tool_names  # noqa: PLC0415
+    from .agent.assembly import builtin_tool_names  # noqa: PLC0415
 
     return builtin_tool_names(cfg, resolved, found)
 

@@ -30,7 +30,6 @@ from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import CommandRunner, Sessions, refuse_unless_subclass
 from kingfisher.core.layout import Layout
-from kingfisher.plugins.sessions.sandbox import confinement
 
 from .folders import (
     LocalSessionDirs,
@@ -41,6 +40,7 @@ from .folders import (
 )
 from .links import RootedBackend
 from .permissions import protect_inputs, writable_inputs
+from .sandbox import confinement
 from .shell import (
     ConfinedLocalShellBackend,
     fence_for,

@@ -11,7 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import (
+from . import environment as config_module
+from .access import (
     UNRESTRICTED,
     CallerError,
     Capabilities,
@@ -22,42 +23,22 @@ from kingfisher.core.access import (
     reaches,
     with_datazone,
 )
-from kingfisher.core.agent.activation import for_the_caller, settled_request
-from kingfisher.core.agent.assembly import (
+from .agent.activation import for_the_caller, settled_request
+from .agent.assembly import (
     build_agent,
     builtin_tool_names,
 )
-from kingfisher.core.agent.kinds.declared_middleware import (
+from .agent.kinds.declared_middleware import (
     MiddlewareFactory,
     refuse_unbuildable_middleware,
 )
-from kingfisher.core.agent.prompting import InstructionsFile, refuse_a_workspace_prompt
-from kingfisher.core.agent.usable_backend import refuse_unusable_backend
-from kingfisher.core.definitions.agents.reading import read
-from kingfisher.core.definitions.agents.spec import AgentSpec
-from kingfisher.core.definitions.catalogue import Definitions, resolve_definitions
-from kingfisher.core.definitions.seeding import SEED_HINT, starter_agent
-from kingfisher.core.session.disposal import Disposal
-from kingfisher.core.session.ledger import Ledger
-from kingfisher.core.session.methods import SessionMethods
-from kingfisher.core.session.model import opened_for
-from kingfisher.core.session.preparation import Preparation
-from kingfisher.core.session.runlog import LoggedRunEvents
-from kingfisher.core.session.running import Running
-from kingfisher.core.session.sent import Preview
-from kingfisher.core.session.steps import (
-    Steps,
-    changing,
-)
-from kingfisher.core.session.store import (
-    HarnessFiles,
-    remember_agent,
-)
-from kingfisher.core.session.threads import thread_pool
-from kingfisher.core.session.unused import DeleteUnusedResults
-
-from . import environment as config_module
+from .agent.prompting import InstructionsFile, refuse_a_workspace_prompt
+from .agent.usable_backend import refuse_unusable_backend
 from .config import Config, ConfigError
+from .definitions.agents.reading import read
+from .definitions.agents.spec import AgentSpec
+from .definitions.catalogue import Definitions, resolve_definitions
+from .definitions.seeding import SEED_HINT, starter_agent
 from .interfaces import (
     AgentsMiddlewares,
     Instructions,
@@ -74,14 +55,31 @@ from .interfaces import (
 from .origins import Origins
 from .reporting import what_opens
 from .request import Request, Resume, caller_of
+from .session.disposal import Disposal
+from .session.ledger import Ledger
+from .session.methods import SessionMethods
+from .session.model import opened_for
+from .session.preparation import Preparation
+from .session.runlog import LoggedRunEvents
+from .session.running import Running
+from .session.sent import Preview
+from .session.steps import (
+    Steps,
+    changing,
+)
+from .session.store import (
+    HarnessFiles,
+    remember_agent,
+)
+from .session.threads import thread_pool
+from .session.unused import DeleteUnusedResults
 from .workspace import ensure_layout
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from kingfisher.core.agent.tool_context import Caller
-    from kingfisher.core.definitions.documents import DefinitionText
-
+    from .agent.tool_context import Caller
+    from .definitions.documents import DefinitionText
     from .interfaces import RunEvents
 
 
