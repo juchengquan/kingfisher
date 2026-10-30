@@ -4,7 +4,8 @@ from __future__ import annotations
 
 # `datetime` and `Mapping` are not under TYPE_CHECKING: pydantic resolves `Caller`'s
 # annotations when a tool is bound.
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
@@ -31,6 +32,16 @@ def current_graph() -> str | None:
     """The name of the graph whose tool call is running here: a subagent's, or `None` in
     the agent the caller asked and outside any tool call."""
     return GRAPH.get()
+
+
+@contextmanager
+def naming(graph: str | None) -> Iterator[None]:
+    """Have `current_graph()` answer `graph` until the block ends."""
+    token = GRAPH.set(graph)
+    try:
+        yield
+    finally:
+        GRAPH.reset(token)
 
 
 @dataclass(frozen=True)

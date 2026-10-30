@@ -219,7 +219,7 @@ def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfi
 
     # Wrapped: this graph gets no kingfisher middleware, so its tools carry their guards or
     # have none.
-    runnable = spec.build(model, guarded_tools(granted, paths))
+    runnable = spec.build(model, guarded_tools(granted, paths, graph=spec.name))
     # `Runnable`, as `CompiledSubAgent` declares the field: a duck-type on `invoke` is too
     # loose, since deepagents also calls `with_config`.
     if not isinstance(runnable, Runnable):

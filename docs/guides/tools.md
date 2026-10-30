@@ -534,9 +534,10 @@ def where() -> str:
 TOOLS = [where]
 ```
 
-A compiled subagent runs none of kingfisher's middleware, so its tools read the graph
-that called `task` — `None` where that was the agent. So does a thread a tool starts
-without `contextvars.copy_context()`.
+A compiled subagent runs none of kingfisher's middleware, so its name travels on the
+tools it was handed instead: those read it, and a tool its `build` adds of its own reads
+the graph that called `task`. A thread a tool starts without
+`contextvars.copy_context()` reads `None`.
 
 ## What the caller can use
 
