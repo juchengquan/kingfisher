@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Sequence
+from contextlib import AbstractContextManager, nullcontext
 from typing import Any
 
 from langchain_core.callbacks import AsyncCallbackManagerForToolRun, CallbackManagerForToolRun
@@ -18,6 +19,7 @@ from langchain_core.tools.base import _get_runnable_config_param, _signature_par
 from .host_paths import HostPathError
 from .references import UnsafeReferenceError
 from .session_paths import SessionPaths, as_asked, refusal_text
+from .tool_context import naming
 
 
 class GuardedTool(BaseTool):
@@ -36,6 +38,12 @@ class GuardedTool(BaseTool):
     inner: Any
     #: `None` where a build has no session to translate against; errors still convert.
     paths: Any = None
+    #: The compiled subagent this tool was handed to, which `current_graph()` answers while
+    #: it runs. `None` leaves the name alone: `eval`'s tools read the graph that ran `eval`.
+    graph: str | None = None
+
+    def _named(self) -> AbstractContextManager[None]:
+        return nullcontext() if self.graph is None else naming(self.graph)
 
     def _translated(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         if self.paths is None:
@@ -76,12 +84,15 @@ class GuardedTool(BaseTool):
         **kwargs: Any,
     ) -> Any:
         args = self._translated(kwargs)
-        try:
-            return self.inner._run(**args, **self._handed(self.inner._run, config, run_manager))
-        except ToolException:
-            raise
-        except Exception as exc:
-            raise self._failed(exc, kwargs) from exc
+        with self._named():
+            try:
+                return self.inner._run(
+                    **args, **self._handed(self.inner._run, config, run_manager)
+                )
+            except ToolException:
+                raise
+            except Exception as exc:
+                raise self._failed(exc, kwargs) from exc
 
     async def _arun(
         self,
@@ -94,20 +105,25 @@ class GuardedTool(BaseTool):
         # Read as `arun` reads it: a tool with no `_arun` of its own runs its `_run`.
         own = type(self.inner)._arun is not BaseTool._arun
         checked = self.inner._arun if own else self.inner._run
-        try:
-            return await self.inner._arun(**args, **self._handed(checked, config, run_manager))
-        except ToolException:
-            raise
-        except Exception as exc:
-            raise self._failed(exc, kwargs) from exc
+        with self._named():
+            try:
+                return await self.inner._arun(
+                    **args, **self._handed(checked, config, run_manager)
+                )
+            except ToolException:
+                raise
+            except Exception as exc:
+                raise self._failed(exc, kwargs) from exc
 
 
-def guarded_tools(tools: Sequence[Any], paths: SessionPaths | None) -> list[Any]:
+def guarded_tools(
+    tools: Sequence[Any], paths: SessionPaths | None, *, graph: str | None = None
+) -> list[Any]:
     """The offered tools a compiled subagent or `eval` is handed, each one wrapped."""
-    return [_guarded(one, paths) for one in tools]
+    return [_guarded(one, paths, graph) for one in tools]
 
 
-def _guarded(one: Any, paths: SessionPaths | None) -> BaseTool:
+def _guarded(one: Any, paths: SessionPaths | None, graph: str | None) -> BaseTool:
     """One tool, wrapped without changing what it advertises.
 
     A plain function becomes the tool `create_agent` would make of it, refusing a
@@ -120,6 +136,7 @@ def _guarded(one: Any, paths: SessionPaths | None) -> BaseTool:
     return GuardedTool(
         inner=inner,
         paths=paths,
+        graph=graph,
         name=inner.name,
         description=inner.description,
         args_schema=declared,

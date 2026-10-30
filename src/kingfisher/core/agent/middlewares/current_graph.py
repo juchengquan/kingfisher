@@ -2,22 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
 
-from kingfisher.core.agent.tool_context import GRAPH
-
-
-@contextmanager
-def _naming(graph: str | None) -> Iterator[None]:
-    token = GRAPH.set(graph)
-    try:
-        yield
-    finally:
-        GRAPH.reset(token)
+from kingfisher.core.agent.tool_context import naming
 
 
 class CurrentGraphMiddleware(AgentMiddleware):
@@ -33,11 +23,11 @@ class CurrentGraphMiddleware(AgentMiddleware):
         self.graph = graph
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        with _naming(self.graph):
+        with naming(self.graph):
             return handler(request)
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        with _naming(self.graph):
+        with naming(self.graph):
             return await handler(request)

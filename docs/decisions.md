@@ -480,9 +480,12 @@ agent's tool objects with no host-path guard, no error guard and no path transla
 around each call.** `kingfisher.current_graph()` answers it: the subagent's name, `None`
 for the agent. Not a `ToolContext` field: one context is handed to every graph a turn
 runs, so a field could not tell a subagent's call from the agent's. Set on every call by every graph's own stack, rather than once
-around `task`, so a helper a subagent starts names itself. A compiled subagent's tools
-read the graph that called `task`, measured `None` from the agent's; kingfisher builds
-no stack for it to set one in. *(2026-10-30.)*
+around `task`, so a helper a subagent starts names itself. A compiled subagent, which
+runs none of kingfisher's middleware, is named by the `GuardedTool` wrapping each tool it
+was handed, which already carries the guards for the same reason; set around `task`
+instead, a middleware wrapping `task` would read the subagent for the agent's own call.
+`eval`'s tools share that wrapper and set nothing, since they already read the graph
+that ran `eval`. *(2026-10-30.)*
 
 **And what every graph shares is said at each call, never defaulted.** `standing_middleware`,
 `as_subagent` and `compiled` take no default for the settings one build's graphs share --
