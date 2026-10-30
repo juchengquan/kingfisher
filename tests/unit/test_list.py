@@ -20,7 +20,7 @@ def test_listing_reports_a_workspace_that_will_not_load(cfg, at_the_command_line
     assert "cannot load" in capsys.readouterr().out
 
 
-def test_a_workspace_with_no_agents_says_so_and_says_what_to_do(at_the_command_line, capsys):
+def test_definitions_with_no_agents_say_so_and_say_what_to_do(at_the_command_line, capsys):
     """The empty listing for agents, which the ones for skills and subagents had
     and this did not -- a mutation removing it went unnoticed.
 
@@ -429,7 +429,7 @@ def test_the_middlewares_section_names_what_is_registered(cfg, at_the_command_li
     printed = capsys.readouterr().out
     assert "\nmiddlewares\n" in printed
     assert "  audit\n" in printed, "the name a definition writes, and nothing else"
-    assert "kingfisher_workspace" not in printed, "never the dynamic module name"
+    assert "kingfisher_definitions" not in printed, "never the dynamic module name"
 
 
 def test_a_middleware_that_came_from_a_package_says_which(cfg, at_the_command_line, capsys):

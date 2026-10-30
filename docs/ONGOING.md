@@ -11,11 +11,6 @@ An entry leaves when its work lands or is dropped. What was decided goes to
 Not repeated here: proposals in `design/`, which `README.md` lists, and what the ledger
 left unbuilt, under *Not built, and still open* in `decisions.md`.
 
-## In review
-
-- **The security findings and bugs from the review of #1039–#1068**, in #1071.
-  *(2026-10-23.)*
-
 ## Waiting on a decision
 
 - **Keeping the cache through a memory change on MiniMax.** The breakpoint ahead of the
@@ -95,14 +90,6 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   PDFs fill some 60% of the trigger rather than half, before any scaling. The same
   mismatch clearing had; reading the rate off `summarizer_count` would close it.
   *(2026-10-23.)*
-- **Names that still call the definitions folder a workspace.** #1086 changed the
-  wording but left identifiers: `defined_in_a_workspace` in `core/definitions/importing.py`,
-  and three tests whose messages no longer say "workspace" --
-  `test_a_caller_who_reaches_no_agent_is_told_the_workspace_offers_none`,
-  `test_a_workspace_with_no_agents_is_told_how_to_write_one` and
-  `test_a_workspace_with_no_agents_says_so_and_says_what_to_do`. *(2026-10-23.)*
-- **The "In review" entry for #1071 is stale**: #1071 has merged, so the entry and its
-  heading go. *(2026-10-23.)*
 
 ## When deepagents moves
 

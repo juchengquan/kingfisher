@@ -27,10 +27,10 @@ PACKAGE_MARKER = "__init__.py"
 
 #: The namespace every definition module is imported under, only to make its name unique.
 #: No parent package is registered: a package resolves relative imports against itself.
-_NAMESPACE = "kingfisher_workspace"
+_NAMESPACE = "kingfisher_definitions"
 
 
-def defined_in_a_workspace(module: str) -> bool:
+def defined_in_a_definition_file(module: str) -> bool:
     """Whether a class with this `__module__` was written in a definition file.
 
     Such a name is unique and meaningless, so a listing must not print it as where the
