@@ -46,7 +46,7 @@ def test_the_listing_in_that_refusal_names_only_reachable_agents(two_agents):
     assert "assistant" not in offers
 
 
-def test_a_caller_who_reaches_no_agent_is_told_the_workspace_offers_none(cfg):
+def test_a_caller_who_reaches_no_agent_is_told_the_definitions_offer_none(cfg):
     an_agent(cfg, "assistant", source_ids="[B]")
     kf = Kingfisher(cfg, sessions=LocalSessions())
     with pytest.raises(CapabilityError, match="definitions offer none"):

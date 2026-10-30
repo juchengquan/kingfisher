@@ -34,7 +34,7 @@ from .definitions.catalogue import (
     doubled_skill,
     resolve_definitions,
 )
-from .definitions.importing import defined_in_a_workspace
+from .definitions.importing import defined_in_a_definition_file
 from .definitions.middlewares.catalogue import MiddlewareError
 from .definitions.subagents.rules import miscounted, refuse_cycles
 from .definitions.subagents.spec import SubagentError
@@ -556,7 +556,7 @@ def _middlewares(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
     """What the definitions register, and why it could not be read."""
     try:
         return MappingProxyType({
-            name: "" if defined_in_a_workspace(cls.__module__) else cls.__module__
+            name: "" if defined_in_a_definition_file(cls.__module__) else cls.__module__
             for name, cls in resolved.middlewares.classes.items()
         }), None
     except MiddlewareError as exc:

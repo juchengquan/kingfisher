@@ -485,7 +485,7 @@ def test_the_starter_agent_the_refusal_prints_actually_loads(cfg):
     assert (spec.builtin_tools, spec.tools) == (ALL, ALL), "a starter that cannot act"
 
 
-def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
+def test_definitions_with_no_agents_are_told_how_to_write_one(cfg):
     """`--from DIR` needs a DIR, and an installed kingfisher has none -- the hint is
     correct and terminal.
     """
