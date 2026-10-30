@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from kingfisher import Capabilities
-from tests.conftest import an_agent, tools_dir
+from tests.conftest import an_agent, subagents_dir, tools_dir
 from tests.unit.test_reachable import AUDIT, SALES, _asked, _deployment
 
 CHECKS = '''import json
@@ -61,9 +61,76 @@ system_prompt: |
 """
 
 
+OWN = """from kingfisher import ToolSpec
+
+
+def own_tool() -> str:
+    "Brought by the subagent."
+    return "own"
+
+
+def own_locked() -> str:
+    "Brought by the subagent, for sales."
+    return "own"
+
+
+TOOLS = [own_tool, ToolSpec(own_locked, source_ids=["ID-SALES"])]
+"""
+
+#: A graph its definition builds, holding a tool of its own folder.
+COMPILED = """
+def build(model, tools):
+    from langchain.agents import create_agent
+
+    return create_agent(model, tools)
+
+
+SUBAGENTS = [
+    {
+        "name": "surveyor",
+        "description": "A compiled subagent.",
+        "build": build,
+        "tools": [{"name": "probe", "source": "bundled"}],
+    }
+]
+"""
+
+PROBE = """
+def probe() -> str:
+    "Brought by the compiled subagent."
+    return "probe"
+
+
+TOOLS = [probe]
+"""
+
+#: An agent gating a tool only its subagent's own folder holds.
+DELEGATING = {
+    "builtin_tools": "[read_file, task]",
+    "tools": "[open_tool]",
+    "skills": "[open-skill]",
+    "subagents": "[bundler, helper, surveyor]",
+    "interrupt_on": "[open_tool, own_tool, own_locked]",
+}
+
+
 def _drafting(cfg) -> None:
     _deployment(cfg)
     (tools_dir(cfg) / "checks.py").write_text(CHECKS, encoding="utf-8")
+    bundler = subagents_dir(cfg) / "bundler"
+    (bundler / "tools").mkdir(parents=True)
+    (bundler / "bundler.yaml").write_text(
+        "name: bundler\ndescription: The bundler.\nbuiltin_tools: [read_file]\ntools:\n"
+        "  - {name: own_tool, source: bundled}\n  - {name: own_locked, source: bundled}\n"
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
+    )
+    (bundler / "tools" / "own.py").write_text(OWN, encoding="utf-8")
+    surveyor = subagents_dir(cfg) / "surveyor"
+    (surveyor / "tools").mkdir(parents=True)
+    (surveyor / "surveyor.py").write_text(COMPILED, encoding="utf-8")
+    (surveyor / "tools" / "probe.py").write_text(PROBE, encoding="utf-8")
+    an_agent(cfg, "delegating", **DELEGATING)
 
 
 def _checked(cfg, text: str, *, source_ids: list[str] = AUDIT, **request) -> list[str]:
@@ -85,6 +152,72 @@ def test_a_copy_of_an_agent_passes_as_a_draft(scripted, source_ids):
     assert _checked(scripted, GOOD) == []
     copied = {"name": "pattern", "rename": "invoices"}
     assert _asked(scripted, "copied_as", copied, source_ids=source_ids) == []
+
+
+@pytest.mark.parametrize(
+    ("builtin_tools", "copied"),
+    [
+        (
+            "*",
+            {
+                "skills": ["open-skill"],
+                "subagents": ["bundler", "helper", "surveyor"],
+                "interrupt_on": ["open_tool", "own_tool"],
+            },
+        ),
+        (("read_file",), {"skills": ["open-skill"], "interrupt_on": ["open_tool"]}),
+        (
+            ("task",),
+            {
+                "subagents": ["bundler", "helper", "surveyor"],
+                "interrupt_on": ["open_tool", "own_tool"],
+            },
+        ),
+    ],
+    ids=["every", "no-task", "no-read-file"],
+)
+def test_a_copy_loads_and_keeps_its_gates_whatever_built_ins_it_keeps(
+    scripted, builtin_tools, copied
+):
+    """A copy cut to `read_file` alone kept its subagents, and one without it its skills,
+    so the reader refused the builder's own copy; and a gate on a tool only a subagent's
+    folder holds was dropped, though startup gates it. Round-tripped through the check,
+    not compared field by field, so the copy is held to what loads."""
+    _drafting(scripted)
+    grant = {"capabilities": Capabilities(builtin_tools=builtin_tools)}
+
+    copy = _asked(scripted, "copied", {"name": "delegating"}, source_ids=AUDIT, **grant)
+    renamed = {"name": "delegating", "rename": "invoices"}
+
+    assert {key: copy[key] for key in ("skills", "subagents", "interrupt_on") if key in copy} == (
+        copied
+    )
+    assert _asked(scripted, "copied_as", renamed, source_ids=AUDIT, **grant) == []
+
+
+def test_a_draft_may_gate_a_tool_only_its_own_subagent_holds(scripted):
+    """Startup gates a call to a subagent's bundled tool, so the check must accept a gate on
+    one -- but only under a subagent the draft names and kingfisher builds: beside one that
+    does not hold it, or a compiled one handed none of the gates, it would never fire. A
+    bundled tool's lock shuts it out as a typo would be, with the lock's holder the control."""
+    _drafting(scripted)
+
+    def gating(tool: str, subagents: str) -> str:
+        return _written(f"interrupt_on: [{tool}]", "interrupt_on: [open_tool]").replace(
+            "subagents: [helper]", f"subagents: {subagents}"
+        )
+
+    assert _checked(scripted, gating("own_tool", "[bundler]")) == []
+    assert _checked(scripted, gating("own_tool", '["*"]')) == []
+    for tool, subagents in (("own_tool", "[helper]"), ("probe", "[surveyor]")):
+        assert _checked(scripted, gating(tool, subagents)) == [
+            f"interrupt_on: {tool!r} is not one this user can use"
+        ]
+    shut_out = _checked(scripted, gating("own_locked", "[bundler]"))
+    typo = _checked(scripted, gating("nowhere", "[bundler]"))
+    assert shut_out == [one.replace("nowhere", "own_locked") for one in typo]
+    assert len(shut_out) == 1
+    assert _checked(scripted, gating("own_locked", "[bundler]"), source_ids=SALES) == []
 
 
 @pytest.mark.parametrize(

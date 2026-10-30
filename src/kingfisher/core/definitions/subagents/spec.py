@@ -482,7 +482,7 @@ def uncallable_helpers(builtin_tools: Selection, subagents: Selection) -> str | 
 
     The agent format asks it too, so the two refuse in the same words.
     """
-    if not subagents or builtin_tools == ALL or TASK_TOOL in (builtin_tools or ()):
+    if not subagents or calls_helpers(builtin_tools):
         return None
     named = "every subagent" if subagents == ALL else ", ".join(subagents)
     # Told apart: "leaves out 'task'" sends someone who wrote no list hunting for one.
@@ -497,6 +497,11 @@ def uncallable_helpers(builtin_tools: Selection, subagents: Selection) -> str | 
         f"made. Add {TASK_TOOL} to builtin_tools, or write builtin_tools: [{ALL!r}] "
         f"for every built-in"
     )
+
+
+def calls_helpers(builtin_tools: Selection) -> bool:
+    """Whether a grant of built-ins holds the tool a subagent is called through."""
+    return builtin_tools == ALL or TASK_TOOL in (builtin_tools or ())
 
 
 def opens_skills(builtin_tools: Selection) -> bool:

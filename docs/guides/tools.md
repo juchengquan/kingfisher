@@ -574,13 +574,17 @@ TOOLS = [what_i_can_use]
 write out as YAML: every list kept to the listing, a `["*"]` kept as one, add-on
 `settings` as the file writes them, and the `system_prompt` with its
 [slots](formats.md#text-that-depends-on-the-caller--system_prompt-written-long) filled for
-this caller. An agent out of their reach answers `None`, as a name nothing defines does.
+this caller. Kept to the built-ins it keeps too: without `read_file` it names no skills,
+and without `task` no subagents, since the reader refuses either. A gate stays on a tool
+the copy holds, or that a subagent it keeps holds, one in that subagent's own folder
+included. An agent out of their reach answers `None`, as a name nothing defines does.
 
 `reachable.check_agent(text)` is everything wrong with `text` as an agent file this
 caller drafted, or `()`. It reads the text as startup reads a file in `agents/`, then
 holds every name to the listing: a tool, skill, subagent, add-on, model or gate this
-caller cannot use, a name an agent they can see already has, capitals aside, and a tool
-named by a file where the listing names it bare. The draft's own name must be lowercase
+caller cannot use -- a gate may name a tool in the folder of a subagent the draft names,
+unless that subagent is compiled -- a name an agent they can see already has, capitals
+aside, and a tool named by a file where the listing names it bare. The draft's own name must be lowercase
 letters and digits with single hyphens between them, at most 32 characters, since a file
 takes it; startup holds no agent file to that. A name out of their reach is refused in the words a
 typo is. Any `source_ids:` or `datazone:` is refused, whatever it says, since who may use

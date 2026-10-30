@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A copied agent loads and keeps its gates, after #1165
+
+- **`Reachable.agent` drops `skills:` and `subagents:`** from a copy whose built-ins
+  no longer hold `read_file` or `task`, which the reader refused.
+- **A gate on a tool in a subagent's own folder is kept**: by `Reachable.agent`, by
+  `kingfisher list --as`, which now prints it on the agent's `interrupt_on` line, and
+  by `Reachable.check_agent`, which accepts it where the draft names that subagent and
+  the subagent is not compiled.
+
 ## A drafted agent's name is lowercase, after #1159
 
 - **`Reachable.check_agent` refuses a draft's name** unless it is lowercase letters and

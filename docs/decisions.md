@@ -1935,6 +1935,19 @@ any name, since nothing else makes a file of one, and a deployment's `sales_ops`
 loading. **In the public check, not the builder's file**, so every tool checking a draft
 holds it to one rule, as it does the refusal of `source_ids:`. *(2026-10-29, #1159.)*
 
+**A copy is one that loads, and keeps the gates its subagents answer.** Cut to a grant
+without `read_file` or `task`, a copy kept its `skills:` or `subagents:`, which the
+reader refuses, so the builder's own check refused an agent copied untouched. A copy
+now drops those two lines when it keeps no built-in to use them with, asked of the
+predicates the reader asks. **A gate may name a tool in the folder of a subagent the
+agent names**, since a call that subagent makes stops on it at startup: the listing, the
+copy and the check each dropped or refused one, and a copied agent lost its approval.
+Only a subagent this file names and this caller reaches, not any in the catalogue as
+startup allows -- under one not named the gate never fires -- and **not a compiled
+one's**, which deepagents hands none of the gates. A bundled tool's own lock applies, so
+one shut to the caller is refused as a typo is. **Decided in the inventory**, so `list
+--as` and `Reachable` give one answer. *(2026-10-30, #1165.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds
