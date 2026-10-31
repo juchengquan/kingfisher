@@ -18,13 +18,25 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   most of its cache; `KINGFISHER_MEMORY_EVERY` went to 4 to pay it half as often. Moving
   the block, or asking MiniMax how it matches a prefix, needs a grilling of its own.
   *(2026-10-27.)*
-- **"Remember X" waits for the memory writer.** In the trial behind
-  `KINGFISHER_MEMORY_EVERY=4`, the agent never saved what the user asked it to remember;
-  the writer did, at its next run. The agent is told how to save but not when. With a
-  `MemoryStore`, a session that ends before that run leaves the request in its own
-  `/.harness/memory_writer.json`, and the user's other sessions never see it. Running the
-  writer on the turn the user asks, or telling the agent to save such a request itself,
-  would close it. *(2026-10-30.)*
+- **"Remember X" waits for the memory writer, and is lost only with a `MemoryStore`.** In
+  the trial behind `KINGFISHER_MEMORY_EVERY=4`, the agent never saved what the user asked
+  it to remember; the writer did, at its next run. The agent is told how to save but not
+  when. A store session that ends before that run leaves the request in its own
+  `/.harness/memory_writer.json`, and the user's other sessions never see it. Session
+  memory loses nothing: the conversation carries the request until the writer reads it,
+  four turns on or on a summarised turn. Agreed for when per-user memory is planned:
+  where memory is the user's and the agent holds a tool to save with, one sentence ahead
+  of the rule on identifying details -- "What the user asks you to remember or to forget
+  reaches their later conversations only once this file says so, so change it in the
+  turn they ask." An agent holding neither, as `operator.yaml` does, is left to the
+  writer, and the guide says so. Kept if, on MiniMax-M3 over one-turn sessions, ten
+  before and ten after, an asked "remember" is saved and a "forget" carried out at least
+  8 times in 10, and a passing remark saved no more than 2 in 10 above before. Still
+  open: what the user never asked to keep, in a store session that ends before the
+  writer runs. Running the writer on a session's first turn as well, or when the caller
+  says the conversation is over, both keep every four turns, and which pays depends on
+  how long a deployment's sessions are; carrying the leftovers into the user's next
+  session would put raw conversation in the store. *(2026-11-01.)*
 - **The memory writer keeps some of the task in hand.** In the same trial M3's writer
   once kept a definition the user had asked for and a one-off exchange rate, though
   `memory_writer.md` says to leave the task out. Tighten the prompt and measure again, or
