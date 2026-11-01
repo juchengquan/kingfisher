@@ -37,6 +37,16 @@ RUNS = frozenset({TASK_TOOL, INTERPRETER_TOOL})
 #: threads too.
 RUN: ContextVar[str | None] = ContextVar("kingfisher_ledger_run", default=None)
 
+#: Where a tool no recorder sees says it ran: set beside `RUN` by the recorder that named
+#: the run, so a call from code or inside a compiled subagent widens nothing but its answer.
+_RAN: ContextVar[Callable[[str], None] | None] = ContextVar("kingfisher_ledger_ran", default=None)
+
+
+def ran(tool: str) -> None:
+    """Count `tool` as read by the run it runs under, which no row will say."""
+    if (note := _RAN.get()) is not None:
+        note(tool)
+
 #: The id the tool call running here will be recorded under, taken before it runs, or
 #: `None` where it will not be. Set around every call a recorder sees, unrecorded ones
 #: too, so a subagent's file tool is not read as the `task` call it runs inside.
@@ -102,8 +112,9 @@ class Audiences:
 
 
 @contextmanager
-def _running(call: Mapping[str, Any]) -> Iterator[None]:
-    """Name the run a top-level `task` or `eval` call starts, for as long as it runs.
+def _running(call: Mapping[str, Any], note: Callable[[str, str], None]) -> Iterator[None]:
+    """Name the run a top-level `task` or `eval` call starts, for as long as it runs,
+    and have `note` told each tool that runs under it unseen.
 
     Only where none is named yet: everything inside a subagent, a nested helper's
     calls included, belongs to the run of the call that started it.
@@ -111,10 +122,13 @@ def _running(call: Mapping[str, Any]) -> Iterator[None]:
     if call.get("name") not in RUNS or RUN.get() is not None:
         yield
         return
-    token = RUN.set(call.get("id") or "")
+    run = call.get("id") or ""
+    token = RUN.set(run)
+    noted = _RAN.set(lambda tool: note(run, tool))
     try:
         yield
     finally:
+        _RAN.reset(noted)
         RUN.reset(token)
 
 
@@ -180,7 +194,7 @@ class RecorderMiddleware(AgentMiddleware):
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         number = self._reserved(request)
-        with _running(request.tool_call), _numbered(number):
+        with _running(request.tool_call, self._ran), _numbered(number):
             result = handler(request)
         answer = answer_in(result, request.tool_call.get("id"))
         if (
@@ -201,7 +215,7 @@ class RecorderMiddleware(AgentMiddleware):
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
         number = self._reserved(request)
-        with _running(request.tool_call), _numbered(number):
+        with _running(request.tool_call, self._ran), _numbered(number):
             result = await handler(request)
         answer = answer_in(result, request.tool_call.get("id"))
         if (
@@ -266,16 +280,20 @@ class RecorderMiddleware(AgentMiddleware):
     def _access(self, tool: str, inside: str) -> Listed | None:
         """The audience this result was produced under, as a row holds it.
 
-        `inside` is the run a `task` answer's subagent ran as. That answer can repeat
-        anything the run read, so it is reached by whoever reaches all of it.
+        `inside` is the run a `task` or `eval` answer was produced in. That answer can
+        repeat anything the run read, so it is reached by whoever reaches all of it.
         """
         if self._audiences is None:
             return None
         offered = self._audiences.offered(tool)
-        if tool != TASK_TOOL:
+        if tool not in RUNS:
             return listed(offered)
         read = (unlisted(one) for one in self._ledger.access_in(inside))
         return listed(jointly((offered, *read)))
+
+    def _ran(self, run: str, tool: str) -> None:
+        if self._audiences is not None:
+            self._ledger.ran(run, listed(self._audiences.offered(tool)))
 
     def _unkept(self, entry: LedgerEntry, answers: Any) -> LedgerEntry:
         """The entry with its path taken off if the backend would not keep its file.

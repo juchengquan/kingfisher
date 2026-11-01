@@ -55,6 +55,9 @@ class Ledger:
         #: whichever call of a batch arrives first numbers them all, and the rest read
         #: their own off it.
         self._numbers: dict[tuple[str, str], str] = {}
+        #: The access of what ran under a run with no row of its own: a call from code, or
+        #: inside a compiled subagent, which the answer it feeds can repeat.
+        self._unrecorded: dict[str, list[Listed]] = {}
 
     def reserve(self, call: str, batch: Sequence[str], *, message: str) -> str:
         """The id `call`'s result will have, numbering every call of `batch` with it.
@@ -103,13 +106,20 @@ class Ledger:
             self._entries[self._entries.index(entry)] = bare
         return bare
 
+    def ran(self, run: str, access: Listed) -> None:
+        """Note what a call that gets no row read under one run."""
+        with self._lock:
+            self._unrecorded.setdefault(run, []).append(access)
+
     def access_in(self, run: str) -> tuple[Listed, ...]:
-        """The access of every entry recorded under one run, before this turn as well."""
+        """The access of everything read under one run: every entry recorded under it,
+        before this turn as well, and every call this turn noted with no row."""
         with self._lock:
             mine = tuple(
                 e.access for e in self._entries if e.run == run and e.access is not None
             )
-        return (*self.earlier.runs.get(run, ()), *mine)
+            unrecorded = tuple(self._unrecorded.get(run, ()))
+        return (*self.earlier.runs.get(run, ()), *mine, *unrecorded)
 
     @property
     def entries(self) -> tuple[LedgerEntry, ...]:
