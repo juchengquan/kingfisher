@@ -71,22 +71,9 @@ def test_the_default_session_is_listed_and_reaped_like_any_other(cfg):
     kf.run(Request(task="the number is forty"))
 
     assert [info.id for info in kf.sessions()] == [DEFAULT]
-    assert kf.reap(older_than_seconds=0, now=time.time()).removed == (DEFAULT,)
+    assert kf.reap(now=time.time()).removed == (DEFAULT,)
     assert kf.run(Request(task="and now?")).session_id == DEFAULT
     assert "forty" not in _sent(kf), "the conversation outlived its session"
-
-
-def test_the_idle_clock_is_the_last_turn(cfg):
-    """`mark_used` touching the session's folder is its clock, so a turn has to move it
-    and a sweep has to read it -- or a session in daily use is reaped as idle.
-    """
-    kf = _service(cfg)
-    kf.run(Request(task="go"))
-    os.utime(cfg.workspace / "sessions" / DEFAULT, (1_000, 1_000))
-
-    assert kf.reap(older_than_seconds=3600, now=time.time()).removed == (DEFAULT,)
-    kf.run(Request(task="back again"))
-    assert kf.reap(older_than_seconds=3600, now=time.time()).removed == ()
 
 
 # -- a request naming one ----------------------------------------------------

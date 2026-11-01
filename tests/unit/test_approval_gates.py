@@ -889,7 +889,7 @@ def test_a_pause_nobody_answers_is_swept_with_its_session(cfg):
     directory = _session_dir(cfg, paused.session_id)
     assert (directory / PAUSED).is_file(), "nothing was left waiting, so nothing is swept"
 
-    swept = kf.reap(older_than_seconds=0, now=time.time())
+    swept = kf.reap(now=time.time())
 
     assert paused.session_id in swept.removed
     assert not directory.exists()

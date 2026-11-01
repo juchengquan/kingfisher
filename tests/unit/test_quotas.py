@@ -271,24 +271,6 @@ def test_session_bytes_counts_everything_the_session_holds(cfg, session_dir):
     assert session_bytes(session_dir) >= 150
 
 
-# -- the idle bound -------------------------------------------------------
-
-
-def test_reap_falls_back_to_the_configured_ttl(cfg):
-    """A janitor that does not want to restate the policy on every call."""
-    kf = Kingfisher(
-        replace(cfg, session_ttl_s=60),
-        graph=StubAgent("ok"),
-        sessions=LocalSessions(),
-    )
-    import os
-
-    idle = start(cfg, "idle")
-    os.utime(cfg.workspace / "sessions" / idle, (1_000, 1_000))
-
-    assert kf.reap(now=10_000).removed == (idle,)
-
-
 def test_a_session_over_budget_is_refused_before_its_inputs_are_placed(cfg, tmp_path):
     """The two features meet here, and the order is the point."""
     supplied = tmp_path / "report.pdf"

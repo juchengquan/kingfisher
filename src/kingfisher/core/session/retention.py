@@ -10,9 +10,8 @@ from enum import Enum
 @dataclass(frozen=True)
 class SweepResult:
     removed: tuple[str, ...]
+    #: Sessions a running turn held, and so spared.
     kept: int
-    #: How many of `kept` a running turn spared.
-    busy: int = 0
     #: Sessions that could not be fully removed, with why: surfaced, not swallowed.
     failures: tuple[str, ...] = ()
 
@@ -23,9 +22,6 @@ class SweepPlan:
 
     doomed: tuple[str, ...]
     kept: int
-    #: How many of `kept` a running turn spared rather than their age, which `kept`
-    #: cannot tell apart: blaming age for a busy session contradicts `kingfisher sessions`.
-    busy: int = 0
 
 
 class Spared(Enum):
@@ -34,24 +30,11 @@ class Spared(Enum):
     BUSY = "busy"
 
 
-def expired(
-    entries: Sequence[tuple[str, float]],
-    older_than_seconds: float,
-    now: float,
-    *,
-    busy: Sequence[str] = (),
-) -> SweepPlan:
-    """Name every session untouched for longer than `older_than_seconds`."""
+def unheld(names: Sequence[str], *, busy: Sequence[str] = ()) -> SweepPlan:
+    """Name every session a running turn does not hold."""
     running = set(busy)
-    doomed = tuple(
-        name
-        for name, modified in entries
-        if name not in running and now - modified > older_than_seconds
-    )
-    spared = tuple(name for name, _ in entries if name in running)
-    return SweepPlan(
-        doomed=doomed, kept=len(entries) - len(doomed), busy=len(spared)
-    )
+    doomed = tuple(name for name in names if name not in running)
+    return SweepPlan(doomed=doomed, kept=len(names) - len(doomed))
 
 
 def apply(
@@ -73,8 +56,5 @@ def apply(
             removed.append(name)
 
     return SweepResult(
-        removed=tuple(removed),
-        kept=sweep_plan.kept + late,
-        busy=sweep_plan.busy + late,
-        failures=tuple(failures),
+        removed=tuple(removed), kept=sweep_plan.kept + late, failures=tuple(failures)
     )

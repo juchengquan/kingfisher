@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from kingfisher import WorkspacePaths
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.layout import (
@@ -141,7 +139,7 @@ def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):
     assert not (workspace / ".gitignore").exists()
 
 
-def sweep(workspace, keep, sessions=None):
+def sweep(workspace, sessions=None):
     """`reap`, over the sessions under this workspace."""
     import time
 
@@ -153,30 +151,7 @@ def sweep(workspace, keep, sessions=None):
     definitions = ensure_definitions(workspace.parent / "definitions")
     cfg = Config(workspace=workspace, definitions=definitions, models=FAKE_CATALOGUE)
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=sessions or LocalSessions())
-    return kf.reap(older_than_seconds=keep, now=time.time())
-
-
-def test_sweep_keeps_the_newest_and_deletes_the_idle(workspace):
-    """A swept session loses its directory, and one still in use keeps it."""
-    import time
-
-    now = time.time()
-    for name, age in (("oldest", 10_000), ("middle", 20), ("newest", 1)):
-        d = workspace / "sessions" / name
-        d.mkdir(parents=True)
-        os.utime(d, (now - age, now - age))
-
-    result = sweep(workspace, keep=100)  # idle over 100s goes
-
-    assert result.removed == ("oldest",)
-    assert not (workspace / "sessions" / "oldest").exists()
-    assert (workspace / "sessions" / "newest").exists()
-
-
-def test_sweep_is_a_noop_when_under_the_limit(workspace):
-    (workspace / "sessions" / "only").mkdir(parents=True)
-    result = sweep(workspace, keep=10_000)
-    assert result.removed == ()
+    return kf.reap(now=time.time())
 
 
 def test_sweep_failures_are_reported_not_swallowed(workspace):
@@ -191,7 +166,7 @@ def test_sweep_failures_are_reported_not_swallowed(workspace):
     for name in ("a", "b"):
         (workspace / "sessions" / name).mkdir(parents=True)
 
-    result = sweep(workspace, keep=0, sessions=Refusing())
+    result = sweep(workspace, sessions=Refusing())
 
     assert result.removed == ()
     assert len(result.failures) == 2

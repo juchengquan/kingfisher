@@ -957,7 +957,7 @@ def test_a_deployment_on_current_names_hears_nothing(cfg, monkeypatch):
     monkeypatch.delenv("KINGFISHER_SKILLS", raising=False)
     monkeypatch.setenv("KINGFISHER_SKILLS_ENABLED", "true")
     # Shares its stem with both retired prefixes, and is read.
-    monkeypatch.setenv("KINGFISHER_SESSION_TTL_S", "3600")
+    monkeypatch.setenv("KINGFISHER_SESSION_MAX_BYTES", "1000000")
 
     assert "retired settings" not in {c.name for c in examine(cfg)}
 

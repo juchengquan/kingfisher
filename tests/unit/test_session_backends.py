@@ -453,10 +453,8 @@ def test_the_command_lists_what_the_named_backend_keeps(told_about_a_remote_back
 def test_the_command_reaps_where_the_named_backend_keeps_them(told_about_a_remote_backend):
     cfg = told_about_a_remote_backend
     remote_backends().open(cfg, "old")
-    stale = time.time() - 10_000
-    os.utime(REMOTE[-1] / "old", (stale, stale))
 
-    assert main(["reap", "--older-than", "1h"]) == 0
+    assert main(["reap", "--all"]) == 0
 
     assert not (REMOTE[-1] / "old").exists()
 

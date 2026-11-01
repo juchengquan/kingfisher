@@ -319,9 +319,6 @@ class Config:
     # only its ledger row. Unset keeps every one: what a session can do without is the
     # deployment's to judge.
     keep_results_rounds: int | None = None
-    # How long an idle session survives a `reap` that names no age. An age, not a count
-    # kept: a count would weigh every caller's sessions against each other.
-    session_ttl_s: int = 7 * 24 * 3600
     # Each agent turn costs 2-3 graph steps. 60 cut a real 1,000-row analysis off
     # mid-step at 20 turns.
     recursion_limit: int = 150
