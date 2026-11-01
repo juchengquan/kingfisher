@@ -130,7 +130,7 @@ def test_the_agent_runs_the_model_its_file_names(cfg, session_dir):
 # -- naming one -------------------------------------------------------------
 
 
-def test_a_request_that_names_no_agent_is_refused_once_the_workspace_has_any(cfg):
+def test_a_request_that_names_no_agent_is_refused_once_the_definitions_have_any(cfg):
     """No default and no implicit one."""
     _agents(cfg, NARROW, CHEAP)
     service = Kingfisher(cfg, sessions=LocalSessions())
@@ -139,7 +139,7 @@ def test_a_request_that_names_no_agent_is_refused_once_the_workspace_has_any(cfg
         agent_named(service, None)
 
 
-def test_the_refusal_lists_what_the_workspace_actually_offers(cfg):
+def test_the_refusal_lists_what_the_definitions_actually_offer(cfg):
     _agents(cfg, NARROW, CHEAP)
     service = Kingfisher(cfg, sessions=LocalSessions())
 
@@ -147,7 +147,7 @@ def test_the_refusal_lists_what_the_workspace_actually_offers(cfg):
         agent_named(service, "analyst")
 
 
-def test_an_empty_workspace_is_told_how_to_get_one(cfg):
+def test_an_empty_definitions_folder_is_told_how_to_get_one(cfg):
     """The other half of that message."""
     service = Kingfisher(cfg, sessions=LocalSessions())
 

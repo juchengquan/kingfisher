@@ -460,7 +460,7 @@ def test_a_carried_skills_folder_is_not_reported_as_abandoned(cfg):
 # -- visible, not grantable --------------------------------------------------
 
 
-def test_the_listing_says_a_carried_tool_is_not_in_this_workspace(
+def test_the_listing_says_a_carried_tool_is_not_in_these_definitions(
     workspace_with_presets,
 ):
     """Both shapes print their private tools the same way, and the names alone do not
@@ -563,7 +563,7 @@ ONE_AXIS_OPEN = {
 
 
 @pytest.mark.parametrize("filename, text", ONE_AXIS_OPEN.values(), ids=ONE_AXIS_OPEN)
-def test_a_subagent_with_one_axis_open_builds_in_a_workspace_with_no_tools(
+def test_a_subagent_with_one_axis_open_builds_where_the_definitions_offer_no_tools(
     cfg, session_dir, filename, text
 ):
     """A request naming only the subagent raised `ValueError: one tool axis resolved
@@ -571,7 +571,7 @@ def test_a_subagent_with_one_axis_open_builds_in_a_workspace_with_no_tools(
     off the probe, and "every built-in plus none" has no spelling as an allowlist.
     """
     for kind in ("skills", "subagents", "tools"):
-        (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
+        (cfg.definitions / kind).mkdir(parents=True, exist_ok=True)
     (cfg.definitions / "subagents" / filename).write_text(text, encoding="utf-8")
 
     subagent = built(cfg, session_dir, Capabilities(subagents=("surveyor",)))

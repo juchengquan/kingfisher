@@ -252,7 +252,7 @@ def test_seeding_never_writes_the_catalogue_itself(cfg):
     assert catalogue.read_text(encoding="utf-8") == "mine: do not touch\n"
 
 
-def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path):
+def test_seeding_never_carries_bytecode_into_the_definitions(cfg, tmp_path):
     """The guard that only had to hold one level deep until a preset tool could be a
     package.
     """

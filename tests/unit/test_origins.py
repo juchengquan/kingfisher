@@ -14,7 +14,7 @@ from kingfisher.plugins import LocalSessions
 from tests.unit.test_backend_seam import Elsewhere
 
 
-def test_a_plain_workspace_reports_every_catalogue_as_derived(cfg):
+def test_a_plain_definitions_folder_reports_every_catalogue_as_derived(cfg):
     """Every catalogue, and `tools` among them.
 
     Named individually rather than looped, because the bug was one kind being silently

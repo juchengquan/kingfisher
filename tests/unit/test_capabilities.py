@@ -237,7 +237,7 @@ def test_a_grant_of_nothing_withholds_everything():
     assert withheld(None, offered=("a", "b")) == ("a", "b")
 
 
-def test_it_names_what_the_workspace_has_and_the_grant_does_not():
+def test_it_names_what_the_definitions_offer_and_the_grant_does_not():
     assert withheld(("a",), offered=("a", "b", "c")) == ("b", "c")
 
 

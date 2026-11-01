@@ -248,7 +248,7 @@ def test_one_file_listing_a_middleware_twice_says_so(cfg):
         Definitions.from_config(cfg).warm()
 
 
-def test_a_workspace_with_no_middleware_still_warms(cfg):
+def test_definitions_with_no_middleware_still_warm(cfg):
     """The control beside it: a definitions folder with no `middlewares/` answers an
     empty mapping rather than raising, so the read above must not turn "none offered"
     into a failure.
@@ -287,7 +287,7 @@ def test_a_tool_wearing_a_builtin_name_fails_at_startup(cfg):
         Kingfisher(cfg, sessions=LocalSessions())
 
 
-def test_a_workspace_whose_tools_clash_with_nothing_still_starts(cfg):
+def test_definitions_whose_tools_clash_with_nothing_still_start(cfg):
     """The control beside it: the probe has to tell a clash from a tool.
 
     Without this the refusal above passes just as well if startup refused every
@@ -299,7 +299,7 @@ def test_a_workspace_whose_tools_clash_with_nothing_still_starts(cfg):
     Kingfisher(cfg, sessions=LocalSessions())
 
 
-def test_a_workspace_with_no_tools_never_assembles_the_probe(cfg, monkeypatch):
+def test_definitions_with_no_tools_never_assemble_the_probe(cfg, monkeypatch):
     """What keeps the cost where it belongs.
 
     Nothing can shadow a built-in when the definitions offer no tools, so the graph

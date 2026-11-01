@@ -898,7 +898,7 @@ def test_every_middleware_a_shipped_definition_names_is_in_the_wiring_block(ship
     )
 
 
-def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(shipped):
+def test_the_middleware_example_is_a_definition_kind_the_definitions_can_load(shipped):
     """It stopped being the one kind folder the definitions could not have.
 
     This asserted the opposite until 2026-09-07, on the argument that a
@@ -968,7 +968,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     assert "subagents/reviewer.yaml" in done.written
 
 
-def test_a_seeded_workspace_still_loads_once_a_policy_exists(
+def test_seeded_definitions_still_load_once_a_policy_exists(
     cfg, at_the_command_line, monkeypatch, shipped, capsys
 ):
     """The whole point of the skip list, end to end and through the command: a deployment
@@ -1030,7 +1030,7 @@ def test_seed_copies_the_middleware_examples_into_a_definitions_folder(shipped, 
     assert "agents/general.yaml" not in done.written
 
 
-def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_path):
+def test_seeded_definitions_hold_nothing_that_names_middleware(shipped, tmp_path):
     """The property the rule exists for, checked over the result rather than the inputs."""
     from kingfisher.core.definitions.seeding import middleware_named, seed
 
@@ -1339,7 +1339,7 @@ def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
     assert "__interrupt__" in out, "the example ran a shell command without stopping"
 
 
-def test_assistant_builds_from_the_workspace_alone(cfg, session_dir, shipped):
+def test_assistant_builds_from_the_definitions_alone(cfg, session_dir, shipped):
     """A shipped definition naming middleware has to build with no
     `middleware_registry=` at all, from `middlewares/` alone.
 

@@ -215,7 +215,7 @@ def test_a_delegation_cycle_is_carried_like_any_other_failure(cfg):
     assert found.tools_error is None, "one catalogue must not take the other down"
 
 
-def test_a_workspace_with_no_cycle_reports_none(cfg):
+def test_definitions_with_no_cycle_report_none(cfg):
     """The negative control."""
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     for name, helper in (("a", "b"), ("b", "c")):

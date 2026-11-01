@@ -150,7 +150,7 @@ def _guard_in(built) -> GuardedCallsMiddleware | None:
     return None
 
 
-def test_the_build_guards_the_names_the_workspace_defined(cfg, session_dir):
+def test_the_build_guards_the_names_the_definitions_offer(cfg, session_dir):
     """A middleware nobody installs guards nothing."""
     from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import tools_dir
@@ -165,7 +165,7 @@ def test_the_build_guards_the_names_the_workspace_defined(cfg, session_dir):
     assert "probe_one" in guard.names
 
 
-def test_a_workspace_with_no_tools_hands_back_no_exception_of_its_own(cfg, session_dir):
+def test_definitions_with_no_tools_hand_back_no_exception_of_their_own(cfg, session_dir):
     """The guard handed names when the definitions offered no tools, so some other tool's
     exception became a failed result rather than its own report."""
     from kingfisher.core.agent.assembly import build_agent

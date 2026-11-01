@@ -391,7 +391,7 @@ def test_a_gate_on_a_tool_only_a_compiled_subagent_holds_is_refused(cfg, session
         _run(cfg, session_dir, _agent(interrupt_on="[probe]"))
 
 
-def test_the_same_workspace_still_gates_a_built_in(cfg, session_dir):
+def test_the_same_definitions_still_gate_a_built_in(cfg, session_dir):
     """The control: a compiled subagent is handed offered tools and no built-in, so
     its presence must not cost the deployment the gates it can have.
     """

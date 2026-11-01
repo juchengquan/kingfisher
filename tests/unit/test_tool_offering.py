@@ -97,7 +97,7 @@ def test_a_grant_cannot_reach_past_what_is_offered():
 # -- what a subagent may call ----------------------------------------------
 
 
-def test_a_subagent_is_narrowed_by_the_grant_not_by_the_workspace():
+def test_a_subagent_is_narrowed_by_the_grant_not_by_the_definitions():
     """The mistake this nearly shipped as an `Offering` method."""
     allowed = ceiling(
         ALL,

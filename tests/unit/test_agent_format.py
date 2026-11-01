@@ -524,8 +524,8 @@ def test_the_starter_names_where_agents_are_read_from(cfg, tmp_path):
     assert f"# {elsewhere / 'helper.yaml'}" in said
 
 
-def test_a_workspace_that_has_agents_is_not_lectured(cfg):
-    """The starter is for an empty workspace."""
+def test_definitions_that_have_agents_are_not_lectured(cfg):
+    """The starter is for an empty definitions folder."""
     from kingfisher import Kingfisher
     from kingfisher.plugins import LocalSessions
     from tests.conftest import an_agent
