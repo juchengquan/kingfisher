@@ -19,6 +19,7 @@ from .recorded import readable_size
 from .results import answer_in, answered
 
 if TYPE_CHECKING:
+    from kingfisher.core.agent.models import SummarizerCount
     from kingfisher.core.interfaces import PdfAttachments
 
 _log = logging.getLogger(__name__)
@@ -46,10 +47,34 @@ PDF = "application/pdf"
 _CARRIERS = frozenset({"file", "image", "audio", "video"})
 
 
-def pdf_allowance(trigger: int) -> int:
+#: The sizes, in bytes, of two PDFs the summariser's counter is asked about: a byte's cost
+#: is the difference, so the message carrying each cancels out.
+_PROBE_BYTES = (1_000, 61_000)
+
+
+def pdf_allowance(trigger: int, count: SummarizerCount) -> int:
     """The PDF bytes one turn may hold open on a graph summarised at `trigger` tokens: half
-    of it, at the summariser's token per four characters of base64, which carry three bytes."""
-    return trigger * 3 // 2
+    of it, at what that graph's summariser charges a byte of PDF.
+
+    Asked of its counter, not assumed: langchain counts four characters of base64 a token
+    on most classes and 3.3 on an Anthropic one, where a fixed four let PDFs fill 60% of
+    the trigger. Unscaled, as a reply's usage would scale it later in the turn.
+    """
+    small, large = (count.each([_carrying_pdf(size)]) for size in _PROBE_BYTES)
+    # A counter that charges a PDF nothing cannot be filled by one; held to the four
+    # characters a token this assumed before, rather than dividing by nothing.
+    if large <= small:
+        return trigger * 3 // 2
+    # Whole numbers throughout: four characters a token gives exactly the old figure.
+    return trigger * (_PROBE_BYTES[1] - _PROBE_BYTES[0]) // (2 * (large - small))
+
+
+def _carrying_pdf(size: int) -> ToolMessage:
+    """A tool's answer carrying a PDF of `size` bytes, in base64 as a tool hands one over."""
+    return ToolMessage(
+        content=[{"type": "file", "base64": "A" * (size * 4 // 3), "mime_type": PDF}],
+        tool_call_id="pdf",
+    )
 
 
 @dataclass(frozen=True)
@@ -162,11 +187,14 @@ def _image(where: str, chars: int, beside: int) -> str | None:
 class AttachmentsMiddleware(AgentMiddleware):
     """Replace a file a tool's result may not hand the model with advice."""
 
-    def __init__(self, trigger: int, pdfs: PdfAttachments | None = None) -> None:
-        """`trigger` is where this graph's model is summarised, which sizes the PDFs its
-        turn may hold open; `pdfs` is asked what to hand over in place of each PDF."""
+    def __init__(
+        self, trigger: int, count: SummarizerCount, pdfs: PdfAttachments | None = None
+    ) -> None:
+        """`trigger` is where this graph's model is summarised and `count` how its
+        summariser counts, which size the PDFs its turn may hold open; `pdfs` is asked
+        what to hand over in place of each PDF."""
         super().__init__()
-        self._pdf_bytes = pdf_allowance(trigger)
+        self._pdf_bytes = pdf_allowance(trigger, count)
         self._pdfs = pdfs
         # What the model was last offered. `None` until a model call has passed: a call
         # replayed on a resume follows none, and is not told to call a tool it may not hold.

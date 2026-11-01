@@ -337,10 +337,13 @@ def test_every_graph_holds_the_pdfs_its_own_summarizer_lets_through(cfg, session
     built = _built(cfg, session_dir, agent=_spec(cfg))
 
     graphs = {spec["name"]: spec["middleware"] for spec in built.subagents or ()}
-    assert _allowance(built.middleware) == pdf_allowance(EARLY)
-    assert _allowance(graphs["general-purpose"]) == pdf_allowance(EARLY)
-    assert _allowance(graphs["helper"]) == pdf_allowance(EARLY)
-    assert _allowance(graphs["plain"]) == pdf_allowance(170_000), "a subagent naming none"
+    # At the rate the running model's counter charges, which is what each graph reads.
+    count = summarizer_count(built.model)
+    assert _allowance(built.middleware) == pdf_allowance(EARLY, count)
+    assert _allowance(graphs["general-purpose"]) == pdf_allowance(EARLY, count)
+    assert _allowance(graphs["helper"]) == pdf_allowance(EARLY, count)
+    plain = pdf_allowance(170_000, count)
+    assert _allowance(graphs["plain"]) == plain, "a subagent naming none"
 
 
 def test_a_turn_refuses_a_pdf_its_summarizer_would_fire_on(cfg, session_dir):

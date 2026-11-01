@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A turn holds less PDF on an Anthropic-class model, after #1173
+
+- **A turn's PDFs are charged as its summariser counts them.** On an Anthropic-class
+  model, MiniMax's Anthropic-compatible endpoint included, langchain counts 3.3
+  characters of base64 a token rather than 4, so a turn holds about 18% less PDF: 185 KB
+  is 152 KB on claude-sonnet-4-5, 1.2 MB is 1.0 MB on MiniMax-M3. A model counted at four
+  keeps its figure. A `PdfAttachments` plugin sees the new figure as `allowance`.
+
 ## `reap` takes a session or `--all`, after #1171
 
 - **`kingfisher reap` needs `--session ID` or `--all`.** Bare, it swept every session

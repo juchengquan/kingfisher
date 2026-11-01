@@ -19,6 +19,7 @@ from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
 from kingfisher.plugins import backend_at
 from tests.conftest import (
+    FAKE_COUNT,
     STANDING_UNWIRED,
     FakeToolCallingModel,
     subagent_of,
@@ -158,6 +159,7 @@ def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
             execution_timeout_s=cfg.execution_timeout_s,
             models=cfg.models,
             trigger=170_000,
+            count=FAKE_COUNT,
             **unwired(STANDING_UNWIRED, **given),
         )
 
@@ -180,6 +182,7 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
         execution_timeout_s=cfg.execution_timeout_s,
         models=cfg.models,
         trigger=170_000,
+        count=FAKE_COUNT,
         **unwired(STANDING_UNWIRED, tools=("read_file",)),
     )
     searched: list[str] = []

@@ -24,6 +24,7 @@ from kingfisher.core.agent.middlewares.attachments import (
     MAX_IMAGE_CHARS,
     MAX_TURN_IMAGE_CHARS,
     MB,
+    PDF,
     AttachmentsMiddleware,
     pdf_allowance,
 )
@@ -31,7 +32,7 @@ from kingfisher.core.agent.middlewares.recorded import readable_size
 from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
-from kingfisher.core.agent.models import summarizer_trigger
+from kingfisher.core.agent.models import SummarizerCount, summarizer_count, summarizer_trigger
 from kingfisher.core.interfaces import PdfAttachments
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
@@ -39,6 +40,7 @@ from kingfisher.plugins import LocalSessions, ReturnedPdf
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
     EVERY_TOOL,
+    FAKE_COUNT,
     STANDING_UNWIRED,
     FakeToolCallingModel,
     a_pdf,
@@ -357,6 +359,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
         execution_timeout_s=cfg.execution_timeout_s,
         models=cfg.models,
         trigger=UNPROFILED,
+        count=FAKE_COUNT,
         **unwired(STANDING_UNWIRED, recorder=recorder),
     )
     call = {"name": "export_pdf", "args": {"note": "x"}, "id": "c1"}
@@ -376,9 +379,41 @@ def test_the_guide_states_the_limits_the_guard_applies():
         (repository_root() / "docs" / "guides" / "tools.md").read_text(encoding="utf-8").split()
     )
 
-    assert f"{readable_size(pdf_allowance(UNPROFILED))} on a model with no profile" in guide
+    unprofiled = readable_size(pdf_allowance(UNPROFILED, FAKE_COUNT))
+    assert f"{unprofiled} on a model with no profile" in guide
     assert f"an image over {MAX_IMAGE_CHARS // MB} MB of base64" in guide
     assert f"past {MAX_TURN_IMAGE_CHARS // MB} MB of images in the turn" in guide
+
+
+def _pdf_answer(size: int) -> ToolMessage:
+    return ToolMessage(
+        content=[{"type": "file", "base64": "A" * (size * 4 // 3), "mime_type": PDF}],
+        tool_call_id="c1",
+    )
+
+
+def test_a_turns_pdfs_fill_half_the_trigger_as_its_summariser_counts_them():
+    """Held to four characters of base64 a token, PDFs filled 60% of the trigger on an
+    Anthropic model, which langchain counts at 3.3, so the summariser fired on a turn
+    still inside what it was allowed.
+    """
+    from langchain_anthropic import ChatAnthropic
+
+    model = ChatAnthropic(model="a-gateway-model", api_key="sk-not-real")
+    count, trigger = summarizer_count(model), summarizer_trigger(model)
+
+    allowed = pdf_allowance(trigger, count)
+    charged = count.each([_pdf_answer(allowed)]) - count.each([_pdf_answer(0)])
+
+    assert trigger // 2 - 2 <= charged <= trigger // 2
+
+
+def test_a_summariser_that_counts_no_pdf_still_builds():
+    """A deployment's counter that skips file blocks charges a PDF nothing, and dividing
+    the trigger by that would fail the build of every graph it summarises."""
+    flat = SummarizerCount(whole=lambda messages: 7, each=lambda messages: 7, tools=False)
+
+    assert pdf_allowance(170_000, flat) == 255_000
 
 
 def test_a_slice_pdf_pages_saves_is_handed_over_whole(cfg, session_dir):
@@ -492,7 +527,7 @@ def test_another_run_calling_its_model_leaves_this_runs_tally_alone():
     """Reset at every model call, the tally of one run's calls in flight is wiped when a
     second run of the same subagent calls its model, as two `task` calls at once do, and
     the first run's next PDF goes out past the total."""
-    guard = AttachmentsMiddleware(UNPROFILED)
+    guard = AttachmentsMiddleware(UNPROFILED, FAKE_COUNT)
 
     def asking(*ids: str, message: str) -> list:
         calls = [{"name": "export_pdf", "args": {}, "id": one} for one in ids]
@@ -620,6 +655,7 @@ def _stacked(cfg, session_dir, pdfs) -> tuple[list, Ledger]:
         execution_timeout_s=cfg.execution_timeout_s,
         models=cfg.models,
         trigger=UNPROFILED,
+        count=FAKE_COUNT,
         **unwired(STANDING_UNWIRED, recorder=recorder, pdf_attachments=pdfs),
     )
     return stack, ledger
@@ -652,7 +688,7 @@ def test_a_plugin_answering_none_leaves_every_verdict_as_it_was(cfg, session_dir
     assert [(one.tool, one.call_id, one.path) for one in asking.asked] == [
         ("read_file", f"c{n}", f"/inputs/p{n}.pdf") for n in (1, 2, 3)
     ]
-    assert {one.allowance for one in asking.asked} == {pdf_allowance(UNPROFILED)}
+    assert {one.allowance for one in asking.asked} == {pdf_allowance(UNPROFILED, FAKE_COUNT)}
     assert first.read() == (session_dir / "inputs" / "p1.pdf").read_bytes()
 
 

@@ -2295,6 +2295,12 @@ results' text. Bytes, because the summarizer counts them and pages would mean pa
 PDF a tool returns. By type, because a 1 MB PDF in an `image` block, or inside a
 `Command`, was handed over whole.
 
+*Since 2026-11-01 a PDF is charged at what that summariser's own counter charges one*,
+asked of it with two PDFs of known size, rather than at four characters a token.
+langchain counts 3.3 on an Anthropic class, where the fixed four let a turn's PDFs fill
+60% of the trigger: claude-sonnet-4-5's 185 KB is 152 KB, and MiniMax-M3, which runs on
+that class, holds 1.0 MB. A counter that charges a PDF nothing is held to the four.
+
 **An image over 5 MB of base64, or past 10 MB of them in a turn.** 5 MB is what a provider
 measures, and the smallest limit: Bedrock and Google Cloud take 5 MB an image, Anthropic's
 API 10. Past it the request is refused, and every later one while the image stays in the
