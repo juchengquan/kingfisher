@@ -111,7 +111,7 @@ def test_a_builtin_is_listed_without_a_file(cfg):
     assert listing.splitlines()[-1].strip() == "read_file"
 
 
-def test_an_empty_workspace_says_so_rather_than_printing_nothing(cfg):
+def test_empty_definitions_say_so_rather_than_printing_nothing(cfg):
     """A refusal that trails off after "the definitions offer" reads as a bug in
     kingfisher rather than an empty catalogue.
     """

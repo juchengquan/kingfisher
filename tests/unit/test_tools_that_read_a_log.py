@@ -213,7 +213,7 @@ def test_the_caps_are_bounds_rather_than_budgets(which, logs):
     assert low <= held <= high, f"{const} is {held}"
 
 
-def test_both_tools_are_found_where_a_workspace_finds_them(shipped):
+def test_both_tools_are_found_where_the_definitions_find_them(shipped):
     """They live in a folder of their own, and a walk that found neither would pass
     every rule above by having no cases.
     """

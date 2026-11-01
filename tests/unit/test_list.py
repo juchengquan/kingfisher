@@ -10,7 +10,7 @@ from kingfisher.cli.__main__ import main
 from tests.conftest import EVERY_TOOL, an_agent, subagents_dir
 
 
-def test_listing_reports_a_workspace_that_will_not_load(cfg, at_the_command_line, capsys):
+def test_listing_reports_definitions_that_will_not_load(cfg, at_the_command_line, capsys):
     """Non-zero, because a listing gets read by scripts."""
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
@@ -35,7 +35,7 @@ def test_definitions_with_no_agents_say_so_and_say_what_to_do(at_the_command_lin
     assert "a request must name one" in printed
 
 
-def test_a_workspace_holding_an_agent_does_not_say_none(cfg, at_the_command_line, capsys):
+def test_definitions_holding_an_agent_do_not_say_none(cfg, at_the_command_line, capsys):
     """So the rule above is not passing on a listing that says it whatever it holds."""
     from tests.conftest import an_agent
 
@@ -169,7 +169,7 @@ def test_the_json_carries_the_kind_and_a_path_a_script_can_open(cfg, tmp_path):
     assert origins["seed"] == {"kind": "relocated", "path": str(tmp_path)}
 
 
-def test_json_and_the_human_form_describe_the_same_workspace(cfg, at_the_command_line, capsys):
+def test_json_and_the_human_form_describe_the_same_definitions(cfg, at_the_command_line, capsys):
     """Two formats, one answer."""
     import json
 
@@ -180,7 +180,7 @@ def test_json_and_the_human_form_describe_the_same_workspace(cfg, at_the_command
     assert main(["list", "--json"]) == 0
     document = json.loads(capsys.readouterr().out)
 
-    # The workspace was seeded above, so both are populated -- asserted rather
+    # The definitions were seeded above, so both are populated -- asserted rather
     # than assumed, because two empty loops agree with each other perfectly and
     # this test's whole claim is that the two formats say the same thing.
     assert document["subagents"] and document["skills"]
@@ -198,7 +198,7 @@ def test_json_and_the_human_form_describe_the_same_workspace(cfg, at_the_command
     assert bool(document["audiences"]) == says_so
 
 
-def test_a_broken_workspace_is_non_zero_in_either_format(cfg, at_the_command_line, capsys):
+def test_broken_definitions_are_non_zero_in_either_format(cfg, at_the_command_line, capsys):
     """The exit code does not depend on the format, and the reason is in the document
     too -- so a script can find out either way round.
     """
@@ -282,7 +282,7 @@ def test_the_listing_says_what_a_compiled_subagent_costs(cfg):
     assert "not what it can call" in printed
 
 
-def test_a_workspace_with_no_compiled_subagent_says_nothing_about_them(cfg):
+def test_definitions_with_no_compiled_subagent_say_nothing_about_them(cfg):
     """The note is about a minority, so it stays absent for everyone else -- a caveat
     printed to every reader is one none of them reads.
     """
@@ -2019,7 +2019,7 @@ def test_naming_a_source_id_no_lock_uses_lists_only_what_is_unlocked(policied, c
     assert "narrow" not in capsys.readouterr().out
 
 
-def test_naming_a_caller_on_a_workspace_with_no_lock_is_refused(
+def test_naming_a_caller_on_definitions_with_no_lock_is_refused(
     cfg, at_the_command_line, capsys
 ):
     """The listing accepted any name where nothing narrows and printed the unscoped

@@ -1028,7 +1028,7 @@ def test_a_session_that_will_not_delete_does_not_fail_the_turn(cfg, monkeypatch,
     assert "not deleted" in capsys.readouterr().err
 
 
-def test_a_policied_workspace_still_deletes_the_session_its_run_used(
+def test_policied_definitions_still_delete_the_session_their_run_used(
     cfg, monkeypatch, capsys
 ):
     """`_discard` opens the session `UNSCOPED`: asked as nobody, definitions declaring

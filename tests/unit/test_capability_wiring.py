@@ -296,7 +296,7 @@ def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, session_dir):
     assert declared_subagents(built) == []
 
 
-def test_naming_something_the_workspace_lacks_fails_loudly(cfg, session_dir):
+def test_naming_something_the_definitions_lack_fails_loudly(cfg, session_dir):
     """Rather than running with quietly less than the caller asked for."""
     _write_skill(cfg.definitions, "tabular-qa")
     _write_subagent(cfg.definitions)

@@ -759,7 +759,7 @@ def test_a_definition_naming_a_real_tool_out_of_reach_is_not_refused(
     }, "the ceiling drops it, which is why naming it is not an error"
 
 
-def test_the_operator_is_still_told_every_tool_the_workspace_has(policied_with_a_typo):
+def test_the_operator_is_still_told_every_tool_the_definitions_offer(policied_with_a_typo):
     """`UNSCOPED` reaches everything, so nothing is narrowed and the refusal says what
     it always said. The control: a listing narrowed to nothing would pass the rule
     above, and a refusal naming no alternative is one somebody has to go and research.
