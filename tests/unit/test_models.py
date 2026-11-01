@@ -430,7 +430,7 @@ ASKED = {
     "list": (["list"], 1),
     "list-json": (["list", "--json"], 1),
     "sessions": (["sessions"], 0),
-    "reap": (["reap"], 0),
+    "reap": (["reap", "--all"], 0),
 }
 
 

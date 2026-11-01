@@ -76,7 +76,8 @@ model is sent, block by block and named for what wrote each, without calling it 
 `kf.sent(request)` from Python. `kingfisher seed` writes a starting
 definitions folder. `kingfisher sessions` shows what the workspace is holding — one line
 per session, how long it has been idle and what it costs — and `kingfisher reap`
-deletes the ones it is finished with. `kingfisher artifact --session ID
+deletes one with `--session ID`, or with `--all` every one no turn is running in.
+`kingfisher artifact --session ID
 outputs/report.html` fetches one file a turn produced, by the name the run
 reported — `kf.session(session_id).artifact(name)` from Python. What the turn's tools
 returned is on `RunResult.ledger`, one entry a result, a subagent's own calls

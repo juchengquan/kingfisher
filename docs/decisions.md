@@ -4278,7 +4278,8 @@ help: none sweeps a session a turn is running in. `SweepPlan` and `SweepResult` 
 busy count, the difference between the two `expired` calls `Disposal` already makes. Three
 sentences rather than one, because three things can be true: every survivor is busy, some
 are and the rest too young, or the age decided -- the control, held by the existing rule
-about which age is named. *(2026-10-11, from an architecture review.)*
+about which age is named. *(2026-10-11, from an architecture review. The age went on
+2026-11-01, and `busy` with it: one reason is left, and `kept` counts it.)*
 
 **A follow-up to a session that is gone is not refused; the caller asks first.** A turn
 naming a session that is not there makes it, so one swept or deleted between two turns
@@ -5052,6 +5053,17 @@ meaning a week, sweep every idle session. Bare `reap` sweeps at the TTL, so the 
 invocation is not the most destructive, and when it removes nothing it names what decided,
 because a silent sweep's next user deletes the directory by hand. *(2026-09-14.)*
 
+*Reversed: `reap` takes `--session ID` or `--all`, and nothing else.*
+`KINGFISHER_SESSION_TTL_S` and `--older-than` went with the age they set. Nothing ever
+swept on a schedule, so the TTL was only the age a bare `reap` guessed at, and to a
+deployment whose sessions continue across requests that guess is a conversation emptied
+under a client still using it: a turn naming a session that is gone makes it again, empty,
+which `ports.md` tells a caller to check with `kf.session` first. What survives of the entry
+is its point. A bare `reap` is refused, so the least-typed invocation still removes nothing,
+and `--all`, the destructive one, has to be typed. `SweepResult.busy` went too: with no
+age, every session a sweep keeps is one a turn held, which `kept` already counts.
+*(2026-11-01.)*
+
 **A run can be told to take its session with it, and only a finished turn is.**
 `--delete-session` and `run(delete_session=True)` dispose of the session once the turn
 ends. A turn stopped at a bound keeps it and says so: those leftovers are worth something,
@@ -5068,7 +5080,8 @@ sweep finding nothing is 1.65ms at fifty sessions and 33ms at a thousand, agains
 1.5-1.9s. On shape: a command that deletes as a side effect of being asked something else
 has a blast radius nobody reads in `kingfisher run --help`. `reap` is the janitor's door,
 and a schedule has cron and `reap()`. Nothing enforces the TTL, and `configuration.md` says
-so. The measurement was never the objection. *(2026-09-15.)*
+so. The measurement was never the objection. *(2026-09-15. There has been no TTL since
+2026-11-01, and `reap` sweeps no age: see the entry above.)*
 
 **`run` takes no flag that narrows capabilities.** Its flags say what runs, where, on what
 and for whom, and what happens around it. Narrowing is a deployment's concern with better
@@ -5138,7 +5151,8 @@ policy not in force. Answered in `inventory`, because the record is what both fo
 handed, and the agreement rule compares access fields both ways.
 
 **The idle column `sessions` prints is floored**, since it is read into `reap
---older-than`. *(2026-10-13, from an architecture review.)*
+--older-than`. *(2026-10-13, from an architecture review. Still floored once
+`--older-than` went on 2026-11-01: no session reads idler than it is.)*
 
 **`help` went, and `--seed`, `--from` and `--all` went off the driver.** `kingfisher help
 seed` was `kingfisher seed --help` byte for byte; the driver's seeding flags duplicated

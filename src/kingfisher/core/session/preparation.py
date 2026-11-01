@@ -133,7 +133,7 @@ class Preparation:
         # runs on the pins read again under the claim.
         first = (yield from pinned_in(harness)) if reads_pins else (None, None)
         self._refuse_out_of_reach(*first, held, session_id=session.id)
-        # A turn writes inside the session, which leaves the timestamp `retention.expired`
+        # A turn writes inside the session, which leaves the timestamp `kingfisher sessions`
         # reads alone. At the top of the turn, not the end: a turn that fails still happened.
         yield changing(self._sessions, "mark_used", cfg, session.id)
         # Before the other refusals: those read the session, and a turn arriving halfway

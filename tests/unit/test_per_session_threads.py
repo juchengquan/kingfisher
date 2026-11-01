@@ -124,7 +124,7 @@ def test_a_sweep_needs_no_thread_store_at_all(cfg):
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
     result = kf.run(Request("go"))
 
-    swept = kf.reap(older_than_seconds=0, now=time.time())
+    swept = kf.reap(now=time.time())
 
     assert result.session_id in swept.removed
     assert swept.failures == ()

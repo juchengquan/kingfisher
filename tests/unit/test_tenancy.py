@@ -365,7 +365,7 @@ def test_the_read_path_and_the_sweep_see_the_same_sessions(cfg):
         start(cfg, f"s{n}")
 
     listed = {s.id for s in kf.sessions()}
-    swept = set(kf.reap(older_than_seconds=0.0, now=time.time() + 10).removed)
+    swept = set(kf.reap(now=time.time() + 10).removed)
 
     assert listed == swept
     assert kf.sessions() == ()

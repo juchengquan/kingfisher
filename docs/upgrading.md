@@ -18,6 +18,20 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `reap` takes a session or `--all`, after #1171
+
+- **`kingfisher reap` needs `--session ID` or `--all`.** Bare, it swept every session
+  idle longer than `KINGFISHER_SESSION_TTL_S`; it is now refused, exits 2 and removes
+  nothing. `--all` removes every session no turn is running in, as `--older-than 0` did,
+  so a session a client continues between turns goes too.
+- **`--older-than` and `KINGFISHER_SESSION_TTL_S` are gone.** Nothing reads the setting,
+  and nothing warns where it is still set, so delete it. A scheduled `kingfisher reap`
+  now exits 2 until it says which of the two it means.
+- **`Kingfisher.reap` takes no age**: `reap(now=...)` removes every session no turn is
+  running in, and one session goes with `kf.session(id).delete()`. `Config.session_ttl_s`
+  is gone, and so is `SweepResult.busy`: a running turn is now the only thing that spares
+  a session, and `kept` counts those.
+
 ## The agent hears which inputs changed, after #1169
 
 - **A turn's message names every change to `/inputs` since the last turn**, not only the

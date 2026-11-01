@@ -858,192 +858,49 @@ def test_the_library_and_the_commands_agree_on_where_sessions_are(cfg, monkeypat
     assert through_the_library == through_a_command == Origin("supplied", None)
 
 
-def test_a_bare_number_is_refused_rather_than_read_as_seconds(cfg, monkeypatch, capsys):
-    """Somebody who means a week types `--older-than 7`, and seven *seconds* sweeps
-    every session no turn is running in. The plausible misreading is the destructive
-    one, so there is no reading at all.
+def test_reap_alone_removes_nothing(cfg, monkeypatch, capsys):
+    """Bare, `reap` swept at a seven-day TTL, and to a deployment whose sessions continue
+    across requests that emptied a conversation a client was still using. The
+    least-typed invocation must not be a destructive one, so it is refused.
     """
     _looking_at(monkeypatch, cfg)
     start(cfg, "s1")
 
     with pytest.raises(SystemExit) as exit_code:
-        main(["reap", "--older-than", "7"])
+        main(["reap"])
 
     assert exit_code.value.code == 2
-    assert "30m, 12h, 7d" in capsys.readouterr().err
+    refused = capsys.readouterr().err
+    assert "--session" in refused and "--all" in refused
     # The half that bites. A refusal that still swept would be no refusal.
     assert (cfg.workspace / "sessions" / "s1").is_dir()
 
 
-def test_zero_is_the_one_age_that_needs_no_unit(cfg, monkeypatch):
-    """Zero is the same number in every unit, and "all of them" is what a person
-    clearing a workspace by hand actually types.
-    """
-    import os
-
-    _looking_at(monkeypatch, cfg)
-    start(cfg, "s1")
-    os.utime(cfg.workspace / "sessions" / "s1", (1_000, 1_000))
-
-    assert main(["reap", "--older-than", "0"]) == 0
-    assert not (cfg.workspace / "sessions" / "s1").exists()
-
-
-def test_a_sweep_that_removes_nothing_names_what_decided(cfg, monkeypatch, capsys):
-    """The ordinary case on a workspace in daily use is that nothing has expired. A
-    command that deletes nothing and says nothing there is one whose next user deletes
-    the directory by hand, which leaves the conversation, the claim and whatever a
-    store kept exactly where they were.
-    """
-    _looking_at(monkeypatch, cfg)
-    start(cfg, "s1")
-
-    assert main(["reap"]) == 0
-
-    printed = capsys.readouterr().out
-    assert "KINGFISHER_SESSION_TTL_S" in printed
-    assert "--older-than" in printed
-    assert (cfg.workspace / "sessions" / "s1").is_dir()
-
-
-def test_an_age_you_asked_for_is_not_blamed_on_the_setting(cfg, monkeypatch, capsys):
-    """The message names where the number came from, and naming an environment variable
-    the caller never set sends them to edit the wrong thing.
-    """
-    _looking_at(monkeypatch, cfg)
-    start(cfg, "s1")
-
-    assert main(["reap", "--older-than", "7d"]) == 0
-
-    printed = capsys.readouterr().out
-    assert "7d" in printed
-    assert "KINGFISHER_SESSION_TTL_S" not in printed
-
-
-@pytest.mark.parametrize(
-    "ttl_said_shorter",
-    [(5400, "90m", "1h"), (30, "30s", "0"), (7 * 86400, "7d", "1d")],
-    ids=["90m", "30s", "a week"],
-)
-def test_the_age_that_spared_them_is_printed_as_it_was(
-    cfg, monkeypatch, capsys, ttl_said_shorter
-):
-    """Floored, a 5400s TTL read "longer than 1h" and a 30s one "longer than <1m", and the
-    hint was always `--older-than 1d`, longer than any TTL under a day."""
-    from dataclasses import replace
-
-    ttl, said, shorter = ttl_said_shorter
-    _looking_at(monkeypatch, replace(cfg, session_ttl_s=ttl))
-    start(cfg, "fresh")
-
-    assert main(["reap"]) == 0
-
-    printed = capsys.readouterr().out
-    assert f"idle longer than {said}, which is KINGFISHER_SESSION_TTL_S" in printed
-    assert f"kingfisher reap --older-than {shorter}\n" in printed
-
-
-def test_more_than_one_busy_session_are_busy(cfg, monkeypatch, capsys):
-    """It said "2 sessions is busy"."""
-    _looking_at(monkeypatch, cfg)
-    _busy_since(cfg, "held", hours=2)
-    _busy_since(cfg, "also", hours=2)
-    start(cfg, "fresh")
-
-    assert main(["reap", "--older-than", "30m"]) == 0
-
-    assert "2 sessions are busy" in capsys.readouterr().out
-
-
-def _busy_since(cfg, session_id: str, *, hours: float) -> str:
-    """A session a turn is holding, last touched `hours` ago."""
-    import os
-    import time
-
+def _busy(cfg, session_id: str) -> str:
+    """A session a turn is holding."""
     from tests.unit.test_tenancy import _claim
 
     start(cfg, session_id)
     _claim(cfg, session_id).write_text("held", encoding="utf-8")
-    old = time.time() - hours * 3600
-    os.utime(cfg.workspace / "sessions" / session_id, (old, old))
     return session_id
 
 
-def test_reap_names_the_turn_rather_than_the_age_that_did_not_decide(cfg, monkeypatch, capsys):
-    """`expired` folds a busy session into `kept`, so a sweep that removed nothing
-    blamed the age -- for a session `kingfisher sessions` prints as hours idle. Two
-    commands contradicting each other on one workspace, and advice that cannot work: no
-    age sweeps a session a turn is running in.
+def test_a_sweep_that_removes_nothing_says_a_turn_holds_it(cfg, monkeypatch, capsys):
+    """A command that deletes nothing and says nothing is one whose next user deletes the
+    directory by hand, which leaves the conversation, the claim and whatever a store kept
+    exactly where they were.
     """
     _looking_at(monkeypatch, cfg)
-    _busy_since(cfg, "held", hours=2)
+    _busy(cfg, "held")
 
-    assert main(["reap", "--older-than", "30m"]) == 0
+    assert main(["reap", "--all"]) == 0
 
-    printed = capsys.readouterr().out
-    assert "a turn is running in it" in printed
-    assert "idle longer than" not in printed, "the age did not decide this"
-
-
-def test_reap_names_both_reasons_where_both_applied(cfg, monkeypatch, capsys):
-    """One held by a turn and one simply too young. Naming only the age would be wrong
-    about the first, and naming only the turn wrong about the second.
-    """
-    _looking_at(monkeypatch, cfg)
-    _busy_since(cfg, "held", hours=2)
-    start(cfg, "fresh")
-
-    assert main(["reap", "--older-than", "30m"]) == 0
-
-    printed = capsys.readouterr().out
-    assert "1 session is busy" in printed
-    assert "none of the other 1 session here has been idle longer than 30m" in printed
+    assert "a turn is running in it" in capsys.readouterr().out
+    assert (cfg.workspace / "sessions" / "held").is_dir()
 
 
-def test_reap_still_blames_the_age_when_the_age_is_what_decided(cfg, monkeypatch, capsys):
-    """The control: a sweep over sessions no turn is holding must go on naming the age,
-    which is the only thing that spared them.
-    """
-    _looking_at(monkeypatch, cfg)
-    start(cfg, "fresh")
-
-    assert main(["reap", "--older-than", "30m"]) == 0
-
-    printed = capsys.readouterr().out
-    assert "idle longer than 30m" in printed
-    assert "busy" not in printed
-
-
-def test_the_idle_column_reads_straight_into_the_flag_it_claims_to(cfg, monkeypatch, capsys):
-    """`sessions --help` says the column is in the units `--older-than` takes, so a
-    listing reads into a sweep. Rounded, it did not: a session idle 1.6 days printed
-    `2d`, and `reap --older-than 2d` left it where it was -- the two commands
-    contradicting each other on one workspace, which is what the rule above exists to
-    keep them out of. 2.4 days printed `2d` as well, so one figure covered a session a
-    sweep would take and a session it would not.
-    """
-    import os
-    import time
-
-    _looking_at(monkeypatch, cfg)
-    start(cfg, "s-one")
-    old = time.time() - 1.6 * 86400
-    os.utime(cfg.workspace / "sessions" / "s-one", (old, old))
-
-    assert main(["sessions"]) == 0
-    printed = capsys.readouterr().out
-    assert "1d" in printed, f"the column rounded 1.6 days up: {printed!r}"
-
-    assert main(["reap", "--older-than", "1d"]) == 0
-    assert not (cfg.workspace / "sessions" / "s-one").exists(), (
-        "the column named an age the flag then declined to act on"
-    )
-
-
-def test_reaping_one_by_name_takes_it_whatever_its_age(cfg, monkeypatch, capsys):
-    """The id you are holding is the session you want gone, and the TTL has nothing to
-    say about it.
-    """
+def test_reaping_one_by_name_leaves_the_rest(cfg, monkeypatch, capsys):
+    """The id you are holding is the session you want gone, and only that one."""
     _looking_at(monkeypatch, cfg)
     start(cfg, "keep")
     start(cfg, "go")
@@ -1065,33 +922,33 @@ def test_an_id_that_names_nothing_is_refused_rather_than_called_done(cfg, monkey
     assert "nosuch" in capsys.readouterr().err
 
 
-def test_an_age_and_a_name_are_not_both_askable(cfg, monkeypatch):
-    """Two different questions. A command handed both would have to decide which one of
-    them it had been asked.
+def test_a_name_and_all_are_not_both_askable(cfg, monkeypatch):
+    """Two different questions, and the wider one deletes: a command handed both would
+    have to pick, and picking `--all` takes every session the name meant to spare.
     """
     _looking_at(monkeypatch, cfg)
+    start(cfg, "s1")
+    start(cfg, "s2")
 
     with pytest.raises(SystemExit) as exit_code:
-        main(["reap", "--older-than", "1d", "--session", "s1"])
+        main(["reap", "--all", "--session", "s1"])
 
     assert exit_code.value.code == 2
+    assert (cfg.workspace / "sessions" / "s2").is_dir()
 
 
 def test_a_session_that_will_not_go_exits_non_zero(cfg, monkeypatch, capsys):
     """A sweep that could not remove what it named is "did something, but not all",
     which is what 1 already means for `list` and for a turn stopped at a bound.
     """
-    import os
-
     _looking_at(monkeypatch, cfg)
     start(cfg, "stuck")
-    os.utime(cfg.workspace / "sessions" / "stuck", (1_000, 1_000))
     monkeypatch.setattr(
         "kingfisher.plugins.sessions.folders.LocalSessionDirs.remove_tree",
         lambda self, path: "directory not removed (Permission denied)",
     )
 
-    assert main(["reap", "--older-than", "1d"]) == 1
+    assert main(["reap", "--all"]) == 1
     assert "not reaped" in capsys.readouterr().err
 
 

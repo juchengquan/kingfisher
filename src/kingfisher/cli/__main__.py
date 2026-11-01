@@ -358,9 +358,6 @@ def build_parser() -> argparse.ArgumentParser:
             "Every session in the workspace, most recently used first, with how\n"
             "long it has been idle and what it holds on disk.\n"
             "\n"
-            "The idle column is in the units `reap --older-than` takes, so a\n"
-            "listing reads straight into a sweep.\n"
-            "\n"
             "The size is a walk per session -- about a millisecond each -- which\n"
             "a workspace holding thousands will feel.\n"
             "\n"
@@ -383,33 +380,30 @@ def build_parser() -> argparse.ArgumentParser:
             "conversation, the lock a turn holds -- through the sessions that\n"
             "keep it: those KINGFISHER_SESSIONS names, or <workspace>/sessions.\n"
             "\n"
-            "With nothing else said it sweeps whatever KINGFISHER_SESSION_TTL_S\n"
-            "calls expired -- seven days by default -- and spares any session\n"
-            "with a turn running in it.\n"
+            "--session removes one by name; --all removes every session no\n"
+            "turn is running in. One of the two is required, so the command\n"
+            "alone removes nothing.\n"
             "\n"
             "There is no --dry-run. `kingfisher sessions` is the preview: it\n"
-            "lists every session with the age this sweeps on."
+            "lists every session and how long it has been idle."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    # Exclusive: handed an age and a name, the command would have to pick a question.
-    chosen = sweeping.add_mutually_exclusive_group()
-    chosen.add_argument(
-        "--older-than",
-        type=_older_than,
-        metavar="AGE",
-        help=(
-            "sweep what has been idle this long instead: 30m, 12h, 7d -- or 0 "
-            "for every session no turn is running in"
-        ),
-    )
+    # Required: bare, the least-typed invocation would have to guess, and every guess
+    # but "nothing" deletes.
+    chosen = sweeping.add_mutually_exclusive_group(required=True)
     chosen.add_argument(
         "--session",
         metavar="ID",
         help=(
-            "reap this one by name, whatever its age -- and whether or not a "
-            "turn is running in it, which that turn will not survive"
+            "reap this one by name -- whether or not a turn is running in it, "
+            "which that turn will not survive"
         ),
+    )
+    chosen.add_argument(
+        "--all",
+        action="store_true",
+        help="reap every session no turn is running in",
     )
     return parser
 
@@ -819,27 +813,6 @@ def _names(raw: str) -> tuple[str, ...]:
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
-#: What a span may be written in, and the whole of it.
-AGES: dict[str, int] = {"m": 60, "h": 3600, "d": 24 * 3600}
-
-
-def _older_than(raw: str) -> float:
-    """`30m`, `12h`, `7d` as seconds. A bare number is refused.
-
-    Not read as seconds: `--older-than 7` meant as a week would sweep every idle session.
-    `0` is exempt, being the same in every unit.
-    """
-    text = raw.strip()
-    if text == "0":
-        return 0.0
-    unit = AGES.get(text[-1:])
-    number = text[:-1]
-    if unit is None or not number.replace(".", "", 1).isdigit():
-        msg = f"{raw!r} needs a unit: 30m, 12h, 7d -- or 0 for all of them"
-        raise argparse.ArgumentTypeError(msg)
-    return float(number) * unit
-
-
 def _list(*, as_document: bool = False, held: Held | None = None) -> int:
     """Print what the definitions offer."""
     cfg = config_from_env()
@@ -858,31 +831,11 @@ def _list(*, as_document: bool = False, held: Held | None = None) -> int:
 
 
 def _age(seconds: float) -> str:
-    """A span in the units `--older-than` takes, so a listing reads into a flag.
-
-    Floored: rounded, 1.6 days would print `2d` and `reap --older-than 2d` would spare it.
-    """
+    """A span in its largest whole unit, floored, so no session reads idler than it is."""
     for suffix, size in (("d", 24 * 3600), ("h", 3600), ("m", 60)):
         if seconds >= size:
             return f"{int(seconds // size)}{suffix}"
     return "<1m"
-
-
-def _exactly(seconds: float) -> str:
-    """A span in the largest unit that holds it whole: `_age` floors, and a threshold
-    printed floored names an age the sweep did not use."""
-    for suffix, size in (("d", 24 * 3600), ("h", 3600), ("m", 60)):
-        if seconds >= size and seconds % size == 0:
-            return f"{int(seconds // size)}{suffix}"
-    return f"{seconds:g}s"
-
-
-def _shorter(seconds: float) -> str:
-    """An `--older-than` below `seconds`, so the hint is never the age that removed nothing."""
-    for suffix, size in (("d", 24 * 3600), ("h", 3600), ("m", 60)):
-        if seconds > size:
-            return f"1{suffix}"
-    return "0"
 
 
 def _size(count: int) -> str:
@@ -946,56 +899,26 @@ def _sessions(*, as_document: bool = False) -> int:
 
 
 def _reap(args: argparse.Namespace) -> int:
-    """Delete sessions: one by name, or every one that has been idle too long."""
+    """Delete sessions: one by name, or every one no turn is running in."""
     cfg = config_from_env()
     kf = _configured(cfg)
     if args.session is not None:
         return _reap_one(kf, args.session)
 
-    # Read once, so the age that decided is the age printed.
-    age = kf.cfg.session_ttl_s if args.older_than is None else args.older_than
-    result = kf.reap(older_than_seconds=age, now=time.time())
-
+    result = kf.reap(now=time.time())
     for gone in result.removed:
         print(f"reaped {gone}")
     for failure in result.failures:
         print(f"not reaped -- {failure}", file=sys.stderr)
-
+    # Said, because a sweep that removes nothing reads as a broken one, and its next user
+    # deletes the directory by hand, leaving the conversation and claim behind.
     if not result.removed and not result.failures:
-        _nothing_reaped(
-            result.kept, result.busy, age, from_config=args.older_than is None
-        )
+        if result.kept == 0:
+            print("nothing to reap -- this workspace holds no sessions")
+        else:
+            held = "it" if result.kept == 1 else "each of them"
+            print(f"nothing to reap -- a turn is running in {held}; reap again when it finishes")
     return 1 if result.failures else 0
-
-
-def _nothing_reaped(kept: int, busy: int, age: float, *, from_config: bool) -> None:
-    """Say what decided, because a sweep that removes nothing reads as a broken one.
-
-    Silent, it sends its next user to delete the directory by hand, leaving the
-    conversation and claim behind. `busy` before the age: `kept` includes busy sessions,
-    which no age sweeps.
-    """
-    if kept == 0:
-        print("nothing to reap -- this workspace holds no sessions")
-        return
-    if busy == kept:
-        # No age sweeps these, so naming one would be advice that cannot work.
-        held = "it" if kept == 1 else "each of them"
-        print(f"nothing to reap -- a turn is running in {held}; reap again when it finishes")
-        return
-    rest = kept - busy
-    waited = f"has been idle longer than {_exactly(age)}"
-    if busy:
-        verb = "is" if busy == 1 else "are"
-        print(f"nothing to reap -- {_count(busy)} {verb} busy, and none of the other "
-              f"{_count(rest)} here {waited}")
-        return
-    why = f"none of the {_count(kept)} here {waited}"
-    if not from_config:
-        print(f"nothing to reap -- {why}")
-        return
-    print(f"nothing to reap -- {why}, which is KINGFISHER_SESSION_TTL_S")
-    print(f"--older-than sweeps on a shorter age: kingfisher reap --older-than {_shorter(age)}")
 
 
 def _artifact(args: argparse.Namespace) -> int:
@@ -1027,7 +950,7 @@ def _artifact(args: argparse.Namespace) -> int:
 
 
 def _reap_one(kf: Kingfisher, session_id: str) -> int:
-    """Reap one session by name, whatever its age and whatever is running in it."""
+    """Reap one session by name, whatever is running in it."""
     # `UNSCOPED`, not `None`, which a policied deployment refuses: this is housekeeping,
     # not a call on anyone's behalf, which is why neither `reap` nor `sessions` takes `--as`.
     session = kf.session(session_id, source_ids=UNSCOPED)

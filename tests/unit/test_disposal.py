@@ -55,23 +55,6 @@ def test_deleting_an_unknown_session_is_not_an_error(cfg):
     assert Through(service(cfg)).delete("never-existed") is None
 
 
-def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
-    """Age, not count: how long a session has been idle is a property of that session
-    alone, so one caller's traffic cannot evict another's.
-    """
-    import os
-
-    kf = service(cfg)
-    old, fresh = start(cfg, "old"), start(cfg, "fresh")
-    os.utime(cfg.workspace / "sessions" / old, (1_000, 1_000))
-
-    result = kf.reap(older_than_seconds=60, now=10_000)
-
-    assert result.removed == ("old",)
-    assert not (cfg.workspace / "sessions" / old).exists()
-    assert (cfg.workspace / "sessions" / fresh).is_dir()
-
-
 def test_a_session_named_with_a_backslash_is_swept_like_any_other(cfg):
     """A session id rule refusing `\\`, which a POSIX name may hold, left such a session
     listed but unopenable, and `reap` raised at it and swept nothing.
@@ -81,18 +64,18 @@ def test_a_session_named_with_a_backslash_is_swept_like_any_other(cfg):
     kf = service(cfg)
     odd, plain = start(cfg, "a\\b"), start(cfg, "plain")
 
-    result = kf.reap(older_than_seconds=0, now=time.time() + 60)
+    result = kf.reap(now=time.time() + 60)
 
     assert set(result.removed) == {odd, plain}
 
 
 # -- a sweep and a session in use -----------------------------------------
 #
-# `expired` names sessions "untouched for longer than X" and reads one
-# timestamp to decide. A turn writes *inside* a session -- `runs/`, `outputs/`
-# -- which leaves the session's own timestamp alone, so a conversation in daily
-# use still read as idle. Measured before this: 10,000s idle immediately after
-# a turn completed in it.
+# `kingfisher sessions` reads how long a session has been idle from one
+# timestamp. A turn writes *inside* a session -- `runs/`, `outputs/` -- which
+# leaves the session's own timestamp alone, so a conversation in daily use still
+# read as idle. Measured before this: 10,000s idle immediately after a turn
+# completed in it.
 
 
 def test_a_turn_records_that_its_session_was_used(cfg):
@@ -114,12 +97,9 @@ def test_a_turn_records_that_its_session_was_used(cfg):
 
 
 def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
-    """A turn may outlive the idle bound -- `turn_timeout_s` defaults to an hour and
-    nothing requires a session to be kept that long -- and sweeping one mid-turn
-    deletes the directory out from under an agent still writing to it, leaving the
-    claim pointing at nothing.
+    """Sweeping a session mid-turn deletes the directory out from under an agent still
+    writing to it, leaving the claim pointing at nothing.
     """
-    import os
     import time
 
     service = Kingfisher(
@@ -129,10 +109,8 @@ def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
     directory = cfg.workspace / "sessions" / session
 
     assert LocalSessions().claim(cfg, session, stale_after=3600)
-    stale = time.time() - 10_000
-    os.utime(directory, (stale, stale))
 
-    result = service.reap(older_than_seconds=1.0, now=time.time())
+    result = service.reap(now=time.time())
 
     assert result.removed == ()
     assert directory.exists()
@@ -140,7 +118,6 @@ def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
 
 def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     """Per session, not a global pause on sweeping."""
-    import os
     import time
 
     service = Kingfisher(
@@ -150,11 +127,8 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     idle = start(cfg, "idle")
 
     assert LocalSessions().claim(cfg, busy, stale_after=3600)
-    stale = time.time() - 10_000
-    for name in (busy, idle):
-        os.utime(cfg.workspace / "sessions" / name, (stale, stale))
 
-    result = service.reap(older_than_seconds=1.0, now=time.time())
+    result = service.reap(now=time.time())
 
     assert result.removed == (idle,)
     assert (cfg.workspace / "sessions" / busy).exists()
@@ -181,21 +155,18 @@ class ClaimedRightAfterTheCheck(LocalSessions):
 def test_a_turn_claiming_after_the_sweep_asked_keeps_its_session(cfg):
     """`reap` asked `held` and then deleted unclaimed, so a turn claiming between the two
     had its session removed mid-turn."""
-    import os
     import time
 
     sessions = ClaimedRightAfterTheCheck()
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=sessions)
     session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
-    stale = time.time() - 10_000
-    os.utime(directory, (stale, stale))
 
-    result = kf.reap(older_than_seconds=1.0, now=time.time())
+    result = kf.reap(now=time.time())
 
     assert sessions.tokens and sessions.tokens[0] is not None, "the turn took its claim"
     assert result.removed == ()
-    assert (result.kept, result.busy) == (1, 1), "spared as busy, not as young"
+    assert result.kept == 1
     assert directory.exists()
     assert sessions.held(cfg, session, stale_after=cfg.claim_stale_after)
 
@@ -203,16 +174,13 @@ def test_a_turn_claiming_after_the_sweep_asked_keeps_its_session(cfg):
 def test_a_sweep_gives_back_the_claim_it_took_when_the_delete_fails(cfg, monkeypatch):
     """A sweep's own claim left behind would lock a session it could not remove out of
     every turn until the claim went stale."""
-    import os
     import time
 
     monkeypatch.setattr(LocalSessions, "delete", Stuck.delete)
     kf = service(cfg)
     session = start(cfg, "s")
-    stale = time.time() - 10_000
-    os.utime(cfg.workspace / "sessions" / session, (stale, stale))
 
-    result = kf.reap(older_than_seconds=1.0, now=time.time())
+    result = kf.reap(now=time.time())
 
     assert result.failures
     assert not _claim(cfg, session).exists()
@@ -235,15 +203,13 @@ class Unclaimable(LocalSessions):
 def test_a_session_another_sweep_removed_first_does_not_stop_this_one(cfg):
     """Its claim fails for want of the session, which is what a sweep was after; raised,
     it ended the sweep for every session after it."""
-    import os
     import time
 
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=RemovedFirst())
-    stale = time.time() - 10_000
     for name in ("a", "b"):
-        os.utime(cfg.workspace / "sessions" / start(cfg, name), (stale, stale))
+        start(cfg, name)
 
-    result = kf.reap(older_than_seconds=1.0, now=time.time())
+    result = kf.reap(now=time.time())
 
     assert sorted(result.removed) == ["a", "b"]
     assert result.failures == ()
@@ -262,25 +228,23 @@ def test_claiming_a_session_that_is_gone_does_not_make_it_again(cfg):
 def test_a_claim_that_fails_on_a_session_still_there_is_raised(cfg):
     """The control: a sweep that read every failed claim as a removal would delete
     nothing and report every session gone."""
-    import os
     import time
 
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=Unclaimable())
-    stale = time.time() - 10_000
-    os.utime(cfg.workspace / "sessions" / start(cfg, "s"), (stale, stale))
+    start(cfg, "s")
 
     with pytest.raises(OSError, match="lock store"):
-        kf.reap(older_than_seconds=1.0, now=time.time())
+        kf.reap(now=time.time())
     assert (cfg.workspace / "sessions" / "s").exists()
 
 
 def test_the_rule_itself_keeps_what_is_busy():
     """The domain half, without a filesystem."""
-    entries = (("a", 0.0), ("b", 0.0))
+    names = ("a", "b")
 
-    assert retention.expired(entries, 1.0, now=100.0).doomed == ("a", "b")
-    assert retention.expired(entries, 1.0, now=100.0, busy=("a",)).doomed == ("b",)
-    assert retention.expired(entries, 1.0, now=100.0, busy=("a",)).kept == 1
+    assert retention.unheld(names).doomed == ("a", "b")
+    assert retention.unheld(names, busy=("a",)).doomed == ("b",)
+    assert retention.unheld(names, busy=("a",)).kept == 1
 
 
 # -- a claim outliving its holder -----------------------------------------
@@ -288,7 +252,7 @@ def test_the_rule_itself_keeps_what_is_busy():
 # `claim` always knew a claim could go stale; retention did not. It read claim
 # *names* and spared every session that had one, so the two disagreed about
 # what "busy" meant and a process that died mid-turn won its session permanent
-# exemption from a workspace whose sessions are supposed to expire.
+# exemption from every sweep.
 
 
 def test_a_claim_left_by_a_dead_process_stops_sparing_its_session(cfg):
@@ -300,7 +264,7 @@ def test_a_claim_left_by_a_dead_process_stops_sparing_its_session(cfg):
     _claim(cfg, crashed).mkdir(parents=True, exist_ok=True)
 
     decade = time.time() + 10 * 365 * 24 * 3600
-    result = kf.reap(older_than_seconds=0.0, now=decade)
+    result = kf.reap(now=decade)
 
     assert crashed in result.removed
     assert kf.session(crashed) is None
@@ -314,7 +278,7 @@ def test_a_claim_someone_could_still_hold_spares_its_session(cfg):
     running = start(cfg, "running")
     _claim(cfg, running).mkdir(parents=True, exist_ok=True)
 
-    result = kf.reap(older_than_seconds=0.0, now=time.time())
+    result = kf.reap(now=time.time())
 
     assert result.removed == ()
     assert kf.session(running) is not None
@@ -330,10 +294,10 @@ def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
     _claim(cfg, held).mkdir(parents=True, exist_ok=True)
     now = time.time()
 
-    inside = kf.reap(older_than_seconds=0.0, now=now + cfg.claim_stale_after - 60)
+    inside = kf.reap(now=now + cfg.claim_stale_after - 60)
     assert inside.removed == ()
 
-    outside = kf.reap(older_than_seconds=0.0, now=now + cfg.claim_stale_after + 60)
+    outside = kf.reap(now=now + cfg.claim_stale_after + 60)
     assert held in outside.removed
 
 
@@ -495,7 +459,7 @@ def test_a_sweep_leaves_no_claim_behind(cfg):
     claim = _claim(cfg, crashed)
     claim.mkdir(parents=True, exist_ok=True)
 
-    kf.reap(older_than_seconds=0.0, now=time.time() + 10 * 365 * 24 * 3600)
+    kf.reap(now=time.time() + 10 * 365 * 24 * 3600)
 
     assert not claim.exists()
     assert not (cfg.workspace / "sessions" / crashed).exists()

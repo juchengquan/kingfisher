@@ -154,7 +154,6 @@ class Environment:
             for name, key, least in (
                 ("execution_timeout_s", "KINGFISHER_EXECUTION_TIMEOUT_S", 1),
                 ("turn_timeout_s", "KINGFISHER_TURN_TIMEOUT_S", 1),
-                ("session_ttl_s", "KINGFISHER_SESSION_TTL_S", 0),
                 ("recursion_limit", "KINGFISHER_RECURSION_LIMIT", 1),
                 ("thread_pool_size", "KINGFISHER_THREAD_POOL_SIZE", 1),
                 ("keep_results_rounds", "KINGFISHER_KEEP_RESULTS_ROUNDS", 1),

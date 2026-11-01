@@ -1,4 +1,4 @@
-"""Getting rid of a session: one by name, or every one idle long enough.
+"""Getting rid of a session: one by name, or every one no turn is running in.
 
 A claim spares a session only while a turn could still be holding it: a process that
 died mid-turn once left a session ten years idle and still there.
@@ -31,14 +31,10 @@ class Disposal:
             return None
         return (yield from self._discard_steps(session_id))
 
-    def reap(self, older_than_seconds: float | None = None, *, now: float) -> SweepResult:
-        """Dispose of every session untouched for `older_than_seconds` and not held by a turn."""
-        age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
-        entries = self._sessions.sessions(self.cfg)
-        # Twice: the first picks whose claims to ask about, and the second leaves out a
-        # running turn's session, so `plan.busy` can say why nothing was removed.
-        idle = retention.expired(entries, age, now)
-        plan = retention.expired(entries, age, now, busy=self._busy(idle.doomed, now=now))
+    def reap(self, *, now: float) -> SweepResult:
+        """Dispose of every session a turn is not running in."""
+        names = tuple(name for name, _ in self._sessions.sessions(self.cfg))
+        plan = retention.unheld(names, busy=self._busy(names, now=now))
         return retention.apply(
             plan, lambda session_id: drive(self._swept_steps(session_id, now=now))
         )
@@ -72,8 +68,7 @@ class Disposal:
     def _busy(self, candidates: tuple[str, ...], *, now: float) -> tuple[str, ...]:
         """Which of these a turn is still running in, so a sweep spares them.
 
-        Asked of the sessions, which hold the lock, and only of those old enough to go:
-        a deployment's may answer each with a round trip.
+        Asked of the sessions, which hold the lock.
         """
         return tuple(
             session_id
