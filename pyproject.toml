@@ -254,6 +254,9 @@ ignore = ["ANN401"]
 # whole exemption -- if this ever needs the other three it has stopped being a
 # thin driver and that is worth noticing.
 "src/kingfisher/cli/**" = ["T201"]
+# A script run by hand against a deployment, for the same reason: what it prints is
+# its report.
+"scripts/**" = ["T201"]
 # The long lines are inside string literals: the task's JSON schema commentary
 # has to stay on one line to read as one field.
 "evals/task.py" = ["E501"]
@@ -316,7 +319,7 @@ python = ".venv"
 # `evals` is the same case, and was missed: the driver imports it, and nothing
 # checked it. `test_every_directory_holding_python_is_type_checked` is what says
 # so next time, because this comment could not.
-include = ["src", "tests", "assets", "spikes", "evals"]
+include = ["src", "tests", "assets", "spikes", "evals", "scripts"]
 
 [tool.ty.terminal]
 output-format = "concise"

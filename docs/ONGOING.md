@@ -78,6 +78,12 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   input cached. Two turns on an Anthropic model, memory changed between them, settle it.
   And how often a real deployment's sessions are summarised on M2.5, whose summariser
   fires at 170,000 tokens, which needs that deployment's sessions. *(2026-10-27.)*
+- **`scripts/session_survey.py` on the client's deployment.** Three questions wait on its
+  numbers: whether per-session memory earns its writer runs, what replaying old tool
+  output costs in speed and window as a session grows, and what sessions hold on disk. It
+  answers the M2.5 one above as well. It reads a sessions folder, and the run log when
+  given one, and prints counts only -- nothing anyone said, no session ids -- so its
+  output can be sent back as it is. *(2026-11-01.)*
 - **What slots cost, on a real deployment.** A slot keyed on a name no tool lock uses
   gives two grants with one tool list two system prompts and a cache entry each; a
   subagent's prompt grows with every slot its grant fills. On the shipped assets neither
