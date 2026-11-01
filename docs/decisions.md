@@ -3116,10 +3116,9 @@ parsed, so a key another version wrote survives. *(2026-10-20.)*
 
 **Marked when the turn's ledger is built, removed by the sweep.** `Ledger` marks the rows
 as it is made, so clearing in that turn hands no path the turn is about to remove, and the
-existing sweep removes what no row names. An offloaded file is removed only while it is
-still the expiring row's length, the identity test repointing uses: deepagents names it by
-call id, a later call of that id overwrites it, and another length is a result a stub
-still names.
+existing sweep removes what no row names. The offloaded copy it also removed, while that
+copy was still the row's length, went with offloading itself on 2026-10-21 (*Reversed on
+2026-10-21: nothing offloads*, above), so a row's own file is all there is to remove.
 
 **A miss explains itself; nothing already written is reworded.** A `read_file`, `glob` or
 `grep` under the two result folders that finds nothing says results expire and to call
