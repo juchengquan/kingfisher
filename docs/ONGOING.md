@@ -101,39 +101,9 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   summariser's own check, which *A refusal for length is clearing's to answer first* in
   `decisions.md` measured and left accepted. *(2026-10-23.)*
 
-## Small fixes, not yet made
-
-- **Test names that call the definitions folder a workspace.** 65 test names say
-  "workspace"; some mean the folder sessions live in, others the definitions, such as
-  `test_a_workspace_with_no_tools_never_assembles_the_probe`. The latter want the word
-  #1086 gave the messages. *(2026-10-30.)*
-- **`http_fetch` fails on every HTTPS address under a Python with no certificate
-  store**, such as python.org's macOS build, because it uses plain `urllib`; `curl` and
-  model calls work, since httpx carries certifi. Proposed: the system store when it has
-  certificates, certifi's bundle otherwise, a clear error with neither, and a `doctor`
-  check. Deferred by the owner. *(2026-10-17.)*
-- **`decisions.md` still says expiry removes deepagents' offloaded copy**, in *Marked
-  when the turn's ledger is built, removed by the sweep*. Nothing has been offloaded
-  since 2026-10-21, so that sentence describes code that is gone. *(2026-10-23.)*
-- **The PDF allowance counts four characters a token.** `pdf_allowance` in
-  `attachments.py` gives a turn half the summariser's trigger at four characters of
-  base64 a token, but langchain counts a PDF block by its `repr` at the summariser's
-  own rate, 3.3 on an Anthropic class, scaled up to 1.25 by reported usage. So a turn's
-  PDFs fill some 60% of the trigger rather than half, before any scaling. The same
-  mismatch clearing had; reading the rate off `summarizer_count` would close it.
-  *(2026-10-23.)*
-
 ## When deepagents moves
 
 It is held at 0.7.22 by the owner's call, which `pyproject.toml` records. 0.7.24 retries
 an overflowing summary call, which kingfisher's version does not. 0.7.23 adds
 `pinned_skills`, a hook that costs a graph step on every model call while skills are on,
 which `NarrowedSkills` would have to drop. *(2026-10-13.)*
-
-## Branches kept
-
-Every other merged branch was deleted, here and on GitHub, on 2026-10-27.
-
-- **`clearing-counts-like-summariser`**, merged. Its worktree,
-  `.claude/worktrees/clearing-counts-like-summariser`, is locked by a Claude session still
-  running; remove the worktree and the branch once that session ends. *(2026-10-27.)*
