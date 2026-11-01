@@ -70,6 +70,18 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   Running it in the job means a PR whose test relies on a newer release must raise that
   floor in the same PR, which is the catch, and costs one more suite run per PR.
   *(2026-10-29.)*
+- **A gate on a tool the agent can never reach.** An agent may gate a tool that lives in
+  a subagent's own folder. Startup accepts that for any subagent in the definitions,
+  including one the agent does not name. Such an agent loads, but the gate never stops
+  anything, because nothing the agent calls holds the tool. Startup already refuses a
+  gate on a name no tool has, for the same reason. Checking only the subagents the agent
+  names would close this, and could refuse a deployment that loads today.
+  *(2026-11-01.)*
+- **Telling the client their copied agents load.** What they asked for landed in #1165:
+  a copy no longer names skills or subagents it has no tool to use, and it keeps a gate
+  on a tool from a subagent's own folder. They will also see those gates in
+  `kingfisher list --as`, which did not show them before. The note to them is not
+  written yet. *(2026-11-01.)*
 
 ## Waiting on a run
 
