@@ -170,7 +170,7 @@ CITATION = re.compile(r"docs/[A-Za-z0-9_./-]+\.md")
 #: no longer resolve.
 #: `test_the_citation_walk_is_what_git_tracks` holds this, and the root files below,
 #: to the tree: a folder named here and gone checks nothing, and says nothing either.
-CITED_FROM = ("src", "tests", "evals", "spikes", ".github", "assets")
+CITED_FROM = ("src", "tests", "evals", "spikes", "scripts", ".github", "assets")
 
 #: The root files, named rather than globbed: the repository root also holds a
 #: `.venv`, a `.git` and whatever a developer left there, and a rule that reads
