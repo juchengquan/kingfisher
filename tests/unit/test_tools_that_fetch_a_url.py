@@ -414,3 +414,82 @@ def test_a_body_is_decoded_as_the_response_says_it_is(declared, fetch, serving):
     `utf-16` as its bytes with a NUL between every character.
     """
     assert fetch.func(url=f"{serving}/{declared}") == ENCODED[declared]
+
+
+def _certificate(folder: Any) -> tuple[str, str]:
+    """A self-signed certificate for 127.0.0.1 and its key, as files in `folder`."""
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
+    now = datetime.datetime.now(datetime.UTC)
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(minutes=1))
+        .not_valid_after(now + datetime.timedelta(hours=1))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(
+            x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+    cert, private = folder / "cert.pem", folder / "key.pem"
+    cert.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+    private.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    return str(cert), str(private)
+
+
+@pytest.fixture
+def serving_tls(fetch, monkeypatch, tmp_path):
+    """`serving` over TLS, its certificate standing in for certifi's bundle."""
+    import ssl
+    from types import SimpleNamespace
+
+    cert, key = _certificate(tmp_path)
+    monkeypatch.setitem(
+        _globals(fetch), "ALLOWED_PRIVATE_NETWORKS", (ipaddress.ip_network("127.0.0.1/32"),)
+    )
+    monkeypatch.setitem(_globals(fetch), "certifi", SimpleNamespace(where=lambda: cert))
+    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    tls.load_cert_chain(cert, key)
+    server = _Server(("127.0.0.1", 0), _Handler)
+    server.socket = tls.wrap_socket(server.socket, server_side=True)
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
+    thread.start()
+    yield f"https://127.0.0.1:{server.server_address[1]}"
+    server.shutdown()
+    server.server_close()
+
+
+def test_a_python_with_no_certificates_of_its_own_fetches_https_with_certifis(
+    fetch, serving_tls, monkeypatch, tmp_path
+):
+    """python.org's macOS build has no store until a script is run, and every HTTPS
+    fetch failed there with `CERTIFICATE_VERIFY_FAILED` while model calls worked.
+    """
+    # The control: a Python with a store of its own trusts that store alone, and the
+    # certificate standing in for certifi's is in no store.
+    assert "CERTIFICATE_VERIFY_FAILED" in fetch.func(url=f"{serving_tls}/plain")
+
+    (tmp_path / "empty.pem").write_text("", encoding="utf-8")
+    (tmp_path / "no-certs").mkdir()
+    monkeypatch.setenv("SSL_CERT_FILE", str(tmp_path / "empty.pem"))
+    monkeypatch.setenv("SSL_CERT_DIR", str(tmp_path / "no-certs"))
+
+    assert fetch.func(url=f"{serving_tls}/plain") == "a plain page"

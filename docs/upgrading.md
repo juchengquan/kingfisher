@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `http_fetch` fetches HTTPS on a Python with no certificate store, after #1176
+
+- **The shipped `http_fetch` verifies against certifi's certificates where this Python
+  has none of its own**, as python.org's macOS build has none until its Install
+  Certificates.command is run; every HTTPS fetch failed there. A store of its own is
+  still used alone. A seeded copy takes the fix with `kingfisher seed --all`.
+- **`kingfisher doctor` has a `certificates` line**, a warning where this Python has no
+  certificates, since a tool of yours fetching HTTPS with Python's defaults fails there.
+
 ## A turn holds less PDF on an Anthropic-class model, after #1173
 
 - **A turn's PDFs are charged as its summariser counts them.** On an Anthropic-class

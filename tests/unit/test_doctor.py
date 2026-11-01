@@ -68,6 +68,25 @@ def test_a_healthy_workspace_passes_everything(cfg):
     assert worst(checks) != "fail"
 
 
+def test_a_python_with_no_certificates_of_its_own_is_warned(cfg, monkeypatch, tmp_path):
+    """There a deployment's own tool fetching HTTPS with Python's defaults fails on every
+    address, and nothing said why."""
+
+    def certificates() -> str:
+        (check,) = [one for one in examine(cfg) if one.name == "certificates"]
+        return check.verdict
+
+    # The control: the Python running this has a store of its own.
+    assert certificates() == "ok"
+
+    (tmp_path / "empty.pem").write_text("", encoding="utf-8")
+    (tmp_path / "no-certs").mkdir()
+    monkeypatch.setenv("SSL_CERT_FILE", str(tmp_path / "empty.pem"))
+    monkeypatch.setenv("SSL_CERT_DIR", str(tmp_path / "no-certs"))
+
+    assert certificates() == "warn"
+
+
 def test_a_catalogue_that_will_not_load_is_a_failure(cfg):
     """And it names the file, because the reader has to go and fix one."""
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
