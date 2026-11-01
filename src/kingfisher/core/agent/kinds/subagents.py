@@ -369,6 +369,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     refuse_a_mark_deepagents_reaches_first(runs, clear_results_at, extra_middleware or ())
     # A summariser it names takes deepagents' place in its stack, so it is the one read.
     trigger = summarizer_trigger(runs, summarizers)
+    count = summarizer_count(runs, summarizers)
     # From `standing_middleware`, so the agent, this subagent and `general-purpose` cannot
     # differ. `paths` is handed down, not read off the backend, which need not carry it.
     # A helper's summariser goes outside them, where deepagents puts its own in every other
@@ -395,6 +396,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         models=cfg.models,
         keep_results_rounds=cfg.keep_results_rounds,
         trigger=trigger,
+        count=count,
         pdf_attachments=pdf_attachments,
         scratch_run_limit=scratch_run_limit,
         recorder=recorder,
@@ -402,7 +404,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
             ledger,
             trigger,
             clear_results_at,
-            count=summarizer_count(runs, summarizers),
+            count=count,
             subject=f"subagent {spec.name!r}",
         ),
         # `None` permits nothing: an empty allowlist, not an absent one.

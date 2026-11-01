@@ -336,10 +336,12 @@ answers to `SummarizationMiddleware` on that graph -- yours, where a definition 
 and deepagents' own elsewhere. A token count is taken as written, a fraction of the
 window as that share of it, several clauses by the earliest that can fire; a clause
 counting messages alone fires at any size, and is left out. So a summarizer firing at
-100,000 tokens holds a turn to about 146 KB of PDF and starts clearing at 50,000, and a
-`clear_results_at` at or past 100,000 is refused when the agent is built. A summarizer
-kingfisher cannot read -- neither deepagents' nor langchain's, or one counting only
-messages -- is sized as deepagents' own, and the notice it is built with says so.
+100,000 tokens holds a turn to about 146 KB of PDF -- 121 KB on an Anthropic model,
+whose tokens langchain counts at 3.3 characters rather than 4 -- and starts clearing at
+50,000, and a `clear_results_at` at or past 100,000 is refused when the agent is built.
+A summarizer kingfisher cannot read -- neither deepagents' nor langchain's, or one
+counting only messages -- is sized as deepagents' own, and the notice it is built with
+says so.
 
 **Clearing counts as your summarizer counts.** Its `token_counter` is read off the same
 summarizer, so calibrating it against what your gateway reports moves the trigger and

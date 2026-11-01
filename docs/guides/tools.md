@@ -225,7 +225,9 @@ reads as failed only when nothing else came back.
   `image` block or a data URL. A turn holds PDFs up to half of where the graph's own
   summariser summarises its conversation -- deepagents', or one a definition names in
   its place. Under deepagents' that is 249 KB on a model with no profile, 130 to
-  159 KB on a 128k window by its `max_tokens`, 1.2 MB on a 1M one. Every PDF already
+  159 KB on a 128k window by its `max_tokens`, 1.2 MB on a 1M one, and about 18% less
+  on an Anthropic model, whose tokens langchain counts at 3.3 characters rather than 4,
+  since a PDF is charged as the summariser counts it. Every PDF already
   open in the turn counts, so ten invoices of 200 KB are not ten passes. Sent whole,
   a PDF goes out again with every model call after it, and can end the turn.
 - **an image over 5 MB of base64**, the most Bedrock and Google Cloud take in one

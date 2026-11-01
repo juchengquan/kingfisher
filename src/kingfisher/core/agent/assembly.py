@@ -441,11 +441,12 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     # The agent's alone: `general-purpose` runs its own copies of these, so the same answer.
     refuse_a_mark_deepagents_reaches_first(running, mark, named)
     trigger = summarizer_trigger(running, named)
+    count = summarizer_count(running, named)
     clearing = result_clearing(
         ledger,
         trigger,
         mark,
-        count=summarizer_count(running, named),
+        count=count,
         subject="this agent" if agent is None else f"agent {agent.name!r}",
     )
     # Filled in kingfisher's order once the grant is known; the probe reads it before.
@@ -558,6 +559,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             permissions=permissions,
             keep_results_rounds=cfg.keep_results_rounds,
             trigger=trigger,
+            count=count,
             pdf_attachments=pdf_attachments,
             scratch_run_limit=limit,
             recorder=recording(agent),

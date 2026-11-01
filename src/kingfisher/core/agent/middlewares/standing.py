@@ -43,6 +43,7 @@ from .step_budget import StepBudget, StepBudgetMiddleware
 from .turn_instructions import TurnInstructionsMiddleware
 
 if TYPE_CHECKING:
+    from kingfisher.core.agent.models import SummarizerCount
     from kingfisher.core.config import Models
     from kingfisher.core.interfaces import PdfAttachments, ScratchRunLimit
 
@@ -102,6 +103,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     backend: Any,
     budget: StepBudget,
     trigger: int,
+    count: SummarizerCount,
     execution_timeout_s: int,
     models: Models,
     permissions: Any,
@@ -131,8 +133,9 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     `None` where no ledger is kept, and `reachable` is the agent's alone.
     `budget` is the turn's, whose step limit reaches only the agent's own run, so a subagent
     is held to it in model calls; one per build, shared by all three kinds. `trigger` is
-    where this graph's own summariser fires, which sizes the PDFs its turn may hold open,
-    and `pdf_attachments` is the deployment's say in what each of them is replaced with.
+    where this graph's own summariser fires and `count` how it counts, which size the PDFs
+    its turn may hold open, and `pdf_attachments` is the deployment's say in what each of
+    them is replaced with.
     `name` is the graph's, as `scratch_run_limit` is asked about it, and `models` the
     deployment's catalogue, whose endpoints say who answered each call.
 
@@ -218,7 +221,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             )
         )
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.
-    standing.append(AttachmentsMiddleware(trigger, pdf_attachments))
+    standing.append(AttachmentsMiddleware(trigger, count, pdf_attachments))
     # deepagents merges by name, so this *replaces* the `FilesystemMiddleware` it would
     # build itself -- in this graph's stack and, through the spec, in each subagent's.
     # Only to turn its offloading off: a result too long to show whole is kingfisher's to

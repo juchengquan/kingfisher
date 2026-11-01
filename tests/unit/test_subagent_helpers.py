@@ -15,7 +15,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.attachments import pdf_allowance
 from kingfisher.core.agent.middlewares.clearing import UNSHOWN, high_mark
 from kingfisher.core.agent.middlewares.standing import FILESYSTEM
-from kingfisher.core.agent.models import SUMMARIZER, summarizer_trigger
+from kingfisher.core.agent.models import SUMMARIZER, summarizer_count, summarizer_trigger
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.subagents.rules import refuse_cycles
 from kingfisher.core.definitions.subagents.spec import SubagentError, SubagentSpec
@@ -782,7 +782,7 @@ def test_a_helpers_clearing_and_pdfs_are_sized_by_the_summarizer_it_runs(cfg, se
     (summarizer,) = _summarizers(helper)
     fires = summarizer_trigger(model, [summarizer])
     assert fires < 170_000, "a fraction of this window, not deepagents' fixed default"
-    assert _allowance(helper) == pdf_allowance(fires)
+    assert _allowance(helper) == pdf_allowance(fires, summarizer_count(model, [summarizer]))
     assert _high(helper) == high_mark(fires, None, subject="the helper")
 
 
