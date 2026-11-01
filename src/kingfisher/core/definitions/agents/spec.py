@@ -109,7 +109,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
 
     # `source: shared` is accepted so an entry reads the same here as in a subagent file.
     # Absent grants none on both tool axes, as everywhere: a forgotten line fails closed.
-    written_tools, _, _ = read.sourced(
+    written_tools, _ = read.sourced(
         document.get("tools"),
         absent=None,
         key="tools",
@@ -117,8 +117,12 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         refuse_bundled=_NO_FOLDER,
         locked=fields.TOOL_LOCK,
     )
-    written_skills, skill_audiences, _ = read.sourced(
-        document.get("skills"), absent=None, key="skills", refuse_bundled=_NO_FOLDER
+    written_skills, _ = read.sourced(
+        document.get("skills"),
+        absent=None,
+        key="skills",
+        refuse_bundled=_NO_FOLDER,
+        locked=fields.SKILL_LOCK,
     )
     written_subagents = read.names_only(
         # No `refuse_all`: `["*"]` loops only for a subagent, which would name itself.
@@ -154,7 +158,6 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         skills=written_skills,
         subagents=written_subagents,
         source_ids=source_ids,
-        skill_audiences=skill_audiences,
         middlewares=written_middleware,
         middleware_settings=middleware_settings,
         wanted=fields.wanted_model(document, read),

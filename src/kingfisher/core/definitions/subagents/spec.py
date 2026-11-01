@@ -340,7 +340,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     wanted = fields.wanted_model(entry, read)
     # A list of names, as a file writes it, and absent grants none: `["*"]` asks for every
     # tool the request granted. What each tool admits is in the tool's own file.
-    written_tools, _, own_tools = read.sourced(
+    written_tools, own_tools = read.sourced(
         entry.get("tools"), absent=None, key="tools", same=bare_name, locked=fields.TOOL_LOCK
     )
     source_ids = read.source_ids(entry.get("source_ids"))
@@ -563,17 +563,18 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 
     # Kept as written, `where::what` and all: two folders may each define a `fetch`, and
     # only the reference says which. `Offering.permitted` flattens it for the allowlist.
-    written_tools, _, own_tools = reader.sourced(
+    written_tools, own_tools = reader.sourced(
         document.get("tools"), absent=None, key="tools", same=bare_name, locked=fields.TOOL_LOCK
     )
     # Read as the agent format reads it: settings must mean the same in either file.
     written_middleware, middleware_settings = reader.selection_with_settings(
         document.get("middlewares"), absent=None, key="middlewares"
     )
-    written_skills, skill_audiences, own_skills = reader.sourced(
+    written_skills, own_skills = reader.sourced(
         document.get("skills"),
         absent=None,
         key="skills",
+        locked=fields.SKILL_LOCK,
         refuse_all=(
             "it means whatever the request granted, and a subagent is given an "
             "index only where its skills are named -- so against the ordinary "
@@ -617,6 +618,5 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         wanted=wanted,
         metadata=reader.mapping(document.get("metadata"), key="metadata"),
         source_ids=source_ids,
-        skill_audiences=skill_audiences,
         datazone=reader.datazone(document.get("datazone")),
     )

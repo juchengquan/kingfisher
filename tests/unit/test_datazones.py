@@ -1045,24 +1045,29 @@ def test_a_deployment_with_no_lock_is_refused_rather_than_answered_empty(cfg):
         kf.opened_by("surveyor", source_ids=[])
 
 
-#: The same agent with a skills entry narrower than its own line, and no tools.
+#: The same agent with a skill whose own lock asks more than its line, and no tools.
 SKILLED = """name: surveyor
 description: An agent.
 source_ids: [A, B]
 builtin_tools: [read_file, task]
-skills:
-  - name: payroll-handling
-    source_ids: [pii]
-  - review
+skills: [payroll-handling, review]
 system_prompt: |
   You do the task.
 """
+
+
+def _lock_payroll(cfg) -> None:
+    """`payroll-handling` locked to `pii`, beside the skills folder."""
+    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(
+        "- name: payroll-handling\n  source_ids: [pii]\n", encoding="utf-8"
+    )
 
 
 def _skilled(cfg, *, enabled: bool = True) -> Kingfisher:
     """The deployment above, with its skills on disk and the deployment's switch set."""
     agents = cfg.catalogue_roots["agents"]
     (agents / "surveyor.yaml").write_text(SKILLED, encoding="utf-8")
+    _lock_payroll(cfg)
     for name in ("payroll-handling", "review"):
         (cfg.skills_dir / name).mkdir(parents=True, exist_ok=True)
         (cfg.skills_dir / name / "SKILL.md").write_text(
@@ -1071,20 +1076,20 @@ def _skilled(cfg, *, enabled: bool = True) -> Kingfisher:
     return Kingfisher(replace(cfg, skills_enabled=enabled), sessions=LocalSessions())
 
 
-def test_a_skill_entrys_own_id_is_named_as_one_that_would_open_it(zoned):
-    """A caller who opens the agent and lacks `pii` is one name short of the entry, and
-    nothing said so: asked for this caller, `declares` drops the entry before its lock
-    can be read, so `would` could name no id that opens a skill.
+def test_a_skills_own_id_is_named_as_one_that_would_open_it(zoned):
+    """A caller who opens the agent and lacks `pii` is one name short of the skill's lock,
+    and nothing said so: asked for this caller, `declares` dropped the skill before its
+    lock could be read, so `would` could name no id that opens a skill.
     """
     opened = _opened(_skilled(zoned), frozenset({"A"}))
 
     assert opened.would.source_ids == frozenset({"pii"})
-    # The bare entry inherits the agent's own line, which this caller satisfies.
+    # The unlocked skill is the agent's own line's, which this caller satisfies.
     assert opened.opens.source_ids == frozenset({"A"})
 
 
 def test_a_skill_nothing_can_open_names_no_id(zoned):
-    """An audience on a line the model is never told: granting `pii` would change
+    """A lock on a skill the model is never told: granting `pii` would change
     nothing, and sending an operator to grant it is worse than saying nothing.
     """
     off = _opened(_skilled(zoned, enabled=False), frozenset({"A"}))
@@ -1156,15 +1161,13 @@ def test_a_carried_tools_lock_is_read_under_the_subagent_that_brings_it(carried)
     assert through.opens.source_ids == frozenset({"A", "C"})
 
 
-#: A subagent locked to `C`, granting the finance tool and narrowing one skill further.
+#: A subagent locked to `C`, granting the finance tool and a skill locked to `pii`.
 AUDITOR = """name: auditor
 description: Audits.
 source_ids: [C]
 builtin_tools: [read_file]
 tools: [payroll]
-skills:
-  - name: payroll-handling
-    source_ids: [pii]
+skills: [payroll-handling]
 system_prompt: |
   You audit.
 """
@@ -1181,11 +1184,12 @@ system_prompt: |
 
 
 def test_what_a_subagent_grants_and_narrows_is_read_under_its_own_lock(zoned):
-    """A subagent's granted tool and its own skills entry, which nothing else here
-    reaches: both are reached only through it, so a caller outside its lock must be told
-    neither `finance` nor `pii` would open anything on its own.
+    """A subagent's granted tool and its locked skill, which nothing else here reaches:
+    both are reached only through it, so a caller outside its lock must be told neither
+    `finance` nor `pii` would open anything on its own.
     """
     (subagents_dir(zoned) / "auditor.yaml").write_text(AUDITOR, encoding="utf-8")
+    _lock_payroll(zoned)
     (zoned.catalogue_roots["agents"] / "surveyor.yaml").write_text(OVERSEER, encoding="utf-8")
     (zoned.skills_dir / "payroll-handling").mkdir(parents=True, exist_ok=True)
     (zoned.skills_dir / "payroll-handling" / "SKILL.md").write_text(

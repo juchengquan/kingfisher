@@ -4,20 +4,30 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from contextlib import suppress
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from kingfisher.core.access import SEPARATOR, CapabilityError, Selection, collected
+from kingfisher.core.access import (
+    ALL,
+    SEPARATOR,
+    Capabilities,
+    CapabilityError,
+    Selection,
+    collected,
+    reaches,
+)
 from kingfisher.core.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
 from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, RESERVED_SKILL_FOLDER, SKILLS_ROUTE
 
+from . import skill_locks
 from .agents.catalogue import LocalAgentRepository
 from .agents.spec import DIRECTORY as AGENT_DIRECTORY
 from .agents.spec import AgentError
 from .middlewares.catalogue import LocalMiddlewareRepository
 from .prompts import unused_names
+from .skill_locks import SkillLock, SkillLockError
 from .skills import registry as skill_registry
 from .skills.catalogue import LocalSkillRepository
 from .skills.registry import SkillRegistry
@@ -135,6 +145,84 @@ class Definitions:
         return named
 
     @cached_property
+    def skill_locks(self) -> tuple[SkillLock, ...]:
+        """Each lock `skill_locks.yaml` writes, as written.
+
+        Beside the definitions, which is the skills folder's parent: inside it, the agent
+        could read the file.
+        """
+        return skill_locks.read_locks(self.skills.root.parent / skill_locks.FILENAME)
+
+    @cached_property
+    def locked_skills(self) -> Mapping[str, SkillLock]:
+        """Each locked skill by the one skill it means, `source::name`.
+
+        Refused where a lock means no one skill: one naming nothing would lock nothing,
+        and a skill renamed under its lock would be told to everyone.
+        """
+        if not self.skill_locks:
+            return {}
+        registry = self.registry
+        found: dict[str, SkillLock] = {}
+        for lock in self.skill_locks:
+            meant = registry.identity(lock.name)
+            if meant is None:
+                raise SkillLockError(self._unlockable(lock.name, registry))
+            if (first := found.get(meant)) is not None:
+                msg = (
+                    f"{skill_locks.FILENAME}: {first.name!r} and {lock.name!r} are one "
+                    f"skill ({meant!r}), locked twice. Keep the one you mean"
+                )
+                raise SkillLockError(msg)
+            found[meant] = lock
+        return found
+
+    def _unlockable(self, name: str, registry: SkillRegistry) -> str:
+        """Why a lock means no one skill."""
+        where = f"{skill_locks.FILENAME}: locks {name!r}"
+        bare = skill_registry.split_qualified(name)[1]
+        with suppress(SubagentError):
+            if owners := sorted(
+                owner for owner, held in self.bundled_skills.items() if bare in held.taken
+            ):
+                return (
+                    f"{where}, which is in subagent {owners[0]!r}'s own folder and in no "
+                    f"catalogue. It reaches whoever reaches that subagent: lock the "
+                    f"subagent, or move the skill into skills/ and lock it here"
+                )
+        try:
+            registry.resolve(name)
+        except CapabilityError as exc:
+            return f"{where}: {exc}"
+        return f"{where}, which means no one skill"  # pragma: no cover -- resolve refused
+
+    def skills_shut(self, held: frozenset[str] | None) -> frozenset[str]:
+        """The skills whose own lock shuts this caller out, as `source::name`."""
+        if held is None or not self.skill_locks:
+            return frozenset()
+        return frozenset(
+            meant
+            for meant, lock in self.locked_skills.items()
+            if not reaches(lock.audience, held)
+        )
+
+    def unlocked_for(self, capabilities: Capabilities, held: frozenset[str] | None) -> Capabilities:
+        """`capabilities` less every skill whose own lock shuts this caller out.
+
+        A star becomes the skills left, since nothing else can say "all but these".
+        """
+        shut = self.skills_shut(held)
+        if not shut or capabilities.skills is None:
+            return capabilities
+        registry = self.registry
+        if capabilities.skills == ALL:
+            kept = tuple(key for key in registry.offered if key not in shut)
+        else:
+            # A name meaning no one skill is kept, for the build to refuse in its own words.
+            kept = tuple(one for one in capabilities.skills if registry.identity(one) not in shut)
+        return replace(capabilities, skills=kept)
+
+    @cached_property
     def vocabulary(self) -> Vocabulary | None:
         """The source ids and datazones these definitions use, or `None` where none carries
         a lock -- one walk, so `Kingfisher` and `kingfisher list` cannot disagree on it."""
@@ -151,6 +239,8 @@ class Definitions:
             kinds.append(("agent", self.agents.specs))
         with suppress(SubagentError, CapabilityError):
             kinds.append(("subagent", self.subagents.specs))
+        with suppress(SkillLockError):
+            kinds.append(("skill", {lock.name: lock for lock in self.skill_locks}))
         return collected(*kinds, ("tool", tools))
 
     @cached_property
@@ -179,6 +269,7 @@ class Definitions:
         # startup rather than at the first turn naming one.
         _ = self.middlewares.classes
         _ = self.registry
+        _ = self.locked_skills
         # Here, not in the reader: whether `audit` is `catalogue::audit` is the catalogue's
         # to say. Both load, and the entry without an audience reaches whom the other kept out.
         for kind, specs, error in (

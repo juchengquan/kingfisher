@@ -7,7 +7,8 @@ definitions folder:
     kingfisher seed --all --from ./assets
 
 `--all` because several definitions here name middleware or carry a lock,
-`general` among them, and a plain `seed` leaves those behind. The middleware
+`general` among them, and so does `skill_locks.yaml`, and a plain `seed` leaves
+those behind. The middleware
 they name is in `middlewares/` and arrives in the same run.
 
 Everything here is committed, and it is held to working. The tests parse every

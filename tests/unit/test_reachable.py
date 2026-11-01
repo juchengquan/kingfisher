@@ -94,10 +94,7 @@ PATTERN = {
     "model": "elsewhere-model",
     "builtin_tools": "[read_file, task]",
     "tools": "[open_tool, locked_tool]",
-    "skills": (
-        "\n  - open-skill\n  - {name: told-skill, source_ids: [ID-SALES]}"
-        "\n  - {name: shared-skill, source_ids: [ID-SALES]}"
-    ),
+    "skills": "[open-skill, told-skill]",
     "subagents": "[helper, spare, zoned]",
     "middlewares": "\n  - {name: counted, settings: {messages: 3}}",
     "interrupt_on": "[locked_tool, open_tool]",
@@ -133,8 +130,11 @@ def _deployment(cfg) -> None:
         )
     middlewares_dir(cfg).mkdir(parents=True, exist_ok=True)
     (middlewares_dir(cfg) / "counted.py").write_text(COUNTED, encoding="utf-8")
-    # `shared-skill` reaches everyone through this agent, and `pattern` tells only sales.
+    # `shared-skill` only this agent lists, and `told-skill` is locked to sales.
     an_agent(cfg, source_ids="[ID-AUDIT, ID-SALES]", skills="[shared-skill]", **EVERY_TOOL)
+    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(
+        "- name: told-skill\n  source_ids: [ID-SALES]\n", encoding="utf-8"
+    )
     an_agent(cfg, "hidden", source_ids="[ID-SALES]")
     an_agent(cfg, "pattern", **PATTERN)
 

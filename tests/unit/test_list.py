@@ -1824,41 +1824,43 @@ def test_the_operator_sees_audiences_per_definition(policied, capsys):
     assert "tool line_count  [A]" in shown
 
 
-#: Two agents telling one skill to different callers, since a skill is the one thing an
-#: entry may lock.
+#: An agent listing a skill whose own lock asks more than the agent's line.
 TELLS_A = """name: narrow
 description: An agent.
 source_ids: [A, B]
 builtin_tools: [read_file]
-skills:
-  - name: routine
-    source_ids: [A]
-system_prompt: |
-  You do the task.
-"""
-
-TELLS_BOTH = """name: wide
-description: An agent.
-source_ids: [A, B]
-builtin_tools: [read_file]
-skills:
-  - name: routine
-    source_ids: [A, B]
+skills: [routine]
 system_prompt: |
   You do the task.
 """
 
 
-def test_the_roll_up_shows_one_skill_at_two_audiences(cfg, at_the_command_line, capsys):
-    """The case it exists for: a use quietly wider than its neighbour."""
-    _workspace(cfg, TELLS_A, TELLS_BOTH, skills=("routine",))
+def _locked(cfg, text: str) -> None:
+    """`skill_locks.yaml`, beside the skills folder."""
+    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(text, encoding="utf-8")
+
+
+def test_a_skills_lock_is_printed_once_as_a_tools_is(cfg, at_the_command_line, capsys):
+    """A skill has one lock now, so a per-skill roll-up of its uses could only repeat it."""
+    _workspace(cfg, TELLS_A, skills=("routine",))
+    _locked(cfg, "- name: routine\n  source_ids: [A]\n")
 
     assert main(["list"]) == 0
 
-    section = capsys.readouterr().out.split("by skill", 1)[1]
-    assert "routine" in section
-    assert "narrow  [A]" in section
-    assert "wide  [A, B]" in section
+    shown = capsys.readouterr().out
+    assert "skill routine  [A]" in shown.split("by definition", 1)[1]
+    assert "by skill" not in shown
+
+
+def test_a_lock_file_that_will_not_load_fails_the_listing(cfg, at_the_command_line, capsys):
+    """Startup refuses the file, so a listing passing over it would be the only green
+    thing in a deployment that cannot start."""
+    _workspace(cfg, TELLS_A, skills=("routine",))
+    _locked(cfg, "- name: routine\n  source_ids: [A]\n- name: nowhere\n  source_ids: [A]\n")
+
+    assert main(["list"]) == 1
+
+    assert "locks 'nowhere'" in capsys.readouterr().out
 
 
 def test_there_is_no_roll_up_by_tool(policied, capsys):
@@ -1876,9 +1878,7 @@ BOTH = """name: both
 description: An agent.
 source_ids: [{A, B}]
 builtin_tools: [read_file]
-skills:
-  - name: routine
-    source_ids: [A, B]
+skills: [routine]
 system_prompt: |
   You do the task.
 """
@@ -1901,15 +1901,15 @@ def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(
     at_the_command_line,
     capsys,
 ):
-    """The by-definition view and the roll-up print the same audience, and a reader
-    comparing the two should not have to translate.
+    """An agent's line and a skill's lock print the same audience, and a reader comparing
+    the two should not have to translate.
     """
     _workspace(cfg, BOTH, skills=("routine",))
+    _locked(cfg, "- name: routine\n  source_ids: [{A, B}]\n")
 
     shown = capsys.readouterr().out if main(["list"]) == 0 else ""
-    before, after = shown.split("by skill", 1)
-    assert "[{A, B}]" in before
-    assert "both  [A, B]" in after
+    assert "agent both  [{A, B}]" in shown
+    assert "skill routine  [{A, B}]" in shown
 
 
 def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
@@ -1932,44 +1932,6 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, at_the_command_line):
         "A": ["agent both", "tool line_count"],
         "B": ["agent both"],
     }
-
-
-NARROWED = """name: narrowed
-description: An agent.
-source_ids: [A, B]
-builtin_tools: [read_file]
-skills:
-  - name: routine
-    source_ids: [C]
-system_prompt: |
-  You do the task.
-"""
-
-
-def test_an_entry_narrowing_past_its_definition_is_reported(cfg, at_the_command_line, capsys):
-    """It used to be refused."""
-    _workspace(cfg, NARROWED, skills=("routine",))
-
-    assert main(["list"]) == 0
-
-    shown = capsys.readouterr().out
-    assert "narrows past this definition's own audience" in shown
-    assert "agent narrowed: skill routine  [C]" in shown
-
-
-def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, at_the_command_line):
-    """The report is not the point -- this is."""
-    from kingfisher.core.access.reach import reaches
-    from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
-
-    _workspace(cfg, NARROWED, skills=("routine",))
-    spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["narrowed"]
-
-    assert spec.declares(frozenset({"A", "C"})).skills == ("routine",)
-    assert spec.declares(frozenset({"A"})).skills == ()
-    # And the definition's own line still gates the agent itself: C alone opens
-    # nothing, so there is no way to reach the skill by holding only C.
-    assert not reaches(spec.source_ids, frozenset({"C"}))
 
 
 def test_a_callers_view_carries_no_audiences(policied, capsys):
@@ -2109,6 +2071,7 @@ def test_the_json_names_each_source_id_in_use_beside_who_uses_it(cfg, at_the_com
 ERRORS_OUTSIDE_THE_KINDS = {
     "bundles_error": "a bundle is one subagent's own folder, not a catalogue",
     "build_error": "a graph is built from every kind at once, so no one kind owns it",
+    "skill_locks_error": "skill_locks.yaml sits beside the kinds, and locks skills of any",
 }
 
 

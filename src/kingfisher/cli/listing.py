@@ -216,7 +216,7 @@ def _said(stated: Stated) -> str:
 
 
 def _access(found: Inventory) -> Iterator[str]:
-    """Who reaches what, twice: as the files say it, and rolled up by skill."""
+    """Who reaches what, as the files say it, and the names those locks use."""
     # `vocabulary` alone decides, as in `as_json`, so a scoped caller's text and JSON agree.
     if found.vocabulary is None:
         return
@@ -226,13 +226,10 @@ def _access(found: Inventory) -> Iterator[str]:
         for name, stated in definitions.items():
             said = True
             yield f"  {kind[:-1]} {name}  {_said(stated)}"
-            for entry, audience in stated.skills.items():
-                yield f"      skill {entry}  {_who(audience)}"
     if not said:
         yield "  (nothing says who reaches it, so everyone reaches everything)"
 
     yield from _in_use(found.vocabulary)
-    yield from _rollup(found)
     yield from found.access_report.lines()
 
 
@@ -250,26 +247,6 @@ def _in_use(vocabulary: Vocabulary) -> Iterator[str]:
     yield "\naccess — names in use"
     for name, who in rows:
         yield f"  {name.ljust(width)}  {', '.join(who)}"
-
-
-def _rollup(found: Inventory) -> Iterator[str]:
-    """Every skill an entry gives an audience, under it each definition that does.
-
-    Skills alone: a tool's lock and a subagent's audience are each one line in its own
-    file, printed above, so there is no second place for a use of one to differ.
-    """
-    where: dict[str, list[str]] = {}
-    for definitions in found.audiences.values():
-        for name, stated in definitions.items():
-            for entry, audience in stated.skills.items():
-                where.setdefault(entry, []).append(f"{name}  {_who(audience)}")
-    if not where:
-        return
-    yield "\naccess — by skill"
-    for entry, sites in sorted(where.items()):
-        yield f"  {entry}"
-        for site in sites:
-            yield f"      {site}"
 
 
 def _skills(found: Inventory) -> Iterator[str]:
@@ -300,6 +277,8 @@ def _skills(found: Inventory) -> Iterator[str]:
     for directory, name in found.skills_misfiled:
         yield f"  ! {directory}/ is offered as {name} — its own header names that instead"
         yield f"    (grant it as {name}, or rename the directory to match)"
+    if found.skill_locks_error is not None:
+        yield f"  cannot load: {found.skill_locks_error}"
 
 
 def _subagents(found: Inventory) -> Iterator[str]:
@@ -405,6 +384,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "skills_unloadable": list(found.skills_unloadable),
         "skills_misplaced": list(found.skills_misplaced),
         "skills_misfiled": [list(pair) for pair in found.skills_misfiled],
+        "skill_locks_error": found.skill_locks_error,
         "skills_enabled": found.skills_enabled,
         "subagents": dict(found.subagents),
         "subagent_sources": dict(found.subagent_sources),
@@ -447,11 +427,6 @@ def as_json(found: Inventory) -> dict[str, object]:
                 name: {
                     "source_ids": _audience_json(stated.source_ids),
                     **({} if stated.datazone is None else {"datazone": stated.datazone}),
-                    **(
-                        {"skills": {e: _audience_json(who) for e, who in stated.skills.items()}}
-                        if stated.skills
-                        else {}
-                    ),
                 }
                 for name, stated in definitions.items()
             }
@@ -459,7 +434,6 @@ def as_json(found: Inventory) -> dict[str, object]:
         },
         "access_report": {
             "unrestricted": [list(pair) for pair in found.access_report.unrestricted],
-            "narrowed": [list(pair) for pair in found.access_report.narrowed],
         },
         "held": None if found.held is None else sorted(found.held),
     }
@@ -484,5 +458,6 @@ def failed(found: Inventory) -> bool:
         return True
     if any(kind.error is not None for kind in found.by_kind()):
         return True
-    # Not a kind either, and its tools are Python that has to import.
-    return found.bundles_error is not None
+    # Not kinds either: a bundle's tools are Python that has to import, and a lock that
+    # will not load stops startup.
+    return found.bundles_error is not None or found.skill_locks_error is not None

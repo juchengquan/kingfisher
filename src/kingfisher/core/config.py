@@ -116,11 +116,17 @@ def definition_roots_for(definitions: Path) -> dict[str, Path]:
     }
 
 
+#: Who is told about each skill. Beside the definitions, not in `skills/`, which the agent
+#: reads.
+SKILL_LOCKS_FILE = "skill_locks.yaml"
+
+
 def authored_files_for(definitions: Path) -> dict[str, Path]:
     """The files a deployment writes itself, beside its definitions."""
     return {
         "models.yaml": definitions / "models.yaml",
         "INSTRUCTIONS.md": definitions / "INSTRUCTIONS.md",
+        SKILL_LOCKS_FILE: definitions / SKILL_LOCKS_FILE,
     }
 
 

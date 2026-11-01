@@ -36,6 +36,7 @@ from .definitions.catalogue import (
 )
 from .definitions.importing import defined_in_a_definition_file
 from .definitions.middlewares.catalogue import MiddlewareError
+from .definitions.skill_locks import SkillLock, SkillLockError
 from .definitions.subagents.rules import miscounted, refuse_cycles
 from .definitions.subagents.spec import SubagentError
 from .definitions.tools.catalogue import ToolError
@@ -146,6 +147,8 @@ class Inventory:
     #: Skills the agent *can* read, under a name their directory does not have, as
     #: `(directory, name)`: neither missing nor broken, so a field of their own.
     skills_misfiled: tuple[tuple[str, str], ...] = ()
+    #: Why `skill_locks.yaml` will not load, or `None`. Startup refuses the same file.
+    skill_locks_error: str | None = None
 
     #: Subagent name -> its description.
     subagents: Mapping[str, str] = _NOTHING
@@ -582,17 +585,19 @@ def _access(
     agents: Mapping[str, object],
     subagents: Mapping[str, object],
     named_tools: Mapping[str, FoundTool],
+    named_skills: Mapping[str, SkillLock],
 ) -> tuple[dict[str, Mapping[str, Stated]], AccessReport]:
     """What the definitions say, and what restricts nobody."""
     stated = {
         "agents": _audiences(agents, kind="agent"),
         "subagents": _audiences(subagents, kind="subagent"),
         "tools": _audiences(named_tools, kind="tool"),
+        "skills": _audiences(named_skills, kind="skill"),
     }
     if vocabulary is None:
         return stated, AccessReport()
-    # Tools are not audited: one stating no audience is open to whoever opens an agent
-    # granting it.
+    # Tools and skills are not audited: one with no lock is open to whoever opens an
+    # agent listing it.
     return stated, audit(("agent", agents), ("subagent", subagents))
 
 
@@ -626,6 +631,28 @@ def _shut_out(resolved: Definitions, held: frozenset[str] | None) -> frozenset[s
         return out_of_reach(resolved.tools.found, held)
     except (ToolError, CapabilityError):
         return frozenset()
+
+
+def _skill_locks(resolved: Definitions) -> tuple[Mapping[str, SkillLock], str | None]:
+    """Each lock `skill_locks.yaml` writes, by the name it writes, and why the file will
+    not load where it will not."""
+    try:
+        _ = resolved.locked_skills
+    except SkillLockError as exc:
+        return {}, str(exc)
+    return {lock.name: lock for lock in resolved.skill_locks}, None
+
+
+def _skills_shut(resolved: Definitions, held: frozenset[str] | None) -> frozenset[str]:
+    """The skills whose own lock shuts this caller out, as `source::name`.
+
+    Every skill where the locks will not load: a lock that cannot be read cannot be passed,
+    and `_skill_locks` carries the fault.
+    """
+    try:
+        return resolved.skills_shut(held)
+    except SkillLockError:
+        return frozenset() if held is None else frozenset(resolved.registry.offered)
 
 
 def _builtin_tools(
@@ -806,11 +833,13 @@ def inventory_for(
         resolved, held
     )
 
+    named_skills, skill_locks_error = _skill_locks(resolved)
     stated, report = _access(
         resolved.vocabulary,
         agents=defined_agents,
         subagents=specs,
         named_tools=resolved.locked_tools,
+        named_skills=named_skills,
     )
     reaching = _reaching(held, stated)
     scoped = held is not None
@@ -848,7 +877,11 @@ def inventory_for(
     offers_tool = admitted(
         offers("tools", held, reached_agents, same=spell), shut=_shut_out(resolved, held)
     )
-    offers_skill = offers("skills", held, reached_agents, same=registry.identity)
+    granted_skill = offers("skills", held, reached_agents, same=registry.identity)
+    shut_skills = _skills_shut(resolved, held)
+
+    def offers_skill(name: str) -> bool:
+        return granted_skill(name) and registry.identity(name) not in shut_skills
     # Each definition's lines through the answers above rather than a walk of their own: a
     # tool kept out of `tools` for this caller must not come back under whoever grants it.
     for_caller_tools = tuple(name for name in offered_tools if offers_tool(name))
@@ -930,6 +963,8 @@ def inventory_for(
         skills_misfiled=tuple(
             (where, name) for where, name in registry.misfiled if offers_skill(name)
         ),
+        # The operator's, like the other faults: who a skill is locked to is policy.
+        skill_locks_error=None if scoped else skill_locks_error,
         subagents=MappingProxyType(dict(for_caller_subagents)),
         # Keyed off the names above, not `reaching` again: a second walk answers a second
         # question, naming subagents no agent in reach hands work to.

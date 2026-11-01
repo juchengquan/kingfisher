@@ -35,7 +35,6 @@ from .definitions.tools.spec import Offering, admitted, out_of_reach, placed
 from .result import RunEvent
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
 
     from .config import Config
     from .definitions.agents.spec import AgentSpec
@@ -84,7 +83,11 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
         offers("tools", held, reached_agents, same=lambda one: placed(one, spelt)),
         shut=out_of_reach(catalogue.tools.found, held),
     )
-    offers_skill = offers("skills", held, reached_agents, same=identity)
+    shut_skills = catalogue.skills_shut(held)
+    granted_skill = offers("skills", held, reached_agents, same=identity)
+
+    def offers_skill(name: str) -> bool:
+        return granted_skill(name) and identity(name) not in shut_skills
 
     offered = (
         # Built-ins and offered tools are granted apart, so reported apart. `or ()`: a
@@ -182,9 +185,9 @@ def what_opens(
     alone: an empty `opens` does not tell a lock from a withholding grant.
 
     Taken for no caller, deliberately. `declares(held)` drops what this caller cannot
-    reach, which is the answer being computed: asked for them, a skills entry whose own
-    audience they fail is gone before its lock can be read, and `would` could never name
-    the id that would open a skill. What a definition offers is one question and who
+    reach, which is the answer being computed: asked for them, what an agent they cannot
+    open lists is gone before its locks can be read, and `would` could never name the id
+    that would open it. What a definition offers is one question and who
     reaches it is the other, and only the audiences below answer the second.
     """
     offered = for_the_caller(agent, asked, held=None)
@@ -202,7 +205,7 @@ def what_opens(
     # so a `file.py::name` entry would skip that tool's lock.
     for one in offering.carried(offering.spelt(offered.tools), found):
         reasons.see(path, one.audience)
-    for audience in _skills_told(cfg, catalogue, allowed=offered, said=stated(agent).skills):
+    for audience in _skills_told(cfg, catalogue, allowed=offered):
         reasons.see(path, audience)
 
     defined = defined_subagents(cfg, catalogue=catalogue)
@@ -220,9 +223,7 @@ def what_opens(
         # which is the question.
         for one in private_tools(catalogue, name, held=None):
             reasons.see(under, one.audience)
-        for audience in _skills_told(
-            cfg, catalogue, allowed=shared, said=stated(spec).skills
-        ):
+        for audience in _skills_told(cfg, catalogue, allowed=shared):
             reasons.see(under, audience)
     return Opened(opens=Opening.of(reasons.satisfied), would=Opening.of(reasons.short))
 
@@ -232,9 +233,8 @@ def _skills_told(
     catalogue: Definitions,
     *,
     allowed: Capabilities,
-    said: Mapping[str, Audience],
 ) -> tuple[Audience, ...]:
-    """The audience on each skill this definition could actually open.
+    """The lock on each skill this definition could actually open.
 
     Nothing where no skill can be opened at all -- switched off for the deployment, or
     no read tool in the grant -- because an audience on a line the model is never told
@@ -244,9 +244,9 @@ def _skills_told(
     if not cfg.skills_enabled or not opens_skills(allowed.builtin_tools):
         return ()
     identity = activatable_skills(cfg, catalogue=catalogue).identity
-    # By the skill each spelling means, as the withheld report compares them: the
-    # audience written on `catalogue::audit` is the audience on `audit`.
-    by_skill = {identity(one) or one: audience for one, audience in said.items()}
+    # By the skill each spelling means, as the withheld report compares them: the lock
+    # written on `catalogue::audit` is the lock on `audit`.
+    by_skill = {meant: lock.audience for meant, lock in catalogue.locked_skills.items()}
     named = (
         available_skills(cfg, catalogue=catalogue)
         if allowed.skills == ALL

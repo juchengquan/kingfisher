@@ -191,7 +191,7 @@ def test_two_sources_that_both_load_are_reported_as_missing_nothing(cfg):
 #: `audit` narrowed to A, and the same skill again qualified, under a line reaching A or B.
 BOTH_SPELLINGS = (
     "source_ids: [A, B]\nbuiltin_tools: [read_file]\n"
-    "skills:\n  - name: audit\n    source_ids: [A]\n  - catalogue::audit\n"
+    "skills:\n  - audit\n  - catalogue::audit\n"
 )
 
 
@@ -208,9 +208,9 @@ def _written(cfg, kind, body):
 
 @pytest.mark.parametrize(("kind", "error"), [("agent", AgentError), ("subagent", SubagentError)])
 def test_one_skill_written_bare_and_qualified_is_refused(cfg, kind, error):
-    """Both entries loaded and resolved to one skill, so the one with no audience cancelled
-    the narrower one's: a caller holding only B was offered a skill written for A, and the
-    access report said nothing.
+    """Both entries loaded and resolved to one skill. While an entry could say who it was
+    for, the one with no audience cancelled the narrower one's: a caller holding only B was
+    offered a skill written for A, and the access report said nothing.
     """
     _written(cfg, kind, BOTH_SPELLINGS)
 

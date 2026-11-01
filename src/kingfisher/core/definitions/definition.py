@@ -63,11 +63,6 @@ class SpecBase:
     #: Who may reach this definition: open a session on an agent, or reach a subagent
     #: wherever it is used.
     source_ids: Audience = ALL
-    #: Skill name -> who is told about it, for the `skills:` entries written long. Only
-    #: skills: a lock in a skill's own file would be read by the model with it.
-    skill_audiences: Mapping[str, Audience] = field(
-        default_factory=dict, metadata={"derived": True}
-    )
 
     def prompt_for(self, held: frozenset[str] | None) -> str:
         """What this definition instructs a caller holding `held` with, its slots filled."""

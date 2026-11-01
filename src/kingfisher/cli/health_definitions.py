@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from kingfisher import Config, Inventory
+from kingfisher.core.config import SKILL_LOCKS_FILE
 
 from .check import Check
 
@@ -136,6 +137,30 @@ def _skill_entries(found: Inventory) -> Iterator[Check]:
             f"{subject} {complaint}",
             "keep one entry, the one carrying the audience you mean",
         )
+
+
+def _skill_locks(cfg: Config, found: Inventory) -> Iterator[Check]:
+    """How many skills are locked, and where.
+
+    Said even where none is: the file sits apart from the skills it locks, so a deploy
+    that leaves it behind opens every one of them and starts as if nothing were wrong.
+    """
+    path = cfg.definitions / SKILL_LOCKS_FILE
+    if found.skill_locks_error is not None:
+        yield Check(
+            "skill locks",
+            "fail",
+            found.skill_locks_error,
+            "fix what it names: kingfisher will not start until the file loads",
+        )
+        return
+    if not path.is_file():
+        yield Check("skill locks", "ok", f"none: no {SKILL_LOCKS_FILE}, so every skill is open")
+        return
+    if not (locked := len(found.audiences.get("skills", {}))):
+        yield Check("skill locks", "ok", f"none: {path} locks nothing, so every skill is open")
+        return
+    yield Check("skill locks", "ok", f"{locked}, in {path}")
 
 
 def _bundled_entries(found: Inventory) -> Iterator[Check]:
@@ -315,6 +340,7 @@ def checks(cfg: Config, found: Inventory) -> Iterator[Check]:
     yield from _tool_names(found)
     yield from _subagent_references(found)
     yield from _skill_entries(found)
+    yield from _skill_locks(cfg, found)
     yield from _bundled_entries(found)
     yield from _subagent_tools(found)
     yield from _definitions(cfg, found)

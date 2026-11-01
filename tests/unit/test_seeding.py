@@ -278,12 +278,11 @@ def test_seeding_never_carries_bytecode_into_the_definitions(cfg, tmp_path):
 #: says. Seeding reads these with a tolerant reader of its own -- it runs before
 #: there is a catalogue, so it cannot refuse a document -- and a spelling that reader
 #: stops covering does not fail: the definition reads as naming nobody and is copied
-#: into a deployment that cannot load it. Two of these four were held by nothing.
+#: into a deployment that cannot load it.
 SPELLINGS = {
     "a bare name": ("source_ids: A\n", ("A",)),
     "a list": ("source_ids: [A, B]\n", ("A", "B")),
     "a requirement set": ("source_ids: [{A, B}]\n", ("A", "B")),
-    "a skills entry's own audience": ("skills:\n  - name: t\n    source_ids: [A]\n", ("A",)),
 }
 
 
@@ -308,6 +307,30 @@ def test_every_way_of_naming_a_source_id_is_left_behind(spelling, cfg, tmp_path)
     assert left, f"a definition naming {expected} by {spelling} was copied anyway"
     assert sorted(left[0].names) == sorted(expected)
     assert left[0].wants == "source_ids"
+
+
+def test_skill_locks_wait_for_all_as_a_locked_definition_does(cfg, tmp_path):
+    """Copied by a plain `seed`, the file switched on access control in a deployment that
+    asked for none; held back by `--all` as well, a deployment could not seed it at all."""
+    source = tmp_path / "presets"
+    (source / "skills").mkdir(parents=True)
+    (source / "skill_locks.yaml").write_text(
+        "- name: audit\n  source_ids: [A]\n  datazone: emea\n", encoding="utf-8"
+    )
+    landed = cfg.definitions / "skill_locks.yaml"
+
+    held = seeding.seed(cfg.definitions, source)
+
+    assert not landed.exists()
+    (left,) = [s for s in held.skipped if s.label == "skill_locks.yaml"]
+    assert (left.names, left.datazones, left.wants) == (("A",), ("emea",), "source_ids")
+
+    copied = seeding.seed(cfg.definitions, source, everything=True)
+
+    assert "skill_locks.yaml" in copied.written
+    assert landed.read_text(encoding="utf-8") == (source / "skill_locks.yaml").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_a_definition_naming_only_a_datazone_is_left_behind(cfg, tmp_path):

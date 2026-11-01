@@ -6,7 +6,7 @@ so the answer comes from deepagents' own lister.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
@@ -145,6 +145,12 @@ class SkillRegistry:
             for source, offered_name in map(split_qualified, self.offered)
             if offered_name == name and source is not None
         )
+
+    def without(self, keys: frozenset[str]) -> SkillRegistry:
+        """This registry less the skills keyed `keys`, as a caller they are shut to sees it."""
+        if not keys:
+            return self
+        return replace(self, offered={k: v for k, v in self.offered.items() if k not in keys})
 
     @property
     def spellings(self) -> tuple[str, ...]:

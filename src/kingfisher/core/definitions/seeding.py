@@ -11,12 +11,14 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 
+import yaml
+
 from kingfisher.core.config import ConfigError, definition_roots_for
 from kingfisher.core.workspace import ensure_definitions
 
-from . import importing
+from . import importing, skill_locks
 from .catalogue import DEFINITION_KINDS
-from .documents import decode
+from .documents import decode, load
 
 #: How the "the definitions offer none" messages tell a reader to fill the folder.
 SEED_HINT = "`kingfisher seed --from DIR`"
@@ -148,14 +150,6 @@ def source_ids_named(fields: Mapping[str, object]) -> tuple[str, ...]:
     """Every source id a definition names, from fields that may not be valid."""
     found: list[str] = []
     _collect(fields.get("source_ids"), into=found)
-    entries = fields.get("skills")
-    # Names, or `{name, source_ids}` mappings. Walking the wrong shape finds nothing,
-    # silently: it looks like a definition naming no source id. Only `skills:` entries:
-    # one under `tools:` or `subagents:` is refused at load, whatever it names.
-    if isinstance(entries, (list, tuple)):
-        for entry in entries:
-            if isinstance(entry, dict):
-                _collect(entry.get("source_ids"), into=found)
     return tuple(dict.fromkeys(found))
 
 
@@ -433,6 +427,21 @@ def _deployment_specific(path: Path, *, kind: str) -> _Wanted | None:
     return None
 
 
+def _locks_named(path: Path) -> _Wanted | None:
+    """What `skill_locks.yaml` locks to, or `None` where it names nobody."""
+    if (text := _read(path)) is None:
+        return None
+    try:
+        entries = load(text)
+    except yaml.YAMLError:
+        return None
+    lines = [one for one in entries if isinstance(one, dict)] if isinstance(entries, list) else []
+    return _audienced(
+        tuple(dict.fromkeys(name for one in lines for name in source_ids_named(one))),
+        tuple(dict.fromkeys(zone for one in lines for zone in datazones_named(one))),
+    )
+
+
 def _one_definition(folder: Path, *, kind: str) -> bool:
     """Whether a folder is a package or a bundle, rather than a folder of definitions."""
     if kind not in AUDIENCED_KINDS:
@@ -628,5 +637,20 @@ def _copy(
             else:
                 shutil.copy(item, target)
             written.append(label)
+
+    # Beside the kinds rather than one of them, and nothing but locks, so it waits for
+    # --all as a locked definition does.
+    locks = tree / skill_locks.FILENAME
+    if locks.is_file():
+        if not everything and (wanted := _locks_named(locks)) is not None:
+            wants, names, datazones, _ = wanted
+            skipped.append(
+                Skipped(skill_locks.FILENAME, names, wants=wants, datazones=datazones)
+            )
+        else:
+            target = definitions / skill_locks.FILENAME
+            overwritten += _overwritten(locks, target, skill_locks.FILENAME, lambda *_: {})
+            shutil.copy(locks, target)
+            written.append(skill_locks.FILENAME)
 
     return written, overwritten, skipped

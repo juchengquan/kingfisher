@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher import inventory
 from kingfisher.core.access.capabilities import CapabilityError
 from kingfisher.core.access.source_ids import UNSCOPED, CallerError
 from kingfisher.core.request import Request
@@ -354,24 +353,6 @@ def test_a_misspelt_lock_starts_and_locks_its_definition_shut(cfg):
 
     with pytest.raises(CapabilityError, match="no agent named 'analyst'"):
         agent_named(kf, "analyst", source_ids=("analysts",))
-
-
-def test_a_line_narrowing_past_its_definition_is_reported_not_refused(cfg):
-    """The line asks for a source id the definition never mentions."""
-    directory = cfg.catalogue_roots["agents"]
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / "analyst.yaml").write_text(
-        "name: analyst\ndescription: An agent.\nsource_ids: [analysts]\n"
-        "builtin_tools: [read_file]\n"
-        "skills:\n  - name: tabular-qa\n    source_ids: [auditors]\n"
-        "system_prompt: |\n  Do it.\n",
-        encoding="utf-8",
-    )
-
-    report = inventory(cfg).access_report
-
-    assert report.narrowed == (("agent analyst: skill tabular-qa", "auditors"),)
-    assert "reaches only callers holding both" in "\n".join(report.lines())
 
 
 def test_a_subagent_cannot_reach_a_looser_middleware_than_its_agent_granted():
