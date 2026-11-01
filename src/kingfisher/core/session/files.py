@@ -99,6 +99,79 @@ def _contents_of(seen: Mapping[str, Path], route: str) -> list[tuple[str, bytes]
     return [(f"{route}{name}", source.read_bytes()) for name, source in seen.items()]
 
 
+#: What a backend's listing may add to each file: any text that changes whenever the
+#: file's contents do, such as an object store's ETag. Only ever compared.
+CHECKSUM = "checksum"
+
+
+@dataclass(frozen=True)
+class InputsChanged:
+    """What the inputs folder gained, had replaced and lost since the agent last heard."""
+
+    new: tuple[str, ...] = ()
+    replaced: tuple[str, ...] = ()
+    removed: tuple[str, ...] = ()
+
+
+def inputs_seen(backend: Any, layout: Layout) -> Steps[dict[str, str | None] | None]:
+    """Each file in the inputs folder by its name there, with what tells one version of it
+    from another, or `None` where the listing came back incomplete."""
+    route = layout.inputs_route
+    seen: dict[str, str | None] = {}
+    # Two patterns, as for artifacts: `**` skips a name starting with a dot.
+    for pattern in ("**", ".*"):
+        result = yield reading(backend, "glob", pattern, path=route)
+        if result.error or result.truncated:
+            # Every file it missed would read as removed.
+            return None
+        for match in result.matches or ():
+            if not match.get("is_dir"):
+                seen[match["path"].removeprefix(route)] = _version(match)
+    return seen
+
+
+def _version(entry: Mapping[str, Any]) -> str | None:
+    """The backend's checksum, else size and time, else `None`.
+
+    Never the contents: a backend hands a file back only whole, so reading one to
+    checksum it would hold the largest input in memory on every turn.
+    """
+    if checksum := entry.get(CHECKSUM):
+        return f"checksum {checksum}"
+    if entry.get("size") is not None and entry.get("modified_at"):
+        return f"size {entry['size']} at {entry['modified_at']}"
+    return None
+
+
+def inputs_changed(
+    before: Mapping[str, str | None] | None,
+    now: Mapping[str, str | None] | None,
+    placement: InputsPlacement,
+) -> InputsChanged:
+    """The inputs folder `now` against `before`, as the agent last heard of it.
+
+    Without either, only what this request placed is known.
+    """
+    if before is None or now is None:
+        return InputsChanged(
+            new=tuple(name for name in placement.placed if name not in placement.replaced),
+            replaced=placement.replaced,
+        )
+
+    def another(name: str) -> bool:
+        was, is_now = before[name], now[name]
+        if was is None or is_now is None or was.split()[0] != is_now.split()[0]:
+            # Nothing to compare, but one this request wrote over is another file.
+            return name in placement.replaced
+        return was != is_now
+
+    return InputsChanged(
+        new=tuple(sorted(now.keys() - before.keys())),
+        replaced=tuple(sorted(name for name in now.keys() & before.keys() if another(name))),
+        removed=tuple(sorted(before.keys() - now.keys())),
+    )
+
+
 def collect_artifacts(backend: Any, layout: Layout) -> Steps[tuple[str, ...]]:
     """What this session holds that is worth keeping, relative to the session.
 

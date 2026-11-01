@@ -69,9 +69,10 @@ def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace):
     now, which changes nothing about the measurement -- what was measured is the
     agent's handling of the two spellings.
     """
+    from kingfisher.core.session.files import InputsChanged
     from kingfisher.core.session.turn import turn_message
 
-    message = turn_message("count the rows", (), layout=DEFAULT_LAYOUT)
+    message = turn_message("count the rows", InputsChanged(), layout=DEFAULT_LAYOUT)
 
     assert "/scratchpad" in message
     # Not a plain `in`: the virtual path *contains* the shell form as a substring, so

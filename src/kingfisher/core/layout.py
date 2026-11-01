@@ -86,6 +86,9 @@ PAUSED_MARK = "paused.json"
 #: What the memory writer has not yet read, and how many turns since it last ran. Here,
 #: not under `/memory`, so the agent cannot put words in the user's mouth for it.
 MEMORY_WRITER = "memory_writer.json"
+#: Each file in the inputs folder as the last turn the agent heard from found it. Here,
+#: because a caller may write the inputs folder directly, and nothing else knows its past.
+INPUTS_SEEN = "inputs.json"
 
 #: The folder name a catalogue may not use for its own skills, because a
 #: subagent's bundled skills already mean something under this root.

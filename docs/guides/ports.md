@@ -843,7 +843,8 @@ built-in tools happen to use. A pre-built graph is the exception: kingfisher
 drives it with no context, and such a tool finds `runtime.context` is `None`.
 
 **Kingfisher reaches the session through it too.** A request's `inputs` are placed
-with `upload_files` under `/inputs/`, what a turn left is listed with `glob` under
+with `upload_files` under `/inputs/`, which each turn that asks something then lists
+with `glob`, what a turn left is listed with `glob` under
 `/outputs/` and `/memory/`, and `Session.artifact` fetches one with
 `download_files`. `Session.memory` reads the memory file with `download_files`, and
 `Session.forget` writes it back with `upload_files`, holding the session's claim. Each tool result a turn records is saved with `upload_files` under
@@ -858,6 +859,16 @@ handed. `/inputs` has to take that upload
 while refusing the agent's own writes: `LocalSessions` routes it to
 `InputsBackend`, which lifts the permission bits for kingfisher's upload alone, and
 a backend of yours meets the same promise its own way.
+
+**What your listing says of a file is how a replaced input is noticed.** The agent is
+told which files in `/inputs` were added, replaced or removed since its last turn,
+however they got there -- a request, `files()`, or your own code writing the storage
+directly -- because each turn keeps what that listing found under `/.harness`. A file
+is told apart from its last version by a `checksum` your `glob` adds to its entry, any
+text that changes whenever the contents do, such as an object store's ETag; failing
+that, by `size` and `modified_at`, which deepagents' own backends give. With neither, a
+replaced file goes unnoticed, though an added or removed one does not. Nothing is
+downloaded to compare: a backend hands a file back only whole, every turn.
 
 **Those are the default names.** A `Config` may rename a session's folders, and what
 yours has to serve is what the `Config` it is handed says: `cfg.layout`, a `Layout`
@@ -884,7 +895,8 @@ yet, so a caller can place its inputs before the first turn. The caller named to
 to that session, and the turn still checks the caller it is given.
 
 **And what it keeps about the session, under `/.harness`.** The agent the session is
-pinned to, its conversation, and a turn paused at an approval gate are all written
+pinned to, its conversation, its inputs folder as the last turn found it, and a turn
+paused at an approval gate are all written
 and read through your backend — which means your agent's shell can reach them too,
 unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own pinned agent is that fence, and it is yours to get
