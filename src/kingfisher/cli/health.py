@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import ssl
 import stat
 from collections.abc import Iterator, Mapping
 from pathlib import Path
@@ -93,6 +94,28 @@ def _models(cfg: Config) -> Iterator[Check]:
         )
     else:
         yield Check("credentials", "ok", keyed)
+
+
+def _certificates() -> Iterator[Check]:
+    """Whether this Python verifies HTTPS by itself, as a tool using its defaults needs."""
+    loaded = ssl.create_default_context().cert_store_stats()["x509_ca"]
+    if loaded:
+        yield Check("certificates", "ok", f"{loaded} in this Python's own store")
+        return
+    # A folder of hashed certificates is read lazily, so none count as loaded yet.
+    folder = ssl.get_default_verify_paths().capath
+    if folder and Path(folder).is_dir() and any(Path(folder).iterdir()):
+        yield Check("certificates", "ok", f"read from {folder} as needed")
+        return
+    yield Check(
+        "certificates",
+        "warn",
+        "this Python has no CA certificates of its own, so a tool fetching HTTPS with "
+        "its defaults fails on every address; model calls carry certifi's and are "
+        "unaffected",
+        "on python.org's macOS build run its Install Certificates.command, or point "
+        "SSL_CERT_FILE at a bundle",
+    )
 
 
 def _key_source(endpoint: Any) -> str:
@@ -384,6 +407,7 @@ def examine(
     # First: a setting that stopped being read looks exactly like one nobody set.
     checks += _retired()
     checks += _models(cfg)
+    checks += _certificates()
     confined = health_isolation.fence_of(cfg, sessions)
     checks += _keys_file(cfg, sessions, confined)
     checks += _keys_file_mode(cfg)

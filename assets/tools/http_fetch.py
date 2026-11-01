@@ -23,8 +23,10 @@ import time
 import unicodedata
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
 
+import certifi
 from langchain_core.tools import tool
 
 #: Bounded because a tool result goes into the model's context, and a context
@@ -166,9 +168,28 @@ class _PublicHandler(urllib.request.HTTPHandler):
         return self.do_open(_PublicConnection, req)
 
 
+def _tls_context() -> ssl.SSLContext:
+    """This Python's own certificates, and certifi's where it has none.
+
+    python.org's macOS build ships with no store until `Install Certificates.command` is
+    run, and every HTTPS fetch failed there while model calls, whose httpx carries
+    certifi, worked. certifi's only then: added beside a system store, it would trust
+    what a deployment had taken out of that store.
+    """
+    context = ssl.create_default_context()
+    if context.cert_store_stats()["x509_ca"]:
+        return context
+    # A folder of hashed certificates is read lazily, so none count as loaded yet.
+    folder = ssl.get_default_verify_paths().capath
+    if folder and Path(folder).is_dir() and any(Path(folder).iterdir()):
+        return context
+    context.load_verify_locations(cafile=certifi.where())
+    return context
+
+
 class _PublicTLSHandler(urllib.request.HTTPSHandler):
     def __init__(self) -> None:
-        self._tls = ssl.create_default_context()
+        self._tls = _tls_context()
         super().__init__(context=self._tls)
 
     def https_open(self, req: Any) -> Any:
