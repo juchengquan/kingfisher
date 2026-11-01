@@ -4280,6 +4280,16 @@ sentences rather than one, because three things can be true: every survivor is b
 are and the rest too young, or the age decided -- the control, held by the existing rule
 about which age is named. *(2026-10-11, from an architecture review.)*
 
+**A follow-up to a session that is gone is not refused; the caller asks first.** A turn
+naming a session that is not there makes it, so one swept or deleted between two turns
+comes back under its id empty, with nothing in the result to say so: probed on
+2026-11-01, the second turn of a swept session ended `end_turn` with none of the first
+in what the model was sent. A `Request(continues=True)` refusing an absent session was
+agreed and then not built, because `kf.session(session_id)` already answers it -- `None`,
+and nothing made -- and a client continuing a conversation knows it is doing so. The flag
+would have closed only the moment between that call and the turn's own listing, against
+a sweep that runs only when someone runs it. *(2026-11-01.)*
+
 **No migration and no fallback reader.** The failure a fallback would paper over is
 silence rather than breakage: a pin the new code cannot find means a session re-pins and
 may change agent mid-conversation, and a transcript read from the new path comes back

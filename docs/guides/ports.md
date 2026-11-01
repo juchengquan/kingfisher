@@ -892,7 +892,10 @@ the turn claims or writes anything. A backend kingfisher did not open is taken a
 your word. `kf.session(session_id, create=True)` makes a session no turn has made
 yet, so a caller can place its inputs before the first turn. The caller named to
 `kf.session` is checked there, once; hand what `files()` returns only to code entitled
-to that session, and the turn still checks the caller it is given.
+to that session, and the turn still checks the caller it is given. A turn naming a
+session that is not there makes it, empty and without a word, so a caller continuing
+one that may have been swept asks `kf.session(session_id)` first: it answers `None`,
+and makes nothing, for a session that is gone.
 
 **And what it keeps about the session, under `/.harness`.** The agent the session is
 pinned to, its conversation, its inputs folder as the last turn found it, and a turn
