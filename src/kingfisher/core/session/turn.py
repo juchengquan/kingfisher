@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     from kingfisher.core.config import Config
 
+    from .files import InputsChanged
     from .store import KeptLedger
     from .transcript import Message
 
@@ -80,11 +81,14 @@ class Prepared:
     #: Whose memory the turn's ending hands its changes to, as the `MemoryStore` named
     #: them; `None` keeps them in the session.
     memory_key: str | None = None
+    #: The inputs folder as this turn's message described it, kept with the transcript
+    #: that carries the message; `None` where there is nothing to keep.
+    inputs_seen: Mapping[str, str | None] | None = None
 
 
 def turn_message(
     task: str,
-    placed: tuple[str, ...],
+    changed: InputsChanged,
     earlier: KeptLedger | None = None,
     *,
     layout: Layout,
@@ -98,8 +102,7 @@ def turn_message(
     # Beside the task, as the caller wrote it: it is the caller's, and kingfisher's lines
     # after it are about where the work is done.
     noted = f"{note}\n\n" if note else ""
-    # Named because the inputs changed under a session the agent may already have seen.
-    arrived = f" New files in {layout.inputs_route}: {', '.join(placed)}." if placed else ""
+    arrived = _inputs_changed(changed, layout.inputs_route)
     # Here, never in the system prompt: a line changing every turn in the cached prefix
     # would miss the cache on every call.
     shown = ledger_shown(earlier) if earlier is not None else ""
@@ -114,6 +117,24 @@ def turn_message(
         f"{arrived}"
         f"{ledger}"
     )
+
+
+def _inputs_changed(changed: InputsChanged, route: str) -> str:
+    """The changes to the inputs folder, the folder named once, or nothing.
+
+    Names alone: on MiniMax-M3 a sentence saying an earlier read is out of date sent the
+    agent back to the file no more often than "Replaced" did.
+    """
+    said: list[str] = []
+    for label, where, names in (
+        ("New files", "in", changed.new),
+        ("Replaced", "in", changed.replaced),
+        ("Removed", "from", changed.removed),
+    ):
+        if names:
+            folder = "" if said else f" {where} {route}"
+            said.append(f"{label}{folder}: {', '.join(names)}.")
+    return "".join(f" {one}" for one in said)
 
 
 #: How many of the latest exchanges that recorded anything the index lists in full.

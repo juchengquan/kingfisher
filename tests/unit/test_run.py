@@ -11,6 +11,7 @@ from kingfisher.core.result import END_TURN, STOP_REASONS, RunResult, normalize_
 from kingfisher.core.run import run
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions
+from kingfisher.plugins.sessions.permissions import writable_inputs
 from tests.conftest import FakeGraph, RecordedEvents, start
 
 
@@ -295,6 +296,39 @@ def test_the_agent_is_told_what_arrived_in_inputs(cfg):
     )
 
     assert "New files in /inputs/: fresh.csv." in agent.state["messages"][0]["content"]
+
+
+def test_inputs_changed_outside_the_request_are_named_on_the_next_turn(cfg):
+    """A caller writing the session's inputs folder directly, as one keeping it remotely
+    does, was never named, and 4 of 10 MiniMax-M3 sessions answered from the copy read
+    the turn before. The quiet third turn is the control: a record the second turn did
+    not keep would have it name the same changes again.
+    """
+    sales, old = cfg.workspace / "sales.csv", cfg.workspace / "old.csv"
+    sales.write_text("q4\n410\n")
+    old.write_text("x")
+    start(cfg, "moved")
+    run(
+        Request("look", session_id="moved", inputs=(sales, old)),
+        cfg=cfg,
+        graph=StubAgent("ok"),
+        sessions=LocalSessions(),
+    )
+    with writable_inputs(cfg.workspace / "sessions" / "moved", cfg.layout) as inputs:
+        (inputs / "sales.csv").write_text("q4\n455\n")
+        (inputs / "old.csv").unlink()
+        (inputs / "returns.csv").write_text("y")
+
+    told = []
+    for asked in ("and Q4?", "and Q1?"):
+        agent = StubAgent("ok")
+        run(Request(asked, session_id="moved"), cfg=cfg, graph=agent, sessions=LocalSessions())
+        told.append(agent.state["messages"][-1]["content"])
+
+    assert told[0].endswith(
+        " New files in /inputs/: returns.csv. Replaced: sales.csv. Removed: old.csv."
+    )
+    assert told[1].endswith("/scratchpad/ is yours to work in (from the shell, scratchpad).")
 
 
 # -- what a caller can be told, and what stays on the host ----------------

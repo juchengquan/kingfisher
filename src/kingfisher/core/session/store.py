@@ -18,6 +18,7 @@ from kingfisher.core.definitions.documents import DefinitionText
 from kingfisher.core.layout import (
     HARNESS,
     HARNESS_ROUTE,
+    INPUTS_SEEN,
     LEDGER_FILE,
     PAUSED_MARK,
     PAUSED_STATE,
@@ -137,6 +138,31 @@ def read_transcript(harness: Any) -> Steps[tuple[Message, ...]]:
 def write_transcript(harness: Any, messages: tuple[Message, ...]) -> Steps[None]:
     """Replace this session's transcript with what it now holds."""
     yield from harness.store(TRANSCRIPT_FILE, as_json(messages).encode("utf-8"))
+
+
+def read_inputs_seen(harness: Any) -> Steps[dict[str, str | None] | None]:
+    """The inputs folder as the last turn the agent heard from found it, or `None` where
+    no turn kept it."""
+    held = yield from harness.fetch(INPUTS_SEEN)
+    if held is None:
+        return None
+    try:
+        seen = json.loads(held)
+    # Unreadable is unknown: told less for a turn beats a turn that fails.
+    except ValueError:
+        return None
+    if not isinstance(seen, dict):
+        return None
+    return {
+        str(name): mark if isinstance(mark, str) else None for name, mark in seen.items()
+    }
+
+
+def write_inputs_seen(harness: Any, seen: Mapping[str, str | None]) -> Steps[None]:
+    """Keep the inputs folder as this turn found it."""
+    yield from harness.store(
+        INPUTS_SEEN, json.dumps(dict(seen), sort_keys=True, ensure_ascii=False).encode("utf-8")
+    )
 
 
 def entry_id(number: int) -> str:

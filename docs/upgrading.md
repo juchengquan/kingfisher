@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The agent hears which inputs changed, after #1169
+
+- **A turn's message names every change to `/inputs` since the last turn**, not only the
+  files its request placed: `New files in /inputs/: …`, then `Replaced: …` and
+  `Removed: …`. A file the request sends under a name already there was listed among
+  the new files and is now named as replaced; a first turn names everything in
+  `/inputs`, files placed with `files()` before it included.
+- **Each turn that asks something lists `/inputs` with `glob`** once its request's files
+  are placed, and keeps what it found in `/.harness/inputs.json`. A session backend of
+  yours should give each entry a `checksum` that changes with the contents, or `size`
+  and `modified_at`; with neither, a replaced file goes unnamed
+  ([`ports.md`](guides/ports.md)).
+
 ## A copied agent loads and keeps its gates, after #1165
 
 - **`Reachable.agent` drops `skills:` and `subagents:`** from a copy whose built-ins

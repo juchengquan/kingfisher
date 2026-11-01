@@ -47,6 +47,7 @@ from .store import (
     PENDING_MARK,
     clear_pause,
     pending_as_mark,
+    write_inputs_seen,
     write_pause_mark,
     write_transcript,
 )
@@ -247,6 +248,10 @@ class Running:
         messages = runtime.as_seen(snapshot)
         if messages:
             yield from write_transcript(prepared.harness, runtime.as_transcript(messages))
+            # Only with the message saying so: kept by a turn the agent never heard from,
+            # what changed before it would never be said.
+            if prepared.inputs_seen is not None:
+                yield from write_inputs_seen(prepared.harness, prepared.inputs_seen)
 
     def _settle_pause(
         self, prepared: Prepared, snapshot: Any

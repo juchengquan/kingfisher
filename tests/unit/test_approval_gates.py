@@ -8,6 +8,7 @@ the feature is.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace as replace_cfg
 from typing import Any
 
@@ -18,13 +19,14 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher
 from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.core.layout import HARNESS, PAUSED_MARK, PAUSED_STATE
+from kingfisher.core.layout import HARNESS, PAUSED_MARK, PAUSED_STATE, TRANSCRIPT_FILE
 from kingfisher.core.request import Decision, DecisionError, Request, Resume
 from kingfisher.core.result import AWAITING, DECISIONS, END_TURN
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.store import read_pause_mark, write_pause_mark
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_bytes
+from kingfisher.plugins.sessions.permissions import writable_inputs
 from tests.conftest import FakeToolCallingModel, Through, harness_of
 
 PAUSED = f"{HARNESS}/{PAUSED_STATE}"
@@ -763,6 +765,35 @@ def test_a_turn_that_runs_still_places_its_inputs_and_says_what_it_replaced(cfg,
     assert placed.text == "report.txt (1 replaced)"
     inputs = _session_dir(cfg, first.session_id) / "inputs" / "report.txt"
     assert inputs.read_text(encoding="utf-8") == "second"
+
+
+def test_an_input_replaced_while_a_turn_waits_is_named_after_its_resume(cfg, session_dir):
+    """A resume adds no message, so a resume that kept the inputs folder as it found it
+    would leave the replacement named on no turn at all.
+    """
+    kf = Kingfisher(
+        cfg,
+        graph=_gated_on_disk(cfg, session_dir, calls=[_write("/outputs/a.txt", "x", "c1")]),
+        sessions=LocalSessions(),
+    )
+    report = cfg.workspace / "report.txt"
+    report.write_text("first", encoding="utf-8")
+    paused = kf.run(Request("write it", session_id=session_dir.name, inputs=(report,)))
+    with writable_inputs(session_dir, cfg.layout) as inputs:
+        (inputs / "report.txt").write_text("second, and longer", encoding="utf-8")
+    kf.run(
+        Resume(
+            session_id=paused.session_id,
+            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+        )
+    )
+
+    kf.run(Request("again", session_id=session_dir.name))
+
+    transcript = (session_dir / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8")
+    asked = [json.loads(line) for line in transcript.splitlines()]
+    *_, last = (one["content"] for one in asked if one["role"] == "user")
+    assert "Replaced in /inputs/: report.txt." in last
 
 
 def test_a_supersede_whose_inputs_cannot_be_placed_leaves_the_pause_waiting(

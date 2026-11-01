@@ -6,9 +6,11 @@ import os
 import shutil
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
+from deepagents.backends.protocol import GlobResult
 from langchain_core.messages import AIMessage
 
 from kingfisher import ArtifactError, Kingfisher, Request, UnknownSessionError
@@ -17,7 +19,11 @@ from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import Sessions
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS, SKILLS_ROUTE, Layout
 from kingfisher.core.session.files import (
+    InputsChanged,
+    InputsPlacement,
     collect_artifacts,
+    inputs_changed,
+    inputs_seen,
     read_artifact,
 )
 from kingfisher.core.session.steps import drive
@@ -322,6 +328,38 @@ def test_a_refused_upload_is_an_inputs_error_naming_the_file(session_dir, tmp_pa
 
     with pytest.raises(ValueError, match=r"/inputs/in\.csv: permission_denied"):
         drive(supplied((source,), backend, Layout()))
+
+
+def test_a_backend_s_own_checksum_comes_before_size_and_time():
+    """A file uploaded again unchanged has a new time, so read by time alone it would be
+    named replaced on every turn of a caller that resends its files; the checksum is the
+    field a backend owner fills to prevent that, and a renamed one would go unread.
+    """
+
+    class Listing:
+        def __init__(self, *entries: dict) -> None:
+            self.entries: list[Any] = [{"path": f"/inputs/{e.pop('name')}", **e} for e in entries]
+
+        def glob(self, pattern: str, path: str) -> GlobResult:
+            return GlobResult(matches=self.entries if pattern == "**" else [])
+
+    def seen(*entries: dict) -> dict:
+        return drive(inputs_seen(Listing(*entries), DEFAULT_LAYOUT))
+
+    before = seen(
+        {"name": "same.csv", "checksum": "e1", "size": 1, "modified_at": "t1"},
+        {"name": "edited.csv", "size": 1, "modified_at": "t1"},
+        {"name": "bare.csv"},
+    )
+    now = seen(
+        {"name": "same.csv", "checksum": "e1", "size": 1, "modified_at": "t2"},
+        {"name": "edited.csv", "size": 1, "modified_at": "t2"},
+        {"name": "bare.csv"},
+    )
+
+    assert inputs_changed(before, now, InputsPlacement()) == InputsChanged(
+        replaced=("edited.csv",)
+    )
 
 
 def test_collecting_and_reading_agree_on_every_name(cfg, session_dir):

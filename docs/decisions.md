@@ -3757,6 +3757,44 @@ the cost of the merge, stated rather than discovered. The per-turn `--input` wen
 the flag and `Request.inputs` came back with the per-session meaning (see "The names a
 caller writes follow the folder" below).
 
+**The agent is told which inputs were added, replaced or removed since its last turn,
+however they arrived.** A turn's message named only the files its own request placed,
+replacements among them, as "New files"; a file a caller wrote into the session itself --
+through `files()`, or into storage its backend keeps elsewhere -- was never named, while
+the agent's earlier read of it stayed whole in the conversation. Measured on MiniMax-M3
+with `general`, ten two-turn sessions, the second replacing `sales.csv` and asking what
+the change answered: 4 of 10 answered from the old copy without looking again, one
+saying "Same file as before". With the file replaced directly between the turns, 0 of 10
+did with `Replaced in /inputs/: sales.csv.`, and 0 of 10 with a sentence after it
+saying an earlier read was out of date, so the names alone are said. *(2026-11-01, from
+a grilled plan.)*
+
+**Kept in the session, compared at the next turn.** Kingfisher keeps nothing between
+turns, so each turn that asks something lists `/inputs` once its request's files are
+placed, compares that with `/.harness/inputs.json`, and leaves its own listing there.
+Written with the transcript, by a turn whose message reached the model: kept by a turn
+that failed first, a change would be named on no turn. A resume adds no message and keeps
+nothing. A first turn names everything there as new; a session from before the record
+names what its request placed until a turn keeps one; and without a conversation no
+earlier read is replayed to go stale, so only the request's files are named.
+
+**A file is told apart by its listing, never its contents.** A `checksum` the backend's
+listing adds first, any text that changes with the contents such as an ETag, since a
+file resent unchanged has a new time; then `size` and `modified_at`; with neither, only a
+file the request itself wrote over counts as replaced. **Rejected: reading each input to
+checksum it.** deepagents' `download_files` hands a file back only whole, so every turn
+would hold the largest input in memory, per session, after downloading it from a remote
+backend. **Rejected: checksumming in the session's shell.** Not every session has one,
+kingfisher runs no command of its own there, and where `/inputs` sits differs by
+backend.
+
+**Not taken: swapping the earlier read for a handle.** It removes the old text, but
+re-caches the conversation from that message on, misses what a command printed of the
+old file and the agent's own answer, and the line alone reached 0 of 10. **Not covered:**
+a file the shell changes outside `/inputs`, of which no listing is kept, and a result
+from an outside source, whose freshness nothing supplies (*What was left open,
+decided*).
+
 **The three lifetimes are told apart by destination**: `/inputs` is the caller's and
 read-only, `/scratchpad` is the agent's and returned to nobody, `/outputs` and `/memory`
 are what the caller gets back. The dot came off `.tmp` because its only reason was that

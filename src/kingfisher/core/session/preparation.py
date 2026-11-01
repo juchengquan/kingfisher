@@ -33,7 +33,7 @@ from .checkpointing import (
     harness_mark,
     resumed_saver,
 )
-from .files import place_inputs, planned_inputs
+from .files import InputsPlacement, inputs_changed, inputs_seen, place_inputs, planned_inputs
 from .ledger import Ledger
 from .memory import UsersMemory, as_file, settled_memory, users_memory
 from .memory_writer import writer_model
@@ -56,6 +56,7 @@ from .store import (
     clear_pause,
     pending_from_mark,
     pinned_in,
+    read_inputs_seen,
     read_ledger,
     read_pause_mark,
     read_transcript,
@@ -265,6 +266,13 @@ class Preparation:
         # nobody can recreate a pause. `run_start` last, so a refused request logs no turn.
         try:
             yield from place_inputs(placement, files, self.cfg.layout)
+            # A resume adds no message: it continues a superstep, and a user turn
+            # appended there would be one the model never saw asked.
+            asked = getattr(request, "task", "")
+            if asked:
+                prepared = yield from self._with_message(
+                    prepared, asked, request, placement, history=history, earlier=earlier
+                )
             if resolved and pinned is None:
                 yield from self._pin_agent_in(harness, request.agent)
             if ran_in:
@@ -289,7 +297,6 @@ class Preparation:
                 )
             # A resume says so in `run_start`: a task-shaped one would read as the work
             # being requested again.
-            asked = getattr(request, "task", "")
             started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
             yield on_host(prepared.logger.run_start, started)
         except BaseException:
@@ -297,6 +304,37 @@ class Preparation:
             release_interpreter(self.cfg, prepared.graph)
             raise
         return prepared
+
+    def _with_message(  # noqa: PLR0913 -- the turn's, handed on
+        self,
+        prepared: Prepared,
+        asked: str,
+        request: Request | Resume,
+        placement: InputsPlacement,
+        *,
+        history: tuple[Any, ...],
+        earlier: KeptLedger | None,
+    ) -> Steps[Prepared]:
+        """`prepared` with its message, saying what changed in the inputs folder since the
+        agent last heard, however it changed.
+
+        Without a conversation no earlier read is replayed to go out of date, so only what
+        this request placed is named, as before anything was kept.
+        """
+        layout = self.cfg.layout
+        now = None
+        if self.cfg.conversation_enabled:
+            now = yield from inputs_seen(prepared.files, layout)
+        # A first turn was told of nothing; a session older than the record, of unknown.
+        before = (yield from read_inputs_seen(prepared.harness)) if history else {}
+        message = turn_message(
+            asked,
+            inputs_changed(before, now, placement),
+            earlier,
+            layout=layout,
+            note=getattr(request, "note", ""),
+        )
+        return replace(prepared, message=message, inputs_seen=now)
 
     def _take_pause(
         self, request: Request | Resume, session: Conversation, harness: HarnessFiles
@@ -468,17 +506,8 @@ class Preparation:
             agent_name=agent.name if agent is not None else None,
             history=history,
             ledger=ledger,
-            # A resume adds no message: it continues a superstep, and a user turn
-            # appended there would be one the model never saw asked.
-            message=turn_message(
-                asked,
-                placement.placed,
-                earlier,
-                layout=self.cfg.layout,
-                note=getattr(request, "note", ""),
-            )
-            if asked
-            else "",
+            # Written once the inputs are placed, which this must not wait for.
+            message="",
             session=session,
             turn=turn,
             logger=logger,

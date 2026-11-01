@@ -16,6 +16,7 @@ from kingfisher.core.interfaces import CommandResult, CommandRunner
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
 from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
+from kingfisher.core.session.files import InputsChanged
 from kingfisher.core.session.running import refused_credentials, refused_request
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.turn import turn_message
@@ -213,7 +214,7 @@ def test_unhardened_paths_are_reported_before_the_run_starts():
 
 
 def test_a_bare_task_is_told_only_where_to_work():
-    message = turn_message("do a thing", (), layout=DEFAULT_LAYOUT)
+    message = turn_message("do a thing", InputsChanged(), layout=DEFAULT_LAYOUT)
 
     assert message == (
         "do a thing\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
@@ -225,7 +226,10 @@ def test_a_note_follows_the_task_and_comes_before_kingfishers_own_lines():
     and one ahead of the task puts the caller's aside before what was asked.
     """
     message = turn_message(
-        "analyse", ("fresh.csv",), layout=DEFAULT_LAYOUT, note="Figures are in euros."
+        "analyse",
+        InputsChanged(new=("fresh.csv",)),
+        layout=DEFAULT_LAYOUT,
+        note="Figures are in euros.",
     )
 
     assert message == (
@@ -239,7 +243,7 @@ def test_an_empty_note_leaves_the_message_as_it_was():
     """The control: a turn without a note that gained so much as a blank line would send
     a different message from every turn before it.
     """
-    message = turn_message("do a thing", (), layout=DEFAULT_LAYOUT, note="")
+    message = turn_message("do a thing", InputsChanged(), layout=DEFAULT_LAYOUT, note="")
 
     assert message == (
         "do a thing\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
@@ -250,14 +254,14 @@ def test_files_supplied_with_the_request_are_named():
     """They went to a directory of the turn's own and are session inputs now, so the
     one line that used to name two places names one.
     """
-    message = turn_message("analyse", ("fresh.csv",), layout=DEFAULT_LAYOUT)
+    message = turn_message("analyse", InputsChanged(new=("fresh.csv",)), layout=DEFAULT_LAYOUT)
 
     assert "New files in /inputs/: fresh.csv." in message
 
 
 def test_the_turn_message_carries_no_output_convention():
     """What the task should *produce* is the task's business."""
-    message = turn_message("say hello", (), layout=DEFAULT_LAYOUT)
+    message = turn_message("say hello", InputsChanged(), layout=DEFAULT_LAYOUT)
 
     assert "report" not in message.lower()
     assert ".md" not in message
