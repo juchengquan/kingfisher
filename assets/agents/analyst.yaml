@@ -30,21 +30,16 @@ tools:
 # What gates them is the line at the top of this file -- an agent declaring a
 # read-only builtin set cannot hand anyone the shell, whoever they are.
 #
-# **A `skills:` entry is the one entry that may say who it is for**, because a
-# skill's own file is `SKILL.md`, which the model reads whole and a deployment may
-# not own. Written long, `{name, source_ids}`, beside the plain names; a bare name
-# inherits the line at the top.
+# Names, as under `tools:`. A skill's lock is its entry in `skill_locks.yaml`, beside
+# these folders: `tabular-qa` is locked to `sales_db` there, so a caller holding only
+# `audit_log` opens this agent and is never told the profiling procedure exists.
+#
+# Worth being exact about what that does and does not buy. Removing a skill means the
+# agent is not *told* about it -- the file is still on disk, and a skill was never a
+# boundary. The boundary is the tools the procedure would need, which carry locks of
+# their own, in their own files.
 skills:
-  # Narrower than this definition, and an **and** with it: a caller holding only
-  # `audit_log` opens this agent and is never told the profiling procedure
-  # exists; one holding `sales_db` is.
-  #
-  # Worth being exact about what that does and does not buy. Removing a skill
-  # means the agent is not *told* about it -- the file is still on disk, and a
-  # skill was never a boundary. The boundary is the tools the procedure would
-  # need, which carry locks of their own, in their own files.
-  - name: tabular-qa
-    source_ids: [sales_db]
+  - tabular-qa
   - code-review
 # Names only, as under `tools:`. A subagent says who reaches it in its own file,
 # and that holds wherever it is used: `subagents/auditor.yaml` is for two

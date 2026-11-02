@@ -11,7 +11,8 @@ from kingfisher.core.result import Listed
 from .capabilities import ALL
 
 #: The selection fields a definition's own `source_ids:` narrows for a caller, since what it
-#: holds is reached only through it. Not `builtin_tools`: deepagents registers those, so
+#: holds is reached only through it. A tool's or skill's own lock is applied apart, from its
+#: own file. Not `builtin_tools`: deepagents registers those, so
 #: kingfisher can filter them but never leave them out, and an audience there would promise a
 #: boundary nothing can hold.
 AUDIENCED: Final[tuple[str, ...]] = ("tools", "subagents", "skills")
@@ -65,15 +66,13 @@ class Stated:
 
     #: The definition's own audience: who may reach it at all.
     source_ids: Audience = ALL
-    #: Skill name -> who this definition tells about it, for the entries saying.
-    skills: Mapping[str, Audience] = field(default_factory=dict)
     #: The one datazone a caller must be in to reach it, or `None` for any.
     datazone: str | None = None
 
     @property
     def says_nothing(self) -> bool:
         """Whether this definition restricts anyone at all."""
-        return self.source_ids == ALL and not self.skills and self.datazone is None
+        return self.source_ids == ALL and self.datazone is None
 
     @property
     def audience(self) -> Audience:
@@ -257,13 +256,9 @@ class AccessReport:
     #: name)`.
     unrestricted: tuple[tuple[str, str], ...] = ()
 
-    #: Skills entries naming none of the source ids their definition's own audience
-    #: mentions, as `(where, audience)`. Reached only by a caller holding one of each.
-    narrowed: tuple[tuple[str, str], ...] = ()
-
     @property
     def is_clean(self) -> bool:
-        return not (self.unrestricted or self.narrowed)
+        return not self.unrestricted
 
     def lines(self) -> tuple[str, ...]:
         """The report, ready to print, or nothing at all when there is nothing."""
@@ -273,10 +268,6 @@ class AccessReport:
         if self.unrestricted:
             said.append("  no source_ids: line, so reachable by everyone:")
             said.extend(f"    {kind} {name}" for kind, name in self.unrestricted)
-        if self.narrowed:
-            said.append("  narrows past this definition's own audience,")
-            said.append("  so it reaches only callers holding both:")
-            said.extend(f"    {where}  [{who}]" for where, who in self.narrowed)
         return tuple(said)
 
 
@@ -342,25 +333,3 @@ def mentioned(audience: Audience) -> frozenset[str]:
     if audience == ALL:
         return frozenset()
     return frozenset(n for one in audience for n in ((one,) if isinstance(one, str) else one))
-
-
-def narrowing_in(
-    skills: Mapping[str, Audience],
-    *,
-    source_ids: Audience,
-    where: str,
-) -> tuple[tuple[str, str], ...]:
-    """Skills entries naming a source id this definition's own audience never mentions.
-
-    An entry's audience is already an and with the definition's, since an entry is reached
-    only through its definition: `[pii]` under `[sales_db, audit_log]` means "whoever
-    opens this agent and holds `pii`", a good second requirement.
-    """
-    if source_ids == ALL:
-        return ()
-    admitted = mentioned(source_ids)
-    return tuple(
-        (f"{where}: skill {entry}", spell(audience))
-        for entry, audience in skills.items()
-        if audience != ALL and not (mentioned(audience) & admitted)
-    )

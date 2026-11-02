@@ -8,6 +8,8 @@ from difflib import get_close_matches
 from types import MappingProxyType
 from typing import TYPE_CHECKING, NoReturn
 
+import yaml
+
 from kingfisher.core.access import ALL, DATAZONE_PREFIX, SEPARATOR, Selection
 
 if TYPE_CHECKING:
@@ -40,11 +42,16 @@ def _spelled(extra: tuple[str, ...]) -> str:
 #: A key an entry may not write, with where it goes instead. On an entry, a datazone could
 #: only repeat or contradict the thing's own, and a contradiction makes it unreachable.
 ON_THE_THING: Mapping[str, str] = MappingProxyType(
-    {"datazone": "write it in the tool's or subagent's own file, the one place it means one thing"}
+    {
+        "datazone": (
+            "write it in the tool's or subagent's own file, or a skill's entry in "
+            "skill_locks.yaml, the one place it means one thing"
+        )
+    }
 )
 
-#: Why a `tools:` or `subagents:` entry says nothing about who may use it: each thing has one
-#: lock, in its own file, so who may use it is read in one place and not off every agent.
+#: Why a `tools:`, `skills:` or `subagents:` entry says nothing about who may use it: each
+#: thing has one lock, so who may use it is read in one place and not off every agent.
 TOOL_LOCK = (
     "a tool's lock is in its own file, as ToolSpec(tool, source_ids=[...]) in its "
     "TOOLS, and holds wherever the tool is granted"
@@ -52,6 +59,15 @@ TOOL_LOCK = (
 SUBAGENT_LOCK = (
     "a subagent's audience is the source_ids: line in its own file, and holds "
     "wherever it is used"
+)
+SKILL_LOCK = (
+    "a skill's lock is its entry in skill_locks.yaml, beside the definitions, and "
+    "holds wherever the skill is listed"
+)
+#: A subagent's own skill is in no catalogue, so `skill_locks.yaml` cannot name it.
+BUNDLED_SKILL_LOCK = (
+    "a skill from this subagent's own folder reaches whoever reaches this subagent -- "
+    "put the source_ids on the subagent itself"
 )
 
 
@@ -183,8 +199,8 @@ class Reader:
             # offered to nobody and reported nowhere.
             msg = (
                 f"{self.source}: {key} is a mapping; this field takes a list. A "
-                f"mapping says who reaches each entry, and only a skills entry may "
-                f"say that -- builtin tools are registered by deepagents, so they "
+                f"mapping would say who reaches each entry, and no entry here says "
+                f"that -- builtin tools are registered by deepagents, so they "
                 f"can be filtered but never left out of a graph"
             )
             raise self.error(msg)
@@ -303,10 +319,15 @@ class Reader:
             kept = "".join(f", {k}: {text(v)}" for k, v in entry.items() if k in extra)
             written = f"{{name: {named}{kept}}}" if kept else named
             said = "writes source_ids" if "source_ids" in entry else "is written long"
+            bundled = text(entry.get("source")) == BUNDLED
+            if key == "skills" and bundled:
+                locked = BUNDLED_SKILL_LOCK
             msg = (
                 f"{self.source}: {key} entry {named!r} {said}, which a {key} entry does "
                 f"not take: {locked}. Write the entry as - {written}"
             )
+            if key == "skills" and "source_ids" in entry and not bundled:
+                msg += _pasted_lock(named, entry["source_ids"])
             raise self.error(msg)
 
         if (
@@ -480,65 +501,13 @@ class Reader:
             raise self.error(msg)
         return named
 
-    def _audience(
-        self,
-        raw: object,
-        *,
-        key: str,
-        entry: str,
-        known: tuple[str, ...],
-    ) -> Audience | None:
-        """One entry's audience, written `{source_ids: [...]}`, or `None` for none."""
-        where = f"{self.source}: {key} entry {entry!r}"
-        if raw is None:
-            return None
-        if isinstance(raw, (list, tuple)):
-            written = ", ".join(str(one) for one in raw) or "..."
-            msg = (
-                f"{where}: an audience is written `source_ids: [{written}]`, not as a "
-                f"bare list -- the same word the definition's own line uses, so an "
-                f"entry says which fact it is stating and has room for another"
-            )
-            raise self.error(msg)
-        if not isinstance(raw, Mapping):
-            msg = f"{where}: write `source_ids: [...]`, or nothing at all -- got {raw!r}"
-            raise self.error(msg)
-        # `name` is in `known` rather than stripped by `_entry_name`, so this checks the
-        # mapping the file contains.
-        if complaint := unrecognised(raw, known=set(known), declined=ON_THE_THING, noun="key"):
-            msg = f"{where}: {complaint}"
-            raise self.error(msg)
-        if "source_ids" not in raw:
-            return None
-        return self.audience_list(
-            raw["source_ids"],
-            where=f"{where}: source_ids",
-            lone_name=False,
-            left_out="inherit the audience around it",
-        )
-
-    def _refuse_mapping(
-        self, value: Mapping[object, object], *, key: str, locked: str | None
-    ) -> NoReturn:
-        """Refuse a whole field written as a mapping keyed by name.
-
-        Refused rather than read: YAML collapses `{a: X, a: Y}` before any reader runs, so
-        one of two audiences for a name would vanish unreported.
-        """
-        if locked is not None:
-            listed = ", ".join(str(one) for one in value) or "<name>"
-            msg = (
-                f"{self.source}: {key} is a mapping; this field takes a list of names -- "
-                f"write {key}: [{listed}]. Nothing beside a name here says who may use "
-                f"it: {locked}"
-            )
-            raise self.error(msg)
-        first = next(iter(value), "<name>")
+    def _refuse_mapping(self, value: Mapping[object, object], *, key: str, locked: str) -> NoReturn:
+        """Refuse a whole field written as a mapping keyed by name."""
+        listed = ", ".join(str(one) for one in value) or "<name>"
         msg = (
-            f"{self.source}: {key} is a mapping; this field takes a list. An "
-            f"entry that says who it is for is written long -- "
-            f"- {{name: {first}, source_ids: [...]}} -- beside the plain names, "
-            f"which is the same shape 'middlewares' takes for its settings"
+            f"{self.source}: {key} is a mapping; this field takes a list of names -- "
+            f"write {key}: [{listed}]. Nothing beside a name here says who may use "
+            f"it: {locked}"
         )
         raise self.error(msg)
 
@@ -569,21 +538,21 @@ class Reader:
         refuse_all: str | None = None,
         refuse_bundled: str | None = None,
         same: Callable[[str], str] | None = None,
-        locked: str | None = None,
-    ) -> tuple[Selection, Mapping[str, Audience], tuple[str, ...]]:
-        """The shared entries and who reaches each, and the bundled entries apart.
+        locked: str,
+    ) -> tuple[Selection, tuple[str, ...]]:
+        """The shared entries, and the bundled entries apart.
 
         Apart because nothing narrows a bundled entry: in the selection, a grant that
         omits it would read as having removed it. `locked` is why no entry may say who
-        reaches it, which leaves the middle answer empty.
+        reaches it.
         """
         if isinstance(value, Mapping):
             self._refuse_mapping(value, key=key, locked=locked)
         if not isinstance(value, (list, tuple)):
             # A bare `"*"`, one name, or nothing: none can carry anything beside a name.
-            return self.selection(value, absent=absent, key=key, refuse_all=refuse_all), {}, ()
+            return self.selection(value, absent=absent, key=key, refuse_all=refuse_all), ()
 
-        extra = ("source",) if locked is not None else ("source_ids", "source")
+        extra = ("source",)
         # Both sources through one `_entries`, so a name written shared and bundled is
         # refused as written twice: a subagent dispatches by name.
         written, carried = self._entries(value, key=key, extra=extra, same=same, locked=locked)
@@ -595,13 +564,6 @@ class Reader:
             if refuse_bundled is not None:
                 msg = f"{where} is source: {BUNDLED} -- {refuse_bundled}"
                 raise self.error(msg)
-            if "source_ids" in carried[name]:
-                msg = (
-                    f"{where} is source: {BUNDLED} and says who reaches it, and a "
-                    f"bundled entry reaches whoever reaches this subagent. Put the "
-                    f"source_ids on the subagent itself"
-                )
-                raise self.error(msg)
             if SEPARATOR in name:
                 msg = (
                     f"{where} is source: {BUNDLED} and says which file it is in, and "
@@ -609,18 +571,13 @@ class Reader:
                     f"the name alone"
                 )
                 raise self.error(msg)
-        stated = {
-            name: self._audience(entry, key=key, entry=name, known=entry_fields(*extra))
-            for name, entry in carried.items()
-            if name not in bundled
-        }
         chosen = self.selection(
             [name for name in written if name not in bundled],
             absent=absent,
             key=key,
             refuse_all=refuse_all,
         )
-        return chosen, {n: a for n, a in stated.items() if a is not None}, bundled
+        return chosen, bundled
 
     def _source(self, entry: Mapping[str, object], *, key: str) -> str:
         """Where one long-form entry says it comes from, `shared` when it does not say."""
@@ -658,6 +615,15 @@ class Reader:
             )
             raise self.error(msg)
         return dict(value)
+
+
+def _pasted_lock(name: str, source_ids: object) -> str:
+    """An old skills entry's audience, as the lines that say it in `skill_locks.yaml`."""
+    lines = yaml.safe_dump(
+        [{"name": name, "source_ids": source_ids}], sort_keys=False, default_flow_style=None
+    )
+    indented = "".join(f"  {line}" for line in lines.splitlines(keepends=True))
+    return f", and add to skill_locks.yaml:\n{indented}"
 
 
 def wanted_model(document: Mapping[str, object], read: Reader) -> str | None:

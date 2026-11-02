@@ -942,6 +942,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
         "subagents/auditor.yaml",
         "subagents/quarters.py",
         "tools/sql_query.py",
+        "skill_locks.yaml",
     }
     assert "agents/general.yaml" not in done.written
     assert not (tmp_path / "agents" / "general.yaml").exists()
@@ -960,6 +961,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
         # field it was written in.
         "subagents/quarters.py": ("source_ids", ("sales_db",), ("emea",)),
         "tools/sql_query.py": ("source_ids", ("sales_db",), ()),
+        "skill_locks.yaml": ("source_ids", ("sales_db",), ()),
     }
 
     # And everything else still arrives, which is the half that would break
@@ -1134,12 +1136,17 @@ def test_the_shipped_assistant_builds_against_the_registry_it_documents(shipped)
 # -- the shipped set for source-id access ---------------------------------------
 
 
-def _vocabulary(shipped):
-    """What the shipped presets add up to, collected the way a deployment's are."""
+def _catalogue(shipped):
+    """The shipped presets, read the way a deployment's are."""
     from kingfisher.core.config import definition_roots_for
     from kingfisher.core.definitions.catalogue import Definitions
 
-    return Definitions.from_roots(definition_roots_for(shipped)).vocabulary
+    return Definitions.from_roots(definition_roots_for(shipped))
+
+
+def _vocabulary(shipped):
+    """What the shipped presets add up to, collected the way a deployment's are."""
+    return _catalogue(shipped).vocabulary
 
 
 def test_the_presets_add_up_to_the_vocabulary_their_guide_teaches(shipped):
@@ -1150,7 +1157,13 @@ def test_the_presets_add_up_to_the_vocabulary_their_guide_teaches(shipped):
     assert vocabulary is not None
     assert vocabulary.source_ids == {
         "audit_log": ("agent analyst", "subagent auditor"),
-        "sales_db": ("agent analyst", "subagent auditor", "subagent quarters", "tool sql_query"),
+        "sales_db": (
+            "agent analyst",
+            "subagent auditor",
+            "subagent quarters",
+            "skill tabular-qa",
+            "tool sql_query",
+        ),
     }
     assert vocabulary.datazones == {"emea": ("subagent quarters",)}
 
@@ -1199,19 +1212,19 @@ def test_the_shipped_quarters_is_for_sales_db_callers_in_emea(shipped):
     assert not reached(["audit_log"], "emea")
 
 
-def test_an_entry_that_states_nothing_inherits(shipped):
-    """`analyst.yaml` narrows one skill and leaves the other bare -- which is the rule most
-    likely to be got wrong, so it is asserted rather than only commented.
+def test_the_shipped_lock_keeps_one_skill_from_an_audit_caller(shipped):
+    """`analyst.yaml` lists both skills by name and `skill_locks.yaml` locks one, which is
+    the rule most likely to be got wrong, so it is asserted rather than only commented.
     """
-    specs = LocalAgentRepository(shipped / "agents").specs
-    analyst = specs["analyst"]
+    catalogue = _catalogue(shipped)
+    analyst = catalogue.agents.specs["analyst"]
 
-    assert analyst.skill_audiences == {"tabular-qa": ("sales_db",)}
-    assert analyst.declares(frozenset({"audit_log"})).skills == ("code-review",)
-    assert analyst.declares(frozenset({"sales_db"})).skills == (
-        "tabular-qa",
-        "code-review",
-    )
+    def told(*names: str) -> object:
+        held = frozenset(names)
+        return catalogue.unlocked_for(analyst.declares(held), held).skills
+
+    assert told("audit_log") == ("code-review",)
+    assert told("sales_db") == ("tabular-qa", "code-review")
     # Every tools entry is a name: `sql_query` says `sales_db` itself, which is asserted
     # by `test_the_shipped_database_tool_says_who_it_is_for`.
     assert analyst.declares(frozenset({"audit_log"})).tools == (
@@ -1231,37 +1244,12 @@ def test_the_shipped_database_tool_says_who_it_is_for(shipped):
     assert found["sql_tables"].source_ids == "*", "the schema listing is not the database"
 
 
-def test_the_set_shows_an_audience_on_a_skills_entry(shipped):
-    """No preset would show the one entry that may still say who it is for."""
-    import yaml
+def test_every_shipped_skill_lock_names_a_shipped_skill(shipped):
+    """A shipped skill renamed under its lock would stop every deployment seeded with
+    `--all` from starting."""
+    locked = _catalogue(shipped).locked_skills
 
-    shown = [
-        path.name
-        for path in sorted((shipped / "agents").rglob("*.yaml"))
-        + sorted((shipped / "subagents").rglob("*.yaml"))
-        if isinstance(document := yaml.safe_load(path.read_text(encoding="utf-8")), dict)
-        and any(
-            isinstance(entry, dict) and "source_ids" in entry
-            for entry in document.get("skills") or ()
-        )
-    ]
-
-    assert shown, "no preset writes source_ids on a skills entry"
-
-
-def test_a_bare_entry_sits_beside_a_long_one(shipped):
-    """Mixing the two spellings in one list is the ordinary case, not a special one --
-    an entry with nothing to attach writes nothing.
-    """
-    import yaml
-
-    document = yaml.safe_load(
-        (shipped / "agents" / "analyst.yaml").read_text(encoding="utf-8")
-    )
-
-    entries = document["skills"]
-    assert any(isinstance(e, str) for e in entries), "skills: no bare entry"
-    assert any(isinstance(e, dict) for e in entries), "skills: no long entry"
+    assert locked, "no preset shows a skill's lock"
 
 
 def test_the_other_presets_still_restrict_nobody(shipped):

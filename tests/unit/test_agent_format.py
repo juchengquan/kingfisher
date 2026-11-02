@@ -361,8 +361,7 @@ def test_declaring_with_no_caller_is_what_it_always_was():
     """A deployment with no vocabulary, or an UNSCOPED call."""
     spec = _read(
         MINIMAL.rstrip()
-        + "\nsource_ids: [A]\nbuiltin_tools: [read_file]\n"
-        + "skills:\n  - name: audit\n    source_ids: [B]\n",
+        + "\nsource_ids: [A]\nbuiltin_tools: [read_file]\nskills: [audit]\n",
         "plain.yaml",
     )
 
@@ -380,17 +379,6 @@ def test_builtin_tools_takes_no_audience():
         )
 
 
-def test_the_refusal_of_a_mapping_names_skills_as_the_one_field_taking_an_audience():
-    """It named tools and subagents too, sending a reader to write the audience the
-    reader of either field refuses.
-    """
-    with pytest.raises(AgentError, match="only a skills entry may say that"):
-        _read(
-            MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute:\n    source_ids: [A]\n",
-            "plain.yaml",
-        )
-
-
 def test_a_mapping_under_middlewares_is_sent_to_the_long_form_not_told_about_builtin_tools():
     """It got the builtin_tools refusal, which says nothing about where settings go."""
     with pytest.raises(AgentError, match=r"- \{name: cap, settings: \{\.\.\.\}\}") as refused:
@@ -399,22 +387,6 @@ def test_a_mapping_under_middlewares_is_sent_to_the_long_form_not_told_about_bui
             "plain.yaml",
         )
     assert "builtin" not in str(refused.value)
-
-
-def test_an_entry_audience_outside_the_definitions_own_is_recorded_not_judged():
-    """Whether one audience can ever reach another is a question about what the names
-    *mean*, and this format has no vocabulary to answer it with: `B` may contain `C`,
-    or `A` may require it.
-    """
-    spec = _read(
-        MINIMAL.rstrip()
-        + "\nsource_ids: [A, B]\nbuiltin_tools: [read_file]\n"
-        + "skills:\n  - name: audit\n    source_ids: [C]\n",
-        "plain.yaml",
-    )
-
-    assert spec.source_ids == ("A", "B")
-    assert spec.skill_audiences["audit"] == ("C",)
 
 
 def test_a_requirement_is_read_as_one_entry_of_the_list():
@@ -428,22 +400,6 @@ def test_a_requirement_is_read_as_one_entry_of_the_list():
     )
 
     assert spec.source_ids == ("admin", frozenset({"finance", "senior"}))
-
-
-def test_only_the_restricted_entries_need_an_audience():
-    """The ergonomics of the long form, and the reason an entry may stay short."""
-    spec = _read(
-        MINIMAL.rstrip()
-        + "\nsource_ids: [A, B]\nbuiltin_tools: [read_file]\n"
-        + "skills:\n  - name: audit\n    source_ids: [A]\n"
-        + "  - review\n  - triage\n",
-        "plain.yaml",
-    )
-
-    assert spec.skills == ("audit", "review", "triage")
-    assert spec.skill_audiences == {"audit": ("A",)}
-    assert spec.declares(frozenset({"A"})).skills == ("audit", "review", "triage")
-    assert spec.declares(frozenset({"B"})).skills == ("review", "triage")
 
 
 def test_long_entries_that_restrict_nothing_mean_what_the_list_means():
