@@ -32,8 +32,9 @@ from .store import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from kingfisher.core.access import Held, Vocabulary
+    from kingfisher.core.access import Held
     from kingfisher.core.config import Config
+    from kingfisher.core.versions import Versions
 
 _log = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ _log = logging.getLogger(__name__)
 class SessionMethods:
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
     cfg: Config
-    vocabulary: Vocabulary | None
+    _versions: Versions
     #: Where the sessions are: which there are, how big, when each was used.
     _sessions: Any
     #: The backend one session's files are reached through, as a sequence.
@@ -184,10 +185,11 @@ class SessionMethods:
     def _session_steps(
         self, session_id: str, source_ids: Held | None, *, create: bool
     ) -> Steps[Session | None]:
-        held = caller_holds(self.vocabulary, source_ids)
+        catalogue = self._versions.current()
+        held = caller_holds(catalogue.vocabulary, source_ids)
         listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
         if create and session_id not in listing:
-            made = yield from self._files_for(session_id)
+            made = yield from self._files_for(session_id, catalogue=catalogue)
             # Checked although nothing is pinned in a session this call made: a listing
             # that missed one opens a session that was already there.
             if not (yield from self._reaches_session(
@@ -203,7 +205,8 @@ class SessionMethods:
 
     def _sessions_steps(self, source_ids: Held | None) -> Steps[tuple[Session, ...]]:
         # Naming nobody is the operator's view of every session, not a caller under a lock.
-        held = None if source_ids is None else caller_holds(self.vocabulary, source_ids)
+        vocabulary = self._versions.current().vocabulary
+        held = None if source_ids is None else caller_holds(vocabulary, source_ids)
         listing = yield reading(self._sessions, "sessions", self.cfg)
         found = []
         for name, last_used in known(listing):
@@ -222,7 +225,7 @@ class SessionMethods:
         """
         if held is None:
             return True, []
-        files = yield from self._files_for(session_id)
+        files = yield from self._files_for(session_id, catalogue=self._versions.current())
         reached = yield from self._reaches_session(
             HarnessFiles(files), held, session_id=session_id
         )
@@ -233,7 +236,9 @@ class SessionMethods:
         `UnknownSessionError` once it is gone, since opening it again would make it."""
         yield from self._refuse_if_absent(session_id)
         if not opened:
-            opened.append((yield from self._files_for(session_id)))
+            opened.append(
+                (yield from self._files_for(session_id, catalogue=self._versions.current()))
+            )
         return opened[0]
 
     def _pending_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[Any, ...]]:

@@ -950,8 +950,9 @@ def test_what_opens_agrees_with_the_withheld_report(zoned):
             checkpointer=None,
             agent=spec,
             held=held,
-            files=drive(kf._files_for(session.name)),
+            files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
             session_id=session.name,
+            catalogue=kf.catalogue,
         ).graph
         told = withheld_by_kind(
             nothing_granted, kf.cfg, graph, kf.catalogue, agent=spec, held=held

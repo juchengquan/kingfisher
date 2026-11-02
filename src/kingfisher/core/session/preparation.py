@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import Capabilities, Held, Vocabulary, caller_holds, zones_held
+from kingfisher.core.access import Capabilities, Held, caller_holds, zones_held
 from kingfisher.core.agent.activation import (
     for_the_caller,
     indistinct_subagents,
@@ -73,6 +73,7 @@ if TYPE_CHECKING:
 
     from kingfisher.core.agent.tool_context import Caller
     from kingfisher.core.interfaces import MemoryStore, RunEvents
+    from kingfisher.core.versions import Versions
 
 
 class Preparation:
@@ -80,8 +81,7 @@ class Preparation:
 
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
     cfg: Config
-    catalogue: Definitions
-    vocabulary: Vocabulary | None
+    _versions: Versions
     grants: Capabilities
     run_events: RunEvents
     memory_store: MemoryStore | None
@@ -111,18 +111,21 @@ class Preparation:
         made goes with it unless another turn has pinned it.
         """
         cfg = self.cfg
+        # Once, and kept to the turn's end: asked again, one turn could build its agent
+        # from one set of definitions and its tools or subagents from the next.
+        catalogue = self._versions.current()
         session = yield from self._session_for(request)
         # Who is calling, before the session is marked, claimed or written to: later, a
         # refused caller's files would be in its `/inputs`, and a session out of reach
         # would answer "busy" rather than "no session".
-        held = caller_holds(self.vocabulary, source_ids)
+        held = caller_holds(catalogue.vocabulary, source_ids)
         # Opened before anything else reads the session: who may touch it is decided by
         # its pinned agent, and that is read through the backend too.
         if files is None:
             # Asked before the open, which makes the session it is asked for: a refusal
             # may take back only a session this request made.
             made = session.id not in (yield from self._known_steps())
-            files = yield from self._files_for(session.id)
+            files = yield from self._files_for(session.id, catalogue=catalogue)
         else:
             made = False
             refuse_files_of_another(files, session.id)
@@ -164,6 +167,7 @@ class Preparation:
                 pinned=pinned,
                 zones=zones,
                 held=held,
+                catalogue=catalogue,
             )
         except BaseException:
             # Each a call that changes something, so a cancel arriving during it waits for
@@ -192,6 +196,7 @@ class Preparation:
         pinned: Any,
         zones: frozenset[str] | None,
         held: frozenset[str] | None,
+        catalogue: Definitions,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
         # Optional on a backend, like `host_path`; reported rather than raised.
@@ -213,7 +218,11 @@ class Preparation:
         # Not resolved for a supplied graph where nothing is locked: that would refuse a
         # request naming another agent.
         resolved = self._graph is None or held is not None
-        agent = self._agent_for(request, held=held, pinned=pinned) if resolved else None
+        agent = (
+            self._agent_for(request, held=held, pinned=pinned, catalogue=catalogue)
+            if resolved
+            else None
+        )
         # What a zoned caller's tools return stays in the session, so once one runs it is
         # read only from those datazones. Kept beside the agent's pin, after the build.
         ran_in = zones_held(held) if zones is None and held is not None else None
@@ -225,7 +234,7 @@ class Preparation:
                 allowed,
                 ceiling=for_the_caller(agent, self.grants, held=held).subagents,
                 held=held,
-                catalogue=self.catalogue,
+                catalogue=catalogue,
             )
         history = yield from read_transcript(harness)
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
@@ -259,6 +268,7 @@ class Preparation:
             earlier=earlier,
             caller=caller,
             users_memory=users.key is not None,
+            catalogue=catalogue,
         )
         # After the build's refusals and before the graph runs: a refused request must
         # leave the session's files, its agent and datazone, and its gate as they were. A
@@ -274,7 +284,7 @@ class Preparation:
                     prepared, asked, request, placement, history=history, earlier=earlier
                 )
             if resolved and pinned is None:
-                yield from self._pin_agent_in(harness, request.agent)
+                yield from self._pin_agent_in(harness, request.agent, catalogue=catalogue)
             if ran_in:
                 yield from remember_zones(harness, ran_in)
             if superseded:
@@ -414,6 +424,7 @@ class Preparation:
         unprotected: tuple[str, ...],
         placement: Any,
         history: tuple[Any, ...],
+        catalogue: Definitions,
         earlier: KeptLedger | None = None,
         caller: Caller | None = None,
         users_memory: bool = False,
@@ -447,6 +458,7 @@ class Preparation:
                 held=held,
                 files=files,
                 session_id=session.id,
+                catalogue=catalogue,
                 ledger=ledger,
                 caller=caller,
                 users_memory=users_memory,
@@ -460,19 +472,19 @@ class Preparation:
                 allowed,
                 cfg,
                 graph,
-                self.catalogue,
+                catalogue,
                 # Only for a caller: without one the filter is a no-op, and an
                 # injected graph has no spec to give.
                 agent=agent if held is not None else None,
                 held=held,
             )
-            shared = subagent_only(allowed, catalogue=self.catalogue)
+            shared = subagent_only(allowed, catalogue=catalogue)
             # The agent and the caller as well as the grant: the grant alone may be
             # `"*"`, naming subagents the build never activated.
             indistinct = indistinct_subagents(
                 cfg,
                 allowed,
-                catalogue=self.catalogue,
+                catalogue=catalogue,
                 run_on=request.run_on,
                 agent=agent,
                 held=held,
