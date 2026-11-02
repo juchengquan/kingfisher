@@ -111,6 +111,22 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   slice separates loading from running, since `Kingfisher` checks the whole catalogue
   once, at `warm()`. Building it undoes the agent's pin, under *Sessions: what persists
   and where* in `decisions.md`, which must then say so. *(2026-10-30.)*
+- **A skills registry that holds each skill's lock.** Grilled part of the way. The
+  owner's skills are to come from outside, written to a standard with an access field
+  of its own, and a registry service would keep those rules in place of
+  `skill_locks.yaml`. Agreed so far: the registry hands kingfisher the rules only, a
+  skill's name and its `source_ids`, converting its own field into them; the skill files
+  stay on disk, a vendor's pack mounted with `KINGFISHER_SKILLS_MOUNTS` and locked as
+  `acme::ledger-qa`, which works on 29d9de2a. Kingfisher asks about the skills it has,
+  so a rule for one it lacks is never read. Open: whether it asks once at startup, where
+  the catalogue and the names a caller may hold are read today, or per turn, which the
+  entry above would bring, and with it perhaps the registry as that source rather than
+  a hook of its own; what the field looks like, since an all-of requirement has no
+  spelling in a lock (*Not taken: `sources` and `data_zone`* in `decisions.md`); and
+  where the registry is chosen. A keyword on `Kingfisher` would not reach `kingfisher
+  list`, `doctor`, or the places that read the definitions from the folder themselves,
+  and each would read the missing file as every skill open. A lock still says only who
+  is told of a skill: the shell reads every one. *(2026-11-02.)*
 - **A second agent framework beside deepagents.** Parked by the owner, for more thought;
   `decisions.md` still leaves another framework out of scope (*The core and its
   plugins*). Where the grilling stopped: Pydantic AI, chosen once per deployment by a
