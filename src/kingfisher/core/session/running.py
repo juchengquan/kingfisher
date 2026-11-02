@@ -3,6 +3,8 @@ stream, and what a turn leaves once it ends."""
 
 from __future__ import annotations
 
+import contextvars
+import threading
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from contextlib import contextmanager
@@ -11,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import Held, with_datazone
 from kingfisher.core.agent.interpreter import release_interpreter
+from kingfisher.core.agent.middlewares.stopping import STOPPING
 from kingfisher.core.config import Config
 from kingfisher.core.layout import INPUTS_SEEN, PAUSED_STATE, REWOUND_FILE
 from kingfisher.core.logged import TurnWarnings, warning_into
@@ -67,7 +70,7 @@ from .turn import (
 from .turnlog import keep_turns
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterable, Callable, Iterable, Sequence
+    from collections.abc import AsyncIterable, Callable, Sequence
 
     from kingfisher.core.interfaces import MemoryStore, RunEvents, UnusedResults
 
@@ -99,35 +102,25 @@ class _Turn:
     keep_failure: str | None = None
 
 
-#: What the turn's stream hands back once it has nothing more.
-_DONE = object()
+#: What a graph's stream is read as once it has nothing more.
+_ENDED = object()
 
 
-def _within(
-    heard: TurnWarnings, stream: Callable[..., Iterable[Any]], /, *args: Any, **kwargs: Any
-) -> Iterator[Any]:
-    """`stream(*args, **kwargs)`, each item made inside the turn's warnings and handed on
-    outside them, where the caller's own code runs."""
-    with warning_into(heard):
-        items = iter(stream(*args, **kwargs))
-    while True:
-        with warning_into(heard):
-            item = next(items, _DONE)
-        if item is _DONE:
-            return
-        yield item
+def _next_chunk(chunks: Iterator[Any]) -> Any:
+    return next(chunks, _ENDED)
 
 
 async def _awithin(
     heard: TurnWarnings, stream: Callable[..., AsyncIterable[Any]], /, *args: Any, **kwargs: Any
 ) -> AsyncIterator[Any]:
-    """`_within`, for the graph's async stream."""
+    """`stream(*args, **kwargs)`, each item made inside the turn's warnings and handed on
+    outside them, where the caller's own code runs."""
     with warning_into(heard):
         items = aiter(stream(*args, **kwargs))
     while True:
         with warning_into(heard):
-            item = await anext(items, _DONE)
-        if item is _DONE:
+            item = await anext(items, _ENDED)
+        if item is _ENDED:
             return
         yield item
 
@@ -518,17 +511,36 @@ class Running:
                 # Inside, not before: a caller that stops reading during these must still
                 # end the turn.
                 yield from turn.prepared.events
-                for chunk in _within(
-                    heard, turn.prepared.graph.stream, self._payload(turn), **self._driving(turn)
-                ):
-                    yield from self._read(turn, *chunk)
-                    if (stop := self._bound(turn)) is not None:
-                        yield stop
-                        break
+                yield from self._graph_events(turn, heard)
         finally:
             with warning_into(heard):
                 self._end_turn(turn)
         yield from self._ending(turn)
+
+    def _graph_events(self, turn: _Turn, heard: TurnWarnings) -> Iterator[RunEvent]:
+        """The graph's stream, read as events until it ends or the turn's time does.
+
+        Driven in a context of its own, which the graph's threads copy, so `STOPPING` and
+        the turn's warnings are this turn's alone and never set in its caller's context.
+        """
+        stopping = threading.Event()
+        with warning_into(heard):
+            context = contextvars.copy_context()
+        context.run(STOPPING.set, stopping)
+        graph = turn.prepared.graph
+        chunks = iter(context.run(graph.stream, self._payload(turn), **self._driving(turn)))
+        try:
+            while (chunk := context.run(_next_chunk, chunks)) is not _ENDED:
+                yield from self._read(turn, *chunk)
+                if (stop := self._bound(turn)) is not None:
+                    yield stop
+                    return
+        finally:
+            # Before the close, which waits for every call the graph queued: one that
+            # begins after this is refused rather than run.
+            stopping.set()
+            if (close := getattr(chunks, "close", None)) is not None:
+                context.run(close)
 
     async def _astream_turn(
         self,

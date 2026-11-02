@@ -36,6 +36,7 @@ from .recorder import RecorderMiddleware
 from .scratch_runs import ScratchRunsMiddleware, limit_answer
 from .signed_thinking import SignedThinkingMiddleware, signers_of
 from .step_budget import StepBudget, StepBudgetMiddleware
+from .stopping import StoppingMiddleware
 from .turn_instructions import TurnInstructionsMiddleware
 
 if TYPE_CHECKING:
@@ -120,6 +121,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # Ahead of every tool wrapper here and in `inner`, so a deployment's reads what the tool
     # reads.
     standing.append(CurrentGraphMiddleware(None if kind == "agent" else name))
+    # Ahead of the recorder, so a call refused because its turn stopped takes no id.
+    standing.append(StoppingMiddleware())
     # After clearing, which measures what the summariser counted. Outside the step budget
     # and the reply checks, so the reply it records is the one kept and a call asked again
     # goes as they built it; and outside the caching slot, which marks what this sends.
