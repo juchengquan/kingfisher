@@ -64,8 +64,9 @@ into the definitions folder.
 | `KINGFISHER_MEMORY_EVERY` | Where memory is on, how many turns the memory writer waits between runs: one model call at a turn's end that rewrites the session's memory entries from what was said since it last ran. It also runs on any turn where the conversation was summarised. It runs on `memory_writer:` in `models.yaml`, or the agent's own model where that is absent. | `4` |
 
 **A turn stops between steps, so the turn timeout is a deadline and not a limit.** A
-turn out of time finishes the step it is inside before it stops, and that step is
-bounded by `KINGFISHER_EXECUTION_TIMEOUT_S` where it runs a shell command and by the
+turn out of time stops when the step it is inside hands something back, and a tool call
+a thread is running for it finishes before the turn answers, on `astream` as on `stream`.
+That step is bounded by `KINGFISHER_EXECUTION_TIMEOUT_S` where it runs a shell command and by the
 model's `timeout_s` in `models.yaml` where it calls one — so a turn may overrun
 `KINGFISHER_TURN_TIMEOUT_S` by the longest of those, and lowering them is what makes the
 overrun smaller. The session stays claimed for the turn timeout plus that longest bound

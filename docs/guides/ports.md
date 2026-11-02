@@ -330,6 +330,7 @@ and its sentence says them again:
 | `turn_file_not_copied` | a file a turn left could not be copied; `files.jsonl` says which and why | `folder` |
 | `turn_files_not_kept` | no file a turn left was copied, a listing having come back cut short | none |
 | `turn_files_unmarked` | the listing gave no checksum, size or time for files a turn left, so none could be told unchanged; once a turn | `folders` |
+| `turn_not_ended` | a turn whose caller had left raised as it ended, once its calls on threads had | `error_type`, `error_at` |
 | `unused_results_failed` | your `UnusedResults` raised | `error_type`, `error_at`, `left`, `files` |
 
 `plugin` is the class that raised and `method` what it was asked; `reason` is a fixed
