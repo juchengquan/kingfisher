@@ -352,10 +352,6 @@ class Config:
     # A JavaScript sandbox to compute in: no filesystem or network, capped memory and
     # time, and only the tools the request granted.
     interpreter_enabled: bool = False
-    # On, because a session that forgets surprises anything that issues session ids.
-    # Off suits a one-task request/response API: on, a two-turn workspace carries a
-    # ~0.4MB database it never reads back.
-    conversation_enabled: bool = True
     # The ceiling a request's capabilities are narrowed by, never widened past. `None`
     # restricts nothing.
     grants: Capabilities | None = None

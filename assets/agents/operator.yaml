@@ -33,11 +33,6 @@ tools: ["*"]
 # widen or narrow what stops for your caller would be deciding that on their
 # behalf, so the field is refused in a subagent file.
 interrupt_on: [execute]
-# Needs the conversation, which is on unless your deployment turned it off. A
-# paused turn's graph state is kept inside the session, and with
-# `KINGFISHER_CONVERSATION_ENABLED=false` there is nowhere to keep it -- so this
-# agent refuses to build there rather than running with its gate silently
-# doing nothing.
 
 # No `skills:` and no `subagents:`, so it has neither. What this agent does is
 # in the prompt below, and it asks nobody.

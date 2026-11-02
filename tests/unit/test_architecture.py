@@ -5373,6 +5373,7 @@ PROSE_ATTR_GONE: dict[str, frozenset[str]] = {
         "Kingfisher.artifact", "Kingfisher.held_for", "Kingfisher.pending",
         "Kingfisher.session_size", "Request.data", "Config.session_ttl_s",
         "RunResult.log_path", "RunResult.session_dir", "ShellPrompt.starts_in_session",
+        "Config.conversation_enabled",
     }),
     # What a decision removed, or declined to build.
     "docs/decisions.md": frozenset({

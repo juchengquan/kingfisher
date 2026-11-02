@@ -379,13 +379,10 @@ can phrase around is worse than none, because it reads as protection. If that is
 too coarse for an agent, what you want is an agent that was never granted
 `execute`.
 
-Two ways to get it wrong are refused rather than discovered later. A name no
-tool answers to is a typo, and honouring it would leave you believing a call is
-gated while it runs. Gates on a deployment with
-`KINGFISHER_CONVERSATION_ENABLED=false` cannot pause at all — there is no
-checkpointer to hold the paused turn — and would be skipped in silence.
+A name no tool answers to is refused rather than discovered later: it is a typo,
+and honouring it would leave you believing a call is gated while it runs.
 
-A gate on a tool *this* caller was not granted is neither of those, and is
+A gate on a tool *this* caller was not granted is not a typo, and is
 allowed: the grant already narrows per request, so there is simply nothing for
 the gate to fire on.
 

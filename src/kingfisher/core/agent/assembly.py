@@ -178,18 +178,16 @@ def read_only_permissions(layout: Layout) -> list[FilesystemPermission]:
 def _gates_for(agent: AgentSpec | None, checkpointer: Any) -> tuple[str, ...]:
     """Which tools this agent stops on, refusing gates that could never pause.
 
-    Asked of the checkpointer, not `conversation_enabled`: a pause needs a saver, and
-    without one langgraph suppresses the interrupt, so the gated call would be skipped
-    with nothing said.
+    A pause needs a saver, and without one langgraph suppresses the interrupt, so the
+    gated call would be skipped with nothing said.
     """
     wanted = agent.interrupt_on if agent is not None else ()
     if not wanted or agent is None or checkpointer is not None:
         return wanted
     msg = (
-        f"agent {agent.name!r} gates {', '.join(wanted)} behind a person, and this "
-        f"deployment keeps no conversation (KINGFISHER_CONVERSATION_ENABLED is "
-        f"false), so there is no checkpointer for a gated call to pause into. It "
-        f"would be skipped without a word. Turn the conversation on, or drop "
+        f"agent {agent.name!r} gates {', '.join(wanted)} behind a person, and it is "
+        f"being built with no checkpointer for a gated call to pause into. It would "
+        f"be skipped without a word. Build it with a checkpointer, or drop "
         f"interrupt_on from the agent"
     )
     raise AgentError(msg)

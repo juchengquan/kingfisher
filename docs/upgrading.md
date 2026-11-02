@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session always keeps its conversation, after #1189
+
+- **`KINGFISHER_CONVERSATION_ENABLED` is gone, and nothing reads it.** A deployment still
+  setting it starts as before, with no error and no `doctor` warning, and every session
+  keeps its conversation whatever the value. Delete the line. `doctor` no longer reports
+  `KINGFISHER_CONVERSATION`, its older name, either. `Config.conversation_enabled` went
+  with it, so code that builds a `Config` itself drops the keyword.
+- **Where you set it to `false` so requests never saw each other**, give each such
+  request a session id of its own, or delete the session after the turn with
+  `delete_session=True` (`kingfisher run --delete-session`). A request naming no session
+  runs in `default`, so without one of the two every request now shares one
+  conversation, and nothing at startup will tell you.
+- **An agent with `interrupt_on` builds on every deployment**, since every turn now has
+  somewhere to pause into.
+
 ## A session keeps its agent's name and follows the agent, after #1187
 
 - **A session's `.harness/agent.yaml` holds `name: <agent>`**, written by its first turn,

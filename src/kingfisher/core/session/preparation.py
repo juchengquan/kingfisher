@@ -351,14 +351,9 @@ class Preparation:
     ) -> Steps[Prepared]:
         """`prepared` with its message, saying what changed in the inputs folder since the
         agent last heard, however it changed.
-
-        Without a conversation no earlier read is replayed to go out of date, so only what
-        this request placed is named, as before anything was kept.
         """
         layout = self.cfg.layout
-        now = None
-        if self.cfg.conversation_enabled:
-            now = yield from inputs_seen(prepared.files, layout)
+        now = yield from inputs_seen(prepared.files, layout)
         # A first turn was told of nothing; a session older than the record, of unknown.
         before = (yield from read_inputs_seen(prepared.harness)) if history else {}
         message = turn_message(
@@ -434,12 +429,12 @@ class Preparation:
             raise DecisionError(msg)
 
     def _checkpointer(self) -> Any:
-        """The saver this turn runs on, empty, or `None` where nothing is remembered.
+        """The saver this turn runs on, empty.
 
         Always new: the transcript carries the conversation, so a saver that remembered
         earlier turns would hand the model each of them twice.
         """
-        return build_session_checkpointer() if self.cfg.conversation_enabled else None
+        return build_session_checkpointer()
 
     def _built_turn(  # noqa: PLR0913 -- everything setup decided, for its on-host part
         self,
