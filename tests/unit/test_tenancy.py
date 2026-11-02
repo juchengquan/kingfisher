@@ -123,6 +123,46 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
         service.run(Request("go", session_id=session))
 
 
+def test_a_claim_a_full_disk_will_not_move_aside_is_still_given_back(cfg, monkeypatch):
+    """A release renames its claim aside before removing it, and APFS refuses even a
+    rename on a full disk; that was swallowed, and the session stayed locked for an hour
+    after the space came back."""
+    renamed = Path.rename
+
+    def full(self, target):
+        if str(target).endswith(".released"):
+            raise OSError(28, "No space left on device")
+        return renamed(self, target)
+
+    session = start(cfg, "s")
+    with monkeypatch.context() as patched:
+        patched.setattr(Path, "rename", full)
+        service(cfg).run(Request("first", session_id=session))
+
+    assert not _claim(cfg, session).exists()
+    assert service(cfg).run(Request("second", session_id=session)).answer == "ok"
+
+
+def test_a_claim_whose_token_cannot_be_written_is_not_left_behind(cfg, monkeypatch):
+    """A full tmpfs makes the claim's folder and refuses its token, and a folder with no
+    token is nobody's to release: it held the session until it went stale."""
+    written = Path.write_text
+
+    def full(self, *args, **kwargs):
+        if self.name == "token":
+            raise OSError(28, "No space left on device")
+        return written(self, *args, **kwargs)
+
+    session = start(cfg, "s")
+    with monkeypatch.context() as patched:
+        patched.setattr(Path, "write_text", full)
+        with pytest.raises(OSError, match="No space left"):
+            service(cfg).run(Request("first", session_id=session))
+
+    assert not _claim(cfg, session).exists()
+    assert service(cfg).run(Request("second", session_id=session)).answer == "ok"
+
+
 def test_the_slot_goes_back_when_the_turn_ends(cfg):
     """Or the first turn would wedge the session for an hour."""
     service = Kingfisher(

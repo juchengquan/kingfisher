@@ -4410,6 +4410,14 @@ and rather than raised, because the turn finished and its answer is worth keepin
 stopped at a bound keeps its session on purpose and leaves the field empty -- `stop_reason`
 says why. *(2026-09-15.)*
 
+**A turn whose record fails still hands back its answer, on the result.** A full disk at
+the ending raised out of the turn, so a finished turn's answer was lost, and no event
+carries its text before `finished`. `RunResult.keep_failure` says what was not kept, as
+`deletion_failure` says what was not deleted, and for the same reason: the turn finished
+and its answer is worth keeping. Only `OSError`, which a backend refusing a write raises;
+anything else is a bug and keeps its traceback. A resume needs nothing more: its pause was
+taken before its approved calls ran, so the retry this invites is refused. *(2026-11-02.)*
+
 **`/memory` lasts as long as its session, and the prompt says so.** `/memory` is deleted
 with its session, so a prompt telling the agent to record what "would change how a future
 session works" had it writing for a reader who never arrives. It says *later turns of this
@@ -4923,6 +4931,14 @@ claim judged before the slot is taken. What is left needs a turn outliving
 it. Not chosen: a separate lock for takeovers, which a crash would hold for good. The
 interface changed rather than `LocalSessions` alone, on the maintainer's call: a token
 is the only way a release can say whose claim it gives back. *(2026-10-19.)*
+
+**A claim goes back on a full disk too.** `release` renames a claim aside before removing
+it, and APFS refuses even that rename on a full disk; swallowed, it left the session
+locked for an hour after the space came back. It now removes the claim in place when the
+rename fails, which can take a claim that replaced it only for a turn outliving
+`stale_after`. A claim whose token cannot be written takes its folder with it, since a
+folder with no token is nobody's to release. Driven on macOS; on Linux a full tmpfs is
+expected to make the folder and refuse the token, the second case. *(2026-11-02.)*
 
 **`SessionRoot` and `SessionStore` are gone**, and `KINGFISHER_SESSION_STORE` and
 `KINGFISHER_SESSION_STORE_FACTORY` are refused rather than ignored: ignored, a deployment

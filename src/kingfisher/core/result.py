@@ -186,6 +186,10 @@ class RunResult:
     #: or `None`: a disk filling or a process killed while it was written. The agent is
     #: not told; what it lost is gone, and the caller decides whether to go on.
     history_lost: str | None = None
+    #: Why this turn's conversation, ledger, pause or files were not all kept, or `None`:
+    #: a disk that filled, or a backend that refused the write. The answer is here
+    #: either way, and the next turn may not have it.
+    keep_failure: str | None = None
 
     @property
     def completed(self) -> bool:

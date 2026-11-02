@@ -93,6 +93,8 @@ class _Turn:
     recorded: tuple[LedgerEntry, ...] = ()
     #: What the turn did to the memory file's entries.
     memory: MemoryChanges = field(default_factory=MemoryChanges)
+    #: Why the ending could not keep all the turn did, or `None`.
+    keep_failure: str | None = None
 
 
 def _asked(value: str | Request | Resume) -> Request | Resume:
@@ -415,6 +417,10 @@ class Running:
                     if failed is not None:
                         turn.pending.append(failed)
             yield from self._sweep_results(prepared, turn.recorded)
+        except OSError as exc:
+            # A full disk refusing the record is no reason to lose the answer as well: it
+            # was paid for, and nothing streamed it before `finished`.
+            turn.keep_failure = str(exc)
         finally:
             try:
                 # However the turn ended, and even if the store was unreachable.
@@ -486,6 +492,7 @@ class Running:
                 stop_reason=turn.stop_reason,
                 ledger=turn.recorded,
                 history_lost=prepared.history_lost,
+                keep_failure=turn.keep_failure,
             ),
         )
         return (*turn.pending, finished)

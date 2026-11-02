@@ -597,6 +597,10 @@ class LocalSessions(Sessions):
         try:
             path.rename(gone)
         except OSError:
+            # APFS refuses even a rename on a full disk, and a claim left behind locks the
+            # session until it is stale. Removed in place, a claim that replaced this one
+            # could go with it, which needs a turn outliving `stale_after`, as a takeover does.
+            LocalSessionDirs().remove_tree(path)
             return
         if _identity(gone) != token:
             with suppress(OSError):
@@ -635,7 +639,12 @@ def _take(dirs: LocalSessionDirs, path: Path, token: str) -> bool:
     path.parent.mkdir(exist_ok=True)
     if not dirs.create_exclusive(path):
         return False
-    (path / _TOKEN).write_text(token, encoding="utf-8")
+    try:
+        (path / _TOKEN).write_text(token, encoding="utf-8")
+    except BaseException:
+        # A claim with no token is no taker's to release, and holds the session until stale.
+        dirs.remove_tree(path)
+        raise
     return True
 
 
