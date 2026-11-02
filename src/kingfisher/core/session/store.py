@@ -129,10 +129,15 @@ def pinned_in(harness: Any) -> Steps[tuple[DefinitionText | None, frozenset[str]
     )
 
 
-def read_transcript(harness: Any) -> Steps[tuple[Message, ...]]:
-    """What was said in this session before now, or nothing for a first turn."""
+def read_transcript(harness: Any) -> Steps[tuple[tuple[Message, ...], bool]]:
+    """What was said in this session before now, or nothing for a first turn; and whether
+    a damaged line ended the reading early."""
     held = yield from harness.fetch(TRANSCRIPT_FILE)
-    return () if held is None else from_json(held.decode("utf-8"))
+    if held is None:
+        return (), False
+    text = held.decode("utf-8")
+    read = from_json(text)
+    return read, len(read) < sum(1 for line in text.splitlines() if line.strip())
 
 
 def write_transcript(harness: Any, messages: tuple[Message, ...]) -> Steps[None]:
@@ -194,6 +199,11 @@ SUMMARISED = "summarised"
 #: failed, or was paused and run again.
 RESERVED = "reserved"
 
+#: On the closing line of a turn that wrote the conversation, how many messages it wrote.
+#: Here because the ledger is written first: a conversation emptied by a full disk, cut on
+#: a line, or never written reads back whole, and only this says it is short.
+MESSAGES = "messages"
+
 
 @dataclass(frozen=True)
 class KeptLedger:
@@ -218,6 +228,9 @@ class KeptLedger:
     unclosed: tuple[tuple[LedgerEntry, ...], ...] = ()
     #: Whether a turn of the last exchange ended on a summarised conversation.
     summarised: bool = False
+    #: How many messages the last turn to write the conversation wrote, or `None` where
+    #: no closing line says.
+    messages: int | None = None
 
     @property
     def since(self) -> tuple[LedgerEntry, ...]:
@@ -228,7 +241,9 @@ class KeptLedger:
 def read_ledger(harness: Any) -> Steps[KeptLedger]:
     """This session's ledger, or an empty one where no turn has written it."""
     held = yield from harness.fetch(LEDGER_FILE)
-    return KeptLedger() if held is None else _kept(held.decode("utf-8"))
+    # Replaced, not refused: rows hold any language, and a cut inside a character raised
+    # on every later turn.
+    return KeptLedger() if held is None else _kept(held.decode("utf-8", errors="replace"))
 
 
 def _kept(text: str) -> KeptLedger:
@@ -239,6 +254,7 @@ def _kept(text: str) -> KeptLedger:
     exchanges: list[list[LedgerEntry]] = []
     cut: list[list[LedgerEntry]] = []
     summarised = False
+    messages: int | None = None
     # Each turn's entries, until its closing line says whether it was a resume.
     unclosed: dict[str, list[LedgerEntry]] = {}
     for line in text.splitlines():
@@ -262,6 +278,8 @@ def _kept(text: str) -> KeptLedger:
         if (entry := _entry(row)) is not None:
             unclosed.setdefault(entry.turn, []).append(entry)
         elif "id" not in row and isinstance(row.get("turn"), str):
+            if isinstance(row.get(MESSAGES), int):
+                messages = row[MESSAGES]
             # By the turn a row names, not where it sits: rows a crash left unclosed would
             # otherwise be counted as the next turn's.
             closed = unclosed.pop(row["turn"], [])
@@ -285,6 +303,7 @@ def _kept(text: str) -> KeptLedger:
         exchanges=tuple(tuple(one) for one in exchanges),
         unclosed=tuple(tuple(one) for one in cut),
         summarised=summarised,
+        messages=messages,
     )
 
 
@@ -350,18 +369,21 @@ def write_ledger(  # noqa: PLR0913 -- three marks, by keyword so none is passed 
     resumed: bool = False,
     summarised: bool = False,
     reserved: str | None = None,
+    messages: int | None = None,
 ) -> Steps[None]:
     """Replace the ledger with what it held, this turn's rows, and this turn's closing line.
 
     The closing line is written even with no rows: turn ids are not a sequence, so the
     file's order is the only record of the turns' order. `reserved` is the highest id
-    this turn gave a call, where no row holds it.
+    this turn gave a call, where no row holds it; `messages`, how many the conversation
+    this turn is about to write holds, where it writes one.
     """
     marks = {RESUMED: resumed, SUMMARISED: summarised}
     closing = {
         "turn": turn,
         **{mark: True for mark, said in marks.items() if said},
         **({RESERVED: reserved} if reserved is not None else {}),
+        **({MESSAGES: messages} if messages is not None else {}),
     }
     rows = [
         *earlier.lines,

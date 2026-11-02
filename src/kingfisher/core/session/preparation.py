@@ -67,6 +67,7 @@ from .store import (
 from .turn import (
     Prepared,
     decision_discarded,
+    history_lost,
     turn_message,
 )
 
@@ -229,9 +230,12 @@ class Preparation:
                 held=held,
                 catalogue=self.catalogue,
             )
-        history = yield from read_transcript(harness)
+        history, cut = yield from read_transcript(harness)
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
         earlier = (yield from read_ledger(harness)) if self._graph is None else None
+        lost = history_lost(
+            len(history), cut=cut, written=earlier.messages if earlier is not None else None
+        )
         # One for the turn, so the store is asked about the caller its tools are handed.
         caller = caller_of(request, held, datetime.now(UTC))
         remembers = self._graph is None and self.cfg.memory_enabled and (
@@ -262,6 +266,8 @@ class Preparation:
             caller=caller,
             users_memory=users.key is not None,
         )
+        if lost is not None:
+            prepared = replace(prepared, events=(*prepared.events, lost), history_lost=lost.text)
         # After the build's refusals and before the graph runs: a refused request must
         # leave the session's files, its agent and datazone, and its gate as they were. A
         # pin is for good, so it waits for the upload; a caller can send a file again, and

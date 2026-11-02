@@ -4138,6 +4138,19 @@ enforced, so it is asserted. A checkpoint preserves resumable graph state, and k
 resumes a graph only in the one case below, so what is left for a saver is one turn's
 supersteps.
 
+**A damaged conversation is read as far as its first bad line, and the turn says it is
+short.** The reader raised on a line it could not parse, so one cut by a kill failed
+every later turn in the session. Skipping the line, as the ledger's reader does, is wrong
+here: past a damaged line a tool result can answer a call that was on it, and a provider
+refuses an answer to no call -- inferred, since no provider was called. So the reading
+stops there. A cut read that way is silent, though, and a file a full disk emptied reads
+as a first turn's, so the ledger, written before the transcript, says on each closing line
+how many messages the turn wrote. A turn reading fewer, or stopping at a damaged line,
+emits `history_lost` and sets `RunResult.history_lost`. The agent is not told: what it
+lost is gone, and whether to go on is the caller's. The ledger's own reader decodes
+leniently now, since its rows keep any language and a cut inside a character raised on
+every later turn: 34 of 312 cut positions on a ledger with one Chinese row. *(2026-11-02.)*
+
 **Narrowed once, for approval gates.** A turn stopped at an `interrupt_on` gate writes what
 its saver holds into `.harness/paused.state`, and a `Resume` reads it back and continues
 that graph. Nothing is kept unless a turn stopped to ask, and it is dropped once answered

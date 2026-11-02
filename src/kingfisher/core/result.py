@@ -182,6 +182,10 @@ class RunResult:
     #: calls included. Not the built-in file tools, whose results are files already, nor
     #: a failed call. Empty for a graph the deployment supplied, which kingfisher cannot hook.
     ledger: tuple[LedgerEntry, ...] = ()
+    #: Why this turn ran on less of the session's conversation than the last turn left,
+    #: or `None`: a disk filling or a process killed while it was written. The agent is
+    #: not told; what it lost is gone, and the caller decides whether to go on.
+    history_lost: str | None = None
 
     @property
     def completed(self) -> bool:
@@ -225,6 +229,9 @@ KINDS: tuple[str, ...] = (
     "subagent_only",
     "indistinct",
     "inputs_placed",
+    # The session's conversation read back shorter than the last turn left it, and this
+    # turn runs on what was read; `RunResult.history_lost` says the same.
+    "history_lost",
     # The run itself.
     "run_start",
     "model_call",
