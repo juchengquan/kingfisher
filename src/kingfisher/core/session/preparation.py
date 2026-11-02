@@ -40,6 +40,7 @@ from .memory_writer import writer_model
 from .model import (
     Conversation,
     SessionBusyError,
+    held_by_a_turn,
     refuse_files_of_another,
     unknown_session,
 )
@@ -51,6 +52,7 @@ from .steps import (
 )
 from .store import (
     AGENT_MARK,
+    TAKEN_MARK,
     HarnessFiles,
     KeptLedger,
     clear_pause,
@@ -61,10 +63,12 @@ from .store import (
     read_pause_mark,
     read_transcript,
     remember_zones,
+    take_pause,
 )
 from .turn import (
     Prepared,
     decision_discarded,
+    history_lost,
     turn_message,
 )
 
@@ -146,8 +150,8 @@ class Preparation:
         )
         if claimed is None:
             msg = (
-                f"session {session.id} already has a turn running; "
-                f"wait for it to finish or start another session"
+                f"session {session.id} is {held_by_a_turn(cfg.claim_stale_after)}; "
+                "wait, or start another session"
             )
             raise SessionBusyError(msg)
         try:
@@ -212,7 +216,7 @@ class Preparation:
 
         allowed = self.grants.intersect(request.capabilities)
         # Before the build: a resume runs on a saver that already holds the pause.
-        paused, resume, discarded, superseded = yield from self._take_pause(
+        paused, resume, discarded, pause = yield from self._take_pause(
             request, session, harness
         )
         # Not resolved for a supplied graph where nothing is locked: that would refuse a
@@ -236,9 +240,12 @@ class Preparation:
                 held=held,
                 catalogue=catalogue,
             )
-        history = yield from read_transcript(harness)
+        history, cut = yield from read_transcript(harness)
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
         earlier = (yield from read_ledger(harness)) if self._graph is None else None
+        lost = history_lost(
+            len(history), cut=cut, written=earlier.messages if earlier is not None else None
+        )
         # One for the turn, so the store is asked about the caller its tools are handed.
         caller = caller_of(request, held, datetime.now(UTC))
         remembers = self._graph is None and self.cfg.memory_enabled and (
@@ -270,6 +277,8 @@ class Preparation:
             users_memory=users.key is not None,
             catalogue=catalogue,
         )
+        if lost is not None:
+            prepared = replace(prepared, events=(*prepared.events, lost), history_lost=lost.text)
         # After the build's refusals and before the graph runs: a refused request must
         # leave the session's files, its agent and datazone, and its gate as they were. A
         # pin is for good, so it waits for the upload; a caller can send a file again, and
@@ -287,7 +296,7 @@ class Preparation:
                 yield from self._pin_agent_in(harness, request.agent, catalogue=catalogue)
             if ran_in:
                 yield from remember_zones(harness, ran_in)
-            if superseded:
+            if pause is not None and resume is None:
                 yield from clear_pause(harness)
             # Before the graph runs, which reads the file: numbered now, so what the
             # turn's end compares with is entries rather than lines nobody has named. The
@@ -305,6 +314,10 @@ class Preparation:
                     memory_key=users.key,
                     events=(*prepared.events, *users.events),
                 )
+            if pause is not None and resume is not None:
+                # Last before the graph runs: a resume refused before here leaves its
+                # pause answerable, and one killed after it cannot run the calls twice.
+                yield from take_pause(harness, pause, prepared.turn.id)
             # A resume says so in `run_start`: a task-shaped one would read as the work
             # being requested again.
             started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
@@ -348,22 +361,31 @@ class Preparation:
 
     def _take_pause(
         self, request: Request | Resume, session: Conversation, harness: HarnessFiles
-    ) -> Steps[tuple[bytes | None, dict[str, Any] | None, tuple[str, ...], bool]]:
+    ) -> Steps[
+        tuple[bytes | None, dict[str, Any] | None, tuple[str, ...], dict[str, Any] | None]
+    ]:
         """Whatever an earlier turn left waiting: the state and answers a resume restores,
-        or the tools a new request supersedes and whether there is a pause to drop.
+        or the tools a new request supersedes; and the pause's mark, or `None`.
 
         Before the graph exists: an answer needs the saver holding its state. A supersede
-        is dropped by the caller, once the build has had its chance to refuse.
+        is dropped, and a resume takes its pause, once the build has had its chance to
+        refuse.
         """
         held = yield from read_pause_mark(harness)
         if not isinstance(request, Resume):
-            if held is None:
-                return None, None, (), False
             # Superseded: `PatchToolCallsMiddleware` tells the model the unanswered call
-            # was cancelled, and the caller is told by `decision_discarded`.
-            return None, None, tuple(item.tool for item in pending_from_mark(held)), True
+            # was cancelled, and the caller is told by `decision_discarded`. A taken pause
+            # names none: its calls were answered, and may have run.
+            return None, None, tuple(item.tool for item in pending_from_mark(held or {})), held
         if held is None:
             msg = f"session {session.id} is not waiting on a decision"
+            raise DecisionError(msg)
+        if taken := held.get(TAKEN_MARK):
+            msg = (
+                f"session {session.id}'s decision was already answered by turn {taken}, "
+                "which did not finish, so its approved calls may have run and are not run "
+                "again; check what they did, then send a new request"
+            )
             raise DecisionError(msg)
         self._refuse_stale_pause(session, held, request)
         state = yield from harness.fetch(PAUSED_STATE)
@@ -372,7 +394,7 @@ class Preparation:
             raise DecisionError(msg)
         # The ids read back, not re-derived: they are the ones the caller was handed, and
         # re-deriving would need the graph, which does not exist yet.
-        return state, runtime.resume_payload(request.decisions, pending_from_mark(held)), (), False
+        return state, runtime.resume_payload(request.decisions, pending_from_mark(held)), (), held
 
     def _refuse_stale_pause(
         self, session: Conversation, held: Mapping[str, str], request: Resume

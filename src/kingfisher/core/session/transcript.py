@@ -70,14 +70,18 @@ def as_json(messages: tuple[Message, ...]) -> str:
 
 
 def from_json(document: str) -> tuple[Message, ...]:
-    """Read back what `as_json` wrote."""
+    """Read back what `as_json` wrote, as far as the first line it did not write.
+
+    Stopped there, not skipped as the ledger skips one: past a damaged line, a tool result
+    can answer a call that was on it, which a provider refuses on every later turn.
+    """
     read: list[Message] = []
     for line in document.splitlines():
         if not line.strip():
             continue
-        raw = json.loads(line)
-        read.append(
-            Message(
+        try:
+            raw = json.loads(line)
+            message = Message(
                 role=raw["role"],
                 content=raw.get("content", ""),
                 tool_calls=tuple(
@@ -88,5 +92,7 @@ def from_json(document: str) -> tuple[Message, ...]:
                 name=raw.get("name", ""),
                 summary=bool(raw.get("summary", False)),
             )
-        )
+        except (ValueError, KeyError, TypeError):
+            break
+        read.append(message)
     return tuple(read)

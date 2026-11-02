@@ -50,6 +50,9 @@ class Prepared:
     #: What was said in this session before now: the saver holds one turn only, so
     #: this is where a conversation comes from.
     history: tuple[Message, ...] = ()
+    #: Why `history` is shorter than the last turn left it, or `None` where it is whole.
+    #: Carried to the end as well as announced, as `discarded` is.
+    history_lost: str | None = None
     #: What this turn's tools returned, kept when it ends, or `None` for a graph the
     #: caller built, which nothing here can hook.
     ledger: Any = None
@@ -249,6 +252,27 @@ def decision_discarded(tools: tuple[str, ...]) -> RunEvent:
         text=f"a pending decision on {', '.join(tools)} was dropped by this turn",
         tools=tools,
     )
+
+
+def history_lost(read: int, *, cut: bool, written: int | None) -> RunEvent | None:
+    """The event for a conversation that read back shorter than the last turn wrote it, or
+    stopped at a damaged line; `None` for one that read back whole.
+
+    `written` is what the ledger says the last turn wrote, or `None` where it says nothing.
+    """
+    if written is not None and read < written:
+        text = (
+            f"this turn read {read} of the {written} messages the last turn left in this "
+            "session's conversation; the rest could not be read"
+        )
+    elif cut:
+        text = (
+            f"this session's conversation is damaged after message {read}; this turn read "
+            "the messages before it"
+        )
+    else:
+        return None
+    return RunEvent(kind="history_lost", text=text)
 
 
 def overrun(prepared: Prepared) -> RunEvent | None:

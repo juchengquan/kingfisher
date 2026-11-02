@@ -334,6 +334,12 @@ one `Decision` per pending call — `approve` runs it, `reject` does not, and
 do; a plain request sent to it instead runs, and says so with a
 `decision_discarded` event.
 
+A gate is answered once. If the turn running your answer dies before it ends, a
+process killed or a pod lost, the same `Resume` sent again is refused with a
+`DecisionError` saying the approved calls may have run, and `Session.pending()`
+offers nothing: whether they ran is something only the world outside can tell you.
+Check, then send a new request.
+
 `awaiting_decision` and `decision_discarded` come from lists you can import:
 `from kingfisher import KINDS, STOP_REASONS` is every kind of event `stream()`
 yields and every reason a turn stops for. Each grows, so treat a value you do not

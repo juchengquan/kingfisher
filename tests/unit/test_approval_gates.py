@@ -9,12 +9,14 @@ the feature is.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import replace as replace_cfg
 from typing import Any
 
 import pytest
 from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
+from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher
@@ -604,6 +606,60 @@ def test_a_refused_resume_leaves_the_pause_answerable(cfg, session_dir):
 
     assert answered.stop_reason == END_TURN
     assert (_session_dir(cfg, paused.session_id) / "outputs" / "a.txt").read_text() == "kept"
+
+
+def _charging(charges: list[str]) -> Any:
+    """A real deep agent whose one tool spends money once a person approves it."""
+
+    @tool
+    def charge(amount: str) -> str:
+        """Charge the customer."""
+        charges.append(amount)
+        return f"charged {amount}"
+
+    call = {"name": "charge", "args": {"amount": "10"}, "id": "c1"}
+    return create_deep_agent(
+        model=FakeToolCallingModel(
+            responses=[AIMessage(content="", tool_calls=[call]), AIMessage(content="done")]
+        ),
+        tools=[charge],
+        interrupt_on={"charge": True},
+        checkpointer=InMemorySaver(),
+    )
+
+
+def test_a_resume_killed_after_its_approved_call_is_not_answered_again(cfg):
+    """Only the ending cleared a pause, so a resume killed while its approved call ran
+    left it waiting, and the caller's retry of the same `Resume` charged a second time.
+
+    Suspended rather than killed, with its claim aged past stale: the ending not yet run
+    is what a kill leaves on disk.
+    """
+    charges: list[str] = []
+    kf = Kingfisher(cfg, graph=_charging(charges), sessions=LocalSessions())
+    paused = kf.run(Request("charge it"))
+    answer = Resume(
+        session_id=paused.session_id,
+        decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+    )
+    killed = kf.stream(answer)
+    for _ in killed:
+        if charges:
+            break
+    os.utime(_session_dir(cfg, paused.session_id) / HARNESS / "claim", (0, 0))
+
+    try:
+        with pytest.raises(DecisionError, match="may have run"):
+            kf.run(answer)
+        session = kf.session(paused.session_id)
+        assert session is not None
+        assert session.pending() == (), "a call that may have run was offered to answer"
+        after = kf.run(Request("did it go through?", session_id=paused.session_id))
+    finally:
+        killed.close()
+
+    assert charges == ["10"]
+    assert after.discarded == (), "a call that may have run was reported as dropped"
 
 
 # -- superseding -----------------------------------------------------------

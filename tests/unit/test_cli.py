@@ -895,7 +895,7 @@ def test_a_sweep_that_removes_nothing_says_a_turn_holds_it(cfg, monkeypatch, cap
 
     assert main(["reap", "--all"]) == 0
 
-    assert "a turn is running in it" in capsys.readouterr().out
+    assert "it is held by a turn that is running, or that died" in capsys.readouterr().out
     assert (cfg.workspace / "sessions" / "held").is_dir()
 
 

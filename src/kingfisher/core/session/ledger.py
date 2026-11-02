@@ -137,10 +137,12 @@ def keep_ledger(
     ledger: Ledger,
     *,
     summarised: bool,
+    messages: int | None = None,
 ) -> Steps[tuple[LedgerEntry, ...]]:
     """Keep this turn's entries, and say where each result is now.
 
-    `summarised` is whether the turn ended on a summarised conversation.
+    `summarised` is whether the turn ended on a summarised conversation, and `messages`
+    how many messages the conversation it is about to write holds.
 
     The ledger is written after every result file and before the conversation, so a
     row never names a missing file and a result the conversation shows always has a
@@ -158,6 +160,7 @@ def keep_ledger(
         # Said only where no row says it already: past every row, it is a number the next
         # turn would otherwise hand out a second time.
         reserved=None if entries and entries[-1].id == reserved else reserved,
+        messages=messages,
     )
     return entries
 

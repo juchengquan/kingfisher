@@ -20,9 +20,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from deepagents import create_deep_agent
 from deepagents.backends.protocol import FileUploadResponse
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
 from kingfisher import Capabilities, Kingfisher, Request
@@ -239,7 +241,7 @@ def test_a_result_is_recorded_kept_and_handed_to_the_caller(ledgered):
     # What the caller holds is the row, through the JSON a service would send.
     sent = json.loads(json.dumps(asdict(result)))
     assert sent["ledger"] == _rows(ledgered)[:1]
-    assert _rows(ledgered)[1:] == [{"turn": result.turn_id}]
+    assert _rows(ledgered)[1:] == [{"turn": result.turn_id, "messages": 4}]
 
 
 def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
@@ -354,6 +356,69 @@ def test_a_ledger_cut_short_by_a_crash_does_not_stop_the_session(ledgered):
     ]
 
 
+def test_a_ledger_cut_inside_a_character_does_not_stop_the_session(ledgered):
+    """The ledger was decoded whole before any line was read, and its rows keep any
+    language, so a cut inside a character raised on every later turn in the session."""
+    _run(ledgered, _calls(("web_search", {"query": "电动车价格战"}, "c1")), AIMessage("done"))
+    ledger = _session(ledgered) / HARNESS / LEDGER_FILE
+    held = ledger.read_bytes()
+    ledger.write_bytes(held[: held.index("电".encode()) + 1])
+
+    second = _run(
+        ledgered, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done")
+    )
+
+    assert [e.id for e in second.ledger] == ["A-0001"]
+
+
+def _stream(cfg, *script: AIMessage, kf: Kingfisher | None = None):
+    """`_run`, with the events it streamed."""
+    Scripted.script.extend(script)
+    service = kf or Kingfisher(cfg, sessions=LocalSessions())
+    events = list(service.stream(Request("go", agent="only", session_id="s")))
+    return next(e.result for e in events if e.kind == "finished"), [e.kind for e in events]
+
+
+def test_a_conversation_emptied_on_disk_is_reported_by_the_turn_that_reads_it(ledgered):
+    """A full disk empties the transcript before failing to write it, and an empty file
+    reads as a first turn's: the next turn ran with no history and nothing said so. A
+    damaged line ends the reading as silently. The ledger is written first, so its count
+    is what says the conversation is short.
+    """
+    _run(ledgered, AIMessage(content="first"))
+    whole, said = _stream(ledgered, AIMessage(content="second"))
+    (_session(ledgered) / HARNESS / TRANSCRIPT_FILE).write_bytes(b"")
+
+    short, warned = _stream(ledgered, AIMessage(content="third"))
+
+    assert whole.history_lost is None, "a whole conversation was reported short"
+    assert "history_lost" not in said
+    assert "history_lost" in warned
+    assert re.search(r"read 0 of the \d+ messages", short.history_lost or "")
+
+
+def test_a_damaged_conversation_is_reported_where_no_ledger_counts_it(cfg):
+    """A graph the deployment supplied keeps no ledger, so only the reading itself can
+    say a damaged line cut it short."""
+    graph = create_deep_agent(
+        model=FakeToolCallingModel(
+            responses=[AIMessage(content="one"), AIMessage(content="two"), AIMessage(content="3")]
+        ),
+        checkpointer=InMemorySaver(),
+    )
+    kf = Kingfisher(cfg, graph=graph, sessions=LocalSessions())
+    kf.run(Request("first", session_id="s"))
+    kf.run(Request("second", session_id="s"))
+    transcript = _session(cfg) / HARNESS / TRANSCRIPT_FILE
+    lines = transcript.read_text(encoding="utf-8").splitlines(keepends=True)
+    transcript.write_text("".join([lines[0], '{"role": "assist\n', *lines[2:]]), encoding="utf-8")
+
+    damaged = kf.run(Request("third", session_id="s"))
+
+    assert damaged.history_lost is not None
+    assert "damaged after message 1" in damaged.history_lost
+
+
 def test_a_turn_that_records_nothing_still_closes_in_the_ledger(ledgered):
     """Turn ids are not a sequence, so the closing line is the only record of a turn's
     place among the others -- a turn that called nothing would vanish from it.
@@ -361,7 +426,7 @@ def test_a_turn_that_records_nothing_still_closes_in_the_ledger(ledgered):
     result = _run(ledgered, AIMessage(content="nothing to call"))
 
     assert result.ledger == ()
-    assert _rows(ledgered) == [{"turn": result.turn_id}]
+    assert _rows(ledgered) == [{"turn": result.turn_id, "messages": 2}]
 
 
 def test_the_file_tools_are_not_recorded_and_the_shell_is(ledgered):
@@ -1109,7 +1174,7 @@ def test_an_id_no_row_holds_is_still_not_given_again_the_next_turn(ledgered):
     second = _run(ledgered, _calls(("web_search", {"query": "EV"}, "c2")), AIMessage("done"))
 
     assert first.ledger == ()
-    assert _rows(ledgered)[0] == {"turn": first.turn_id, "reserved": "A-0001"}
+    assert _rows(ledgered)[0] == {"turn": first.turn_id, "reserved": "A-0001", "messages": 4}
     assert [e.id for e in second.ledger] == ["A-0002"]
 
 
@@ -1705,8 +1770,8 @@ def test_a_resume_says_so_on_its_closing_line_and_an_asked_turn_does_not(ledgere
     )
 
     assert [row for row in _rows(ledgered) if "id" not in row] == [
-        {"turn": paused.turn_id},
-        {"turn": resumed.turn_id, "resumed": True},
+        {"turn": paused.turn_id, "messages": 2},
+        {"turn": resumed.turn_id, "resumed": True, "messages": 4},
     ]
 
 

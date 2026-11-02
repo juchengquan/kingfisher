@@ -289,6 +289,30 @@ the model reached for, which a deployment cannot predict.
 Raise `ToolException` when the message is already advice for the model: it goes
 back as you wrote it, without its type.
 
+## A tool that acts on the world may run twice
+
+A process killed during a turn ends it before anything is saved, so the next turn
+has no record of what the killed one did, and its model may call your tool again
+for the same thing. Kingfisher cannot stop that for you: the call's id, and any key
+the model made up, are in no file, and the second call gets new ones. Make the
+service you act on refuse the repeat:
+
+- **Key on what the effect is, and which instance of it.** `reminder:INV-1043:2026-11`
+  stops a second reminder this month and lets next month's through, which
+  `reminder:INV-1043` would swallow. A hash of the arguments refuses two identical
+  payments that were both meant.
+- **Add your caller's request id, if it sends one.** A caller that resends a request
+  it got no answer for can put the same id in `context` both times, and
+  [`caller.context`](#who-the-turn-is-for) hands it to the tool. Where a call
+  arrives without it, as a `Resume` may, refuse rather than run unkeyed.
+- **Looking first survives a kill, but not two calls in one reply**, which both look,
+  both find nothing, and both act.
+- **A gated tool is answered once.** Under `interrupt_on`, a `Resume` sent again after
+  the turn running it died is refused, so the approved call does not run twice.
+- **Put a short receipt on the result's first line**, such as `charged INV-1043:
+  receipt R-77`. The ledger row the model is shown in later turns keeps that line
+  whatever becomes of the rest.
+
 ## Folders, when one file stops being enough
 
 `tools/` may be as deep as you like, and `__init__.py` decides what a folder is:

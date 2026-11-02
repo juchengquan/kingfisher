@@ -30,7 +30,8 @@ class Session:
     _opened: list[Any] = field(default_factory=list, repr=False, compare=False)
 
     def pending(self) -> tuple[PendingDecision, ...]:
-        """What this session's paused turn is waiting on, or nothing.
+        """What this session's paused turn is waiting on, or nothing, as once a resume has
+        begun answering it.
 
         Read from the pause's mark rather than by starting a turn, which would supersede it.
         """

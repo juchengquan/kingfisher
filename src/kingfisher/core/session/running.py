@@ -68,6 +68,8 @@ if TYPE_CHECKING:
     from kingfisher.core.config import Endpoint
     from kingfisher.core.interfaces import MemoryStore, UnusedResults
 
+    from .transcript import Message
+
 
 
 @dataclass
@@ -91,6 +93,8 @@ class _Turn:
     recorded: tuple[LedgerEntry, ...] = ()
     #: What the turn did to the memory file's entries.
     memory: MemoryChanges = field(default_factory=MemoryChanges)
+    #: Why the ending could not keep all the turn did, or `None`.
+    keep_failure: str | None = None
 
 
 def _asked(value: str | Request | Resume) -> Request | Resume:
@@ -215,11 +219,13 @@ class Running:
         """Keep what this turn's tools returned, whether or not the turn paused."""
         if prepared.ledger is None:
             return ()
+        written = self._transcript_of(snapshot)
         return (
             yield from keep_ledger(
                 prepared.harness,
                 prepared.ledger,
                 summarised=runtime.summarised_in(snapshot),
+                messages=len(written) if written else None,
             )
         )
 
@@ -237,17 +243,22 @@ class Running:
             session_id=prepared.session.id,
         )
 
-    def _record_transcript(self, prepared: Prepared, snapshot: Any) -> Steps[None]:
-        """Write what was said this turn, as records this package owns."""
+    def _transcript_of(self, snapshot: Any) -> tuple[Message, ...]:
+        """The conversation this turn writes, or nothing where it writes none."""
         if not self.cfg.conversation_enabled:
-            return
+            return ()
         if snapshot is None:
             # No state, or a turn that died before its first superstep: this runs after
             # every turn, failed ones included.
-            return
+            return ()
         messages = runtime.as_seen(snapshot)
-        if messages:
-            yield from write_transcript(prepared.harness, runtime.as_transcript(messages))
+        return runtime.as_transcript(messages) if messages else ()
+
+    def _record_transcript(self, prepared: Prepared, snapshot: Any) -> Steps[None]:
+        """Write what was said this turn, as records this package owns."""
+        written = self._transcript_of(snapshot)
+        if written:
+            yield from write_transcript(prepared.harness, written)
             # Only with the message saying so: kept by a turn the agent never heard from,
             # what changed before it would never be said.
             if prepared.inputs_seen is not None:
@@ -406,6 +417,10 @@ class Running:
                     if failed is not None:
                         turn.pending.append(failed)
             yield from self._sweep_results(prepared, turn.recorded)
+        except OSError as exc:
+            # A full disk refusing the record is no reason to lose the answer as well: it
+            # was paid for, and nothing streamed it before `finished`.
+            turn.keep_failure = str(exc)
         finally:
             try:
                 # However the turn ended, and even if the store was unreachable.
@@ -476,6 +491,8 @@ class Running:
                 memory=turn.memory,
                 stop_reason=turn.stop_reason,
                 ledger=turn.recorded,
+                history_lost=prepared.history_lost,
+                keep_failure=turn.keep_failure,
             ),
         )
         return (*turn.pending, finished)

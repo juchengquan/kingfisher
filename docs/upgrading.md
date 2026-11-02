@@ -18,6 +18,26 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A turn that ends badly says so, and a gate is answered once, after #1184
+
+- **A `Resume` sent again after the turn running it died raises `DecisionError`**,
+  saying the approved calls may have run, and `Session.pending()` offers nothing for
+  that pause. It used to run the approved calls a second time. Check what they did,
+  then send a new request; that request no longer reports the calls as discarded.
+- **A turn whose ending could not write returns its answer**, with
+  `RunResult.keep_failure` saying what was not kept. It used to raise `OSError` out of
+  `run` and `arun`. If you caught that error to detect a failed save, read the field
+  instead.
+- **A damaged conversation no longer fails every later turn.** The turn reads up to
+  the first bad line, and when it reads fewer messages than the last turn wrote, it
+  emits a `history_lost` event and sets `RunResult.history_lost`. The turn still runs.
+- **`SessionBusyError` says the session is held by a turn that is running, or that
+  died**, and when a dead turn's hold lapses. Code matching "already has a turn
+  running" needs the new text. `kingfisher reap` says the same, and names `--session`.
+- **The ledger's closing lines carry `messages`**, and a taken pause's
+  `.harness/paused.json` carries `taken_by`. A reader of those files should ignore
+  keys it does not know.
+
 ## `http_fetch` fetches HTTPS on a Python with no certificate store, after #1176
 
 - **The shipped `http_fetch` verifies against certifi's certificates where this Python

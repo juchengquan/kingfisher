@@ -4138,6 +4138,19 @@ enforced, so it is asserted. A checkpoint preserves resumable graph state, and k
 resumes a graph only in the one case below, so what is left for a saver is one turn's
 supersteps.
 
+**A damaged conversation is read as far as its first bad line, and the turn says it is
+short.** The reader raised on a line it could not parse, so one cut by a kill failed
+every later turn in the session. Skipping the line, as the ledger's reader does, is wrong
+here: past a damaged line a tool result can answer a call that was on it, and a provider
+refuses an answer to no call -- inferred, since no provider was called. So the reading
+stops there. A cut read that way is silent, though, and a file a full disk emptied reads
+as a first turn's, so the ledger, written before the transcript, says on each closing line
+how many messages the turn wrote. A turn reading fewer, or stopping at a damaged line,
+emits `history_lost` and sets `RunResult.history_lost`. The agent is not told: what it
+lost is gone, and whether to go on is the caller's. The ledger's own reader decodes
+leniently now, since its rows keep any language and a cut inside a character raised on
+every later turn: 34 of 312 cut positions on a ledger with one Chinese row. *(2026-11-02.)*
+
 **Narrowed once, for approval gates.** A turn stopped at an `interrupt_on` gate writes what
 its saver holds into `.harness/paused.state`, and a `Resume` reads it back and continues
 that graph. Nothing is kept unless a turn stopped to ask, and it is dropped once answered
@@ -4159,6 +4172,18 @@ The pending writes go with the checkpoint. A turn can stop on one gated call whi
 sibling in the same superstep has already run; drop those writes and the sibling runs
 *again* on resume -- a tool firing twice for one decision, in identical end state, so
 nothing but the side effect tells them apart. *(2026-09-22.)*
+
+**A gate is answered once: a resume takes its pause before the approved calls run.**
+Only the ending cleared a pause, so a resume killed while its approved call ran left the
+pause waiting, `pending()` still offered it, and the same `Resume` sent again charged a
+second time -- driven on 2026-11-02, with no model between the two charges and no message
+a warning could have gone in. The mark now names the turn answering it, written last in
+setup, and a resume finding a name there is refused as one whose calls may have run. A
+resume killed before its call ran is refused too, which is the safe direction: the person
+checks and asks again. Not chosen: dropping the pause at the start of the resume, which
+answers the retry with "not waiting on a decision", read as the first answer having
+worked, and reports a request superseding it as discarding a call that may have run.
+*(2026-11-02.)*
 
 **Dropped: a deployment's own saver.** `threads=` let a deployment hand every turn a
 langgraph saver of its own. Driven on 2026-10-17 it had four faults with one cause -- a
@@ -4384,6 +4409,14 @@ the caller asked for the deletion in the same call and looks there for how the t
 and rather than raised, because the turn finished and its answer is worth keeping. A turn
 stopped at a bound keeps its session on purpose and leaves the field empty -- `stop_reason`
 says why. *(2026-09-15.)*
+
+**A turn whose record fails still hands back its answer, on the result.** A full disk at
+the ending raised out of the turn, so a finished turn's answer was lost, and no event
+carries its text before `finished`. `RunResult.keep_failure` says what was not kept, as
+`deletion_failure` says what was not deleted, and for the same reason: the turn finished
+and its answer is worth keeping. Only `OSError`, which a backend refusing a write raises;
+anything else is a bug and keeps its traceback. A resume needs nothing more: its pause was
+taken before its approved calls ran, so the retry this invites is refused. *(2026-11-02.)*
 
 **`/memory` lasts as long as its session, and the prompt says so.** `/memory` is deleted
 with its session, so a prompt telling the agent to record what "would change how a future
@@ -4898,6 +4931,14 @@ claim judged before the slot is taken. What is left needs a turn outliving
 it. Not chosen: a separate lock for takeovers, which a crash would hold for good. The
 interface changed rather than `LocalSessions` alone, on the maintainer's call: a token
 is the only way a release can say whose claim it gives back. *(2026-10-19.)*
+
+**A claim goes back on a full disk too.** `release` renames a claim aside before removing
+it, and APFS refuses even that rename on a full disk; swallowed, it left the session
+locked for an hour after the space came back. It now removes the claim in place when the
+rename fails, which can take a claim that replaced it only for a turn outliving
+`stale_after`. A claim whose token cannot be written takes its folder with it, since a
+folder with no token is nobody's to release. Driven on macOS; on Linux a full tmpfs is
+expected to make the folder and refuse the token, the second case. *(2026-11-02.)*
 
 **`SessionRoot` and `SessionStore` are gone**, and `KINGFISHER_SESSION_STORE` and
 `KINGFISHER_SESSION_STORE_FACTORY` are refused rather than ignored: ignored, a deployment

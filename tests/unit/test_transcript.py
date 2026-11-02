@@ -102,12 +102,19 @@ def test_a_system_message_has_a_role_even_though_none_is_stored():
     assert as_transcript([SystemMessage(content="rules")])[0].role == "system"
 
 
-def test_a_blank_line_is_skipped_and_a_broken_one_is_not(tmp_path):
-    """A file re-read across a crash may end in whitespace, and losing a whole
-    conversation to that is a worse answer than ignoring it.
+@pytest.mark.parametrize(
+    "damaged",
+    ['{"role": "assistant", "tool_ca', '{"content": "no role"}', '["a", "list"]'],
+    ids=["cut mid-line", "no role", "not an object"],
+)
+def test_the_reading_stops_at_the_first_damaged_line(damaged):
+    """A damaged line raised, so one cut by a kill failed every later turn in the
+    session; and one skipped would let the result after it answer a call the model never
+    sees made, which a provider refuses on every turn after.
     """
-    good = as_json((Message(role="user", content="hi"),))
+    before = as_json((Message(role="user", content="hi"),))
+    after = as_json((Message(role="tool", content="charged", call_id="c1"),))
 
-    assert from_json(good + "\n\n") == (Message(role="user", content="hi"),)
-    with pytest.raises(json.JSONDecodeError):
-        from_json(good + "{not json\n")
+    assert from_json(before + "\n\n" + damaged + "\n" + after) == (
+        Message(role="user", content="hi"),
+    )
