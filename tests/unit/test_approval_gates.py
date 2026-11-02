@@ -691,8 +691,7 @@ def _approved(paused: Any) -> Resume:
         ("middlewares/quiet.py", True),
         ("tools/count.py", True),
         ("tools/spare.py", False),
-        # Read from the session's copy, which an edit to the folder does not reach.
-        ("agents/only.yaml", False),
+        ("agents/only.yaml", True),
     ],
     ids=[
         "tool-helper", "skill", "middleware", "subagents-tool", "control-unused", "agents-own-file"

@@ -92,7 +92,9 @@ class Preview:
     ) -> Steps[Sent]:
         """The build and the caught call, after the checks a turn makes before either."""
         pinned, zones = yield from pinned_in(HarnessFiles(files))
-        if not self._reaches_pin(pinned, zones, held, session_id=session_id):
+        if not self._reaches_pin(
+            pinned, zones, held, session_id=session_id, catalogue=catalogue
+        ):
             raise unknown_session(session_id)
         agent = self._agent_for(request, held=held, pinned=pinned, catalogue=catalogue)
         built = yield on_host(

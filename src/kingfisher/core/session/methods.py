@@ -6,7 +6,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import ALL, caller_holds, reaches, with_datazone, zones_held
-from kingfisher.core.definitions.agents.reading import read
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.request import Request, Resume
 
@@ -27,6 +26,7 @@ from .store import (
     HarnessFiles,
     pending_from_mark,
     pinned_in,
+    pinned_name,
     read_pause_mark,
 )
 
@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     from kingfisher.core.access import Held
     from kingfisher.core.config import Config
+    from kingfisher.core.definitions.catalogue import Definitions
     from kingfisher.core.versions import Versions
 
 _log = logging.getLogger(__name__)
@@ -67,7 +68,12 @@ class SessionMethods:
             raise unknown_session(session_id)
 
     def _reaches_session(
-        self, harness: Any, held: frozenset[str] | None, *, session_id: str
+        self,
+        harness: Any,
+        held: frozenset[str] | None,
+        *,
+        session_id: str,
+        catalogue: Definitions,
     ) -> Steps[bool]:
         """Whether a caller holding `held` may touch the session `harness` belongs to.
 
@@ -79,7 +85,7 @@ class SessionMethods:
         if held is None:
             return True
         kept, zones = yield from pinned_in(harness)
-        return self._reaches_pin(kept, zones, held, session_id=session_id)
+        return self._reaches_pin(kept, zones, held, session_id=session_id, catalogue=catalogue)
 
     def _reaches_pin(
         self,
@@ -88,23 +94,37 @@ class SessionMethods:
         held: frozenset[str] | None,
         *,
         session_id: str,
+        catalogue: Definitions,
     ) -> bool:
-        """`_reaches_session`, for the pins already read."""
+        """`_reaches_session`, for the pins already read, against the agent as `catalogue`
+        defines it now."""
         if held is None:
             return True
-        try:
-            audience = ALL if kept is None else read(kept).source_ids
-        except AgentError as exc:
-            # A pin an older kingfisher wrote and today's reader refuses reaches no scoped
-            # caller. Raised, it stopped every scoped listing, and told a caller who may not
-            # reach the session what its lock was.
-            _log.warning(
-                "session %s: its pinned agent no longer reads, so only an unscoped call "
-                "reaches it: %s",
-                session_id,
-                exc,
-            )
-            return False
+        audience = ALL
+        if kept is not None:
+            try:
+                name = pinned_name(kept)
+            except AgentError as exc:
+                # A pin that names no agent reaches no scoped caller. Raised, it stopped every
+                # scoped listing, and told a caller who may not reach the session its lock.
+                _log.warning(
+                    "session %s: its pin names no agent, so only an unscoped call reaches "
+                    "it: %s",
+                    session_id,
+                    exc,
+                )
+                return False
+            if (spec := catalogue.agents.specs.get(name)) is None:
+                # Renamed or deleted, the agent takes its sessions out of every scoped
+                # caller's reach; the operator's listing still has them.
+                _log.info(
+                    "session %s: its agent %r is no longer defined, so only an unscoped "
+                    "call reaches it",
+                    session_id,
+                    name,
+                )
+                return False
+            audience = spec.source_ids
         # The same zones, not every one of them and more: a caller also in another zone would
         # leave what its tools returned here, for callers who are not.
         return reaches(audience, held) and (zones is None or zones_held(held) == zones)
@@ -194,14 +214,14 @@ class SessionMethods:
             # Checked although nothing is pinned in a session this call made: a listing
             # that missed one opens a session that was already there.
             if not (yield from self._reaches_session(
-                HarnessFiles(made), held, session_id=session_id
+                HarnessFiles(made), held, session_id=session_id, catalogue=catalogue
             )):
                 return None
             listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
             return Session(session_id, listing[session_id], self, [made])
         if session_id not in listing:
             return None
-        reached, opened = yield from self._reaches(session_id, held)
+        reached, opened = yield from self._reaches(session_id, held, catalogue)
         return Session(session_id, listing[session_id], self, opened) if reached else None
 
     def _sessions_steps(self, source_ids: Held | None) -> Steps[tuple[Session, ...]]:
@@ -211,13 +231,13 @@ class SessionMethods:
         listing = yield reading(self._sessions, "sessions", self.cfg)
         found = []
         for name, last_used in known(listing):
-            reached, opened = yield from self._reaches(name, held)
+            reached, opened = yield from self._reaches(name, held, catalogue)
             if reached:
                 found.append(Session(name, last_used, self, opened))
         return tuple(found)
 
     def _reaches(
-        self, session_id: str, held: frozenset[str] | None
+        self, session_id: str, held: frozenset[str] | None, catalogue: Definitions
     ) -> Steps[tuple[bool, list[Any]]]:
         """`_reaches_session` by id, and the backend opened to decide it, if one was.
 
@@ -226,10 +246,9 @@ class SessionMethods:
         """
         if held is None:
             return True, []
-        catalogue = yield on_host(self._versions.current)
         files = yield from self._files_for(session_id, catalogue=catalogue)
         reached = yield from self._reaches_session(
-            HarnessFiles(files), held, session_id=session_id
+            HarnessFiles(files), held, session_id=session_id, catalogue=catalogue
         )
         return reached, [files]
 

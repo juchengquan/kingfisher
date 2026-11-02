@@ -68,9 +68,12 @@ SKILLS = "skills"
 HARNESS = ".harness"
 
 #: What it holds, named here because `.harness` is a layout decision.
+#: The session's agent, as `name: ...`: the one field it shares with the whole definition
+#: an older session kept here, so both read the same. Not renamed: every session pinned
+#: before would read as pinned to nothing, open to every caller.
 PINNED_AGENT = "agent.yaml"
-#: The datazones of the session's first zoned turn, beside the agent rather than in it:
-#: the pin is the agent's document as written. Not renamed for holding several: every
+#: The datazones of the session's first zoned turn, in a file of their own: an older
+#: session's agent file is a whole definition. Not renamed for holding several: every
 #: session pinned before would read as in no datazone, open to every caller.
 PINNED_ZONE = "datazone"
 TRANSCRIPT_FILE = "transcript.jsonl"

@@ -142,7 +142,7 @@ class Preparation:
         # Only so a caller out of reach hears "no session" rather than "busy": the turn
         # runs on the pins read again under the claim.
         first = (yield from pinned_in(harness)) if reads_pins else (None, None)
-        self._refuse_out_of_reach(*first, held, session_id=session.id)
+        self._refuse_out_of_reach(*first, held, session_id=session.id, catalogue=catalogue)
         # A turn writes inside the session, which leaves the timestamp `kingfisher sessions`
         # reads alone. At the top of the turn, not the end: a turn that fails still happened.
         yield changing(self._sessions, "mark_used", cfg, session.id)
@@ -165,7 +165,9 @@ class Preparation:
                 # This request pins only later, so another turn ran here, whatever the
                 # listing said: not a session this request made, nor its to delete.
                 made = False
-            self._refuse_out_of_reach(pinned, zones, held, session_id=session.id)
+            self._refuse_out_of_reach(
+                pinned, zones, held, session_id=session.id, catalogue=catalogue
+            )
             prepared = yield from self._claimed(
                 request,
                 session,
@@ -188,9 +190,11 @@ class Preparation:
 
     def _refuse_out_of_reach(
         self, pinned: Any, zones: frozenset[str] | None, held: frozenset[str] | None, *,
-        session_id: str,
+        session_id: str, catalogue: Definitions,
     ) -> None:
-        if not self._reaches_pin(pinned, zones, held, session_id=session_id):
+        if not self._reaches_pin(
+            pinned, zones, held, session_id=session_id, catalogue=catalogue
+        ):
             raise unknown_session(session_id)
 
     def _claimed(  # noqa: PLR0913 -- setup's, handed on: a second backend is a second sandbox
@@ -300,7 +304,7 @@ class Preparation:
                     prepared, asked, request, placement, history=history, earlier=earlier
                 )
             if resolved and pinned is None:
-                yield from self._pin_agent_in(harness, request.agent, catalogue=catalogue)
+                yield from self._pin_agent_in(harness, request.agent)
             if ran_in:
                 yield from remember_zones(harness, ran_in)
             if pause is not None and resume is None:
