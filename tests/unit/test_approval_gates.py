@@ -730,13 +730,20 @@ def test_a_pause_from_before_the_record_resumes_as_it_did(scripted):
     assert done.stop_reason == END_TURN
 
 
-def test_a_pause_records_the_files_as_they_were_loaded(scripted):
-    """Recorded from the folder as the turn paused, a tool edited while kingfisher ran
-    would be recorded as the new code though the turn ran the old, and the resume after
-    a restart would go ahead on code the turn never planned against."""
+def test_a_pause_records_the_files_its_turn_ran_on(scripted, monkeypatch):
+    """Recorded from the folder as the turn paused, a tool edited after the turn took its
+    definitions would be recorded as the new code though the turn ran the old, and the
+    resume after a restart would go ahead on code the turn never planned against."""
     _gated_on_echo(scripted)
     running = Kingfisher(scripted, sessions=LocalSessions())
-    _edit(scripted, "tools/echo/words.py")
+    took = running._versions.current
+
+    def then_edited() -> Any:
+        version = took()
+        _edit(scripted, "tools/echo/words.py")
+        return version
+
+    monkeypatch.setattr(running._versions, "current", then_edited)
     paused = _paused(running, scripted)
 
     with pytest.raises(

@@ -404,8 +404,9 @@ deployment wrote the lambda.
 Nothing here is discovered mid-run. The first fires earlier than the rest: it is
 a fact about the registry rather than about any definition, so `Kingfisher`
 refuses it as the registry arrives, before a definition has named anything. The
-two about `middlewares/` files fire as that folder is read at startup, and raise
-the loader's `ValueError` naming the file. The others are raised while the agent
+two about `middlewares/` files fire as that folder is read, and raise the
+loader's `ValueError` naming the file: at startup, or, for a file changed while
+kingfisher runs, in the log, with turns kept on what was read before. The others are raised while the agent
 is built, before the model is reached. All but those two raise `CapabilityError`.
 
 | What happened | What it says |

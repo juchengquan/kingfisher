@@ -79,6 +79,10 @@ def load(path: Path, *, declares: str, error: type[ValueError] = LoadError) -> A
     source = path / PACKAGE_MARKER if is_package else path
 
     module_name = _module_name(path)
+    # Its helpers too: Python keeps a submodule by name, so a package read again would run
+    # its new `__init__` over the helpers it imported the first time.
+    for stale in [name for name in sys.modules if name.startswith(f"{module_name}.")]:
+        del sys.modules[stale]
     spec = importlib.util.spec_from_file_location(
         module_name,
         source,

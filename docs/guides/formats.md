@@ -1611,7 +1611,9 @@ TOOLS = [ToolSpec(sql_query, source_ids=["A"])]
   source_ids: [A]
 ```
 
-Read once at startup, so a revocation lands on restart.
+Read again whenever the definitions change, so a revocation reaches the next turn; until
+a session stops keeping its own copy of its agent, an agent's own `source_ids:` reaches
+only the sessions opened after it changed.
 
 ### Who is calling
 

@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## An edit to the definitions reaches the next turn, after #1186
+
+- **A change to the definitions folder no longer waits for a restart.** Each turn
+  starts on the folder as it is, read and checked again whenever anything in it
+  changed; a turn already running keeps what it started on. `models.yaml` is still read
+  once, at start.
+- **A change that fails its checks is logged, not raised**, by the
+  `kingfisher.core.versions` logger, once for what the folder holds, and turns run on the
+  set that loaded last. At startup a set that fails still stops `Kingfisher`. Watch that
+  logger where you used to rely on a restart failing.
+- **A session's backend is opened with the set the turn runs on.** A `Sessions` plugin
+  handed `catalogue=` should use it rather than one it kept from an earlier call.
+
 ## A resume is refused once a file its agent uses changed, after #1185
 
 - **A paused turn records the files behind its agent's tools, skills, subagents and

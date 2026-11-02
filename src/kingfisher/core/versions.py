@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import suppress
 from pathlib import PurePosixPath
+from threading import Lock
 from typing import TYPE_CHECKING
 
 from .access import ALL
@@ -13,30 +15,87 @@ from .definitions.catalogue import Definitions, resolve_definitions
 from .definitions.tools.spec import Offering, select
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from .definitions.definition import SpecBase
+
+logger = logging.getLogger(__name__)
 
 
 class Versions:
-    """The checked definitions turns start on.
+    """The checked definitions turns start on, read again whenever the folder changes.
 
-    Read and checked once, when kingfisher is built: a catalogue that cannot be read is a
-    wiring mistake, to fail at startup rather than serve an agent told about nothing.
+    The first read refuses as kingfisher is built: a catalogue that cannot be read then is
+    a wiring mistake, to fail at startup rather than serve an agent told about nothing.
     """
 
     def __init__(self, cfg: Config) -> None:
-        self._current = checked(cfg)
+        self._cfg = cfg
+        # One turn reads a changed folder while the others wait for what it read.
+        self._lock = Lock()
+        fresh = resolve_definitions(cfg)
+        self._seen = _signature(fresh)
+        self._current = _checked(cfg, fresh)
+        #: What the folder held when it was last refused, so a refusal is said once.
+        self._refused: object = None
 
     def current(self) -> Definitions:
-        """The definitions a turn starting now runs on.
+        """The definitions a turn starting now runs on: the set that loaded last, or the
+        folder read again if it changed since and passes its checks.
 
         Asked once per turn, which keeps the answer to its end, subagents included.
         """
-        return self._current
+        with self._lock:
+            try:
+                fresh = resolve_definitions(self._cfg)
+                seen = _signature(fresh)
+                if seen == self._seen:
+                    return self._current
+                found = dict(fresh.digests)
+            except ConfigError as exc:
+                self._refuse(str(exc), exc)
+                return self._current
+            except OSError:
+                # A file moved while it was read: the next turn looks again.
+                return self._current
+            self._seen = seen
+            if found in (self._current.digests, self._refused):
+                return self._current
+            try:
+                self._current = _checked(self._cfg, fresh)
+            # Whatever a changed folder raises, turns keep a set that loaded.
+            except Exception as exc:  # noqa: BLE001
+                self._refuse(found, exc)
+            return self._current
+
+    def _refuse(self, held: object, exc: Exception) -> None:
+        """Say once that the folder, as it now holds `held`, was not taken."""
+        if held == self._refused:
+            return
+        self._refused = held
+        logger.warning(
+            "the definitions changed and the change was refused, so turns run on the set "
+            "that loaded last: %s: %s",
+            type(exc).__name__,
+            exc,
+        )
 
 
-def checked(cfg: Config) -> Definitions:
-    """Every definition `cfg` names, read and checked together, or the refusal."""
-    definitions = resolve_definitions(cfg).warm()
+def _signature(definitions: Definitions) -> Mapping[str, tuple[int, int]]:
+    """Each file's size and time of change: what a turn compares before reading any.
+
+    An edit that keeps both is noticed with the next one.
+    """
+    stats = {key: path.stat() for key, path in definitions.files.items()}
+    return {key: (stat.st_size, stat.st_mtime_ns) for key, stat in stats.items()}
+
+
+def _checked(cfg: Config, definitions: Definitions) -> Definitions:
+    """`definitions` read and checked, or the refusal."""
+    # Before the read, so an edit landing during it leaves the record behind the files,
+    # and the next turn reads them again. A pause records what was loaded.
+    _ = definitions.digests
+    definitions.warm()
     # Whether an offered tool wears a built-in's name: only an assembled graph can say,
     # so `warm` cannot. A subagent's own tools as well as the catalogue's: a bundled
     # `read_file` replaced deepagents' own in that subagent and crashed every model call
@@ -49,9 +108,6 @@ def checked(cfg: Config) -> Definitions:
         # commands, which need no model. `CapabilityError` still refuses.
         with suppress(ConfigError):
             builtin_tool_names(cfg, definitions)
-    # With the read, so a pause records what was loaded rather than what the folder holds
-    # by the time it pauses.
-    _ = definitions.digests
     return definitions
 
 

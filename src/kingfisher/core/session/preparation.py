@@ -118,8 +118,9 @@ class Preparation:
         """
         cfg = self.cfg
         # Once, and kept to the turn's end: asked again, one turn could build its agent
-        # from one set of definitions and its tools or subagents from the next.
-        catalogue = self._versions.current()
+        # from one set of definitions and its tools or subagents from the next. On the
+        # host, since a changed folder is read and checked while the turn waits.
+        catalogue = yield on_host(self._versions.current)
         session = yield from self._session_for(request)
         # Who is calling, before the session is marked, claimed or written to: later, a
         # refused caller's files would be in its `/inputs`, and a session out of reach

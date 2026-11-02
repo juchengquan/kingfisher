@@ -67,7 +67,7 @@ class Preview:
             msg = "sent places no inputs; ask without them, since they change nothing sent"
             raise ValueError(msg)
         # Once, as a turn asks.
-        catalogue = self._versions.current()
+        catalogue = yield on_host(self._versions.current)
         session = yield from self._session_for(request)
         held = caller_holds(catalogue.vocabulary, source_ids)
         made = session.id not in (yield from self._known_steps())

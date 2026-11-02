@@ -22,7 +22,7 @@ from .model import (
     known,
     unknown_session,
 )
-from .steps import Steps, adrive, changing, drive, reading
+from .steps import Steps, adrive, changing, drive, on_host, reading
 from .store import (
     HarnessFiles,
     pending_from_mark,
@@ -186,7 +186,7 @@ class SessionMethods:
     def _session_steps(
         self, session_id: str, source_ids: Held | None, *, create: bool
     ) -> Steps[Session | None]:
-        catalogue = self._versions.current()
+        catalogue = yield on_host(self._versions.current)
         held = caller_holds(catalogue.vocabulary, source_ids)
         listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
         if create and session_id not in listing:
@@ -206,8 +206,8 @@ class SessionMethods:
 
     def _sessions_steps(self, source_ids: Held | None) -> Steps[tuple[Session, ...]]:
         # Naming nobody is the operator's view of every session, not a caller under a lock.
-        vocabulary = self._versions.current().vocabulary
-        held = None if source_ids is None else caller_holds(vocabulary, source_ids)
+        catalogue = yield on_host(self._versions.current)
+        held = None if source_ids is None else caller_holds(catalogue.vocabulary, source_ids)
         listing = yield reading(self._sessions, "sessions", self.cfg)
         found = []
         for name, last_used in known(listing):
@@ -226,7 +226,8 @@ class SessionMethods:
         """
         if held is None:
             return True, []
-        files = yield from self._files_for(session_id, catalogue=self._versions.current())
+        catalogue = yield on_host(self._versions.current)
+        files = yield from self._files_for(session_id, catalogue=catalogue)
         reached = yield from self._reaches_session(
             HarnessFiles(files), held, session_id=session_id
         )
@@ -237,9 +238,8 @@ class SessionMethods:
         `UnknownSessionError` once it is gone, since opening it again would make it."""
         yield from self._refuse_if_absent(session_id)
         if not opened:
-            opened.append(
-                (yield from self._files_for(session_id, catalogue=self._versions.current()))
-            )
+            catalogue = yield on_host(self._versions.current)
+            opened.append((yield from self._files_for(session_id, catalogue=catalogue)))
         return opened[0]
 
     def _pending_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[Any, ...]]:

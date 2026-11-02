@@ -154,11 +154,13 @@ def test_a_turn_asks_for_its_definitions_once(scripted, monkeypatch):
     an_agent(scripted, tools="[echo]", subagents="[helper]", builtin_tools="[read_file, task]")
     kf = Kingfisher(scripted, sessions=LocalSessions())
     asked, read_again = [], []
-    current, from_roots = kf._versions.current, Definitions.from_roots
+    # Taken before the spy: asking is what reads a changed folder, and the question is
+    # whether anything else does.
+    version, from_roots = kf._versions.current(), Definitions.from_roots
 
     def counted() -> Definitions:
         asked.append(1)
-        return current()
+        return version
 
     def spied(*args, **kwargs) -> Definitions:
         read_again.append(args)

@@ -407,8 +407,9 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     assert all("sessions" in str(d) for d in reads[at_construction:])
 
 
-def test_a_definition_written_after_wiring_is_not_this_deployments(cfg):
-    """The cost of reading once, stated as behaviour rather than left to be discovered."""
+def test_a_definition_written_after_wiring_is_this_deployments(cfg):
+    """Read once at wiring, a definition added afterwards waited for a restart; a new file
+    changes which files there are, which an edit to one does not."""
     from tests.unit.test_run import StubAgent
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
@@ -417,10 +418,7 @@ def test_a_definition_written_after_wiring_is_not_this_deployments(cfg):
         "name: late\ndescription: Written afterwards.\nsystem_prompt: |\n  x\n", encoding="utf-8"
     )
 
-    assert "late" not in service.catalogue.subagents.specs
-    assert "late" in Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
-    ).catalogue.subagents.specs
+    assert "late" in service.catalogue.subagents.specs
 
 
 def test_listing_still_survives_a_definition_that_will_not_load(cfg):
