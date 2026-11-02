@@ -91,6 +91,7 @@ def test_the_agent_is_wrapped_in_standing_then_switched_then_offered(cfg, sessio
     assert [type(m).__name__ for m in built.middleware] == [
         "ResultClearingMiddleware",
         "CurrentGraphMiddleware",
+        "StoppingMiddleware",
         "SignedThinkingMiddleware",
         "TodoListMiddleware",
         "RecorderMiddleware",
@@ -120,6 +121,7 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
     assert [type(m).__name__ for m in subagent_of(built, "general-purpose")["middleware"]] == [
         "ResultClearingMiddleware",
         "CurrentGraphMiddleware",
+        "StoppingMiddleware",
         "SignedThinkingMiddleware",
         "RecorderMiddleware",
         "StepBudgetMiddleware",

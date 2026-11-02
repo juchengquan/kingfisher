@@ -6145,6 +6145,16 @@ through the lifecycle's own ending -- *Cancelling waits* again.
 `test_cancelling_during_setup_leaves_the_session_free` lets setup go only after the
 cancel has landed, so it cannot pass by setup finishing first. *(2026-10-02.)*
 
+**A call that has not begun when its turn stops is not run.** Closing a turn's stream,
+because its caller stopped reading or its time ran out, closes the graph's, and
+langgraph's sync loop waits there for every call the reply queued, starting each as a
+thread frees: 40 calls asked together and stopped with the first few under way charged 40
+times. `StoppingMiddleware` refuses a call that begins once its turn is stopping, and
+`GuardedTool` refuses one from `eval` or a compiled subagent. The flag is a context
+variable set in a context of the turn's own, which the graph's stream runs in and
+langgraph's threads copy, so it is never set in the caller's. A call already running
+finishes: no thread can be killed. *(2026-11-02.)*
+
 **Kingfisher's own thread pool, one per process.** `asyncio.to_thread` borrows the
 loop's default executor, `min(32, cpu+4)` workers, and a call blocking on a round trip
 holds its worker throughout: at 50ms, 200 concurrent calls took 917ms there, 73ms on
