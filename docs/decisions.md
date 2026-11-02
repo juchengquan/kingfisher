@@ -370,6 +370,29 @@ subagent -- and no `file::name` path. A subagent inheriting the catalogue with `
 and listing its own `fetch` gets its own, and `list` marks the shadowing; a folder named
 after no definition stays a warning. *(2026-09-23.)*
 
+**The definitions are read again when they change, not once at startup.** Each turn asks
+`Versions.current()` once and keeps the answer to its end, subagents included. The folder
+is compared by each file's size and time of change, then by content where those differ;
+a changed folder is read and checked on the side, as startup checks it, while the turn
+waits, about 85 ms. A change that fails is never swapped in: turns run on the set that
+loaded last, and the refusal is logged once for what the folder holds. A folder that goes
+away is refused the same way, since nothing a turn runs is read from it again. Startup
+still stops on a set that fails, where it is a wiring mistake. This reverses the service
+reading its catalogue once, at construction, so that a change reaches the next turn
+without a restart, which a source that may later be an API needs. A tool package's
+helper modules are imported afresh with it: Python keeps a submodule by name, and a
+package read again in one process ran its new `__init__` over the old helpers.
+
+**Not taken: a copy of each version's skills.** Skills are the one kind still read from
+the folder while a turn runs, so a skill edited mid-turn reaches the rest of that turn,
+as it did before. A copy per version was weighed against where it could go: the
+workspace, which the macOS shell reads whole, would hand an agent other agents' prompts
+and tool code, and copying only skills meant a copy on every change, a skills folder that
+moves under a session plugin syncing it, and subagents' own skills readable on macOS for
+the first time. Each version gets its own folder once the files can come from an API,
+which has to write them somewhere. `models.yaml` is configuration and is still read at
+start. *(2026-11-02.)*
+
 ## Agents and delegation
 
 **The main agent is a definition.** It used to be assembled from four places that

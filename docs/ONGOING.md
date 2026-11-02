@@ -109,14 +109,13 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   out as `assets/` is, so publishing one is running code as the deployment, and
   `skill_locks.yaml` is one of them. A paused turn is refused on resume when anything its
   agent uses changed. A session's datazones stay pinned, and a current version that fails
-  at startup still stops it. Four slices, in order: a turn takes its definitions once,
-  from `core/versions.py`, which has landed; a pause records the files its agent's
+  at startup still stops it. Four slices, in order, the first three landed: a turn takes
+  its definitions once, from `core/versions.py`; a pause records the files its agent's
   tools, skills, subagents and middleware come from, its own file once the fourth lands;
-  a new version per turn; the session keeps only its agent's name, which undoes the agent's pin
-  under *Sessions: what persists and where* in `decisions.md`. The third must give each
-  version's Python names of its own, since a reload in one process keeps a tool's old
-  helper module, and a folder that never changes, since skills are read from the folder
-  as the turn runs. The source a deployment supplies waits for a real API.
+  a new version per turn, skills still read from the folder as the turn runs; the session
+  keeps only its agent's name, which undoes the agent's pin under *Sessions: what
+  persists and where* in `decisions.md`. The source a deployment supplies waits for a
+  real API, and gives each version a folder of its own.
   *(2026-11-02.)*
 - **A skills registry that holds each skill's lock.** Grilled part of the way. The
   owner's skills are to come from outside, written to a standard with an access field

@@ -84,8 +84,8 @@ class Definitions:
         return skill_registry.read(self.skills)
 
     @cached_property
-    def digests(self) -> Mapping[str, str]:
-        """A digest of each file these definitions are read from, by `kind/path`.
+    def files(self) -> Mapping[str, Path]:
+        """Each file these definitions are read from, by `kind/path`.
 
         A mounted skills folder is under `skills/` by its label, where the agent reaches it.
         """
@@ -97,11 +97,20 @@ class Definitions:
             "tools": self.tools.root,
             **{f"skills/{label}": mount for label, mount in self.skills.mounts.items()},
         }
+        locks = Path(self.skills.root).parent / skill_locks.FILENAME
         return {
-            f"{kind}/{path.relative_to(root).as_posix()}": sha256(path.read_bytes()).hexdigest()
-            for kind, root in roots.items()
-            for path in _files_under(Path(root))
+            **{
+                f"{kind}/{path.relative_to(root).as_posix()}": path
+                for kind, root in roots.items()
+                for path in _files_under(Path(root))
+            },
+            **({skill_locks.FILENAME: locks} if locks.is_file() else {}),
         }
+
+    @cached_property
+    def digests(self) -> Mapping[str, str]:
+        """A digest of each of `files`."""
+        return {key: sha256(path.read_bytes()).hexdigest() for key, path in self.files.items()}
 
     def skill_sources(self) -> tuple[SkillSource, ...]:
         """Every place the agent is given a skills index."""
