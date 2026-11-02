@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import replace as replace_cfg
 from typing import Any
 
@@ -29,7 +30,17 @@ from kingfisher.core.session.store import read_pause_mark, write_pause_mark
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_bytes
 from kingfisher.plugins.sessions.permissions import writable_inputs
-from tests.conftest import FakeToolCallingModel, Through, harness_of
+from tests.conftest import (
+    FakeToolCallingModel,
+    Through,
+    an_agent,
+    harness_of,
+    middlewares_dir,
+    start,
+    subagents_dir,
+    tools_dir,
+)
+from tests.unit.scripted import Scripted
 
 PAUSED = f"{HARNESS}/{PAUSED_STATE}"
 PAUSED_PROVENANCE = f"{HARNESS}/{PAUSED_MARK}"
@@ -584,6 +595,154 @@ def test_a_pause_that_did_not_survive_an_upgrade_is_refused(cfg):
                 decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
             )
         )
+
+
+WORDS = '''
+def echo(text: str) -> str:
+    """Says the text back."""
+    return "ECHO:" + text
+'''
+
+COUNT = '''
+def count(text: str) -> int:
+    """How long the text is."""
+    return len(text)
+
+
+TOOLS = [count]
+'''
+
+QUIET = '''from langchain.agents.middleware import AgentMiddleware
+
+
+class Quiet(AgentMiddleware):
+    """Does nothing."""
+
+    name = "quiet"
+
+
+MIDDLEWARES = [Quiet]
+'''
+
+
+def _gated_on_echo(cfg) -> None:
+    """An agent built from definitions, gated on its tool `echo`.
+
+    `echo` is a package whose helper module holds the code, which is the file a reload
+    in one process keeps stale; `count` reaches the agent only through its subagent.
+    """
+    package = tools_dir(cfg) / "echo"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("from .words import echo\n\nTOOLS = [echo]\n")
+    (package / "words.py").write_text(WORDS, encoding="utf-8")
+    (tools_dir(cfg) / "count.py").write_text(COUNT, encoding="utf-8")
+    (tools_dir(cfg) / "spare.py").write_text(COUNT.replace("count", "spare"), encoding="utf-8")
+    middlewares_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (middlewares_dir(cfg) / "quiet.py").write_text(QUIET, encoding="utf-8")
+    (cfg.skills_dir / "s1").mkdir(parents=True)
+    (cfg.skills_dir / "s1" / "SKILL.md").write_text(
+        "---\nname: s1\ndescription: A skill.\n---\nDo it.\n", encoding="utf-8"
+    )
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(
+        "name: helper\ndescription: Helps.\nbuiltin_tools: [read_file]\ntools: [count]\n"
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
+    )
+    an_agent(
+        cfg,
+        tools="[echo]",
+        skills="[s1]",
+        subagents="[helper]",
+        middlewares="[quiet]",
+        builtin_tools="[read_file, task]",
+        interrupt_on="[echo]",
+    )
+
+
+def _paused(kf: Kingfisher, cfg) -> Any:
+    """A turn of `kf` stopped at the gate on `echo`."""
+    Scripted.script.append(
+        AIMessage("", tool_calls=[{"name": "echo", "args": {"text": "x"}, "id": "c1"}])
+    )
+    paused = kf.run(Request("go", agent="only", session_id=start(cfg, "s")))
+    assert paused.pending, "the gate on echo stopped nothing"
+    return paused
+
+
+def _edit(cfg, edited: str) -> None:
+    path = cfg.definitions / edited
+    path.write_text(path.read_text(encoding="utf-8") + "\n# edited\n", encoding="utf-8")
+
+
+def _approved(paused: Any) -> Resume:
+    Scripted.script.append(AIMessage("done"))
+    return Resume(
+        session_id=paused.session_id,
+        decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+    )
+
+
+@pytest.mark.parametrize(
+    ("edited", "refused"),
+    [
+        ("tools/echo/words.py", True),
+        ("skills/s1/SKILL.md", True),
+        ("middlewares/quiet.py", True),
+        ("tools/count.py", True),
+        ("tools/spare.py", False),
+        # Read from the session's copy, which an edit to the folder does not reach.
+        ("agents/only.yaml", False),
+    ],
+    ids=[
+        "tool-helper", "skill", "middleware", "subagents-tool", "control-unused", "agents-own-file"
+    ],
+)
+def test_a_resume_is_refused_once_what_its_agent_uses_changed(scripted, edited, refused):
+    """A turn paused on one tool and resumed on another would run a plan made against
+    code that is gone, as a restart after an edit did with nothing said; the control is a
+    file the agent never names, which must not stop it."""
+    _gated_on_echo(scripted)
+    paused = _paused(Kingfisher(scripted, sessions=LocalSessions()), scripted)
+    _edit(scripted, edited)
+    restarted = Kingfisher(scripted, sessions=LocalSessions())
+    resume = _approved(paused)
+
+    if refused:
+        with pytest.raises(DecisionError, match=re.escape(f"paused before {edited} changed")):
+            restarted.run(resume)
+    else:
+        assert restarted.run(resume).stop_reason == END_TURN
+
+
+def test_a_pause_from_before_the_record_resumes_as_it_did(scripted):
+    """Every pause written before kingfisher recorded its files would be refused on the
+    first resume after the upgrade, though nothing it uses moved."""
+    _gated_on_echo(scripted)
+    paused = _paused(Kingfisher(scripted, sessions=LocalSessions()), scripted)
+    kept = harness_of(scripted, paused.session_id)
+    written = drive(read_pause_mark(kept)) or {}
+    assert "built_from" in written, "the pause recorded no files to leave out"
+    drive(write_pause_mark(kept, {k: v for k, v in written.items() if k != "built_from"}))
+
+    done = Kingfisher(scripted, sessions=LocalSessions()).run(_approved(paused))
+
+    assert done.stop_reason == END_TURN
+
+
+def test_a_pause_records_the_files_as_they_were_loaded(scripted):
+    """Recorded from the folder as the turn paused, a tool edited while kingfisher ran
+    would be recorded as the new code though the turn ran the old, and the resume after
+    a restart would go ahead on code the turn never planned against."""
+    _gated_on_echo(scripted)
+    running = Kingfisher(scripted, sessions=LocalSessions())
+    _edit(scripted, "tools/echo/words.py")
+    paused = _paused(running, scripted)
+
+    with pytest.raises(
+        DecisionError, match=re.escape("paused before tools/echo/words.py changed")
+    ):
+        Kingfisher(scripted, sessions=LocalSessions()).run(_approved(paused))
 
 
 def test_a_refused_resume_leaves_the_pause_answerable(cfg, session_dir):

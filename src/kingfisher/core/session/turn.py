@@ -63,6 +63,9 @@ class Prepared:
     #: resolved. The *resolved* one, not the requested: a turn after the first names
     #: none. Written beside a pause, so a resume naming a different agent can be refused.
     agent_name: str | None = None
+    #: What the graph was built from, as `built_from` answers, or `None` for a graph the
+    #: caller built. Written beside a pause, so a resume on changed files can be refused.
+    built_from: Mapping[str, str] | None = None
     #: Tools an earlier turn was waiting on that this one superseded. Carried to the end
     #: as well as announced: `run` drains the stream, so its caller would otherwise never hear.
     discarded: tuple[str, ...] = ()

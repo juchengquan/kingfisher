@@ -44,6 +44,7 @@ from .steps import (
 )
 from .store import (
     AGENT_MARK,
+    BUILT_FROM_MARK,
     PENDING_MARK,
     clear_pause,
     pending_as_mark,
@@ -288,6 +289,11 @@ class Running:
                 AGENT_MARK: prepared.agent_name or "",
                 PENDING_MARK: pending_as_mark(waiting),
                 **harness_mark(),
+                **(
+                    {BUILT_FROM_MARK: dict(prepared.built_from)}
+                    if prepared.built_from is not None
+                    else {}
+                ),
             },
         )
         return waiting

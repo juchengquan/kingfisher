@@ -397,6 +397,11 @@ def write_ledger(  # noqa: PLR0913 -- three marks, by keyword so none is passed 
 #: one: capabilities are presented afresh, and another agent's graph does not fit.
 AGENT_MARK = "agent"
 
+#: A digest of each file the paused graph's tools, skills, subagents and middleware were
+#: read from, by path. A resume on files that differ would run a turn planned against
+#: others.
+BUILT_FROM_MARK = "built_from"
+
 #: The gated calls the pause is waiting on, as the caller was told them. Kept, not
 #: re-derived: a caller answers the ids it was handed, and deriving them needs a
 #: compiled graph, which admission has only after it has dealt with the pause.
