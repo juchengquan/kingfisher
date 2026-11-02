@@ -7,10 +7,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.config import ConfigError
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.interfaces import CommandResult, CommandRunner
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
@@ -31,8 +33,10 @@ from tests.conftest import (
     harness_in,
     start,
     subagents_dir,
+    tools_dir,
     withheld_told,
 )
+from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
 
 
@@ -76,13 +80,25 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
     # looked at, which is the thing this asserts.
     asked = Request("go")
     assert service._graph_for(
-        asked, asked.capabilities, agent=None, held=None, files=None, session_id="s"
+        asked,
+        asked.capabilities,
+        agent=None,
+        held=None,
+        files=None,
+        session_id="s",
+        catalogue=service.catalogue,
     ) is agent
 
     with pytest.raises(ValueError, match="pre-built graph"):
         narrowed = Request("go", capabilities=Capabilities(builtin_tools=("read_file",)))
         service._graph_for(
-            narrowed, narrowed.capabilities, agent=None, held=None, files=None, session_id="s"
+            narrowed,
+            narrowed.capabilities,
+            agent=None,
+            held=None,
+            files=None,
+            session_id="s",
+            catalogue=service.catalogue,
         )
 
 
@@ -97,14 +113,83 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     asked = Request("go", agent="only")
 
     built = agent_for(service, asked, harness_in(cfg, session_dir))
-    files = drive(service._files_for(session_dir.name))
+    files = drive(service._files_for(session_dir.name, catalogue=service.catalogue))
 
     def once():
         return service._graph_for(
-            asked, service.grants, agent=built, held=None, files=files, session_id="s"
+            asked,
+            service.grants,
+            agent=built,
+            held=None,
+            files=files,
+            session_id="s",
+            catalogue=service.catalogue,
         )
 
     assert once() is not once()
+
+
+ECHO = '''
+def echo(text: str) -> str:
+    """Says the text back."""
+    return "ECHO:" + text
+
+
+TOOLS = [echo]
+'''
+
+
+def test_a_turn_asks_for_its_definitions_once(scripted, monkeypatch):
+    """A turn asking twice, or reading the folder behind its answer, could build its agent
+    from one set of definitions and its tools or subagents from another. Driven through a
+    tool call and a subagent calling one, so the whole turn is inside what is counted."""
+    tools_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (tools_dir(scripted) / "echo.py").write_text(ECHO, encoding="utf-8")
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "helper.yaml").write_text(
+        "name: helper\ndescription: Helps.\nbuiltin_tools: [read_file]\ntools: [echo]\n"
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
+    )
+    an_agent(scripted, tools="[echo]", subagents="[helper]", builtin_tools="[read_file, task]")
+    kf = Kingfisher(scripted, sessions=LocalSessions())
+    asked, read_again = [], []
+    current, from_roots = kf._versions.current, Definitions.from_roots
+
+    def counted() -> Definitions:
+        asked.append(1)
+        return current()
+
+    def spied(*args, **kwargs) -> Definitions:
+        read_again.append(args)
+        return from_roots(*args, **kwargs)
+
+    monkeypatch.setattr(kf._versions, "current", counted)
+    monkeypatch.setattr(Definitions, "from_roots", spied)
+    Scripted.script.extend(
+        [
+            AIMessage("", tool_calls=[{"name": "echo", "args": {"text": "x"}, "id": "c1"}]),
+            AIMessage(
+                "",
+                tool_calls=[
+                    {
+                        "name": "task",
+                        "args": {"description": "go", "subagent_type": "helper"},
+                        "id": "c2",
+                    }
+                ],
+            ),
+            AIMessage("", tool_calls=[{"name": "echo", "args": {"text": "y"}, "id": "c3"}]),
+            AIMessage("helped"),
+            AIMessage("done"),
+        ]
+    )
+
+    ran = kf.run(Request("go", agent="only", session_id=start(scripted, "s")))
+
+    assert [entry.tool for entry in ran.ledger] == ["echo", "task", "echo"]
+    assert len(asked) == 1
+    assert not read_again
 
 
 def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):

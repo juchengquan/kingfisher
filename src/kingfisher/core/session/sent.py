@@ -15,11 +15,13 @@ from .store import HarnessFiles, pinned_in
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from kingfisher.core.access import Capabilities, Held, Vocabulary
+    from kingfisher.core.access import Capabilities, Held
     from kingfisher.core.config import Config
     from kingfisher.core.definitions.agents.spec import AgentSpec
+    from kingfisher.core.definitions.catalogue import Definitions
     from kingfisher.core.request import Request
     from kingfisher.core.result import Sent
+    from kingfisher.core.versions import Versions
 
     from .model import Conversation
 
@@ -29,7 +31,7 @@ class Preview:
 
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
     cfg: Config
-    vocabulary: Vocabulary | None
+    _versions: Versions
     grants: Capabilities
     _sessions: Any
     _graph: Any
@@ -64,12 +66,14 @@ class Preview:
             # Placing them is a write; leaving them out silently would read as placed.
             msg = "sent places no inputs; ask without them, since they change nothing sent"
             raise ValueError(msg)
+        # Once, as a turn asks.
+        catalogue = self._versions.current()
         session = yield from self._session_for(request)
-        held = caller_holds(self.vocabulary, source_ids)
+        held = caller_holds(catalogue.vocabulary, source_ids)
         made = session.id not in (yield from self._known_steps())
-        files = yield from self._files_for(session.id)
+        files = yield from self._files_for(session.id, catalogue=catalogue)
         try:
-            sent = yield from self._looked(request, session.id, files, held)
+            sent = yield from self._looked(request, session.id, files, held, catalogue)
         except BaseException:
             if made:
                 yield changing(self._sessions, "delete", self.cfg, session.id)
@@ -79,13 +83,18 @@ class Preview:
         return sent
 
     def _looked(
-        self, request: Request, session_id: str, files: Any, held: frozenset[str] | None
+        self,
+        request: Request,
+        session_id: str,
+        files: Any,
+        held: frozenset[str] | None,
+        catalogue: Definitions,
     ) -> Steps[Sent]:
         """The build and the caught call, after the checks a turn makes before either."""
         pinned, zones = yield from pinned_in(HarnessFiles(files))
         if not self._reaches_pin(pinned, zones, held, session_id=session_id):
             raise unknown_session(session_id)
-        agent = self._agent_for(request, held=held, pinned=pinned)
+        agent = self._agent_for(request, held=held, pinned=pinned, catalogue=catalogue)
         built = yield on_host(
             self._graph_for,
             request,
@@ -94,6 +103,7 @@ class Preview:
             held=held,
             files=files,
             session_id=session_id,
+            catalogue=catalogue,
         )
         name = agent.name if agent is not None else ""
         # As a turn's teardown does: the caught call can have started the code

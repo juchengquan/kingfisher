@@ -97,20 +97,26 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   interface. A new hook is written into both, and missing either turns a test red, so
   nothing slips; it is only one place too many. Merging them into one list is a small
   tidy-up whenever someone is next in either file. *(2026-11-01.)*
-- **Every definition read per turn, from a source that may be remote.** Grilled part of
-  the way: tools, agents, subagents, skills and middleware fetched from an API, or from a
-  wrapper over today's folder. Agreed so far: a session keeps only its agent's name and
-  reads the definition fresh, so widening an agent's `source_ids` opens its old sessions'
-  results to the new callers, and a model change sends old history to the new model. A
-  turn runs on one whole checked version, kept to its end and reused while unchanged,
-  and a version failing its check is never swapped in. The source refuses an invalid
-  version at publish with kingfisher's own checker, and kingfisher checks each new one
-  again, about 85 ms. A version is files laid out as `assets/` is, so publishing one is
-  running code as the deployment, and `skill_locks.yaml` is one of them. Open: startup
-  when the current version fails, and the datazones a session is pinned to. The first
-  slice separates loading from running, since `Kingfisher` checks the whole catalogue
-  once, at `warm()`. Building it undoes the agent's pin, under *Sessions: what persists
-  and where* in `decisions.md`, which must then say so. *(2026-10-30.)*
+- **Every definition read per turn, from a source that may be remote.** Tools, agents,
+  subagents, skills and middleware fetched from an API, or from a wrapper over today's
+  folder. Agreed: a session keeps only its agent's name and reads the definition fresh,
+  so widening an agent's `source_ids` opens its old sessions' results to the new callers,
+  and a model change sends old history to the new model; a session whose agent is gone
+  reaches no scoped caller. A turn runs on one whole checked version, kept to its end and
+  reused while unchanged, and a version failing its check is never swapped in and is
+  reported once. The source refuses an invalid version at publish with kingfisher's own
+  checker, and kingfisher checks each new one again, about 85 ms. A version is files laid
+  out as `assets/` is, so publishing one is running code as the deployment, and
+  `skill_locks.yaml` is one of them. A paused turn is refused on resume when anything its
+  agent uses changed. A session's datazones stay pinned, and a current version that fails
+  at startup still stops it. Four slices, in order: a turn takes its definitions once,
+  from `core/versions.py`; a pause records the files its agent was built from; a new
+  version per turn; the session keeps only its agent's name, which undoes the agent's pin
+  under *Sessions: what persists and where* in `decisions.md`. The third must give each
+  version's Python names of its own, since a reload in one process keeps a tool's old
+  helper module, and a folder that never changes, since skills are read from the folder
+  as the turn runs. The source a deployment supplies waits for a real API.
+  *(2026-11-02.)*
 - **A skills registry that holds each skill's lock.** Grilled part of the way. The
   owner's skills are to come from outside, written to a standard with an access field
   of its own, and a registry service would keep those rules in place of

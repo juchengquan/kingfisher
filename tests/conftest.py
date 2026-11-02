@@ -347,10 +347,11 @@ def agent_for(service, request, harness, *, source_ids=None):
     from kingfisher.core.session.store import pinned_in
 
     pinned, _zone = drive(pinned_in(harness))
-    held = caller_holds(service.vocabulary, source_ids)
-    agent = service._agent_for(request, held=held, pinned=pinned)
+    catalogue = service.catalogue
+    held = caller_holds(catalogue.vocabulary, source_ids)
+    agent = service._agent_for(request, held=held, pinned=pinned, catalogue=catalogue)
     if pinned is None:
-        drive(service._pin_agent_in(harness, request.agent))
+        drive(service._pin_agent_in(harness, request.agent, catalogue=catalogue))
     return agent
 
 
@@ -358,7 +359,10 @@ def agent_named(service, name, *, source_ids=None):
     """The agent a first turn naming `name` runs, with the caller asked first as setup asks."""
     from kingfisher.core.access import caller_holds
 
-    return service._agent_named(name, held=caller_holds(service.vocabulary, source_ids))
+    catalogue = service.catalogue
+    return service._agent_named(
+        name, held=caller_holds(catalogue.vocabulary, source_ids), catalogue=catalogue
+    )
 
 
 def paths_in(cfg, session_dir: Path, *, sessions: Path | None = None):

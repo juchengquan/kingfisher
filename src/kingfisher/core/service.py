@@ -6,7 +6,6 @@ Each request builds its agent afresh on purpose: construction is cheap beside a 
 from __future__ import annotations
 
 import logging
-from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -24,20 +23,17 @@ from .access import (
     with_datazone,
 )
 from .agent.activation import for_the_caller, settled_request
-from .agent.assembly import (
-    build_agent,
-    builtin_tool_names,
-)
+from .agent.assembly import build_agent
 from .agent.kinds.declared_middleware import (
     MiddlewareFactory,
     refuse_unbuildable_middleware,
 )
 from .agent.prompting import InstructionsFile, refuse_a_workspace_prompt
 from .agent.usable_backend import refuse_unusable_backend
-from .config import Config, ConfigError
+from .config import Config
 from .definitions.agents.reading import read
 from .definitions.agents.spec import AgentSpec
-from .definitions.catalogue import Definitions, resolve_definitions
+from .definitions.catalogue import Definitions
 from .definitions.seeding import SEED_HINT, starter_agent
 from .interfaces import (
     AgentsMiddlewares,
@@ -73,6 +69,7 @@ from .session.store import (
 )
 from .session.threads import thread_pool
 from .session.unused import DeleteUnusedResults
+from .versions import Versions
 from .workspace import ensure_layout
 
 if TYPE_CHECKING:
@@ -127,22 +124,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         # Only what sessions share: a session's own path is known once a request names it.
         self.workspace: Path = ensure_layout(self.cfg.workspace)
 
-        # Read and parsed now, not per request: a catalogue that cannot be read is a
-        # wiring mistake, to fail at startup rather than serve an agent told about nothing.
-        self.catalogue: Definitions = resolve_definitions(self.cfg).warm()
-        # Whether an offered tool wears a built-in's name, refused at startup: only an
-        # assembled graph can say, so `warm` cannot. A subagent's own tools as well as the
-        # catalogue's: a bundled `read_file` replaced deepagents' own in that subagent and
-        # crashed every model call it made, and nothing said so -- `doctor` called the
-        # definitions healthy.
-        if self.catalogue.tools.found or any(
-            repository.found for repository in self.catalogue.bundled_tools.values()
-        ):
-            # Only `ConfigError`: the deployment could not be assembled, which the turn and
-            # `doctor` report, and raised here it would stop the `sessions` and `reap`
-            # commands, which need no model. `CapabilityError` still refuses.
-            with suppress(ConfigError):
-                builtin_tool_names(self.cfg, self.catalogue)
+        self._versions = Versions(self.cfg)
 
         # Sessions, not a backend: one backend shared by every session is one filesystem
         # for every caller, and nothing at the call site would look wrong.
@@ -189,14 +171,26 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         refuse_unbuildable_middleware(self.middlewares)
         self._sessions: Sessions = sessions
         self._graph = graph
-        # Collected rather than read from a file: a lock written anywhere is in force, so no
-        # missing file can leave one inert.
-        self.vocabulary: Vocabulary | None = self.catalogue.vocabulary
 
         # Last, so the line reports what was resolved, and a wiring failure raises
         # instead of announcing a deployment that never came up.
         if logger.isEnabledFor(logging.INFO):
             logger.info("reading from: %s", self.origins.line())
+
+    @property
+    def catalogue(self) -> Definitions:
+        """The definitions a call starting now would run on.
+
+        Never read by a turn, which asks once and keeps its answer.
+        """
+        return self._versions.current()
+
+    @property
+    def vocabulary(self) -> Vocabulary | None:
+        """The source ids and datazones the definitions lock with, or `None` for no lock."""
+        # Collected rather than read from a file: a lock written anywhere is in force, so no
+        # missing file can leave one inert.
+        return self.catalogue.vocabulary
 
     @property
     def origins(self) -> Origins:
@@ -228,25 +222,27 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         Definitions only -- no session, no backend, no model -- so it is synchronous
         where the rest of this service is not.
         """
+        catalogue = self.catalogue
         # The catalogue directly, never `_agent_named`, which drops an agent out of
         # reach so that it reads as one nobody wrote. Here that agent is the answer
         # worth having, and only a name nothing defines is a mistake in the call.
-        spec = self.catalogue.agents.specs.get(agent)
+        spec = catalogue.agents.specs.get(agent)
         if spec is None:
-            listing = ", ".join(sorted(self.catalogue.agents.specs)) or "none"
+            listing = ", ".join(sorted(catalogue.agents.specs)) or "none"
             msg = (
                 f"no agent named {agent!r}; the definitions define {listing}. One this "
                 f"caller cannot reach is answered rather than refused, so this is a "
                 f"name nothing defines"
             )
             raise CapabilityError(msg)
-        held = held_by(self.vocabulary, with_datazone(source_ids, datazone, extra_datazones))
+        vocabulary = catalogue.vocabulary
+        held = held_by(vocabulary, with_datazone(source_ids, datazone, extra_datazones))
         # `held_by` answers `None` for no caller and for no lock anywhere, and these two
         # are opposite mistakes: asked of that one function rather than by reading the
         # shape of `source_ids` here, which is a reader that would come to disagree
         # with it. With a lock in force, every sequence answers a set, so `None` is a
         # caller nobody named.
-        if held is None and self.vocabulary is not None:
+        if held is None and vocabulary is not None:
             msg = (
                 "UNSCOPED is no caller at all, and this call asks which of a caller's "
                 "names open something -- pass the ids they hold, or [] for a caller "
@@ -268,9 +264,9 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             self.grants.intersect(capabilities or Capabilities()),
             ceiling=for_the_caller(spec, self.grants, held=held).subagents,
             held=held,
-            catalogue=self.catalogue,
+            catalogue=catalogue,
         )
-        return what_opens(asked, self.cfg, self.catalogue, agent=spec, held=held)
+        return what_opens(asked, self.cfg, catalogue, agent=spec, held=held)
 
     def _graph_for(  # noqa: PLR0913 -- setup holds each; deriving one here derives it twice
         self,
@@ -282,6 +278,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         held: frozenset[str] | None,
         files: Any,
         session_id: str,
+        catalogue: Definitions,
         ledger: Ledger | None = None,
         caller: Caller | None = None,
         users_memory: bool = False,
@@ -322,7 +319,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             subagent_middlewares=self.subagent_middlewares,
             scratch_run_limit=self.scratch_run_limit,
             checkpointer=checkpointer,
-            catalogue=self.catalogue,
+            catalogue=catalogue,
             ledger=ledger,
         )
 
@@ -339,14 +336,12 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             raise TypeError(msg)
         return said
 
-    def _files_for(self, session_id: str) -> Steps[Any]:
+    def _files_for(self, session_id: str, *, catalogue: Definitions) -> Steps[Any]:
         """The backend a session's files are reached through, by kingfisher and any agent it builds.
 
         What runs its commands is the sessions' choice: only they know a session's host.
         """
-        files = yield changing(
-            self._sessions, "open", self.cfg, session_id, catalogue=self.catalogue
-        )
+        files = yield changing(self._sessions, "open", self.cfg, session_id, catalogue=catalogue)
         # Here as well as at the build: a pre-built graph has none, and setup reads the
         # session through this backend before any build.
         refuse_unusable_backend(files, self.cfg.layout)
@@ -355,7 +350,9 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         opened_for(files, session_id)
         return files
 
-    def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> Steps[None]:
+    def _pin_agent_in(
+        self, harness: HarnessFiles, name: str | None, *, catalogue: Definitions
+    ) -> Steps[None]:
         """Keep the agent, in the session's own files.
 
         Never at a path rebuilt from the id: that is the session only under the default
@@ -363,7 +360,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         """
         if name is None:
             return
-        if (text := self.catalogue.agents.documents.get(name)) is not None:
+        if (text := catalogue.agents.documents.get(name)) is not None:
             yield from remember_agent(harness, text)
 
     def _agent_for(
@@ -372,13 +369,14 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         *,
         held: frozenset[str] | None,
         pinned: DefinitionText | None,
+        catalogue: Definitions,
     ) -> AgentSpec | None:
         """The agent this turn runs, which is the one its session opened with, `pinned`.
 
         Decided, not pinned: setup pins a session's first agent once the build has passed.
         """
         if pinned is None:
-            return self._agent_named(request.agent, held=held)
+            return self._agent_named(request.agent, held=held, catalogue=catalogue)
 
         started = read(pinned)
         if request.agent is not None and request.agent != started.name:
@@ -390,13 +388,15 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             raise CapabilityError(msg)
         return started
 
-    def _agent_named(self, name: str | None, *, held: frozenset[str] | None) -> AgentSpec | None:
+    def _agent_named(
+        self, name: str | None, *, held: frozenset[str] | None, catalogue: Definitions
+    ) -> AgentSpec | None:
         """The agent this request asked for, out of the catalogue.
 
         `held` as `caller_holds` answered it, never `held_by`: `None` offers every agent,
         which for a caller nobody named under a policy is the hole `caller_holds` refuses.
         """
-        offered = self.catalogue.agents.specs
+        offered = catalogue.agents.specs
         # Filtered before the listing is built: an agent out of reach must read exactly
         # like one never written, or a caller could enumerate the catalogue by guessing.
         if held is not None:
@@ -406,7 +406,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         listing = ", ".join(sorted(offered)) if offered else "none"
         # With nothing offered, a starter file as well as `SEED_HINT`, whose `--from DIR`
         # needs a DIR a reader who only installed the package may not have.
-        root = self.catalogue.agents.root
+        root = catalogue.agents.root
         starter = "" if root is None else f", or write one:\n\n{starter_agent(root)}"
         empty = "" if offered else f" -- try {SEED_HINT}{starter}"
         if name is None:

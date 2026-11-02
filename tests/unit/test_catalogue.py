@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.core import service as service_module
+from kingfisher.core import versions as versions_module
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.activation import (
     available_skills,
@@ -311,7 +311,7 @@ def test_definitions_with_no_tools_never_assemble_the_probe(cfg, monkeypatch):
     def refuse(*_args, **_kwargs):
         pytest.fail("the probe was assembled for definitions with no tools")
 
-    monkeypatch.setattr(service_module, "builtin_tool_names", refuse)
+    monkeypatch.setattr(versions_module, "builtin_tool_names", refuse)
 
     Kingfisher(cfg, sessions=LocalSessions())
 
