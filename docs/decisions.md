@@ -6131,6 +6131,32 @@ session is free. Returning sooner would leave a window in which a retry gets
 cancel. `test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
 that error when the wait is removed.
 
+**Narrowed: a cancel waits for a call a thread runs, for at most `LEFT_WAIT_S`.** The
+wait above ended with the turn, and a cancelled awaited graph let go of a call on a
+thread at once: the session was free, the next turn was told the call did not complete,
+and the charge landed 1.4 seconds after that turn had finished, on a 1.5-second tool.
+A cancel now waits for such a call, through any number of cancels, for at most five
+seconds; past that the caller is let go and the turn holds its session until the call
+ends, so a retry meanwhile gets `SessionBusyError`. That is the window the paragraph
+above calls worse than a slow cancel, taken on the maintainer's call: an unbounded wait
+holds a caller as long as a hung tool, which *Not taken: a thread-backed `astream`*
+refused at 120 seconds, and the refusal now says a running or dead turn holds the
+session. A model call still stops at once, an awaited tool is cancelled, and a command
+is ended rather than waited out. *(2026-11-02.)*
+
+**The awaited graph runs in a task the turn owns, and is cancelled once.** langgraph
+waits for the calls it cancels, but a second cancel breaks out of that wait, and a web
+framework cancels again and again: an awaited tool not yet reached charged behind the
+next turn. The turn's task hands chunks over a one-slot queue, cancels the graph's task
+exactly once, and waits through every later cancel. A turn out of time and a graph that
+fails stop the same way and wait for their calls with no bound, since no caller has left.
+A call's answer is kept even where the graph's step was cancelled before taking it, and
+joined to the conversation the ending writes, so the next model reads the receipt rather
+than "did not complete". A call still queued for a thread is refused where the thread
+begins, since every call of a reply has passed the middleware by then. Not reached: an
+awaited tool cancelled after its effect, a tool with a thread of its own, and a compiled
+graph's own tool, whose calls still read as not completed. *(2026-11-02.)*
+
 **Methods on `Kingfisher`, and no module-level pair.** `run` and `stream` have
 module-level conveniences; the async twins do not, because a new name in `__all__`
 needs a witness and no caller outside this wheel has asked. The day one does, it is
