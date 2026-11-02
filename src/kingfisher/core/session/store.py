@@ -14,7 +14,8 @@ from dataclasses import MISSING, asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
-from kingfisher.core.definitions.documents import DefinitionText
+from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.documents import DefinitionText, decode
 from kingfisher.core.layout import (
     HARNESS,
     HARNESS_ROUTE,
@@ -94,15 +95,28 @@ class HarnessFiles:
 AGENT_SNAPSHOT = f"{HARNESS}/{PINNED_AGENT}"
 
 
-def remember_agent(harness: Any, document: str) -> Steps[None]:
-    """Keep the agent definition this session opened with.
+def remember_agent(harness: Any, name: str) -> Steps[None]:
+    """Keep the name of the agent this session opened with.
 
-    Written once and never rewritten: a later turn is built from what the session
-    started with, so a deploy cannot change an agent under a history already made.
+    Written once and never rewritten: a session runs one agent. Its name and not its
+    definition, so each turn reads the agent as the definitions have it then.
     """
     if (yield from harness.fetch(PINNED_AGENT)) is not None:
         return
-    yield from harness.store(PINNED_AGENT, document.encode("utf-8"))
+    yield from harness.store(PINNED_AGENT, f"name: {json.dumps(name)}\n".encode())
+
+
+def pinned_name(pinned: DefinitionText) -> str:
+    """The agent a session's pin names, or `AgentError` where it names none.
+
+    Its `name` alone, so the whole definition an older session kept reads the same way.
+    """
+    document = decode(pinned.text)
+    name = document.get("name") if isinstance(document, dict) else None
+    if not isinstance(name, str) or not name:
+        msg = f"{pinned.source}: names no agent"
+        raise AgentError(msg)
+    return name
 
 
 def _agent_text(held: bytes | None) -> DefinitionText | None:

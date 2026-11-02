@@ -399,7 +399,9 @@ start. *(2026-11-02.)*
 did not know about each other. The agent file is the baseline and `Capabilities`
 only ever narrows it; the prompt is appended to the harness prompt, never
 replaces it; naming an agent is required; the agent is fixed when the session
-starts and snapshotted into it. *(2026-08-18, `agents-as-definitions.md`.)*
+starts and snapshotted into it. *(2026-08-18, `agents-as-definitions.md`.)* Since
+2026-11-02 the session keeps the agent's name, not a copy: *Reversed: a session keeps
+its agent's name* under *Sessions: what persists and where*.
 
 **Reversed: omission means different things on different axes.** Leaving out `tools:`
 or `builtin_tools:` granted everything available -- the shell, and every tool file
@@ -4329,6 +4331,23 @@ re-pinned from *that* host's catalogue and took whatever agent the request named
 *"a session is fixed to the agent it opened with"* held on one machine and failed across
 two. It lives in the session's `.harness`, wherever the session's backend keeps it. The run
 log does not: it is diagnostics, and goes to `RunEvents`.
+
+**Reversed: a session keeps its agent's name, not the agent.** The pin was the agent's
+whole definition, written by the first turn, so an edit, or an update from wherever the
+definitions come from, never reached a session already open. What the copy protected, a
+history made under one prompt, is the cost taken for the reverse. A session is still
+fixed to one agent: the name is written once, and a request naming another is refused.
+Each turn reads that agent as the definitions have it then. So widening its
+`source_ids:` opens its older sessions' results to the callers it newly admits, a change
+of model sends an old history to the new model, and an agent renamed or deleted takes its
+sessions out of every scoped caller's reach, as a pin naming nothing does, while the
+operator's listing still reaches them. A session pinned before is read for its copy's
+`name:` alone, so the lock written in the copy decides nothing now. The file keeps its
+name, `agent.yaml`, and holds `name: ...`: renamed, every older session would read as
+pinned to nothing and open to every caller. A forged pin can now only name an agent the
+definitions have and the caller reaches, where a forged copy could define one. A paused
+turn records the agent's own file with the rest of what it was built from.
+*(2026-11-02.)*
 
 **The claim moving in deleted `_discard_dead_claims` outright.** It existed because a claim
 could outlive the session it named; one inside that session cannot. The cost is that

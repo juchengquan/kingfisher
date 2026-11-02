@@ -31,7 +31,6 @@ from .agent.kinds.declared_middleware import (
 from .agent.prompting import InstructionsFile, refuse_a_workspace_prompt
 from .agent.usable_backend import refuse_unusable_backend
 from .config import Config
-from .definitions.agents.reading import read
 from .definitions.agents.spec import AgentSpec
 from .definitions.catalogue import Definitions
 from .definitions.seeding import SEED_HINT, starter_agent
@@ -65,6 +64,7 @@ from .session.steps import (
 )
 from .session.store import (
     HarnessFiles,
+    pinned_name,
     remember_agent,
 )
 from .session.threads import thread_pool
@@ -350,18 +350,14 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         opened_for(files, session_id)
         return files
 
-    def _pin_agent_in(
-        self, harness: HarnessFiles, name: str | None, *, catalogue: Definitions
-    ) -> Steps[None]:
-        """Keep the agent, in the session's own files.
+    def _pin_agent_in(self, harness: HarnessFiles, name: str | None) -> Steps[None]:
+        """Keep the agent's name, in the session's own files.
 
         Never at a path rebuilt from the id: that is the session only under the default
         `session_root`, and a pin written elsewhere is never read back.
         """
-        if name is None:
-            return
-        if (text := catalogue.agents.documents.get(name)) is not None:
-            yield from remember_agent(harness, text)
+        if name is not None:
+            yield from remember_agent(harness, name)
 
     def _agent_for(
         self,
@@ -371,22 +367,31 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         pinned: DefinitionText | None,
         catalogue: Definitions,
     ) -> AgentSpec | None:
-        """The agent this turn runs, which is the one its session opened with, `pinned`.
+        """The agent this turn runs: the one its session opened with, `pinned`, as the
+        definitions have it now.
 
         Decided, not pinned: setup pins a session's first agent once the build has passed.
+        Reached already: a scoped caller who cannot reach the agent was refused the session.
         """
         if pinned is None:
             return self._agent_named(request.agent, held=held, catalogue=catalogue)
 
-        started = read(pinned)
-        if request.agent is not None and request.agent != started.name:
+        started = pinned_name(pinned)
+        if request.agent is not None and request.agent != started:
             msg = (
-                f"this session is running {started.name!r}; it was fixed when the "
+                f"this session is running {started!r}; it was fixed when the "
                 f"session opened and cannot be changed to {request.agent!r} "
                 f"mid-conversation -- start a session to run a different agent"
             )
             raise CapabilityError(msg)
-        return started
+        if (spec := catalogue.agents.specs.get(started)) is None:
+            listing = ", ".join(sorted(catalogue.agents.specs)) or "none"
+            msg = (
+                f"this session runs {started!r}, which the definitions no longer define; "
+                f"start a session to run one they offer: {listing}"
+            )
+            raise CapabilityError(msg)
+        return spec
 
     def _agent_named(
         self, name: str | None, *, held: frozenset[str] | None, catalogue: Definitions

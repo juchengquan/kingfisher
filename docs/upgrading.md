@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session keeps its agent's name and follows the agent, after #1187
+
+- **A session's `.harness/agent.yaml` holds `name: <agent>`**, written by its first turn,
+  where it held the agent's whole definition. Sessions opened before keep their copy, and
+  it is read for its `name:` alone.
+- **Every turn runs the agent as its file is now**, in old sessions too. Widening an
+  agent's `source_ids:` opens its older sessions to the callers it newly admits; a change
+  of model sends an old session's history to the new model. Narrow with that in mind.
+- **A session whose agent was renamed or deleted** is out of every scoped caller's
+  reach, and the operator's listing still has it: delete it, or put the agent back.
+- **A `Resume` is refused once the agent's own file changed**, as it is for its tools,
+  skills, subagents and middleware.
+
 ## An edit to the definitions reaches the next turn, after #1186
 
 - **A change to the definitions folder no longer waits for a restart.** Each turn

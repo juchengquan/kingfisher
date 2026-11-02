@@ -112,12 +112,12 @@ def _checked(cfg: Config, definitions: Definitions) -> Definitions:
 
 
 def built_from(definitions: Definitions, agent: SpecBase) -> dict[str, str]:
-    """The digest of each file a build of `agent` reads: the tools, skills, middleware
-    and subagents it names, theirs in turn, and every file in a folder one of them owns.
-
-    Not the agent's own file, which a turn reads from the session's copy.
-    """
+    """The digest of each file a build of `agent` reads: its own, those behind the
+    tools, skills, middleware and subagents it names, theirs in turn, and every file in a
+    folder one of them owns."""
     places = _named_by(definitions, agent, seen=set())
+    if (own := definitions.agents.sources.get(agent.name)) is not None:
+        places.add(f"agents/{own}")
     folders = tuple(place for place in places if place.endswith("/"))
     return {
         path: digest

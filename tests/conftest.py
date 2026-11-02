@@ -351,7 +351,7 @@ def agent_for(service, request, harness, *, source_ids=None):
     held = caller_holds(catalogue.vocabulary, source_ids)
     agent = service._agent_for(request, held=held, pinned=pinned, catalogue=catalogue)
     if pinned is None:
-        drive(service._pin_agent_in(harness, request.agent, catalogue=catalogue))
+        drive(service._pin_agent_in(harness, request.agent))
     return agent
 
 
@@ -440,15 +440,13 @@ def a_pdf(*texts: str) -> bytes:
 def pin(kf, session_id: str, name: str) -> None:
     """Fix a session's agent before it has run, the way its first turn would.
 
-    The document comes from the service's own catalogue, which is where
-    `_pin_agent_in` reads it. A deployment that supplies its own graph never
-    resolves an agent at all, so a test whose subject is the pin cannot get one by
-    running a turn.
+    A deployment that supplies its own graph never resolves an agent at all, so a test
+    whose subject is the pin cannot get one by running a turn.
     """
     from kingfisher.core.session.store import remember_agent
 
-    document = kf.catalogue.agents.documents[name]
-    drive(remember_agent(harness_of(kf.cfg, session_id), document))
+    assert name in kf.catalogue.agents.specs, f"no agent {name!r} to pin"
+    drive(remember_agent(harness_of(kf.cfg, session_id), name))
 
 
 def a_subagent(text: str, name: str) -> SubagentSpec:

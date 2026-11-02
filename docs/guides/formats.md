@@ -147,10 +147,12 @@ identity and the path is not.
 `agent` is refused, and the message lists what your definitions offer. The agent
 decides where every prompt in the session goes and what it costs.
 
-**A session keeps the agent it started with.** It is resolved when the session
-opens and stored beside it, so editing the file mid-conversation does not change
-the instructions under a history that already happened. A later turn may name the
-same agent again; naming a different one is refused.
+**A session keeps the agent it started with, by name.** The name is resolved when
+the session opens and stored beside it, and each turn reads that agent as its file says
+then, so an edit reaches the session's next turn: a wider `source_ids:` opens it to more
+callers, and a new model gets its history. A later turn may name the same agent again;
+naming a different one is refused. An agent renamed or deleted leaves its sessions to
+the operator, since no scoped caller reaches them.
 
 ### The prompt is added to, not replaced
 
@@ -1611,9 +1613,8 @@ TOOLS = [ToolSpec(sql_query, source_ids=["A"])]
   source_ids: [A]
 ```
 
-Read again whenever the definitions change, so a revocation reaches the next turn; until
-a session stops keeping its own copy of its agent, an agent's own `source_ids:` reaches
-only the sessions opened after it changed.
+Read again whenever the definitions change, so a revocation reaches the next turn, in
+every session.
 
 ### Who is calling
 
@@ -1910,7 +1911,7 @@ Running a *turn* still has to say who is calling.
 `agents` is checked where the *name* is resolved: when a session is opened, and
 again on **every turn afterwards**.
 
-A session pins its agent for life, and a session id is a bearer credential.
+A session keeps its agent for life, and a session id is a bearer credential.
 Checked only at the open, holding one would be a durable grant to an agent you
 may not open, and a caller who lost a source id would keep running what they had. So:
 

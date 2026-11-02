@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.prompting import system_prompt
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import DEFAULT_LAYOUT, PINNED_AGENT
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.steps import drive
@@ -180,18 +180,39 @@ def test_a_request_naming_no_agent_is_still_a_valid_request(cfg):
 # -- a session keeps the agent it opened with -------------------------------
 
 
-def test_a_later_turn_runs_what_the_session_opened_with(cfg):
-    """Editing an agent file mid-conversation must not change the instructions under a
-    history that already happened.
-    """
+def test_a_later_turn_runs_the_agent_as_its_file_now_says(cfg):
+    """Kept as a copy, an edit to an agent never reached a session already open, so an
+    update reached only the conversations started after it."""
     _agents(cfg, NARROW)
     service = Kingfisher(cfg, sessions=LocalSessions())
     asked = Request("go", agent="narrow", session_id="s")
 
-    opened = agent_for(service, asked, _held(cfg))
+    agent_for(service, asked, _held(cfg))
     _agents(cfg, NARROW.replace("Reads and nothing else.", "Reads and writes now."))
 
-    assert agent_for(service, asked, _held(cfg)).description == opened.description
+    assert agent_for(service, asked, _held(cfg)).description == "Reads and writes now."
+
+
+def test_a_session_that_kept_a_whole_copy_follows_its_agent_as_it_is_now(cfg):
+    """A session opened before kept its agent's whole definition. Read for more than its
+    name, it would go on admitting the callers, and running the prompt, that the copy
+    wrote."""
+    locked = "source_ids: [{}]\nbuiltin_tools"
+    _agents(
+        cfg,
+        NARROW.replace("builtin_tools", locked.format("B")),
+        CHEAP.replace("builtin_tools", locked.format("A")),
+    )
+    service = Kingfisher(cfg, sessions=LocalSessions())
+    copy = NARROW.replace("Reads and nothing else.", "What the copy said.")
+    copy = copy.replace("builtin_tools", locked.format("A"))
+    drive(_held(cfg).store(PINNED_AGENT, copy.encode()))
+
+    ran = agent_for(service, Request("go", session_id="s"), _held(cfg), source_ids=["B"])
+
+    assert ran.description == "Reads and nothing else."
+    assert service.session("s", source_ids=("B",)) is not None
+    assert service.session("s", source_ids=("A",)) is None
 
 
 def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
@@ -256,18 +277,19 @@ def test_a_request_refused_at_the_build_pins_no_agent(scripted):
     assert kf.run(Request("go", agent="narrow", session_id="s")).answer == "done"
 
 
-def test_a_snapshot_is_written_once_and_not_overwritten(cfg, tmp_path):
-    """The property that makes it a snapshot rather than a cache.
+def test_a_sessions_agent_is_written_once_and_not_overwritten(cfg, tmp_path):
+    """The property that fixes a session to one agent.
 
     Its only caller checks first, so this holds it directly: a second writer added later
-    would reintroduce exactly what the file exists to prevent, and every test above
-    would still pass.
+    would switch a session's agent under a history made with another, and every test
+    above would still pass.
     """
-    from kingfisher.core.session.store import pinned_in, remember_agent
+    from kingfisher.core.session.store import pinned_in, pinned_name, remember_agent
 
     harness = harness_in(cfg, tmp_path)
-    drive(remember_agent(harness, "name: first\ndescription: One.\n"))
-    drive(remember_agent(harness, "name: second\ndescription: Two.\n"))
+    drive(remember_agent(harness, "first"))
+    drive(remember_agent(harness, "second"))
 
     pinned, _zone = drive(pinned_in(harness))
-    assert pinned.text.startswith("name: first")
+    assert pinned is not None
+    assert pinned_name(pinned) == "first"
