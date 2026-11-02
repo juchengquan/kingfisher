@@ -77,11 +77,15 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   gate on a name no tool has, for the same reason. Checking only the subagents the agent
   names would close this, and could refuse a deployment that loads today.
   *(2026-11-01.)*
-- **Telling the client their copied agents load.** What they asked for landed in #1165:
-  a copy no longer names skills or subagents it has no tool to use, and it keeps a gate
-  on a tool from a subagent's own folder. They will also see those gates in
-  `kingfisher list --as`, which did not show them before. The note to them is not
-  written yet. *(2026-11-01.)*
+- **Telling the client what #1165 and #1162 change.** #1165 is what they asked for: a
+  copied agent no longer names skills or subagents it has no tool to use, and it keeps a
+  gate on a tool from a subagent's own folder, which `kingfisher list --as` now shows.
+  #1162 they must hear before upgrading: an agent writing `source_ids` on a `skills:`
+  entry stops kingfisher starting until the lock moves into `skill_locks.yaml`, and the
+  refusal writes the lines out when only one agent locked the skill. One skill can no
+  longer be locked two ways in two agents; the "access — by skill" part of `kingfisher
+  list` on their current version shows whether any of theirs is, so ask for it first.
+  The note is not written yet. *(2026-11-02.)*
 - **Whether `pdf_attachments=` stays a keyword on `Kingfisher`.** It is there because the
   hook is handed kingfisher's verdict on each PDF a tool returns: fine, too big, or too
   many open. A deployment's own middleware runs inside kingfisher's and never sees that
@@ -93,6 +97,29 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   interface. A new hook is written into both, and missing either turns a test red, so
   nothing slips; it is only one place too many. Merging them into one list is a small
   tidy-up whenever someone is next in either file. *(2026-11-01.)*
+- **Every definition read per turn, from a source that may be remote.** Grilled part of
+  the way: tools, agents, subagents, skills and middleware fetched from an API, or from a
+  wrapper over today's folder. Agreed so far: a session keeps only its agent's name and
+  reads the definition fresh, so widening an agent's `source_ids` opens its old sessions'
+  results to the new callers, and a model change sends old history to the new model. A
+  turn runs on one whole checked version, kept to its end and reused while unchanged,
+  and a version failing its check is never swapped in. The source refuses an invalid
+  version at publish with kingfisher's own checker, and kingfisher checks each new one
+  again, about 85 ms. A version is files laid out as `assets/` is, so publishing one is
+  running code as the deployment, and `skill_locks.yaml` is one of them. Open: startup
+  when the current version fails, and the datazones a session is pinned to. The first
+  slice separates loading from running, since `Kingfisher` checks the whole catalogue
+  once, at `warm()`. Building it undoes the agent's pin, under *Sessions: what persists
+  and where* in `decisions.md`, which must then say so. *(2026-10-30.)*
+- **A second agent framework beside deepagents.** Parked by the owner, for more thought;
+  `decisions.md` still leaves another framework out of scope (*The core and its
+  plugins*). Where the grilling stopped: Pydantic AI, chosen once per deployment by a
+  setting, with one definition format and deepagents' file layer on both. Probes with
+  scripted models found a pause inside a subagent resuming in another process, grants,
+  and LangChain tools through a short bridge all working, and `wrap_model_request`
+  calling its handler only once, which the re-ask in `ModelReplyMiddleware` would have
+  to change. Not reached: middleware, and subagents that build their own graph, both
+  LangGraph's. *(2026-10-31.)*
 
 ## Waiting on a run
 
@@ -129,6 +156,12 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   which model rows ran. A summary on a single batch reopens clearing acting before the
   summariser's own check, which *A refusal for length is clearing's to answer first* in
   `decisions.md` measured and left accepted. *(2026-10-23.)*
+- **The test suite's growth, counted again around 2026-11-27.** *The size of the test
+  suite* in `decisions.md` holds growth by a rule in `CLAUDE.md`, and puts a count per
+  pull request into CI if the weekly rate is not then well under 430 test functions. The
+  baseline is 3,413 functions named `test_*` on 6b542f37, 2026-10-28. Cutting stopped at
+  #1140 until then; if it resumes, the config, CLI and seeding files, never read for it,
+  come before more of the half written before September. *(2026-10-28.)*
 
 ## When deepagents moves
 
