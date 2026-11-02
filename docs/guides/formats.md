@@ -340,6 +340,13 @@ process killed or a pod lost, the same `Resume` sent again is refused with a
 offers nothing: whether they ran is something only the world outside can tell you.
 Check, then send a new request.
 
+**A resume is refused once something the agent uses has changed.** The pause records
+the files behind the agent's tools, skills, subagents and middleware, and a `Resume`
+after any of them changed is refused with the files named, as one after a deepagents,
+langchain or langgraph upgrade is: the turn was planned against code that is gone, so
+send it again as a plain request. A change to a file the agent does not name, another
+agent's say, leaves the pause to be answered.
+
 `awaiting_decision` and `decision_discarded` come from lists you can import:
 `from kingfisher import KINDS, STOP_REASONS` is every kind of event `stream()`
 yields and every reason a turn stops for. Each grows, so treat a value you do not

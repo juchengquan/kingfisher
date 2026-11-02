@@ -110,8 +110,9 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   `skill_locks.yaml` is one of them. A paused turn is refused on resume when anything its
   agent uses changed. A session's datazones stay pinned, and a current version that fails
   at startup still stops it. Four slices, in order: a turn takes its definitions once,
-  from `core/versions.py`; a pause records the files its agent was built from; a new
-  version per turn; the session keeps only its agent's name, which undoes the agent's pin
+  from `core/versions.py`, which has landed; a pause records the files its agent's
+  tools, skills, subagents and middleware come from, its own file once the fourth lands;
+  a new version per turn; the session keeps only its agent's name, which undoes the agent's pin
   under *Sessions: what persists and where* in `decisions.md`. The third must give each
   version's Python names of its own, since a reload in one process keeps a tool's old
   helper module, and a folder that never changes, since skills are read from the folder

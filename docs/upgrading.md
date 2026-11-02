@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A resume is refused once a file its agent uses changed, after #1185
+
+- **A paused turn records the files behind its agent's tools, skills, subagents and
+  middleware**, in `.harness/paused.json` under `built_from`, and a `Resume` after any of
+  them changed raises `DecisionError` naming them, as one after a deepagents, langchain or
+  langgraph upgrade does. Send the session a plain request instead, which supersedes the
+  pause. A pause written before this resumes as it did.
+
 ## A turn that ends badly says so, and a gate is answered once, after #1184
 
 - **A `Resume` sent again after the turn running it died raises `DecisionError`**,

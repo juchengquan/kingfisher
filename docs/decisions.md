@@ -4225,6 +4225,16 @@ resume naming an agent the session is not running is also refused by the pin in
 `_agent_for`, but `_refuse_stale_pause` stays ahead of it because the paused state is
 deserialised first. *(2026-10-01, from an architecture review.)*
 
+**The mark also records the files the paused graph was built from.** A digest of each
+file behind the tools, skills, subagents and middleware the agent names, and theirs in
+turn, taken when the definitions are read, so it is what the turn ran and not what the
+folder held by the time it paused. A resume whose current files differ is refused, naming
+them, as one after a library upgrade is; one whose agent names nothing that changed goes
+ahead, which is why it is not every file in the definitions. The agent's own file is left
+out while a session keeps a copy of it, since that copy is what a resume reads. A pause
+written before the record resumes unchecked, as every pause did. Until then a tool edited
+across a restart was resumed with nothing said. *(2026-11-02.)*
+
 What the old per-session sqlite bought survives by another route, measured rather than
 assumed: a conversation deleted with its session (one workspace held 132 orphaned threads
 after every session was reaped), a conversation the quota can see, and no cross-session

@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, fields, replace
 from functools import cached_property
+from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -25,6 +26,7 @@ from . import skill_locks
 from .agents.catalogue import LocalAgentRepository
 from .agents.spec import DIRECTORY as AGENT_DIRECTORY
 from .agents.spec import AgentError
+from .importing import skipped
 from .middlewares.catalogue import LocalMiddlewareRepository
 from .prompts import unused_names
 from .skill_locks import SkillLock, SkillLockError
@@ -80,6 +82,26 @@ class Definitions:
     def registry(self) -> SkillRegistry:
         """What the agent will actually be told about, asked of deepagents."""
         return skill_registry.read(self.skills)
+
+    @cached_property
+    def digests(self) -> Mapping[str, str]:
+        """A digest of each file these definitions are read from, by `kind/path`.
+
+        A mounted skills folder is under `skills/` by its label, where the agent reaches it.
+        """
+        roots = {
+            "agents": self.agents.root,
+            "middlewares": self.middlewares.root,
+            "skills": self.skills.root,
+            "subagents": self.subagents.root,
+            "tools": self.tools.root,
+            **{f"skills/{label}": mount for label, mount in self.skills.mounts.items()},
+        }
+        return {
+            f"{kind}/{path.relative_to(root).as_posix()}": sha256(path.read_bytes()).hexdigest()
+            for kind, root in roots.items()
+            for path in _files_under(Path(root))
+        }
 
     def skill_sources(self) -> tuple[SkillSource, ...]:
         """Every place the agent is given a skills index."""
@@ -350,6 +372,18 @@ class Definitions:
             subagents=LocalSubagentRepository(Path(roots["subagents"])),
             tools=LocalToolRepository(Path(roots["tools"])),
         )
+
+
+def _files_under(directory: Path) -> list[Path]:
+    """Every file below `directory` a definition can be read from, or none if it is absent."""
+    if not directory.is_dir():
+        return []
+    return sorted(
+        path
+        for path in directory.rglob("*")
+        if path.is_file()
+        and not any(skipped(part) for part in path.relative_to(directory).parts)
+    )
 
 
 def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:

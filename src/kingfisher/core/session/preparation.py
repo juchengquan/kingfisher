@@ -26,6 +26,7 @@ from kingfisher.core.reporting import (
     withheld_by_kind,
 )
 from kingfisher.core.request import DecisionError, Request, Resume, caller_of
+from kingfisher.core.versions import built_from
 
 from . import runtime
 from .checkpointing import (
@@ -52,6 +53,7 @@ from .steps import (
 )
 from .store import (
     AGENT_MARK,
+    BUILT_FROM_MARK,
     TAKEN_MARK,
     HarnessFiles,
     KeptLedger,
@@ -227,6 +229,10 @@ class Preparation:
             if resolved
             else None
         )
+        recorded = pause.get(BUILT_FROM_MARK) if resume is not None and pause else None
+        # A pause written before the record resumes unchecked, as every pause did then.
+        if isinstance(recorded, dict) and agent is not None:
+            _refuse_changed_since(session, recorded, built_from(catalogue, agent))
         # What a zoned caller's tools return stays in the session, so once one runs it is
         # read only from those datazones. Kept beside the agent's pin, after the build.
         ran_in = zones_held(held) if zones is None and held is not None else None
@@ -538,6 +544,9 @@ class Preparation:
             discarded=discarded,
             # Never `request.agent`, which is set only on the turn that opened the session.
             agent_name=agent.name if agent is not None else None,
+            built_from=built_from(catalogue, agent)
+            if agent is not None and isinstance(built, Assembled)
+            else None,
             history=history,
             ledger=ledger,
             # Written once the inputs are placed, which this must not wait for.
@@ -578,3 +587,26 @@ class Preparation:
             # the session rather than leaving msgpack to.
             msg = f"session {session.id} recorded a pause whose state cannot be read: {exc}"
             raise DecisionError(msg) from exc
+
+
+#: How many changed files a refused resume names before it counts the rest.
+NAMED = 3
+
+
+def _refuse_changed_since(
+    session: Conversation, recorded: Mapping[str, str], now: Mapping[str, str]
+) -> None:
+    """Refuse a resume whose agent's tools, skills, subagents or middleware changed since
+    it paused: the turn was planned against what those files held then."""
+    changed = sorted(
+        path for path in recorded.keys() | now.keys() if recorded.get(path) != now.get(path)
+    )
+    if not changed:
+        return
+    more = f" and {len(changed) - NAMED} more" if len(changed) > NAMED else ""
+    msg = (
+        f"session {session.id} paused before {', '.join(changed[:NAMED])}{more} changed, "
+        "which its agent uses; the pause did not survive the change and the turn must "
+        "be asked again"
+    )
+    raise DecisionError(msg)
