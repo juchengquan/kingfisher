@@ -18,6 +18,7 @@ from .model import (
     Conversation,
     QuotaExceededError,
     SessionBusyError,
+    held_by_a_turn,
     known,
     unknown_session,
 )
@@ -259,7 +260,8 @@ class SessionMethods:
         )
         if claimed is None:
             msg = (
-                f"session {session_id} has a turn running; forget {entry_id} once it ends"
+                f"session {session_id} is {held_by_a_turn(self.cfg.claim_stale_after)}; "
+                f"forget {entry_id} once it is free"
             )
             raise SessionBusyError(msg)
         try:

@@ -40,6 +40,7 @@ from .memory_writer import writer_model
 from .model import (
     Conversation,
     SessionBusyError,
+    held_by_a_turn,
     refuse_files_of_another,
     unknown_session,
 )
@@ -146,8 +147,8 @@ class Preparation:
         )
         if claimed is None:
             msg = (
-                f"session {session.id} already has a turn running; "
-                f"wait for it to finish or start another session"
+                f"session {session.id} is {held_by_a_turn(cfg.claim_stale_after)}; "
+                "wait, or start another session"
             )
             raise SessionBusyError(msg)
         try:

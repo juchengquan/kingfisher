@@ -793,5 +793,5 @@ def test_a_busy_session_still_refuses_the_async_path(cfg):
     session = start(cfg, "s")
     assert LocalSessions().claim(cfg, session, stale_after=3600)
 
-    with pytest.raises(SessionBusyError, match="already has a turn running"):
+    with pytest.raises(SessionBusyError, match="held by a turn that is running, or that died"):
         _drain(kf, Request("go", session_id=session))

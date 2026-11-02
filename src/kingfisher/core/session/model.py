@@ -16,11 +16,26 @@ class UnknownSessionError(ValueError):
 
 
 class SessionBusyError(ValueError):
-    """A turn is already running in this session.
+    """A turn holds this session: one still running, or one that died before letting go.
 
     Two turns on one session share a conversation written whole: both append to the
     same history, the last write wins, and the other turn leaves no record.
     """
+
+
+_MINUTE = 60
+
+
+def held_by_a_turn(stale_after: float) -> str:
+    """Why a claimed session is refused. A claim cannot tell a running turn from a dead
+    one, so this says both, and when a dead one's lapses: computed from the bound the
+    claim was asked with, since a remote `Sessions` judges age itself."""
+    lapse = (
+        f"{stale_after / _MINUTE:g} minutes"
+        if stale_after >= _MINUTE
+        else f"{stale_after:g} seconds"
+    )
+    return f"held by a turn that is running, or that died and holds it until {lapse} after it began"
 
 
 class QuotaExceededError(ValueError):

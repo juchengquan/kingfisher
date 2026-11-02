@@ -45,6 +45,7 @@ from kingfisher.core.access import Datazone, ExtraDatazone, with_datazone
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.config import MissingCredentialsWarning
 from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.session.model import held_by_a_turn
 
 from .health import _retired, examine, worst
 from .listing import as_json, failed, origins_document, render
@@ -917,7 +918,10 @@ def _reap(args: argparse.Namespace) -> int:
             print("nothing to reap -- this workspace holds no sessions")
         else:
             held = "it" if result.kept == 1 else "each of them"
-            print(f"nothing to reap -- a turn is running in {held}; reap again when it finishes")
+            print(
+                f"nothing to reap -- {held} is {held_by_a_turn(cfg.claim_stale_after)}; "
+                "reap again then, or reap one by name with --session"
+            )
     return 1 if result.failures else 0
 
 
@@ -1074,7 +1078,7 @@ def main(argv: list[str] | None = None) -> int:
     except SessionBusyError as exc:
         # Not the caller's mistake: waiting fixes it. Still exit 2, so the words say "wait".
         print(f"session busy: {exc}", file=sys.stderr)
-        print("nothing to change -- run it again when that turn finishes", file=sys.stderr)
+        print("nothing to change -- run it again once the session is free", file=sys.stderr)
         return 2
     except REFUSALS as exc:
         # Uncaught, one would exit 1, which the help gives a turn that ran and stopped.

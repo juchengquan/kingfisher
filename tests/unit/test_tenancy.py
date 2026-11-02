@@ -119,7 +119,8 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
 
     assert LocalSessions().claim(cfg, session, stale_after=3600)
 
-    with pytest.raises(SessionBusyError, match="already has a turn running"):
+    lapse = f"until {cfg.claim_stale_after / 60:g} minutes after it began"
+    with pytest.raises(SessionBusyError, match=f"running, or that died .*{lapse}"):
         service.run(Request("go", session_id=session))
 
 
