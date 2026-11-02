@@ -4160,6 +4160,18 @@ sibling in the same superstep has already run; drop those writes and the sibling
 *again* on resume -- a tool firing twice for one decision, in identical end state, so
 nothing but the side effect tells them apart. *(2026-09-22.)*
 
+**A gate is answered once: a resume takes its pause before the approved calls run.**
+Only the ending cleared a pause, so a resume killed while its approved call ran left the
+pause waiting, `pending()` still offered it, and the same `Resume` sent again charged a
+second time -- driven on 2026-11-02, with no model between the two charges and no message
+a warning could have gone in. The mark now names the turn answering it, written last in
+setup, and a resume finding a name there is refused as one whose calls may have run. A
+resume killed before its call ran is refused too, which is the safe direction: the person
+checks and asks again. Not chosen: dropping the pause at the start of the resume, which
+answers the retry with "not waiting on a decision", read as the first answer having
+worked, and reports a request superseding it as discarding a call that may have run.
+*(2026-11-02.)*
+
 **Dropped: a deployment's own saver.** `threads=` let a deployment hand every turn a
 langgraph saver of its own. Driven on 2026-10-17 it had four faults with one cause -- a
 saver remembering earlier turns, beside a transcript replayed into each: every follow-up

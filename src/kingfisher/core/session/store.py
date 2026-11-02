@@ -380,9 +380,17 @@ AGENT_MARK = "agent"
 #: compiled graph, which admission has only after it has dealt with the pause.
 PENDING_MARK = "pending"
 
+#: The turn that began answering the pause, written before the approved calls run. A kill
+#: stops a turn before the ending that clears its pause, and nothing else on disk says
+#: whether those calls ran, so a second answer would run them again.
+TAKEN_MARK = "taken_by"
+
 
 def pending_from_mark(mark: Mapping[str, Any]) -> tuple[PendingDecision, ...]:
-    """The gated calls a mark records, or nothing where it records none."""
+    """The gated calls a mark records as still waiting: none where it records none, or
+    where a resume has taken them."""
+    if mark.get(TAKEN_MARK):
+        return ()
     return tuple(
         PendingDecision(
             call_id=str(item.get("call_id") or ""),
@@ -427,6 +435,11 @@ def read_pause_mark(harness: Any) -> Steps[dict[str, Any] | None]:
 def write_pause_mark(harness: Any, mark: Mapping[str, Any]) -> Steps[None]:
     """Record what the checkpoint written beside this was built against."""
     yield from harness.store(PAUSED_MARK, json.dumps(dict(mark), sort_keys=True).encode("utf-8"))
+
+
+def take_pause(harness: Any, mark: Mapping[str, Any], turn_id: str) -> Steps[None]:
+    """Record that `turn_id` is answering the pause `mark` describes."""
+    yield from write_pause_mark(harness, {**mark, TAKEN_MARK: turn_id})
 
 
 def clear_pause(harness: Any) -> Steps[None]:
