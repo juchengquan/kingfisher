@@ -6,7 +6,6 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.core.access.source_ids import UNSCOPED
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.prompting import system_prompt
 from kingfisher.core.layout import HARNESS
@@ -223,7 +222,7 @@ def test_the_pin_an_older_session_kept_decides_nothing(scripted):
         OTHER.replace("system_prompt", "source_ids: [B]\nsystem_prompt"),
     )
     kf = Kingfisher(scripted, sessions=LocalSessions())
-    kf.session("s", source_ids=UNSCOPED, create=True)
+    kf.session("s", create=True)
     (scripted.sessions_root / "s" / HARNESS / "agent.yaml").write_text("name: narrow\n")
     Scripted.script.append(AIMessage(content="done"))
 

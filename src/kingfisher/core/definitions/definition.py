@@ -60,7 +60,7 @@ class SpecBase:
     #: The caller's own keys, carried and never interpreted: reading any would make this a
     #: field with rules.
     metadata: Mapping[str, object] = field(default_factory=dict)
-    #: Who may reach this definition: open a session on an agent, or reach a subagent
+    #: Who may reach this definition: run an agent, or reach a subagent
     #: wherever it is used.
     source_ids: Audience = ALL
 

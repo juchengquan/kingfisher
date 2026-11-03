@@ -53,13 +53,6 @@ def zone_in(held: Iterable[str]) -> str | None:
     return next(zones, None)
 
 
-def zones_held(held: Iterable[str]) -> frozenset[str]:
-    """Every datazone a caller holds: the one they are in, and their extra ones."""
-    return frozenset(
-        one.removeprefix(DATAZONE_PREFIX) for one in held if one.startswith(DATAZONE_PREFIX)
-    )
-
-
 @dataclass(frozen=True)
 class Stated:
     """What one definition says about who reaches what."""

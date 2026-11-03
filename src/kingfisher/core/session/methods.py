@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import caller_holds, with_datazone, zones_held
 from kingfisher.core.request import Request, Resume
 
 from .files import read_artifact
@@ -24,16 +23,13 @@ from .steps import Steps, adrive, changing, drive, on_host, reading
 from .store import (
     HarnessFiles,
     pending_from_mark,
-    pinned_zones,
     read_pause_mark,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable
 
-    from kingfisher.core.access import Held
     from kingfisher.core.config import Config
-    from kingfisher.core.definitions.catalogue import Definitions
     from kingfisher.core.versions import Versions
 
 class SessionMethods:
@@ -62,24 +58,6 @@ class SessionMethods:
         if session_id not in (yield from self._known_steps()):
             raise unknown_session(session_id)
 
-    def _reaches_session(self, harness: Any, held: frozenset[str] | None) -> Steps[bool]:
-        """Whether a caller holding `held` may touch the session `harness` belongs to.
-
-        The rule reading a session and running a turn in it share: a caller not in exactly
-        the session's datazones cannot touch the session. Which agents ran in it decides
-        nothing, since any of them may run in it next. `None` (no lock anywhere, or an
-        `UNSCOPED` call) reaches everything, as does a session no zoned turn has run in.
-        """
-        if held is None:
-            return True
-        return self._reaches_zones((yield from pinned_zones(harness)), held)
-
-    def _reaches_zones(self, zones: frozenset[str] | None, held: frozenset[str] | None) -> bool:
-        """`_reaches_session`, for the datazones already read."""
-        # The same zones, not every one of them and more: a caller also in another zone would
-        # leave what its tools returned here, for callers who are not.
-        return held is None or zones is None or zones_held(held) == zones
-
     def _known_steps(self) -> Steps[tuple[str, ...]]:
         """The id of every session the deployment's backends hold."""
         listing = yield reading(self._sessions, "sessions", self.cfg)
@@ -97,108 +75,44 @@ class SessionMethods:
             )
             raise QuotaExceededError(msg)
 
-    def session(
-        self,
-        session_id: str,
-        *,
-        source_ids: Held | None = None,
-        datazone: str | None = None,
-        extra_datazones: Sequence[str] = (),
-        create: bool = False,
-    ) -> Session | None:
-        """One session, or `None` when this caller has no such session.
+    def session(self, session_id: str, *, create: bool = False) -> Session | None:
+        """One session, or `None` where there is no such session.
 
-        **A session whose datazones are not exactly this caller's answers `None` too**, so
-        a leaked id confirms nothing.
+        Whoever holds its id: who may use a session is the deployment's to settle before
+        it asks, and no agent or datazone that ran in it decides that here.
 
         `create` makes a session not there yet, as a turn naming it would, so files can
-        be placed before the first turn. One out of this caller's reach is still `None`.
+        be placed before the first turn.
         """
-        caller = with_datazone(source_ids, datazone, extra_datazones)
-        return drive(self._session_steps(session_id, caller, create=create))
+        return drive(self._session_steps(session_id, create=create))
 
-    async def asession(
-        self,
-        session_id: str,
-        *,
-        source_ids: Held | None = None,
-        datazone: str | None = None,
-        extra_datazones: Sequence[str] = (),
-        create: bool = False,
-    ) -> Session | None:
+    async def asession(self, session_id: str, *, create: bool = False) -> Session | None:
         """`session`, for a caller on an event loop."""
-        caller = with_datazone(source_ids, datazone, extra_datazones)
-        return await adrive(self._session_steps(session_id, caller, create=create))
+        return await adrive(self._session_steps(session_id, create=create))
 
-    def sessions(
-        self,
-        *,
-        source_ids: Held | None = None,
-        datazone: str | None = None,
-        extra_datazones: Sequence[str] = (),
-    ) -> tuple[Session, ...]:
-        """Every session this caller reaches, most recently used first; every session
-        there is when no caller is named. Naming one costs a read per session, of its
-        datazones.
-        """
-        caller = with_datazone(source_ids, datazone, extra_datazones)
-        return drive(self._sessions_steps(caller))
+    def sessions(self) -> tuple[Session, ...]:
+        """Every session there is, most recently used first: the operator's view, since
+        kingfisher cannot know whose a session is."""
+        return drive(self._sessions_steps())
 
-    async def asessions(
-        self,
-        *,
-        source_ids: Held | None = None,
-        datazone: str | None = None,
-        extra_datazones: Sequence[str] = (),
-    ) -> tuple[Session, ...]:
+    async def asessions(self) -> tuple[Session, ...]:
         """`sessions`, for a caller on an event loop."""
-        caller = with_datazone(source_ids, datazone, extra_datazones)
-        return await adrive(self._sessions_steps(caller))
+        return await adrive(self._sessions_steps())
 
-    def _session_steps(
-        self, session_id: str, source_ids: Held | None, *, create: bool
-    ) -> Steps[Session | None]:
-        catalogue = yield on_host(self._versions.current)
-        held = caller_holds(catalogue.vocabulary, source_ids)
+    def _session_steps(self, session_id: str, *, create: bool) -> Steps[Session | None]:
         listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
         if create and session_id not in listing:
+            catalogue = yield on_host(self._versions.current)
             made = yield from self._files_for(session_id, catalogue=catalogue)
-            # Checked although nothing is pinned in a session this call made: a listing
-            # that missed one opens a session that was already there.
-            if not (yield from self._reaches_session(HarnessFiles(made), held)):
-                return None
             listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
             return Session(session_id, listing[session_id], self, [made])
         if session_id not in listing:
             return None
-        reached, opened = yield from self._reaches(session_id, held, catalogue)
-        return Session(session_id, listing[session_id], self, opened) if reached else None
+        return Session(session_id, listing[session_id], self, [])
 
-    def _sessions_steps(self, source_ids: Held | None) -> Steps[tuple[Session, ...]]:
-        # Naming nobody is the operator's view of every session, not a caller under a lock.
-        catalogue = yield on_host(self._versions.current)
-        held = None if source_ids is None else caller_holds(catalogue.vocabulary, source_ids)
+    def _sessions_steps(self) -> Steps[tuple[Session, ...]]:
         listing = yield reading(self._sessions, "sessions", self.cfg)
-        found = []
-        for name, last_used in known(listing):
-            reached, opened = yield from self._reaches(name, held, catalogue)
-            if reached:
-                found.append(Session(name, last_used, self, opened))
-        return tuple(found)
-
-    def _reaches(
-        self, session_id: str, held: frozenset[str] | None, catalogue: Definitions
-    ) -> Steps[tuple[bool, list[Any]]]:
-        """`_reaches_session` by id, and the backend opened to decide it, if one was.
-
-        Not opened where nothing narrows: on a remote backend that is a sandbox opened to
-        say a session exists.
-        """
-        if held is None:
-            return True, []
-        files = yield from self._files_for(session_id, catalogue=catalogue)
-        reached = yield from self._reaches_session(HarnessFiles(files), held)
-        return reached, [files]
+        return tuple(Session(name, last_used, self, []) for name, last_used in known(listing))
 
     def _files_in(self, session_id: str, opened: list[Any]) -> Steps[Any]:
         """The backend of a session still there, opened at most once into `opened`;

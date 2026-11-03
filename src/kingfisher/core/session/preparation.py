@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import Capabilities, Held, caller_holds, zones_held
+from kingfisher.core.access import Capabilities, Held, caller_holds
 from kingfisher.core.agent.activation import (
     for_the_caller,
     indistinct_subagents,
@@ -43,7 +43,6 @@ from .model import (
     SessionBusyError,
     held_by_a_turn,
     refuse_files_of_another,
-    unknown_session,
 )
 from .runlog import RunLogger
 from .steps import (
@@ -59,12 +58,10 @@ from .store import (
     KeptLedger,
     clear_pause,
     pending_from_mark,
-    pinned_zones,
     read_inputs_seen,
     read_ledger,
     read_pause_mark,
     read_transcript,
-    remember_zones,
     take_pause,
 )
 from .turn import (
@@ -94,7 +91,6 @@ class Preparation:
     _sessions: Any
     _graph: Any
     _session_for: Callable[..., Steps[Conversation]]
-    _reaches_zones: Callable[..., bool]
     _refuse_if_over_budget: Callable[..., Steps[None]]
     _files_for: Callable[..., Steps[Any]]
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
@@ -110,10 +106,9 @@ class Preparation:
     ) -> Steps[Prepared]:
         """Everything up to the model call, as the one sequence both loops drive.
 
-        Every refusal comes before `run_start` and before the session's datazone is
-        pinned, so a refused request leaves no turn behind and fixes nothing; the claim is
-        taken before them and given back if one refuses, and a session this request made
-        goes with it unless another turn has used it.
+        Every refusal comes before `run_start`, so a refused request leaves no turn behind;
+        the claim is taken before them and given back if one refuses, and a session this
+        request made goes with it unless another turn has used it.
         """
         cfg = self.cfg
         # Once, and kept to the turn's end: asked again, one turn could build its agent
@@ -122,8 +117,7 @@ class Preparation:
         catalogue = yield on_host(self._versions.current)
         session = yield from self._session_for(request)
         # Who is calling, before the session is marked, claimed or written to: later, a
-        # refused caller's files would be in its `/inputs`, and a session out of reach
-        # would answer "busy" rather than "no session".
+        # refused caller's files would be in its `/inputs`.
         held = caller_holds(catalogue.vocabulary, source_ids)
         # Not resolved for a supplied graph where nothing is locked: it runs no agent from
         # the definitions, so a request there need name none.
@@ -136,8 +130,6 @@ class Preparation:
             if resolved and not unnamed_resume
             else None
         )
-        # Opened before anything else reads the session: who may touch it is decided by
-        # its datazones, and those are read through the backend too.
         if files is None:
             # Asked before the open, which makes the session it is asked for: a refusal
             # may take back only a session this request made.
@@ -147,12 +139,6 @@ class Preparation:
             made = False
             refuse_files_of_another(files, session.id)
         harness = HarnessFiles(files)
-        # Neither read asks a supplied graph where nothing is locked.
-        reads_pins = held is not None or self._graph is None
-        # Only so a caller out of reach hears "no session" rather than "busy": the turn
-        # runs on the pins read again under the claim.
-        first = (yield from pinned_zones(harness)) if reads_pins else None
-        self._refuse_out_of_reach(first, held, session_id=session.id)
         # A turn writes inside the session, which leaves the timestamp `kingfisher sessions`
         # reads alone. At the top of the turn, not the end: a turn that fails still happened.
         yield changing(self._sessions, "mark_used", cfg, session.id)
@@ -168,22 +154,17 @@ class Preparation:
             )
             raise SessionBusyError(msg)
         try:
-            # A turn that held the claim since the read above may have pinned the session
-            # to datazones this caller does not reach.
-            zones = (yield from pinned_zones(harness)) if reads_pins else None
             history, cut = yield from read_transcript(harness)
-            if zones is not None or history or cut:
-                # Each written only by a turn holding the claim, so another turn ran here,
+            if history or cut:
+                # Written only by a turn holding the claim, so another turn ran here,
                 # whatever the listing said: not a session this request made, nor its to
                 # delete.
                 made = False
-            self._refuse_out_of_reach(zones, held, session_id=session.id)
             prepared = yield from self._claimed(
                 request,
                 session,
                 files=files,
                 harness=harness,
-                zones=zones,
                 held=held,
                 catalogue=catalogue,
                 agent=agent,
@@ -200,12 +181,6 @@ class Preparation:
             raise
         return replace(prepared, claim=claimed)
 
-    def _refuse_out_of_reach(
-        self, zones: frozenset[str] | None, held: frozenset[str] | None, *, session_id: str
-    ) -> None:
-        if not self._reaches_zones(zones, held):
-            raise unknown_session(session_id)
-
     def _claimed(  # noqa: PLR0913 -- setup's, handed on: a second backend is a second sandbox
         self,
         request: Request | Resume,
@@ -213,7 +188,6 @@ class Preparation:
         *,
         files: Any,
         harness: HarnessFiles,
-        zones: frozenset[str] | None,
         held: frozenset[str] | None,
         catalogue: Definitions,
         agent: AgentSpec | None,
@@ -244,9 +218,6 @@ class Preparation:
         # A pause written before the record resumes unchecked, as every pause did then.
         if isinstance(recorded, dict) and agent is not None:
             _refuse_changed_since(session, recorded, built_from(catalogue, agent))
-        # What a zoned caller's tools return stays in the session, so once one runs it is
-        # read only from those datazones. Kept after the build.
-        ran_in = zones_held(held) if zones is None and held is not None else None
         if self._graph is None:
             # Before the build and the reports, which must both see a bare name settled to
             # the one this caller reaches.
@@ -296,9 +267,9 @@ class Preparation:
         if lost is not None:
             prepared = replace(prepared, events=(*prepared.events, lost), history_lost=lost.text)
         # After the build's refusals and before the graph runs: a refused request must
-        # leave the session's files, its datazone, and its gate as they were. A pin is
-        # for good, so it waits for the upload; a caller can send a file again, and
-        # nobody can recreate a pause. `run_start` last, so a refused request logs no turn.
+        # leave the session's files and its gate as they were: a caller can send a file
+        # again, and nobody can recreate a pause. `run_start` last, so a refused request
+        # logs no turn.
         try:
             yield from place_inputs(placement, files, self.cfg.layout)
             # A resume adds no message: it continues a superstep, and a user turn
@@ -308,8 +279,6 @@ class Preparation:
                 prepared = yield from self._with_message(
                     prepared, asked, request, placement, history=history, earlier=earlier
                 )
-            if ran_in:
-                yield from remember_zones(harness, ran_in)
             if pause is not None and resume is None:
                 yield from clear_pause(harness)
             # Before the graph runs, which reads the file: numbered now, so what the

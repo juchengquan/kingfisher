@@ -18,6 +18,22 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session is open to whoever holds its id, after #1193
+
+- **`session()`, `asession()`, `sessions()` and `asessions()` take no caller.**
+  `source_ids`, `datazone` and `extra_datazones` are gone from all four, so passing one is
+  a `TypeError`. `session(id)` returns the session to whoever asks, and `sessions()` lists
+  every session. Decide who may see a session before you call: keep which user owns which
+  session id yourself, and never pass on an id a user sent you without checking it.
+- **Everything a `Session` does is open to whoever holds the id**: `pending()`,
+  `artifact()`, `result()`, `memory()`, `forget()`, `files()`, `size()` and `delete()`.
+- **A session's datazones no longer decide who may read or continue it.**
+  `.harness/datazone` is not written or read; older sessions keep theirs, and it decides
+  nothing. The datazone on each call still decides which tools that turn is handed.
+- **`kingfisher artifact` and `kingfisher result` take no `--as`, `--datazone` or
+  `--extra-datazones`**: drop them. `kingfisher decide --session ID` with nothing to answer
+  refuses them, as it refuses `--agent`.
+
 ## Every call names its agent, after #1191
 
 - **A request naming no agent is refused on every turn**, where a session's later turns

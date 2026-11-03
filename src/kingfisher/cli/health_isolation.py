@@ -175,8 +175,8 @@ def _session_files(sessions: object, confined: Confinement) -> Iterator[Check]:
     """Whether anything this command can see keeps the agent's shell out of `.harness`.
 
     Nothing signs what kingfisher keeps there, so a shell that can write it can rewrite the
-    pinned datazones, the conversation and a paused turn. A warning, because the deployment
-    runs either way and may be fenced by something out of sight, such as backends in code.
+    conversation and a paused turn. A warning, because the deployment runs either way and
+    may be fenced by something out of sight, such as backends in code.
     """
     if (shell := shell_of(sessions)) is None:
         yield Check(
@@ -191,8 +191,8 @@ def _session_files(sessions: object, confined: Confinement) -> Iterator[Check]:
         yield Check(
             "session files",
             "warn",
-            f"{why}, so the agent's shell can rewrite the session's pinned datazones, "
-            "conversation and paused turn",
+            f"{why}, so the agent's shell can rewrite the session's conversation and "
+            "paused turn",
             "turn the sandbox on, or confine the shell another way -- shell_denied, in "
             "kingfisher's tests/checks/backend.py, says whether it holds",
         )

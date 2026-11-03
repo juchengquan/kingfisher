@@ -1,5 +1,5 @@
-"""What kingfisher keeps about a session: its conversation, the datazones it is in, the
-ledger of what its tools returned, and a turn paused for an answer.
+"""What kingfisher keeps about a session: its conversation, the ledger of what its tools
+returned, and a turn paused for an answer.
 
 This module owns the formats; the session's backend, through `HarnessFiles`, owns
 where they live.
@@ -19,7 +19,6 @@ from kingfisher.core.layout import (
     LEDGER_FILE,
     PAUSED_MARK,
     PAUSED_STATE,
-    PINNED_ZONE,
     TRANSCRIPT_FILE,
 )
 from kingfisher.core.result import LedgerEntry, Listed, PendingDecision
@@ -32,7 +31,7 @@ class HarnessFiles:
     """What kingfisher keeps about one session under `/.harness`, through its backend.
 
     Read back as found: the agent's shell reaches the same backend, so only the shell's
-    fence keeps it from rewriting its own conversation, datazones or paused turn.
+    fence keeps it from rewriting its own conversation or paused turn.
     """
 
     def __init__(self, backend: Any) -> None:
@@ -80,23 +79,6 @@ class HarnessFiles:
             else:
                 found.append(answer.content)
         return found
-
-
-def remember_zones(harness: Any, zones: frozenset[str]) -> Steps[None]:
-    """Keep the datazones this session's first zoned turn ran in, a line each.
-
-    Never rewritten: what that turn's tools returned is in the session for good, and a
-    caller in other datazones is refused before they could reach this.
-    """
-    if (yield from harness.fetch(PINNED_ZONE)) is not None:
-        return
-    yield from harness.store(PINNED_ZONE, "\n".join(sorted(zones)).encode("utf-8"))
-
-
-def pinned_zones(harness: Any) -> Steps[frozenset[str] | None]:
-    """The datazones this session is in, or `None` before a zoned turn has run in it."""
-    zones = yield from harness.fetch(PINNED_ZONE)
-    return None if zones is None else frozenset(zones.decode("utf-8").splitlines())
 
 
 def read_transcript(harness: Any) -> Steps[tuple[tuple[Message, ...], bool]]:

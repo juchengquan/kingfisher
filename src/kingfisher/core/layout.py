@@ -68,9 +68,6 @@ SKILLS = "skills"
 HARNESS = ".harness"
 
 #: What it holds, named here because `.harness` is a layout decision.
-#: The datazones of the session's first zoned turn. Not renamed for holding several: every
-#: session pinned before would read as in no datazone, open to every caller.
-PINNED_ZONE = "datazone"
 TRANSCRIPT_FILE = "transcript.jsonl"
 #: The session's tool results, a row each and a closing line a turn. Here, not beside
 #: them, so the agent cannot rewrite what a later turn reads back as true.
@@ -328,9 +325,8 @@ class Layout:
                 Route(route, deny_write_under=f"{route}**")
                 for route in self.kept_record_routes
             ),
-            # Denied both ways: a write could rewrite the datazones or the conversation
-            # the next turn is rebuilt from, and a read gains nothing the run was not
-            # already told.
+            # Denied both ways: a write could rewrite the conversation the next turn is
+            # rebuilt from, and a read gains nothing the run was not already told.
             Route(HARNESS_ROUTE, deny_write_under=f"{HARNESS_ROUTE}**",
                   deny_read_under=f"{HARNESS_ROUTE}**"),
         )

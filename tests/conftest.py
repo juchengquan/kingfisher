@@ -262,10 +262,9 @@ def way(request) -> str:
 class Through:
     """A session's methods, on the `Session` `kf` hands out.
 
-    Shorthand for the two calls a test would otherwise write each time. A session the
-    caller is handed no `Session` for answers as a wrong id does, with
-    `UnknownSessionError`. `delete` and `files` act for nobody in particular, as an
-    operator's housekeeping does, and `files` makes a session that is not there yet.
+    Shorthand for the two calls a test would otherwise write each time. A session `kf`
+    hands no `Session` for answers as a wrong id does, with `UnknownSessionError`, and
+    `files` makes a session that is not there yet.
     """
 
     def __init__(self, kf) -> None:
@@ -282,27 +281,23 @@ class Through:
             raise unknown_session(session_id)
         return getattr(handle, method)(*args)
 
-    def pending(self, session_id: str, *, source_ids=None):
-        return self._on(session_id, "pending", source_ids=source_ids)
+    def pending(self, session_id: str):
+        return self._on(session_id, "pending")
 
-    def artifact(self, session_id: str, name: str, *, source_ids=None):
-        return self._on(session_id, "artifact", name, source_ids=source_ids)
+    def artifact(self, session_id: str, name: str):
+        return self._on(session_id, "artifact", name)
 
-    def size(self, session_id: str, *, source_ids=None):
-        return self._on(session_id, "size", source_ids=source_ids)
+    def size(self, session_id: str):
+        return self._on(session_id, "size")
 
     def delete(self, session_id: str):
-        from kingfisher.core.access.source_ids import UNSCOPED
-
-        handle = self.session(session_id, source_ids=UNSCOPED)
+        handle = self.session(session_id)
         if handle is None:
             return None
         return handle.delete()
 
     def files(self, session_id: str):
-        from kingfisher.core.access.source_ids import UNSCOPED
-
-        return self._on(session_id, "files", source_ids=UNSCOPED, create=True)
+        return self._on(session_id, "files", create=True)
 
 
 def _backend_in(cfg, session_dir: Path):

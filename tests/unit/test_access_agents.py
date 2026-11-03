@@ -9,7 +9,7 @@ from kingfisher.core.access.source_ids import UNSCOPED, CallerError
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions
-from tests.conftest import Through, agent_named, an_agent, start
+from tests.conftest import agent_named, an_agent, start
 
 
 @pytest.fixture
@@ -206,39 +206,6 @@ def test_a_first_turn_is_refused_however_the_ids_are_written(two_agents, held):
         _first_event(kf, Request(task="t", agent="assistant"), held)
 
 
-def test_reading_a_session_without_saying_who_is_calling_is_refused(two_agents):
-    """The door that answered. Running a turn and asking for an agent both refuse a call
-    that names nobody; reading one session took the same argument, ignored its absence,
-    and answered for a session pinned to an agent the caller could not open -- because
-    "nobody named" and "reaches everything" were the same value.
-    """
-    kf = Kingfisher(two_agents, sessions=LocalSessions())
-
-    with pytest.raises(CallerError, match="source_ids="):
-        Through(kf).session(_started_by_a(kf))
-
-
-def test_an_operator_reads_a_session_by_saying_so(two_agents):
-    """`UNSCOPED` is what a caller writes to mean no caller, and housekeeping on the
-    machine is exactly that -- which is what `kingfisher reap` passes.
-    """
-    kf = Kingfisher(two_agents, sessions=LocalSessions())
-
-    assert Through(kf).session(_started_by_a(kf), source_ids=UNSCOPED) is not None
-
-
-def test_listing_sessions_stays_the_operators(two_agents):
-    """The two housekeeping calls take no caller at all, so there is nothing to forget.
-    Stated here because the refusal above makes the difference deliberate rather than an
-    oversight in the same area.
-    """
-    kf = Kingfisher(two_agents, sessions=LocalSessions())
-    session_id = _started_by_a(kf)
-
-    assert [info.id for info in kf.sessions()] == [session_id]
-    assert Through(kf).delete(session_id) is None
-
-
 @pytest.mark.parametrize("held", [("A",), ["A"]], ids=["tuple", "list"])
 def test_a_caller_in_reach_is_let_in_however_the_ids_are_written(two_agents, held):
     """So the refusals above are not passing because a list is turned away outright."""
@@ -248,32 +215,17 @@ def test_a_caller_in_reach_is_let_in_however_the_ids_are_written(two_agents, hel
 
 
 def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_agents):
-    """Naming an agent and reading a session let `"B"` through unfiltered, and the
-    listing spelled it out a letter at a time, because a string is a sequence too.
+    """Naming an agent let `"B"` through unfiltered, and the listing spelled it out a
+    letter at a time, because a string is a sequence too.
     """
     from kingfisher import inventory
 
     kf = Kingfisher(two_agents, sessions=LocalSessions())
-    session_id = _started_by_a(kf)
 
     with pytest.raises(CallerError, match="not a string"):
         agent_named(kf, "assistant", source_ids="B")
     with pytest.raises(CallerError, match="not a string"):
-        Through(kf).session(session_id, source_ids="B")
-    with pytest.raises(CallerError, match="not a string"):
         inventory(two_agents, source_ids="B")
-
-
-# -- which agents ran in a session decides nothing about it -----------------
-
-
-def test_a_session_an_agent_out_of_reach_ran_in_is_still_there(two_agents):
-    """A session answered only the callers who reached the agent pinned in it; any agent
-    may run there now, so the one that ran decides nothing."""
-    kf = Kingfisher(two_agents, sessions=LocalSessions())
-    session_id = _started_by_a(kf)
-
-    assert Through(kf).session(session_id, source_ids=("B",)) is not None
 
 
 # -- a lock is in force wherever it is written ---------------------------------

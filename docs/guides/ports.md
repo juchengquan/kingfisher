@@ -891,16 +891,16 @@ request has to run in the session they were opened for -- a request naming none 
 in `default` -- and one naming another is refused with `UnknownSessionError` before
 the turn claims or writes anything. A backend kingfisher did not open is taken at
 your word. `kf.session(session_id, create=True)` makes a session no turn has made
-yet, so a caller can place its inputs before the first turn. The caller named to
-`kf.session` is checked there, once; hand what `files()` returns only to code entitled
-to that session, and the turn still checks the caller it is given. A turn naming a
+yet, so a caller can place its inputs before the first turn. `kf.session` asks who
+is calling no more than a session's id does: hand what it returns only to code entitled
+to that session, and the turn still checks the agent its caller names. A turn naming a
 session that is not there makes it, empty and without a word, so a caller continuing
 one that may have been swept asks `kf.session(session_id)` first: it answers `None`,
 and makes nothing, for a session that is gone.
 
-**And what it keeps about the session, under `/.harness`.** Its conversation, the
-datazones it is pinned to, its inputs folder as the last turn found it, and a turn
-paused at an approval gate are all written
+**And what it keeps about the session, under `/.harness`.** Its conversation, its
+inputs folder as the last turn found it, and a turn paused at an approval gate are all
+written
 and read through your backend — which means your agent's shell can reach them too,
 unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own conversation is that fence, and it is yours to get
