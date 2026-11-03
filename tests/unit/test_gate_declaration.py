@@ -12,7 +12,6 @@ subagent is where a tool two files define, or a tool a bundle holds, is held at 
 
 from __future__ import annotations
 
-from dataclasses import replace as replace_cfg
 from pathlib import Path
 from typing import Any
 
@@ -136,21 +135,8 @@ def test_a_gate_with_no_checkpointer_is_refused(cfg, session_dir):
     interrupt rather than raising it -- so the gated call is skipped in silence.
     That is the outcome `interrupt_on` was written to prevent, so it is refused.
     """
-    stateless = replace_cfg(cfg, conversation_enabled=False)
-
     with pytest.raises(AgentError, match="no checkpointer"):
-        _run(stateless, session_dir, _agent(interrupt_on="[write_file]"), checkpointer=None)
-
-
-def test_an_agent_with_no_gates_needs_no_checkpointer(cfg, session_dir):
-    """The refusal above must not reach every stateless deployment, which is most of
-    the reason it is asked of the gate list rather than of the flag.
-    """
-    stateless = replace_cfg(cfg, conversation_enabled=False)
-
-    out = _run(stateless, session_dir, _agent(), checkpointer=None)
-
-    assert "__interrupt__" not in out
+        _run(cfg, session_dir, _agent(interrupt_on="[write_file]"), checkpointer=None)
 
 
 def test_the_gates_reach_deepagents_as_the_argument_a_subagent_inherits(

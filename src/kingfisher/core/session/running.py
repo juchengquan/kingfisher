@@ -245,9 +245,7 @@ class Running:
         )
 
     def _transcript_of(self, snapshot: Any) -> tuple[Message, ...]:
-        """The conversation this turn writes, or nothing where it writes none."""
-        if not self.cfg.conversation_enabled:
-            return ()
+        """The conversation this turn writes, or nothing where there is no state."""
         if snapshot is None:
             # No state, or a turn that died before its first superstep: this runs after
             # every turn, failed ones included.

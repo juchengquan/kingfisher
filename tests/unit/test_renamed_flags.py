@@ -9,7 +9,7 @@ import pytest
 from kingfisher.cli.health import RETIRED
 from kingfisher.core.environment import Environment
 
-#: The four whose replacement is another flag, taken from the list `doctor`
+#: The three whose replacement is another flag, taken from the list `doctor`
 #: reports rather than spelled again here -- a fifth flag renamed and added
 #: there is covered by these without anybody remembering to come back.
 FLAG_PAIRS = {old: new for old, new in RETIRED.items() if new.endswith("_ENABLED")}
@@ -19,7 +19,7 @@ def test_there_are_flags_to_check():
     """A dict comprehension that matched nothing would leave every rule below
     passing over an empty loop, which is the shape of a guard that guards nothing.
     """
-    assert len(FLAG_PAIRS) == 4
+    assert len(FLAG_PAIRS) == 3
 
 
 def test_no_old_flag_name_reaches_its_setting():
@@ -71,14 +71,13 @@ def test_the_collision_the_suffix_exists_to_end():
 
 
 def test_a_default_survives_a_name_nobody_set() -> None:
-    """`KINGFISHER_CONVERSATION_ENABLED` is the one flag that is on unless it is
-    turned off, so a reader returning the wrong empty answer would take conversation
-    away from every deployment that never set it.
+    """`KINGFISHER_CITE_RESULTS` is on unless it is turned off, so a reader returning the
+    wrong empty answer would take citing away from every deployment that never set it.
     """
-    assert Environment({}).flag("KINGFISHER_CONVERSATION_ENABLED", default=True) is True
+    assert Environment({}).flag("KINGFISHER_CITE_RESULTS", default=True) is True
     assert (
-        Environment({"KINGFISHER_CONVERSATION_ENABLED": "false"}).flag(
-            "KINGFISHER_CONVERSATION_ENABLED", default=True
+        Environment({"KINGFISHER_CITE_RESULTS": "false"}).flag(
+            "KINGFISHER_CITE_RESULTS", default=True
         )
         is False
     )

@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import replace as replace_cfg
 from typing import Any
 
 import pytest
@@ -1065,27 +1064,6 @@ def test_superseding_is_silent_where_there_was_no_pause(cfg):
     again = kf.run(Request("two", session_id=first.session_id))
 
     assert again.discarded == ()
-
-
-# -- with the conversation off --------------------------------------------
-
-
-def test_a_stateless_deployment_writes_no_pause(cfg):
-    """No checkpointer means no state to keep, and a mark written with nothing behind
-    it would make every later turn on that session refuse to resume something that
-    was never there.
-    """
-    stateless = replace_cfg(cfg, conversation_enabled=False)
-    kf = Kingfisher(
-        stateless,
-        graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]),
-        sessions=LocalSessions(),
-    )
-
-    result = kf.run(Request("write it"))
-
-    assert not (_session_dir(cfg, result.session_id) / PAUSED).exists()
-    assert not (_session_dir(cfg, result.session_id) / PAUSED_PROVENANCE).exists()
 
 
 # -- and when nobody ever answers -----------------------------------------

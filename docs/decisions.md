@@ -3808,6 +3808,20 @@ These began as decisions in *Nothing at rest on this machine* and were built
 without the rest of it, which is what that document's N2 asked for -- the parts
 that need no memory-backed filesystem, first and separately.
 
+**A session always keeps its conversation; the switch to forget it is gone.**
+`KINGFISHER_CONVERSATION_ENABLED=false` made each turn start cold while the session's
+files stayed. Nothing recorded a deployment that used it, and each of its branches -- no
+saver, no transcript, no record of the inputs -- was one more case for every change to
+sessions to carry. A request that must not see another's names a session of its own, or
+deletes it after the turn with `delete_session=True`: the forgetting the switch gave,
+from parts that already exist. **Ignored when set, with nothing said**, unlike the
+settings `REMOVED_SETTINGS` refuses and `doctor` reports, and its older name
+`KINGFISHER_CONVERSATION` left `RETIRED` with it: no trace in the code over a warning, on
+the maintainer's call. The cost falls on a deployment that set it to `false` and names no session,
+whose requests now share `default`'s conversation with nothing at startup to say so;
+`docs/upgrading.md` is the only place that does. `build_agent` still refuses a gate
+where it is handed no checkpointer, which a caller of its own can do. *(2026-11-03.)*
+
 **`/runs` and `.tmp` became one `/scratch`, and a turn stopped being a place.**
 A session held two scratch directories with one purpose: `.tmp`, the shell's `TMPDIR`,
 which the agent was never told about, and `runs/<turn>`, named in every task message.

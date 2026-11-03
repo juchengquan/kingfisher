@@ -130,58 +130,6 @@ def test_a_sweep_needs_no_thread_store_at_all(cfg):
     assert swept.failures == ()
 
 
-# -- or no conversation at all --------------------------------------------
-
-
-def test_conversation_can_be_turned_off_entirely(cfg):
-    """A graph takes `checkpointer=None` and runs; the turn simply starts cold."""
-    from dataclasses import replace as replace_cfg
-
-    stateless = replace_cfg(cfg, conversation_enabled=False)
-    kf = Kingfisher(stateless, graph=StubAgent("ok"), sessions=LocalSessions())
-
-    result = kf.run(Request("go"))
-
-    assert result.answer == "ok"
-    # Conversation off means nothing is remembered between turns, so there is
-    # no transcript either -- the file and the flag say the same thing.
-    assert not (_session_dir(cfg, result.session_id) / TRANSCRIPT).exists()
-
-
-def test_files_survive_a_stateless_turn(cfg):
-    """"Stateless" is about the conversation, not the session."""
-    from dataclasses import replace as replace_cfg
-
-    stateless = replace_cfg(cfg, conversation_enabled=False)
-    kf = Kingfisher(stateless, graph=StubAgent("ok"), sessions=LocalSessions())
-    first = kf.run(Request("go"))
-    directory = _session_dir(cfg, first.session_id)
-    (directory / "outputs" / "kept.txt").write_text("still here", encoding="utf-8")
-
-    second = kf.run(Request("again", session_id=first.session_id))
-
-    assert second.session_id == first.session_id
-    assert (directory / "outputs" / "kept.txt").read_text() == "still here"
-
-
-def test_with_conversation_off_a_turn_runs_on_no_saver(cfg):
-    """A saver nobody reads from would be state kept for nothing, and a gated agent
-    would find somewhere to pause that no resume could reach."""
-    from dataclasses import replace as replace_cfg
-
-    stateless = replace_cfg(cfg, conversation_enabled=False)
-    service = Kingfisher(stateless, graph=StubAgent("ok"), sessions=LocalSessions())
-
-    assert service._checkpointer() is None
-
-
-def test_conversation_is_on_unless_a_deployment_says_otherwise(cfg):
-    """A session that forgets is a surprising default for something that issues session
-    ids.
-    """
-    assert cfg.conversation_enabled is True
-
-
 def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
     """What the conversation carries, and what it deliberately does not.
 
