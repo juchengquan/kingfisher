@@ -635,6 +635,25 @@ its turns are not checked.
 - **An agent with `interrupt_on` builds on every deployment**, since every turn now has
   somewhere to pause into.
 
+## A stopped turn starts no more calls, and waits for those on threads, after #1188
+
+- **A call that has not begun when its turn stops is not run.** Its result says "This
+  call did not run: the turn stopped before it began." A turn stops when its caller stops
+  reading, it runs out of time, or its graph fails. Every call the model had asked for used
+  to run.
+- **Cancelling `astream` or `arun` waits for a call a thread is running**, for at most 5
+  seconds, and the next turn reads what the call returned. It used to return at once,
+  telling the next turn the call did not complete while it went on running.
+- **A request sent while that call still runs raises `SessionBusyError`**, including after
+  the 5 seconds, when the caller is let go and the session stays held until the call ends.
+  Wait for the cancelled task before sending again.
+- **A turn that then fails as it ends warns `turn_not_ended`** on your `RunEvents`, with
+  the error's type and place; nobody is left to raise it to.
+- **The shell's command is ended when its turn is cancelled.** A `CommandRunner` of your
+  own is waited for, not stopped.
+- **A middleware of your own named `StoppingMiddleware` fails the agent's build**, since
+  kingfisher's now has that name. Rename yours.
+
 ## A session keeps its agent's name and follows the agent, after #1187
 
 - **A session's `.harness/agent.yaml` holds `name: <agent>`**, written by its first turn,
