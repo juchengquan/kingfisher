@@ -413,7 +413,7 @@ Three things are refused, each as a failed result the model can read:
 
 - **A path the turn may not read**, as `read_file` refuses it. `/.harness` is never
   handed to a tool — a tool runs in kingfisher's own process, outside every sandbox,
-  and could otherwise read or rewrite the agent the session is pinned to.
+  and could otherwise read or rewrite the conversation the next turn is rebuilt from.
 - **A path that climbs out through `..`, or that is or runs through a link** —
   anywhere, even one pointing to a file inside the session. The shell can make a link,
   and `/scratchpad/notes` pointing at `/.harness` would hand the tool the file that rule

@@ -143,16 +143,18 @@ kingfisher reads these files, so nothing outside it has an opinion about the
 layout. `agents/support/triage.yaml` is still `triage`, because `name:` is the
 identity and the path is not.
 
-**A request must name one.** There is no default agent; a request without
-`agent` is refused, and the message lists what your definitions offer. The agent
-decides where every prompt in the session goes and what it costs.
+**Every request must name one, every turn.** There is no default agent, and a session
+does not remember one: a request without `agent` is refused, on a session's later turns
+and in a `Resume` too, and the message lists what your definitions offer. The agent
+decides where every prompt in the turn goes and what it costs.
 
-**A session keeps the agent it started with, by name.** The name is resolved when
-the session opens and stored beside it, and each turn reads that agent as its file says
-then, so an edit reaches the session's next turn: a wider `source_ids:` opens it to more
-callers, and a new model gets its history. A later turn may name the same agent again;
-naming a different one is refused. An agent renamed or deleted leaves its sessions to
-the operator, since no scoped caller reaches them.
+**A session may run a different agent on each turn.** A turn reads the agent it names as
+that agent's file says then, and is handed the whole conversation so far, whichever
+agents made it: another prompt, perhaps another model, and calls to tools it may not
+have. Who may run an agent is its `source_ids:`; which agents ran in a session before
+decides nothing, so who may use a session is for your application to decide before it
+calls. A `Resume` is the exception: it names the agent the turn paused under, the only
+one whose graph can continue it, and naming another is refused.
 
 ### The prompt is added to, not replaced
 
@@ -330,11 +332,11 @@ interrupt_on: [execute, deploy]
 ```
 
 A turn that reaches one of them ends with `stop_reason: awaiting_decision` and
-hands back the calls on `RunResult.pending`. Answer it with a `Resume` carrying
-one `Decision` per pending call — `approve` runs it, `reject` does not, and
-`respond` replaces its result with text of your own. The session waits until you
-do; a plain request sent to it instead runs, and says so with a
-`decision_discarded` event.
+hands back the calls on `RunResult.pending`. Answer it with a `Resume` naming the
+agent it paused under and carrying one `Decision` per pending call — `approve` runs
+it, `reject` does not, and `respond` replaces its result with text of your own. The
+session waits until you do; a plain request sent to it instead runs, and says so
+with a `decision_discarded` event.
 
 A gate is answered once. If the turn running your answer dies before it ends, a
 process killed or a pod lost, the same `Resume` sent again is refused with a
@@ -361,8 +363,8 @@ From a terminal that is `kingfisher decide`:
     # stopped: awaiting_decision -- waiting for a decision on 1 call(s):
     #   4f2a91c0#0  execute  {'command': 'rm -rf build'}
     #       takes: approve, reject, respond
-    # answer with: kingfisher decide --session <id> --approve 4f2a91c0#0
-    kingfisher decide --session <id> --approve 4f2a91c0#0
+    # answer with: kingfisher decide --session <id> --agent operator --approve 4f2a91c0#0
+    kingfisher decide --session <id> --agent operator --approve 4f2a91c0#0
 
 `--reject` and `--respond CALL_ID=TEXT` are the other two. Every pending call has
 to be answered in one go: the turn resumes mid-superstep, and a half-answered

@@ -1,5 +1,5 @@
-"""What kingfisher keeps about a session: the agent it opened with, its conversation,
-the ledger of what its tools returned, and a turn paused for an answer.
+"""What kingfisher keeps about a session: its conversation, the datazones it is in, the
+ledger of what its tools returned, and a turn paused for an answer.
 
 This module owns the formats; the session's backend, through `HarnessFiles`, owns
 where they live.
@@ -11,19 +11,14 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import MISSING, asdict, dataclass, field, fields
-from pathlib import Path
 from typing import Any
 
-from kingfisher.core.definitions.agents.spec import AgentError
-from kingfisher.core.definitions.documents import DefinitionText, decode
 from kingfisher.core.layout import (
-    HARNESS,
     HARNESS_ROUTE,
     INPUTS_SEEN,
     LEDGER_FILE,
     PAUSED_MARK,
     PAUSED_STATE,
-    PINNED_AGENT,
     PINNED_ZONE,
     TRANSCRIPT_FILE,
 )
@@ -37,7 +32,7 @@ class HarnessFiles:
     """What kingfisher keeps about one session under `/.harness`, through its backend.
 
     Read back as found: the agent's shell reaches the same backend, so only the shell's
-    fence keeps it from rewriting its own pinned agent, conversation or paused turn.
+    fence keeps it from rewriting its own conversation, datazones or paused turn.
     """
 
     def __init__(self, backend: Any) -> None:
@@ -47,10 +42,6 @@ class HarnessFiles:
         """`name`'s content, or `None` where the session has none."""
         (content,) = yield from self._download(name)
         return content
-
-    def fetch_each(self, *names: str) -> Steps[list[bytes | None]]:
-        """`fetch`, for several names in one read of the backend."""
-        return (yield from self._download(*names))
 
     def store(self, name: str, content: bytes) -> Steps[None]:
         """Replace `name`."""
@@ -91,38 +82,6 @@ class HarnessFiles:
         return found
 
 
-#: What a refusal of the pinned agent calls it: only a name, so changing it moves nothing.
-AGENT_SNAPSHOT = f"{HARNESS}/{PINNED_AGENT}"
-
-
-def remember_agent(harness: Any, name: str) -> Steps[None]:
-    """Keep the name of the agent this session opened with.
-
-    Written once and never rewritten: a session runs one agent. Its name and not its
-    definition, so each turn reads the agent as the definitions have it then.
-    """
-    if (yield from harness.fetch(PINNED_AGENT)) is not None:
-        return
-    yield from harness.store(PINNED_AGENT, f"name: {json.dumps(name)}\n".encode())
-
-
-def pinned_name(pinned: DefinitionText) -> str:
-    """The agent a session's pin names, or `AgentError` where it names none.
-
-    Its `name` alone, so the whole definition an older session kept reads the same way.
-    """
-    document = decode(pinned.text)
-    name = document.get("name") if isinstance(document, dict) else None
-    if not isinstance(name, str) or not name:
-        msg = f"{pinned.source}: names no agent"
-        raise AgentError(msg)
-    return name
-
-
-def _agent_text(held: bytes | None) -> DefinitionText | None:
-    return None if held is None else DefinitionText(held.decode("utf-8"), Path(AGENT_SNAPSHOT))
-
-
 def remember_zones(harness: Any, zones: frozenset[str]) -> Steps[None]:
     """Keep the datazones this session's first zoned turn ran in, a line each.
 
@@ -134,13 +93,10 @@ def remember_zones(harness: Any, zones: frozenset[str]) -> Steps[None]:
     yield from harness.store(PINNED_ZONE, "\n".join(sorted(zones)).encode("utf-8"))
 
 
-def pinned_in(harness: Any) -> Steps[tuple[DefinitionText | None, frozenset[str] | None]]:
-    """The agent this session opened with and the datazones it is in, in one read, since
-    a listing asks it of every session."""
-    agent, zones = yield from harness.fetch_each(PINNED_AGENT, PINNED_ZONE)
-    return _agent_text(agent), None if zones is None else frozenset(
-        zones.decode("utf-8").splitlines()
-    )
+def pinned_zones(harness: Any) -> Steps[frozenset[str] | None]:
+    """The datazones this session is in, or `None` before a zoned turn has run in it."""
+    zones = yield from harness.fetch(PINNED_ZONE)
+    return None if zones is None else frozenset(zones.decode("utf-8").splitlines())
 
 
 def read_transcript(harness: Any) -> Steps[tuple[tuple[Message, ...], bool]]:

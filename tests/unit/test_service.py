@@ -10,12 +10,12 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher
-from kingfisher.core.access.capabilities import Capabilities, CapabilityError
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.interfaces import CommandResult, CommandRunner
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
 from kingfisher.core.session.files import InputsChanged
@@ -23,14 +23,12 @@ from kingfisher.core.session.running import refused_credentials, refused_request
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.turn import turn_message
 from kingfisher.plugins import LocalSessions, backend_at
-from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import (
     FAKE_ENDPOINT,
     OTHER_ENDPOINT,
     FakeGraph,
     agent_for,
     an_agent,
-    harness_in,
     start,
     subagents_dir,
     tools_dir,
@@ -38,11 +36,6 @@ from tests.conftest import (
 )
 from tests.unit.scripted import Scripted
 from tests.unit.test_run import StubAgent
-
-
-def agent_snapshot(session_dir) -> Path:
-    """Where the default backend keeps a session's pinned agent, on disk."""
-    return Path(session_dir) / HARNESS / PINNED_AGENT
 
 
 def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
@@ -112,7 +105,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     service = Kingfisher(cfg, sessions=LocalSessions())
     asked = Request("go", agent="only")
 
-    built = agent_for(service, asked, harness_in(cfg, session_dir))
+    built = agent_for(service, asked)
     files = drive(service._files_for(session_dir.name, catalogue=service.catalogue))
 
     def once():
@@ -913,29 +906,17 @@ def test_the_command_reports_a_provider_refusal_in_one_line(cfg, monkeypatch, ca
     assert "Traceback" not in said
 
 
-def _snapshot_reads(monkeypatch) -> list[int]:
-    """Every read of a session's pinned agent, each as how many claims had been taken."""
-    from kingfisher.core.session import preparation
+def _resolutions(monkeypatch) -> list[str | None]:
+    """Every agent a turn looks up, by the name its request gave."""
+    asked: list[str | None] = []
+    real = Kingfisher._agent_named
 
-    seen: list[int] = []
-    claims = [0]
+    def counted(self, name, **kwargs):
+        asked.append(name)
+        return real(self, name, **kwargs)
 
-    def counting(real):
-        def read(session_dir):
-            seen.append(claims[0])
-            return real(session_dir)
-
-        return read
-
-    real_claim = LocalSessions.claim
-
-    def claiming(self, *args, **kwargs):
-        claims[0] += 1
-        return real_claim(self, *args, **kwargs)
-
-    monkeypatch.setattr(preparation, "pinned_in", counting(preparation.pinned_in))
-    monkeypatch.setattr(LocalSessions, "claim", claiming)
-    return seen
+    monkeypatch.setattr(Kingfisher, "_agent_named", counted)
+    return asked
 
 
 def _policied(cfg):
@@ -959,7 +940,7 @@ def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
     from kingfisher.core.session import preparation
 
     service = Kingfisher(_policied(cfg), sessions=LocalSessions())
-    reads = _snapshot_reads(monkeypatch)
+    asked = _resolutions(monkeypatch)
     reported: list[object] = []
     real = preparation.withheld_by_kind
 
@@ -977,8 +958,7 @@ def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
     finally:
         events.close()
 
-    # One read each side of the claim: the second is what the turn runs on.
-    assert reads == [0, 1], f"the pinned agent was read at claims {reads} in one turn"
+    assert asked == ["only"], f"the agent was looked up as {asked} in one turn"
     # And the one resolution reached the second reader. Handing it `None` would leave
     # the report measured against the whole catalogue, which is what it filters.
     assert reported and reported[0] is not None
@@ -987,18 +967,17 @@ def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
 def test_a_supplied_graph_with_no_policy_is_never_asked_which_agent(cfg, monkeypatch):
     """The condition the single resolution is guarded by, and it is not an
     optimisation: such a deployment has no reader for the spec, and resolving one
-    anyway would make a session start refusing a request that names a different agent
-    mid-conversation -- which for a supplied graph it does not.
+    anyway would refuse every request there that names no agent -- which a request to a
+    supplied graph need not.
     """
     an_agent(cfg, "only")
     service = Kingfisher(
         cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
-    reads = _snapshot_reads(monkeypatch)
+    asked = _resolutions(monkeypatch)
 
-    service.run(Request("go", agent="only"))
-
-    assert reads == []
+    assert service.run(Request("go")).answer == "ok"
+    assert asked == []
 
 
 def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
@@ -1012,7 +991,7 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
     service = Kingfisher(
         _policied(cfg), graph=StubAgent("ok"), sessions=LocalSessions()
     )
-    reads = _snapshot_reads(monkeypatch)
+    asked = _resolutions(monkeypatch)
     reported: list[object] = []
     real = preparation.withheld_by_kind
 
@@ -1024,31 +1003,7 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
 
     service.run(Request("go", agent="only"), source_ids=("A",))
 
-    assert reads == [0, 1]
+    assert asked == ["only"]
     assert reported and reported[0] is not None
 
 
-def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
-    """The pin goes wherever the session's own files are, never to a path re-derived
-    from its id. It was once written to `<workspace>/sessions/<id>` whatever held the
-    session, so the next turn found none and a session fixed to
-    the agent it opened with silently was not.
-
-    Driven through `_agent_for` rather than `run`, because that is what resolves a
-    turn's agent and writes the pin -- and a supplied graph never reaches it.
-    """
-    an_agent(cfg, "only")
-    an_agent(cfg, "other")
-    # A session whose files are not under the workspace at all.
-    elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session", DEFAULT_LAYOUT)
-    service = Kingfisher(cfg, sessions=LocalSessions())
-
-    agent_for(service, Request("go", agent="only"), harness_in(cfg, elsewhere))
-
-    assert agent_snapshot(elsewhere).is_file(), "the pin is not where the turn ran"
-    assert not (cfg.workspace / "sessions" / elsewhere.name).exists(), (
-        "the pin was written under the workspace, which is not this session"
-    )
-
-    with pytest.raises(CapabilityError, match="cannot be changed"):
-        agent_for(service, Request("again", agent="other"), harness_in(cfg, elsewhere))

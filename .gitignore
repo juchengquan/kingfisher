@@ -236,7 +236,7 @@ __marimo__/
 /definitions/
 
 # And the whole workspace, when `KINGFISHER_WORKSPACE` points inside the
-# checkout rather than at the root: sessions, memory, pinned agents and run
+# checkout rather than at the root: sessions, memory, conversations and run
 # logs, none of which this project versions. `ensure_layout` writes no
 # `.gitignore` and runs no git on purpose -- its docstring argues that an
 # operator who wants version control is better served writing the rules they

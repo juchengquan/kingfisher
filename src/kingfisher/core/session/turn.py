@@ -60,8 +60,7 @@ class Prepared:
     #: beside a message: a resume continues a graph mid-superstep.
     resume: dict[str, Any] | None = None
     #: The agent this turn's graph was built from, by name, or `None` where none was
-    #: resolved. The *resolved* one, not the requested: a turn after the first names
-    #: none. Written beside a pause, so a resume naming a different agent can be refused.
+    #: resolved. Written beside a pause, so a resume naming a different agent can be refused.
     agent_name: str | None = None
     #: What the graph was built from, as `built_from` answers, or `None` for a graph the
     #: caller built. Written beside a pause, so a resume on changed files can be refused.

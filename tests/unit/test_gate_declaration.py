@@ -502,6 +502,7 @@ def test_a_helper_two_levels_down_stops_at_the_agents_gate(scripted, action, wri
     answered = service.run(
         Resume(
             session_id="s",
+            agent="only",
             decisions=(Decision(call_id=paused.pending[0].call_id, action=action),),
         )
     )

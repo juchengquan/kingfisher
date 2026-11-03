@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import ArtifactError, Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
+from kingfisher.core.access.source_ids import Datazone
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import Sessions
 from kingfisher.core.layout import (
@@ -37,9 +38,10 @@ from kingfisher.core.session.files import (
     read_artifact,
 )
 from kingfisher.core.session.steps import drive
+from kingfisher.core.session.store import remember_zones
 from kingfisher.core.session.transcript import Message, as_json
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import EVERY_TOOL, Through, an_agent, pin, start, supplied
+from tests.conftest import EVERY_TOOL, Through, an_agent, harness_of, start, supplied
 from tests.unit.scripted import Scripted
 
 
@@ -155,6 +157,15 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_inputs_and_gives_ba
 # -- fetching one ------------------------------------------------------------
 
 
+#: A caller in the datazone `_in_finance` puts a session in.
+IN_FINANCE = ("A", Datazone("finance"))
+
+
+def _in_finance(cfg, session_id: str) -> None:
+    """Pin `session_id` to the datazone a `finance` turn would have left it in."""
+    drive(remember_zones(harness_of(cfg, session_id), frozenset({"finance"})))
+
+
 def _produced(
     cfg, name: str = "outputs/out.txt", content: str = "result", *, backends=None
 ) -> Kingfisher:
@@ -174,27 +185,27 @@ def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg):
 @pytest.mark.parametrize(
     "name",
     [
-        ".harness/agent.yaml",
+        ".harness/transcript.jsonl",
         "inputs/in.csv",
         "scratchpad/tmp.txt",
-        "outputs/../.harness/agent.yaml",
+        "outputs/../.harness/transcript.jsonl",
         "/outputs/out.txt",
         "outputs",
     ],
 )
 def test_only_what_a_turn_produced_can_be_fetched(cfg, name):
     """The backend reaches `/.harness` and `/inputs` too. A caller entitled to a report is
-    not thereby entitled to the pinned agent or someone's inputs.
+    not thereby entitled to the conversation or someone's inputs.
     """
     kf = _produced(cfg)
-    (cfg.workspace / "sessions" / "s" / HARNESS / "agent.yaml").write_text("secret")
+    (cfg.workspace / "sessions" / "s" / HARNESS / "transcript.jsonl").write_text("secret")
 
     with pytest.raises(ArtifactError):
         Through(kf).artifact("s", name)
 
 
 @pytest.mark.parametrize(
-    "name", ["outputs/../.harness/agent.yaml", "memory/../inputs/in.csv", "outputs"]
+    "name", ["outputs/../.harness/transcript.jsonl", "memory/../inputs/in.csv", "outputs"]
 )
 def test_a_refused_name_never_reaches_the_backend(name):
     """Refused here, not left to the backend: the local one happens to reject `..` on
@@ -228,18 +239,18 @@ def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg):
 
 
 def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg):
-    """Checked as reading a session is. Holding only the id of a session pinned to an
-    agent you cannot reach buys nothing, including its outputs.
+    """Checked as reading a session is. Holding only the id of a session in datazones
+    that are not yours buys nothing, including its outputs.
     """
     an_agent(cfg, "only_a", source_ids="[A]", **EVERY_TOOL)
     policied = cfg
     kf = _produced(policied)
-    pin(kf, "s", "only_a")
+    _in_finance(policied, "s")
 
     # The control beside the escape: the same call, by a caller who does reach it.
-    assert Through(kf).artifact("s", "outputs/out.txt", source_ids=("A",)) == b"result"
+    assert Through(kf).artifact("s", "outputs/out.txt", source_ids=IN_FINANCE) == b"result"
     with pytest.raises(UnknownSessionError):
-        Through(kf).artifact("s", "outputs/out.txt", source_ids=("B",))
+        Through(kf).artifact("s", "outputs/out.txt", source_ids=("A",))
 
 
 # -- reading one -------------------------------------------------------------
@@ -285,17 +296,17 @@ def test_asking_whether_a_session_exists_opens_nothing_where_nothing_narrows(cfg
     assert counting.asked == []
 
 
-def test_a_session_is_opened_once_where_its_pinned_agent_decides(cfg):
-    """The control beside the one above: under a policy the pin decides, and reading it
-    takes the session's backend -- once.
+def test_a_session_is_opened_once_where_its_datazones_decide(cfg):
+    """The control beside the one above: under a policy the datazones decide, and reading
+    them takes the session's backend -- once.
     """
     an_agent(cfg, "only_a", source_ids="[A]", **EVERY_TOOL)
     policied = cfg
     counting = Counting()
     kf = _produced(policied, backends=counting)
-    pin(kf, "s", "only_a")
+    _in_finance(policied, "s")
 
-    assert Through(kf).session("s", source_ids=("A",)) is not None
+    assert Through(kf).session("s", source_ids=IN_FINANCE) is not None
     assert counting.asked == ["s"]
 
 
@@ -479,7 +490,7 @@ def test_the_command_prints_a_result_by_its_id_and_refuses_one_it_has_not(
 def test_the_command_refuses_a_name_that_is_not_an_artifact(at_the_command_line, capsys):
     _produced(at_the_command_line)
 
-    code = main(["artifact", "--session", "s", ".harness/agent.yaml"])
+    code = main(["artifact", "--session", "s", ".harness/transcript.jsonl"])
 
     assert code == 2
     assert "ArtifactError" in capsys.readouterr().err

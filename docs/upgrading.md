@@ -18,6 +18,24 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Every call names its agent, after #1191
+
+- **A request naming no agent is refused on every turn**, where a session's later turns
+  ran the agent its first named. Send `agent=` with every `Request`, as `kingfisher run
+  --agent` already required.
+- **A `Resume` names the agent the turn paused under.** One naming none is refused with
+  that agent's name in the message, and one naming another is refused as before.
+  `kingfisher decide --agent NAME` is needed to answer, and the line `run` prints when a
+  turn pauses now includes it.
+- **A later turn may name a different agent.** It runs on the whole conversation so far,
+  whichever agents made it, and is refused only where the caller's `source_ids` and
+  datazone do not reach the agent it names. Who may use a session at all is yours to
+  settle before you call: kingfisher no longer refuses a caller for the agent a session
+  ran, and `session()` and `sessions(source_ids=...)` now narrow by datazone alone.
+- **`.harness/agent.yaml` is no longer written or read.** Older sessions keep theirs, and
+  it decides nothing. `scripts/session_survey.py` still reads an older session's agent
+  from it, and reports none for a newer one.
+
 ## A tool result is filed when it leaves the conversation, after #1190
 
 - **`LedgerEntry.path` is `None` while the result is still in the conversation.** A result

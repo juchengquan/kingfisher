@@ -64,7 +64,6 @@ def test_the_survey_reads_what_a_turn_leaves_behind(scripted):
     assert found.recorded_results == 1
     assert found.chars["user"] and found.chars["tool results"]
     assert found.repeated > 0, "the result's file and the transcript both hold it"
-    assert found.agent == "only"
-    for part in ("result files", "transcript", "ledger", "pinned agent"):
+    for part in ("result files", "transcript", "ledger"):
         assert found.disk[part], part
     assert found.disk["other"] == 0, "a file the survey has no part for"

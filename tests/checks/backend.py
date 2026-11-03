@@ -119,7 +119,7 @@ def offloads_in_the_scratchpad(make: Callable[[], Any]) -> None:
 def shell_denied(make: Callable[[], Any]) -> None:
     """The agent's shell may not write under `/.harness` or `/inputs`.
 
-    `/.harness` is what kingfisher reads back and trusts -- the pinned agent, the
+    `/.harness` is what kingfisher reads back and trusts -- the pinned datazones, the
     conversation, a paused turn -- and `/inputs` is the caller's input, which the agent
     is promised it cannot change. The file tools are refused both by the turn's
     permissions; the shell bypasses those, so on any backend but kingfisher's own this
@@ -127,7 +127,7 @@ def shell_denied(make: Callable[[], Any]) -> None:
 
     Driven through `execute` rather than read off the backend's configuration, and
     both ways a shell writes: a new file, and over one kingfisher put there. The
-    second is the one a pinned agent is rewritten by.
+    second is the one a conversation is rewritten by.
 
     **With the mode bits lifted first**, which is what this missed. kingfisher's own
     backend kept `/inputs` by dropping the write bits, and the shell runs as the uid

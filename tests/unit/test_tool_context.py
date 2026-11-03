@@ -767,6 +767,7 @@ def test_a_resumed_turn_is_handed_it_again(scripted):
         kf.stream(
             Resume(
                 session_id="s",
+                agent="only",
                 decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
             )
         )

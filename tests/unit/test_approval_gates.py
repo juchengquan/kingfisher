@@ -450,13 +450,9 @@ def _under_a_policy(cfg):
     return cfg
 
 
-def _paused_on_a_pinned_session(cfg, call_id: str):
-    """Open a session on `analyst`, then pause a *later* turn, which names no agent.
-
-    The later turn is the point: a session's agent is fixed when it opens, so every turn
-    after the first names nothing. A pause recorded on one of those is the case that was
-    broken, and a pause on the opening turn is not -- which is why the rules below do not
-    use one.
+def _paused_on_a_later_turn(cfg, call_id: str):
+    """Open a session on `analyst`, then pause a *later* turn on it, where the broken
+    record was: it held what the request named, which a later turn then left empty.
     """
     opening = Kingfisher(
         cfg,
@@ -471,7 +467,9 @@ def _paused_on_a_pinned_session(cfg, call_id: str):
     kf = Kingfisher(
         cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", call_id)]), sessions=LocalSessions()
     )
-    paused = kf.run(Request("write it", session_id=first.session_id), source_ids=("A",))
+    paused = kf.run(
+        Request("write it", agent="analyst", session_id=first.session_id), source_ids=("A",)
+    )
     return kf, paused
 
 
@@ -481,7 +479,7 @@ def test_a_pause_records_the_agent_the_turn_actually_ran(cfg):
     something, and `_refuse_stale_pause` compared every resume against nothing.
     """
     policied = _under_a_policy(cfg)
-    _kf, paused = _paused_on_a_pinned_session(policied, "c1")
+    _kf, paused = _paused_on_a_later_turn(policied, "c1")
 
     written = drive(read_pause_mark(harness_of(policied, paused.session_id))) or {}
 
@@ -493,7 +491,7 @@ def test_a_resume_naming_the_agent_the_session_runs_is_accepted(cfg):
     this was refused as `paused under agent 'none'` -- the correct name turned away.
     """
     policied = _under_a_policy(cfg)
-    kf, paused = _paused_on_a_pinned_session(policied, "c1")
+    kf, paused = _paused_on_a_later_turn(policied, "c1")
 
     done = kf.run(
         Resume(
@@ -510,13 +508,13 @@ def test_a_resume_naming_the_agent_the_session_runs_is_accepted(cfg):
 def test_a_resume_naming_a_different_agent_is_refused(cfg):
     """A different agent is a different graph, whose nodes this checkpoint's are not.
 
-    Driven on a session with a pinned agent, so the refusal is a real mismatch. It used
+    Driven on a session whose agent was resolved, so the refusal is a real mismatch. It used
     to run on an injected graph under no policy, where nothing was resolved and nothing
     recorded -- so it passed against a mark of `none`, which is to say it passed for
     every name including the right one.
     """
     policied = _under_a_policy(cfg)
-    kf, paused = _paused_on_a_pinned_session(policied, "c1")
+    kf, paused = _paused_on_a_later_turn(policied, "c1")
 
     with pytest.raises(DecisionError, match="paused under agent 'analyst'"):
         kf.run(
@@ -529,22 +527,23 @@ def test_a_resume_naming_a_different_agent_is_refused(cfg):
         )
 
 
-def test_a_resume_naming_nothing_is_not_a_mismatch(cfg):
-    """What a caller normally sends. The agent is already fixed by the session, so there
-    is nothing to disagree with, and the pause check has nothing to say about it.
+def test_a_resume_naming_nothing_is_told_the_agent_it_paused_under(cfg):
+    """What a caller sent while a session kept its agent. With nothing in the session to
+    supply one, it would run no agent; refused, it is told the one only the pause knows.
     """
     policied = _under_a_policy(cfg)
-    kf, paused = _paused_on_a_pinned_session(policied, "c1")
+    kf, paused = _paused_on_a_later_turn(policied, "c1")
 
-    done = kf.run(
-        Resume(
-            session_id=paused.session_id,
-            decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
-        ),
-        source_ids=("A",),
-    )
-
-    assert done.stop_reason == END_TURN
+    with pytest.raises(
+        DecisionError, match="paused under agent 'analyst', and this resume names no agent"
+    ):
+        kf.run(
+            Resume(
+                session_id=paused.session_id,
+                decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+            ),
+            source_ids=("A",),
+        )
 
 
 def test_an_injected_graph_under_no_policy_has_no_agent_to_disagree_with(cfg):
@@ -678,6 +677,7 @@ def _approved(paused: Any) -> Resume:
     Scripted.script.append(AIMessage("done"))
     return Resume(
         session_id=paused.session_id,
+        agent="only",
         decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
     )
 

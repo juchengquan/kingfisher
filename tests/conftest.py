@@ -18,7 +18,6 @@ from kingfisher.core.agent.models import WIRE_FORMATS, summarizer_count
 from kingfisher.core.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
 from kingfisher.core.interfaces import RunEvents
 from kingfisher.core.layout import DEFAULT_LAYOUT
-from kingfisher.core.session.steps import drive
 from kingfisher.core.workspace import ensure_definitions, ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.unit.scripted import Scripted
@@ -340,19 +339,13 @@ def harness_in(cfg, session_dir: Path):
     return HarnessFiles(_backend_in(cfg, session_dir))
 
 
-def agent_for(service, request, harness, *, source_ids=None):
-    """The agent a turn on this session runs, with its pin read first and written after
-    as setup reads and writes it."""
+def agent_for(service, request, *, source_ids=None):
+    """The agent a turn running `request` runs, with the caller asked first as setup asks."""
     from kingfisher.core.access import caller_holds
-    from kingfisher.core.session.store import pinned_in
 
-    pinned, _zone = drive(pinned_in(harness))
     catalogue = service.catalogue
     held = caller_holds(catalogue.vocabulary, source_ids)
-    agent = service._agent_for(request, held=held, pinned=pinned, catalogue=catalogue)
-    if pinned is None:
-        drive(service._pin_agent_in(harness, request.agent))
-    return agent
+    return service._agent_named(request.agent, held=held, catalogue=catalogue)
 
 
 def agent_named(service, name, *, source_ids=None):
@@ -435,18 +428,6 @@ def a_pdf(*texts: str) -> bytes:
     out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode()
     out += f"startxref\n{xref}\n%%EOF\n".encode()
     return bytes(out)
-
-
-def pin(kf, session_id: str, name: str) -> None:
-    """Fix a session's agent before it has run, the way its first turn would.
-
-    A deployment that supplies its own graph never resolves an agent at all, so a test
-    whose subject is the pin cannot get one by running a turn.
-    """
-    from kingfisher.core.session.store import remember_agent
-
-    assert name in kf.catalogue.agents.specs, f"no agent {name!r} to pin"
-    drive(remember_agent(harness_of(kf.cfg, session_id), name))
 
 
 def a_subagent(text: str, name: str) -> SubagentSpec:

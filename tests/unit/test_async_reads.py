@@ -11,7 +11,7 @@ from deepagents.backends import CompositeBackend, FilesystemBackend
 from kingfisher import Kingfisher
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions
-from tests.conftest import an_agent, pin, start
+from tests.conftest import an_agent, start
 from tests.unit.test_run import StubAgent
 
 #: Every sync method the async paths can reach, on the classes that answer them.
@@ -75,7 +75,6 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
     produced = policied.workspace / "sessions" / "s" / "outputs" / "out.txt"
     produced.parent.mkdir(parents=True, exist_ok=True)
     produced.write_text("result")
-    pin(kf, "s", "only_a")
     sync_calls.clear()
 
     async def read_all():
@@ -144,9 +143,9 @@ def test_a_turn_reads_the_pin_once_each_side_of_its_claim(cfg, monkeypatch):
     """Read once to decide whether the caller reaches the session and again to decide
     which agent the turn runs, every turn under a policy paid a round trip for a file
     it already held. The second read now is the one under the claim, which the turn
-    runs on.
+    runs on; the agent is the request's, and reads nothing.
     """
-    from kingfisher.core.layout import HARNESS_ROUTE, PINNED_AGENT
+    from kingfisher.core.layout import HARNESS_ROUTE, PINNED_ZONE
 
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = cfg
@@ -155,9 +154,9 @@ def test_a_turn_reads_the_pin_once_each_side_of_its_claim(cfg, monkeypatch):
     )
     start(policied, "s")
     asked = Request("go", agent="only_a", session_id="s")
-    kf.run(asked, source_ids=("A",))  # pins the agent
+    kf.run(asked, source_ids=("A",))
 
-    pin = f"{HARNESS_ROUTE}{PINNED_AGENT}"
+    pin = f"{HARNESS_ROUTE}{PINNED_ZONE}"
     reads: list[str] = []
     downloading = CompositeBackend.download_files
 

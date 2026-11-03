@@ -59,7 +59,7 @@ from .store import (
     KeptLedger,
     clear_pause,
     pending_from_mark,
-    pinned_in,
+    pinned_zones,
     read_inputs_seen,
     read_ledger,
     read_pause_mark,
@@ -94,12 +94,11 @@ class Preparation:
     _sessions: Any
     _graph: Any
     _session_for: Callable[..., Steps[Conversation]]
-    _reaches_pin: Callable[..., bool]
+    _reaches_zones: Callable[..., bool]
     _refuse_if_over_budget: Callable[..., Steps[None]]
     _files_for: Callable[..., Steps[Any]]
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
-    _agent_for: Callable[..., AgentSpec | None]
-    _pin_agent_in: Callable[..., Steps[None]]
+    _agent_named: Callable[..., AgentSpec | None]
     _graph_for: Callable[..., Any]
 
     def _prepare_steps(
@@ -111,10 +110,10 @@ class Preparation:
     ) -> Steps[Prepared]:
         """Everything up to the model call, as the one sequence both loops drive.
 
-        Every refusal comes before `run_start` and before the session's agent and datazone
-        are pinned, so a refused request leaves no turn behind and fixes nothing; the claim
-        is taken before them and given back if one refuses, and a session this request
-        made goes with it unless another turn has pinned it.
+        Every refusal comes before `run_start` and before the session's datazone is
+        pinned, so a refused request leaves no turn behind and fixes nothing; the claim is
+        taken before them and given back if one refuses, and a session this request made
+        goes with it unless another turn has used it.
         """
         cfg = self.cfg
         # Once, and kept to the turn's end: asked again, one turn could build its agent
@@ -126,8 +125,19 @@ class Preparation:
         # refused caller's files would be in its `/inputs`, and a session out of reach
         # would answer "busy" rather than "no session".
         held = caller_holds(catalogue.vocabulary, source_ids)
+        # Not resolved for a supplied graph where nothing is locked: it runs no agent from
+        # the definitions, so a request there need name none.
+        resolved = self._graph is None or held is not None
+        # The agent as well, since nothing in the session decides it. A resume naming none
+        # is left to its pause, which can say which agent it waits for.
+        unnamed_resume = isinstance(request, Resume) and request.agent is None
+        agent = (
+            self._agent_named(request.agent, held=held, catalogue=catalogue)
+            if resolved and not unnamed_resume
+            else None
+        )
         # Opened before anything else reads the session: who may touch it is decided by
-        # its pinned agent, and that is read through the backend too.
+        # its datazones, and those are read through the backend too.
         if files is None:
             # Asked before the open, which makes the session it is asked for: a refusal
             # may take back only a session this request made.
@@ -141,8 +151,8 @@ class Preparation:
         reads_pins = held is not None or self._graph is None
         # Only so a caller out of reach hears "no session" rather than "busy": the turn
         # runs on the pins read again under the claim.
-        first = (yield from pinned_in(harness)) if reads_pins else (None, None)
-        self._refuse_out_of_reach(*first, held, session_id=session.id, catalogue=catalogue)
+        first = (yield from pinned_zones(harness)) if reads_pins else None
+        self._refuse_out_of_reach(first, held, session_id=session.id)
         # A turn writes inside the session, which leaves the timestamp `kingfisher sessions`
         # reads alone. At the top of the turn, not the end: a turn that fails still happened.
         yield changing(self._sessions, "mark_used", cfg, session.id)
@@ -159,24 +169,26 @@ class Preparation:
             raise SessionBusyError(msg)
         try:
             # A turn that held the claim since the read above may have pinned the session
-            # to an agent or datazones this caller does not reach.
-            pinned, zones = (yield from pinned_in(harness)) if reads_pins else (None, None)
-            if (pinned, zones) != (None, None):
-                # This request pins only later, so another turn ran here, whatever the
-                # listing said: not a session this request made, nor its to delete.
+            # to datazones this caller does not reach.
+            zones = (yield from pinned_zones(harness)) if reads_pins else None
+            history, cut = yield from read_transcript(harness)
+            if zones is not None or history or cut:
+                # Each written only by a turn holding the claim, so another turn ran here,
+                # whatever the listing said: not a session this request made, nor its to
+                # delete.
                 made = False
-            self._refuse_out_of_reach(
-                pinned, zones, held, session_id=session.id, catalogue=catalogue
-            )
+            self._refuse_out_of_reach(zones, held, session_id=session.id)
             prepared = yield from self._claimed(
                 request,
                 session,
                 files=files,
                 harness=harness,
-                pinned=pinned,
                 zones=zones,
                 held=held,
                 catalogue=catalogue,
+                agent=agent,
+                history=history,
+                cut=cut,
             )
         except BaseException:
             # Each a call that changes something, so a cancel arriving during it waits for
@@ -189,12 +201,9 @@ class Preparation:
         return replace(prepared, claim=claimed)
 
     def _refuse_out_of_reach(
-        self, pinned: Any, zones: frozenset[str] | None, held: frozenset[str] | None, *,
-        session_id: str, catalogue: Definitions,
+        self, zones: frozenset[str] | None, held: frozenset[str] | None, *, session_id: str
     ) -> None:
-        if not self._reaches_pin(
-            pinned, zones, held, session_id=session_id, catalogue=catalogue
-        ):
+        if not self._reaches_zones(zones, held):
             raise unknown_session(session_id)
 
     def _claimed(  # noqa: PLR0913 -- setup's, handed on: a second backend is a second sandbox
@@ -204,10 +213,12 @@ class Preparation:
         *,
         files: Any,
         harness: HarnessFiles,
-        pinned: Any,
         zones: frozenset[str] | None,
         held: frozenset[str] | None,
         catalogue: Definitions,
+        agent: AgentSpec | None,
+        history: tuple[Any, ...],
+        cut: bool,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
         # Optional on a backend, like `host_path`; reported rather than raised.
@@ -226,20 +237,15 @@ class Preparation:
         paused, resume, discarded, pause = yield from self._take_pause(
             request, session, harness
         )
-        # Not resolved for a supplied graph where nothing is locked: that would refuse a
-        # request naming another agent.
-        resolved = self._graph is None or held is not None
-        agent = (
-            self._agent_for(request, held=held, pinned=pinned, catalogue=catalogue)
-            if resolved
-            else None
-        )
+        if agent is None and (self._graph is None or held is not None):
+            # A resume naming none, past a pause that named no agent to refuse it with.
+            agent = self._agent_named(request.agent, held=held, catalogue=catalogue)
         recorded = pause.get(BUILT_FROM_MARK) if resume is not None and pause else None
         # A pause written before the record resumes unchecked, as every pause did then.
         if isinstance(recorded, dict) and agent is not None:
             _refuse_changed_since(session, recorded, built_from(catalogue, agent))
         # What a zoned caller's tools return stays in the session, so once one runs it is
-        # read only from those datazones. Kept beside the agent's pin, after the build.
+        # read only from those datazones. Kept after the build.
         ran_in = zones_held(held) if zones is None and held is not None else None
         if self._graph is None:
             # Before the build and the reports, which must both see a bare name settled to
@@ -251,7 +257,6 @@ class Preparation:
                 held=held,
                 catalogue=catalogue,
             )
-        history, cut = yield from read_transcript(harness)
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
         earlier = (yield from read_ledger(harness)) if self._graph is None else None
         lost = history_lost(
@@ -291,8 +296,8 @@ class Preparation:
         if lost is not None:
             prepared = replace(prepared, events=(*prepared.events, lost), history_lost=lost.text)
         # After the build's refusals and before the graph runs: a refused request must
-        # leave the session's files, its agent and datazone, and its gate as they were. A
-        # pin is for good, so it waits for the upload; a caller can send a file again, and
+        # leave the session's files, its datazone, and its gate as they were. A pin is
+        # for good, so it waits for the upload; a caller can send a file again, and
         # nobody can recreate a pause. `run_start` last, so a refused request logs no turn.
         try:
             yield from place_inputs(placement, files, self.cfg.layout)
@@ -303,8 +308,6 @@ class Preparation:
                 prepared = yield from self._with_message(
                     prepared, asked, request, placement, history=history, earlier=earlier
                 )
-            if resolved and pinned is None:
-                yield from self._pin_agent_in(harness, request.agent)
             if ran_in:
                 yield from remember_zones(harness, ran_in)
             if pause is not None and resume is None:
@@ -412,12 +415,11 @@ class Preparation:
         """
         was = held.get(AGENT_MARK) or None
         # `None` is no mismatch: nothing was resolved, for an injected graph where nothing
-        # is locked, where a request naming any agent is not refused either.
-        if was is not None and request.agent is not None and was != request.agent:
-            msg = (
-                f"session {session.id} paused under agent {was!r}, "
-                f"and this resume names {request.agent!r}"
-            )
+        # is locked, where a request naming any agent is not refused either. Named back,
+        # since every resume must name it and holding the session's id is the grant.
+        if was is not None and request.agent != was:
+            names = "names no agent" if request.agent is None else f"names {request.agent!r}"
+            msg = f"session {session.id} paused under agent {was!r}, and this resume {names}"
             raise DecisionError(msg)
         now = harness_mark()
         if moved := sorted(k for k, v in now.items() if k in held and held[k] != v):
@@ -542,7 +544,6 @@ class Preparation:
             context=built.context if isinstance(built, Assembled) else None,
             resume=resume,
             discarded=discarded,
-            # Never `request.agent`, which is set only on the turn that opened the session.
             agent_name=agent.name if agent is not None else None,
             built_from=built_from(catalogue, agent)
             if agent is not None and isinstance(built, Assembled)

@@ -1,6 +1,6 @@
 """What kingfisher reads back from a session is kept as written, and nothing signs it.
 
-What stops the agent rewriting its own pinned agent, conversation or paused turn is
+What stops the agent rewriting its own conversation, datazones or paused turn is
 the shell's fence -- kingfisher's sandbox, or a backend that passes `shell_denied`.
 Where kingfisher can see neither, `doctor` says so; a turn still runs.
 """
@@ -11,7 +11,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
-from kingfisher.core.layout import HARNESS, PAUSED_STATE, PINNED_AGENT
+from kingfisher.core.layout import HARNESS, PAUSED_STATE, TRANSCRIPT_FILE
 from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from tests.checks.backend import shell_denied
@@ -37,7 +37,7 @@ def test_what_a_session_keeps_is_written_as_it_is(scripted):
     Kingfisher(scripted, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
 
     held = sorted(p.name for p in (scripted.workspace / "sessions" / "s" / HARNESS).iterdir())
-    assert PINNED_AGENT in held, "nothing was pinned, so there was nothing to leave unsigned"
+    assert TRANSCRIPT_FILE in held, "nothing was kept, so there was nothing to leave unsigned"
     assert not [name for name in held if name.endswith(".sig")], held
 
 

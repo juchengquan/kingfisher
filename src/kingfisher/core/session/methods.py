@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.access import ALL, caller_holds, reaches, with_datazone, zones_held
-from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.access import caller_holds, with_datazone, zones_held
 from kingfisher.core.request import Request, Resume
 
 from .files import read_artifact
@@ -26,8 +24,7 @@ from .steps import Steps, adrive, changing, drive, on_host, reading
 from .store import (
     HarnessFiles,
     pending_from_mark,
-    pinned_in,
-    pinned_name,
+    pinned_zones,
     read_pause_mark,
 )
 
@@ -38,9 +35,6 @@ if TYPE_CHECKING:
     from kingfisher.core.config import Config
     from kingfisher.core.definitions.catalogue import Definitions
     from kingfisher.core.versions import Versions
-
-_log = logging.getLogger(__name__)
-
 
 class SessionMethods:
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
@@ -68,67 +62,23 @@ class SessionMethods:
         if session_id not in (yield from self._known_steps()):
             raise unknown_session(session_id)
 
-    def _reaches_session(
-        self,
-        harness: Any,
-        held: frozenset[str] | None,
-        *,
-        session_id: str,
-        catalogue: Definitions,
-    ) -> Steps[bool]:
+    def _reaches_session(self, harness: Any, held: frozenset[str] | None) -> Steps[bool]:
         """Whether a caller holding `held` may touch the session `harness` belongs to.
 
-        The rule reading a session and running a turn in it share: a caller who cannot
-        reach the pinned agent, or is not in exactly the session's datazones, cannot touch
-        the session. `None` (no lock anywhere, or an `UNSCOPED` call) reaches everything, as does
-        a session with nothing pinned yet.
+        The rule reading a session and running a turn in it share: a caller not in exactly
+        the session's datazones cannot touch the session. Which agents ran in it decides
+        nothing, since any of them may run in it next. `None` (no lock anywhere, or an
+        `UNSCOPED` call) reaches everything, as does a session no zoned turn has run in.
         """
         if held is None:
             return True
-        kept, zones = yield from pinned_in(harness)
-        return self._reaches_pin(kept, zones, held, session_id=session_id, catalogue=catalogue)
+        return self._reaches_zones((yield from pinned_zones(harness)), held)
 
-    def _reaches_pin(
-        self,
-        kept: Any,
-        zones: frozenset[str] | None,
-        held: frozenset[str] | None,
-        *,
-        session_id: str,
-        catalogue: Definitions,
-    ) -> bool:
-        """`_reaches_session`, for the pins already read, against the agent as `catalogue`
-        defines it now."""
-        if held is None:
-            return True
-        audience = ALL
-        if kept is not None:
-            try:
-                name = pinned_name(kept)
-            except AgentError as exc:
-                # A pin that names no agent reaches no scoped caller. Raised, it stopped every
-                # scoped listing, and told a caller who may not reach the session its lock.
-                _log.warning(
-                    "session %s: its pin names no agent, so only an unscoped call reaches "
-                    "it: %s",
-                    session_id,
-                    exc,
-                )
-                return False
-            if (spec := catalogue.agents.specs.get(name)) is None:
-                # Renamed or deleted, the agent takes its sessions out of every scoped
-                # caller's reach; the operator's listing still has them.
-                _log.info(
-                    "session %s: its agent %r is no longer defined, so only an unscoped "
-                    "call reaches it",
-                    session_id,
-                    name,
-                )
-                return False
-            audience = spec.source_ids
+    def _reaches_zones(self, zones: frozenset[str] | None, held: frozenset[str] | None) -> bool:
+        """`_reaches_session`, for the datazones already read."""
         # The same zones, not every one of them and more: a caller also in another zone would
         # leave what its tools returned here, for callers who are not.
-        return reaches(audience, held) and (zones is None or zones_held(held) == zones)
+        return held is None or zones is None or zones_held(held) == zones
 
     def _known_steps(self) -> Steps[tuple[str, ...]]:
         """The id of every session the deployment's backends hold."""
@@ -158,8 +108,8 @@ class SessionMethods:
     ) -> Session | None:
         """One session, or `None` when this caller has no such session.
 
-        **A session whose pinned agent this caller cannot reach, or whose datazones are
-        not exactly theirs, answers `None` too**, so a leaked id confirms nothing.
+        **A session whose datazones are not exactly this caller's answers `None` too**, so
+        a leaked id confirms nothing.
 
         `create` makes a session not there yet, as a turn naming it would, so files can
         be placed before the first turn. One out of this caller's reach is still `None`.
@@ -188,7 +138,8 @@ class SessionMethods:
         extra_datazones: Sequence[str] = (),
     ) -> tuple[Session, ...]:
         """Every session this caller reaches, most recently used first; every session
-        there is when no caller is named. Naming one costs a read per session, of its pins.
+        there is when no caller is named. Naming one costs a read per session, of its
+        datazones.
         """
         caller = with_datazone(source_ids, datazone, extra_datazones)
         return drive(self._sessions_steps(caller))
@@ -214,9 +165,7 @@ class SessionMethods:
             made = yield from self._files_for(session_id, catalogue=catalogue)
             # Checked although nothing is pinned in a session this call made: a listing
             # that missed one opens a session that was already there.
-            if not (yield from self._reaches_session(
-                HarnessFiles(made), held, session_id=session_id, catalogue=catalogue
-            )):
+            if not (yield from self._reaches_session(HarnessFiles(made), held)):
                 return None
             listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
             return Session(session_id, listing[session_id], self, [made])
@@ -248,9 +197,7 @@ class SessionMethods:
         if held is None:
             return True, []
         files = yield from self._files_for(session_id, catalogue=catalogue)
-        reached = yield from self._reaches_session(
-            HarnessFiles(files), held, session_id=session_id, catalogue=catalogue
-        )
+        reached = yield from self._reaches_session(HarnessFiles(files), held)
         return reached, [files]
 
     def _files_in(self, session_id: str, opened: list[Any]) -> Steps[Any]:
