@@ -49,6 +49,19 @@ class Session:
         """`artifact`, for a caller on an event loop."""
         return await adrive(self._service._artifact_in(self.id, name, self._opened))
 
+    def result(self, entry_id: str) -> str:
+        """One tool result's text, by the id `RunResult.ledger` gave it, wherever it is
+        kept: its file where its row names one, else the conversation.
+
+        `ResultError` for an id this session has no row for, and for a result kept nowhere
+        -- expired, or refused by the backend.
+        """
+        return drive(self._service._result_in(self.id, entry_id, self._opened))
+
+    async def aresult(self, entry_id: str) -> str:
+        """`result`, for a caller on an event loop."""
+        return await adrive(self._service._result_in(self.id, entry_id, self._opened))
+
     def memory(self) -> tuple[MemoryEntry, ...]:
         """This session's memory entries, by the ids a turn would give them; none without
         a memory file."""

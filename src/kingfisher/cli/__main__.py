@@ -12,7 +12,7 @@ import warnings
 from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from dotenv import load_dotenv
 
@@ -29,6 +29,7 @@ from kingfisher import (
     InputsError,
     QuotaExceededError,
     Request,
+    ResultError,
     Resume,
     SessionBusyError,
     SubagentError,
@@ -61,6 +62,26 @@ if TYPE_CHECKING:
 #: Read from the working directory only: a bare `load_dotenv()` walks up looking for
 #: one, and a command should not pick up a file two directories above.
 ENV_FILE = ".env"
+
+def _add_fetching(
+    sub: Any, verb: str, summary: str, description: str, what: tuple[str, str]
+) -> None:
+    """A verb that reads one thing a session holds, by the name a run gave it."""
+    fetching = sub.add_parser(
+        verb,
+        help=summary,
+        description=description,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    fetching.add_argument("--session", metavar="ID", required=True, help="the session")
+    fetching.add_argument(what[0], help=what[1])
+    fetching.add_argument("--out", metavar="PATH", help="write it here instead")
+    _add_caller(
+        fetching,
+        "who is calling: comma-separated source ids, or UNSCOPED to read "
+        "with no caller. Required where a definition carries a lock",
+    )
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -331,10 +352,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit the same as JSON, every tool's parameters included",
     )
     _add_caller(showing, _TURN_CALLER)
-    fetching = sub.add_parser(
+    _add_fetching(
+        sub,
         "artifact",
-        help="fetch one file a turn produced",
-        description=(
+        "fetch one file a turn produced",
+        (
             "Fetches a file a turn left under /outputs or /memory, by the name\n"
             "the run printed for it -- `outputs/report.html`, not a path on\n"
             "this machine. Read through the session's backend, so it works\n"
@@ -342,15 +364,20 @@ def build_parser() -> argparse.ArgumentParser:
             "\n"
             "Without --out the bytes go to standard output, to pipe or redirect."
         ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        ("name", "the artifact, as the run named it"),
     )
-    fetching.add_argument("--session", metavar="ID", required=True, help="the session")
-    fetching.add_argument("name", help="the artifact, as the run named it")
-    fetching.add_argument("--out", metavar="PATH", help="write it here instead")
-    _add_caller(
-        fetching,
-        "who is calling: comma-separated source ids, or UNSCOPED to read "
-        "with no caller. Required where a definition carries a lock",
+    _add_fetching(
+        sub,
+        "result",
+        "fetch one tool result's text, by its id",
+        (
+            "Fetches what one tool call returned, by the id the run's ledger gave\n"
+            "it -- `A-0002`. From its file where it has one, else from the\n"
+            "session's conversation, which holds a result until it is filed.\n"
+            "\n"
+            "Without --out the text goes to standard output, to pipe or redirect."
+        ),
+        ("id", "the result, as the ledger names it"),
     )
     holding = sub.add_parser(
         "sessions",
@@ -953,6 +980,31 @@ def _artifact(args: argparse.Namespace) -> int:
     return 0
 
 
+def _result(args: argparse.Namespace) -> int:
+    """Fetch one tool result's text, to a file or to standard output."""
+    cfg = config_from_env()
+    kf = _configured(cfg)
+    session = kf.session(
+        args.session,
+        source_ids=args.held,
+        datazone=args.datazone,
+        extra_datazones=args.extra_datazones,
+    )
+    if session is None:
+        msg = f"no session {args.session!r}"
+        raise UnknownSessionError(msg)
+    text = session.result(args.id)
+    if args.out is None:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        return 0
+    out = Path(args.out).expanduser()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(f"wrote {args.id} to {args.out}")
+    return 0
+
+
 def _reap_one(kf: Kingfisher, session_id: str) -> int:
     """Reap one session by name, whatever is running in it."""
     # `UNSCOPED`, not `None`, which a policied deployment refuses: this is housekeeping,
@@ -1025,6 +1077,7 @@ REFUSALS = (
     DecisionError,
     InputsError,
     QuotaExceededError,
+    ResultError,
     SubagentError,
     UnknownSessionError,
 )
@@ -1042,6 +1095,7 @@ HANDLERS = {
     "prompt": _prompt,
     "sessions": lambda args: _sessions(as_document=args.json),
     "artifact": _artifact,
+    "result": _result,
     "reap": _reap,
 }
 

@@ -3,18 +3,26 @@
 from __future__ import annotations
 
 import bisect
+import logging
 import threading
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-from .steps import Steps, on_host, reading
+from kingfisher.core.agent.middlewares.recorded import filed_at, kept_text, stamped_id
+from kingfisher.core.result import ResultError
+
+from .steps import Steps, changing, on_host, reading
 from .store import (
+    HarnessFiles,
     KeptLedger,
     entry_id,
     expired,
     names_a_result,
+    patched,
+    read_ledger,
+    read_transcript,
     write_ledger,
 )
 from .unused import UnusedFiles, settle_unused
@@ -22,6 +30,11 @@ from .unused import UnusedFiles, settle_unused
 if TYPE_CHECKING:
     from kingfisher.core.interfaces import UnusedResults
     from kingfisher.core.result import LedgerEntry, Listed
+
+_log = logging.getLogger(__name__)
+
+#: One result to file: its id, where it goes, and what the file holds.
+Filing = tuple[str, str, bytes]
 
 
 class Ledger:
@@ -44,7 +57,8 @@ class Ledger:
         self.resumed = resumed
         #: As this turn writes it back, with every result older than `keep_rounds` exchanges
         #: expired: no row names its file, so the sweep removes it. Marked from the start,
-        #: so clearing this turn hands no path the turn will remove.
+        #: so clearing this turn hands no path the turn will remove. An earlier result
+        #: this turn files is patched in as it is filed.
         self.earlier = expired(earlier, keep_rounds, turn=turn, resumed=resumed)
         # Calls made together run on threads, each with its own recorder.
         self._lock = threading.Lock()
@@ -58,6 +72,8 @@ class Ledger:
         #: The access of what ran under a run with no row of its own: a call from code, or
         #: inside a compiled subagent, which the answer it feeds can repeat.
         self._unrecorded: dict[str, list[Listed]] = {}
+        #: A subagent's results not yet filed, by id, each with the run it belongs to.
+        self._held: dict[str, tuple[str | None, str, bytes]] = {}
 
     def reserve(self, call: str, batch: Sequence[str], *, message: str) -> str:
         """The id `call`'s result will have, numbering every call of `batch` with it.
@@ -101,10 +117,67 @@ class Ledger:
     def unkept(self, entry: LedgerEntry) -> LedgerEntry:
         """Mark one entry as having no file, because the backend would not take it, and
         hand back the entry as it now stands."""
-        bare = replace(entry, path=None)
+        bare = replace(entry, path=None, unkept=True)
         with self._lock:
             self._entries[self._entries.index(entry)] = bare
         return bare
+
+    def row(self, number: str) -> LedgerEntry | None:
+        """The row of result `number`, this turn's or an earlier one's, as it now stands."""
+        with self._lock:
+            mine = next((one for one in self._entries if one.id == number), None)
+            earlier = self.earlier
+        return mine if mine is not None else earlier.row(number)
+
+    def hold(self, entry: LedgerEntry, path: str, content: bytes) -> None:
+        """Keep a subagent's result to file at `path` when its run ends, when the
+        conversation holding it goes."""
+        with self._lock:
+            self._held[entry.id] = (entry.run, path, content)
+
+    def held(self, run: str | None = None) -> tuple[Filing, ...]:
+        """What `hold` kept that nothing has filed since: `run`'s, or every run's."""
+        with self._lock:
+            return tuple(
+                (number, path, content)
+                for number, (owner, path, content) in self._held.items()
+                if run is None or owner == run
+            )
+
+    def filed(self, wanted: Sequence[Filing], answers: Any, *, lose: bool) -> frozenset[str]:
+        """Note what a save of `wanted` answered, and hand back the ids it kept.
+
+        `answers` is what `upload_files` answered, or what it raised. A result it refused
+        is marked unkept where `lose` -- its last copy is going -- and is otherwise left as
+        it was, for a later save to try. Logged, never raised: the tool has run, and a
+        failure here is one the model may answer by running it twice.
+        """
+        failed = (
+            {number: f"{type(answers).__name__}: {answers}" for number, _, _ in wanted}
+            if isinstance(answers, BaseException)
+            else {
+                number: str(answer.error)
+                for (number, _, _), answer in zip(wanted, answers, strict=True)
+                if answer.error
+            }
+        )
+        for number, path, _ in wanted:
+            if number in failed:
+                _log.warning("result %s was not filed at %s: %s", number, path, failed[number])
+        kept = {number: path for number, path, _ in wanted if number not in failed}
+        changes: dict[str, dict[str, Any]] = {n: {"path": p} for n, p in kept.items()}
+        if lose:
+            changes.update({n: {"path": None, "unkept": True} for n in failed})
+        with self._lock:
+            for number in (*kept, *(failed if lose else ())):
+                self._held.pop(number, None)
+            for at, entry in enumerate(self._entries):
+                if (change := changes.pop(entry.id, None)) is not None:
+                    self._entries[at] = replace(entry, **change)
+            # A result an earlier turn recorded, filed as it leaves this turn's conversation:
+            # its line names the file, or the sweep removes it.
+            self.earlier = patched(self.earlier, changes)
+        return frozenset(kept)
 
     def ran(self, run: str, access: Listed) -> None:
         """Note what a call that gets no row read under one run."""
@@ -130,6 +203,39 @@ class Ledger:
 def _number(entry: LedgerEntry) -> int:
     # By number, not as text: `A-10000` sorts before `A-9999` as a string.
     return int(entry.id.removeprefix("A-"))
+
+
+def file_left(
+    files: Any,
+    ledger: Ledger,
+    away: Sequence[Any],
+    *,
+    tool_results_route: str,
+) -> Steps[None]:
+    """File, in one save, what left the conversation this turn with no file: each result
+    behind the summary's cut, `away`, and a subagent's results its run did not file.
+
+    Before the ledger is written, so its rows name the files. Only now for `away`: the
+    whole of each is held in state until the turn ends.
+    """
+    wanted = list(ledger.held())
+    for message in away:
+        if (call := getattr(message, "tool_call_id", None)) is None:
+            continue
+        text = str(getattr(message, "text", ""))
+        row = ledger.row(number) if (number := stamped_id(text)) is not None else None
+        if row is None or row.call != call or row.path or row.expired_in or row.unkept:
+            continue
+        if (content := kept_text(text, row.id, row.size)) is not None:
+            path = filed_at(tool_results_route, row.id, row.tool, content)
+            wanted.append((row.id, path, content))
+    if not wanted:
+        return
+    try:
+        answers = yield changing(files, "upload_files", [(path, held) for _, path, held in wanted])
+    except Exception as exc:  # noqa: BLE001 -- a save must never cost the turn its record
+        answers = exc
+    ledger.filed(wanted, answers, lose=True)
 
 
 def keep_ledger(
@@ -220,3 +326,36 @@ def _swept(
         yield on_host(
             settle_unused, unused_results, UnusedFiles(files, unused, session_id=session_id)
         )
+
+
+def read_result(files: Any, number: str) -> Steps[str]:
+    """Result `number`'s text, as its tool returned it: from its file where its row names
+    one, else from the conversation, which holds it whole until it is filed -- an expired
+    one too, until it leaves.
+
+    `ResultError` for an id no row has, and for a result kept nowhere.
+    """
+    row = (yield from read_ledger(HarnessFiles(files))).row(number)
+    if row is None:
+        msg = f"no result {number} in this session"
+        raise ResultError(msg)
+    if row.path is not None:
+        (answer,) = yield reading(files, "download_files", [row.path])
+        if answer.error or answer.content is None:
+            msg = f"{number}: {answer.error or 'no content'} at {row.path}"
+            raise ResultError(msg)
+        return answer.content.decode("utf-8")
+    said, _ = yield from read_transcript(HarnessFiles(files))
+    for message in said:
+        if message.call_id == row.call and (
+            content := kept_text(message.content, row.id, row.size)
+        ) is not None:
+            return content.decode("utf-8")
+    if row.expired_in is not None:
+        why = f"it expired in turn {row.expired_in}"
+    elif row.unkept:
+        why = "the session's backend refused its file"
+    else:
+        why = "it has no file"
+    msg = f"{number} is kept nowhere: {why}, and the conversation no longer holds it whole"
+    raise ResultError(msg)

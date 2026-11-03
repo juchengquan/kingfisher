@@ -253,7 +253,7 @@ def _instantiate(
 REQUIRED_BY_DEEPAGENTS = {
     "FilesystemMiddleware": (
         "it backs every built-in file tool, enforces the `permissions` rules, and leaves "
-        "tool-result offloading off -- kingfisher saves every result itself, in the one "
+        "tool-result offloading off -- kingfisher files a long result itself, in the one "
         "folder a ledger row names"
     ),
     "SubAgentMiddleware": (

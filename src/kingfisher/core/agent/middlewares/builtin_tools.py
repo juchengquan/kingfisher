@@ -9,7 +9,7 @@ import re
 from collections.abc import Awaitable, Callable, Collection, Iterator
 from functools import cache
 from pathlib import PurePosixPath
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from deepagents.backends.utils import _get_backend_read_file_type, validate_path
 from deepagents.middleware.filesystem import DEFAULT_READ_LIMIT, FilesystemMiddleware
@@ -39,9 +39,14 @@ from kingfisher.core.agent.prompting import (
 )
 from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import Layout
+from kingfisher.core.session.store import ENTRY_ID
 
 from .narrowing import tool_name
+from .recorder import RUN
 from .results import failed
+
+if TYPE_CHECKING:
+    from kingfisher.core.session.ledger import Ledger
 
 #: deepagents' advice in `execute`'s description, wrong on kingfisher's own shell: the
 #: only absolute paths a model knows are the file tools', and that shell reads `/inputs`
@@ -248,6 +253,12 @@ def _found_nothing(tool: str, said: str) -> bool:
     if tool == READ_FILE:
         return said.startswith("Error") and "not found" in said
     return "No files found" in said or "No matches found" in said
+
+
+def unfiled_note(number: str) -> str:
+    """Appended to a search for a result that is still in the conversation, so has no file:
+    told nothing, the agent takes the result as lost and runs its tool again."""
+    return f"{number} has no file yet; it is still in this conversation."
 
 
 def expired_note(rounds: int) -> str:
@@ -647,6 +658,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         root: str | None = None,
         here: bool = True,
         expires_after: int | None = None,
+        ledger: Ledger | None = None,
         folders: frozenset[str] | None = None,
         skilled: bool = False,
     ) -> None:
@@ -654,11 +666,11 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         self._longest = longest
         self._layout = layout
         self._folders = folders_of(layout) if folders is None else folders
-        # The folder a ledger row names, as the file tools spell it, where results expire.
-        self._expiring = (
-            () if expires_after is None else (layout.tool_results_route.rstrip("/"),)
-        )
+        # The folder a ledger row names, as the file tools spell it.
+        self._results = layout.tool_results_route.rstrip("/")
         self._expired = "" if expires_after is None else expired_note(expires_after)
+        #: The turn's, which says which results have no file yet; `None` where none is kept.
+        self._ledger = ledger
         self._timed = timeout_line(longest)
         # Whether the shell runs on this host; where not, deepagents' section names paths it
         # does not have.
@@ -714,22 +726,51 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         return result.model_copy(update={"content": f"{result.content}\n\n{said}"})
 
     def _explained(self, request: Any, result: Any) -> Any:
-        """`result`, saying results expire where a file tool looked for one and found nothing.
+        """`result`, saying why a file tool that looked for a result found nothing: it has
+        no file yet, or results expire.
 
         Said on the miss, not by rewriting the handles that name a removed file: a handle
         keeps its wording once written, and an id the model remembers names no file at all.
         """
         call = request.tool_call
-        if not self._expiring or call.get("name") not in (READ_FILE, GLOB, GREP):
+        if (self._ledger is None and not self._expired) or call.get("name") not in (
+            READ_FILE,
+            GLOB,
+            GREP,
+        ):
             return result
         if not isinstance(result, ToolMessage) or not isinstance(result.content, str):
             return result
         said = [str(value) for value in (call.get("args") or {}).values()]
-        if not any(route in value for value in said for route in self._expiring):
+        if not any(self._results in value for value in said):
             return result
         if not _found_nothing(call["name"], result.content):
             return result
-        return result.model_copy(update={"content": f"{result.content}\n\n{self._expired}"})
+        if not (note := self._unfiled(said) or self._expired):
+            return result
+        return result.model_copy(update={"content": f"{result.content}\n\n{note}"})
+
+    def _unfiled(self, said: list[str]) -> str:
+        """The note for the first result `said` names that this graph's conversation still
+        holds, with no file yet; `""` for none.
+
+        This graph's alone, by the run it is in: a subagent handed the id of its parent's
+        result does not hold it.
+        """
+        if self._ledger is None:
+            return ""
+        for value in said:
+            for found in ENTRY_ID.finditer(value):
+                row = self._ledger.row(found.group(0))
+                if (
+                    row is not None
+                    and row.path is None
+                    and row.expired_in is None
+                    and not row.unkept
+                    and row.run == RUN.get()
+                ):
+                    return unfiled_note(row.id)
+        return ""
 
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         return handler(self._told(request))

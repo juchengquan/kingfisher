@@ -57,8 +57,14 @@ def test_create_does_not_reveal_a_session_out_of_reach(policied):
 
 @pytest.mark.parametrize(
     ("method", "args"),
-    [("pending", ()), ("artifact", ("outputs/a.txt",)), ("files", ()), ("size", ())],
-    ids=["pending", "artifact", "files", "size"],
+    [
+        ("pending", ()),
+        ("artifact", ("outputs/a.txt",)),
+        ("result", ("A-0001",)),
+        ("files", ()),
+        ("size", ()),
+    ],
+    ids=["pending", "artifact", "result", "files", "size"],
 )
 def test_a_handle_whose_session_has_gone_answers_as_a_wrong_id_does(cfg, method, args):
     """Read through the backend it kept, it found no pause and no files; opened again,

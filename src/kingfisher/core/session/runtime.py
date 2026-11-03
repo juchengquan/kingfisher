@@ -621,6 +621,18 @@ def as_seen(snapshot: Any) -> list[Any]:
     return [event["summary_message"], *messages[event["cutoff_index"] :]]
 
 
+def summarised_away(snapshot: Any) -> list[Any]:
+    """The messages a summary stands for, which `as_seen` leaves out; none where deepagents
+    summarised nothing."""
+    values = getattr(snapshot, "values", None)
+    if not isinstance(values, Mapping):
+        return []
+    event = values.get(SUMMARY_EVENT)
+    if not isinstance(event, Mapping):
+        return []
+    return list(values.get("messages") or ())[: event["cutoff_index"]]
+
+
 def summarised_in(snapshot: Any) -> bool:
     """Whether a turn ended on a conversation deepagents had summarised, even before
     the turn began, as a resume's restored state can be."""

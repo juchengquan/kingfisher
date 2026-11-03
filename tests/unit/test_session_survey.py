@@ -16,10 +16,12 @@ from tests.unit.scripted import Scripted
 
 SURVEY = Path(__file__).resolve().parents[2] / "scripts" / "session_survey.py"
 
+#: Long enough to be filed as it arrives, so the turn leaves a result file beside the
+#: transcript's preview of it: a short result has none until it leaves the conversation.
 TOOL = '''
 def web_search(query: str) -> str:
     """Search the web."""
-    return f"Ten results for {query}"
+    return f"Ten results for {query}\\n" + "a result line\\n" * 7_000
 
 
 TOOLS = [web_search]

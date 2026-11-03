@@ -17,6 +17,7 @@ _EXPORTS = {
     "CallerError": "kingfisher.core.access.source_ids",
     "ArtifactError": "kingfisher.core.result",
     "MemoryEntryError": "kingfisher.core.result",
+    "ResultError": "kingfisher.core.result",
     "UNSCOPED": "kingfisher.core.access.source_ids",
     # How a tool file says who may use its tool, or gives it another name.
     "ToolSpec": "kingfisher.core.definitions.tools.spec",
@@ -129,6 +130,7 @@ __all__ = [
     "QuotaExceededError",
     "Reachable",
     "Request",
+    "ResultError",
     "Resume",
     "RunEvent",
     "RunOn",
@@ -208,6 +210,7 @@ if TYPE_CHECKING:
     from kingfisher.core.result import MemoryEntry as MemoryEntry
     from kingfisher.core.result import MemoryEntryError as MemoryEntryError
     from kingfisher.core.result import PendingDecision as PendingDecision
+    from kingfisher.core.result import ResultError as ResultError
     from kingfisher.core.result import RunEvent as RunEvent
     from kingfisher.core.result import RunResult as RunResult
     from kingfisher.core.result import Sent as Sent

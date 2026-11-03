@@ -449,6 +449,8 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         mark,
         count=count,
         subject="this agent" if agent is None else f"agent {agent.name!r}",
+        files=backend,
+        tool_results_route=cfg.layout.tool_results_route,
     )
     # Filled in kingfisher's order once the grant is known; the probe reads it before.
     middleware: list[Any] = []
@@ -567,6 +569,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             pdf_attachments=pdf_attachments,
             scratch_run_limit=limit,
             recorder=recording(agent),
+            ledger=ledger,
             clearing=clearing,
             tools=tools,
             skills=narrowed_skills,

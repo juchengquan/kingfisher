@@ -210,9 +210,15 @@ def _listed(entries: Sequence[LedgerEntry]) -> list[str]:
 
 
 def _delta_line(entry: LedgerEntry) -> str:
+    """One entry, ending in its file; or in why it has none, saying nothing for one still
+    in the conversation."""
     called = f"{entry.tool} {entry.args}" if entry.args else entry.tool
-    kept = entry.path or ("expired" if entry.expired_in is not None else "not kept")
-    return f"{entry.id} {called} -> {readable_size(entry.size)}  {kept}"
+    line = f"{entry.id} {called} -> {readable_size(entry.size)}"
+    if entry.path is not None:
+        return f"{line}  {entry.path}"
+    if entry.expired_in is not None:
+        return f"{line}  expired"
+    return f"{line}  not kept" if entry.unkept else line
 
 
 def consume(  # noqa: PLR0913 -- a chunk, the answer so far, and what the stream taught

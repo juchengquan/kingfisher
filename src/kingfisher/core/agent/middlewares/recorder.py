@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import re
-from collections.abc import Awaitable, Callable, Iterator, Mapping
+from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -20,11 +18,11 @@ from kingfisher.core.agent.prompting import FILE_TOOLS, WRITE_TODOS
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.result import MAIN, WORKING, LedgerEntry, Listed
 
-from .recorded import arguments, stamp, summary
+from .recorded import arguments, filed_at, stamp, summary
 from .results import answer_in, answered
 
 if TYPE_CHECKING:
-    from kingfisher.core.session.ledger import Ledger
+    from kingfisher.core.session.ledger import Filing, Ledger
 
 _log = logging.getLogger(__name__)
 
@@ -112,21 +110,24 @@ class Audiences:
 
 
 @contextmanager
-def _running(call: Mapping[str, Any], note: Callable[[str, str], None]) -> Iterator[None]:
+def _running(
+    call: Mapping[str, Any], note: Callable[[str, str], None]
+) -> Iterator[str | None]:
     """Name the run a top-level `task` or `eval` call starts, for as long as it runs,
-    and have `note` told each tool that runs under it unseen.
+    and have `note` told each tool that runs under it unseen. Yields the run, or `None`
+    where this call starts none.
 
     Only where none is named yet: everything inside a subagent, a nested helper's
     calls included, belongs to the run of the call that started it.
     """
     if call.get("name") not in RUNS or RUN.get() is not None:
-        yield
+        yield None
         return
     run = call.get("id") or ""
     token = RUN.set(run)
     noted = _RAN.set(lambda tool: note(run, tool))
     try:
-        yield
+        yield run
     finally:
         _RAN.reset(noted)
         RUN.reset(token)
@@ -166,8 +167,12 @@ def made_together(call: Mapping[str, Any], state: Any) -> tuple[str, list[str]]:
 
 
 class RecorderMiddleware(AgentMiddleware):
-    """Record each successful tool result, keep it as a file in the session, and end
-    what the model is handed with the result's id.
+    """Record each successful tool result and end what the model is handed with its id.
+
+    A result is filed only where the conversation will not hold it whole: at once where
+    it is too long to show, and when its run ends for a subagent's, whose conversation
+    goes then. The rest are filed as they leave the conversation, by clearing or at the
+    turn's end.
 
     Ahead of the guards in what `standing_middleware` returns, `GuardedCallsMiddleware` among
     them, so it records the arguments the model wrote rather than the host paths they
@@ -194,8 +199,13 @@ class RecorderMiddleware(AgentMiddleware):
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         number = self._reserved(request)
-        with _running(request.tool_call, self._ran), _numbered(number):
-            result = handler(request)
+        with _running(request.tool_call, self._ran) as run, _numbered(number):
+            try:
+                result = handler(request)
+            finally:
+                # However the run ended: a cancelled or failed one's results are as gone.
+                if run is not None and (wanted := self._ledger.held(run)):
+                    self._ledger.filed(wanted, self._uploaded(wanted), lose=True)
         answer = answer_in(result, request.tool_call.get("id"))
         if (
             number is None
@@ -204,19 +214,20 @@ class RecorderMiddleware(AgentMiddleware):
         ):
             return result
         entry, content, text = made
-        try:
-            answers = self._backend.upload_files([(entry.path, content)])
-        except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
-            answers = exc
-        entry = self._unkept(entry, answers)
+        if entry.path is not None:
+            entry = self._unkept(entry, self._uploaded([(entry.id, entry.path, content)]))
         return _stamped(result, answer, entry.id, _shown(answer, entry, text))
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
         number = self._reserved(request)
-        with _running(request.tool_call, self._ran), _numbered(number):
-            result = await handler(request)
+        with _running(request.tool_call, self._ran) as run, _numbered(number):
+            try:
+                result = await handler(request)
+            finally:
+                if run is not None and (wanted := self._ledger.held(run)):
+                    self._ledger.filed(wanted, await self._auploaded(wanted), lose=True)
         answer = answer_in(result, request.tool_call.get("id"))
         if (
             number is None
@@ -225,12 +236,26 @@ class RecorderMiddleware(AgentMiddleware):
         ):
             return result
         entry, content, text = made
-        try:
-            answers = await self._backend.aupload_files([(entry.path, content)])
-        except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
-            answers = exc
-        entry = self._unkept(entry, answers)
+        if entry.path is not None:
+            entry = self._unkept(
+                entry, await self._auploaded([(entry.id, entry.path, content)])
+            )
         return _stamped(result, answer, entry.id, _shown(answer, entry, text))
+
+    def _uploaded(self, wanted: Sequence[Filing]) -> Any:
+        """What the backend answered a save of `wanted`, or what it raised."""
+        try:
+            return self._backend.upload_files([(path, content) for _, path, content in wanted])
+        except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
+            return exc
+
+    async def _auploaded(self, wanted: Sequence[Filing]) -> Any:
+        try:
+            return await self._backend.aupload_files(
+                [(path, content) for _, path, content in wanted]
+            )
+        except Exception as exc:  # noqa: BLE001 -- a save must never fail the call
+            return exc
 
     def _reserved(self, request: Any) -> str | None:
         """The id this call's result will have if it is recorded, or `None` for a tool
@@ -261,6 +286,7 @@ class RecorderMiddleware(AgentMiddleware):
         run = RUN.get()
         args = arguments(call.get("args") or {})
         access = self._access(tool, run or call_id)
+        path = filed_at(self._tool_results_route, number, tool, content)
         entry = LedgerEntry(
             id=number,
             turn=self._ledger.turn,
@@ -271,10 +297,14 @@ class RecorderMiddleware(AgentMiddleware):
             args=args,
             access=access,
             size=len(content),
-            path=f"{self._tool_results_route}{number}-{_segment(tool)}{_suffix(text)}",
+            # Named now only where it is filed now: shown as a preview, the whole of it is
+            # what the preview's last line sends the model to.
+            path=path if len(text) > PREVIEW_ABOVE else None,
             summary=summary(tool, args, text, answer.content_blocks),
         )
         self._ledger.add(entry)
+        if entry.path is None and run is not None:
+            self._ledger.hold(entry, path, content)
         return entry, content, text
 
     def _access(self, tool: str, inside: str) -> Listed | None:
@@ -410,19 +440,3 @@ def _stamped(result: Any, answer: ToolMessage, number: str, shown: Any | None = 
     )
     return answered(result, answer, marked)
 
-
-#: A tool's name may come from an MCP server or a module author, and the file name
-#: has to be one path segment however it was spelled.
-_UNSAFE = re.compile(r"[^A-Za-z0-9_-]+")
-
-
-def _segment(tool: str) -> str:
-    return _UNSAFE.sub("_", tool).strip("_")[:64] or "tool"
-
-
-def _suffix(text: str) -> str:
-    try:
-        json.loads(text)
-    except ValueError:
-        return ".txt"
-    return ".json"

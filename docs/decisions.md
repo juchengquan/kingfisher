@@ -2698,6 +2698,31 @@ anything but ASCII, so previewing on bytes would cut a result deepagents left wh
 leave a row pointing at a file holding less than it says. Driven with 30,000 Japanese
 characters, 90,000 bytes: shown whole. *(2026-10-21.)*
 
+*Reversed on 2026-11-03: a result is filed when it leaves the conversation, not as it
+arrives.* While the model can still read a result the conversation is its one copy, and a
+file beside it was a copy nobody opened -- a 30-byte `Saved /outputs/chart.png` got one --
+and a save every call waited on, a round trip on a remote backend. Filed now at four
+moments: when clearing swaps it for a handle, all of a pass's in one save, before the
+handle is handed over; at once where it is too long to show whole, since the preview names
+the file; when a subagent's `task` or `eval` call returns, however it ends, all of the
+run's in one save, since its conversation goes then; and at the turn's end, before the
+ledger is written, for each result behind a summary's cut, whose whole text is in state
+only until then. Between a summary and the turn's end such a result is in neither place;
+rare, since passes have filed most old results before a summary fires. A save refused at a
+swap leaves the result whole for the next pass; anywhere else the row is marked `unkept`,
+apart from `path` because an empty `path` now also means a result still in the
+conversation. A row filed in a later turn than recorded it is patched in place, as expiry
+patches one, or the sweep removes the file. The model is told the same: `<ledger_delta>`
+names a file only where there is one, the prompt says when one appears, and a `read_file`,
+`glob` or `grep` of the folder that misses an id still in view says so -- read as lost, the
+result is fetched again by running its tool. `Session.result(id)` reads a result wherever it
+is kept, so a caller stops depending on where the text lives. Rejected: filing only long
+results and telling the model to call again for the rest, since some calls cannot be
+repeated safely; and filing every result off the call's path, which keeps the copies. None
+of eleven harnesses surveyed files every result as it arrives: Claude Code and deepagents
+file past a size, Anthropic's context editing and JetBrains' study keep nothing, and
+deepagents' summary step files as it takes a result out of view. *(2026-11-03.)*
+
 **A long result the backend would not keep is previewed all the same, and says so.** Its
 last line is `full result not kept; call <tool> again for less` where a kept one names its
 file -- not `full result:`, from which a reader takes a path. The row still says it was
@@ -3033,7 +3058,10 @@ limit, and wrapping the summariser, were the other options; the owner chose this
 message keeps its id and position, since the summariser's cut is an index. No file is
 written, so reading a handle cannot start another pass, and a handle is never cleared
 again: read as what it replaced, an offloaded result's was pointed at a swept copy.
-*(2026-10-16, after the acceptance run.)*
+*(2026-10-16, after the acceptance run.)* **No longer writing nothing, from 2026-11-03**: a
+pass files each result it clears that has no file yet, in one save before it hands the
+handles over (*Reversed on 2026-11-03: a result is filed when it leaves the conversation*,
+above). Filing changes no message, and a handle is still never cleared again.
 
 **An offloaded result was named by a search for its id, not by a path. Reversed on
 2026-10-21**, when kingfisher began saving every result itself: a handle names the
@@ -3176,7 +3204,10 @@ gains `expired_in` naming the turn, and has `path` empty; `expired_in` is apart 
 `path` because an empty `path` already meant a file the backend refused. Older rows lack
 the field and are still read, which `test_a_row_written_before_expiry_existed_is_still_read`
 holds: required, every one of them read as a closing line. An expired row is patched as
-parsed, so a key another version wrote survives. *(2026-10-20.)*
+parsed, so a key another version wrote survives. *(2026-10-20.)* From 2026-11-03 a result
+still in the conversation expires too: it has no file to lose, and is not filed when it
+leaves, its handle saying to call the tool again -- filed then, it would be kept longer
+than the rounds say.
 
 **Marked when the turn's ledger is built, removed by the sweep.** `Ledger` marks the rows
 as it is made, so clearing in that turn hands no path the turn is about to remove, and the
