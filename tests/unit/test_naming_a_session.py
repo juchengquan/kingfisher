@@ -10,7 +10,7 @@ import pytest
 
 from kingfisher import Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TRANSCRIPT_FILE
 from kingfisher.core.request import Decision, Resume
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -157,11 +157,11 @@ def test_reaping_by_name_at_the_command_line_removes_it(at_the_command_line, cap
 
 @macos
 def test_the_shell_cannot_write_or_remove_its_session_s_harness(cfg):
-    """Catches a session's pinned agent, conversation and paused turn being left to its
-    own shell."""
+    """Catches a session's conversation, datazones and paused turn being left to its own
+    shell."""
     backend = LocalSessions().open(cfg, DEFAULT)
     harness = cfg.workspace / "sessions" / DEFAULT / HARNESS
-    pinned = harness / PINNED_AGENT
+    pinned = harness / TRANSCRIPT_FILE
     pinned.write_text("name: pinned\n", encoding="utf-8")
 
     backend.execute(f'printf "name: mine" > "{pinned}"')
@@ -350,7 +350,7 @@ def test_a_shell_cannot_make_sessions_harness(cfg, session_dir):
 def _pin(workspace, *parts):
     harness = workspace.joinpath(*parts, HARNESS)
     harness.mkdir(parents=True, exist_ok=True)
-    pinned = harness / PINNED_AGENT
+    pinned = harness / TRANSCRIPT_FILE
     pinned.write_text("name: pinned\n", encoding="utf-8")
     return pinned
 
@@ -358,7 +358,8 @@ def _pin(workspace, *parts):
 @macos
 def test_the_shell_cannot_relocate_sessions_to_reach_a_harness(cfg, session_dir):
     """The measured gap: the harness is denied by where it sits, so moving `sessions/`
-    aside slid it out from under the rule, let the pin be rewritten, and moved it back.
+    aside slid it out from under the rule, let the conversation be rewritten, and moved
+    it back.
     """
     backend = LocalSessions().open(cfg, session_dir.name)
     pinned = _pin(cfg.workspace, "sessions", session_dir.name)
@@ -366,7 +367,7 @@ def test_the_shell_cannot_relocate_sessions_to_reach_a_harness(cfg, session_dir)
 
     backend.execute(
         f'mv "{ws}/sessions" "{ws}/moved" '
-        f'&& printf "name: mine" > "{ws}/moved/{session_dir.name}/{HARNESS}/{PINNED_AGENT}"; '
+        f'&& printf "name: mine" > "{ws}/moved/{session_dir.name}/{HARNESS}/{TRANSCRIPT_FILE}"; '
         f'mv "{ws}/moved" "{ws}/sessions"'
     )
 
@@ -384,7 +385,7 @@ def test_moving_one_session_out_of_sessions_does_not_free_its_harness(cfg, sessi
 
     backend.execute(
         f'mv "{ws}/sessions/{sid}" "{ws}/out" '
-        f'&& printf "name: mine" > "{ws}/out/{HARNESS}/{PINNED_AGENT}"; '
+        f'&& printf "name: mine" > "{ws}/out/{HARNESS}/{TRANSCRIPT_FILE}"; '
         f'mv "{ws}/out" "{ws}/sessions/{sid}"'
     )
 
@@ -416,11 +417,11 @@ def test_the_shell_cannot_fabricate_a_sibling_session(cfg, session_dir):
 @macos
 def test_a_link_from_a_writable_folder_does_not_reach_the_harness(cfg):
     """Pinned so it stays closed: a hard or soft link the shell makes in a writable folder
-    is not a way for the shell to write the pin the `.harness` rule guards.
+    is not a way for the shell to write the conversation the `.harness` rule guards.
     """
     backend = LocalSessions().open(cfg, DEFAULT)
     pinned = _pin(cfg.workspace, "sessions", DEFAULT)
-    target = cfg.workspace / "sessions" / DEFAULT / HARNESS / PINNED_AGENT
+    target = cfg.workspace / "sessions" / DEFAULT / HARNESS / TRANSCRIPT_FILE
 
     backend.execute(f'ln "{target}" outputs/hard 2>/dev/null; printf "name: mine" > outputs/hard')
     soft = f'ln -s "{target}" outputs/soft 2>/dev/null; printf "name: mine" > outputs/soft'
@@ -452,9 +453,9 @@ FILE_TOOLS = {
 @pytest.mark.parametrize("folder", ["scratchpad", "outputs"])
 def test_the_file_tools_follow_no_link_into_the_harness(cfg, folder, tool):
     """The file tools run outside every fence, and the `/.harness` rule judged the path
-    typed: `edit("/scratchpad/link")` rewrote the pinned agent the link pointed at.
+    typed: `edit("/scratchpad/link")` rewrote the file in `.harness` the link pointed at.
     """
-    backend, _ = _planted(cfg, f"{folder}/link", f"{HARNESS}/{PINNED_AGENT}")
+    backend, _ = _planted(cfg, f"{folder}/link", f"{HARNESS}/{TRANSCRIPT_FILE}")
     pinned = _pin(cfg.workspace, "sessions", DEFAULT)
 
     answer = FILE_TOOLS[tool](backend, f"/{folder}/link")
@@ -478,7 +479,7 @@ def test_the_file_tools_follow_no_link_into_the_saved_results(cfg):
 def test_a_walk_names_no_link_and_reads_through_none(cfg):
     """`ls` named a link by its target's path, and grep's own walk read through one. The
     ordinary file beside it is the control: a walk that found nothing would pass."""
-    backend, session = _planted(cfg, "scratchpad/link", f"{HARNESS}/{PINNED_AGENT}")
+    backend, session = _planted(cfg, "scratchpad/link", f"{HARNESS}/{TRANSCRIPT_FILE}")
     _pin(cfg.workspace, "sessions", DEFAULT)
     (session / "scratchpad" / "own.txt").write_text("name: pinned\n", encoding="utf-8")
     shell = backend.default

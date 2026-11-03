@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -675,45 +674,6 @@ def test_a_listing_leaves_out_a_session_in_another_datazone(turns):
 
     assert [one.id for one in kf.sessions(source_ids=("A",), datazone="finance")] == ["s"]
     assert kf.sessions(source_ids=("A",)) == ()
-
-
-def _pinned_to(cfg, session_id: str, text: str) -> None:
-    """Rewrite what `session_id`'s pin holds."""
-    pin = cfg.sessions_root / session_id / ".harness" / "agent.yaml"
-    assert pin.is_file(), "the turn pinned nothing to rewrite"
-    pin.write_text(text, encoding="utf-8")
-
-
-@pytest.mark.parametrize(
-    ("pinned", "said"),
-    [
-        ("description: no name\n", "its pin names no agent"),
-        ('name: "retired"\n', "its agent 'retired' is no longer defined"),
-    ],
-    ids=["names-no-agent", "agent-gone"],
-)
-def test_a_session_whose_agent_cannot_be_found_reaches_no_scoped_caller(
-    turns, caplog, pinned, said
-):
-    """One such pin raised out of every scoped listing, so no caller got one, and quoted
-    its lock to a caller asking for that session by id, which a leaked id must not do. An
-    agent renamed or deleted leaves its sessions the same way.
-    """
-    caplog.set_level(logging.INFO, logger="kingfisher.core.session.methods")
-    kf = Kingfisher(turns, sessions=LocalSessions())
-    _turn(kf, "s1", None)
-    _turn(kf, "s2", None)
-    _pinned_to(turns, "s1", pinned)
-
-    listed = kf.sessions(source_ids=("A",))
-    assert [one.id for one in listed] == ["s2"]
-    assert Through(kf).session("s1", source_ids=("A",)) is None
-    with pytest.raises(UnknownSessionError):
-        _turn(kf, "s1", None)
-    assert f"session s1: {said}" in caplog.text
-    # The operator still sees it, so it can be cleaned up.
-    assert {one.id for one in kf.sessions()} == {"s1", "s2"}
-    assert Through(kf).session("s1", source_ids=UNSCOPED) is not None
 
 
 def test_the_first_zoned_turn_narrows_a_session_that_had_none(turns):

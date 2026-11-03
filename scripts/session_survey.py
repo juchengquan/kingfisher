@@ -81,7 +81,8 @@ FOLDERS = {
 HISTORY = "conversation_history"
 HARNESS = ".harness"
 TRANSCRIPT = "transcript.jsonl"
-#: `.harness` files with a part of their own: the pinned agent is a whole copy per session.
+#: `.harness` files with a part of their own: `agent.yaml` is the pin a session kept before
+#: every call named its agent, read for the name it held.
 HARNESS_PARTS = {TRANSCRIPT: "transcript", "ledger.jsonl": "ledger", "agent.yaml": "pinned agent"}
 
 #: What a session's bytes are counted under, in the order they are shown.

@@ -6,9 +6,15 @@ from __future__ import annotations
 import pytest
 
 from kingfisher import Kingfisher, UnknownSessionError
+from kingfisher.core.access.source_ids import Datazone
+from kingfisher.core.session.steps import drive
+from kingfisher.core.session.store import remember_zones
 from kingfisher.plugins import LocalSessions
-from tests.conftest import Through, an_agent, pin, start
+from tests.conftest import Through, an_agent, harness_of, start
 from tests.unit.test_session_files import Counting
+
+#: A caller in the datazone the sessions below were made in.
+IN_FINANCE = ("A", Datazone("finance"))
 
 
 @pytest.fixture
@@ -18,9 +24,10 @@ def policied(cfg):
     return cfg
 
 
-def _pinned_to_a(kf, session_id: str = "mine") -> str:
+def _in_finance(kf, session_id: str = "mine") -> str:
+    """A session a `finance` turn ran in, out of reach of a caller in no datazone."""
     start(kf.cfg, session_id)
-    pin(kf, session_id, "assistant")
+    drive(remember_zones(harness_of(kf.cfg, session_id), frozenset({"finance"})))
     return session_id
 
 
@@ -48,11 +55,11 @@ def test_create_does_not_reveal_a_session_out_of_reach(policied):
     """A handle for a session that exists and is someone else's would confirm the id,
     which is what answering `None` for both is for."""
     kf = Kingfisher(policied, sessions=LocalSessions())
-    session_id = _pinned_to_a(kf)
+    session_id = _in_finance(kf)
     reads = Through(kf)
 
-    assert reads.session(session_id, source_ids=("B",), create=True) is None
-    assert reads.session(session_id, source_ids=("A",), create=True) is not None
+    assert reads.session(session_id, source_ids=("A",), create=True) is None
+    assert reads.session(session_id, source_ids=IN_FINANCE, create=True) is not None
 
 
 @pytest.mark.parametrize(
@@ -92,9 +99,9 @@ def test_deleting_twice_is_not_an_error(cfg):
 
 def test_the_listing_narrows_to_a_caller_only_when_one_is_named(policied):
     """Naming nobody is the operator's view of every session; naming a caller leaves out
-    a session pinned to an agent they cannot run, as asking for it by id does."""
+    a session in datazones that are not theirs, as asking for it by id does."""
     kf = Kingfisher(policied, sessions=LocalSessions())
-    mine = _pinned_to_a(kf)
+    mine = _in_finance(kf)
     anyones = start(policied, "open")
 
     def listed(**kwargs) -> set[str]:
@@ -102,8 +109,8 @@ def test_the_listing_narrows_to_a_caller_only_when_one_is_named(policied):
         return {s.id for s in found}
 
     assert listed() == {mine, anyones}
-    assert listed(source_ids=("B",)) == {anyones}
-    assert listed(source_ids=("A",)) == {mine, anyones}
+    assert listed(source_ids=("A",)) == {anyones}
+    assert listed(source_ids=IN_FINANCE) == {mine, anyones}
 
 
 def test_a_session_s_size_is_its_backend_s_count(cfg):
@@ -120,9 +127,9 @@ def test_a_narrowed_read_opens_the_session_once(policied):
     a second opening was a second sandbox per query on a remote store."""
     counting = Counting()
     kf = Kingfisher(policied, sessions=counting)
-    session_id = _pinned_to_a(kf)
+    session_id = _in_finance(kf)
     counting.asked.clear()
 
-    Through(kf).pending(session_id, source_ids=("A",))
+    Through(kf).pending(session_id, source_ids=IN_FINANCE)
 
     assert counting.asked == [session_id]

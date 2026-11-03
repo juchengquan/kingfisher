@@ -1,7 +1,7 @@
 """What a session keeps about itself, where the agent cannot reach it.
 
-`.harness` holds the agent a session opened with, its conversation, the lock a
-turn holds and its run log. Each of those used to live under `state_dir`, one
+`.harness` holds a session's conversation, the lock a turn holds and its run
+log. Each of those used to live under `state_dir`, one
 directory per kind keyed by session id, where two things were true and neither
 was intended: nothing deleted them when the session went, and -- because
 `state_dir` defaults inside the workspace and `writable_roots` returns the whole
@@ -16,12 +16,12 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, PINNED_AGENT
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TRANSCRIPT_FILE
 from kingfisher.core.request import Request
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import CLAIM, backend_at
-from tests.conftest import FakeToolCallingModel, Through, macos, pin, start
+from tests.conftest import FakeToolCallingModel, Through, macos, start
 
 AGENT = """name: assistant
 description: An agent.
@@ -30,9 +30,13 @@ system_prompt: |
 """
 
 
-def agent_snapshot(session_dir) -> Path:
-    """Where the default backend keeps a session's pinned agent, on disk."""
-    return Path(session_dir) / HARNESS / PINNED_AGENT
+#: A conversation as kept, for a tool to be refused rewriting or reading.
+CONVERSATION = '{"role": "user", "content": "You help"}\n'
+
+
+def kept_conversation(session_dir) -> Path:
+    """Where the default backend keeps a session's conversation, on disk."""
+    return Path(session_dir) / HARNESS / TRANSCRIPT_FILE
 
 
 def _agent(cfg) -> None:
@@ -63,30 +67,30 @@ def _drive(cfg, session_dir, tool, args) -> str:
 
 
 def test_a_file_tool_cannot_write_into_the_harness(cfg, session_dir):
-    """The pin is the agent definition this session is running under. A turn that
-    could rewrite it could change its own instructions mid-conversation."""
-    pinned = agent_snapshot(session_dir)
-    pinned.parent.mkdir(parents=True, exist_ok=True)
-    pinned.write_text(AGENT, encoding="utf-8")
+    """The next turn is rebuilt from the conversation kept here. A turn that could
+    rewrite it could put words in the user's mouth for every turn after it."""
+    kept = kept_conversation(session_dir)
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text(CONVERSATION, encoding="utf-8")
 
     said = _drive(
         cfg, session_dir, "write_file",
-        {"file_path": "/.harness/agent.yaml", "content": "name: something-else"},
+        {"file_path": f"/{HARNESS}/{TRANSCRIPT_FILE}", "content": "rewritten"},
     )
 
     assert "permission denied" in said.lower()
-    assert pinned.read_text(encoding="utf-8") == AGENT
+    assert kept.read_text(encoding="utf-8") == CONVERSATION
 
 
 def test_a_file_tool_cannot_read_the_harness_either(cfg, session_dir):
     """Unlike `/skills/`, which is read-only rather than unreachable: a skill is
     instructions the agent is meant to follow, and this is bookkeeping about the
     agent that it gains nothing by reading."""
-    pinned = agent_snapshot(session_dir)
-    pinned.parent.mkdir(parents=True, exist_ok=True)
-    pinned.write_text(AGENT, encoding="utf-8")
+    kept = kept_conversation(session_dir)
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text(CONVERSATION, encoding="utf-8")
 
-    said = _drive(cfg, session_dir, "read_file", {"file_path": "/.harness/agent.yaml"})
+    said = _drive(cfg, session_dir, "read_file", {"file_path": f"/{HARNESS}/{TRANSCRIPT_FILE}"})
 
     assert "You help" not in said
 
@@ -109,15 +113,15 @@ def test_a_listing_does_not_show_the_harness(cfg, session_dir):
 def test_the_shell_cannot_write_into_the_harness(cfg, session_dir):
     """The half a tool rule cannot reach: the shell backend roots at the session, so
     `/.harness` is an ordinary relative path to `execute`."""
-    pinned = agent_snapshot(session_dir)
-    pinned.parent.mkdir(parents=True, exist_ok=True)
-    pinned.write_text(AGENT, encoding="utf-8")
+    kept = kept_conversation(session_dir)
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text(CONVERSATION, encoding="utf-8")
     shell = backend_at(cfg, session_dir)
 
-    shell.execute(f'printf "name: mine" > "{pinned}"')
-    shell.execute(f'rm -f "{pinned}"')
+    shell.execute(f'printf "rewritten" > "{kept}"')
+    shell.execute(f'rm -f "{kept}"')
 
-    assert pinned.read_text(encoding="utf-8") == AGENT
+    assert kept.read_text(encoding="utf-8") == CONVERSATION
 
 
 @macos
@@ -144,7 +148,7 @@ def test_one_session_s_harness_is_not_denied_by_naming_another(cfg, workspace):
     assert shell.execute(f'echo fine > "{decoy}/ok.txt"').exit_code == 0
 
 
-def test_the_pin_and_the_claim_go_with_the_session(cfg):
+def test_the_conversation_and_the_claim_go_with_the_session(cfg):
     """The residue this whole change is about: one file per session that ever existed,
     under `state_dir`, deleted by nothing."""
     from kingfisher.core.service import Kingfisher
@@ -155,14 +159,13 @@ def test_the_pin_and_the_claim_go_with_the_session(cfg):
         cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )
     session_id = start(cfg, "s")
-    pin(service, session_id, "assistant")
     service.run(Request(task="go", session_id=session_id))
     directory = cfg.workspace / "sessions" / session_id
-    assert agent_snapshot(directory).is_file()
+    assert kept_conversation(directory).is_file()
 
     Through(service).delete(session_id)
 
-    assert not agent_snapshot(directory).exists()
+    assert not kept_conversation(directory).exists()
     assert not (directory / HARNESS / CLAIM).exists()
     assert not list((cfg.workspace / "sessions").iterdir())
 

@@ -68,12 +68,7 @@ SKILLS = "skills"
 HARNESS = ".harness"
 
 #: What it holds, named here because `.harness` is a layout decision.
-#: The session's agent, as `name: ...`: the one field it shares with the whole definition
-#: an older session kept here, so both read the same. Not renamed: every session pinned
-#: before would read as pinned to nothing, open to every caller.
-PINNED_AGENT = "agent.yaml"
-#: The datazones of the session's first zoned turn, in a file of their own: an older
-#: session's agent file is a whole definition. Not renamed for holding several: every
+#: The datazones of the session's first zoned turn. Not renamed for holding several: every
 #: session pinned before would read as in no datazone, open to every caller.
 PINNED_ZONE = "datazone"
 TRANSCRIPT_FILE = "transcript.jsonl"
@@ -81,10 +76,10 @@ TRANSCRIPT_FILE = "transcript.jsonl"
 #: them, so the agent cannot rewrite what a later turn reads back as true.
 LEDGER_FILE = "ledger.jsonl"
 #: Written only by a turn stopped at an approval gate, deleted once answered or superseded.
-#: Its presence *is* the mark a session is waiting: a second marker could disagree with it.
 PAUSED_STATE = "paused.state"
-#: What the paused checkpoint was built against, checked before loading it. Apart from it
-#: so it is readable when a checkpoint written by libraries that have since moved is not.
+#: What the paused checkpoint was built against and is waiting on, and its presence is what
+#: says a session is waiting, so it is written after the state. Apart from it so it is
+#: readable when a checkpoint written by libraries that have since moved is not.
 PAUSED_MARK = "paused.json"
 #: What the memory writer has not yet read, and how many turns since it last ran. Here,
 #: not under `/memory`, so the agent cannot put words in the user's mouth for it.
@@ -333,7 +328,7 @@ class Layout:
                 Route(route, deny_write_under=f"{route}**")
                 for route in self.kept_record_routes
             ),
-            # Denied both ways: a write could rewrite the pinned agent or the conversation
+            # Denied both ways: a write could rewrite the datazones or the conversation
             # the next turn is rebuilt from, and a read gains nothing the run was not
             # already told.
             Route(HARNESS_ROUTE, deny_write_under=f"{HARNESS_ROUTE}**",

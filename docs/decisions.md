@@ -4394,6 +4394,38 @@ definitions have and the caller reaches, where a forged copy could define one. A
 turn records the agent's own file with the rest of what it was built from.
 *(2026-11-02.)*
 
+**Reversed: a session runs one agent. Every call names the agent it runs.** A session
+kept the name of its first turn's agent, ran it for a later request naming none, refused
+one naming another, and answered only callers who reached it. That made an agent the
+session's owner, which kingfisher cannot know: who may use a conversation is the
+deployment's knowledge, settled before it calls (*Who may continue a session is the
+caller's to decide*). So every `Request` and `Resume` names its agent, refused without
+one as a first turn always was, and a turn runs that agent on the whole conversation,
+whichever agents made it. The agent is looked up at the top of the turn, before the
+session is marked, claimed or written to, so a caller refused it leaves nothing there,
+as *A turn checks who is calling before it touches the session* asks; the check that
+entry describes is now on the agent the request names. A resume naming none is the one
+refused later, under the claim, by its pause: `paused.json` records the agent whose graph
+the checkpoint fits, and the refusal names it. Nothing writes `.harness/agent.yaml` or
+reads it, so an older session's copy decides nothing, and a scoped `sessions()` narrows by
+datazone alone. **The cost, taken:** a second agent is handed a history made under
+another prompt, perhaps another model, with calls to tools it may not have. Measured on
+MiniMax-M3, five sessions whose first turn listed and read a file and whose second, on an
+agent with neither tool, was asked to check it again: every second turn was accepted,
+two with no tools defined at all. In 4 of 5 the agent called a tool it lacked, was told
+it is not available, and answered from the history at one model call's cost; one said it
+had re-checked a file it never read. **Not taken:** a session answering only callers who reach every agent that ran in it,
+which is the pin again under another name. *(2026-11-03.)*
+
+**A turn tells a session another turn used by its conversation.** A refusal after the
+claim deletes a session this request made, and a listing that missed a session makes
+one already used look made; any pin found under the claim said otherwise (#1122). With
+the agent's pin gone the transcript says it, beside the datazone pin: only a turn holding
+the claim writes it, and the turn reads it under the claim anyway, so it costs no read.
+A session whose only turns ended before their first step left no transcript and is
+still taken for one made; it holds no more than their inputs, which a caller can send
+again. *(2026-11-03.)*
+
 **The claim moving in deleted `_discard_dead_claims` outright.** It existed because a claim
 could outlive the session it named; one inside that session cannot. The cost is that
 `busy` is asked per session rather than read from one listing. The claim is on the

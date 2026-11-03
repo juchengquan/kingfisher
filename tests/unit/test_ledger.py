@@ -725,6 +725,7 @@ def test_a_paused_turn_keeps_its_rows_before_its_state(ledgered):
     resumed = kf.run(
         Resume(
             session_id="s",
+            agent="only",
             decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
         )
     )
@@ -1321,6 +1322,7 @@ def test_a_task_paused_at_a_gate_takes_a_new_id_when_it_is_run_again(ledgered):
     resumed = kf.run(
         Resume(
             session_id="s",
+            agent="only",
             decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
         )
     )
@@ -1563,6 +1565,7 @@ def test_a_subagent_paused_at_a_gate_answers_under_everything_its_run_read(ledge
     resumed = kf.run(
         Resume(
             session_id="s",
+            agent="only",
             decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
         ),
         source_ids=HOLDING,
@@ -1864,6 +1867,7 @@ def test_the_next_message_lists_what_was_recorded_since_the_last_one(ledgered):
     kf.run(
         Resume(
             session_id="s",
+            agent="only",
             decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
         )
     )
@@ -1888,6 +1892,7 @@ def test_a_resume_says_so_on_its_closing_line_and_an_asked_turn_does_not(ledgere
     resumed = kf.run(
         Resume(
             session_id="s",
+            agent="only",
             decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
         )
     )

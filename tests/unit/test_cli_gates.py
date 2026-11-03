@@ -478,22 +478,22 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
     assert (session_dir / "outputs" / "done.txt").read_text() == "ran"
 
 
-def _a_paused_session_only_a_reaches(cfg):
-    """A deployment with source ids, and a paused session pinned to an agent that only
-    `A` reaches -- with a pending call whose arguments are worth not leaking.
+def _a_paused_session_in_finance(cfg):
+    """A deployment with source ids, and a paused session a `finance` turn ran in -- with
+    a pending call whose arguments are worth not leaking outside that datazone.
     """
 
 
-    from kingfisher.core.session.store import pending_as_mark, write_pause_mark
-    from tests.conftest import an_agent, harness_of, pin, start
+    from kingfisher.core.session.store import pending_as_mark, remember_zones, write_pause_mark
+    from tests.conftest import an_agent, harness_of, start
 
     an_agent(cfg, "only_a", source_ids="[A]")
     policied = cfg
     kf = kingfisher.Kingfisher(policied, sessions=kingfisher.plugins.LocalSessions())
     start(policied, "s-1")
-    pin(kf, "s-1", "only_a")
-    mark = {"pending": pending_as_mark([PAUSED.pending[0]])}
-    drive(write_pause_mark(harness_of(policied, "s-1"), mark))
+    harness = harness_of(policied, "s-1")
+    drive(remember_zones(harness, frozenset({"finance"})))
+    drive(write_pause_mark(harness, {"pending": pending_as_mark([PAUSED.pending[0]])}))
     return policied, kf
 
 
@@ -503,24 +503,27 @@ def test_a_caller_who_cannot_reach_the_session_is_not_shown_what_it_waits_on(cfg
     """
     from kingfisher import UnknownSessionError
 
-    _, kf = _a_paused_session_only_a_reaches(cfg)
+    _, kf = _a_paused_session_in_finance(cfg)
 
     reads = Through(kf)
+    in_finance = ("A", Datazone("finance"))
 
     # The control beside the escape: the caller who does reach it is shown the call.
-    assert [call.call_id for call in reads.pending("s-1", source_ids=("A",))] == ["abc123#0"]
+    assert [call.call_id for call in reads.pending("s-1", source_ids=in_finance)] == [
+        "abc123#0"
+    ]
     with pytest.raises(UnknownSessionError):
-        reads.pending("s-1", source_ids=("B",))
+        reads.pending("s-1", source_ids=("A",))
 
 
 def test_the_command_asks_as_the_caller_it_names(cfg, monkeypatch, capsys):
     """`--as` reaches the question, and an unreachable session reads as a missing one."""
-    policied, _ = _a_paused_session_only_a_reaches(cfg)
+    policied, _ = _a_paused_session_in_finance(cfg)
     monkeypatch.setattr(cli, "config_from_env", lambda: policied)
 
-    refused = cli._decide(_decide_args(held=("B",)))
+    refused = cli._decide(_decide_args(held=("A",)))
     told = capsys.readouterr().err
-    shown = cli._decide(_decide_args(held=("A",)))
+    shown = cli._decide(_decide_args(held=("A",), datazone="finance"))
 
     assert refused == 2
     assert "no such session: s-1" in told
@@ -660,7 +663,7 @@ def _ran_as_printed(monkeypatch, cfg, said: str, result: RunResult) -> None:
     from kingfisher.core.service import Kingfisher
     from kingfisher.core.session import runtime
     from kingfisher.core.session.store import pending_as_mark, write_pause_mark
-    from tests.conftest import an_agent, harness_of, pin, start
+    from tests.conftest import an_agent, harness_of, start
 
     line = next(one for one in said.splitlines() if one.startswith("answer with: "))
     argv = shlex.split(line.removeprefix("answer with: "))
@@ -672,9 +675,10 @@ def _ran_as_printed(monkeypatch, cfg, said: str, result: RunResult) -> None:
     an_agent(cfg, "only_a", source_ids="[A]")
     kf = Kingfisher(cfg, sessions=LocalSessions())
     start(cfg, result.session_id)
-    pin(kf, result.session_id, "only_a")
     harness = harness_of(cfg, result.session_id)
-    drive(write_pause_mark(harness, {"pending": pending_as_mark(list(result.pending))}))
+    # Paused under the agent the run named, so a line that does not name it is refused.
+    mark = {"agent": "only_a", "pending": pending_as_mark(list(result.pending))}
+    drive(write_pause_mark(harness, mark))
     drive(harness.store(PAUSED_STATE, b"held"))
 
     judge = runtime.resume_payload
@@ -692,8 +696,8 @@ def _ran_as_printed(monkeypatch, cfg, said: str, result: RunResult) -> None:
         cli._decide(cli.build_parser().parse_args(argv[1:]))
 
 
-#: Who the runs below were asked as: the caller the printed line has to name again.
-ASKED_AS = {"held": ("A",), "datazone": "finance"}
+#: Who the runs below were asked as, and their agent: what the printed line has to name again.
+ASKED_AS = {"agent": "only_a", "held": ("A",), "datazone": "finance"}
 
 
 def test_the_printed_answer_answers_every_waiting_call(cfg, monkeypatch, capsys):
@@ -723,10 +727,10 @@ def test_one_waiting_call_is_still_answered_by_approving_it(cfg, monkeypatch, ca
 def test_the_printed_answer_names_the_caller_the_run_was_asked_as(capsys):
     """It named no `--as` or `--datazone`, so under a policy pasting it was refused as
     a call from nobody."""
-    cli._awaiting(PAUSED, ("A", Datazone("finance")))
-    cli._awaiting(PAUSED, ("A", Datazone("hr"), ExtraDatazone("finance"), ExtraDatazone("x")))
-    cli._awaiting(PAUSED, UNSCOPED)
-    cli._awaiting(PAUSED, None)
+    cli._awaiting(PAUSED, ("A", Datazone("finance")), None)
+    cli._awaiting(PAUSED, ("A", Datazone("hr"), ExtraDatazone("finance"), ExtraDatazone("x")), None)
+    cli._awaiting(PAUSED, UNSCOPED, None)
+    cli._awaiting(PAUSED, None, None)
 
     lines = [one for one in capsys.readouterr().err.splitlines() if "answer with:" in one]
     assert [one.split(" --approve")[0] for one in lines] == [

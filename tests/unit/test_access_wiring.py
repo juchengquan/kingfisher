@@ -37,7 +37,6 @@ from tests.conftest import (
     an_agent,
     declared_subagents,
     dispatched,
-    harness_in,
     middleware_of,
     subagent_of,
     subagents_dir,
@@ -421,7 +420,7 @@ def reported(kf, source_ids, name: str, *, asked_for: Capabilities | None = None
     # Once, and handed to both, which is what a turn does: the build and the report
     # are the two readers of it, and resolving separately for each is what this
     # stopped doing.
-    agent = agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held_names)
+    agent = agent_for(kf, request, source_ids=held_names)
     graph = kf._graph_for(
         request,
         capabilities=kf.grants,
@@ -846,7 +845,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         request,
         capabilities=grants,
         checkpointer=None,
-        agent=agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held),
+        agent=agent_for(kf, request, source_ids=held),
         held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
         session_id=session.name,
@@ -944,7 +943,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
         request,
         capabilities=kf.grants,
         checkpointer=None,
-        agent=agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held),
+        agent=agent_for(kf, request, source_ids=held),
         held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
         session_id=session.name,
@@ -964,7 +963,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
     grants = replace(kf.grants, skills=granted)
     session = session_at(kf, "withheld-" + "-".join(held))
     request = Request(task="t", agent="skilled")
-    agent = agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held)
+    agent = agent_for(kf, request, source_ids=held)
     graph = kf._graph_for(
         request,
         capabilities=grants,
@@ -1076,7 +1075,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
         request,
         capabilities=kf.grants,
         checkpointer=None,
-        agent=agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held),
+        agent=agent_for(kf, request, source_ids=held),
         held=caller_holds(kf.vocabulary, held),
         files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
         session_id=session.name,

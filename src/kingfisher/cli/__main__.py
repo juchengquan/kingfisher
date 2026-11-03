@@ -248,8 +248,8 @@ def build_parser() -> argparse.ArgumentParser:
     deciding.add_argument(
         "--agent",
         help=(
-            "refuse unless the session paused under this agent. Optional, and "
-            "checked rather than applied: a session keeps the agent it opened with"
+            "the agent the session paused under. Needed to answer, as every turn names "
+            "its agent; any other is refused, with the one it paused under"
         ),
     )
     deciding.add_argument(
@@ -635,7 +635,7 @@ def _drive(
         # Different words: running again continues a turn cut off at a bound, but
         # discards what a gate stopped to ask.
         if result.pending:
-            _awaiting(result, held)
+            _awaiting(result, held, asked.agent)
         else:
             # Empty where the model never spoke, and stdout then holds nothing to point at.
             reached = (
@@ -783,7 +783,7 @@ def _caller(held: Held | None) -> str:
     return said + (f" --extra-datazones {shlex.quote(','.join(extras))}" if extras else "")
 
 
-def _awaiting(result: RunResult, held: Held | None) -> None:
+def _awaiting(result: RunResult, held: Held | None, agent: str | None) -> None:
     """What a turn that stopped at an approval gate owes the person who ran it.
 
     Prints the ids, the only way to answer, and says that running again supersedes the
@@ -797,9 +797,11 @@ def _awaiting(result: RunResult, held: Held | None) -> None:
     )
     _list_calls(result.pending)
     # Every call: `decide` refuses an answer that leaves one waiting.
+    # The agent too: a resume naming none is refused.
+    named = f" --agent {shlex.quote(agent)}" if agent else ""
     print(
-        f"answer with: kingfisher decide --session {result.session_id}{_caller(held)} "
-        + " ".join(_answer(call) for call in result.pending),
+        f"answer with: kingfisher decide --session {result.session_id}{_caller(held)}"
+        f"{named} " + " ".join(_answer(call) for call in result.pending),
         file=sys.stderr,
     )
     print(

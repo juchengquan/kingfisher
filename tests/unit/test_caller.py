@@ -141,6 +141,7 @@ def test_a_resume_hands_the_tool_the_context_it_presents(scripted):
         kf.stream(
             Resume(
                 session_id="s",
+                agent="only",
                 decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
                 context={"user_id": "second"},
             )

@@ -431,7 +431,7 @@ def test_the_run_report_agrees_with_the_build(policied):
     from kingfisher.core.reporting import withheld_by_kind
     from kingfisher.core.request import Request
     from kingfisher.core.session.steps import drive
-    from tests.conftest import agent_for, harness_in
+    from tests.conftest import agent_for
 
     kf = Kingfisher(policied, sessions=LocalSessions())
 
@@ -441,7 +441,7 @@ def test_the_run_report_agrees_with_the_build(policied):
         ensure_session_layout(session, DEFAULT_LAYOUT)
         held = caller_holds(kf.vocabulary, held_names)
         request = Request(task="t", agent="surveyor")
-        agent = agent_for(kf, request, harness_in(kf.cfg, session), source_ids=held_names)
+        agent = agent_for(kf, request, source_ids=held_names)
         graph = kf._graph_for(
             request,
             capabilities=kf.grants,

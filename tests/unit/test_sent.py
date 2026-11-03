@@ -13,11 +13,11 @@ from langchain_core.messages import AIMessage, SystemMessage
 
 from kingfisher import SENT_SOURCES, Capabilities, Kingfisher, ModelProfile, Request
 from kingfisher.cli.__main__ import EMPTY_TELL, main
+from kingfisher.core.access.capabilities import CapabilityError
 from kingfisher.core.agent.sent import _OPENINGS, labelled, sent_tool
 from kingfisher.core.interfaces import TurnInstructions
-from kingfisher.core.session.model import UnknownSessionError
 from kingfisher.plugins import LocalSessions
-from tests.conftest import EVERY_TOOL, FakeGraph, an_agent, pin, start, tools_dir
+from tests.conftest import EVERY_TOOL, FakeGraph, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
 from tests.unit.test_interpreter import _close_every_interpreter, _quickjs_workers
 from tests.unit.test_shell_paths import Here
@@ -211,35 +211,28 @@ def test_a_look_refused_at_the_call_closes_its_sandbox_too(cfg, monkeypatch):
     assert not remaining, "a sandbox outlived the refused look that opened it"
 
 
-def test_a_session_running_one_agent_refuses_another_as_its_turn_would(scripted):
-    """A session keeps the agent it opened with, so a preview of another would show an
-    agent no turn there can run."""
+def test_a_look_in_a_session_another_agent_ran_in_shows_the_one_it_names(scripted):
+    """A preview reads its agent apart from a turn's: left on the session's first, it
+    would show an agent the turn it previews does not run."""
     an_agent(scripted, "first")
     an_agent(scripted, "second")
     kf = _kingfisher(scripted)
     Scripted.script.append(AIMessage(content="done"))
     kf.run(Request("go", agent="first", session_id="s"))
 
-    with pytest.raises(Exception) as previewed:
-        kf.sent(Request("go", agent="second", session_id="s"))
-    with pytest.raises(Exception) as ran:
-        kf.run(Request("go", agent="second", session_id="s"))
-
-    assert type(previewed.value) is type(ran.value)
-    assert str(previewed.value) == str(ran.value)
+    assert kf.sent(Request("go", agent="second", session_id="s")).agent == "second"
 
 
-def test_a_session_out_of_the_callers_reach_reads_as_one_that_is_not_there(cfg):
-    """Without the check a turn makes first, a caller holding another's session id would
-    be shown that session's memory and its agent's prompt."""
+def test_an_agent_out_of_the_callers_reach_is_refused_as_its_turn_would_be(cfg):
+    """Without the check a turn makes first, a caller holding a session's id would be
+    shown the prompt of an agent they may not run there."""
     an_agent(cfg, "assistant", source_ids="[A]")
     an_agent(cfg, "surveyor")
     kf = _kingfisher(cfg)
-    session_id = start(cfg, "pinned-by-a")
-    pin(kf, session_id, "assistant")
+    session_id = start(cfg, "used-by-a")
 
-    with pytest.raises(UnknownSessionError):
-        kf.sent(Request("again", session_id=session_id), source_ids=("B",))
+    with pytest.raises(CapabilityError, match="no agent named 'assistant'"):
+        kf.sent(Request("again", agent="assistant", session_id=session_id), source_ids=("B",))
 
 
 def test_each_block_and_tool_is_named_for_what_wrote_it(cfg, monkeypatch):

@@ -724,8 +724,8 @@ any id names a session, the first turn naming one starts it, and a request namin
 none runs in `default`. So `open` is handed ids nobody has used before, and makes
 them; your own sessions are too. That is why a service must derive the ids
 it sends itself and never forward a user's: an id is no longer something kingfisher
-handed out, and naming one is reaching it, unless the access policy stops the
-caller at the session's pinned agent.
+handed out, and naming one is reaching it. The access policy decides which agent a
+caller may run there, never whose session it is.
 
 **Try a mount before replacing it.** Sessions that must outlive the machine, or
 never touch its disk, get durable or memory-backed storage mounted at
@@ -898,12 +898,12 @@ session that is not there makes it, empty and without a word, so a caller contin
 one that may have been swept asks `kf.session(session_id)` first: it answers `None`,
 and makes nothing, for a session that is gone.
 
-**And what it keeps about the session, under `/.harness`.** The agent the session is
-pinned to, its conversation, its inputs folder as the last turn found it, and a turn
+**And what it keeps about the session, under `/.harness`.** Its conversation, the
+datazones it is pinned to, its inputs folder as the last turn found it, and a turn
 paused at an approval gate are all written
 and read through your backend — which means your agent's shell can reach them too,
 unless your backend keeps it out. Nothing signs them, so what stands between the
-agent and rewriting its own pinned agent is that fence, and it is yours to get
+agent and rewriting its own conversation is that fence, and it is yours to get
 right: **`shell_denied`**, in `tests/checks/backend.py`, drives `execute` at `/.harness` and
 `/inputs` and fails if the shell can write either. `kingfisher doctor` warns when
 `KINGFISHER_SESSIONS` names sessions of yours, because it
