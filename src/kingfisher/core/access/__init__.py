@@ -58,7 +58,6 @@ _EXPORTS = {
     "unlisted": "kingfisher.core.access.source_ids",
     "with_datazone": "kingfisher.core.access.source_ids",
     "zone_in": "kingfisher.core.access.source_ids",
-    "zones_held": "kingfisher.core.access.source_ids",
     "zoned": "kingfisher.core.access.source_ids",
 }
 
@@ -119,7 +118,6 @@ if TYPE_CHECKING:
     from kingfisher.core.access.source_ids import with_datazone as with_datazone
     from kingfisher.core.access.source_ids import zone_in as zone_in
     from kingfisher.core.access.source_ids import zoned as zoned
-    from kingfisher.core.access.source_ids import zones_held as zones_held
 
 
 def __getattr__(name: str) -> Any:

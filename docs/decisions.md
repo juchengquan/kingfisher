@@ -4438,6 +4438,23 @@ A session whose only turns ended before their first step left no transcript and 
 still taken for one made; it holds no more than their inputs, which a caller can send
 again. *(2026-11-03.)*
 
+**Reversed: a session answers only callers in its datazones. A session is open to
+whoever holds its id.** A session kept the datazones of its first zoned turn in
+`.harness/datazone` and answered only callers in exactly those (*A session keeps the
+datazone of its first zoned turn*), and `session()` and `sessions()` took a caller to
+narrow by. Both decided whose a session is, which kingfisher cannot know: the deployment
+settles that before it calls (*Who may continue a session is the caller's to decide*).
+So `session()` checks no caller and `sessions()` lists every session, neither taking
+`source_ids`, `datazone` or `extra_datazones`; nothing writes or reads the datazone pin;
+and a turn's datazone decides the tools it is handed and nothing about the session. The
+check *A turn checks who is calling before it touches the session* describes is now the
+one on the agent the request names. `kingfisher artifact` and `result` take no `--as`,
+and `decide` with nothing to answer refuses one, as it refuses an `--agent` it would not
+use. The transcript alone now says another turn used a session the listing missed.
+**The cost, taken:** what a finance turn's tools returned is read, and the session
+carried on, by whoever holds its id, from any datazone; keeping an id from callers who
+should not have it is the deployment's. *(2026-11-04.)*
+
 **The claim moving in deleted `_discard_dead_claims` outright.** It existed because a claim
 could outlive the session it named; one inside that session cannot. The cost is that
 `busy` is asked per session rather than read from one listing. The claim is on the

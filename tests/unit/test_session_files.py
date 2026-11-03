@@ -16,7 +16,6 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import ArtifactError, Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
-from kingfisher.core.access.source_ids import Datazone
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import Sessions
 from kingfisher.core.layout import (
@@ -38,10 +37,9 @@ from kingfisher.core.session.files import (
     read_artifact,
 )
 from kingfisher.core.session.steps import drive
-from kingfisher.core.session.store import remember_zones
 from kingfisher.core.session.transcript import Message, as_json
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import EVERY_TOOL, Through, an_agent, harness_of, start, supplied
+from tests.conftest import EVERY_TOOL, Through, an_agent, start, supplied
 from tests.unit.scripted import Scripted
 
 
@@ -157,15 +155,6 @@ def test_a_backend_that_keeps_the_session_elsewhere_gets_the_inputs_and_gives_ba
 # -- fetching one ------------------------------------------------------------
 
 
-#: A caller in the datazone `_in_finance` puts a session in.
-IN_FINANCE = ("A", Datazone("finance"))
-
-
-def _in_finance(cfg, session_id: str) -> None:
-    """Pin `session_id` to the datazone a `finance` turn would have left it in."""
-    drive(remember_zones(harness_of(cfg, session_id), frozenset({"finance"})))
-
-
 def _produced(
     cfg, name: str = "outputs/out.txt", content: str = "result", *, backends=None
 ) -> Kingfisher:
@@ -238,21 +227,6 @@ def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg):
         Through(kf).artifact("nobody", "outputs/out.txt")
 
 
-def test_a_caller_who_cannot_reach_the_session_cannot_fetch_from_it(cfg):
-    """Checked as reading a session is. Holding only the id of a session in datazones
-    that are not yours buys nothing, including its outputs.
-    """
-    an_agent(cfg, "only_a", source_ids="[A]", **EVERY_TOOL)
-    policied = cfg
-    kf = _produced(policied)
-    _in_finance(policied, "s")
-
-    # The control beside the escape: the same call, by a caller who does reach it.
-    assert Through(kf).artifact("s", "outputs/out.txt", source_ids=IN_FINANCE) == b"result"
-    with pytest.raises(UnknownSessionError):
-        Through(kf).artifact("s", "outputs/out.txt", source_ids=("A",))
-
-
 # -- reading one -------------------------------------------------------------
 
 
@@ -285,7 +259,7 @@ def test_reading_a_session_opens_its_backend_once(cfg, read):
     assert counting.asked == ["s"]
 
 
-def test_asking_whether_a_session_exists_opens_nothing_where_nothing_narrows(cfg):
+def test_asking_whether_a_session_exists_opens_nothing(cfg):
     """Opened to read a pin no check would consult, remote sessions handed out
     a sandbox to say that a session exists.
     """
@@ -294,23 +268,6 @@ def test_asking_whether_a_session_exists_opens_nothing_where_nothing_narrows(cfg
 
     assert Through(kf).session("s") is not None
     assert counting.asked == []
-
-
-def test_a_session_is_opened_once_where_its_datazones_decide(cfg):
-    """The control beside the one above: under a policy the datazones decide, and reading
-    them takes the session's backend -- once.
-    """
-    an_agent(cfg, "only_a", source_ids="[A]", **EVERY_TOOL)
-    policied = cfg
-    counting = Counting()
-    kf = _produced(policied, backends=counting)
-    _in_finance(policied, "s")
-
-    assert Through(kf).session("s", source_ids=IN_FINANCE) is not None
-    assert counting.asked == ["s"]
-
-
-# -- the pieces --------------------------------------------------------------
 
 
 def test_inputs_placed_through_the_default_backend_land_read_only(cfg, session_dir, tmp_path):

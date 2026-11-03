@@ -8,9 +8,7 @@ from kingfisher.core.access import caller_holds
 from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.agent.sent import first_call
 
-from .model import unknown_session
 from .steps import Steps, adrive, changing, drive, on_host
-from .store import HarnessFiles, pinned_zones
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -38,7 +36,6 @@ class Preview:
     _session_for: Callable[..., Steps[Conversation]]
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
     _files_for: Callable[..., Steps[Any]]
-    _reaches_zones: Callable[..., bool]
     _agent_named: Callable[..., AgentSpec | None]
     _graph_for: Callable[..., Any]
 
@@ -90,9 +87,7 @@ class Preview:
         held: frozenset[str] | None,
         catalogue: Definitions,
     ) -> Steps[Sent]:
-        """The build and the caught call, after the checks a turn makes before either."""
-        if not self._reaches_zones((yield from pinned_zones(HarnessFiles(files))), held):
-            raise unknown_session(session_id)
+        """The build and the caught call, after the check a turn makes before either."""
         agent = self._agent_named(request.agent, held=held, catalogue=catalogue)
         built = yield on_host(
             self._graph_for,

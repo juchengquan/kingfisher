@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import Capabilities, CapabilityError, Request, ToolSpec, UnknownSessionError
+from kingfisher import Capabilities, CapabilityError, Request, ToolSpec
 from kingfisher.cli.__main__ import main
 from kingfisher.core.access.checks import caller_holds
 from kingfisher.core.access.source_ids import (
@@ -36,7 +36,7 @@ from tests.conftest import Through, agent_named, start, subagents_dir, tools_dir
 from tests.unit.scripted import Scripted
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    pass
 
 #: `payroll` is for the finance datazone; `line_count` is for any.
 TOOLS = '''
@@ -191,14 +191,6 @@ ZONE_DOORS = {
     "run": lambda kf, cfg, zone: kf.run("t", source_ids=("A",), datazone=zone),
     "stream": lambda kf, cfg, zone: next(iter(kf.stream("t", source_ids=("A",), datazone=zone))),
     "arun": lambda kf, cfg, zone: asyncio.run(kf.arun("t", source_ids=("A",), datazone=zone)),
-    "session": lambda kf, cfg, zone: kf.session("s", source_ids=("A",), datazone=zone),
-    "asession": lambda kf, cfg, zone: asyncio.run(
-        kf.asession("s", source_ids=("A",), datazone=zone)
-    ),
-    "sessions": lambda kf, cfg, zone: kf.sessions(source_ids=("A",), datazone=zone),
-    "asessions": lambda kf, cfg, zone: asyncio.run(
-        kf.asessions(source_ids=("A",), datazone=zone)
-    ),
     "inventory": lambda kf, cfg, zone: inventory(cfg, source_ids=["A"], datazone=zone),
 }
 
@@ -230,8 +222,6 @@ def test_a_caller_s_star_datazone_is_refused_at_every_door(zoned, door, zone):
 
 #: The doors where naming nobody means the operator, who sees everything.
 NOBODY_DOORS = {
-    "sessions": lambda kf, cfg: kf.sessions(datazone="finance"),
-    "asessions": lambda kf, cfg: asyncio.run(kf.asessions(datazone="finance")),
     "inventory": lambda kf, cfg: inventory(cfg, datazone="finance"),
 }
 
@@ -239,7 +229,7 @@ NOBODY_DOORS = {
 @pytest.mark.parametrize("door", NOBODY_DOORS.values(), ids=NOBODY_DOORS.keys())
 def test_a_datazone_with_no_caller_is_refused_where_nobody_is_the_operator(zoned, door):
     """Let through, a datazone with no source ids was dropped, and the call read as the
-    operator's: every session there is, the listing no caller is scoped to."""
+    operator's: the listing no caller is scoped to."""
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
     with pytest.raises(CallerError, match="names no caller"):
@@ -251,14 +241,6 @@ EXTRA_DOORS = {
     "run": lambda kf, cfg, **zones: kf.run("t", source_ids=("A",), **zones),
     "stream": lambda kf, cfg, **zones: next(iter(kf.stream("t", source_ids=("A",), **zones))),
     "arun": lambda kf, cfg, **zones: asyncio.run(kf.arun("t", source_ids=("A",), **zones)),
-    "session": lambda kf, cfg, **zones: kf.session("s", source_ids=("A",), **zones),
-    "asession": lambda kf, cfg, **zones: asyncio.run(
-        kf.asession("s", source_ids=("A",), **zones)
-    ),
-    "sessions": lambda kf, cfg, **zones: kf.sessions(source_ids=("A",), **zones),
-    "asessions": lambda kf, cfg, **zones: asyncio.run(
-        kf.asessions(source_ids=("A",), **zones)
-    ),
     "inventory": lambda kf, cfg, **zones: inventory(cfg, source_ids=["A"], **zones),
 }
 
@@ -304,17 +286,9 @@ def test_the_command_refuses_a_star_datazone(zoned, at_the_command_line, capsys)
     assert "'*' is not 'any'" in capsys.readouterr().err
 
 
-def test_a_caller_s_padded_datazone_is_the_one_it_names(turns):
-    """`" finance"` was held as given: it reached nothing zoned finance, and the session
-    the turn ran in was pinned to `' finance'`, which no finance caller could reach again.
-    """
-    kf = Kingfisher(turns, sessions=LocalSessions())
-
+def test_a_caller_s_padded_datazone_is_the_one_it_names():
+    """`" finance"` was held as given, so it reached nothing zoned finance."""
     assert with_datazone(("A",), " finance ") == ("A", "finance")
-    _turn(kf, "s", " finance ")
-
-    assert kf.session("s", source_ids=("A",), datazone="finance") is not None
-    assert kf.session("s", source_ids=("A",)) is None
 
 
 # -- where a datazone may be written --------------------------------------------------
@@ -561,7 +535,7 @@ def test_a_saved_result_is_stamped_with_its_datazone():
     )
 
 
-# -- a session keeps the datazone a turn ran in -------------------------------------
+# -- a datazone decides a turn's tools, not who may use the session ----------------
 
 
 @pytest.fixture
@@ -576,177 +550,15 @@ def _turn(kf: Kingfisher, session_id: str, datazone: str | None, extras: tuple[s
     return kf.run(request, source_ids=("A",), datazone=datazone, extra_datazones=extras)
 
 
-def test_a_session_a_zoned_turn_ran_in_is_reached_only_from_that_datazone(turns):
-    """A finance turn left its tools' results in a session that any caller of its agent
-    could read or carry on, in no datazone or in another.
-    """
-    kf = Kingfisher(turns, sessions=LocalSessions())
-    _turn(kf, "s", "finance")
-    reads = Through(kf)
-
-    assert reads.session("s", source_ids=("A",), datazone="finance") is not None
-    assert reads.session("s", source_ids=("A",)) is None
-    assert reads.session("s", source_ids=("A",), datazone="hr") is None
-    assert reads.session("s", source_ids=UNSCOPED) is not None
-    with pytest.raises(UnknownSessionError):
-        _turn(kf, "s", "hr")
-
-
-def test_a_session_is_reached_only_from_exactly_the_datazones_its_turn_ran_in(turns):
-    """Not from fewer: `hr` alone would read what `payroll` returned to `hr` with
-    `finance`. Nor from more: a caller in a zone below `hr` holds `hr` and `finance`
-    besides its own, and would leave what its own zone returned for `hr` to read.
-    """
-    kf = Kingfisher(turns, sessions=LocalSessions())
-    _turn(kf, "s", "hr", ("finance",))
-    reads = Through(kf)
-
-    def session(datazone, *extras):
-        return reads.session("s", source_ids=("A",), datazone=datazone, extra_datazones=extras)
-
-    assert session("hr", "finance") is not None
-    assert session("finance", "hr") is not None, "a set: which one the caller is in is theirs"
-    assert session("hr") is None
-    assert session("finance") is None
-    assert session("hr-emea", "hr", "finance") is None
-    with pytest.raises(UnknownSessionError):
-        _turn(kf, "s", "hr")
-    with pytest.raises(UnknownSessionError):
-        _turn(kf, "s", "hr-emea", ("hr", "finance"))
-
-
-class _Racing(LocalSessions):
-    """`LocalSessions` running one turn of another's inside the next turn's `mark_used`,
-    the one step between that turn's first read of the pins and its claim."""
-
-    race: Callable[[], object] | None = None
-
-    def mark_used(self, cfg, session_id):
-        race, self.race = self.race, None
-        if race is not None:
-            race()
-        super().mark_used(cfg, session_id)
-
-
-def _raced(turns, door: str, datazone: str, racer: str):
-    """A finance turn starting session `s` as a `racer` turn pins it under the claim."""
-    sessions = _Racing()
-    kf = Kingfisher(turns, sessions=sessions)
-    sessions.race = lambda: _turn(kf, "s", racer)
-    Scripted.script.append(AIMessage(content="done"))
-    request = Request("t", agent="surveyor", session_id="s")
-    if door == "arun":
-        return kf, asyncio.run(kf.arun(request, source_ids=("A",), datazone=datazone))
-    return kf, kf.run(request, source_ids=("A",), datazone=datazone)
-
-
-@pytest.mark.parametrize("door", ["run", "arun"])
-def test_a_turn_runs_on_the_pins_read_under_its_claim(turns, door):
-    """The pins were read once, before the claim, so a finance turn starting a session
-    an hr turn pinned in between ran in it anyway, and left finance's results where hr
-    reads them; refused, it would have deleted the session the hr turn ran in.
-
-    Raced through `mark_used` rather than threads, so the hr turn lands in the gap
-    every time and not only when the scheduler happens to put it there.
-    """
-    with pytest.raises(UnknownSessionError):
-        _raced(turns, door, "finance", racer="hr")
-
-    kf = Kingfisher(turns, sessions=LocalSessions())
-    assert kf.session("s", source_ids=("A",), datazone="hr") is not None
-    assert kf.session("s", source_ids=("A",), datazone="finance") is None
-    _turn(kf, "s", "hr")  # and the claim was given back
-
-
-@pytest.mark.parametrize("door", ["run", "arun"])
-def test_a_turn_raced_in_its_own_datazone_runs(turns, door):
-    """The control: a session pinned under the claim to what this caller reaches is
-    one it carries on, not one it is refused."""
-    kf, result = _raced(turns, door, "finance", racer="finance")
-
-    assert result.session_id == "s"
-    assert kf.session("s", source_ids=("A",), datazone="finance") is not None
-
-
-def test_a_listing_leaves_out_a_session_in_another_datazone(turns):
+def test_a_session_a_zoned_turn_ran_in_is_carried_on_from_another_datazone(turns):
+    """A session kept the datazones of its first zoned turn and answered only callers in
+    exactly those, though which session is whose is the deployment's to settle."""
     kf = Kingfisher(turns, sessions=LocalSessions())
     _turn(kf, "s", "finance")
 
-    assert [one.id for one in kf.sessions(source_ids=("A",), datazone="finance")] == ["s"]
-    assert kf.sessions(source_ids=("A",)) == ()
-
-
-def test_the_first_zoned_turn_narrows_a_session_that_had_none(turns):
-    """Not the first turn's: an unzoned turn adds nothing a finance caller may not read,
-    and the finance turn after it adds what only they may.
-    """
-    kf = Kingfisher(turns, sessions=LocalSessions())
-    _turn(kf, "s", None)
-    assert kf.session("s", source_ids=("A",)) is not None
-
-    _turn(kf, "s", "finance")
-
-    assert kf.session("s", source_ids=("A",)) is None
-    assert kf.session("s", source_ids=("A",), datazone="finance") is not None
-
-
-def test_a_zoned_request_refused_at_the_build_leaves_the_session_unzoned(turns):
-    """The datazone was written before the build's refusals had run, so a finance request
-    refused there narrowed a session no zoned turn had run in, and took it from every
-    caller in no datazone.
-    """
-    from kingfisher.core.access.capabilities import CapabilityError
-    from kingfisher.core.definitions.subagents.spec import RunOn
-
-    kf = Kingfisher(turns, sessions=LocalSessions())
-    _turn(kf, "s", None)
-
-    with pytest.raises(CapabilityError, match="did not activate"):
-        kf.run(
-            Request("t", agent="surveyor", session_id="s", run_on={"ghost": RunOn("x")}),
-            source_ids=("A",),
-            datazone="finance",
-        )
-
-    assert kf.session("s", source_ids=("A",)) is not None
-
-
-def test_a_session_no_zoned_turn_ran_in_is_reached_from_every_datazone(turns):
-    """The control: a caller in a datazone holds everything one in none does."""
-    kf = Kingfisher(turns, sessions=LocalSessions())
-    _turn(kf, "s", None)
-
-    for datazone in (None, "finance", "hr"):
-        assert kf.session("s", source_ids=("A",), datazone=datazone) is not None
-
-
-def test_the_command_reads_an_artifact_from_the_datazone_it_was_made_in(
-    turns, at_the_command_line, capsysbinary
-):
-    kf = Kingfisher(turns, sessions=LocalSessions())
-    _turn(kf, "s", "finance")
-    (turns.sessions_root / "s" / "outputs" / "a.txt").write_text("result")
-
-    asked = ["artifact", "--session", "s", "--as", "A", "outputs/a.txt"]
-    assert main([*asked, "--datazone", "finance"]) == 0
-    assert capsysbinary.readouterr().out == b"result"
-    assert main(asked) == 2
-
-
-def test_the_pending_calls_are_listed_from_the_datazone_the_session_is_in(
-    turns, at_the_command_line, capsys
-):
-    """`decide` with no answer lists what a session waits on, and must not be the one
-    door into a zoned session that drops the caller's datazone.
-    """
-    kf = Kingfisher(turns, sessions=LocalSessions())
-    _turn(kf, "s", "finance")
-
-    asked = ["decide", "--session", "s", "--as", "A"]
-    assert main([*asked, "--datazone", "finance"]) == 2
-    assert "is not waiting on a decision" in capsys.readouterr().err
-    assert main(asked) == 2
-    assert "no such session" in capsys.readouterr().err
+    assert _turn(kf, "s", "hr").session_id == "s"
+    assert Through(kf).session("s") is not None
+    assert not (turns.sessions_root / "s" / HARNESS / "datazone").exists()
 
 
 # -- which names open something ------------------------------------------------------
@@ -1194,21 +1006,6 @@ class _Unlisted(LocalSessions):
         return tuple(row for row in super().sessions(cfg) if row[0] not in missing)
 
 
-def test_a_session_the_listing_missed_is_not_made_anew_for_another_datazone(turns):
-    """`create=True` took an id the listing lacked for a session nobody had made, and
-    handed back a finance session to an hr caller without reading its pins."""
-    sessions = _Unlisted()
-    kf = Kingfisher(turns, sessions=sessions)
-    _turn(kf, "s", "finance")
-    reads = Through(kf)
-
-    sessions.missing = frozenset({"s"})
-    assert reads.session("s", source_ids=("A",), datazone="hr", create=True) is None
-    # The control: the caller it is pinned to gets it back.
-    sessions.missing = frozenset({"s"})
-    assert reads.session("s", source_ids=("A",), datazone="finance", create=True) is not None
-
-
 def _refused_over_budget(turns, sessions: _Unlisted, door: str, session_id: str) -> None:
     """A turn in `session_id`, refused after its claim because the session is too large,
     with the listing missing the session when the turn asks whether it made it."""
@@ -1223,9 +1020,9 @@ def _refused_over_budget(turns, sessions: _Unlisted, door: str, session_id: str)
 
 
 @pytest.mark.parametrize("door", ["run", "arun"])
-def test_a_pinned_session_the_listing_missed_outlives_a_refused_turn(turns, door):
+def test_a_used_session_the_listing_missed_outlives_a_refused_turn(turns, door):
     """A turn took a session its listing lacked for one it had made, and a refusal after
-    its claim deleted it, conversation and all, though an earlier turn had pinned it."""
+    its claim deleted it, conversation and all, though an earlier turn had run in it."""
     sessions = _Unlisted()
     _turn(Kingfisher(turns, sessions=sessions), "s", None)
 
@@ -1235,10 +1032,10 @@ def test_a_pinned_session_the_listing_missed_outlives_a_refused_turn(turns, door
 
 
 @pytest.mark.parametrize("door", ["run", "arun"])
-def test_an_unpinned_session_the_listing_missed_is_still_taken_for_one_made(turns, door):
-    """The gap left open, recorded rather than hidden: nothing tells an unpinned session
-    the listing missed from one this turn made, so a refusal still deletes it. Only a
-    listing of every session there is, as `Sessions.sessions` promises, closes it."""
+def test_an_unused_session_the_listing_missed_is_still_taken_for_one_made(turns, door):
+    """The gap left open, recorded rather than hidden: nothing tells a session no turn ran
+    in that the listing missed from one this turn made, so a refusal still deletes it. Only
+    a listing of every session there is, as `Sessions.sessions` promises, closes it."""
     start(turns, "u")
 
     _refused_over_budget(turns, _Unlisted(), door, "u")

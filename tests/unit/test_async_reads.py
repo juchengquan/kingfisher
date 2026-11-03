@@ -78,8 +78,7 @@ def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wir
     sync_calls.clear()
 
     async def read_all():
-        held = ("A",)
-        session = await kf.asession("s", source_ids=held)
+        session = await kf.asession("s")
         return (session, await session.apending(), await session.aartifact("outputs/out.txt"))
 
     found, waiting, content = asyncio.run(read_all())
@@ -137,37 +136,6 @@ def test_opening_a_sessions_files_makes_no_sync_port_call_on_the_loop(cfg, sync_
     assert sync_calls, "no sync port method was reached, on any thread"
     on_the_loop = sorted({name for name, loop in sync_calls if loop})
     assert not on_the_loop, f"made on the event loop's thread: {on_the_loop}"
-
-
-def test_a_turn_reads_the_pin_once_each_side_of_its_claim(cfg, monkeypatch):
-    """Read once to decide whether the caller reaches the session and again to decide
-    which agent the turn runs, every turn under a policy paid a round trip for a file
-    it already held. The second read now is the one under the claim, which the turn
-    runs on; the agent is the request's, and reads nothing.
-    """
-    from kingfisher.core.layout import HARNESS_ROUTE, PINNED_ZONE
-
-    an_agent(cfg, "only_a", source_ids="[A]")
-    policied = cfg
-    kf = Kingfisher(
-        policied, graph=StubAgent("ok"), sessions=LocalSessions()
-    )
-    start(policied, "s")
-    asked = Request("go", agent="only_a", session_id="s")
-    kf.run(asked, source_ids=("A",))
-
-    pin = f"{HARNESS_ROUTE}{PINNED_ZONE}"
-    reads: list[str] = []
-    downloading = CompositeBackend.download_files
-
-    def counted(self, paths):
-        reads.extend(path for path in paths if path == pin)
-        return downloading(self, paths)
-
-    monkeypatch.setattr(CompositeBackend, "download_files", counted)
-    kf.run(asked, source_ids=("A",))
-
-    assert reads == [pin, pin]
 
 
 def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(

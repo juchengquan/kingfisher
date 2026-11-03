@@ -257,7 +257,7 @@ advice too.
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `interrupt_on` | optional | Tools whose every call stops for a person before it runs — see [Approval gates](#approval-gates) |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
-| `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience for everything it lists — see [Access](#access--source_ids-in-the-definitions) |
+| `source_ids` | optional | Who may run this agent. Unset means everyone. Also the default audience for everything it lists — see [Access](#access--source_ids-in-the-definitions) |
 
 One rule covers every field that grants, and a subagent file follows it too:
 **leave a field out and you get none of it; write `["*"]` for everything
@@ -1593,7 +1593,7 @@ is no second list to keep in step with them.
 # agents/assistant.yaml
 name: assistant
 description: Answers questions about the data in this workspace.
-source_ids: [A, B]                 # who may open a session on this agent
+source_ids: [A, B]                 # who may run this agent
 builtin_tools: ["*"]               # `task` reaches reviewer, `read_file` a skill
 tools: [sql_query, http_fetch]     # names: a tool's lock is in its own file
 subagents: [reviewer]              # names: a subagent's audience is its own line
@@ -2013,11 +2013,10 @@ and a tool file writes `ToolSpec(tool, datazone="finance")`.
   whichever datazone its caller names. Nor does an entry —
   `{name: payroll, datazone: hr}` is refused, since on an entry it could only repeat
   the tool's own or contradict it.
-- **A session keeps the datazones of its first zoned turn.** What that turn's tools
-  returned stays in it, so from then on the session is read and carried on only from
-  exactly those datazones -- `kf.session(id, source_ids=["sales_db"], datazone="finance")`,
-  and `--datazone` on `artifact` and `decide`. Any other caller is told there is no such
-  session. One no zoned turn ran in is reached from every datazone.
+- **A datazone decides a turn's tools, not who may read the session.** What a finance
+  turn's tools returned stays in the session, and whoever holds its id reads it and may
+  carry it on from any datazone. Keep a session's id from callers who should not have it:
+  which session is whose is your application's to settle before it calls.
 - **A datazone nothing requires opens nothing**, as an unused source id does, and a
   misspelt one locks its subagent or tool shut; the listing shows each datazone in
   use beside what requires it, as `datazone finance  subagent ledger`. With no lock

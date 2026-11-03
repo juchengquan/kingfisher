@@ -182,9 +182,9 @@ def _read(cfg, virtual: str) -> str:
     return (_session(cfg) / virtual.lstrip("/")).read_text(encoding="utf-8")
 
 
-def _text(cfg, number: str, *, source_ids: Any = None) -> str:
+def _text(cfg, number: str) -> str:
     """A result's text as a caller reads it, wherever the session keeps it."""
-    session = Kingfisher(cfg, sessions=LocalSessions()).session("s", source_ids=source_ids)
+    session = Kingfisher(cfg, sessions=LocalSessions()).session("s")
     assert session is not None
     return session.result(number)
 
@@ -1537,7 +1537,7 @@ def test_an_answer_no_recorder_saw_the_work_of_is_stamped_with_what_ran(ledgered
         "t1": ("public",),
     }
     ran = {e.call: e.id for e in result.ledger}
-    assert "Ten results for EV" in _text(cfg, ran["e1"], source_ids=HOLDING)
+    assert "Ten results for EV" in _text(cfg, ran["e1"])
 
 
 def test_a_subagent_paused_at_a_gate_answers_under_everything_its_run_read(ledgered):

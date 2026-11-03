@@ -26,7 +26,6 @@ from kingfisher.core.result import AWAITING, RunResult
 from kingfisher.core.result import PendingDecision as Pending
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions
-from tests.conftest import Through
 
 PAUSED = RunResult(
     session_id="s-1",
@@ -325,6 +324,8 @@ def _paused_at_the_command_line(cfg, monkeypatch, tmp_path) -> None:
     "given",
     [
         ("--agent", "operator"),
+        ("--as", "A"),
+        ("--datazone", "finance"),
         ("--delete-session",),
         ("--log", "kept/turns.jsonl"),
         ("--tell", "Today is Friday."),
@@ -334,8 +335,8 @@ def _paused_at_the_command_line(cfg, monkeypatch, tmp_path) -> None:
 def test_the_listing_refuses_a_flag_only_an_answer_uses(
     given, at_the_command_line, monkeypatch, tmp_path, capsys
 ):
-    """Each was taken and dropped with nothing said -- `--agent` promising a check it
-    never made, and `--log` creating its directory for a turn that never ran.
+    """Each was taken and dropped with nothing said -- `--agent` and `--as` promising a
+    check never made, and `--log` creating its directory for a turn that never ran.
     """
     _paused_at_the_command_line(at_the_command_line, monkeypatch, tmp_path)
 
@@ -478,56 +479,28 @@ def test_the_whole_loop_runs_through_the_command(cfg, session_dir, monkeypatch, 
     assert (session_dir / "outputs" / "done.txt").read_text() == "ran"
 
 
-def _a_paused_session_in_finance(cfg):
-    """A deployment with source ids, and a paused session a `finance` turn ran in -- with
-    a pending call whose arguments are worth not leaking outside that datazone.
-    """
-
-
-    from kingfisher.core.session.store import pending_as_mark, remember_zones, write_pause_mark
+def _a_paused_session(cfg):
+    """A deployment with source ids, and a paused session with a pending call."""
+    from kingfisher.core.session.store import pending_as_mark, write_pause_mark
     from tests.conftest import an_agent, harness_of, start
 
     an_agent(cfg, "only_a", source_ids="[A]")
-    policied = cfg
-    kf = kingfisher.Kingfisher(policied, sessions=kingfisher.plugins.LocalSessions())
-    start(policied, "s-1")
-    harness = harness_of(policied, "s-1")
-    drive(remember_zones(harness, frozenset({"finance"})))
-    drive(write_pause_mark(harness, {"pending": pending_as_mark([PAUSED.pending[0]])}))
-    return policied, kf
+    start(cfg, "s-1")
+    mark = {"pending": pending_as_mark([PAUSED.pending[0]])}
+    drive(write_pause_mark(harness_of(cfg, "s-1"), mark))
+    return cfg
 
 
-def test_a_caller_who_cannot_reach_the_session_is_not_shown_what_it_waits_on(cfg):
-    """It asked as nobody, so anyone holding a session id read the pending calls and
-    their arguments -- the one door into a session that did not ask who was calling.
-    """
-    from kingfisher import UnknownSessionError
-
-    _, kf = _a_paused_session_in_finance(cfg)
-
-    reads = Through(kf)
-    in_finance = ("A", Datazone("finance"))
-
-    # The control beside the escape: the caller who does reach it is shown the call.
-    assert [call.call_id for call in reads.pending("s-1", source_ids=in_finance)] == [
-        "abc123#0"
-    ]
-    with pytest.raises(UnknownSessionError):
-        reads.pending("s-1", source_ids=("A",))
-
-
-def test_the_command_asks_as_the_caller_it_names(cfg, monkeypatch, capsys):
-    """`--as` reaches the question, and an unreachable session reads as a missing one."""
-    policied, _ = _a_paused_session_in_finance(cfg)
+def test_the_listing_shows_what_a_session_waits_on_to_whoever_holds_its_id(
+    cfg, monkeypatch, capsys
+):
+    """It asked who was calling and hid a session in other datazones, though whose session
+    it is is the deployment's to settle before anyone holds its id."""
+    policied = _a_paused_session(cfg)
     monkeypatch.setattr(cli, "config_from_env", lambda: policied)
 
-    refused = cli._decide(_decide_args(held=("A",)))
-    told = capsys.readouterr().err
-    shown = cli._decide(_decide_args(held=("A",), datazone="finance"))
+    shown = cli._decide(_decide_args())
 
-    assert refused == 2
-    assert "no such session: s-1" in told
-    assert "abc123#0" not in told
     assert shown == 1
     assert "abc123#0" in capsys.readouterr().err
 

@@ -76,11 +76,6 @@ def _add_fetching(
     fetching.add_argument("--session", metavar="ID", required=True, help="the session")
     fetching.add_argument(what[0], help=what[1])
     fetching.add_argument("--out", metavar="PATH", help="write it here instead")
-    _add_caller(
-        fetching,
-        "who is calling: comma-separated source ids, or UNSCOPED to read "
-        "with no caller. Required where a definition carries a lock",
-    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -685,12 +680,15 @@ def _decide(args: argparse.Namespace) -> int:
               file=sys.stderr)
         return 2
 
-    # Refused, not ignored: with no turn to act on, a silent `--agent` reads as the check
-    # its help promises having passed.
+    # Refused, not ignored: with no turn to act on, a silent `--agent` or `--as` reads as
+    # the check its help promises having passed.
     unused = [
         flag
         for flag, given in (
             ("--agent", args.agent is not None),
+            ("--as", args.held is not None),
+            ("--datazone", args.datazone is not None),
+            ("--extra-datazones", bool(args.extra_datazones)),
             ("--delete-session", args.delete_session),
             ("--log", args.log is not None),
             ("--tell", args.tell is not None),
@@ -710,11 +708,7 @@ def _decide(args: argparse.Namespace) -> int:
 
     cfg = config_from_env()
     if not decisions:
-        return _show_pending(
-            _configured(cfg),
-            args.session,
-            with_datazone(args.held, args.datazone, args.extra_datazones),
-        )
+        return _show_pending(_configured(cfg), args.session)
     return _drive(
         _configured(cfg, log=args.log, tell=args.tell),
         Resume(
@@ -727,13 +721,9 @@ def _decide(args: argparse.Namespace) -> int:
     )
 
 
-def _show_pending(kf: Kingfisher, session_id: str, held: Held | None) -> int:
-    """What this session is waiting on, for somebody who has lost the ids.
-
-    Asked as the caller `--as` names: it shows somebody's tool calls and their arguments,
-    and must not be the one door into a session that skips the access check.
-    """
-    session = kf.session(session_id, source_ids=held)
+def _show_pending(kf: Kingfisher, session_id: str) -> int:
+    """What this session is waiting on, for somebody who has lost the ids."""
+    session = kf.session(session_id)
     if session is None:
         print(f"no such session: {session_id}", file=sys.stderr)
         return 2
@@ -824,8 +814,7 @@ def _discard(kf: Kingfisher, result: RunResult) -> None:
         )
         for name in result.artifacts:
             print(f"  {name}", file=sys.stderr)
-    # `UNSCOPED`: the command deletes the session its own turn just used.
-    session = kf.session(result.session_id, source_ids=UNSCOPED)
+    session = kf.session(result.session_id)
     failure = session.delete() if session is not None else None
     if failure:
         print(f"session not deleted -- {failure}", file=sys.stderr)
@@ -958,12 +947,7 @@ def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
     cfg = config_from_env()
     kf = _configured(cfg)
-    session = kf.session(
-        args.session,
-        source_ids=args.held,
-        datazone=args.datazone,
-        extra_datazones=args.extra_datazones,
-    )
+    session = kf.session(args.session)
     if session is None:
         msg = f"no session {args.session!r}"
         raise UnknownSessionError(msg)
@@ -986,12 +970,7 @@ def _result(args: argparse.Namespace) -> int:
     """Fetch one tool result's text, to a file or to standard output."""
     cfg = config_from_env()
     kf = _configured(cfg)
-    session = kf.session(
-        args.session,
-        source_ids=args.held,
-        datazone=args.datazone,
-        extra_datazones=args.extra_datazones,
-    )
+    session = kf.session(args.session)
     if session is None:
         msg = f"no session {args.session!r}"
         raise UnknownSessionError(msg)
@@ -1009,9 +988,7 @@ def _result(args: argparse.Namespace) -> int:
 
 def _reap_one(kf: Kingfisher, session_id: str) -> int:
     """Reap one session by name, whatever is running in it."""
-    # `UNSCOPED`, not `None`, which a policied deployment refuses: this is housekeeping,
-    # not a call on anyone's behalf, which is why neither `reap` nor `sessions` takes `--as`.
-    session = kf.session(session_id, source_ids=UNSCOPED)
+    session = kf.session(session_id)
     if session is None:
         # Refused here: deleting answers `None` for nothing there too, so a mistyped id
         # would report work nothing did.
