@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.models import SummarizerCount
     from kingfisher.core.config import Models
     from kingfisher.core.interfaces import PdfAttachments, ScratchRunLimit
+    from kingfisher.core.session.ledger import Ledger
 
 _log = logging.getLogger(__name__)
 
@@ -109,6 +110,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     permissions: Any,
     keep_results_rounds: int | None,
     recorder: RecorderMiddleware | None,
+    ledger: Ledger | None,
     clearing: Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None,
     tools: Sequence[str] | None,
     gated: Collection[str],
@@ -130,7 +132,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     offered and `skills` its skills index, each `None` where nothing narrows -- `indexed`
     saying a graph `skills` leaves `None` is handed every skill's index beside it -- and `gated`
     what it stops on for a person; `clearing` builds the result clearing for that grant,
-    `None` where no ledger is kept, and `reachable` is the agent's alone.
+    `None` where no ledger is kept, as `ledger` is, and `reachable` is the agent's alone.
     `budget` is the turn's, whose step limit reaches only the agent's own run, so a subagent
     is held to it in model calls; one per build, shared by all three kinds. `trigger` is
     where this graph's own summariser fires and `count` how it counts, which size the PDFs
@@ -247,6 +249,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             longest=longest_command(execution_timeout_s),
             here=shell_runs_here(backend),
             expires_after=keep_results_rounds,
+            ledger=ledger,
             folders=folders_of(layout, backend),
             skilled=skills is not None or indexed,
         )

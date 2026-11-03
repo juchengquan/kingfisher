@@ -31,7 +31,7 @@ from .checkpointing import (
     paused_state,
 )
 from .files import collect_artifacts
-from .ledger import keep_ledger, sweep_results
+from .ledger import file_left, keep_ledger, sweep_results
 from .memory import kept_in_store
 from .memory_writer import kept_memory
 from .steps import (
@@ -217,9 +217,16 @@ class Running:
     def _record_ledger(
         self, prepared: Prepared, snapshot: Any
     ) -> Steps[tuple[LedgerEntry, ...]]:
-        """Keep what this turn's tools returned, whether or not the turn paused."""
+        """Keep what this turn's tools returned, whether or not the turn paused, filing
+        first what left the conversation with no file."""
         if prepared.ledger is None:
             return ()
+        yield from file_left(
+            prepared.files,
+            prepared.ledger,
+            runtime.summarised_away(snapshot),
+            tool_results_route=self.cfg.layout.tool_results_route,
+        )
         written = self._transcript_of(snapshot)
         return (
             yield from keep_ledger(

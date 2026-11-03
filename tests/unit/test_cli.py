@@ -1070,6 +1070,7 @@ def _said_and_not_raised() -> tuple[type[Exception], ...]:
         DecisionError,
         InputsError,
         QuotaExceededError,
+        ResultError,
         SubagentError,
         UnknownSessionError,
     )
@@ -1083,6 +1084,7 @@ def _said_and_not_raised() -> tuple[type[Exception], ...]:
         DecisionError,
         InputsError,
         QuotaExceededError,
+        ResultError,
         SubagentError,
         UnknownSessionError,
     )

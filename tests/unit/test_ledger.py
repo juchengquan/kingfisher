@@ -47,8 +47,9 @@ from kingfisher.core.layout import (
     Layout,
 )
 from kingfisher.core.request import Decision, Resume
-from kingfisher.core.result import AWAITING, MAIN, WORKING, LedgerEntry
-from kingfisher.core.session.ledger import Ledger
+from kingfisher.core.result import AWAITING, MAIN, WORKING, LedgerEntry, ResultError
+from kingfisher.core.session.ledger import Ledger, file_left
+from kingfisher.core.session.steps import drive
 from kingfisher.core.session.store import KeptLedger, entry_id
 from kingfisher.core.session.transcript import from_json
 from kingfisher.core.session.turn import ledger_delta, ledger_index
@@ -181,6 +182,13 @@ def _read(cfg, virtual: str) -> str:
     return (_session(cfg) / virtual.lstrip("/")).read_text(encoding="utf-8")
 
 
+def _text(cfg, number: str, *, source_ids: Any = None) -> str:
+    """A result's text as a caller reads it, wherever the session keeps it."""
+    session = Kingfisher(cfg, sessions=LocalSessions()).session("s", source_ids=source_ids)
+    assert session is not None
+    return session.result(number)
+
+
 # -- what is recorded ----------------------------------------------------------
 
 
@@ -193,6 +201,8 @@ class _Ordered(LocalSessions):
     def __init__(self) -> None:
         super().__init__()
         self.written: list[str] = []
+        #: The paths of each save, a list a save.
+        self.saves: list[list[str]] = []
 
     def open(self, cfg, session_id, /, *, catalogue=None):
         opened = super().open(cfg, session_id, catalogue=catalogue)
@@ -200,6 +210,7 @@ class _Ordered(LocalSessions):
 
         def noted(files):
             self.written.extend(path for path, _ in files)
+            self.saves.append([path for path, _ in files])
             return upload(files)
 
         opened.upload_files = noted
@@ -218,8 +229,9 @@ class _Ordered(LocalSessions):
 
 
 def test_a_result_is_recorded_kept_and_handed_to_the_caller(ledgered):
-    """The whole of what a turn records: a result the model was handed has a row, a file
-    holding it, and the same row on the caller's result, serialisable as JSON.
+    """The whole of what a turn records: a result the model was handed has a row, its
+    text kept where a caller reads it back, and the same row on the caller's result,
+    serialisable as JSON. No file while the conversation holds it whole.
     """
     result = _run(
         ledgered,
@@ -234,9 +246,10 @@ def test_a_result_is_recorded_kept_and_handed_to_the_caller(ledgered):
     assert entry.turn == result.turn_id
     assert entry.args == "query='EV price war'"
     assert entry.summary == "web_search query='EV price war' -- Ten results for EV price war"
-    assert entry.path == "/scratchpad/tool_results/A-0001-web_search.txt"
-    assert _read(ledgered, entry.path) == "Ten results for EV price war\n1. one\n2. two"
-    assert entry.size == len(_read(ledgered, entry.path).encode("utf-8"))
+    assert entry.path is None
+    assert _kept(ledgered) == []
+    assert _text(ledgered, "A-0001") == "Ten results for EV price war\n1. one\n2. two"
+    assert entry.size == len(_text(ledgered, "A-0001").encode("utf-8"))
     assert entry.access is None, "no definition carries a lock"
     # What the caller holds is the row, through the JSON a service would send.
     sent = json.loads(json.dumps(asdict(result)))
@@ -258,16 +271,15 @@ def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
         ),
     )
     session = ensure_session_layout(moved.workspace / "sessions" / "s2", moved.layout)
-    Scripted.script.extend(
-        [_calls(("web_search", {"query": "EV price war"}, "c1")), AIMessage(content="done")]
-    )
+    # Long, so it is filed as it arrives.
+    Scripted.script.extend([_calls(("loud", {}, "c1")), AIMessage(content="done")])
     service = Kingfisher(moved, sessions=LocalSessions())
     result = service.run(Request("go", agent="only", session_id="s2"))
 
     (entry,) = result.ledger
-    assert entry.path == "/scratch/results/A-0001-web_search.txt"
-    kept = session / "scratch" / "results" / "A-0001-web_search.txt"
-    assert kept.read_text(encoding="utf-8") == "Ten results for EV price war\n1. one\n2. two"
+    assert entry.path == "/scratch/results/A-0001-loud.txt"
+    kept = session / "scratch" / "results" / "A-0001-loud.txt"
+    assert kept.read_text(encoding="utf-8").startswith("row 00000 ")
     # The default spellings are written nowhere: the whole path moved, not a copy of it.
     assert not (session / "scratchpad").exists()
     assert (session / "mem" / "AGENTS.md").exists()
@@ -299,11 +311,12 @@ def test_the_next_turn_numbers_on_from_the_ledger_it_found(ledgered):
     """Each turn builds a fresh graph and collector, so a number not read back from
     the ledger starts again at A-0001 and the second turn's file replaces the first's.
     """
+    # Long, so each is filed as it arrives and a reused number would overwrite a file.
     first = _run(
-        ledgered, _calls(("web_search", {"query": "one"}, "c1")), AIMessage(content="done")
+        ledgered, _calls(("loud_about", {"subject": "one"}, "c1")), AIMessage(content="done")
     )
     second = _run(
-        ledgered, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done")
+        ledgered, _calls(("loud_about", {"subject": "two"}, "c2")), AIMessage(content="done")
     )
 
     assert [e.id for e in first.ledger] == ["A-0001"]
@@ -311,29 +324,133 @@ def test_the_next_turn_numbers_on_from_the_ledger_it_found(ledgered):
     assert [row.get("id") or row["turn"] for row in _rows(ledgered)] == [
         "A-0001", first.turn_id, "A-0002", second.turn_id,
     ]
-    assert _kept(ledgered) == ["A-0001-web_search.txt", "A-0002-web_search.txt"]
-    assert "one" in _read(ledgered, first.ledger[0].path)
+    assert _kept(ledgered) == ["A-0001-loud_about.txt", "A-0002-loud_about.txt"]
+    assert _read(ledgered, first.ledger[0].path).startswith("one ")
 
 
 def test_numbering_goes_on_past_four_digits(ledgered):
     """`A-{n:04d}` is a minimum width: a matcher fixed at four digits would restart or
     reuse ids at the 10,000th result, and the new file would replace an old one's."""
-    _run(ledgered, _calls(("web_search", {"query": "one"}, "c1")), AIMessage(content="done"))
+    _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
     ledger = _session(ledgered) / HARNESS / LEDGER_FILE
     ledger.write_text(ledger.read_text().replace('"A-0001"', '"A-9999"', 1))
 
-    second = _run(
-        ledgered, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done")
-    )
-    third = _run(
-        ledgered, _calls(("web_search", {"query": "three"}, "c3")), AIMessage(content="done")
-    )
+    second = _run(ledgered, _calls(("loud", {}, "c2")), AIMessage(content="done"))
+    third = _run(ledgered, _calls(("loud", {}, "c3")), AIMessage(content="done"))
 
     assert [e.id for e in second.ledger] == ["A-10000"]
     assert [e.id for e in third.ledger] == ["A-10001"]
-    assert _kept(ledgered) == [
-        "A-0001-web_search.txt", "A-10000-web_search.txt", "A-10001-web_search.txt",
-    ]
+    assert _kept(ledgered) == ["A-0001-loud.txt", "A-10000-loud.txt", "A-10001-loud.txt"]
+
+
+# -- when a result is filed ------------------------------------------------------
+
+
+def test_a_subagents_results_are_filed_together_as_its_run_ends(ledgered):
+    """A subagent's conversation goes when it answers, and with it the one copy of each
+    result it holds: filed as each arrived, a run of ten calls was ten saves on the
+    calls' path, and left to the turn's end, an id its answer names has no file when the
+    agent looks for it.
+    """
+    backends = _Ordered()
+    result = _run(
+        ledgered,
+        _task("t1"),
+        _calls(("web_search", {"query": "BYD"}, "c1"), ("sql_query", {"query": "q"}, "c2")),
+        AIMessage(content="margins are thin"),
+        _calls(("loud", {}, "c3")),
+        AIMessage(content="done"),
+        kf=Kingfisher(ledgered, sessions=backends),
+    )
+
+    rows = {e.call: e for e in result.ledger}
+    working = {rows["c1"].path, rows["c2"].path}
+    assert None not in working, "a subagent's result was never filed"
+    assert working in [set(save) for save in backends.saves], "not filed in one save"
+    assert max(map(backends.at, working)) < backends.at(rows["c3"].path), (
+        "filed only as the turn ended"
+    )
+    assert _read(ledgered, rows["c1"].path).startswith("Ten results for BYD")
+    assert rows["t1"].path is None, "the answer is in the agent's conversation"
+
+
+def test_a_subagents_results_its_run_left_unfiled_are_filed_as_the_turn_ends():
+    """A run cancelled while it filed its results leaves them held, and its conversation
+    is gone: not filed with the turn's own, they are lost."""
+    ledger = Ledger("t", KeptLedger())
+    entry = _entry(1, "web_search", run="t1", kept=False)
+    path = f"{TOOL_RESULTS_ROUTE}A-0001-web_search.txt"
+    ledger.add(entry)
+    ledger.hold(entry, path, b"Ten results")
+    saved: list[list[tuple[str, bytes]]] = []
+
+    def upload_files(batch):
+        saved.append(list(batch))
+        return [FileUploadResponse(path=one) for one, _ in batch]
+
+    drive(
+        file_left(
+            SimpleNamespace(upload_files=upload_files),
+            ledger,
+            (),
+            tool_results_route=TOOL_RESULTS_ROUTE,
+        )
+    )
+
+    assert saved == [[(path, b"Ten results")]]
+    assert ledger.entries[0].path == path
+    assert ledger.held() == ()
+
+
+def test_a_result_the_summary_took_out_is_filed_before_the_ledger_names_it(ledgered):
+    """Behind the summary's cut a result is in no message a later turn is given, and the
+    whole of it is in the turn's state only until the turn ends: not filed then, it is
+    gone; filed after the ledger is written, no row names the file and the sweep
+    removes it.
+    """
+    cfg = _windowed(ledgered)
+    backends = _Ordered()
+    kf = Kingfisher(cfg, sessions=backends)
+    _say(kf, HALF, _calls(("web_search", {"query": "one"}, "c1")), AIMessage(content="done"))
+    assert _rows(cfg)[0]["path"] is None, "the control: filed while still in the conversation"
+
+    _say(kf, HALF, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done"))
+
+    assert Scripted.summaries >= 1, "the control: the summariser never fired"
+    by_id = {row["id"]: row for row in _rows(cfg) if "id" in row}
+    path = f"{TOOL_RESULTS_ROUTE}A-0001-web_search.txt"
+    assert by_id["A-0001"]["path"] == path
+    assert _read(cfg, path) == "Ten results for one\n1. one\n2. two"
+    assert by_id["A-0002"]["path"] is None, "filed though still in the conversation"
+    assert any(one.endswith(LEDGER_FILE) for one in backends.written[backends.at(path) :])
+
+
+def test_a_caller_reads_a_result_wherever_it_is_kept_and_is_told_why_where_it_is_not(
+    ledgered,
+):
+    """A row's `path` is empty until its result leaves the conversation, so a caller
+    opening the file a row names finds nothing for most results. Asked by id, the text
+    comes from the file or the conversation, and one kept nowhere says why rather than
+    reading as empty.
+    """
+    cfg = _rounds(ledgered, 1)
+    _run(
+        cfg,
+        _calls(("web_search", {"query": "EV"}, "c1"), ("loud", {}, "c2")),
+        AIMessage(content="done"),
+    )
+    long = _text(cfg, "A-0002")
+
+    assert _text(cfg, "A-0001") == "Ten results for EV\n1. one\n2. two"
+    assert long.startswith("row 00000 ") and long.endswith(" " + "x" * 90)
+
+    _run(cfg, AIMessage(content="done"))
+
+    assert _text(cfg, "A-0001").startswith("Ten results"), "expired, it is still whole here"
+    with pytest.raises(ResultError, match="A-0002 is kept nowhere: it expired in turn"):
+        _text(cfg, "A-0002")
+    with pytest.raises(ResultError, match="no result A-0009"):
+        _text(cfg, "A-0009")
 
 
 def test_a_ledger_cut_short_by_a_crash_does_not_stop_the_session(ledgered):
@@ -460,7 +577,7 @@ def test_the_file_tools_are_not_recorded_and_the_shell_is(ledgered):
     assert not (_session(ledgered) / "outputs" / "notes.txt").exists()
     assert sorted(e.tool for e in result.ledger) == ["execute", "web_search"]
     (shell,) = [e for e in result.ledger if e.tool == "execute"]
-    assert "recorded" in _read(ledgered, shell.path)
+    assert "recorded" in _text(ledgered, shell.id)
 
 
 def test_a_tool_name_is_one_path_segment_in_the_tool_results_folder(ledgered):
@@ -471,8 +588,8 @@ def test_a_tool_name_is_one_path_segment_in_the_tool_results_folder(ledgered):
         "from langchain_core.tools import tool\n\n\n"
         "@tool('../../up.and/away')\n"
         "def odd() -> str:\n"
-        '    """Return something."""\n'
-        "    return 'climbed'\n\n\n"
+        '    """Return something long enough to be filed as it arrives."""\n'
+        "    return 'climbed\\n' * 30_000\n\n\n"
         "TOOLS = [odd]\n",
         encoding="utf-8",
     )
@@ -500,7 +617,7 @@ def test_the_arguments_recorded_are_the_ones_the_model_wrote(ledgered):
     )
 
     (entry,) = result.ledger
-    assert _read(ledgered, entry.path) == "2", "the tool never reached the file"
+    assert _text(ledgered, entry.id) == "2", "the tool never reached the file"
     assert entry.args == "path='/inputs/notes.txt'"
 
 
@@ -534,7 +651,7 @@ def test_what_a_deployments_middleware_left_is_recorded(ledgered):
     )
 
     (entry,) = result.ledger
-    assert _read(ledgered, entry.path).endswith("\n\nMind the source.")
+    assert _text(ledgered, entry.id).endswith("\n\nMind the source.")
 
 
 def test_a_result_too_long_to_show_is_recorded_whole(ledgered):
@@ -556,12 +673,12 @@ def test_results_are_written_before_the_ledger_and_the_ledger_before_the_transcr
     backends = _Ordered()
     _run(
         ledgered,
-        _calls(("web_search", {"query": "EV"}, "c1")),
+        _calls(("loud", {}, "c1")),
         AIMessage(content="done"),
         kf=Kingfisher(ledgered, sessions=backends),
     )
 
-    assert backends.at("A-0001-web_search.txt") < backends.at(LEDGER_FILE)
+    assert backends.at("A-0001-loud.txt") < backends.at(LEDGER_FILE)
     assert backends.at(LEDGER_FILE) < backends.at(TRANSCRIPT_FILE)
 
 
@@ -629,13 +746,13 @@ def test_what_the_shell_writes_beside_the_results_is_left_alone(ledgered):
         ledgered,
         # One call per message: asked together they run at once, and an id is taken as a
         # call starts, so `execute` sometimes took `A-0001` and the names below did not hold.
-        _calls(("web_search", {"query": "EV"}, "c1")),
+        _calls(("loud", {}, "c1")),
         _calls(("execute", {"command": "printf mine > scratchpad/tool_results/notes.md"}, "c2")),
         AIMessage(content="done"),
         kf=Kingfisher(ledgered, sessions=LocalSessions(shell=ShellSettings(sandbox="off"))),
     )
 
-    assert _kept(ledgered) == ["A-0001-web_search.txt", "A-0002-execute.txt", "notes.md"]
+    assert _kept(ledgered) == ["A-0001-loud.txt", "notes.md"]
     assert _read(ledgered, f"{TOOL_RESULTS_ROUTE}notes.md") == "mine"
 
 
@@ -650,10 +767,9 @@ def test_the_agent_cannot_rewrite_or_delete_the_file_a_row_names(ledgered):
     Both verbs, because a deny on writing is not obviously a deny on removing, and a
     row naming a file that is gone is the same lie told the other way round.
     """
-    first = _run(
-        ledgered, _calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done")
-    )
+    first = _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
     (row,) = first.ledger
+    assert row.path is not None, "the control: the result was filed"
 
     _run(
         ledgered,
@@ -664,7 +780,8 @@ def test_the_agent_cannot_rewrite_or_delete_the_file_a_row_names(ledgered):
         AIMessage(content="done"),
     )
 
-    assert _read(ledgered, row.path) == "Ten results for EV\n1. one\n2. two"
+    assert _read(ledgered, row.path).startswith("row 00000 ")
+    assert len(_read(ledgered, row.path)) == row.size
 
 
 def test_a_call_id_used_twice_leaves_each_row_on_its_own_result(ledgered):
@@ -678,14 +795,15 @@ def test_a_call_id_used_twice_leaves_each_row_on_its_own_result(ledgered):
     """
     first = _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
     second = _run(
-        ledgered, _calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done")
+        ledgered, _calls(("loud_about", {"subject": "EV"}, "c1")), AIMessage(content="done")
     )
 
     (was,) = first.ledger
     (now,) = second.ledger
     assert was.call == now.call == "c1", "the control: the provider reused the id"
+    assert None not in (was.path, now.path), "the control: both were filed"
     assert now.path != was.path, "two rows name one file, and only one of them is right"
-    assert _read(ledgered, now.path).startswith("Ten results for EV")
+    assert _read(ledgered, now.path).startswith("EV 00000 ")
     assert len(_read(ledgered, now.path)) == now.size
 
 
@@ -751,14 +869,14 @@ def test_a_result_file_no_row_names_is_swept(ledgered):
     stray = _session(ledgered) / SCRATCH / TOOL_RESULTS / "A-0007-web_search.txt"
     stray.parent.mkdir(parents=True, exist_ok=True)
     stray.write_text("from a turn that died", encoding="utf-8")
-    _run(ledgered, _calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done"))
+    _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
 
     assert not stray.exists()
-    assert _kept(ledgered) == ["A-0001-web_search.txt"]
+    assert _kept(ledgered) == ["A-0001-loud.txt"]
 
     _run(ledgered, AIMessage(content="nothing this time"))
 
-    assert _kept(ledgered) == ["A-0001-web_search.txt"], "an earlier turn's file was swept"
+    assert _kept(ledgered) == ["A-0001-loud.txt"], "an earlier turn's file was swept"
 
 
 class _Refusing(LocalSessions):
@@ -784,15 +902,16 @@ def test_a_result_the_backend_will_not_keep_still_has_its_row(ledgered, caplog):
     with caplog.at_level(logging.WARNING):
         result = _run(
             ledgered,
-            _calls(("web_search", {"query": "EV"}, "c1")),
+            # Long, the one kind of result saved as it arrives.
+            _calls(("loud", {}, "c1")),
             AIMessage(content="done"),
             kf=Kingfisher(ledgered, sessions=_Refusing()),
         )
 
     assert result.answer == "done"
     (entry,) = result.ledger
-    assert (entry.id, entry.path) == ("A-0001", None)
-    assert _rows(ledgered)[0]["path"] is None
+    assert (entry.id, entry.path, entry.unkept) == ("A-0001", None, True)
+    assert (_rows(ledgered)[0]["path"], _rows(ledgered)[0]["unkept"]) == (None, True)
     assert "A-0001 was not kept" in caplog.text
     assert "permission_denied" in caplog.text
 
@@ -860,9 +979,7 @@ def test_a_save_that_raises_does_not_fail_the_call_the_model_is_about_to_read(
     """
     kf = Kingfisher(ledgered, sessions=_Raising())
     request = Request("go", agent="only", session_id="s")
-    Scripted.script.extend(
-        [_calls(("web_search", {"query": "EV"}, "c1")), AIMessage(content="done")]
-    )
+    Scripted.script.extend([_calls(("loud", {}, "c1")), AIMessage(content="done")])
 
     with caplog.at_level(logging.WARNING):
         result = kf.run(request)
@@ -932,7 +1049,7 @@ def test_a_subagents_results_are_working_entries_of_the_run_that_started_it(ledg
     ]
     (answer,) = [e for e in result.ledger if e.tool == "task"]
     assert answer.id == "A-0001", "the answer is numbered as its call started, before its work"
-    assert _read(ledgered, answer.path) == "margins are thin"
+    assert _text(ledgered, answer.id) == "margins are thin"
     assert answer.args == "description='dig into it' subagent_type='researcher'"
 
 
@@ -995,8 +1112,7 @@ def test_a_subagent_a_program_starts_is_filed_under_the_program(ledgered, awaite
         ("e1", "main", None),
         ("c1", "working", "e1"),
     ]
-    program = result.ledger[0].path
-    assert program and "Ten results for EV" in _read(cfg, program), "the program never called"
+    assert "Ten results for EV" in _text(cfg, "A-0001"), "the program never called"
     _run(cfg, AIMessage(content="noted"))
     assert _listed_in(_asked()) == ["A-0001", "  A-0002"]
 
@@ -1031,9 +1147,10 @@ ARRIVED = threading.Barrier({TOGETHER}, timeout=10)
 
 
 def together(n: int) -> str:
-    """Wait for the calls made beside this one."""
+    """Wait for the calls made beside this one, then return a result long enough to be
+    filed as it arrives."""
     ARRIVED.wait()
-    return f"call {{n}}"
+    return f"call {{n}} " + "x" * 80_001
 
 
 TOOLS = [together]
@@ -1417,8 +1534,8 @@ def test_an_answer_no_recorder_saw_the_work_of_is_stamped_with_what_ran(ledgered
         "e2": ("finance", "public"),
         "t1": ("public",),
     }
-    ran = {e.call: e.path for e in result.ledger}
-    assert all(ran.values()) and "Ten results for EV" in _read(cfg, str(ran["e1"]))
+    ran = {e.call: e.id for e in result.ledger}
+    assert "Ten results for EV" in _text(cfg, ran["e1"], source_ids=HOLDING)
 
 
 def test_a_subagent_paused_at_a_gate_answers_under_everything_its_run_read(ledgered):
@@ -1515,7 +1632,7 @@ def test_the_kept_file_and_the_size_are_the_result_without_its_id(ledgered):
 
     (entry,) = result.ledger
     assert _handed("c1").content.endswith("\n[A-0001]"), "the model was never handed the id"
-    assert json.loads(_read(ledgered, entry.path)) == {"rows": [[1, "a"], [2, "b"]]}
+    assert json.loads(_text(ledgered, entry.id)) == {"rows": [[1, "a"], [2, "b"]]}
     assert entry.size == len('{"rows": [[1, "a"], [2, "b"]]}')
 
 
@@ -1651,6 +1768,7 @@ def _entry(  # noqa: PLR0913 -- one keyword for each field the delta reads
     run: str | None = None,
     call: str | None = None,
     kept: bool = True,
+    unkept: bool = False,
 ) -> LedgerEntry:
     """An entry as a recorder makes one, varying only in what the delta reads."""
     at = f"A-{number:04d}"
@@ -1664,8 +1782,9 @@ def _entry(  # noqa: PLR0913 -- one keyword for each field the delta reads
         args=args,
         access=None,
         size=size,
-        path=f"/scratchpad/tool_results/{at}-{tool}.txt" if kept else None,
+        path=f"/scratchpad/tool_results/{at}-{tool}.txt" if kept and not unkept else None,
         summary=tool,
+        unkept=unkept,
     )
 
 
@@ -1681,6 +1800,9 @@ def test_a_subagents_entries_sit_under_its_answer_and_unanswered_ones_follow_the
     """The parent is shown where its subagent's results are and not what they hold. An
     entry whose task never answered has nothing to sit under: indented, it would read
     as belonging to whichever entry it followed.
+
+    And a line names no file for a result still in the conversation, which a line saying
+    "not kept" would send the model to run again.
     """
     shown = ledger_delta(
         [
@@ -1688,15 +1810,16 @@ def test_a_subagents_entries_sit_under_its_answer_and_unanswered_ones_follow_the
             _entry(2, "fetch", args="url='https://x'", size=31_000, run="t1"),
             _entry(3, "search", args="query='BYD'", run="t0"),
             _entry(4, "sql", args="query='select 1'", size=6_100, run="t1"),
-            _entry(5, "task", args="subagent_type='researcher'", size=2_048, call="t1"),
-            _entry(6, "loud", size=100_999, kept=False),
+            _entry(5, "task", args="subagent_type='researcher'", size=2_048, call="t1",
+                   kept=False),
+            _entry(6, "loud", size=100_999, unkept=True),
         ]
     )
 
     assert shown.splitlines() == [
         "<ledger_delta>",
         "A-0001 search query='EV' -> 14 KB  /scratchpad/tool_results/A-0001-search.txt",
-        "A-0005 task subagent_type='researcher' -> 2 KB  /scratchpad/tool_results/A-0005-task.txt",
+        "A-0005 task subagent_type='researcher' -> 2 KB",
         "  A-0002 fetch url='https://x' -> 30 KB  /scratchpad/tool_results/A-0002-fetch.txt",
         "  A-0004 sql query='select 1' -> 6 KB  /scratchpad/tool_results/A-0004-sql.txt",
         "A-0006 loud -> 99 KB  not kept",
@@ -1991,9 +2114,10 @@ def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):
     pattern read out of the prompt rather than written here, so that a test spelling it
     right cannot pass beside a prompt spelling it wrong.
 
-    One pattern for both: a long result is named after its id like any other, where it
-    was once named after its call and could only be found by grepping for the id line it
-    ended in.
+    A long result is named after its id like any other, where it was once named after
+    its call and could only be found by grepping for the id line it ended in. A short one
+    still in the conversation has no file yet, and the miss says so: read as lost, the
+    model runs its tool again.
     """
     taught = " ".join(render_system_prompt(layout=DEFAULT_LAYOUT).split())
     by_name = re.search(r"`glob` for `([^`]+)` in `([^`]+)`", taught)
@@ -2005,11 +2129,8 @@ def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):
         AIMessage(content="done"),
     )
     kept, long = (next(e for e in first.ledger if e.tool == t) for t in ("web_search", "loud"))
-    # Both in the one folder, short and long alike: the id is what finds either, and a
-    # second folder was the reason an id had to be searched for rather than read.
-    assert kept.path.startswith(TOOL_RESULTS_ROUTE), "the control: the search was not kept"
+    assert kept.path is None, "the control: the search is still in the conversation"
     assert long.path.startswith(TOOL_RESULTS_ROUTE), "the control: the long result was not kept"
-    assert long.path != kept.path
 
     example = entry_id(42)
     _run(
@@ -2017,12 +2138,15 @@ def test_an_older_results_file_is_found_by_its_id_as_the_prompt_says(ledgered):
         _calls(
             ("glob", {"pattern": by_name[1].replace(example, kept.id), "path": by_name[2]}, "c3"),
             ("glob", {"pattern": by_name[1].replace(example, long.id), "path": by_name[2]}, "c4"),
+            ("glob", {"pattern": by_name[1].replace(example, "A-0099"), "path": by_name[2]}, "c5"),
         ),
         AIMessage(content="done"),
     )
 
-    assert kept.path in _handed("c3").text
+    assert _handed("c3").text.startswith("No files found")
+    assert f"{kept.id} has no file yet; it is still in this conversation." in _handed("c3").text
     assert long.path in _handed("c4").text
+    assert "no file yet" not in _handed("c5").text, "a mistyped id is told it is in view"
 
 
 # -- expiry --------------------------------------------------------------------
@@ -2033,7 +2157,10 @@ def _rounds(cfg, rounds: int | None):
 
 
 def _searched(cfg, at: str):
-    return _run(cfg, _calls(("web_search", {"query": at}, at)), AIMessage(content="done"))
+    """A turn recording one result, long so that it is filed as it arrives."""
+    return _run(
+        cfg, _calls(("loud_about", {"subject": at}, at)), AIMessage(content="done")
+    )
 
 
 def _closed(*rows: dict[str, Any]) -> list[str]:
@@ -2053,15 +2180,15 @@ def test_a_result_older_than_the_rounds_kept_loses_its_file_and_keeps_its_row(le
     cfg = _rounds(ledgered, 2)
     _searched(cfg, "c1")
     _searched(cfg, "c2")
-    assert _kept(cfg) == ["A-0001-web_search.txt", "A-0002-web_search.txt"]
+    assert _kept(cfg) == ["A-0001-loud_about.txt", "A-0002-loud_about.txt"]
 
     third = _run(cfg, AIMessage(content="nothing this time"))
 
-    assert _kept(cfg) == ["A-0002-web_search.txt"]
+    assert _kept(cfg) == ["A-0002-loud_about.txt"]
     first, second = (row for row in _rows(cfg) if "id" in row)
     assert (first["path"], first["expired_in"]) == (None, third.turn_id)
-    assert first["summary"] == "web_search query='c1' -- Ten results for c1"
-    assert second["path"] == "/scratchpad/tool_results/A-0002-web_search.txt"
+    assert first["summary"].startswith("loud_about subject='c1' -- c1 00000 ")
+    assert second["path"] == "/scratchpad/tool_results/A-0002-loud_about.txt"
     assert second["expired_in"] is None
 
 
@@ -2076,7 +2203,7 @@ def test_a_result_a_crash_left_unclosed_expires_with_the_turn_after_it(ledgered)
     _searched(cfg, "c2")
 
     _run(cfg, AIMessage(content="nothing this time"))
-    assert _kept(cfg) == ["A-0001-web_search.txt", "A-0002-web_search.txt"]
+    assert _kept(cfg) == ["A-0001-loud_about.txt", "A-0002-loud_about.txt"]
 
     fourth = _run(cfg, AIMessage(content="nothing again"))
 

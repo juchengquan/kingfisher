@@ -11,6 +11,7 @@ from kingfisher.core.request import Request, Resume
 
 from .files import read_artifact
 from .handle import Session
+from .ledger import read_result
 from .memory import forget_entry, memory_entries
 from .model import (
     DEFAULT_SESSION,
@@ -269,6 +270,10 @@ class SessionMethods:
     def _artifact_in(self, session_id: str, name: str, opened: list[Any]) -> Steps[bytes]:
         files = yield from self._files_in(session_id, opened)
         return (yield from read_artifact(files, name, self.cfg.layout))
+
+    def _result_in(self, session_id: str, number: str, opened: list[Any]) -> Steps[str]:
+        files = yield from self._files_in(session_id, opened)
+        return (yield from read_result(files, number))
 
     def _memory_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[Any, ...]]:
         files = yield from self._files_in(session_id, opened)

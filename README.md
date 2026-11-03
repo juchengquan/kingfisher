@@ -81,7 +81,10 @@ deletes one with `--session ID`, or with `--all` every one no turn is running in
 outputs/report.html` fetches one file a turn produced, by the name the run
 reported — `kf.session(session_id).artifact(name)` from Python. What the turn's tools
 returned is on `RunResult.ledger`, one entry a result, a subagent's own calls
-included, each naming the file in the session's scratchpad it was kept in. A run
+included, each naming the file in the session's scratchpad once it is filed there --
+when it leaves the conversation, or at once if it is too long to show whole.
+`kingfisher result --session ID A-0002` prints one by its id wherever it is kept --
+`kf.session(session_id).result("A-0002")` from Python. A run
 that should leave nothing behind can say so at the time: `kingfisher run
 --delete-session`, or `Kingfisher.run(..., delete_session=True)` from Python.
 

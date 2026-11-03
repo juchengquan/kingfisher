@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A tool result is filed when it leaves the conversation, after #1190
+
+- **`LedgerEntry.path` is `None` while the result is still in the conversation.** A result
+  is filed under `/scratchpad/tool_results/` when clearing swaps it for a handle, when a
+  summary takes it out, when the subagent that made it answers, or as it arrives if it is
+  too long to show whole -- no longer every result as it arrives. Code that opened the
+  file a row names reads `Session.result(id)` instead (`aresult` on an event loop, or
+  `kingfisher result --session ID A-0002`), which answers from the file or the
+  conversation, wherever the text is, and raises `ResultError`, newly public, for an id
+  no row has or a result kept nowhere.
+- **A file the backend refused is `unkept: true` on the row**, where it was a `null`
+  `path` alone, which now also means a result still in the conversation. Rows written
+  before this have no `unkept`, and read as `false`.
+- **Sessions from before need nothing.** Their rows name files that are still there.
+
 ## A session always keeps its conversation, after #1189
 
 - **`KINGFISHER_CONVERSATION_ENABLED` is gone, and nothing reads it.** A deployment still

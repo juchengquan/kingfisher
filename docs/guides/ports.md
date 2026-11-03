@@ -311,8 +311,9 @@ and a sink that keeps state between events wants a lock.
 
 ## `UnusedResults` — what becomes of a saved result nothing names
 
-Every result kingfisher records — not a file tool's, nor the checklist's — is saved under
-`/scratchpad/tool_results/`, and the session's ledger names its file. Two things leave a
+A result kingfisher records — not a file tool's, nor the checklist's — is filed under
+`/scratchpad/tool_results/` once it leaves the conversation, or as it arrives where it is
+too long to show whole, and the session's ledger names its file. Two things leave a
 file there that no row names: a turn that died before it wrote its ledger, and a result
 older than `KINGFISHER_KEEP_RESULTS_ROUNDS` keeps, once its row is expired. Kingfisher's
 own plugin removes them; yours decides instead — keep them in an archive, count them,

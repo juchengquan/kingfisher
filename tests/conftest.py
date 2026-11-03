@@ -637,6 +637,7 @@ STANDING_UNWIRED: dict[str, Any] = {
     "permissions": None,
     "keep_results_rounds": None,
     "recorder": None,
+    "ledger": None,
     "clearing": None,
     "tools": None,
     "gated": (),

@@ -3,6 +3,7 @@ id the result ends with in what the model is handed."""
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -100,3 +101,33 @@ def stamped_id(text: str) -> str | None:
     """The id `text` ends in, or `None` where it ends in none."""
     found = _ENDING.search(text)
     return None if found is None else found.group("id")
+
+
+def kept_text(text: str, number: str, size: int) -> bytes | None:
+    """What a result's file holds, read back off `text`, the result as the conversation
+    has it; `None` where that is not the whole result.
+
+    Checked against the row's `size`, so a preview, or a stub a deployment's
+    `FilesystemMiddleware` left, is never filed as the result it stands for.
+    """
+    mark = stamp(number)
+    if not text.endswith(mark):
+        return None
+    content = text.removesuffix(mark).encode("utf-8")
+    return content if len(content) == size else None
+
+
+#: A tool's name may come from an MCP server or a module author, and the file name
+#: has to be one path segment however it was spelled.
+_UNSAFE = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def filed_at(route: str, number: str, tool: str, content: bytes) -> str:
+    """Where a result is filed: `route`, the tool results folder, and a name led by its
+    id, which is what the sweep and a `glob` for the id find it by."""
+    segment = _UNSAFE.sub("_", tool).strip("_")[:64] or "tool"
+    try:
+        json.loads(content)
+    except ValueError:
+        return f"{route}{number}-{segment}.txt"
+    return f"{route}{number}-{segment}.json"

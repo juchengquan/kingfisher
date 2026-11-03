@@ -2075,6 +2075,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         # What `Session.forget` raises for an id the memory file does not hold, which a
         # caller tells apart from a session a turn is holding.
         "MemoryEntryError": "embedder",
+        # What `Session.result` raises for an id no row has or a result kept nowhere,
+        # which a caller tells apart from a session it cannot reach.
+        "ResultError": "embedder",
         # `README.md` opens on these four and the package docstring on `run`. A
         # reader who copied either is owed them.
         "definitions_source": "document",
@@ -3740,8 +3743,8 @@ def test_every_record_this_package_hands_out_is_frozen():
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
     "ArtifactError", "CallerError", "CapabilityError", "DecisionError", "InputsError",
-    "MemoryEntryError", "QuotaExceededError", "SessionBusyError", "SubagentError",
-    "UnknownSessionError",
+    "MemoryEntryError", "QuotaExceededError", "ResultError", "SessionBusyError",
+    "SubagentError", "UnknownSessionError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.

@@ -400,12 +400,15 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         pdf_attachments=pdf_attachments,
         scratch_run_limit=scratch_run_limit,
         recorder=recorder,
+        ledger=ledger,
         clearing=result_clearing(
             ledger,
             trigger,
             clear_results_at,
             count=count,
             subject=f"subagent {spec.name!r}",
+            files=backend,
+            tool_results_route=cfg.layout.tool_results_route,
         ),
         # `None` permits nothing: an empty allowlist, not an absent one.
         tools=None

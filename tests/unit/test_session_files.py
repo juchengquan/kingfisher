@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,16 @@ from kingfisher import ArtifactError, Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import Sessions
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, INPUTS, SKILLS_ROUTE, Layout
+from kingfisher.core.layout import (
+    DEFAULT_LAYOUT,
+    HARNESS,
+    INPUTS,
+    LEDGER_FILE,
+    SKILLS_ROUTE,
+    TRANSCRIPT_FILE,
+    Layout,
+)
+from kingfisher.core.result import LedgerEntry
 from kingfisher.core.session.files import (
     InputsChanged,
     InputsPlacement,
@@ -27,6 +37,7 @@ from kingfisher.core.session.files import (
     read_artifact,
 )
 from kingfisher.core.session.steps import drive
+from kingfisher.core.session.transcript import Message, as_json
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import EVERY_TOOL, Through, an_agent, pin, start, supplied
 from tests.unit.scripted import Scripted
@@ -440,6 +451,29 @@ def test_the_command_writes_bytes_to_standard_output_untouched(
 
     assert code == 0
     assert capsysbinary.readouterr().out == b"\xff\x00\xfe"
+
+
+def test_the_command_prints_a_result_by_its_id_and_refuses_one_it_has_not(
+    at_the_command_line, capsys
+):
+    """A row names no file while its result is in the conversation, so this is how a
+    person at a terminal reads one; an id no row has is a refusal, not a traceback."""
+    _produced(at_the_command_line)
+    harness = at_the_command_line.workspace / "sessions" / "s" / HARNESS
+    harness.mkdir(parents=True, exist_ok=True)
+    entry = LedgerEntry(
+        id="A-0001", turn="t1", call="c1", run=None, role="main", tool="web_search",
+        args="", access=None, size=len("Ten results"), path=None, summary="web_search",
+    )
+    rows = [json.dumps(asdict(entry)), json.dumps({"turn": "t1"})]
+    (harness / LEDGER_FILE).write_text("\n".join(rows) + "\n")
+    said = Message(role="tool", content="Ten results\n[A-0001]", call_id="c1", name="web_search")
+    (harness / TRANSCRIPT_FILE).write_text(as_json((said,)))
+
+    assert main(["result", "--session", "s", "A-0001"]) == 0
+    assert capsys.readouterr().out == "Ten results"
+    assert main(["result", "--session", "s", "A-0009"]) == 2
+    assert "ResultError: no result A-0009" in capsys.readouterr().err
 
 
 def test_the_command_refuses_a_name_that_is_not_an_artifact(at_the_command_line, capsys):

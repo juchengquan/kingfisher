@@ -80,8 +80,8 @@ _READING = (
     ),
     (
         (GREP,),
-        "Search them with `grep`, a result too long to show you whole included: every "
-        "one is in the same folder, named after its id.",
+        "Search the filed ones with `grep`, a result too long to show you whole included: "
+        "every one is in the same folder, named after its id.",
     ),
     (
         (GLOB, READ_FILE),
@@ -322,7 +322,8 @@ def _expiring(rounds: int | None) -> str:
         return ""
     return (
         f"A result older than {rounds} rounds of this conversation expires: its file is "
-        "removed, so to see it again, call its tool again."
+        "removed, and it gets none once it leaves the conversation, so to see it again, "
+        "call its tool again."
     )
 
 

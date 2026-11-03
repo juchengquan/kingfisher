@@ -16,6 +16,10 @@ class ArtifactError(ValueError):
     """A name that is not something a turn produced, or that is not there."""
 
 
+class ResultError(ValueError):
+    """A result id the session's ledger holds no row for, or whose text is kept nowhere."""
+
+
 class MemoryEntryError(ValueError):
     """An id the session's memory file holds no entry for."""
 
@@ -101,15 +105,19 @@ class LedgerEntry:
     access: Listed | None
     #: The length in bytes of the result's text, as the tool returned it.
     size: int
-    #: Where the result is kept in the session, or `None` where the backend refused
-    #: the file; the row is kept either way.
+    #: Where the result is filed in the session, or `None` where it is not: still in the
+    #: conversation, expired, or `unkept`. A result is filed when it leaves the
+    #: conversation, and at once where it is too long to show whole.
     path: str | None
     #: The tool, its arguments and the first line of its result, and any attachment its
     #: saved copy, the text alone, left out. No model writes it.
     summary: str
-    #: The turn that removed its file for age, `path` then `None`. Apart from `path`, whose
-    #: `None` also means the backend refused the file, so the two read differently.
+    #: The turn that removed its file for age, `path` then `None`.
     expired_in: str | None = None
+    #: Whether the backend refused its file, so nothing holds the whole result. Apart from
+    #: `path`, whose `None` also means a result still in the conversation, which a later
+    #: save files.
+    unkept: bool = False
 
 
 @dataclass(frozen=True)

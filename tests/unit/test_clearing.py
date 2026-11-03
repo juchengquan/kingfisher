@@ -11,10 +11,11 @@ wherever the test did.
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from typing import Any
 
 import pytest
+from deepagents.backends.protocol import FileUploadResponse
 from deepagents.middleware import SubAgentMiddleware
 from langchain.agents.middleware import ExtendedModelResponse, ModelRequest, ModelResponse
 from langchain_anthropic import ChatAnthropic
@@ -36,7 +37,7 @@ from kingfisher.core.agent.middlewares.recorded import arguments, stamp, summary
 from kingfisher.core.agent.middlewares.recorder import UNRECORDED
 from kingfisher.core.agent.models import SummarizerCount, summarizer_count, summarizer_trigger
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TRANSCRIPT_FILE
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, LEDGER_FILE, TRANSCRIPT_FILE
 from kingfisher.core.result import MAIN, LedgerEntry
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
@@ -67,6 +68,30 @@ def _text(first: str) -> str:
     return f"{first}\n{BIG}"
 
 
+class Files:
+    """A backend's two save calls, keeping what each save held, in order, and refusing
+    whatever path `refusing` names."""
+
+    def __init__(self, refusing: frozenset[str] = frozenset()) -> None:
+        self.saves: list[dict[str, bytes]] = []
+        self.refusing = refusing
+
+    def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
+        self.saves.append(dict(files))
+        return [
+            FileUploadResponse(path=p, error="permission_denied" if p in self.refusing else None)
+            for p, _ in files
+        ]
+
+    async def aupload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
+        return self.upload_files(files)
+
+    @property
+    def held(self) -> dict[str, bytes]:
+        """Every file saved, by path."""
+        return {path: content for save in self.saves for path, content in save.items()}
+
+
 class Talk:
     """A main agent's conversation built call by call, with the rows the turn's recorder
     would have kept for it: a row and an id for every successful result of a recorded
@@ -76,6 +101,8 @@ class Talk:
     def __init__(self, earlier: KeptLedger | None = None) -> None:
         self.messages: list[Any] = [HumanMessage("go", id="m0")]
         self.ledger = Ledger("t", earlier or KeptLedger())
+        #: Where a pass files what it clears.
+        self.files = Files()
         #: The message being built and its recorded calls, in the order they were
         #: written: what the turn's recorder numbers together, a file tool no part of it.
         self._numbered: tuple[str, list[str]] = ("", [])
@@ -127,7 +154,8 @@ class Talk:
                 LedgerEntry(
                     id=number, turn="t", call=at, run=None, role=MAIN, tool=name,
                     args=written, access=None, size=len(text.encode("utf-8")),
-                    path=f"{TOOL_RESULTS_ROUTE}{number}-{name}.txt",
+                    # Filed only as it leaves the conversation.
+                    path=None,
                     summary=summary(name, written, text),
                 )
             )
@@ -172,9 +200,7 @@ class Talk:
             heard.append(request)
             return ModelResponse(result=[AIMessage("ok")])
 
-        returned = ResultClearingMiddleware(
-            self.ledger, high, tools, count=count
-        ).wrap_model_call(request, model)
+        returned = _passing(self, high, tools, count=count).wrap_model_call(request, model)
         (asked,) = heard
         if isinstance(returned, ExtendedModelResponse):
             assert returned.command is not None
@@ -189,6 +215,23 @@ class Talk:
     ) -> list[Any]:
         """The conversation after one model call at this high mark."""
         return _applied(self.messages, self.passed(high, sent, tools=tools)[1])
+
+
+def _passing(
+    talk: Talk,
+    high: int,
+    tools: tuple[str, ...] | None = None,
+    *,
+    count: SummarizerCount = FAKE_COUNT,
+) -> ResultClearingMiddleware:
+    return ResultClearingMiddleware(
+        talk.ledger,
+        high,
+        tools,
+        count=count,
+        files=talk.files,
+        tool_results_route=TOOL_RESULTS_ROUTE,
+    )
 
 
 def _applied(messages: list[Any], update: dict[str, Any] | None) -> list[Any]:
@@ -443,6 +486,72 @@ def test_an_expired_result_is_cleared_and_says_to_call_its_tool_again():
     assert "bytes, cleared; expired, call http_fetch again to see it)" in handle
     assert "grep" not in handle
     assert handle.endswith("\n[A-0001]")
+
+
+def test_a_result_that_expired_in_the_conversation_is_cleared_without_a_file():
+    """Past the rounds a deployment keeps, a result still in the conversation is not
+    filed as it leaves: filed, it would be kept after all, longer than the rounds say."""
+    earlier = Talk()
+    old = earlier.call("http_fetch", {"url": "https://a.example"}, _text("<html>"))
+    (row,) = earlier.ledger.entries
+    kept = KeptLedger(
+        lines=(json.dumps(asdict(row)), json.dumps({"turn": "t"})),
+        last=1,
+        exchanges=((row,),),
+    )
+    talk = Talk()
+    talk.ledger = Ledger("t2", kept, keep_rounds=1)
+    talk.messages = list(earlier.messages)
+    talk.call("web_search", {"query": "bulk"}, _text("bulk"))
+    talk.pad()
+
+    handle = _of(talk.cleared(), old).content
+
+    assert "bytes, cleared; expired, call http_fetch again to see it)" in handle
+    assert not [path for path in talk.files.held if "http_fetch" in path]
+
+
+# -- filed as it is cleared ------------------------------------------------------------
+
+
+def test_a_pass_files_what_it_clears_in_one_save_as_its_tool_returned_it():
+    """Until it is cleared the conversation is a result's one copy, so the pass files it:
+    written with its id on, a JSON result no longer parses, and a save each is a round
+    trip each on a remote backend. A result the pass spares is not filed at all."""
+    rows = json.dumps({"rows": ["x" * 8_000]})
+    talk = Talk()
+    first = talk.call("sql_query", {"query": "q"}, rows)
+    talk.call("web_search", {"query": "b"}, _text("b"))
+    talk.pad()
+
+    after = talk.cleared()
+
+    filed = {
+        f"{TOOL_RESULTS_ROUTE}A-0001-sql_query.json": rows.encode(),
+        f"{TOOL_RESULTS_ROUTE}A-0002-web_search.txt": _text("b").encode(),
+    }
+    assert talk.files.saves == [filed]
+    assert [talk.ledger.row(n).path for n in ("A-0001", "A-0002")] == list(filed)
+    assert f"full result: {TOOL_RESULTS_ROUTE}A-0001-sql_query.json)" in _of(after, first).text
+    assert [talk.ledger.row(f"A-000{n}").path for n in range(3, 7)] == [None] * 4
+
+
+def test_a_result_whose_file_is_refused_stays_whole():
+    """The conversation is its one copy until it is filed: swapped for a handle anyway,
+    it is gone, and the handle names a file that was never written. Left whole, it is
+    still in the conversation, for the next pass to try again."""
+    talk = Talk()
+    filed = talk.call("web_search", {"query": "a"}, _text("a"))
+    refused = talk.call("web_search", {"query": "b"}, _text("b"))
+    talk.pad()
+    talk.files.refusing = frozenset({f"{TOOL_RESULTS_ROUTE}A-0002-web_search.txt"})
+
+    after = talk.cleared()
+
+    assert "cleared; full result:" in _of(after, filed).text, "the control: no pass ran"
+    assert _of(after, refused).text == talk.result(refused).text
+    row = talk.ledger.row("A-0002")
+    assert row is not None and (row.path, row.unkept) == (None, False)
 
 
 def test_a_file_tools_handle_names_the_call_that_gets_it_back():
@@ -745,7 +854,7 @@ def _overflowing(
     async def amodel(request: Any) -> ModelResponse:
         return model(request)
 
-    clearing = ResultClearingMiddleware(talk.ledger, high, tools, count=FAKE_COUNT)
+    clearing = _passing(talk, high, tools)
     try:
         returned = clearing.wrap_model_call(request, model)
     except Exception as exc:  # noqa: BLE001 -- the error is what the test reads
@@ -1055,9 +1164,33 @@ def test_a_long_turn_clears_and_the_transcript_carries_the_handles(bulky):
         assert kept.startswith(f"row {call[1]}-0000") and len(kept) > 16_000
     for call in ("c3", "c4", "c5", "c6"):
         assert len(said[call]) > 16_000, call
+    # Only what left the conversation was filed: the rest are whole in the transcript.
+    folder = cfg.workspace / "sessions" / "s" / "scratchpad" / "tool_results"
+    assert sorted(one.name for one in folder.iterdir()) == ["A-0001-bulky.txt", "A-0002-bulky.txt"]
     # The model was handed the handle on the calls after the pass, not only the file.
     last = [m.content for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
     assert last[0] == said["c1"] and last[1] == said["c2"]
+
+
+def test_an_earlier_turns_result_is_filed_when_a_later_turn_clears_it(bulky):
+    """Carried from turn to turn in the conversation, a result has no file until a turn
+    clears it; filed then without its row naming the file, the sweep at that turn's end
+    removes the file the handle has just named."""
+    cfg = _marked(bulky, clear_results_at=12_000)
+    folder = cfg.workspace / "sessions" / "s" / "scratchpad" / "tool_results"
+    _turn(cfg, _one("bulky", 1, n=1), AIMessage(content="done"))
+    assert not folder.exists() or not list(folder.iterdir()), "the control: filed already"
+
+    _turn(cfg, *(_one("bulky", n, n=n) for n in range(2, 8)), AIMessage(content="done"))
+    _turn(cfg, AIMessage(content="done"))
+
+    path = "/scratchpad/tool_results/A-0001-bulky.txt"
+    said = next(one.content for one in _transcript(cfg) if one.call_id == "c1")
+    assert f"cleared; full result: {path})" in said
+    rows = (cfg.workspace / "sessions" / "s" / HARNESS / LEDGER_FILE).read_text()
+    first = next(json.loads(line) for line in rows.splitlines() if '"A-0001"' in line)
+    assert first["path"] == path
+    assert (folder / "A-0001-bulky.txt").read_text(encoding="utf-8").startswith("row 1-0000")
 
 
 def test_a_long_results_handle_finds_it_after_the_turn(bulky):

@@ -251,6 +251,14 @@ class KeptLedger:
         """The entries recorded since the last user message."""
         return self.exchanges[-1] if self.exchanges else ()
 
+    def row(self, number: str) -> LedgerEntry | None:
+        """The row of result `number`, closed or not, or `None` where none is kept."""
+        for group in (*self.exchanges, *self.unclosed):
+            for entry in group:
+                if entry.id == number:
+                    return entry
+        return None
+
 
 def read_ledger(harness: Any) -> Steps[KeptLedger]:
     """This session's ledger, or an empty one where no turn has written it."""
@@ -353,25 +361,29 @@ def expired(
         return earlier
     kept = rounds if resumed else rounds - 1
     old = max(len(earlier.exchanges) - kept, 0)
+    # One still in the conversation as well as one filed: expired there, it gets no file
+    # when it leaves, and its handle says to call the tool again.
     expiring = {
-        entry
+        entry.id
         for exchange in (*earlier.exchanges[:old], *earlier.unclosed[:old])
         for entry in exchange
-        if entry.path is not None
+        if entry.expired_in is None and not entry.unkept
     }
-    if not expiring:
+    return patched(earlier, {one: {"path": None, "expired_in": turn} for one in expiring})
+
+
+def patched(earlier: KeptLedger, changes: Mapping[str, Mapping[str, Any]]) -> KeptLedger:
+    """`earlier` with each row `changes` names by id given the fields it maps to."""
+    if not changes:
         return earlier
     lines = []
     for line in earlier.lines:
         row = json.loads(line)
         # Patched as parsed rather than rewritten from the entry, which would drop any key
         # this version does not read.
-        lines.append(
-            json.dumps({**row, "path": None, "expired_in": turn}, ensure_ascii=False)
-            if _entry(row) in expiring
-            else line
-        )
-    return _kept("\n".join(lines))
+        change = changes.get(row["id"]) if _entry(row) is not None else None
+        lines.append(line if change is None else json.dumps({**row, **change}, ensure_ascii=False))
+    return earlier if lines == list(earlier.lines) else _kept("\n".join(lines))
 
 
 def write_ledger(  # noqa: PLR0913 -- three marks, by keyword so none is passed for another
