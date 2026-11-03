@@ -89,15 +89,19 @@ class Prepared:
     #: The inputs folder as this turn's message described it, kept with the transcript
     #: that carries the message; `None` where there is nothing to keep.
     inputs_seen: Mapping[str, str | None] | None = None
+    #: The tool names this turn's graph offers, as `Assembled.granted`; `None` where
+    #: nothing narrows them or the caller built the graph.
+    granted: tuple[str, ...] | None = None
 
 
-def turn_message(
+def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
     task: str,
     changed: InputsChanged,
     earlier: KeptLedger | None = None,
     *,
     layout: Layout,
     note: str = "",
+    unavailable: tuple[str, ...] = (),
 ) -> str:
     """The task and the caller's note, plus this turn's facts and nothing more.
 
@@ -108,6 +112,9 @@ def turn_message(
     # after it are about where the work is done.
     noted = f"{note}\n\n" if note else ""
     arrived = _inputs_changed(changed, layout.inputs_route)
+    # Each call the conversation shows invites another; refused, it costs a model call,
+    # and on MiniMax-M3 one agent said it had re-read a file it no longer could.
+    lacking = f" Not available on this turn: {', '.join(unavailable)}." if unavailable else ""
     # Here, never in the system prompt: a line changing every turn in the cached prefix
     # would miss the cache on every call.
     shown = ledger_shown(earlier) if earlier is not None else ""
@@ -120,8 +127,18 @@ def turn_message(
         f"{noted}"
         f"{layout.scratch_route} is yours to work in (from the shell, {layout.scratchpad})."
         f"{arrived}"
+        f"{lacking}"
         f"{ledger}"
     )
+
+
+def not_offered(history: tuple[Message, ...], granted: tuple[str, ...] | None) -> tuple[str, ...]:
+    """The tools the conversation shows called that this turn does not offer, or none where
+    nothing narrows what it offers."""
+    if granted is None:
+        return ()
+    called = {call.name for message in history for call in message.tool_calls}
+    return tuple(sorted(called - set(granted)))
 
 
 def _inputs_changed(changed: InputsChanged, route: str) -> str:

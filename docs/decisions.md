@@ -4417,6 +4417,18 @@ it is not available, and answered from the history at one model call's cost; one
 had re-checked a file it never read. **Not taken:** a session answering only callers who reach every agent that ran in it,
 which is the pin again under another name. *(2026-11-03.)*
 
+**A turn is told which tools the conversation shows called that it does not offer.** A
+second agent handed the first one's calls made them again. On MiniMax-M3, five sessions
+whose second turn, on an agent with neither `ls` nor `read_file`, was asked to check a
+file the first turn had read: 4 of 5 called a tool they lacked, each refused at a model
+call's cost. With `Not available on this turn: ls, read_file.` in the turn's message, 0 of
+5 did. Names alone, as the inputs line is, and only the tools the history shows called,
+which are the ones a model reaches for; in the message, not the system prompt, for that
+line's reason. Nothing is said where nothing narrows the turn's tools or the caller built
+the graph, since there is nothing to compare. **Not mended by it:** a turn saying it had
+re-checked what it could not, 1 of 5 before and 2 of 5 after. That is conduct, and the line
+states only the fact. *(2026-11-03.)*
+
 **A turn tells a session another turn used by its conversation.** A refusal after the
 claim deletes a session this request made, and a listing that missed a session makes
 one already used look made; any pin found under the claim said otherwise (#1122). With

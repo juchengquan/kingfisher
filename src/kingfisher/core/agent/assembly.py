@@ -139,6 +139,9 @@ class Assembled:
     skills: Any = None
     interrupt_on: Mapping[str, Any] | None = None
     subagents: list[Any] | None = None
+    #: The tool names the graph offers, or `None` where nothing narrows them. Not a
+    #: keyword of the build: what it was granted, which only the last build knows.
+    granted: tuple[str, ...] | None = None
 
 
 def memory_is_denied(layout: Layout) -> FilesystemPermission:
@@ -619,6 +622,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         return Assembled(
             graph=graph,
             context=ToolContext(backend=under_rules, caller=caller, reachable=reachable),
+            granted=granted,
             **attached,
         )
 

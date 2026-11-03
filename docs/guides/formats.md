@@ -151,10 +151,11 @@ decides where every prompt in the turn goes and what it costs.
 **A session may run a different agent on each turn.** A turn reads the agent it names as
 that agent's file says then, and is handed the whole conversation so far, whichever
 agents made it: another prompt, perhaps another model, and calls to tools it may not
-have. Who may run an agent is its `source_ids:`; which agents ran in a session before
-decides nothing, so who may use a session is for your application to decide before it
-calls. A `Resume` is the exception: it names the agent the turn paused under, the only
-one whose graph can continue it, and naming another is refused.
+have, which its message names. Who may run an agent is its `source_ids:`; which agents
+ran in a session before decides nothing, so who may use a session is for your
+application to decide before it calls. A `Resume` is the exception: it names the agent
+the turn paused under, the only one whose graph can continue it, and naming another is
+refused.
 
 ### The prompt is added to, not replaced
 
