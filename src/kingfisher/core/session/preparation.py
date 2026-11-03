@@ -71,6 +71,7 @@ from .turn import (
     Prepared,
     decision_discarded,
     history_lost,
+    not_offered,
     turn_message,
 )
 
@@ -365,6 +366,7 @@ class Preparation:
             earlier,
             layout=layout,
             note=getattr(request, "note", ""),
+            unavailable=not_offered(history, prepared.granted),
         )
         return replace(prepared, message=message, inputs_seen=now)
 
@@ -542,6 +544,7 @@ class Preparation:
             harness=harness,
             saver=saver,
             context=built.context if isinstance(built, Assembled) else None,
+            granted=built.granted if isinstance(built, Assembled) else None,
             resume=resume,
             discarded=discarded,
             agent_name=agent.name if agent is not None else None,

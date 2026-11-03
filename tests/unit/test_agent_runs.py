@@ -230,3 +230,37 @@ def test_the_pin_an_older_session_kept_decides_nothing(scripted):
     ran = kf.run(Request("go", agent="other", session_id="s"), source_ids=("B",))
 
     assert ran.answer == "done"
+
+
+LISTS = """name: lists
+description: Lists files.
+builtin_tools: [ls]
+system_prompt: |
+  You list files.
+"""
+
+
+def _last_asked() -> str:
+    """The message the last model call was handed as the user's."""
+    content = next(m.content for m in reversed(Scripted.heard[-1]) if m.type == "human")
+    assert isinstance(content, str), content
+    return content
+
+
+def test_a_turn_is_told_which_tools_called_earlier_it_does_not_have(scripted):
+    """A second agent shown the first one's calls made them again, each refused at a model
+    call's cost, and on MiniMax-M3 one said it had re-read a file it no longer could."""
+    _agents(scripted, LISTS, OTHER)
+    kf = Kingfisher(scripted, sessions=LocalSessions())
+    listed = AIMessage(content="", tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": "c1"}])
+    Scripted.script.extend([listed, AIMessage(content="listed"), AIMessage(content="answered")])
+    kf.run(Request("list", agent="lists", session_id="s"))
+
+    kf.run(Request("again", agent="other", session_id="s"))
+    told = _last_asked()
+    # The control beside it: the agent that has the tool is told nothing.
+    Scripted.script.append(AIMessage(content="listed again"))
+    kf.run(Request("once more", agent="lists", session_id="s"))
+
+    assert "Not available on this turn: ls." in told
+    assert "Not available" not in _last_asked()
