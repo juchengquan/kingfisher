@@ -190,19 +190,21 @@ jobs:
         run: |
           uv build --wheel --out-dir /tmp/wheels .
           uv venv /tmp/floors
-          VIRTUAL_ENV=/tmp/floors uv pip install "$(ls /tmp/wheels/kingfisher-*.whl)[fence]" -c /tmp/floors.txt
+          VIRTUAL_ENV=/tmp/floors uv pip install "$(ls /tmp/wheels/kingfisher-*.whl)[fence,loguru]" -c /tmp/floors.txt
           VIRTUAL_ENV=/tmp/floors uv pip check
 
       # Loading, not the suite: the suite also reads data a release ships, such
       # as a provider's model windows, so a floor run would answer for that too.
       # Every public name reaches the private imports a floor has to cover;
       # `tool_guards.py`'s import of `_signature_parameters` needs
-      # `langchain-core` 1.6.7, and this is the step it fails.
+      # `langchain-core` 1.6.7, and this is the step it fails. `LoguruEvents` by
+      # name, since no name on `kingfisher` imports the `loguru` floor.
       - name: Every public name loads
         run: |
           /tmp/floors/bin/python -c "
           import kingfisher
           for name in kingfisher._EXPORTS:
               getattr(kingfisher, name)
-          print(f'{len(kingfisher._EXPORTS)} public names, at the floors')
+          from kingfisher.plugins import LoguruEvents
+          print(f'{len(kingfisher._EXPORTS)} public names and LoguruEvents, at the floors')
           "

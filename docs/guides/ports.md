@@ -388,18 +388,24 @@ and setting `kingfisher.run` or `kingfisher.warnings` alone touches only that on
 `kingfisher` itself and none of its children's, and every record kingfisher writes is
 a child's.
 
-**On loguru**, until kingfisher ships a sink for it: the standard bridge, the
-`InterceptHandler` loguru's documentation gives, passes on a record's message and
-nothing else, so the event is lost on the way. Bind it into loguru's context where the
-bridge logs, as one field:
+**On loguru**, pass `LoguruEvents`, which `pip install 'kingfisher[loguru]'` brings:
 
 ```python
-bound = logger.bind(kingfisher=record.kingfisher) if hasattr(record, "kingfisher") else logger
-bound.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+from kingfisher.plugins import LoguruEvents
+
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(), run_events=LoguruEvents())
 ```
 
-Or skip Python's logging: a sink of your own can hand each event to loguru itself, as
-`logger.bind(kingfisher=dict(event)).log(event["level"], event["message"])`.
+Each event is a loguru record at its `level`, saying its `message`, with the whole event
+as one field, `record["extra"]["kingfisher"]`. `logger.disable("kingfisher")` silences
+them, as it would any library's. That is the reason to pass this rather than write your
+own: loguru names a record after the module that logged it, so a sink of yours calling
+loguru is named after your app, and `disable("kingfisher")` misses it without a word.
+`LoguruEvents` logs from kingfisher's module, so a sink of yours that wraps it, to send
+each event somewhere else as well, keeps the switch working.
+
+LangChain and httpx still log through Python's logging, so keep loguru's standard
+bridge, the `InterceptHandler` its documentation gives, for their records.
 
 **A warning of your own goes to the same sink.** A plugin of yours that has something
 to say about a turn says it with `warn`, and the deployment hears it beside

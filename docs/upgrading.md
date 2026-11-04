@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## An app on loguru passes `LoguruEvents`, after #1207
+
+- **`LoguruEvents`, on `kingfisher.plugins`, hands every event to loguru**: install
+  `kingfisher[loguru]` and pass `run_events=LoguruEvents()`. Each record is at the
+  event's `level`, says its `message`, and carries the whole event as
+  `record["extra"]["kingfisher"]`; `logger.disable("kingfisher")` silences them. A sink
+  of yours that called loguru itself can go: its records were named after your app, so
+  that switch missed them.
+- **Unchanged**: nothing is installed for an app that does not ask for the extra, and
+  LangChain and httpx still log through Python's logging.
+
 ## The command's log lines name their turn, and take a level, after #1206
 
 - **Each of kingfisher's log lines the command prints on stderr is led by its ids**: the

@@ -1436,8 +1436,9 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # the Linux shell fence, which is the OS in the most literal sense this table holds
     # -- Landlock, applied to a process before it execs. Optional and Linux-only, so
     # both imports of `sandlock` are inside functions behind an `ImportError` or a
-    # platform check, and a macOS install never sees it.
-    "plugins": frozenset({"deepagents", "sandlock"}),
+    # platform check, and a macOS install never sees it. And `loguru`, for `LoguruEvents`
+    # alone: an extra too, loaded only by naming that class.
+    "plugins": frozenset({"deepagents", "loguru", "sandlock"}),
     # Registering skills means handing them to the runtime that reads them: `registry`
     # asks deepagents which skills an agent will actually have. That cannot be done from
     # outside, and inverting it behind a port would put one implementation behind an
@@ -1608,8 +1609,8 @@ def test_an_unspent_grant_is_what_that_rule_reads():
     nothing about whether the predicate can tell them apart. Read against the table
     rather than a copy of it, for the reason the rule beside `_undeclared` is.
     """
-    assert _unspent("plugins", {"deepagents", "sandlock", "json"}) == set()
-    assert _unspent("plugins", {"deepagents"}) == {"sandlock"}
+    assert _unspent("plugins", {"deepagents", "loguru", "sandlock", "json"}) == set()
+    assert _unspent("plugins", {"deepagents", "loguru"}) == {"sandlock"}
     assert _unspent("", set()) == set()
 #: What may import from `plugins/`: the command, which may import anything. The plugins'
 #: own address is inside `plugins/`, and the package root names none of them.
@@ -2197,6 +2198,8 @@ WITNESSES: dict[str, dict[str, str]] = {
         "InstructionsFile": "embedder",
         "DeleteUnusedResults": "embedder",
         "AgentsMiddlewares": "embedder",
+        # `ports.md` passes it for an app that logs through loguru.
+        "LoguruEvents": "document",
         # `ports.md` names it as what a deployment leaving the limit out is given.
         "NoScratchRunLimit": "document",
         # What `UnusedResults.settle` is handed, which `ports.md` writes out in its

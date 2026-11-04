@@ -122,6 +122,12 @@ dependencies = [
 # written without the authority its target required -- so a lower pin installs a
 # fence with known holes in the one thing it is here to do.
 fence = ["sandlock>=0.8.8; sys_platform == 'linux'"]
+# `LoguruEvents`, for an app that logs through loguru. An extra because an app that
+# does not should not install it. The floor is the lowest that runs on 3.12, measured
+# against its tests: 0.3 imports `distutils`, which 3.12 removed. No higher, because the
+# app installing this already pins a loguru, and a floor above what the sink needs is a
+# conflict with that pin.
+loguru = ["loguru>=0.4.0"]
 
 [project.scripts]
 # This said "seeding a workspace and looking at one, which are the two things
