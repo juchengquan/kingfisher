@@ -3474,8 +3474,8 @@ one clock per program, stricter than the claim needs; and renewing the claim whi
 lives. Renewal would also cover a slow tool and a `task()` from code, but it cannot tell a
 long step from a stuck one -- a hung tool would keep its session locked as long as the
 process lived -- and it changes every `Sessions`. Build it when a deployment needs a turn
-to outlast its deadline. Still open: refusing new `tools.*` and `task()` calls from code
-once the turn is out of time. *(2026-11-04.)*
+to outlast its deadline. Still open, with what was measured, in `ONGOING.md`: refusing
+new `tools.*` and `task()` calls from code once the turn is out of time. *(2026-11-04.)*
 
 **An output is not evidence the command wrote it.** The run's folder is in the session's
 scratchpad because the Linux fences grant one session and nothing else, so the agent's

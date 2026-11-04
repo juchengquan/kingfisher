@@ -155,6 +155,15 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   answers the M2.5 one above as well. It reads a sessions folder, and the run log when
   given one, and prints counts only -- nothing anyone said, no session ids -- so its
   output can be sent back as it is. *(2026-11-01.)*
+- **`scripts/turn_deadline_survey.py` on the client's deployment.** Whether to stop a
+  turn's work at its limit, which #1201 left open, waits on how often real programs and
+  subagents run near or past it. Measured with test models under a 2s limit: a program's
+  tool calls kept starting after it, 4 of 6, built-in ones too; a subagent ran all its
+  calls though the turn was reported cut short, and with #1188 merged in its tool calls
+  stopped but 4 of its 7 model calls still came after the limit. A refusal in
+  `GuardedTool` stopped the offered tools and not `write_file` from the same program.
+  The survey reads the run log and prints counts only -- nothing anyone said, no ids, no
+  offered tool's name -- so its output can be sent back as it is. *(2026-11-04.)*
 - **What slots cost, on a real deployment.** A slot keyed on a name no tool lock uses
   gives two grants with one tool list two system prompts and a cache entry each; a
   subagent's prompt grows with every slot its grant fills. On the shipped assets neither
