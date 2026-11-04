@@ -75,7 +75,7 @@ from .turn import (
     not_offered,
     turn_message,
 )
-from .turnlog import resuming
+from .turnlog import logged_turns, resuming
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -236,9 +236,12 @@ class Preparation:
             )
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
         earlier = (yield from read_ledger(harness)) if self._graph is None else None
-        if earlier is not None and request.turn_id in earlier.turns:
-            # The ledger names a turn only by its id, so two turns under one could not be
-            # told apart in it.
+        # The ledger, written before the log, names every turn the log opens; a supplied
+        # graph keeps none, and the log is all that names its turns.
+        taken = earlier.turns if earlier is not None else (yield from logged_turns(harness))
+        if request.turn_id in taken:
+            # The ledger and the log name a turn only by its id: a second turn under one
+            # would take the first one's place in the log, and its copies of files.
             msg = (
                 f"session {session.id} already has a turn {request.turn_id!r}; "
                 "give each turn an id of its own"
@@ -246,9 +249,7 @@ class Preparation:
             raise TurnIdError(msg)
         # Before the build, because every row the graph records names the turn; and before
         # the memory store is asked, so that a warning from here on names it too.
-        turn = session.allocate_turn(
-            request.turn_id, taken=earlier.turns if earlier is not None else ()
-        )
+        turn = session.allocate_turn(request.turn_id, taken=taken)
         stamp_warnings(
             session_id=session.id,
             turn_id=turn.id,

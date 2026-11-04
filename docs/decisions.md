@@ -3899,15 +3899,17 @@ It buys no de-duplication on a retry, which the id never gave.
 turn ids" had stopped being true: the ledger names a turn only by its id -- a row by the
 turn that recorded it, an expiry by the turn that removed the file -- so two turns under
 one id could not be told apart, and rows a cut turn left open were closed by whichever
-later turn reused its id. Rewind, being built in slices, names a turn by its id and
-records each turn's parent by it. A caller's id still
-wins, but one the session holds is refused with `TurnIdError` under the claim, before
+later turn reused its id. Rewind names a turn by its id and records each turn's parent
+by it. A caller's id still wins, but one the session holds is refused with `TurnIdError` under the claim, before
 inputs are placed or a pause is cleared; a made id that repeats one is drawn again,
 since eight hex digits repeat over enough turns. Refused rather than renamed: a caller
 passes its own id to tie the run to its request, and a renamed turn would cut that tie
 without a word. Still no de-duplication: a retry under the same id is refused, not
-answered with the first run's result. The ids held are the ones the ledger names, so a
-graph a deployment supplies, which keeps no ledger, is not checked yet.
+answered with the first run's result. The ids held are the ones the ledger names, and
+for a graph a deployment supplies, which keeps no ledger, the ones its turn log opens:
+unchecked, a second turn under one id was logged as its own parent, and `turns` and
+`rewind` walked that loop forever. A graph built here reads only the ledger, which is
+written before the log and so names every turn the log does.
 
 **A request's files go to `/inputs` with the session's.** Once a turn had nowhere of its
 own, a per-turn field and a per-session one were two fields for one operation, and they
