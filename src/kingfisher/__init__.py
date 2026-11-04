@@ -27,6 +27,8 @@ _EXPORTS = {
     "QuotaExceededError": "kingfisher.core.session.model",
     "SessionBusyError": "kingfisher.core.session.model",
     "TurnIdError": "kingfisher.core.session.model",
+    "RewindError": "kingfisher.core.session.model",
+    "START": "kingfisher.core.session.model",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
     # For an offered tool file, outside the wheel by construction, to annotate
     # `runtime: ToolRuntime[ToolContext]`: a bare `ToolRuntime` has pydantic warn per call.
@@ -70,6 +72,8 @@ _EXPORTS = {
     "CompiledSubagent": "kingfisher.core.definitions.subagents.spec",
     "RunEvent": "kingfisher.core.result",
     "RunResult": "kingfisher.core.result",
+    "Rewound": "kingfisher.core.result",
+    "TurnRecord": "kingfisher.core.result",
     # What `Kingfisher.sent` answers: the first model call of a turn, as it would be sent.
     "Sent": "kingfisher.core.result",
     "SentBlock": "kingfisher.core.result",
@@ -101,6 +105,7 @@ _EXPORTS = {
 __all__ = [
     "KINDS",
     "SENT_SOURCES",
+    "START",
     "STOP_REASONS",
     "UNSCOPED",
     "ArtifactError",
@@ -139,6 +144,8 @@ __all__ = [
     "Request",
     "ResultError",
     "Resume",
+    "RewindError",
+    "Rewound",
     "RunEvent",
     "RunOn",
     "RunResult",
@@ -153,6 +160,7 @@ __all__ = [
     "ToolContext",
     "ToolSpec",
     "TurnIdError",
+    "TurnRecord",
     "UnknownSessionError",
     "WorkspacePaths",
     "config_from_env",
@@ -221,17 +229,21 @@ if TYPE_CHECKING:
     from kingfisher.core.result import MemoryEntryError as MemoryEntryError
     from kingfisher.core.result import PendingDecision as PendingDecision
     from kingfisher.core.result import ResultError as ResultError
+    from kingfisher.core.result import Rewound as Rewound
     from kingfisher.core.result import RunEvent as RunEvent
     from kingfisher.core.result import RunResult as RunResult
     from kingfisher.core.result import Sent as Sent
     from kingfisher.core.result import SentBlock as SentBlock
     from kingfisher.core.result import SentTool as SentTool
+    from kingfisher.core.result import TurnRecord as TurnRecord
     from kingfisher.core.run import run as run
     from kingfisher.core.run import stream as stream
     from kingfisher.core.service import Kingfisher as Kingfisher
     from kingfisher.core.session.files import InputsError as InputsError
     from kingfisher.core.session.handle import Session as Session
+    from kingfisher.core.session.model import START as START
     from kingfisher.core.session.model import QuotaExceededError as QuotaExceededError
+    from kingfisher.core.session.model import RewindError as RewindError
     from kingfisher.core.session.model import SessionBusyError as SessionBusyError
     from kingfisher.core.session.model import TurnIdError as TurnIdError
     from kingfisher.core.session.model import UnknownSessionError as UnknownSessionError

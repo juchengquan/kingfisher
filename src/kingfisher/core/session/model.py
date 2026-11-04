@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Collection, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
 from uuid import uuid4
 from weakref import WeakKeyDictionary
@@ -17,6 +18,20 @@ class UnknownSessionError(ValueError):
 
 class TurnIdError(ValueError):
     """A request named a turn id its session already holds."""
+
+
+class RewindError(ValueError):
+    """A rewind named a turn its session cannot be put back to."""
+
+
+class Start(Enum):
+    """Before a session's first turn, as `Session.rewind` is told to go back to it: a value
+    of its own, so an unset variable passed as the turn can never empty a session."""
+
+    START = "start"
+
+
+START = Start.START
 
 
 class SessionBusyError(ValueError):

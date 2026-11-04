@@ -25,6 +25,8 @@ from .store import (
     read_transcript,
     write_ledger,
 )
+from .transcript import from_record
+from .turnlog import read_turn_log
 from .unused import UnusedFiles, settle_unused
 
 if TYPE_CHECKING:
@@ -331,7 +333,8 @@ def _swept(
 def read_result(files: Any, number: str) -> Steps[str]:
     """Result `number`'s text, as its tool returned it: from its file where its row names
     one, else from the conversation, which holds it whole until it is filed -- an expired
-    one too, until it leaves.
+    one too, until it leaves -- else from the turn log, which keeps it as first written
+    once a rewind has left its turn behind.
 
     `ResultError` for an id no row has, and for a result kept nowhere.
     """
@@ -346,7 +349,12 @@ def read_result(files: Any, number: str) -> Steps[str]:
             raise ResultError(msg)
         return answer.content.decode("utf-8")
     said, _ = yield from read_transcript(HarnessFiles(files))
-    for message in said:
+    logged = [
+        from_record(line)
+        for line in (yield from read_turn_log(HarnessFiles(files)))
+        if line.get("turn") == row.turn and line.get("call_id") == row.call
+    ]
+    for message in (*said, *logged):
         if message.call_id == row.call and (
             content := kept_text(message.content, row.id, row.size)
         ) is not None:

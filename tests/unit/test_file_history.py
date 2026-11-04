@@ -102,7 +102,8 @@ def test_a_turn_past_its_deadline_copies_nothing_and_the_next_turn_does(cfg):
     _run(late, "t1")
 
     assert _history(cfg)["t1"]["not_kept"]["outputs/report.txt"]["why"] == LATE
-    assert not (_session(cfg) / HARNESS / KEPT_FILES).exists()
+    # The harness's own small files are still kept beside it: no slower than the ledger.
+    assert not (_session(cfg) / HARNESS / KEPT_FILES / "t1" / "outputs").exists()
 
     _run(Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions()), "t2")
 

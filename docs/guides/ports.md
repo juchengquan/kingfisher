@@ -921,8 +921,8 @@ and makes nothing, for a session that is gone.
 
 **And what it keeps about the session, under `/.harness`.** Its conversation, every
 turn's messages as first written, its inputs folder as the last turn found it, a copy
-of each file a turn left changed in `/outputs` and `/memory`, and a turn paused at an
-approval gate are all written
+of each file a turn left changed in `/outputs` and `/memory`, the turns a rewind left
+behind, and a turn paused at an approval gate are all written
 and read through your backend — which means your agent's shell can reach them too,
 unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own conversation is that fence, and it is yours to get

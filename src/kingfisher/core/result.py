@@ -86,6 +86,35 @@ WORKING = "working"
 
 
 @dataclass(frozen=True)
+class TurnRecord:
+    """One turn a session ran, as `Session.turns` lists it."""
+
+    id: str
+    #: The turn it followed, or `None` for a first turn and the first after a rewind to the
+    #: start.
+    parent: str | None
+    #: The task as the caller sent it, which sending again regenerates the turn; `None` for
+    #: a resume, which sends none.
+    task: str | None
+    resumed: bool
+    #: Whether this stands for the conversation the session held before it kept a log of
+    #: its turns, under the last turn its ledger closed then.
+    imported: bool
+    #: Whether this turn is on the path to the one the session is at now.
+    current: bool
+
+
+@dataclass(frozen=True)
+class Rewound:
+    """What `Session.rewind` did. Files in `/outputs` and `/memory` stay as they are."""
+
+    #: The turn the session now ends where, or `None` for its start.
+    to: str | None
+    #: What a pause was waiting on, which the rewind discarded.
+    discarded: tuple[PendingDecision, ...] = ()
+
+
+@dataclass(frozen=True)
 class LedgerEntry:
     """One tool result a turn recorded, with the fields of its row in the ledger."""
 

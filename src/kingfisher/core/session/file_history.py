@@ -17,7 +17,14 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.agent.permitted_backend import host_path
-from kingfisher.core.layout import ARTIFACTS_SEEN, FILE_HISTORY, HARNESS_ROUTE, KEPT_FILES
+from kingfisher.core.layout import (
+    ARTIFACTS_SEEN,
+    FILE_HISTORY,
+    HARNESS_ROUTE,
+    INPUTS_SEEN,
+    KEPT_FILES,
+    MEMORY_WRITER,
+)
 from kingfisher.core.logged import raised
 
 from .files import artifacts_seen
@@ -47,6 +54,10 @@ KEPT = "kept"
 NOT_KEPT = "not_kept"
 #: The paths there when the last turn ended and gone when this one did.
 REMOVED = "removed"
+#: Each of `STATE_KEPT` as the turn left it, by name: `{UNDER, SHA}`, `UNDER` the folder
+#: holding its copy, an earlier turn's where it was the same.
+STATE = "state"
+SHA = "sha256"
 MARK = "mark"
 BYTES = "bytes"
 WHY = "why"
@@ -64,6 +75,14 @@ _FINAL = frozenset({HELD_BY_STORE, OVER_BUDGET})
 #: A turn id used as its own folder: one segment, and none a case-folding disk would take
 #: for another's.
 _PLAIN = re.compile(r"[a-z0-9-]{1,64}")
+
+#: What the harness keeps of a session's past that a rewind puts back with its
+#: conversation: the inputs folder as the agent last heard of it, and what the memory
+#: writer has not read yet.
+STATE_KEPT = (INPUTS_SEEN, MEMORY_WRITER)
+#: Beside a turn's copies: a folder name no artifact folder can take, a layout's names
+#: being plain segments.
+STATE_FOLDER = ".state"
 _DIGESTED = re.compile(r"_[0-9a-f]{32}")
 
 # Not blocking, or a FIFO left under a listed name would hold the ending on its open.
@@ -225,7 +244,17 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
                 FILE_HISTORY,
             )
         not_kept[path] = {MARK: mark, WHY: why}
-    records.append(_line(turn, under, kept, not_kept, sorted(before.keys() - now.keys())))
+    state = yield from _kept_state(harness, records, under)
+    records.append(
+        _line(
+            turn,
+            under,
+            kept=kept,
+            not_kept=not_kept,
+            removed=sorted(before.keys() - now.keys()),
+            state=state,
+        )
+    )
     dropped = dropped_for_space(records, cfg.rewind_max_bytes)
     for at, path in dropped:
         records[at][KEPT][path][DROPPED_IN] = turn
@@ -256,16 +285,18 @@ def _not_to_copy(path: str, size: int | None, prepared: Prepared, cfg: Config) -
     return None
 
 
-def _line(
+def _line(  # noqa: PLR0913 -- a line's keys, each by name
     turn: str,
     under: str,
+    *,
     kept: dict[str, dict[str, Any]],
     not_kept: dict[str, dict[str, Any]],
     removed: list[str],
+    state: dict[str, dict[str, str]],
 ) -> dict[str, Any]:
     """A turn's line in the history, each key only where it holds something."""
     line: dict[str, Any] = {TURN: turn, UNDER: under}
-    for key, held in ((KEPT, kept), (NOT_KEPT, not_kept), (REMOVED, removed)):
+    for key, held in ((KEPT, kept), (NOT_KEPT, not_kept), (REMOVED, removed), (STATE, state)):
         if held:
             line[key] = held
     return line
@@ -376,3 +407,64 @@ def forget_in_copies(harness: Any, layout: Layout, entry: MemoryEntry) -> Steps[
         text = held.decode("utf-8", errors="replace")
         if (without := without_any(text, entry)) != text:
             yield from harness.store(name, without.encode("utf-8"))
+
+
+def _kept_state(
+    harness: Any, records: list[dict[str, Any]], under: str
+) -> Steps[dict[str, dict[str, str]]]:
+    """Each of `STATE_KEPT` as this turn left it, copied beside its files unless the last
+    copy of it is the same, which is named instead."""
+    kept: dict[str, dict[str, str]] = {}
+    for name in STATE_KEPT:
+        held = yield from harness.fetch(name)
+        if held is None:
+            continue
+        digest = hashlib.sha256(held).hexdigest()
+        last = next((one for one in map(_state_of, reversed(records)) if name in one), {})
+        if last.get(name, {}).get(SHA) == digest:
+            kept[name] = last[name]
+            continue
+        yield from harness.store(f"{KEPT_FILES}/{under}/{STATE_FOLDER}/{name}", held)
+        kept[name] = {UNDER: under, SHA: digest}
+    return kept
+
+
+def _state_of(record: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """The record's kept state, by name, each with a folder `folder_for` could have named."""
+    held = record.get(STATE)
+    if not isinstance(held, dict):
+        return {}
+    return {
+        name: one
+        for name, one in held.items()
+        if isinstance(one, dict)
+        and isinstance(one.get(UNDER), str)
+        and (_PLAIN.fullmatch(one[UNDER]) or _DIGESTED.fullmatch(one[UNDER]))
+    }
+
+
+def restore_state(
+    harness: Any, records: list[dict[str, Any]], path: list[str | None], names: tuple[str, ...]
+) -> Steps[tuple[str, ...]]:
+    """Put back each of `names` as the last turn of `path` to keep it left it, and drop one
+    no turn of `path` kept; the names dropped.
+
+    Dropped rather than left: what the agent heard of the inputs folder, or what the writer
+    has not read, on another branch, is a conversation this one never had.
+    """
+    on_path = set(path)
+    kept = [_state_of(one) for one in records if one.get(TURN) in on_path]
+    dropped = []
+    for name in names:
+        entry = next((one[name] for one in reversed(kept) if name in one), None)
+        held = (
+            (yield from harness.fetch(f"{KEPT_FILES}/{entry[UNDER]}/{STATE_FOLDER}/{name}"))
+            if entry is not None
+            else None
+        )
+        if held is None:
+            yield from harness.drop(name)
+            dropped.append(name)
+        else:
+            yield from harness.store(name, held)
+    return tuple(dropped)

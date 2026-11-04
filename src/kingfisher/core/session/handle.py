@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING, Any
 from .steps import adrive, drive
 
 if TYPE_CHECKING:
-    from kingfisher.core.result import MemoryEntry, PendingDecision
+    from kingfisher.core.result import MemoryEntry, PendingDecision, Rewound, TurnRecord
+
+    from .model import Start
 
 
 @dataclass(frozen=True)
@@ -84,6 +86,31 @@ class Session:
     async def aforget(self, entry_id: str) -> None:
         """`forget`, for a caller on an event loop."""
         await adrive(self._service._forget_in(self.id, entry_id, self._opened))
+
+    def turns(self) -> tuple[TurnRecord, ...]:
+        """Every turn this session kept a log of, oldest first, including those a rewind
+        left behind; `current` marks the path to where the session is now."""
+        return drive(self._service._turns_in(self.id, self._opened))
+
+    async def aturns(self) -> tuple[TurnRecord, ...]:
+        """`turns`, for a caller on an event loop."""
+        return await adrive(self._service._turns_in(self.id, self._opened))
+
+    def rewind(self, to: str | Start) -> Rewound:
+        """Put this session back where turn `to` ended, or before its first turn for
+        `START`: its conversation, which tool results the next turn is told of, and what it
+        heard of its inputs folder. The turns after it are kept, so a rewind to one of them
+        returns. Files in `/outputs` and `/memory` stay as they are.
+
+        A pause waiting on a decision is discarded, as a new request discards it.
+        `SessionBusyError` while a turn holds the session, and `RewindError` for a turn
+        the session has no log of.
+        """
+        return drive(self._service._rewind_in(self.id, to, self._opened))
+
+    async def arewind(self, to: str | Start) -> Rewound:
+        """`rewind`, for a caller on an event loop."""
+        return await adrive(self._service._rewind_in(self.id, to, self._opened))
 
     def files(self) -> Any:
         """The backend a turn here is given, built the way a turn builds it.

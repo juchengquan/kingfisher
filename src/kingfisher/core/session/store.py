@@ -17,6 +17,7 @@ from kingfisher.core.layout import (
     HARNESS_ROUTE,
     INPUTS_SEEN,
     LEDGER_FILE,
+    OFF_PATH_FILE,
     PAUSED_MARK,
     PAUSED_STATE,
     TRANSCRIPT_FILE,
@@ -196,6 +197,26 @@ class KeptLedger:
     messages: int | None = None
     #: Every turn id a line names, a cut turn's rows included: ids a later turn may not take.
     turns: frozenset[str] = frozenset()
+    #: The turns a rewind left behind, whose lines stay so a rewind can return to them, and
+    #: `None` for a conversation imported under no turn. `exchanges`, `unclosed`,
+    #: `summarised` and `messages` leave them out, being what the conversation the model is
+    #: handed holds.
+    off_path: frozenset[str | None] = frozenset()
+    #: `exchanges` and `unclosed` with every branch in, in the order the turns ran, or
+    #: `None` where no turn is off the path and the two are the same.
+    every_exchange: tuple[tuple[LedgerEntry, ...], ...] | None = None
+    every_unclosed: tuple[tuple[LedgerEntry, ...], ...] | None = None
+
+    @property
+    def all_exchanges(self) -> tuple[tuple[LedgerEntry, ...], ...]:
+        """Every branch's exchanges: what `expired` counts rounds in, since a result left on
+        a branch ages as one on the path does."""
+        return self.exchanges if self.every_exchange is None else self.every_exchange
+
+    @property
+    def all_unclosed(self) -> tuple[tuple[LedgerEntry, ...], ...]:
+        """`unclosed` beside `all_exchanges`."""
+        return self.unclosed if self.every_unclosed is None else self.every_unclosed
 
     @property
     def since(self) -> tuple[LedgerEntry, ...]:
@@ -203,8 +224,9 @@ class KeptLedger:
         return self.exchanges[-1] if self.exchanges else ()
 
     def row(self, number: str) -> LedgerEntry | None:
-        """The row of result `number`, closed or not, or `None` where none is kept."""
-        for group in (*self.exchanges, *self.unclosed):
+        """The row of result `number`, closed or not, on the path or not, or `None` where
+        none is kept."""
+        for group in (*self.all_exchanges, *self.all_unclosed):
             for entry in group:
                 if entry.id == number:
                     return entry
@@ -214,19 +236,62 @@ class KeptLedger:
 def read_ledger(harness: Any) -> Steps[KeptLedger]:
     """This session's ledger, or an empty one where no turn has written it."""
     held = yield from harness.fetch(LEDGER_FILE)
+    if held is None:
+        return KeptLedger()
     # Replaced, not refused: rows hold any language, and a cut inside a character raised
     # on every later turn.
-    return KeptLedger() if held is None else _kept(held.decode("utf-8", errors="replace"))
+    return _kept(held.decode("utf-8", errors="replace"), (yield from read_off_path(harness)))
 
 
-def _kept(text: str) -> KeptLedger:
+def read_off_path(harness: Any) -> Steps[frozenset[str | None]]:
+    """The turns a rewind left off the session's path, or none where it never rewound.
+
+    Unreadable reads as none: the ledger then lists a branch's results beside the path's,
+    which is less than a turn refused for it.
+    """
+    held = yield from harness.fetch(OFF_PATH_FILE)
+    try:
+        listed = json.loads(held) if held is not None else []
+    except ValueError:
+        return frozenset()
+    if not isinstance(listed, list):
+        return frozenset()
+    return frozenset(one for one in listed if one is None or isinstance(one, str))
+
+
+def write_off_path(harness: Any, turns: frozenset[str | None]) -> Steps[None]:
+    """Keep `turns` as the ones off the session's path."""
+    listed = sorted(turns, key=lambda one: (one is not None, one or ""))
+    yield from harness.store(OFF_PATH_FILE, json.dumps(listed).encode("utf-8"))
+
+
+class _Track:
+    """Exchanges as a closing line at a time adds to them."""
+
+    def __init__(self) -> None:
+        self.exchanges: list[list[LedgerEntry]] = []
+        self.cut: list[list[LedgerEntry]] = []
+        self.summarised = False
+
+    def close(
+        self, row: Mapping[str, Any], closed: list[LedgerEntry], left: list[LedgerEntry]
+    ) -> None:
+        if row.get(RESUMED) and self.exchanges:
+            self.exchanges[-1].extend(closed)
+            self.cut[-1].extend(left)
+            self.summarised = self.summarised or bool(row.get(SUMMARISED))
+        else:
+            self.exchanges.append(closed)
+            self.cut.append(left)
+            self.summarised = bool(row.get(SUMMARISED))
+
+
+def _kept(text: str, off_path: frozenset[str | None] = frozenset()) -> KeptLedger:
     lines: list[str] = []
     last = 0
     paths: set[str] = set()
     runs: dict[str, list[Listed]] = {}
-    exchanges: list[list[LedgerEntry]] = []
-    cut: list[list[LedgerEntry]] = []
-    summarised = False
+    every, on_path = _Track(), _Track()
     messages: int | None = None
     turns: set[str] = set()
     # Each turn's entries, until its closing line says whether it was a resume.
@@ -254,8 +319,6 @@ def _kept(text: str) -> KeptLedger:
             unclosed.setdefault(entry.turn, []).append(entry)
         elif "id" not in row and isinstance(row.get("turn"), str):
             turns.add(row["turn"])
-            if isinstance(row.get(MESSAGES), int):
-                messages = row[MESSAGES]
             # By the turn a row names, not where it sits: rows a crash left unclosed would
             # otherwise be counted as the next turn's.
             closed = unclosed.pop(row["turn"], [])
@@ -263,24 +326,25 @@ def _kept(text: str) -> KeptLedger:
             # turn still open here never closes: its write was cut.
             left = [entry for entries in unclosed.values() for entry in entries]
             unclosed.clear()
-            if row.get(RESUMED) and exchanges:
-                exchanges[-1].extend(closed)
-                cut[-1].extend(left)
-                summarised = summarised or bool(row.get(SUMMARISED))
-            else:
-                exchanges.append(closed)
-                cut.append(left)
-                summarised = bool(row.get(SUMMARISED))
+            # A list each: a resume extends the exchange it joins in place.
+            every.close(row, list(closed), list(left))
+            if row["turn"] not in off_path:
+                if isinstance(row.get(MESSAGES), int):
+                    messages = row[MESSAGES]
+                on_path.close(row, list(closed), [one for one in left if one.turn not in off_path])
     return KeptLedger(
         lines=tuple(lines),
         last=last,
         paths=frozenset(paths),
         runs={run: tuple(found) for run, found in runs.items()},
-        exchanges=tuple(tuple(one) for one in exchanges),
-        unclosed=tuple(tuple(one) for one in cut),
-        summarised=summarised,
+        exchanges=tuple(tuple(one) for one in on_path.exchanges),
+        unclosed=tuple(tuple(one) for one in on_path.cut),
+        summarised=on_path.summarised,
         messages=messages,
         turns=frozenset(turns),
+        off_path=off_path,
+        every_exchange=tuple(tuple(one) for one in every.exchanges) if off_path else None,
+        every_unclosed=tuple(tuple(one) for one in every.cut) if off_path else None,
     )
 
 
@@ -315,12 +379,14 @@ def expired(
     if rounds is None:
         return earlier
     kept = rounds if resumed else rounds - 1
-    old = max(len(earlier.exchanges) - kept, 0)
+    # Every branch, in the order the turns ran: a result left on a branch ages as one on
+    # the path does, or a rewind would keep its file past the rounds forever.
+    old = max(len(earlier.all_exchanges) - kept, 0)
     # One still in the conversation as well as one filed: expired there, it gets no file
     # when it leaves, and its handle says to call the tool again.
     expiring = {
         entry.id
-        for exchange in (*earlier.exchanges[:old], *earlier.unclosed[:old])
+        for exchange in (*earlier.all_exchanges[:old], *earlier.all_unclosed[:old])
         for entry in exchange
         if entry.expired_in is None and not entry.unkept
     }
@@ -338,7 +404,7 @@ def patched(earlier: KeptLedger, changes: Mapping[str, Mapping[str, Any]]) -> Ke
         # this version does not read.
         change = changes.get(row["id"]) if _entry(row) is not None else None
         lines.append(line if change is None else json.dumps({**row, **change}, ensure_ascii=False))
-    return earlier if lines == list(earlier.lines) else _kept("\n".join(lines))
+    return earlier if lines == list(earlier.lines) else _kept("\n".join(lines), earlier.off_path)
 
 
 def write_ledger(  # noqa: PLR0913 -- three marks, by keyword so none is passed for another

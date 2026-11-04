@@ -4384,6 +4384,40 @@ once a session measures slow. **Named for its turns**, not as a message log, whi
 glossary turns down as a name for `conversation_history/`; a rewind lists turns.
 *(2026-11-04.)*
 
+**A session is put back where a turn it logged ended, and the turns after it are kept.**
+`Session.rewind(to)` rebuilds the transcript by replaying the turn log along `to`'s
+parents, so a turn behind a summary comes back whole; `Session.turns()` lists the tree.
+Kept rather than deleted, so a rewind made by mistake is undone by another, and a client
+can step between versions of a reply. The next turn follows the turn rewound to, from the
+conversation it left. `START` is a value of its own, never `None`: an unset variable
+passed as the turn must not empty a session.
+
+**The ledger keeps every branch, and `.harness/off_path.json` names the turns left
+behind.** The plan moved a branch's rows out of the ledger and back; only a rewind writes
+this file, and the ledger's readers leave its turns out of what the model is told of --
+the delta, the index, clearing -- while expiry counts every branch in the order the turns
+ran. Moved out, a result left on a branch would never age, so `KEEP_RESULTS_ROUNDS` would
+bound nothing once a session rewound; and its id, its file and its turn id stay held
+because the lines do. A result a rewind took out of the conversation before it was filed
+is read back from the turn log, which keeps it as first written.
+
+**A pause the rewind finds is discarded**, as a new request discards it: answered after,
+it would run calls asked for in a conversation the session is no longer at.
+
+**What the agent heard of its inputs folder goes back with the conversation.** Each turn
+keeps `inputs.json` and `memory_writer.json` beside its copies of files, once per change,
+since neither slice before recorded them a turn at a time. A rewind puts back the last
+copy its path kept and drops the file where none did: the agent is then told only what
+the next request places, rather than a history from another branch. The memory writer's
+file waits for the slice that restores the memory file it writes.
+
+**Written pause, path, conversation, inputs, in that order.** A rewind dying after the
+path and before the conversation leaves a turn that follows the turn rewound to reading
+the old transcript, whose length the ledger's count for that turn then disagrees with,
+which the turn reports; the other order would leave it following the old turns from a
+conversation they never had. **Not yet:** files in `/outputs` and `/memory` stay as they
+are, and a turn from before the log is refused. *(2026-11-04.)*
+
 **Narrowed once, for approval gates.** A turn stopped at an `interrupt_on` gate writes what
 its saver holds into `.harness/paused.state`, and a `Resume` reads it back and continues
 that graph. Nothing is kept unless a turn stopped to ask, and it is dropped once answered
