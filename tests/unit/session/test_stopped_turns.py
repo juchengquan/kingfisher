@@ -26,7 +26,7 @@ from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.session import running
 from kingfisher.core.session.model import SessionBusyError
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import an_agent, start, tools_dir
+from tests.conftest import RecordedEvents, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
 
 #: More calls in one reply than langgraph's executor runs at once, so some are queued.
@@ -406,6 +406,40 @@ def test_a_caller_is_let_go_of_while_a_hung_call_holds_the_session(charging, mon
 
     assert asyncio.run(hung()) < 2, "the caller was held for the hung call"
     assert "receipt R-hold" in _told_next(charging, "c-hold").text
+
+
+def test_a_turn_ending_after_its_caller_left_warns_by_its_errors_type_never_its_words(
+    charging, monkeypatch
+):
+    """Nobody is left to raise a failed ending to, so the deployment's `RunEvents` is all
+    that hears it: warned outside the turn's warnings it reached none, and logged with its
+    traceback it carried the error's words."""
+    monkeypatch.setattr(running, "LEFT_WAIT_S", 0.2)
+    ending = running.Running._aend_turn
+
+    async def failing(self: Any, turn: Any) -> None:
+        await ending(self, turn)
+        msg = "the customer's card number"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(running.Running, "_aend_turn", failing)
+    sink = RecordedEvents()
+    Scripted.script.append(_asking("hold"))
+
+    async def left() -> None:
+        kf = Kingfisher(charging.cfg, sessions=LocalSessions(), run_events=sink)
+        turn = asyncio.ensure_future(kf.arun(_asked()))
+        await _until(lambda: "hold" in _lines(charging.begun))
+        turn.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await turn
+        charging.release.touch()
+        await _until(lambda: sink.named("turn_not_ended"))
+
+    asyncio.run(left())
+    [warned] = sink.named("turn_not_ended")
+    assert (warned["session_id"], warned["error_type"]) == ("s", "RuntimeError")
+    assert "card number" not in str(warned)
 
 
 def test_a_call_from_code_is_waited_for_through_a_cancel():
