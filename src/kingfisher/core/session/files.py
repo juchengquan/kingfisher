@@ -130,6 +130,29 @@ def inputs_seen(backend: Any, layout: Layout) -> Steps[dict[str, str | None] | N
     return seen
 
 
+#: One file a listing named: what tells its version apart, and its size where given.
+type Seen = tuple[str | None, int | None]
+
+
+def artifacts_seen(backend: Any, layout: Layout) -> Steps[dict[str, Seen] | None]:
+    """Each file under the artifact folders by its path in the session, as `inputs_seen`
+    marks it, with its size; `None` where a listing came back incomplete."""
+    seen: dict[str, Seen] = {}
+    for name in layout.artifact_dirs:
+        for pattern in ("**", ".*"):
+            result = yield reading(backend, "glob", pattern, path=f"/{name}/")
+            if result.error or result.truncated:
+                # Every file it missed would read as removed.
+                return None
+            for match in result.matches or ():
+                if not match.get("is_dir"):
+                    size = match.get("size")
+                    seen[match["path"].lstrip("/")] = (
+                        _version(match), size if isinstance(size, int) else None
+                    )
+    return seen
+
+
 def _version(entry: Mapping[str, Any]) -> str | None:
     """The backend's checksum, else size and time, else `None`.
 

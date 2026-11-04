@@ -899,8 +899,9 @@ one that may have been swept asks `kf.session(session_id)` first: it answers `No
 and makes nothing, for a session that is gone.
 
 **And what it keeps about the session, under `/.harness`.** Its conversation, every
-turn's messages as first written, its inputs folder as the last turn found it, and a
-turn paused at an approval gate are all written
+turn's messages as first written, its inputs folder as the last turn found it, a copy
+of each file a turn left changed in `/outputs` and `/memory`, and a turn paused at an
+approval gate are all written
 and read through your backend — which means your agent's shell can reach them too,
 unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own conversation is that fence, and it is yours to get
@@ -972,6 +973,29 @@ the call's deadline, before your method is asked. `scratch_runs_of(backend)`, fr
 `kingfisher.plugins`, finds the method as kingfisher will: yours, else your composite's
 default's. **`scratch_runs`**, in `tests/checks/backend.py`, holds a backend that has one
 to the list above, and asks nothing of one without.
+
+**Copying a file for a turn's history: `copy`.** At the end of every turn, kingfisher
+keeps a copy of each file in `/outputs` and `/memory` that changed, under `/.harness/files/`,
+so a session can later be put back where any turn left it. Where `host_path` names both
+the file and its copy on this host, kingfisher copies it on disk, as a clone where the
+filesystem makes one. Otherwise it asks an optional method on what your `open` returns:
+
+```python
+class MySandbox(...):
+    def copy(self, source, destination):
+        # Both are paths as the file tools name them: `/outputs/report.xlsx` and
+        # `/.harness/files/t2/outputs/report.xlsx`. Make any folder the second needs.
+        ...
+        return None  # or why it could not, as text
+```
+
+Without it, kingfisher downloads the file and uploads it again, which holds the whole file
+in kingfisher's memory, so a backend with large files elsewhere wants one. It is read on
+the object your `open` returns, never on a composite's routes, because the two paths may
+be routed to different backends, and an async turn calls it on kingfisher's thread pool.
+**`own_copies`**, in `tests/checks/backend.py`, holds one you declare to three promises:
+the copy lands whole, it is a copy and not the same file, so rewriting the original in
+place leaves it as it was, and a file that is not there is answered with why, never `None`.
 
 **Three more extras are read where you declare them.** `unprotected` on the backend,
 a tuple of what it could not make read-only, which a turn reports to its caller as

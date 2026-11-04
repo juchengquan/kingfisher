@@ -65,16 +65,23 @@ def numbered(text: str, *, after: int = 0) -> tuple[str, tuple[MemoryEntry, ...]
     )
 
 
+def _entry_named(entries: tuple[MemoryEntry, ...], entry_id: str) -> MemoryEntry:
+    """The entry `entry_id` names, or `MemoryEntryError` naming the ids there are."""
+    for one in entries:
+        if one.id == entry_id:
+            return one
+    held = ", ".join(one.id for one in entries) or "none"
+    msg = f"no memory entry {entry_id!r}; the memory file holds {held}"
+    raise MemoryEntryError(msg)
+
+
 def without(text: str, entry_id: str) -> str:
     """`text` numbered, less the entry `entry_id` and the lines continuing it.
 
     `MemoryEntryError`, naming the ids there are, for an id `text` holds no entry for.
     """
     written, entries = numbered(text)
-    if entry_id not in {one.id for one in entries}:
-        held = ", ".join(one.id for one in entries) or "none"
-        msg = f"no memory entry {entry_id!r}; the memory file holds {held}"
-        raise MemoryEntryError(msg)
+    _entry_named(entries, entry_id)
     kept: list[str] = []
     owner = None
     for line in written.split("\n"):
@@ -88,6 +95,38 @@ def without(text: str, entry_id: str) -> str:
         if owner != entry_id:
             kept.append(line)
     return "\n".join(kept)
+
+
+def without_any(text: str, entry: MemoryEntry) -> str:
+    """`text` less every entry written with `entry`'s id or saying what it says, each with
+    the lines continuing it, and nothing numbered.
+
+    For an earlier copy of the file. Numbered now, its entries would take ids the caller
+    was never shown; and the entry's earlier wording is still the entry, while its text
+    alone finds it where it was not yet numbered.
+    """
+    lines = text.split("\n")
+    owners: list[int | None] = []
+    found: list[tuple[str | None, list[str]]] = []
+    for line in lines:
+        if numbered_line := _NUMBERED.match(line):
+            found.append((f"m{numbered_line.group(1)}", [numbered_line.group(2).strip()]))
+        elif bare := _BARE.match(line):
+            found.append((None, [bare.group(1).strip()]))
+        # Continued by the rule `numbered` reads it by: the last entry above, whatever is
+        # between.
+        elif found and line[:1].isspace() and line.strip():
+            found[-1][1].append(line.strip())
+        else:
+            owners.append(None)
+            continue
+        owners.append(len(found) - 1)
+    gone = {
+        at
+        for at, (written, said) in enumerate(found)
+        if written == entry.id or " ".join(said) == entry.text
+    }
+    return "\n".join(line for line, owner in zip(lines, owners, strict=True) if owner not in gone)
 
 
 def changes(
@@ -204,6 +243,12 @@ def memory_entries(backend: Any, layout: Layout) -> Steps[tuple[MemoryEntry, ...
     if got.error or got.content is None:
         return ()
     return numbered(got.content.decode("utf-8", errors="replace"))[1]
+
+
+def memory_entry(backend: Any, layout: Layout, entry_id: str) -> Steps[MemoryEntry]:
+    """The entry `entry_id` names in the memory file, by the ids a turn would give them, or
+    `MemoryEntryError` naming the ids there are."""
+    return _entry_named((yield from memory_entries(backend, layout)), entry_id)
 
 
 def forget_entry(backend: Any, layout: Layout, entry_id: str) -> Steps[None]:

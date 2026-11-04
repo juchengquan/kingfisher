@@ -100,7 +100,18 @@ def write_transcript(harness: Any, messages: tuple[Message, ...]) -> Steps[None]
 def read_inputs_seen(harness: Any) -> Steps[dict[str, str | None] | None]:
     """The inputs folder as the last turn the agent heard from found it, or `None` where
     no turn kept it."""
-    held = yield from harness.fetch(INPUTS_SEEN)
+    return (yield from read_listing(harness, INPUTS_SEEN))
+
+
+def write_inputs_seen(harness: Any, seen: Mapping[str, str | None]) -> Steps[None]:
+    """Keep the inputs folder as this turn found it."""
+    yield from write_listing(harness, INPUTS_SEEN, seen)
+
+
+def read_listing(harness: Any, name: str) -> Steps[dict[str, str | None] | None]:
+    """Each file a listing kept as `name` holds, with its version mark, or `None` where no
+    turn kept one."""
+    held = yield from harness.fetch(name)
     if held is None:
         return None
     try:
@@ -111,14 +122,14 @@ def read_inputs_seen(harness: Any) -> Steps[dict[str, str | None] | None]:
     if not isinstance(seen, dict):
         return None
     return {
-        str(name): mark if isinstance(mark, str) else None for name, mark in seen.items()
+        str(path): mark if isinstance(mark, str) else None for path, mark in seen.items()
     }
 
 
-def write_inputs_seen(harness: Any, seen: Mapping[str, str | None]) -> Steps[None]:
-    """Keep the inputs folder as this turn found it."""
+def write_listing(harness: Any, name: str, seen: Mapping[str, str | None]) -> Steps[None]:
+    """Keep a listing as `name`."""
     yield from harness.store(
-        INPUTS_SEEN, json.dumps(dict(seen), sort_keys=True, ensure_ascii=False).encode("utf-8")
+        name, json.dumps(dict(seen), sort_keys=True, ensure_ascii=False).encode("utf-8")
     )
 
 

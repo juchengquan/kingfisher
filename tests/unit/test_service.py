@@ -427,7 +427,8 @@ def test_a_turn_id_the_session_already_holds_is_refused_before_anything_changes(
     folder = scripted.workspace / "sessions" / session
     Scripted.script.append(AIMessage("first"))
     kf.run(Request("go", agent="only", session_id=session, turn_id="req-77"))
-    kept = {path: path.read_bytes() for path in (folder / ".harness").iterdir()}
+    # Every file at any depth: a turn keeps copies in folders under `.harness`.
+    kept = {path: path.read_bytes() for path in (folder / ".harness").rglob("*") if path.is_file()}
     (tmp_path / "data.csv").write_text("new", encoding="utf-8")
 
     with pytest.raises(TurnIdError, match="req-77"):
@@ -441,7 +442,8 @@ def test_a_turn_id_the_session_already_holds_is_refused_before_anything_changes(
             )
         )
 
-    assert {path: path.read_bytes() for path in (folder / ".harness").iterdir()} == kept
+    after = {path: path.read_bytes() for path in (folder / ".harness").rglob("*") if path.is_file()}
+    assert after == kept
     assert not (folder / "inputs" / "data.csv").exists()
     # The control: the same request under an id of its own runs.
     Scripted.script.append(AIMessage("second"))

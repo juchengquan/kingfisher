@@ -136,14 +136,21 @@ class Sessions(ABC):
 
     Anything else is read only where an implementation declares it, by name: `where(cfg)`
     here, the folder these sessions are kept in on this host, for the origins line;
-    `host_path`, `shell_prompt` and `unprotected` on a backend `open` returns; and
+    `host_path`, `shell_prompt`, `unprotected` and `copy` on a backend `open` returns; and
     `runs_here` on its shell.
+
+    `copy(source, destination)` copies one file within the session, both paths as the file
+    tools name them, and answers `None`, or why it could not. A turn's ending copies each
+    changed file in `/outputs` and `/memory` under `/.harness`; where `host_path` does not
+    name both ends on this host, it asks this, and without it reads the file whole into
+    this process and writes it back. Read on the backend alone, never on a composite's routes,
+    since the two paths may be routed to different backends.
 
     What `open` returns, held by `tests/checks/backend.py`: deepagents recognises it
     as running commands and it routes every path kingfisher denies -- both refused at
     startup by `refuse_unusable_backend` -- and it reads back what it was given, keeps
     deepagents' own files in the scratchpad, keeps the shell out of `/.harness` and
-    `/inputs`, and refuses a host path.
+    `/inputs`, refuses a host path, and copies a file where it declares `copy`.
     """
 
     @abstractmethod

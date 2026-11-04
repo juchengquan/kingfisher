@@ -261,10 +261,57 @@ def scratch_runs(make: Callable[[], Any]) -> None:
             raise AssertionError(msg)
 
 
+def own_copies(make: Callable[[], Any]) -> None:
+    """What a turn's ending is promised of a backend's own `copy`, where it declares one.
+
+    Read on what `open` returned and never followed into a composite's routes, as kingfisher
+    reads it: the two paths sit in different folders, which a composite may give different
+    backends. The copy lands whole; it is a copy and not the same file, so the agent
+    rewriting the original in place leaves it as it was; and a file that is not there is
+    answered with why, since `None` there is recorded as a copy kept, and a rewind would
+    restore it from nothing.
+    """
+    cfg, backend = make()
+    copy = getattr(backend, "copy", None)
+    if not callable(copy):
+        return
+    token = uuid4().hex
+    source = f"{cfg.layout.outputs_route}{token}.txt"
+    destination = f"{cfg.layout.harness_route}files/{token}/{cfg.layout.outputs}/{token}.txt"
+    backend.upload_files([(source, b"as it was")])
+
+    refused = copy(source, destination)
+    (landed,) = backend.download_files([destination])
+    if refused is not None or landed.content != b"as it was":
+        msg = (
+            f"a copy did not land: `copy` answered {refused!r}, and {destination} holds "
+            f"{landed.content!r} ({landed.error})"
+        )
+        raise AssertionError(msg)
+
+    backend.upload_files([(source, b"rewritten")])
+    (after,) = backend.download_files([destination])
+    if after.content != b"as it was":
+        msg = (
+            "a copy changed with the file it was copied from: it shares the file, as a "
+            "link does, rather than copying it"
+        )
+        raise AssertionError(msg)
+
+    nowhere = f"{destination}.never"
+    try:
+        missing = copy(f"{cfg.layout.outputs_route}{token}-never.txt", nowhere)
+    except Exception:  # noqa: BLE001 -- raising is an answer: kingfisher records it as why
+        return
+    if missing is None:
+        msg = "a copy of a file that is not there answered None, which reads as a copy kept"
+        raise AssertionError(msg)
+
+
 #: Every check a backend a deployment's `open` returned must pass, in the order a
 #: deployment wants to read them: the silent failure first, then the one that stops
 #: the graph building, then the promises the prompt makes, then what the shell must
-#: not write, then the refusal, then what a tool's run is promised.
+#: not write, then the refusal, then what a tool's run and a turn's copies are promised.
 BACKEND_CHECKS: tuple[Callable[[Callable[[], Any]], None], ...] = (
     execution_support,
     route_coverage,
@@ -273,6 +320,7 @@ BACKEND_CHECKS: tuple[Callable[[Callable[[], Any]], None], ...] = (
     shell_denied,
     host_path_refusal,
     scratch_runs,
+    own_copies,
 )
 
 
