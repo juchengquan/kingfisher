@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A graph you supply refuses a turn id its session holds, after #1208
+
+#1194 refused a reused `Request.turn_id` or `Resume.turn_id` only where kingfisher built
+the graph. A deployment passing `graph=` now gets the same `TurnIdError` when the id is
+one the session's turn log already holds, before anything in the session changes.
+
+Only a deployment that reuses its own ids is affected, as a retry of the same request
+does. Until now such a turn ran, and left the session's `turns()` and `rewind` looping
+forever on a turn logged as its own parent.
+
 ## An app on loguru passes `LoguruEvents`, after #1207
 
 - **`LoguruEvents`, on `kingfisher.plugins`, hands every event to loguru**: install

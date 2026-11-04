@@ -228,6 +228,12 @@ def read_turn_log(harness: Any) -> Steps[list[dict[str, Any]]]:
     return [] if held is None else [line for _, line in _read(held)]
 
 
+def logged_turns(harness: Any) -> Steps[frozenset[str]]:
+    """Every turn id the log names, on every branch."""
+    lines = yield from read_turn_log(harness)
+    return frozenset(line["turn"] for line in lines if isinstance(line.get("turn"), str))
+
+
 #: Each turn's opening line and the lines after it, by its id.
 Logged = Mapping[str | None, tuple[dict[str, Any], list[dict[str, Any]]]]
 

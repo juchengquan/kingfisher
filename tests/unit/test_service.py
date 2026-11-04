@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, TurnIdError
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
@@ -419,8 +419,6 @@ def test_a_turn_id_the_session_already_holds_is_refused_before_anything_changes(
     """The ledger names a turn only by its id, so two turns under one could not be told
     apart; refused after its inputs were placed, it would still have replaced the
     caller's file."""
-    from kingfisher import TurnIdError
-
     an_agent(scripted)
     kf = Kingfisher(scripted, sessions=LocalSessions())
     session = start(scripted, "s")
@@ -449,6 +447,26 @@ def test_a_turn_id_the_session_already_holds_is_refused_before_anything_changes(
     Scripted.script.append(AIMessage("second"))
     again = kf.run(Request("again", agent="only", session_id=session, turn_id="req-78"))
     assert again.answer == "second"
+
+
+def test_a_supplied_graph_refuses_a_turn_id_its_turn_log_holds(cfg):
+    """A supplied graph keeps no ledger, so its ids went unchecked: a second turn under one
+    was logged as its own parent, and `turns` and `rewind` looped on it forever."""
+    start(cfg, "s")
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+    kf.run(Request("first", agent="only", session_id="s", turn_id="req-77"))
+    # The control: under an id of its own a turn runs. Also what puts the reused id a
+    # turn back, rather than on the log's last line.
+    kf.run(Request("second", agent="only", session_id="s", turn_id="req-78"))
+    log = cfg.workspace / "sessions" / "s" / ".harness" / "turns.jsonl"
+    kept = log.read_bytes()
+
+    with pytest.raises(TurnIdError, match="req-77"):
+        kf.run(Request("again", agent="only", session_id="s", turn_id="req-77"))
+
+    assert log.read_bytes() == kept
+    turns = kf.session("s").turns()
+    assert [(turn.id, turn.parent) for turn in turns] == [("req-77", None), ("req-78", "req-77")]
 
 
 def test_a_caller_naming_one_file_twice_catches_it_by_the_front_door_name(cfg, tmp_path):
