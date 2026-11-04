@@ -5447,6 +5447,15 @@ cannot index into it where a `{`-style one can, as `{kingfisher[session_id]}`; a
 either style fails the same way on an app's own records, which lack the field whatever
 it is called. *(2026-11-04.)*
 
+**A loguru sink is shipped, as an extra, rather than documented.** Its one trap is
+invisible: loguru names a record after the module that logged it, so a sink an app
+writes is named after the app, and `logger.disable("kingfisher")`, how a loguru app turns
+a library off, misses it without a word. `LoguruEvents` logs from kingfisher's own
+module, so its records are named under `kingfisher` whoever hands it the event, an app's
+sink wrapping it included. Measured: `opt(depth=1)`, the fix for an app's own copy, names
+the caller instead, and that wrapper turns it back into the app. An extra, not a
+dependency: an app not on loguru should not install it. *(2026-11-04.)*
+
 **Out of scope: tags on LangChain's runs for a tracer.** The turn's ids on every run
 would change what a saved checkpoint holds. *(2026-11-04.)*
 
