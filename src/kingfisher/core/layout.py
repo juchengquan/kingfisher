@@ -77,6 +77,10 @@ LEDGER_FILE = "ledger.jsonl"
 #: replaced the transcript's front. Here, because the agent can write
 #: `conversation_history/`, and a conversation rebuilt from that is one it wrote itself.
 TURNS_FILE = "turns.jsonl"
+#: The turns a rewind left behind, as a list of ids. Their lines stay in the ledger and the
+#: turn log so a rewind can return to them; written by a rewind alone, so a session that
+#: never rewound has none.
+OFF_PATH_FILE = "off_path.json"
 #: Written only by a turn stopped at an approval gate, deleted once answered or superseded.
 PAUSED_STATE = "paused.state"
 #: What the paused checkpoint was built against and is waiting on, and its presence is what

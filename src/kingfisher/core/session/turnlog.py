@@ -20,8 +20,8 @@ from kingfisher.core.layout import TURNS_FILE
 
 from . import runtime
 from .steps import Steps
-from .store import RESUMED, KeptLedger, read_ledger
-from .transcript import Message, as_record
+from .store import RESUMED, KeptLedger, read_ledger, read_off_path
+from .transcript import Message, as_record, from_record
 
 if TYPE_CHECKING:
     from kingfisher.core.request import Decision
@@ -200,14 +200,76 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
     if ledger is not None:
         expired = {
             entry.id: entry
-            for group in (*ledger.exchanges, *ledger.unclosed)
+            for group in (*ledger.all_exchanges, *ledger.all_unclosed)
             for entry in group
             if entry.expired_in is not None
         }
         lines = _without_expired(lines, expired)
-    parent = next((line["turn"] for _, line in reversed(lines) if PARENT in line), None)
+    off_path = ledger.off_path if ledger is not None else (yield from read_off_path(harness))
+    # The last turn a rewind did not leave behind: after one, the turn rewound to.
+    parent = next(
+        (
+            line["turn"]
+            for _, line in reversed(lines)
+            if PARENT in line and line["turn"] not in off_path
+        ),
+        None,
+    )
     added = _turn_lines(
         turn, parent, task=task, history=len(history), resumed=resumed, snapshot=snapshot
     )
     written = [raw for raw, _ in lines] + [json.dumps(one, ensure_ascii=False) for one in added]
     yield from harness.store(TURNS_FILE, ("\n".join(written) + "\n").encode("utf-8"))
+
+
+def read_turn_log(harness: Any) -> Steps[list[dict[str, Any]]]:
+    """Every line of the log, as written; none where no turn wrote one."""
+    held = yield from harness.fetch(TURNS_FILE)
+    return [] if held is None else [line for _, line in _read(held)]
+
+
+#: Each turn's opening line and the lines after it, by its id.
+Logged = Mapping[str | None, tuple[dict[str, Any], list[dict[str, Any]]]]
+
+
+def by_turn(lines: Sequence[dict[str, Any]]) -> Logged:
+    """Each turn's opening line and the lines after it, by its id; the conversation imported
+    from before the log under the turn it is tagged with, `None` where it has none."""
+    turns: dict[str | None, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
+    for line in lines:
+        if PARENT in line:
+            turns[line.get("turn")] = (line, [])
+        elif line.get("turn") in turns:
+            turns[line["turn"]][1].append(line)
+    return turns
+
+
+def path_to(turns: Logged, target: str | None) -> list[str | None]:
+    """The turns from the first to `target`, each the parent of the next."""
+    path = [target]
+    while not turns[path[-1]][0].get(IMPORTED):
+        parent = turns[path[-1]][0].get(PARENT)
+        # `null` names the imported conversation where the log holds one under no turn,
+        # and otherwise nothing: a first turn, or the first after a rewind to the start.
+        if parent not in turns:
+            break
+        path.append(parent)
+    return list(reversed(path))
+
+
+def replayed(turns: Logged, path: Sequence[str | None]) -> tuple[Message, ...]:
+    """The conversation the last turn of `path` ended on, rebuilt from the log alone: each
+    turn's parent's conversation kept to its `from`, its messages appended, and a summary
+    standing for everything before its `cut`."""
+    said: list[Message] = []
+    for turn in path:
+        opening, body = turns[turn]
+        if isinstance(opening.get(FROM), int):
+            said = said[: opening[FROM]]
+        for line in body:
+            if "role" not in line:
+                continue
+            message = from_record(line)
+            cut = line.get(CUT)
+            said = [message, *said[cut:]] if isinstance(cut, int) else [*said, message]
+    return tuple(said)

@@ -2049,6 +2049,11 @@ WITNESSES: dict[str, dict[str, str]] = {
         # a gate at all, and one that cannot catch `DecisionError` cannot tell a bad
         # answer from a broken session.
         "PendingDecision": "embedder",
+        # What `Session.turns` and `Session.rewind` answer, and the turn a rewind to
+        # before the first is asked with: a caller naming a turn to go back to holds these.
+        "TurnRecord": "embedder",
+        "Rewound": "embedder",
+        "START": "embedder",
         # What `RunResult.ledger` holds, one per recorded result. A caller keeping or
         # showing those entries names the type to do it.
         "LedgerEntry": "embedder",
@@ -2068,6 +2073,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         "SessionBusyError": "embedder",
         "SubagentError": "embedder",
         "TurnIdError": "embedder",
+        "RewindError": "embedder",
         "UnknownSessionError": "embedder",
         # What `Session.artifact` raises for a name that is not an artifact, which a
         # caller fetching by a name it was handed tells apart from a session it cannot
@@ -3749,7 +3755,7 @@ def test_every_record_this_package_hands_out_is_frozen():
 CALLER_FACING_ERRORS = frozenset({
     "ArtifactError", "CallerError", "CapabilityError", "DecisionError", "InputsError",
     "MemoryEntryError", "QuotaExceededError", "ResultError", "SessionBusyError",
-    "SubagentError", "TurnIdError", "UnknownSessionError",
+    "RewindError", "SubagentError", "TurnIdError", "UnknownSessionError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.

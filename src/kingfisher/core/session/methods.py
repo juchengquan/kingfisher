@@ -20,18 +20,24 @@ from .model import (
     known,
     unknown_session,
 )
+from .rewind import rewound, turn_records
 from .steps import Steps, adrive, changing, drive, on_host, reading
 from .store import (
     HarnessFiles,
     pending_from_mark,
+    read_off_path,
     read_pause_mark,
 )
+from .turnlog import read_turn_log
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from kingfisher.core.config import Config
+    from kingfisher.core.result import Rewound, TurnRecord
     from kingfisher.core.versions import Versions
+
+    from .model import Start
 
 class SessionMethods:
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
@@ -166,6 +172,30 @@ class SessionMethods:
             # as the id would be gone from the file.
             yield from forget_in_copies(HarnessFiles(files), self.cfg.layout, forgotten)
             yield from forget_entry(files, self.cfg.layout, entry_id)
+        finally:
+            yield changing(self._sessions, "release", self.cfg, session_id, claimed)
+
+    def _turns_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[TurnRecord, ...]]:
+        harness = HarnessFiles((yield from self._files_in(session_id, opened)))
+        lines = yield from read_turn_log(harness)
+        return turn_records(lines, (yield from read_off_path(harness)))
+
+    def _rewind_in(self, session_id: str, to: str | Start, opened: list[Any]) -> Steps[Rewound]:
+        files = yield from self._files_in(session_id, opened)
+        # Taken, as `forget` takes it: a turn starting halfway would read a conversation
+        # from one branch and a ledger from another.
+        claimed = yield changing(
+            self._sessions, "claim", self.cfg, session_id,
+            stale_after=self.cfg.claim_stale_after,
+        )
+        if claimed is None:
+            msg = (
+                f"session {session_id} is {held_by_a_turn(self.cfg.claim_stale_after)}; "
+                "rewind it once it is free"
+            )
+            raise SessionBusyError(msg)
+        try:
+            return (yield from rewound(HarnessFiles(files), to))
         finally:
             yield changing(self._sessions, "release", self.cfg, session_id, claimed)
 

@@ -18,6 +18,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session can be rewound to an earlier turn, after #1200
+
+- **`Session.turns()` and `Session.rewind(to)`**, with `aturns` and `arewind`. `turns()`
+  lists every turn the session logged, as `TurnRecord`, with `current` marking the path
+  to where it is now. `rewind(to)` takes a turn id, or `kingfisher.START` for before the
+  first turn, and answers `Rewound`. A turn it cannot rebuild raises `RewindError`, and a
+  session a turn holds raises `SessionBusyError`, as `forget` does.
+- **On the command line**, `kingfisher turns --session ID` and
+  `kingfisher rewind --session ID --to TURN` (or `--to-start`).
+- **Files in `/outputs` and `/memory` are not put back yet.** A rewind restores the
+  conversation, which results the next turn is told of, and what the agent heard of its
+  inputs folder.
+- **A pause a rewind finds is discarded**, and listed in `Rewound.discarded`.
+- **`.harness` holds `off_path.json`** once a session has rewound, and each turn keeps
+  `inputs.json` and `memory_writer.json` under `.harness/files/<turn>/.state/` when they
+  change. The ledger keeps the lines of turns a rewind left behind.
+
 ## Logs say how a turn went, never what was said in it, after #1199
 
 - **Four run-event fields are gone.** `run_start`'s `task` is now `task_chars`, the task's

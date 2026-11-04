@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 
 import kingfisher
 from kingfisher import (
+    START,
     UNSCOPED,
     ArtifactError,
     CallerError,
@@ -32,6 +33,7 @@ from kingfisher import (
     Request,
     ResultError,
     Resume,
+    RewindError,
     SessionBusyError,
     SubagentError,
     UnknownSessionError,
@@ -394,6 +396,36 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="emit the same answer as JSON, for a script rather than a person",
+    )
+    listing_turns = sub.add_parser(
+        "turns",
+        help="show the turns a session ran, and which it is at now",
+        description=(
+            "Every turn the session kept a log of, oldest first, including those a\n"
+            "rewind left behind. A * marks the path to where the session is now; a\n"
+            "turn's task is what sending it again would regenerate it from."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    listing_turns.add_argument("--session", metavar="ID", required=True, help="the session")
+    rewinding = sub.add_parser(
+        "rewind",
+        help="put a session back where an earlier turn left it",
+        description=(
+            "The session's conversation, which tool results its next turn is told\n"
+            "of, and what it heard of its inputs folder go back to where the turn\n"
+            "ended. The turns after it are kept, so rewinding to one of them returns.\n"
+            "Files in /outputs and /memory stay as they are. A pause waiting on a\n"
+            "decision is discarded."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    rewinding.add_argument("--session", metavar="ID", required=True, help="the session")
+    where = rewinding.add_mutually_exclusive_group(required=True)
+    where.add_argument("--to", metavar="TURN", help="the turn to go back to the end of")
+    # A flag of its own, not a turn named `start`: a caller's own turn ids may be anything.
+    where.add_argument(
+        "--to-start", action="store_true", help="go back to before the first turn"
     )
     sweeping = sub.add_parser(
         "reap",
@@ -986,6 +1018,40 @@ def _result(args: argparse.Namespace) -> int:
     return 0
 
 
+def _opened(kf: Kingfisher, session_id: str) -> Any:
+    session = kf.session(session_id)
+    if session is None:
+        msg = f"no session {session_id!r}"
+        raise UnknownSessionError(msg)
+    return session
+
+
+def _turns(args: argparse.Namespace) -> int:
+    """List a session's turns, marking the path to where it is now."""
+    turns = _opened(_configured(config_from_env()), args.session).turns()
+    if not turns:
+        print(f"session {args.session} has kept no log of its turns")
+        return 0
+    for turn in turns:
+        kind = "resumed" if turn.resumed else "imported" if turn.imported else ""
+        said = turn.task.strip().splitlines()[0][:60] if turn.task and turn.task.strip() else ""
+        mark = "*" if turn.current else " "
+        print(f"{mark} {turn.id}  after {turn.parent or '-'}  {kind:<8} {said}")
+    return 0
+
+
+def _rewind(args: argparse.Namespace) -> int:
+    """Put a session back where a turn left it, and say what that discarded."""
+    session = _opened(_configured(config_from_env()), args.session)
+    done = session.rewind(START if args.to_start else args.to)
+    where = f"where turn {done.to} ended" if done.to is not None else "at its start"
+    print(f"session {args.session} is now {where}")
+    print("files in /outputs and /memory are as they were")
+    for pending in done.discarded:
+        print(f"  discarded the decision {pending.call_id} on {pending.tool}")
+    return 0
+
+
 def _reap_one(kf: Kingfisher, session_id: str) -> int:
     """Reap one session by name, whatever is running in it."""
     session = kf.session(session_id)
@@ -1057,6 +1123,7 @@ REFUSALS = (
     InputsError,
     QuotaExceededError,
     ResultError,
+    RewindError,
     SubagentError,
     UnknownSessionError,
 )
@@ -1076,6 +1143,8 @@ HANDLERS = {
     "artifact": _artifact,
     "result": _result,
     "reap": _reap,
+    "turns": _turns,
+    "rewind": _rewind,
 }
 
 
