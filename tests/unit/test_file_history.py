@@ -4,6 +4,7 @@ turn left it, and the line a turn that says which."""
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -350,6 +351,33 @@ def test_a_backend_naming_no_host_path_keeps_copies_by_its_own_copy_or_whole(cfg
     asked = {source for source, _ in sessions.copied}
     assert asked == ({"/outputs/report.txt", "/memory/AGENTS.md"} if kind is _RemoteCopying
                      else set())
+
+
+def test_a_failed_copy_is_logged_without_the_file_or_the_backends_words(cfg, caplog):
+    """A file's name is what the agent called it, and a backend's error may quote it: both
+    reached the log when a copy failed, and a log reaches people the session never did."""
+
+    class Failing(_Remote):
+        def host_path(self, virtual: str) -> None:
+            msg = f"no host for {virtual}"
+            raise RuntimeError(msg)
+
+        def copy(self, source: str, destination: str) -> str | None:
+            msg = f"cannot copy {source}"
+            raise OSError(msg)
+
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=_RemoteSessions(Failing))
+    outputs = _session(cfg, start(cfg, "s")) / "outputs"
+    (outputs / "jane-doe-4471.txt").write_text("one", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="kingfisher"):
+        _run(kf, "t1")
+
+    assert "jane-doe" not in caplog.text, "the file's name reached the log"
+    assert "Failing.host_path raised RuntimeError at" in caplog.text
+    assert "turn t1 kept no copy of a file under /outputs" in caplog.text
+    # The control: the session's own record still says which file and why.
+    assert "jane-doe" in _history(cfg)["t1"]["not_kept"]["outputs/jane-doe-4471.txt"]["why"]
 
 
 def test_a_file_the_backend_cannot_copy_is_recorded_with_why(cfg):

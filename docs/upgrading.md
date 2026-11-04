@@ -18,6 +18,32 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Logs say how a turn went, never what was said in it, after #1199
+
+- **Four run-event fields are gone.** `run_start`'s `task` is now `task_chars`, the task's
+  length, beside `decisions`, how many a resume answers, `null` for a request.
+  `tool_start`'s `input_preview` is `input_chars`, and `tool_end`'s `output_preview` is
+  `output_chars`, the length of the answer's text as the model reads it, or `null`.
+  `tool_error`'s and `model_error`'s `error` is `error_type`, the exception's class, and
+  `error_at`, where it was raised, as `folder/file.py:LINE in function`; `model_error`
+  adds `status_code`, the provider's HTTP status, or `null`. A sink, dashboard or alert
+  reading the old names finds nothing, in `--log` files too.
+- **Kingfisher's warnings name an exception's type and where it was raised**, with no
+  message and no traceback. That includes your own plugins failing -- a `MemoryStore`,
+  `UnusedResults`, `PdfAttachments` or `ScratchRunLimit`, and a `RunEvents` sink -- so
+  log a plugin's message inside it if you want it. A backend that would not keep a saved
+  result is logged by deepagents' code, such as `permission_denied`, and any other text
+  as `the backend refused it`; a failed artifacts listing as `the listing failed`; a
+  scratch run's folder left behind by its error code, such as `ENOTEMPTY`; and a file a
+  turn left that could not be copied by its folder alone, the file and the reason being
+  in the session's `files.jsonl`.
+- **Why**: a task, a tool's arguments and its answer are what the caller and the tools
+  said, and an exception's message quotes them -- a tool called with a bad argument
+  raises a `ValidationError` holding the argument, and a `FileNotFoundError` names the
+  path. Logs reach whoever reads the deployment's logs, for as long as they are kept.
+- **Unchanged**: a refused change to the definitions is logged with its message, and what
+  a turn reports to its caller, such as `memory_store_failed`, still names the error.
+
 ## Kingfisher's warnings are all `KingfisherWarning`, after #1198
 
 - **Every warning kingfisher raises is a `KingfisherWarning`**, a `UserWarning` exported

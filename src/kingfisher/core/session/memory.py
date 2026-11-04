@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.logged import raised
 from kingfisher.core.result import MemoryChanges, MemoryEntry, MemoryEntryError, RunEvent
 
 from .steps import Steps, changing, on_host, reading
@@ -342,9 +343,9 @@ _INSTEAD = {
 
 
 def store_failed(store: MemoryStore, call: str, exc: Exception) -> RunEvent:
-    """The event, and the log line with its traceback, for a store call that raised."""
+    """The event, and the log line, for a store call that raised."""
     named = f"{type(store).__name__}.{call}"
-    _log.warning("%s raised; the turn goes on", named, exc_info=exc)
+    _log.warning("%s raised %s at %s; the turn goes on", named, *raised(exc))
     return RunEvent(
         kind="memory_store_failed",
         text=f"{named} raised {type(exc).__name__}: {exc}; {_INSTEAD[call]}",

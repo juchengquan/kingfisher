@@ -237,7 +237,7 @@ def test_a_plugin_that_raises_is_logged_and_the_turn_keeps_its_answer(
     assert (result.answer, result.completed) == ("done", True)
     assert "session s" in caplog.text
     assert "1 of 1 file(s) left" in caplog.text
-    assert "the archive is down" in caplog.text
+    assert "raised RuntimeError at unit/test_unused_results.py:" in caplog.text
     assert STRAY in _kept(workspace)
 
 

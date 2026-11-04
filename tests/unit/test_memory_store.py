@@ -3,6 +3,8 @@ and what the turn changed handed back at its end."""
 
 from __future__ import annotations
 
+import logging
+import traceback
 from dataclasses import replace
 from typing import Any
 
@@ -11,6 +13,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, MemoryChanges, MemoryEntry, Request
 from kingfisher.core.interfaces import MemoryStore
+from kingfisher.core.session.memory import store_failed
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start
 from tests.unit.scripted import Scripted
@@ -223,6 +226,29 @@ def test_a_failing_store_never_fails_the_turn(scripted, failing):
     # Where nothing was loaded the agent read the session's copy, and it keeps what was saved.
     assert ("- [m2] Stored" in _heard()) == (failing == "apply")
     assert "Short answers" in _memory_file(scripted).read_text(encoding="utf-8")
+
+
+def _refusing(entry: str) -> None:
+    msg = f"refused to save {entry!r}"
+    raise ConnectionError(msg)
+
+
+def test_a_failing_store_is_logged_by_its_type_and_place_never_its_words(caplog):
+    """Logged with its traceback, whose last line is its message, a store's failure put the
+    memory it quoted into the deployment's logs."""
+    with pytest.raises(ConnectionError) as refused:
+        _refusing("Allergic to penicillin")
+
+    with caplog.at_level(logging.WARNING):
+        store_failed(Shelf(), "apply", refused.value)
+
+    frame = traceback.extract_tb(refused.value.__traceback__)[-1]
+    (record,) = caplog.records
+    assert record.getMessage() == (
+        f"Shelf.apply raised ConnectionError at unit/test_memory_store.py:{frame.lineno} "
+        "in _refusing; the turn goes on"
+    )
+    assert "penicillin" not in caplog.text, "the store's words reached the log"
 
 
 def test_changes_made_on_the_sessions_copy_still_reach_the_store(scripted):

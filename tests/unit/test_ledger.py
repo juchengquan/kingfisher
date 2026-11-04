@@ -883,13 +883,15 @@ def test_a_result_file_no_row_names_is_swept(ledgered):
 class _Refusing(LocalSessions):
     """Kingfisher's own backends, refusing every file under the tool results folder."""
 
+    error = "permission_denied"
+
     def open(self, cfg, session_id, /, *, catalogue=None):
         opened = super().open(cfg, session_id, catalogue=catalogue)
         upload = opened.upload_files
 
         def refused(files):
             if any(path.startswith(f"/{SCRATCH}/{TOOL_RESULTS}/") for path, _ in files):
-                return [FileUploadResponse(path=p, error="permission_denied") for p, _ in files]
+                return [FileUploadResponse(path=p, error=self.error) for p, _ in files]
             return upload(files)
 
         opened.upload_files = refused
@@ -915,6 +917,26 @@ def test_a_result_the_backend_will_not_keep_still_has_its_row(ledgered, caplog):
     assert (_rows(ledgered)[0]["path"], _rows(ledgered)[0]["unkept"]) == (None, True)
     assert "A-0001 was not kept" in caplog.text
     assert "permission_denied" in caplog.text
+
+
+def test_a_backends_own_words_for_a_refusal_stay_out_of_the_log(ledgered, caplog):
+    """Beside deepagents' codes a backend may refuse in its own words, and logged as they
+    came they put whatever it quoted of the result into the deployment's logs."""
+
+    class Worded(_Refusing):
+        error = "disk full writing q7-said-q7"
+
+    with caplog.at_level(logging.WARNING):
+        _run(
+            ledgered,
+            _calls(("loud", {}, "c1")),
+            AIMessage(content="done"),
+            kf=Kingfisher(ledgered, sessions=Worded()),
+        )
+
+    assert "q7-said-q7" not in caplog.text, "the backend's words reached the log"
+    assert "A-0001 was not kept" in caplog.text
+    assert "the backend refused it" in caplog.text
 
 
 class _Raising(LocalSessions):
@@ -990,7 +1012,7 @@ def test_a_save_that_raises_does_not_fail_the_call_the_model_is_about_to_read(
     assert (entry.id, entry.path) == ("A-0001", None)
     assert _rows(ledgered)[0]["path"] is None
     assert "A-0001 was not kept" in caplog.text
-    assert "the store closed the connection" in caplog.text
+    assert "raised RuntimeError at " in caplog.text
 
 
 def test_a_graph_the_deployment_supplied_records_nothing(ledgered):

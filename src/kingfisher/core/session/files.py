@@ -209,11 +209,12 @@ def collect_artifacts(backend: Any, layout: Layout) -> Steps[tuple[str, ...]]:
             result = yield reading(backend, "glob", pattern, path=f"/{name}/")
             if result.error or result.truncated:
                 # Reported, not raised: the turn has run, and failing it now would lose
-                # its answer over a listing.
+                # its answer over a listing. Not `result.error`, a backend's own words,
+                # which may name what the agent left there.
                 _log.warning(
                     "artifacts under /%s/ may be incomplete: %s",
                     name,
-                    result.error or "the listing was cut short",
+                    "the listing failed" if result.error else "the listing was cut short",
                 )
             found.update(
                 match["path"].lstrip("/")

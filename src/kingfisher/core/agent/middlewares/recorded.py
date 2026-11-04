@@ -6,8 +6,11 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, get_args
 
+from deepagents.backends.protocol import FileOperationError
+
+from kingfisher.core.logged import raised
 from kingfisher.core.session.store import ENTRY_ID
 
 if TYPE_CHECKING:
@@ -129,6 +132,18 @@ def kept_text(text: str, number: str, size: int) -> bytes | None:
         return None
     content = text.removesuffix(mark).encode("utf-8")
     return content if len(content) == size else None
+
+
+#: deepagents' codes for a refused upload. A backend may answer its own words instead,
+#: which can quote what it was handed, so a log never carries them.
+_UPLOAD_ERRORS = frozenset(get_args(FileOperationError))
+
+
+def unfiled(answer: Any) -> str:
+    """Why an upload kept nothing, from what it raised or the answer that refused it."""
+    if isinstance(answer, BaseException):
+        return "raised {} at {}".format(*raised(answer))
+    return answer.error if answer.error in _UPLOAD_ERRORS else "the backend refused it"
 
 
 #: A tool's name may come from an MCP server or a module author, and the file name

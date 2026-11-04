@@ -312,10 +312,13 @@ class Preparation:
                 # Last before the graph runs: a resume refused before here leaves its
                 # pause answerable, and one killed after it cannot run the calls twice.
                 yield from take_pause(harness, pause, prepared.turn.id)
-            # A resume says so in `run_start`: a task-shaped one would read as the work
-            # being requested again.
-            started = asked or f"resuming {len(getattr(request, 'decisions', ()))} decision(s)"
-            yield on_host(prepared.logger.run_start, started)
+            # A resume says so in `run_start`: by its size alone it would read as a request
+            # that asked nothing.
+            yield on_host(
+                prepared.logger.run_start,
+                asked,
+                decisions=len(request.decisions) if isinstance(request, Resume) else None,
+            )
         except BaseException:
             # Built and not yet handed over, so no ending will let go of it.
             release_interpreter(self.cfg, prepared.graph)

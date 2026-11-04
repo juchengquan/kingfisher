@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import traceback
 from collections import Counter
 from dataclasses import replace
 
+import httpx
 import pytest
 from deepagents import create_deep_agent
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
+from langgraph.types import Command
 
 from kingfisher import Kingfisher
 from kingfisher.core.interfaces import RunEvents
@@ -46,9 +50,9 @@ from tests.unit.test_stream_delegations import (
 from tests.unit.test_subagent_helpers import HELPER, REVIEWER, _define
 
 
-def _logger(sink) -> RunLogger:
+def _logger(sink, *, session_id: str = "s") -> RunLogger:
     return RunLogger(
-        sink, model="m", endpoint="gateway", session_id="s", turn_id="t1", turn_agent="a"
+        sink, model="m", endpoint="gateway", session_id=session_id, turn_id="t1", turn_agent="a"
     )
 
 
@@ -68,6 +72,66 @@ def test_every_event_says_which_session_and_turn_it_came_from():
     (event,) = sink.events
     assert (event["session_id"], event["turn_id"]) == ("s", "t1")
     assert (event["model"], event["endpoint"]) == ("m", "gateway")
+
+
+#: Written into everything a turn is asked, handed and answered below.
+SAID = "q7-said-q7"
+
+
+def _raised(error: Exception) -> Exception:
+    """`error` as a callback is handed it, with the traceback raising it gave it."""
+    try:
+        raise error
+    except type(error) as caught:
+        return caught
+
+
+class _RefusedError(Exception):
+    """An SDK's error for a request the provider refused, which carries its status."""
+
+    status_code = 400
+
+
+def test_a_run_event_carries_sizes_and_error_types_never_what_was_said():
+    """The task, a tool's arguments and answer, and an error's message, which quotes either,
+    were each written into the run log, for whoever reads the deployment's logs."""
+    sink = RecordedEvents()
+    logger = _logger(sink)
+    task, handed, answer = f"summarise {SAID}", str({"file_path": SAID}), f"read {SAID}"
+    image = {"type": "image", "base64": "AAAA", "mime_type": "image/png"}
+    outputs = {
+        "c1": ToolMessage([{"type": "text", "text": answer}, image], tool_call_id="c1"),
+        "c2": Command(update={"messages": [ToolMessage(answer, tool_call_id="c2")]}),
+    }
+    missing = _raised(FileNotFoundError(SAID))
+    request = httpx.Request("POST", "https://provider.test")
+    overloaded = httpx.Response(529, request=request)
+
+    logger.run_start(task)
+    for at, output in outputs.items():
+        logger.on_tool_start({"name": "read_file"}, handed, run_id=at, tool_call_id=at)
+        logger.on_tool_end(output, run_id=at)
+    logger.on_tool_start({"name": "read_file"}, handed, run_id="c3", tool_call_id="c3")
+    logger.on_tool_error(missing, run_id="c3")
+    logger.on_llm_error(_raised(_RefusedError(f"prompt too long: {SAID}")), run_id="m1")
+    logger.on_llm_error(
+        _raised(httpx.HTTPStatusError(SAID, request=request, response=overloaded)), run_id="m2"
+    )
+
+    assert SAID not in json.dumps(sink.events), "content reached a run event"
+    (started,) = sink.named("run_start")
+    assert (started["task_chars"], started["decisions"]) == (len(task), None)
+    assert {e["input_chars"] for e in sink.named("tool_start")} == {len(handed)}
+    # The text the model reads, in a `task` call's `Command` too, and not the image beside it.
+    assert [e["output_chars"] for e in sink.named("tool_end")] == [len(answer), len(answer)]
+    (failed,) = sink.named("tool_error")
+    frame = traceback.extract_tb(missing.__traceback__)[-1]
+    assert (failed["error_type"], failed["error_at"]) == (
+        "FileNotFoundError", f"unit/test_runlog.py:{frame.lineno} in {frame.name}"
+    )
+    assert [(e["error_type"], e["status_code"]) for e in sink.named("model_error")] == [
+        ("_RefusedError", 400), ("HTTPStatusError", 529)
+    ]
 
 
 def test_usage_totals_the_model_calls_it_was_handed():
@@ -303,17 +367,13 @@ def test_with_nothing_wired_the_events_go_to_the_run_logger(cfg, caplog):
     assert [r.run_event["event"] for r in records] == ["run_start", "run_end"]
 
 
-def test_a_task_keeps_its_own_alphabet_in_the_log(caplog):
-    """A run log is read by a person, and `\\u00e9` is not what they asked for.
-
-    Every task the log carries is text somebody typed, so most of the world's
-    tasks escape into hex under the default. Nothing named this, and the flag
-    that prevents it reads as an ordinary keyword.
-    """
+def test_a_session_id_keeps_its_own_alphabet_in_the_log(caplog):
+    """A session id is the caller's own, in any alphabet, and how its events are found
+    again: escaped to `\\u00e9` under the default, a search for it finds none of them."""
     with caplog.at_level(logging.INFO, logger=RUN_LOGGER):
-        _logger(LoggedRunEvents()).run_start("Résume le rapport trimestriel")
+        _logger(LoggedRunEvents(), session_id="réunion-42").run_start("t")
 
-    assert "Résume" in caplog.text
+    assert "réunion-42" in caplog.text
     assert "\\u00e9" not in caplog.text
 
 
@@ -328,20 +388,18 @@ def test_a_file_sink_keeps_one_line_per_event_in_its_own_alphabet(tmp_path):
     """What `kingfisher run --log` writes. One line per event, appended, so a second
     turn adds to the file rather than replacing it -- and the parent is made, because a
     path somebody typed on the command line is the likeliest to name a folder that is
-    not there yet.
+    not there yet. A session id is in the caller's alphabet, as on the logger.
     """
-    import json
-
     from kingfisher.plugins.events import JsonlRunEvents
 
     sink = JsonlRunEvents(tmp_path / "logs" / "turns.jsonl")
-    _logger(sink).run_start("Résume le rapport")
-    _logger(sink).run_end(ok=True, answer_chars=3, stop_reason="end_turn")
+    _logger(sink, session_id="réunion-42").run_start("t")
+    _logger(sink, session_id="réunion-42").run_end(ok=True, answer_chars=3, stop_reason="end_turn")
 
     written = (tmp_path / "logs" / "turns.jsonl").read_text(encoding="utf-8")
     events = [json.loads(line) for line in written.splitlines()]
     assert [e["event"] for e in events] == ["run_start", "run_end"]
-    assert "Résume" in written
+    assert "réunion-42" in written
 
 
 PING = '''
@@ -551,6 +609,10 @@ def test_a_subagents_pause_is_no_tool_error_in_the_record(cfg, session_dir):
     resumed = kf.run(Resume(session_id=paused.session_id, decisions=answers))
 
     assert sink.named("tool_error") == []
+    # A resume asks no task, so it says how many decisions it answers.
+    assert [(e["task_chars"], e["decisions"]) for e in sink.named("run_start")] == [
+        (len("go"), None), (0, len(answers))
+    ]
     # `run_end` was written before the pause was read off the saved state.
     assert [e["stop_reason"] for e in sink.named("run_end")] == ["awaiting_decision", "end_turn"]
     delegated = [

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.agent.permitted_backend import host_path
 from kingfisher.core.layout import ARTIFACTS_SEEN, FILE_HISTORY, HARNESS_ROUTE, KEPT_FILES
+from kingfisher.core.logged import raised
 
 from .files import artifacts_seen
 from .memory import without_any
@@ -215,7 +216,14 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
             if why is None:
                 kept[path] = {MARK: mark, BYTES: copied}
                 continue
-            _log.warning("turn %s kept no copy of %s: %s", turn, path, why)
+            # Not the file, which the agent named, nor `why`, which may quote the backend: the
+            # history line keeps both, inside the session.
+            _log.warning(
+                "turn %s kept no copy of a file under /%s; its line in %s says why",
+                turn,
+                path.partition("/")[0],
+                FILE_HISTORY,
+            )
         not_kept[path] = {MARK: mark, WHY: why}
     records.append(_line(turn, under, kept, not_kept, sorted(before.keys() - now.keys())))
     dropped = dropped_for_space(records, cfg.rewind_max_bytes)
@@ -295,8 +303,8 @@ def _copied(
 def _on_this_host(backend: Any, path: str) -> tuple[Path | None, Path] | None:
     try:
         return host_path(backend, path)
-    except Exception:  # noqa: BLE001 -- a turn outlives a failing plugin
-        _log.warning("%s.host_path raised on %s", type(backend).__name__, path, exc_info=True)
+    except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing plugin
+        _log.warning("%s.host_path raised %s at %s", type(backend).__name__, *raised(exc))
         return None
 
 

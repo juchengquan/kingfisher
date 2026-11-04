@@ -12,6 +12,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher.core.interfaces import ReturnedPdf
+from kingfisher.core.logged import raised
 from kingfisher.core.session.threads import off_loop, thread_pool
 
 from .narrowing import tool_name
@@ -288,12 +289,12 @@ class AttachmentsMiddleware(AgentMiddleware):
         )
         try:
             instead = self._pdfs.replacement(pdf)
-        except Exception:  # noqa: BLE001 -- a deployment's hook failing leaves the verdict
+        except Exception as exc:  # noqa: BLE001 -- a deployment's hook failing leaves the verdict
             _log.warning(
-                "the PDF attachments plugin raised on %s's result; kingfisher's verdict "
-                "stands",
+                "the PDF attachments plugin raised %s at %s on %s's result; kingfisher's "
+                "verdict stands",
+                *raised(exc),
                 pdf.tool,
-                exc_info=True,
             )
             return None
         if instead is None:
