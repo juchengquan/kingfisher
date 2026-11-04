@@ -2079,6 +2079,10 @@ WITNESSES: dict[str, dict[str, str]] = {
         # What `Session.result` raises for an id no row has or a result kept nowhere,
         # which a caller tells apart from a session it cannot reach.
         "ResultError": "embedder",
+        # `configuration.md` writes both into a warnings filter: every warning kingfisher
+        # raises, and the one a fleet whose machines hold different keys silences alone.
+        "KingfisherWarning": "document",
+        "MissingCredentialsWarning": "document",
         # `README.md` opens on these four and the package docstring on `run`. A
         # reader who copied either is owed them.
         "definitions_source": "document",

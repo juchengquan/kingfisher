@@ -43,6 +43,10 @@ _EXPORTS = {
     "Landing": "kingfisher.core.config",
     "Kingfisher": "kingfisher.core.service",
     "ConfigError": "kingfisher.core.config",
+    # What every warning kingfisher raises is, for a deployment to filter by, and the one a
+    # fleet whose machines hold different keys silences alone.
+    "KingfisherWarning": "kingfisher.core.config",
+    "MissingCredentialsWarning": "kingfisher.core.config",
     "Request": "kingfisher.core.request",
     # Which graph a tool's call is made in, for a tool or a middleware to read.
     "current_graph": "kingfisher.core.agent.tool_context",
@@ -114,12 +118,14 @@ __all__ = [
     "InputsError",
     "Inventory",
     "Kingfisher",
+    "KingfisherWarning",
     "Landing",
     "LedgerEntry",
     "Listing",
     "MemoryChanges",
     "MemoryEntry",
     "MemoryEntryError",
+    "MissingCredentialsWarning",
     "ModelProfile",
     "Models",
     "Opened",
@@ -177,7 +183,9 @@ if TYPE_CHECKING:
     from kingfisher.core.config import Config as Config
     from kingfisher.core.config import ConfigError as ConfigError
     from kingfisher.core.config import Endpoint as Endpoint
+    from kingfisher.core.config import KingfisherWarning as KingfisherWarning
     from kingfisher.core.config import Landing as Landing
+    from kingfisher.core.config import MissingCredentialsWarning as MissingCredentialsWarning
     from kingfisher.core.config import ModelProfile as ModelProfile
     from kingfisher.core.config import Models as Models
     from kingfisher.core.config import WorkspacePaths as WorkspacePaths

@@ -5820,6 +5820,17 @@ record per construction. `print` would make the library unusable by a server, an
 is every other logger's parent, so raising it to INFO for this would have turned on the
 audit trail a deployment had left off, while there was one.
 
+**Kingfisher's warnings stay warnings, under one class, `KingfisherWarning`.** There are
+three -- a missing key, an unconfined shell, a middleware replacing one of deepagents'
+own -- each about setup rather than a turn. Not log records: the missing key is said as
+the model catalogue loads, before any `Kingfisher` exists, and Python's default filter
+says each once per process, where a record would repeat on every backend a server builds.
+One base, so a client silences all three with one filter. `MissingCredentialsWarning`
+keeps a class of its own, public, because a fleet whose machines hold different keys
+expects it. The other two get none: `external` withdraws the shell's, and a deployment
+that meant one replacement filters on the text, which names it, rather than on a class
+that would also hide the replacement it did not mean. *(2026-11-04.)*
+
 **Reversed: `doctor` says where a catalogue came from, not only what it holds.** It
 gained two rows a path alone could not express. One warned of an empty catalogue at a
 relocated path, because resolving a catalogue *created* its directory, so a mistyped root

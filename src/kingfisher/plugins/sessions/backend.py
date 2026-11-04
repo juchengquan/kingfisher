@@ -26,7 +26,7 @@ from deepagents.backends.composite import (
 
 from kingfisher.core.agent.host_paths import reject_host_path
 from kingfisher.core.agent.prompting import ShellPrompt
-from kingfisher.core.config import Config, ConfigError
+from kingfisher.core.config import Config, ConfigError, KingfisherWarning
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import CommandRunner, Sessions, refuse_unless_subclass
 from kingfisher.core.layout import Layout
@@ -403,7 +403,7 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
             " A workspace may hold many sessions, and each session's agent can then also "
             "read and change the other sessions' files."
         )
-        warnings.warn(said, stacklevel=1)
+        warnings.warn(said, KingfisherWarning, stacklevel=1)
     confined_shell = ConfinedLocalShellBackend(
         confined,
         runner=chosen,

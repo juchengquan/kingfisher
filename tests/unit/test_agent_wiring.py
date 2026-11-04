@@ -6,7 +6,7 @@ import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, KingfisherWarning
 from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.backend import skills_sources
@@ -327,7 +327,8 @@ def test_deepagents_own_middleware_is_discovered_across_the_package():
 
 def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, session_dir):
     """The whole point: said, not forbidden."""
-    with pytest.warns(UserWarning, match="deepagents merges by name"):
+    # By the class a deployment silences every kingfisher warning by, not `UserWarning`.
+    with pytest.warns(KingfisherWarning, match="deepagents merges by name"):
         built = build_agent(
             cfg,
             agent=_named(("audit",)),

@@ -320,7 +320,8 @@ enforces the `permissions` rules, so the substitution has to do that job too.
 
 Kingfisher warns rather than refuses, once, at build time. If you meant it there
 is nothing to do; if you did not, rename the class and leave the registry key
-alone.
+alone. The warning is a `KingfisherWarning`, which
+[`configuration.md`](configuration.md#its-warnings) says how to silence.
 
 `summarize_by_count.py` means it. deepagents' summarizer records what it summarized
 as an index into the conversation, so a second summarizer beside it -- one that
