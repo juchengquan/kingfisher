@@ -18,6 +18,20 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The command's log lines name their turn, and take a level, after #1206
+
+- **Each of kingfisher's log lines the command prints on stderr is led by its ids**: the
+  session, the turn, and the subagent where there is one, as `[s1 t3 researcher] the PDF
+  attachments plugin raised …`. A line with none, such as `reading from:`, is as it was.
+  A script matching a warning's sentence at the start of a line no longer finds it there.
+- **`run` and `decide` take `--log-level`**: `warning`, the default and what was shown
+  before, `info` to add each run event as its name and `key=value` fields, or `off`. It
+  sets kingfisher's own loggers alone, and only while the command runs. `--log FILE` keeps
+  every event whatever it says, and a setup warning from Python's `warnings`, such as a
+  `KingfisherWarning`, is still one `warning:` line whatever it says.
+- **Unchanged**: the library has no level of its own; only the command, which owns its
+  terminal, has one.
+
 ## A rewind reaches turns from before the turn log, after #1204
 
 - **`Session.rewind` accepts a turn a session ran before it kept a turn log**, back to

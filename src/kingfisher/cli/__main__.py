@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import shlex
 import sys
@@ -48,7 +49,7 @@ from kingfisher.core.access import Datazone, ExtraDatazone, with_datazone
 
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.definitions.agents.spec import AgentError
-from kingfisher.core.logged import logged
+from kingfisher.core.logged import RUN_LOGGER, logged
 from kingfisher.core.session.model import held_by_a_turn
 
 from .health import _retired, examine, worst
@@ -175,15 +176,11 @@ def build_parser() -> argparse.ArgumentParser:
             "its session, and says so"
         ),
     )
-    doing.add_argument(
-        "--log",
-        metavar="FILE",
-        type=Path,
-        help=(
-            "append what the turn did -- each model call with its tokens, each tool "
-            "call, each warning -- to FILE as JSON lines; warnings are still said on "
-            "stderr. Without it, nothing is kept"
-        ),
+    _add_logging(
+        doing,
+        "append what the turn did -- each model call with its tokens, each tool call, each "
+        "warning -- to FILE as JSON lines, every one whatever --log-level shows. Without it, "
+        "nothing is kept",
     )
     doing.add_argument(
         "--tell",
@@ -256,11 +253,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="delete the session once the turn finishes, as `run` does",
     )
-    deciding.add_argument(
-        "--log",
-        metavar="FILE",
-        type=Path,
-        help="append what the resumed turn did to FILE as JSON lines, as `run --log` does",
+    _add_logging(
+        deciding, "append what the resumed turn did to FILE as JSON lines, as `run --log` does"
     )
     deciding.add_argument(
         "--tell",
@@ -497,6 +491,26 @@ def _add_caller(parser: argparse.ArgumentParser, help_text: str) -> None:
     )
 
 
+#: `--log-level`'s choices, as the level the `kingfisher` logger holds while the command runs.
+LOG_LEVELS = {"warning": logging.WARNING, "info": logging.INFO, "off": logging.CRITICAL + 1}
+SHOWN_BY_DEFAULT = "warning"
+
+
+def _add_logging(parser: argparse.ArgumentParser, log_help: str) -> None:
+    parser.add_argument("--log", metavar="FILE", type=Path, help=log_help)
+    parser.add_argument(
+        "--log-level",
+        choices=LOG_LEVELS,
+        default=SHOWN_BY_DEFAULT,
+        help=(
+            "which of kingfisher's log lines stderr shows, each led by its session, turn "
+            "and subagent: warning (the default) its warnings, info what the turn did as "
+            "well, off none. --log keeps everything whatever this says, and a `warning:` "
+            "line is printed whatever it says"
+        ),
+    )
+
+
 def _seed(source: str | None = None, *, everything: bool = False) -> int:
     """Fill the definitions folder."""
     paths = paths_from_env()
@@ -549,6 +563,58 @@ def _plain_warnings() -> Iterator[None]:
         # replacement is.
         warnings.showwarning = plain  # ty: ignore[invalid-assignment]
         yield
+
+
+#: What leads a line: not `turn_agent`, which `--agent` named.
+PREFIXED = ("session_id", "turn_id", "agent")
+#: Not repeated among a run event's fields: its name, its prefix or `--agent` says each, and
+#: a line printed as it happens needs no `ts`.
+UNLISTED = frozenset({"ts", "event", "level", "message", "turn_agent", *PREFIXED})
+
+
+def _field(value: object) -> str:
+    # Bare only where nothing could be misread; JSON's escapes keep the rest to one line.
+    if isinstance(value, str) and value and not any(c.isspace() or c in '="' for c in value):
+        return value
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
+class _Prefixed(logging.Formatter):
+    """A line led by the ids its event carries, `[session turn subagent]`, and a run event
+    as its name and its fields, `key=value`, rather than the JSON the default sink writes."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        event = getattr(record, "kingfisher", None) or {}
+        if record.name == RUN_LOGGER and event:
+            said = " ".join([
+                str(event.get("event")),
+                *(f"{name}={_field(value)}" for name, value in event.items()
+                  if name not in UNLISTED),
+            ])
+        else:
+            said = record.getMessage()
+        ids = " ".join(str(event[name]) for name in PREFIXED if event.get(name) is not None)
+        return f"[{ids}] {said}" if ids else said
+
+
+@contextmanager
+def _prefixed_logs(level: str) -> Iterator[None]:
+    """Kingfisher's log lines on stderr, prefixed, at `--log-level`; its loggers alone."""
+    logger = logging.getLogger("kingfisher")
+    was = logger.level
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(_Prefixed())
+    # On the logger, not the handler: `logged` asks the logger before it builds a line,
+    # and Python's default drops INFO.
+    logger.setLevel(LOG_LEVELS[level])
+    logger.addHandler(handler)
+    try:
+        yield
+    finally:
+        # Put back: `main` runs in-process in the tests, and a handler left on `kingfisher`
+        # would say every later line twice.
+        logger.removeHandler(handler)
+        logger.setLevel(was)
 
 
 EMPTY_TELL = "--tell is empty -- say what to tell the agents, or leave it out"
@@ -638,13 +704,14 @@ def _kept_in(log: Path | None) -> JsonlRunEvents | None:
     from kingfisher.plugins import JsonlRunEvents  # noqa: PLC0415
 
     class KeptAndSaid(JsonlRunEvents):
-        """The file, and each warning on stderr as well: a command's user reads the
-        terminal, and a plugin they wired that broke must still say so there."""
+        """The file, and each event on stderr as well where `--log-level` shows it: a
+        command's user reads the terminal, and a plugin they wired that broke must still
+        say so there."""
 
         def record(self, event: Mapping[str, object]) -> None:
+            # Unfiltered: a deployment may total its tokens from the file.
             super().record(event)
-            if event.get("level") == "WARNING":
-                logged(event)
+            logged(event)
 
     return KeptAndSaid(log.expanduser())
 
@@ -1180,7 +1247,9 @@ def main(argv: list[str] | None = None) -> int:
     from_dotenv = _load_dotenv()
 
     parser = build_parser()
-    parser.set_defaults(from_dotenv=from_dotenv)
+    # A level for every verb: each one's lines go through the command's handler, though only
+    # `run` and `decide` take `--log-level`.
+    parser.set_defaults(from_dotenv=from_dotenv, log_level=SHOWN_BY_DEFAULT)
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
     if args.command is None:
@@ -1190,7 +1259,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         # Every verb, not `run` alone: for `list` the warning is its only report of a
         # missing key.
-        with _plain_warnings():
+        with _plain_warnings(), _prefixed_logs(args.log_level):
             return HANDLERS[args.command](args)
     except SessionBusyError as exc:
         # Not the caller's mistake: waiting fixes it. Still exit 2, so the words say "wait".

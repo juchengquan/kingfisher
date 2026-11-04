@@ -358,13 +358,29 @@ Every record carries the whole event as one attribute, `record.kingfisher`, for 
 handler that ships structured logs — `record.kingfisher["session_id"]`, so nothing
 kingfisher adds lands on a name your own records use. With logging configured by
 nobody, Python's last resort prints warnings to stderr and drops the rest, so a
-deployment that set up nothing still hears that a plugin of its failed. `kingfisher
-run` and `decide` keep no run events unless given `--log FILE`, which appends one JSON
-line per event, warnings and the origins line included, and still says each warning on
-stderr.
+deployment that set up nothing still hears that a plugin of its failed.
 
-**Switching them off is the sink's call.** Kingfisher has no level setting of its own:
+**The command prints them itself.** While it runs, the `kingfisher` command has a handler
+of its own on the `kingfisher` logger, and each line it prints on stderr is led by the ids
+its event carries: the session, the turn, and the subagent where there is one.
+
+```
+[s1 t3 researcher] the PDF attachments plugin raised ValueError at mine/pdf.py:40 in replacement on read_file's result; kingfisher's verdict stands
+```
+
+A line with none, such as the origins line, has no prefix. `run` and `decide` take
+`--log-level`: `warning`, the default, shows the warnings; `info` adds each run event, as
+its name and then its fields as `key=value`, such as `[s1 t3] run_end model=m1
+endpoint=gateway ok=true answer_chars=412 stop_reason=end_turn`; `off` shows none. It sets
+kingfisher's loggers alone, never LangChain's or httpx's. It does not reach a warning
+Python's `warnings` raises while the command sets up, such as a `KingfisherWarning`, which
+is one `warning:` line whatever the level. Nor does it reach the record: `run` and
+`decide` keep no run events unless given `--log FILE`, which appends one JSON line per
+event, warnings and the origins line included, whatever `--log-level` shows.
+
+**Switching them off is the sink's call.** The library has no level setting of its own:
 one applied before every sink would drop `model_call`, which a bill is totalled from.
+`--log-level` is the command's, for the terminal it owns.
 On the default sink Python's levels decide —
 `logging.getLogger("kingfisher").setLevel(logging.ERROR)` silences all three loggers,
 and setting `kingfisher.run` or `kingfisher.warnings` alone touches only that one. Not
