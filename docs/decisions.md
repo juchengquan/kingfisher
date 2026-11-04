@@ -2251,7 +2251,7 @@ would make kingfisher a second name for someone else's contract, which `guides/t
 refuses to be. Documented instead: a `Command` writing its own message leaves its
 `tool_result` event naming no tool, and a `files` update reaches nothing, as the file
 tools are on a real filesystem. `findings.md` has the measurement and
-`tests/unit/test_tool_returns.py` pins it, so a langchain change lands there.
+`tests/unit/agent/test_tool_returns.py` pins it, so a langchain change lands there.
 *(2026-09-04.)*
 
 **A tool that creates a file saves it and returns where it went, never its contents.**
@@ -2327,8 +2327,8 @@ might write it. *(2026-10-15, from an architecture review.)*
 `","` under a docstring saying CSV, so a comma, quote or newline in a value returned
 different data -- measured, three rows as four lines. It uses `csv.writer`, as
 `csv_filter` does, and says its row cap in a trailing `--` line the docstring names.
-`tests/unit/test_tools_that_read_a_database.py` drives the three tools that open a
-database, which "does it import" had covered, and holds connections closed:
+`tests/unit/assets/test_tools_that_read_a_database.py` drives the three tools that open
+a database, which "does it import" had covered, and holds connections closed:
 `with sqlite3.connect(...)` commits and does *not* close, so every call leaked one;
 `closing` is what a read wants. *(2026-10-14, from an architecture review.)*
 
@@ -5857,14 +5857,14 @@ out a tool its spec shut to everyone, which an agent still named. The row asks
 one answer; without the built-in set it says "not checked", since every `builtin_tools:`
 name would read as unknown. *(2026-10-23.)*
 
-**`REFUSALS` is what stops the next one.** The table in `tests/unit/test_refusals.py` has an
-entry per catalogue-reading function that can refuse a definition, naming a broken
-catalogue that reaches it or why none can, deny by default both ways, with the raise count
-checked so a new refusal cannot inherit an entry about another. It counts a raise of a
-class the function was *handed*, which `importing.load` and
-`documents.require_literal_prompt` do; driving it found a sixth escape, a bundle folder
-holding two definitions; and each defect is run and the frame that raised compared with its
-key.
+**`REFUSALS` is what stops the next one.** The table in
+`tests/unit/cli/test_refusals.py` has an entry per catalogue-reading function that can
+refuse a definition, naming a broken catalogue that reaches it or why none can, deny by
+default both ways, with the raise count checked so a new refusal cannot inherit an entry
+about another. It counts a raise of a class the function was *handed*, which
+`importing.load` and `documents.require_literal_prompt` do; driving it found a sixth
+escape, a bundle folder holding two definitions; and each defect is run and the frame
+that raised compared with its key.
 
 **`doctor` asks the fence the questions a run asks.** It kept its own copy of the required
 ABI and its own kernel reading, and told a kernel that could be fenced to wait "until that
@@ -6556,7 +6556,7 @@ so the startup check finds a public name in one step. `FOLDER_TABLES` and
 folder gets one waits on what this one cost, and so does how the plugin rule reads a
 table, since no plugin takes anything from `core/access`. *(2026-10-19.)*
 
-**The rules**, all in `tests/unit/test_architecture.py`:
+**The rules**, all in `tests/unit/rules/test_architecture.py`:
 
   - **`THIRD_PARTY`**, a per-folder library allowlist, deny by default, so an upgrade
     is a list of files rather than a search. The runtime goes to `core/agent`,
@@ -7264,6 +7264,17 @@ stops a seventh copy: tests read `.subagents` 113 times, mostly asking something
 different, so a rule against it would be noise around one real duplication.
 *(2026-09-24, from an architecture review.)*
 
+**The tests sit in folders named for what they test.** 170 files lay flat in
+`tests/unit/`, so whoever changed `core/session/ledger.py` searched for its tests by
+name. Fourteen folders mirror the package, with `rules/` for checks over the whole tree
+and `tooling/` for the scripts'. A file went where the area it imports most from says,
+leaving out what every turn-driving test imports; that held for 101 of 150, and the
+rest went by subject -- a subagent's parsing under `definitions/`, its building under
+`agent/`, its gates and streams under `session/`. File names were kept, so a citation by
+bare name still holds, and the move was checked by collecting the same 4,582
+`file::name` ids before and after. `test_a_test_sits_on_its_shelf_and_in_its_folder`
+refuses a test module left loose in `tests/unit/`. *(2026-11-05, from a review.)*
+
 ## Proposals, and what became of them
 
 What is still being argued is in `docs/design/`, and `docs/README.md` lists it,
@@ -7305,11 +7316,11 @@ list is where the deliberate differences live: the star on `skills` and `subagen
 
 The risk the history does show is a fix reaching one reader: refusing a list where one
 model goes reached the subagent format and left the agent's turning it into a string.
-`tests/unit/test_format_parity.py` holds the readers to each other instead: it reads the
-same documents through both and compares every shared field or the refusal, requires
-`["*"]` to part the formats on exactly `skills` and `subagents`, and checks each
-format's keys against its spec. A field both formats take goes into both readers and
-into a document there, and the test is red until it does. *(2026-09-16.)*
+`tests/unit/definitions/test_format_parity.py` holds the readers to each other instead:
+it reads the same documents through both and compares every shared field or the refusal,
+requires `["*"]` to part the formats on exactly `skills` and `subagents`, and checks
+each format's keys against its spec. A field both formats take goes into both readers
+and into a document there, and the test is red until it does. *(2026-09-16.)*
 
 **Left for now: one spec for agents and subagents.** Not one reader but one record. The
 two share 14 fields, and the differences are guarantees the types enforce: a subagent

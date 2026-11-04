@@ -38,10 +38,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from deepagents.backends.protocol import FileDownloadResponse, FileUploadResponse
 
 from kingfisher import Kingfisher, Request
-from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, Config
 from kingfisher.core.agent.backend import SessionBackends
+from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, Config
 from tests.conftest import FAKE_CATALOGUE, StubCheckpointer
-from tests.unit.test_run import StubAgent
+from tests.unit.service.test_run import StubAgent
 
 #: One round trip to the remote backend.
 LATENCY = 0.05

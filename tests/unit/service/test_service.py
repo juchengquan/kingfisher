@@ -1,0 +1,1065 @@
+"""The application service: wired once, asked many times."""
+
+from __future__ import annotations
+
+from dataclasses import replace
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from langchain_core.messages import AIMessage
+
+from kingfisher import Kingfisher, TurnIdError
+from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.config import ConfigError
+from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.core.interfaces import CommandResult, CommandRunner
+from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.reporting import opening_events
+from kingfisher.core.request import Request
+from kingfisher.core.session.files import InputsChanged
+from kingfisher.core.session.running import refused_credentials, refused_request
+from kingfisher.core.session.steps import drive
+from kingfisher.core.session.turn import turn_message
+from kingfisher.plugins import LocalSessions, backend_at
+from tests.conftest import (
+    FAKE_ENDPOINT,
+    OTHER_ENDPOINT,
+    FakeGraph,
+    agent_for,
+    an_agent,
+    start,
+    subagents_dir,
+    tools_dir,
+    withheld_told,
+)
+from tests.unit.scripted import Scripted
+from tests.unit.service.test_run import StubAgent
+
+
+def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
+    """Wiring is shared; per-turn state is not."""
+    start(cfg, "s")
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
+    )
+
+    asked = Request("go", agent="only", session_id="s")
+    turns = [service.run(asked).turn_id for _ in range(3)]
+    assert len(set(turns)) == 3, "three turns, three names"
+
+
+def test_construction_prepares_only_what_sessions_share(cfg):
+    """Eagerly, so broken definitions fail at startup rather than mid-turn -- but only
+    the shared tier, and no definition kind, which nothing reads from the workspace.
+    """
+    service = Kingfisher(cfg, sessions=LocalSessions())
+
+    assert service.workspace.is_dir()
+    assert (service.workspace / "sessions").is_dir()
+    assert not (service.workspace / "skills").exists()
+    assert not (service.workspace / "inputs").exists()
+
+
+def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
+    """Injection is by collaborator, not by monkeypatching -- and an agent built
+    elsewhere cannot honour restrictions it never saw.
+    """
+    agent = StubAgent("ok")
+    service = Kingfisher(cfg, graph=agent, sessions=LocalSessions())
+
+    # No spec and no source ids: a supplied graph is handed back before either is
+    # looked at, which is the thing this asserts.
+    asked = Request("go")
+    assert service._graph_for(
+        asked,
+        asked.capabilities,
+        agent=None,
+        held=None,
+        files=None,
+        session_id="s",
+        catalogue=service.catalogue,
+    ) is agent
+
+    with pytest.raises(ValueError, match="pre-built graph"):
+        narrowed = Request("go", capabilities=Capabilities(builtin_tools=("read_file",)))
+        service._graph_for(
+            narrowed,
+            narrowed.capabilities,
+            agent=None,
+            held=None,
+            files=None,
+            session_id="s",
+            catalogue=service.catalogue,
+        )
+
+
+def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
+    """Deliberately not cached: it reads the skills and subagent definitions, which a
+    user can edit between turns.
+    """
+    # A real checkpointer: this builds a real agent, and deepagents type-checks
+    # the saver it is handed.
+    an_agent(cfg)
+    service = Kingfisher(cfg, sessions=LocalSessions())
+    asked = Request("go", agent="only")
+
+    built = agent_for(service, asked)
+    files = drive(service._files_for(session_dir.name, catalogue=service.catalogue))
+
+    def once():
+        return service._graph_for(
+            asked,
+            service.grants,
+            agent=built,
+            held=None,
+            files=files,
+            session_id="s",
+            catalogue=service.catalogue,
+        )
+
+    assert once() is not once()
+
+
+ECHO = '''
+def echo(text: str) -> str:
+    """Says the text back."""
+    return "ECHO:" + text
+
+
+TOOLS = [echo]
+'''
+
+
+def test_a_turn_asks_for_its_definitions_once(scripted, monkeypatch):
+    """A turn asking twice, or reading the folder behind its answer, could build its agent
+    from one set of definitions and its tools or subagents from another. Driven through a
+    tool call and a subagent calling one, so the whole turn is inside what is counted."""
+    tools_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (tools_dir(scripted) / "echo.py").write_text(ECHO, encoding="utf-8")
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "helper.yaml").write_text(
+        "name: helper\ndescription: Helps.\nbuiltin_tools: [read_file]\ntools: [echo]\n"
+        "system_prompt: |\n  You help.\n",
+        encoding="utf-8",
+    )
+    an_agent(scripted, tools="[echo]", subagents="[helper]", builtin_tools="[read_file, task]")
+    kf = Kingfisher(scripted, sessions=LocalSessions())
+    asked, read_again = [], []
+    # Taken before the spy: asking is what reads a changed folder, and the question is
+    # whether anything else does.
+    version, from_roots = kf._versions.current(), Definitions.from_roots
+
+    def counted() -> Definitions:
+        asked.append(1)
+        return version
+
+    def spied(*args, **kwargs) -> Definitions:
+        read_again.append(args)
+        return from_roots(*args, **kwargs)
+
+    monkeypatch.setattr(kf._versions, "current", counted)
+    monkeypatch.setattr(Definitions, "from_roots", spied)
+    Scripted.script.extend(
+        [
+            AIMessage("", tool_calls=[{"name": "echo", "args": {"text": "x"}, "id": "c1"}]),
+            AIMessage(
+                "",
+                tool_calls=[
+                    {
+                        "name": "task",
+                        "args": {"description": "go", "subagent_type": "helper"},
+                        "id": "c2",
+                    }
+                ],
+            ),
+            AIMessage("", tool_calls=[{"name": "echo", "args": {"text": "y"}, "id": "c3"}]),
+            AIMessage("helped"),
+            AIMessage("done"),
+        ]
+    )
+
+    ran = kf.run(Request("go", agent="only", session_id=start(scripted, "s")))
+
+    assert [entry.tool for entry in ran.ledger] == ["echo", "task", "echo"]
+    assert len(asked) == 1
+    assert not read_again
+
+
+def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
+    """The bug this fixes: hardening `inputs/` ran before everything else, so one file
+    owned by another user -- a `sudo` run, a restored backup -- aborted the turn, and
+    every later turn of that session with it.
+    """
+    start(cfg, "s")
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
+    )
+
+    real_chmod = Path.chmod
+
+    def refuse_everything(self, mode, **kwargs):
+        raise PermissionError(1, "Operation not permitted", str(self))
+
+    Path.chmod = refuse_everything
+    try:
+        events = list(service.stream(Request("go", agent="only", session_id="s")))
+    finally:
+        Path.chmod = real_chmod
+
+    assert [e.kind for e in events][-1] == "finished"
+    assert [e.kind for e in events if e.kind == "protect_failed"]
+
+
+def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
+    """Degrading quietly would be worse than crashing: the guard is weaker than it looks
+    and nobody would know.
+    """
+    start(cfg, "s")
+    monkeypatch.setattr(
+        "kingfisher.plugins.sessions.backend.protect_inputs",
+        lambda _dir, _inputs=None: ("theirs.pdf: Operation not permitted",),
+    )
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
+    )
+
+    events = list(service.stream(Request("go", agent="only", session_id="s")))
+    (failed,) = [e for e in events if e.kind == "protect_failed"]
+
+    assert "theirs.pdf" in failed.text
+    assert [e.kind for e in events][-1] == "finished"  # and the run went on
+
+
+def test_the_module_level_helpers_are_unchanged(cfg):
+    """`run("do a thing")` was the whole public surface before this object, and is
+    unaffected by it.
+    """
+    from kingfisher import run
+
+    result = run(
+        "say hello",
+        cfg=cfg,
+        graph=StubAgent("hello"),
+        sessions=LocalSessions(),
+    )
+    assert result.answer == "hello"
+
+
+# -- what a turn opens with -----------------------------------------------
+#
+# Both of these were inline in setup, when it was one function of 123 lines.
+# Neither touches the service, so neither needed to be reached through a full
+# run -- and reaching them that way is why the cases below went uncovered: the
+# only assertion on either was one substring, through a stubbed agent.
+
+
+class FakePlacement:
+    def __init__(self, placed=(), replaced=()):
+        self.placed = placed
+        self.replaced = replaced
+
+
+def test_a_quiet_turn_opens_with_only_run_start():
+    events = opening_events("t001", (), FakePlacement())
+
+    assert [(e.kind, e.text) for e in events] == [("run_start", "t001")]
+
+
+def test_replacing_an_input_is_counted_not_just_listed():
+    """A caller's input silently overwritten is the one dangerous case, so the
+    count is named.
+    """
+    events = opening_events("t001", (), FakePlacement(("a.csv", "b.csv"), ("a.csv",)))
+
+    (placed,) = [e for e in events if e.kind == "inputs_placed"]
+    assert placed.text == "a.csv, b.csv (1 replaced)"
+
+
+def test_placing_without_replacing_says_nothing_about_replacement():
+    events = opening_events("t001", (), FakePlacement(("fresh.csv",)))
+
+    (placed,) = [e for e in events if e.kind == "inputs_placed"]
+    assert placed.text == "fresh.csv"
+
+
+def test_unhardened_paths_are_reported_before_the_run_starts():
+    """Order matters: the caller should know the guard is weaker before it is told the
+    turn began.
+    """
+    events = opening_events("t001", ("theirs.pdf: denied",), FakePlacement())
+
+    assert [e.kind for e in events] == ["protect_failed", "run_start"]
+
+
+def test_a_bare_task_is_told_only_where_to_work():
+    message = turn_message("do a thing", InputsChanged(), layout=DEFAULT_LAYOUT)
+
+    assert message == (
+        "do a thing\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
+    )
+
+
+def test_a_note_follows_the_task_and_comes_before_kingfishers_own_lines():
+    """A note after the scratch line or the new files reads as more about where to work,
+    and one ahead of the task puts the caller's aside before what was asked.
+    """
+    message = turn_message(
+        "analyse",
+        InputsChanged(new=("fresh.csv",)),
+        layout=DEFAULT_LAYOUT,
+        note="Figures are in euros.",
+    )
+
+    assert message == (
+        "analyse\n\nFigures are in euros.\n\n"
+        "/scratchpad/ is yours to work in (from the shell, scratchpad)."
+        " New files in /inputs/: fresh.csv."
+    )
+
+
+def test_an_empty_note_leaves_the_message_as_it_was():
+    """The control: a turn without a note that gained so much as a blank line would send
+    a different message from every turn before it.
+    """
+    message = turn_message("do a thing", InputsChanged(), layout=DEFAULT_LAYOUT, note="")
+
+    assert message == (
+        "do a thing\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
+    )
+
+
+def test_files_supplied_with_the_request_are_named():
+    """They went to a directory of the turn's own and are session inputs now, so the
+    one line that used to name two places names one.
+    """
+    message = turn_message("analyse", InputsChanged(new=("fresh.csv",)), layout=DEFAULT_LAYOUT)
+
+    assert "New files in /inputs/: fresh.csv." in message
+
+
+def test_the_turn_message_carries_no_output_convention():
+    """What the task should *produce* is the task's business."""
+    message = turn_message("say hello", InputsChanged(), layout=DEFAULT_LAYOUT)
+
+    assert "report" not in message.lower()
+    assert ".md" not in message
+
+
+# -- a refused request leaves no turn behind ------------------------------
+#
+# `--input` naming a missing file was refused once *after* `allocate_turn`, and left
+# `t001` behind -- a stray turn counting against the session's own budget. Every
+# refusal comes before `run_start` now, and the claim taken before them goes back.
+
+
+#: Every way a request is turned down after its session is claimed: over the files
+#: it names, over the session already being too large, and over the backend refusing
+#: the upload, which comes after the build.
+REFUSALS = [
+    "inputs name a missing file",
+    "inputs name one file twice",
+    "session over budget",
+    "backend refuses the upload",
+]
+
+
+@pytest.mark.parametrize("how", REFUSALS)
+def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how, monkeypatch):
+    """Refused after the claim and before it went back, the session stayed claimed
+    until the claim went stale; refused after `run_start`, the run log held a turn that
+    never ran.
+    """
+    from kingfisher.core.session import preparation
+    from kingfisher.core.session.files import InputsError
+    from kingfisher.core.session.model import QuotaExceededError
+    from tests.conftest import RecordedEvents, start
+    from tests.unit.access.test_tenancy import _claim
+
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    (tmp_path / "a" / "same.csv").write_text("one")
+    (tmp_path / "b" / "same.csv").write_text("two")
+    inputs = {
+        "inputs name a missing file": (tmp_path / "nope.csv",),
+        "inputs name one file twice": (tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv"),
+        "session over budget": (),
+        "backend refuses the upload": (tmp_path / "a" / "same.csv",),
+    }[how]
+    if how == "backend refuses the upload":
+
+        def refusing(placement, files, layout):
+            msg = "the session's backend refused /inputs/same.csv: permission_denied"
+            raise InputsError(msg)
+            yield
+
+        monkeypatch.setattr(preparation, "place_inputs", refusing)
+    budgeted = replace(cfg, session_max_bytes=1) if how == "session over budget" else cfg
+    session = start(budgeted, "s")
+    (budgeted.workspace / "sessions" / session / "outputs" / "big.txt").write_text("x" * 64)
+    recorded = RecordedEvents()
+    kf = Kingfisher(
+        budgeted,
+        graph=StubAgent("ok"),
+        sessions=LocalSessions(),
+        run_events=recorded,
+    )
+
+    with pytest.raises((InputsError, QuotaExceededError)):
+        kf.run(Request("go", session_id=session, inputs=inputs))
+
+    assert recorded.named("run_start") == []
+    assert not _claim(budgeted, session).exists()
+
+
+def test_a_turn_id_the_session_already_holds_is_refused_before_anything_changes(
+    scripted, tmp_path
+):
+    """The ledger names a turn only by its id, so two turns under one could not be told
+    apart; refused after its inputs were placed, it would still have replaced the
+    caller's file."""
+    an_agent(scripted)
+    kf = Kingfisher(scripted, sessions=LocalSessions())
+    session = start(scripted, "s")
+    folder = scripted.workspace / "sessions" / session
+    Scripted.script.append(AIMessage("first"))
+    kf.run(Request("go", agent="only", session_id=session, turn_id="req-77"))
+    # Every file at any depth: a turn keeps copies in folders under `.harness`.
+    kept = {path: path.read_bytes() for path in (folder / ".harness").rglob("*") if path.is_file()}
+    (tmp_path / "data.csv").write_text("new", encoding="utf-8")
+
+    with pytest.raises(TurnIdError, match="req-77"):
+        kf.run(
+            Request(
+                "again",
+                agent="only",
+                session_id=session,
+                turn_id="req-77",
+                inputs=(tmp_path / "data.csv",),
+            )
+        )
+
+    after = {path: path.read_bytes() for path in (folder / ".harness").rglob("*") if path.is_file()}
+    assert after == kept
+    assert not (folder / "inputs" / "data.csv").exists()
+    # The control: the same request under an id of its own runs.
+    Scripted.script.append(AIMessage("second"))
+    again = kf.run(Request("again", agent="only", session_id=session, turn_id="req-78"))
+    assert again.answer == "second"
+
+
+def test_a_supplied_graph_refuses_a_turn_id_its_turn_log_holds(cfg):
+    """A supplied graph keeps no ledger, so its ids went unchecked: a second turn under one
+    was logged as its own parent, and `turns` and `rewind` looped on it forever."""
+    start(cfg, "s")
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+    kf.run(Request("first", agent="only", session_id="s", turn_id="req-77"))
+    # The control: under an id of its own a turn runs. Also what puts the reused id a
+    # turn back, rather than on the log's last line.
+    kf.run(Request("second", agent="only", session_id="s", turn_id="req-78"))
+    log = cfg.workspace / "sessions" / "s" / ".harness" / "turns.jsonl"
+    kept = log.read_bytes()
+
+    with pytest.raises(TurnIdError, match="req-77"):
+        kf.run(Request("again", agent="only", session_id="s", turn_id="req-77"))
+
+    assert log.read_bytes() == kept
+    turns = kf.session("s").turns()
+    assert [(turn.id, turn.parent) for turn in turns] == [("req-77", None), ("req-78", "req-77")]
+
+
+def test_a_caller_naming_one_file_twice_catches_it_by_the_front_door_name(cfg, tmp_path):
+    """`InputsError` was filed as the deployment's and not exported, so a library caller
+    could catch two `Request.inputs` of one filename only as `ValueError`, beside any bug."""
+    import kingfisher
+
+    for folder in ("a", "b"):
+        (tmp_path / folder).mkdir()
+        (tmp_path / folder / "same.csv").write_text(folder)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+
+    with pytest.raises(kingfisher.InputsError, match=r"same\.csv: supplied twice"):
+        kf.run(Request("go", inputs=(tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv")))
+
+
+def test_a_narrowed_request_is_told_what_it_did_not_grant(cfg):
+    """The silence this closes: the caller found out when the model reached for a tool
+    mid-turn and was refused, not when the turn opened.
+    """
+    events = opening_events("t001", (), FakePlacement(), (("tool", ("execute", "ls")),))
+
+    (said,) = [e for e in events if e.kind == "withheld"]
+    assert said.text == "2 tool(s) not granted: execute, ls"
+
+
+def test_an_unrestricted_request_is_told_nothing(cfg):
+    """Nothing was withheld, so there is nothing to say."""
+    events = opening_events("t001", (), FakePlacement(), ())
+
+    assert [e.kind for e in events] == ["run_start"]
+
+
+def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
+    """Not off a list kept somewhere."""
+    from kingfisher.core.definitions import seeding
+
+    # Seeded before the service, not after: a catalogue is read when a
+    # deployment is wired, so definitions written afterwards are not its.
+    seeding.seed(cfg.definitions, shipped)
+    # An agent of this test's own. `general` declares subagents of its own, and
+    # what those name is a different subject from a withheld-tool report --
+    # narrowing tools to `sql_query` refuses `profiler` before it gets here.
+    an_agent(cfg)
+    service = Kingfisher(cfg, sessions=LocalSessions())  # adds http_fetch, sql_query, sql_tables
+    start(cfg, "s")
+    asked = Request(
+        "go",
+        agent="only",
+        session_id="s",
+        capabilities=Capabilities(builtin_tools=("read_file",), tools=("sql_query",)),
+    )
+
+    prepared = drive(service._prepare_steps(asked))
+
+    by_kind = dict(withheld_told(prepared.events))
+
+    # The two kinds are reported apart, which is the whole point of the split.
+    assert "http_fetch" in by_kind["tool"]  # an offered tool
+    assert "execute" in by_kind["builtin tool"]  # and a built-in
+    assert "read_file" not in by_kind["builtin tool"]  # granted, so not withheld
+
+
+def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
+    """Every axis narrows the same way and every one of them went silent the same way."""
+    from kingfisher.core.definitions import seeding
+
+    # Seeded before the service, not after: a catalogue is read when a
+    # deployment is wired, so definitions written afterwards are not its.
+    seeding.seed(cfg.definitions, shipped)
+    # An agent of this test's own. `general` declares subagents of its own, and
+    # what those name is a different subject from a withheld-tool report --
+    # narrowing tools to `sql_query` refuses `profiler` before it gets here.
+    an_agent(cfg)
+    # Skills switched on, because this rule is about the skills axis among the four and
+    # `Config.skills_enabled` defaults to off. With it off the agent is told about no
+    # skills at all, so a report naming one "not granted" says the others were -- which
+    # is the answer the switch exists to suppress, and what this asserted.
+    wired = replace(cfg, skills_enabled=True)
+    service = Kingfisher(wired, sessions=LocalSessions())
+    start(cfg, "s")
+    asked = Request(
+        "go",
+        agent="only",
+        session_id="s",
+        capabilities=Capabilities(
+            builtin_tools=("read_file",),
+            tools=("sql_query",),
+            skills=("code-review",),
+            subagents=("reviewer",),
+        ),
+    )
+
+    prepared = drive(service._prepare_steps(asked))
+
+    by_kind = dict(withheld_told(prepared.events))
+
+    # Asked of what `seed` actually wrote, rather than named here. The literal
+    # tuples this used to assert were arithmetic about the shipped catalogue,
+    # so adding a preset failed a test about *reporting* for a reason having
+    # nothing to do with reporting. Sortedness is still asserted -- this is a
+    # line a person reads -- but the membership comes from the catalogue.
+    # `available_skills`, because the report measures against what the *run* was
+    # offered, which resolves a skill in a source folder -- `incident::postmortem`.
+    # A directory listing did not show that one, and the two agreed until a sourced
+    # skill shipped.
+    from kingfisher.core.agent.activation import available_skills
+
+    seeded_skills = set(available_skills(wired))
+    seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
+    # Not vacuous: the granted name has to be one the catalogue offers, or
+    # "everything except it" would be the whole catalogue by accident.
+    assert {"code-review"} < seeded_skills
+    assert {"reviewer"} < seeded_subagents
+
+    assert set(by_kind) == {"builtin tool", "tool", "skill", "subagent"}
+    assert "execute" in by_kind["builtin tool"]  # granted read_file only
+    assert "read_file" not in by_kind["builtin tool"]  # and it was granted
+    assert "http_fetch" in by_kind["tool"]  # an offered tool, reported apart
+    assert by_kind["skill"] == tuple(sorted(seeded_skills - {"code-review"}))
+    assert by_kind["subagent"] == tuple(sorted(seeded_subagents - {"reviewer"}))
+
+
+def test_nothing_is_withheld_from_the_skills_axis_when_the_switch_is_off(cfg, shipped):
+    """With `KINGFISHER_SKILLS_ENABLED` off the agent is told about no skills at all, so
+    a report naming one "not granted" says the others were.
+
+    Measured before this: the same line, `1 skill(s) not granted: ...`, with the switch
+    on and off alike -- while `doctor` on that config says "KINGFISHER_SKILLS_ENABLED is
+    off so none will be offered". Two surfaces contradicting each other about one
+    deployment. The third reader of this switch to ask only the request; the subagent
+    branch and `doctor` were the first two, and the entry recording those says why.
+    """
+    from kingfisher.core.definitions import seeding
+
+    seeding.seed(cfg.definitions, shipped)
+    an_agent(cfg)
+    off = replace(cfg, skills_enabled=False)
+    asked = Request(
+        "go",
+        agent="only",
+        capabilities=Capabilities(skills=("code-review",)),
+    )
+
+    prepared = drive(Kingfisher(off, sessions=LocalSessions())._prepare_steps(asked))
+    withheld = dict(withheld_told(prepared.events))
+
+    assert "skill" not in withheld, "a skill cannot be withheld where none is offered"
+
+
+def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
+    """The control: suppressing the row where nothing is offered must not suppress it
+    where something is.
+    """
+    from kingfisher.core.agent.activation import available_skills
+    from kingfisher.core.definitions import seeding
+
+    seeding.seed(cfg.definitions, shipped)
+    an_agent(cfg)
+    on = replace(cfg, skills_enabled=True)
+    asked = Request(
+        "go",
+        agent="only",
+        capabilities=Capabilities(skills=("code-review",)),
+    )
+
+    prepared = drive(Kingfisher(on, sessions=LocalSessions())._prepare_steps(asked))
+    withheld = dict(withheld_told(prepared.events))
+
+    assert withheld["skill"] == tuple(sorted(set(available_skills(on)) - {"code-review"}))
+    assert withheld["skill"], "and the catalogue really does offer more than the one granted"
+
+
+def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
+    """Narrowing tools should not produce a line about skills."""
+    from kingfisher.core.definitions import seeding
+
+    # Seeded before the service, not after: a catalogue is read when a
+    # deployment is wired, so definitions written afterwards are not its.
+    seeding.seed(cfg.definitions, shipped)
+    # An agent of this test's own. `general` declares subagents of its own, and
+    # what those name is a different subject from a withheld-tool report --
+    # narrowing tools to `sql_query` refuses `profiler` before it gets here.
+    an_agent(cfg)
+    service = Kingfisher(cfg, sessions=LocalSessions())
+    start(cfg, "s")
+    asked = Request(
+        "go",
+        agent="only",
+        session_id="s",
+        capabilities=Capabilities(builtin_tools=("read_file",)),
+    )
+
+    prepared = drive(service._prepare_steps(asked))
+
+    assert [kind for kind, _ in withheld_told(prepared.events)] == ["builtin tool"]
+
+
+def test_each_kind_gets_its_own_line(cfg):
+    events = opening_events(
+        "t001",
+        (),
+        FakePlacement(),
+        (("tool", ("execute",)), ("subagent", ("extractor",))),
+    )
+
+    said = [e.text for e in events if e.kind == "withheld"]
+    assert said == ["1 tool(s) not granted: execute", "1 subagent(s) not granted: extractor"]
+
+
+# -- a turn that ends early --------------------------------------------------
+
+
+def test_a_caller_who_stops_reading_still_gives_the_session_back(cfg):
+    """`run_start` is yielded before the graph is reached, and that yield used to sit
+    outside the `try` -- so stopping here left the session claimed, the checkpointer
+    open and the interpreter running. A later turn on the same session proves the
+    slot went back.
+    """
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
+    )
+    opened = service.run(Request(task="anything"))
+
+    events = service.stream(Request(task="again", session_id=opened.session_id))
+    first = next(events)
+    events.close()
+
+    assert first.kind == "run_start", "the caller stopped before the model, which is the point"
+    assert service.run(Request(task="third", session_id=opened.session_id)).answer == "ok"
+
+
+def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg):
+    """Where history comes from now."""
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
+    )
+    first = service.run(Request(task="the number is forty"))
+    service.run(Request(task="and now?", session_id=first.session_id))
+
+    sent = service._graph.state["messages"]
+
+    assert len(sent) > 1, "only the new question reached the graph"
+    assert any("forty" in str(getattr(m, "content", m)) for m in sent)
+
+
+# -- a fence a deployment brings --------------------------------------------
+
+
+def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, monkeypatch):
+    """The reason this takes a callable rather than an object.
+
+    Read off the arguments `open` is given, because that is where a runner goes
+    now: a service that built one per turn and then handed it to nothing would
+    satisfy the first two assertions on its own.
+    """
+    import kingfisher.core.service as service_module
+
+    asked: list[Path] = []
+    handed: list[object] = []
+
+    class Runner(CommandRunner):
+        local = True
+
+        def run(self, command, *, timeout=None):
+            del timeout
+            return CommandResult(output=f"ran {command}", exit_code=0)
+
+    def build(session_dir: Path):
+        asked.append(session_dir)
+        return Runner()
+
+    class Recording(LocalSessions):
+        def open(self, cfg_, session_id, /, *, catalogue=None):
+            opened = super().open(cfg_, session_id, catalogue=catalogue)
+            handed.append(opened.default.runner)
+            return opened
+
+    named = an_agent(cfg, "worker")
+    monkeypatch.setattr(service_module, "build_agent", lambda *a, **kw: StubAgent("ok"))
+    service = Kingfisher(cfg, sessions=Recording(runner=build))
+
+    first = service.run(Request(task="anything", agent=named))
+    service.run(Request(task="again", agent=named, session_id=first.session_id))
+
+    assert len(asked) == 2, "built per turn, not once"
+    assert {path.name for path in asked} == {first.session_id}
+    assert all(isinstance(runner, Runner) for runner in handed)
+
+
+def test_a_runner_that_is_not_a_callable_is_refused_at_wiring_time(cfg):
+    """With the sentence that says what to type instead."""
+
+    class Runner(CommandRunner):
+        local = True
+
+        def run(self, command, *, timeout=None):
+            return CommandResult(output="", exit_code=0)
+
+    with pytest.raises(TypeError, match="lambda session_dir"):
+        # The type checker refuses this too, which is the point: the runtime
+        # check is for callers who never run one.
+        LocalSessions(runner=Runner())  # ty: ignore[invalid-argument-type]
+
+
+def test_no_runner_leaves_the_platform_to_decide(cfg):
+    """The default, and the case every existing deployment is in: a command runs on
+    whatever `backend_at` picks when handed no runner. Compared with that rather than
+    with `None`, which is the pick only where kingfisher has no fence of its own --
+    on Linux it is the Landlock runner.
+    """
+    opened = LocalSessions().open(cfg, "s")
+    unwired = backend_at(cfg, cfg.workspace / "sessions" / "s")
+
+    assert type(opened.default.runner) is type(unwired.default.runner)
+
+
+# -- a provider that will not take the key ----------------------------------
+
+
+class _RejectedKeyError(Exception):
+    """Shaped like a provider's 401 without importing one.
+
+    `status_code` and `response.request.url` are what `anthropic` and `openai` both
+    carry, and matching on those rather than on a class is what lets one branch cover
+    every wire format.
+    """
+
+    def __init__(self, url: str, status: int = 401) -> None:
+        said = f"Error code: {status}"
+        super().__init__(said)
+        self.status_code = status
+        self.response = SimpleNamespace(request=SimpleNamespace(url=url))
+
+
+def test_a_rejected_key_names_the_variable_it_came_from(cfg):
+    """A 401 reached the terminal as a provider traceback that named no variable, so a
+    reader went to `models.yaml`, where the `key_env` line is correct and the value it
+    points at is not.
+    """
+    models = replace(
+        cfg.models, endpoints={"fake": replace(FAKE_ENDPOINT, key_env="FAKE_API_KEY")}
+    )
+    refused = refused_credentials(
+        _RejectedKeyError(f"{FAKE_ENDPOINT.base_url}/v1/messages"), replace(cfg, models=models)
+    )
+
+    assert refused is not None
+    assert "endpoint 'fake'" in str(refused)
+    assert "FAKE_API_KEY" in str(refused)
+    # The half that explains why a correct-looking file was not what was sent.
+    assert ".env" in str(refused)
+
+
+def test_a_rejected_key_from_the_keys_file_names_its_entry_and_the_file(cfg, tmp_path):
+    """The `.env` sentence is wrong for a key no variable held: the entry is what to check."""
+    keys = tmp_path / "keys.yaml"
+    models = replace(
+        cfg.models,
+        endpoints={"fake": replace(FAKE_ENDPOINT, key_env="", key_entry="fake")},
+        keys_file=keys,
+    )
+    refused = refused_credentials(
+        _RejectedKeyError(f"{FAKE_ENDPOINT.base_url}/v1/messages"), replace(cfg, models=models)
+    )
+
+    assert refused is not None
+    assert "entry 'fake'" in str(refused)
+    assert str(keys) in str(refused)
+    assert ".env" not in str(refused)
+
+
+def test_the_endpoint_named_is_the_one_that_refused(cfg):
+    """Not the default. A subagent may run somewhere its parent does not, so resolving
+    the default model for the name would be confidently wrong on the one 401 that
+    needed a different answer.
+    """
+    refused = refused_credentials(_RejectedKeyError(f"{OTHER_ENDPOINT.base_url}/v1/messages"), cfg)
+
+    assert refused is not None and "'elsewhere'" in str(refused)
+    assert "'fake'" not in str(refused), "named the default rather than the one that failed"
+
+
+def test_anything_but_a_401_keeps_its_traceback(cfg):
+    """The control beside the escape. A translation that caught one status too many
+    would turn a bug in the graph into a configuration error nobody can act on.
+    """
+    assert refused_credentials(RuntimeError("the model went away"), cfg) is None
+    assert refused_credentials(_RejectedKeyError(FAKE_ENDPOINT.base_url, status=500), cfg) is None
+
+
+def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_error(cfg):
+    """Driven rather than inspected: the translation lives in the turn's own `except`,
+    and a test that only called `refused_credentials` would still pass with that branch
+    deleted.
+    """
+
+    class Rejects(FakeGraph):
+        def stream(self, state, config, stream_mode=None, subgraphs=False):
+            yield ((), "values", {"messages": []})
+            where = f"{FAKE_ENDPOINT.base_url}/v1/messages"
+            raise _RejectedKeyError(where)
+
+        def get_state(self, config):
+            return None
+
+    service = Kingfisher(
+        cfg, graph=Rejects(), sessions=LocalSessions()
+    )
+
+    with pytest.raises(ConfigError, match="rejected the key"):
+        service.run(Request(task="anything"))
+
+
+def _provider_refused(status: int, model: str = "claude-nope") -> Exception:
+    """The SDK's own error for a status, over the request it would have sent."""
+    import anthropic
+    import httpx
+
+    request = httpx.Request(
+        "POST", f"{FAKE_ENDPOINT.base_url}/v1/messages", json={"model": model, "max_tokens": 1}
+    )
+    body = {"type": "error", "error": {"type": "not_found_error", "message": f"model: {model}"}}
+    response = httpx.Response(status, request=request, json=body)
+    return anthropic.APIStatusError(f"Error code: {status}", response=response, body=body)
+
+
+def test_a_model_the_endpoint_does_not_serve_names_the_model_and_the_endpoint(cfg):
+    """A 404 for a mistyped model name reached the terminal as a provider traceback with
+    exit 1, the code for a turn that ran; it is a line of `models.yaml` to fix."""
+    refused = refused_request(_provider_refused(404), cfg)
+
+    assert refused is not None
+    assert "endpoint 'fake'" in str(refused)
+    assert FAKE_ENDPOINT.base_url in str(refused)
+    assert "model 'claude-nope'" in str(refused)
+    assert "(404): model: claude-nope" in str(refused)
+
+
+@pytest.mark.parametrize("status", [429, 500, 529])
+def test_a_refusal_that_may_pass_is_not_called_configuration(cfg, status):
+    """The control beside it: a rate limit or an outage is a stop the turn ends on, and
+    a configuration error would send the reader to a file with nothing wrong in it."""
+    assert refused_request(_provider_refused(status), cfg) is None
+    assert refused_request(RuntimeError("the model went away"), cfg) is None
+
+
+def test_a_rejected_key_is_still_the_credentials_message(cfg):
+    """A 401 is a 4xx too, and the general message would drop the variable it names."""
+    refused = refused_request(_provider_refused(401), cfg)
+
+    assert refused is not None and "rejected the key" in str(refused)
+
+
+def _failing(exc: Exception) -> FakeGraph:
+    """A graph whose first model call raises `exc`."""
+
+    class Fails(FakeGraph):
+        def stream(self, state, config, stream_mode=None, subgraphs=False):
+            yield ((), "values", {"messages": []})
+            raise exc
+
+        def get_state(self, config):
+            return None
+
+    return Fails()
+
+
+def test_a_turn_translates_any_provider_refusal_and_leaves_a_bug_alone(cfg):
+    """Driven, for the reason the 401 test above is: the translation lives in the turn's
+    own `except`, and a bug keeps its traceback."""
+    refused = Kingfisher(cfg, graph=_failing(_provider_refused(404)), sessions=LocalSessions())
+    broken = Kingfisher(cfg, graph=_failing(KeyError("limit")), sessions=LocalSessions())
+
+    with pytest.raises(ConfigError, match="model 'claude-nope'"):
+        refused.run(Request(task="anything"))
+    with pytest.raises(KeyError):
+        broken.run(Request(task="anything"))
+
+
+def test_the_command_reports_a_provider_refusal_in_one_line(cfg, monkeypatch, capsys):
+    """Through `main`: exit 2, never ran, and no traceback."""
+    from kingfisher.cli import __main__ as entry
+
+    service = Kingfisher(cfg, graph=_failing(_provider_refused(404)), sessions=LocalSessions())
+    monkeypatch.setattr(entry, "config_from_env", lambda: cfg)
+    monkeypatch.setattr("kingfisher.Kingfisher", lambda *a, **k: service)
+
+    assert entry.main(["run", "anything", "--agent", "assistant"]) == 2
+
+    said = capsys.readouterr().err
+    assert "configuration error: endpoint 'fake'" in said
+    assert "Traceback" not in said
+
+
+def _resolutions(monkeypatch) -> list[str | None]:
+    """Every agent a turn looks up, by the name its request gave."""
+    asked: list[str | None] = []
+    real = Kingfisher._agent_named
+
+    def counted(self, name, **kwargs):
+        asked.append(name)
+        return real(self, name, **kwargs)
+
+    monkeypatch.setattr(Kingfisher, "_agent_named", counted)
+    return asked
+
+
+def _policied(cfg):
+    """A deployment with a vocabulary, which is the only case that resolved twice."""
+
+
+    an_agent(cfg, "only", source_ids="[A]")
+    return cfg
+
+
+def test_a_turn_resolves_its_agent_once(cfg, monkeypatch):
+    """Measured at two, and down different branches of the same function: the first
+    call resolved from the catalogue and wrote the pin, the second read that pin back
+    and parsed it. Counted here rather than reasoned about, because the second call
+    was invisible -- both answers agreed, so nothing was ever wrong.
+
+    Under a policy, because that is the one deployment where the second reader --
+    the withheld report -- asks for the spec at all. Without one it never did, so a
+    turn here would count one either way and this would pass against the defect.
+    """
+    from kingfisher.core.session import preparation
+
+    service = Kingfisher(_policied(cfg), sessions=LocalSessions())
+    asked = _resolutions(monkeypatch)
+    reported: list[object] = []
+    real = preparation.withheld_by_kind
+
+    def spying(*args, **kwargs):
+        reported.append(kwargs.get("agent"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(preparation, "withheld_by_kind", spying)
+
+    # The first event is everything before the model is reached, which is where
+    # admission happens and the only part of a turn this is about.
+    events = service.stream(Request("go", agent="only"), source_ids=("A",))
+    try:
+        next(events)
+    finally:
+        events.close()
+
+    assert asked == ["only"], f"the agent was looked up as {asked} in one turn"
+    # And the one resolution reached the second reader. Handing it `None` would leave
+    # the report measured against the whole catalogue, which is what it filters.
+    assert reported and reported[0] is not None
+
+
+def test_a_supplied_graph_with_no_policy_is_never_asked_which_agent(cfg, monkeypatch):
+    """The condition the single resolution is guarded by, and it is not an
+    optimisation: such a deployment has no reader for the spec, and resolving one
+    anyway would refuse every request there that names no agent -- which a request to a
+    supplied graph need not.
+    """
+    an_agent(cfg, "only")
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
+    )
+    asked = _resolutions(monkeypatch)
+
+    assert service.run(Request("go")).answer == "ok"
+    assert asked == []
+
+
+def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
+    """The other half of that condition, and the half with a reader. A supplied graph
+    is handed back without an agent being resolved for it -- but the withheld report
+    still filters by what the agent declares, so under a policy the spec is asked for
+    even though no build wanted it.
+    """
+    from kingfisher.core.session import preparation
+
+    service = Kingfisher(
+        _policied(cfg), graph=StubAgent("ok"), sessions=LocalSessions()
+    )
+    asked = _resolutions(monkeypatch)
+    reported: list[object] = []
+    real = preparation.withheld_by_kind
+
+    def spying(*args, **kwargs):
+        reported.append(kwargs.get("agent"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(preparation, "withheld_by_kind", spying)
+
+    service.run(Request("go", agent="only"), source_ids=("A",))
+
+    assert asked == ["only"]
+    assert reported and reported[0] is not None
+
+

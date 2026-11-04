@@ -1,0 +1,651 @@
+from __future__ import annotations
+
+import warnings
+
+import pytest
+from langchain.agents.middleware import AgentMiddleware
+from langchain_core.messages import AIMessage
+
+from kingfisher import Kingfisher, KingfisherWarning
+from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityError
+from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.backend import skills_sources
+from kingfisher.core.agent.kinds.declared_middleware import (
+    REQUIRED_BY_DEEPAGENTS,
+    _deepagents_middleware_names,
+    declared_middleware,
+)
+from kingfisher.core.agent.middlewares.narrowing import CatalogueSkillsMiddleware
+from kingfisher.core.agent.prompting import system_prompt
+from kingfisher.core.definitions.agents.spec import AgentSpec
+from kingfisher.plugins import LocalSessions, backend_at
+from tests.conftest import (
+    FakeToolCallingModel,
+    declared_subagents,
+    hosts_shell,
+    repository_root,
+)
+from tests.unit.plugins.sessions.sandbox.test_confinement import needs_a_real_toolchain
+
+
+def _all_text(messages) -> str:
+    return "\n".join(str(getattr(m, "content", "")) for m in messages)
+
+
+@needs_a_real_toolchain
+def test_agent_runs_shell_and_writes_files(cfg, session_dir):
+    """The wiring test that matters: a scripted tool sequence, no network."""
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "execute", "args": {"command": 'python3 -c "print(6*7)"'}, "id": "c1"}
+            ],
+        ),
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "write_file",
+                    "args": {"file_path": "/outputs/out.txt", "content": "42"},
+                    "id": "c2",
+                }
+            ],
+        ),
+        AIMessage(content="done"),
+    ]
+
+    agent = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=responses)).graph
+    out = agent.invoke(
+        {"messages": [{"role": "user", "content": "go"}]},
+        config={"recursion_limit": 12},
+    )
+
+    # The shell actually ran, with a PATH we constructed rather than inherited.
+    assert "42" in _all_text(out["messages"])
+    # The virtual path /outputs/out.txt resolved to a real file inside root_dir.
+    assert (session_dir / "outputs" / "out.txt").read_text().strip() == "42"
+
+
+def test_planning_and_permissions_are_wired(cfg, session_dir):
+    """deepagents 0.7.6 ships no planning tool, and /inputs must be write-denied."""
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
+
+    middleware_names = {type(m).__name__ for m in built.middleware}
+    assert "TodoListMiddleware" in middleware_names
+
+    # These routes are read-only for every request, whatever it was granted:
+    # `/inputs` is the caller's input, `/skills` is instructions the agent
+    # follows, and `/.harness` is the harness's own. Named rather than counted.
+    # `delete` maps to the `write` operation, so one rule covers write/edit/delete.
+    read_only = {
+        rule.paths[0] for rule in built.permissions
+        if rule.mode == "deny" and "write" in rule.operations
+    }
+    assert read_only == {
+        "/.harness/**",
+        "/inputs/**",
+        "/scratchpad/blobs/**",
+        "/scratchpad/conversation_history/**",
+        "/scratchpad/large_tool_results/**",
+        "/scratchpad/tool_results/**",
+        "/skills/**",
+    }
+
+    # Kingfisher's own backend, so its own shell's wording.
+    assert built.system_prompt == system_prompt(cfg, shell=hosts_shell(cfg))
+    # M2 capabilities are off by default, so neither is passed through. `is None`
+    # rather than a key check: the record declares every keyword, so "not passed"
+    # is the default value rather than an absent entry.
+    assert built.skills is None
+    assert built.memory is None
+
+
+def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(
+    cfg,
+    session_dir,
+):
+    """One switch drives both, so nothing describes a missing capability: each is
+    described by the middleware that carries it, and the prompt says nothing of either."""
+    from dataclasses import replace
+
+    wired = replace(cfg, skills_enabled=True, memory_enabled=True)
+    built = build_agent(
+        wired,
+        backend=backend_at(wired, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+    )
+
+    assert built.skills == skills_sources()
+    assert built.memory == ["/memory/AGENTS.md"]
+    assert any(isinstance(m, CatalogueSkillsMiddleware) for m in built.middleware)
+    assert "/skills" not in built.system_prompt
+
+
+def test_system_prompt_carries_no_host_paths_or_session_ids():
+    """Q19/Q20: the prompt must stay byte-identical across workspaces and sessions, or
+    the cached prefix is invalidated on every run.
+    """
+    text = system_prompt()
+    assert "/Users/" not in text
+    assert "/home/" not in text
+    assert "session_id" not in text
+    # It must still teach the virtual layout.
+    assert "/inputs" in text
+    assert "/outputs" in text
+
+
+def test_the_agent_exposes_the_expected_tool_surface(cfg, session_dir):
+    """A regression guard on the whole surface, not just one middleware."""
+    agent = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")])).graph
+
+    names = set()
+    for node in agent.nodes.values():
+        registry = getattr(getattr(node, "bound", None), "tools_by_name", None)
+        if isinstance(registry, dict):
+            names |= set(registry)
+
+    assert names == {
+        "ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep",
+        "execute", "task", "write_todos",
+    }
+
+
+# -- the agent's own middleware --------------------------------------------
+
+
+class _Audit(AgentMiddleware):
+    """Stands in for what a deployment registers: an audit hook, a rate limit."""
+
+    name = "_Audit"
+
+
+def _named(spec_middleware, **kwargs) -> AgentSpec:
+    return AgentSpec(
+        name="probed",
+        description="an agent whose file names middleware",
+        system_prompt="You work.",
+        middlewares=spec_middleware,
+        **kwargs,
+    )
+
+
+def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, session_dir):
+    """`middlewares:` in an agent file did nothing to the agent.
+
+    Measured before it was fixed, one build, same registry, same name: the subagent's
+    graph had an `Audit.before_agent` node and the agent's did not. An audit hook
+    that covers the cheap half of a run and not the expensive half is worse than
+    none, because it looks like coverage.
+    """
+    built = build_agent(
+        cfg,
+        agent=_named(("audit",)),
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        middleware_registry={"audit": _Audit},
+    )
+
+    assert "_Audit" in {type(m).__name__ for m in built.middleware}
+
+
+def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
+    cfg, session_dir
+):
+    """After the narrowing, for the reason `as_subagent` already gives for a subagent's: a
+    deployment's middleware should see the tool and skill narrowing rather than running
+    ahead of it.
+    """
+    built = build_agent(
+        cfg,
+        agent=_named(("audit",)),
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        middleware_registry={"audit": _Audit},
+        capabilities=Capabilities(builtin_tools=("read_file",)),
+    )
+
+    names = [type(m).__name__ for m in built.middleware]
+    assert "GrantedOnlyMiddleware" in names, "nothing narrowed, so this proves nothing"
+    assert names.index("_Audit") > names.index("GrantedOnlyMiddleware"), (
+        f"the deployment's middleware runs ahead of the narrowing: {names}"
+    )
+    # Not `names[-1]`: `OfferedToolFailureMiddleware` goes under the deployment's own on a
+    # graph that holds an offered tool, so asserting the deployment's was last held only
+    # because the definitions offer none; and the prompt caching is deepagents' slot,
+    # taken by name.
+    assert set(names[names.index("_Audit") + 1 :]) <= {
+        "PromptCachingMiddleware",
+        "OfferedToolFailureMiddleware",
+    }, names
+
+
+def test_an_agent_naming_middleware_nothing_registered_is_refused(cfg, session_dir):
+    """The same refusal a subagent gets, and for the same reason: a name nothing
+    registered is a mistake in the definition, not a narrower caller.
+    """
+    with pytest.raises(CapabilityError, match="unregistered middleware"):
+        build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={},
+        )
+
+
+def test_a_request_may_not_quietly_drop_the_agents_middleware(cfg, session_dir):
+    """Withholding it refuses rather than running with less than the definition asked
+    for -- which could mean running without the rate limit or the audit hook it was
+    written to have.
+    """
+    with pytest.raises(CapabilityError, match="may not use"):
+        build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"audit": _Audit},
+            capabilities=Capabilities(middlewares=()),
+        )
+
+
+def test_an_agent_that_names_none_wires_none(cfg, session_dir):
+    """Omission grants nothing here, like `skills` and `subagents` -- so a deployment
+    with a registry does not wrap every agent in it by default.
+    """
+    built = build_agent(
+        cfg,
+        agent=_named(None),
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        middleware_registry={"audit": _Audit},
+    )
+
+    assert "_Audit" not in {type(m).__name__ for m in built.middleware}
+
+
+# -- middleware that replaces deepagents' own ------------------------------
+
+
+class FilesystemMiddleware(AgentMiddleware):
+    """A deployment's own middleware, named like deepagents' scaffolding."""
+
+
+class SubAgentMiddleware(AgentMiddleware):
+    """The other one deepagents refuses to run without, named the same way."""
+
+
+class _Summarization(AgentMiddleware):
+    """deepagents' own, but not one it refuses to run without."""
+
+    name = "SummarizationMiddleware"
+
+
+def _replacement_warnings(recorded) -> list[str]:
+    """Just the ones this file is about, since a build warns about other things."""
+    return [str(w.message) for w in recorded if "deepagents merges by name" in str(w.message)]
+
+
+def test_the_required_names_match_deepagents():
+    """`REQUIRED_BY_DEEPAGENTS` is a copy, so something has to compare it."""
+    from deepagents.graph import _REQUIRED_MIDDLEWARE_NAMES
+
+    assert set(REQUIRED_BY_DEEPAGENTS) == set(_REQUIRED_MIDDLEWARE_NAMES)
+
+
+def test_the_guide_names_the_same_required_middleware():
+    """The third copy, and the one with nothing else watching it."""
+    page = repository_root() / "docs" / "guides" / "middleware.md"
+    text = page.read_text(encoding="utf-8")
+
+    missing = [name for name in REQUIRED_BY_DEEPAGENTS if name not in text]
+
+    assert not missing, (
+        f"{missing} are in REQUIRED_BY_DEEPAGENTS and not in {page.name}, which "
+        "tells a deployment which two classes it must not shadow by accident"
+    )
+
+
+def test_deepagents_own_middleware_is_discovered_across_the_package():
+    """The breadth, pinned, because the narrow version looked right and was not."""
+    found = _deepagents_middleware_names()
+
+    assert set(REQUIRED_BY_DEEPAGENTS) <= found
+    assert "SummarizationMiddleware" in found, "the factory-built one, missed by graph.py alone"
+    assert "AgentMiddleware" not in found, "the base class is not one of deepagents' own"
+
+
+def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, session_dir):
+    """The whole point: said, not forbidden."""
+    # By the class a deployment silences every kingfisher warning by, not `UserWarning`.
+    with pytest.warns(KingfisherWarning, match="deepagents merges by name"):
+        built = build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"audit": FilesystemMiddleware},
+        )
+
+    assert "FilesystemMiddleware" in {m.name for m in built.middleware}
+
+
+def test_the_warning_names_both_of_the_deployments_two_names():
+    """A deployment has two names for one middleware and only one is the problem."""
+    with pytest.warns(UserWarning) as recorded:
+        declared_middleware(
+            _named(("audit",)), {"audit": FilesystemMiddleware}, ALL, kind="subagent"
+        )
+
+    message = _replacement_warnings(recorded)[0]
+    assert "'audit'" in message, "the key it was registered under"
+    assert "'FilesystemMiddleware'" in message, "the class name that collides"
+    assert message.startswith("subagent "), "the kind, so the reader opens the right file"
+    assert "rename the class" in message
+
+
+@pytest.mark.parametrize(
+    ("replacement", "its_job", "the_others"),
+    [
+        (FilesystemMiddleware, "permissions", "`task`"),
+        (SubAgentMiddleware, "`task`", "permissions"),
+    ],
+)
+def test_replacing_one_deepagents_needs_says_so_more_loudly(replacement, its_job, the_others):
+    """One job sentence served both, telling a SubAgentMiddleware it backed the file tools."""
+    with pytest.warns(UserWarning) as recorded:
+        declared_middleware(_named(("audit",)), {"audit": replacement}, ALL, kind="agent")
+    required = _replacement_warnings(recorded)[0]
+
+    with pytest.warns(UserWarning) as recorded:
+        declared_middleware(
+            _named(("summarize",)), {"summarize": _Summarization}, ALL, kind="agent"
+        )
+    ordinary = _replacement_warnings(recorded)[0]
+
+    assert "refuses to run without" in required
+    assert its_job in required
+    assert the_others not in required, "the other required middleware's job"
+    assert "refuses to run without" not in ordinary
+    assert "deepagents merges by name" in ordinary, "still said, just not as loudly"
+
+
+def test_a_middleware_named_its_own_thing_warns_about_nothing(cfg, session_dir):
+    """The quiet path, which is every deployment that named its classes normally."""
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always")
+        built = build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"audit": _Audit},
+        )
+
+    assert _replacement_warnings(recorded) == []
+    assert "_Audit" in {m.name for m in built.middleware}
+
+
+def test_a_registered_instance_is_refused_rather_than_called(cfg, session_dir):
+    """`_instantiate` called every non-class entry, so an instance was *called*."""
+    with pytest.raises(CapabilityError, match="audit") as raised:
+        build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            # `ty: ignore` is half the test. A type checker rejects this
+            # statically -- `MiddlewareFactory` is `Callable[..., Any]` and an
+            # instance is not one -- so a deployment running `ty` never gets
+            # here. The runtime guard is for the registry assembled from
+            # configuration, and for everyone who does not.
+            middleware_registry={"audit": _Audit()},  # ty: ignore[invalid-argument-type]
+        )
+
+    message = str(raised.value)
+    assert "probed" in message, "the definition that named it, as every other refusal here does"
+    assert "a built _Audit rather than the class" in message, (
+        "the mistake named, not just 'not callable' -- nobody registers a dict by accident"
+    )
+    assert "built again for every graph" in message, (
+        "and why, or this reads as a rule kingfisher invented"
+    )
+
+
+def test_an_entry_no_definition_names_is_still_refused_when_it_is_registered(cfg):
+    """The half `_instantiate` cannot reach, and the reason the sweep exists."""
+    with pytest.raises(CapabilityError, match="audit"):
+        Kingfisher(cfg, sessions=LocalSessions(), middlewares={"audit": _Audit()})  # ty: ignore[invalid-argument-type]
+
+
+def test_the_sweep_refuses_anything_uncallable_not_only_a_middleware(cfg):
+    """The gate is `callable`, which is what `MiddlewareFactory` promises."""
+    with pytest.raises(CapabilityError, match="which cannot be called") as raised:
+        Kingfisher(cfg, sessions=LocalSessions(), middlewares={"audit": {"limit": 20}})  # ty: ignore[invalid-argument-type]
+
+    assert "a dict" in str(raised.value)
+
+
+def test_a_registered_class_is_built_again_for_every_graph(cfg, session_dir):
+    """The lifecycle the refusal above gives as its reason, held to it.
+
+    The message says a middleware is built again for every graph, and that is the
+    whole justification for refusing an instance. Nothing else in the tree checks it:
+    graphs are built per request for reasons that have nothing to do with middleware
+    -- capabilities narrow them, the backend is session-anchored -- and `service.py`
+    already describes the cache that would end that as the thing to reach for above
+    roughly 150 concurrent turns.
+    """
+    seen = []
+    for _ in range(2):
+        assembled = build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"audit": _Audit},
+        )
+        seen.append(next(m for m in assembled.middleware if type(m) is _Audit))
+
+    first, second = seen
+    assert first is not second, (
+        "two graphs shared one middleware object, so a counter in it would carry "
+        "across them -- which is the thing the instance refusal promises cannot happen"
+    )
+
+
+#: A subagent pinned to a model that is not the deployment's default, which is the
+#: only shape that can tell the two apart: `cheap-model` carries `max_tokens=321`
+#: where the default carries 4096, so a middleware handed the wrong one says so.
+_SUBAGENT = """name: reviewer
+description: Checks an analysis for arithmetic errors.
+model: cheap-model
+middlewares: [wants]
+system_prompt: |
+  You review analyses.
+"""
+
+
+class _WantsEverything(AgentMiddleware):
+    """A deployment's own, needing every object this build provides."""
+
+    name = "_WantsEverything"
+    wants = frozenset({"model", "backend", "definition", "result_id"})
+
+    def __init__(
+        self, model: object, backend: object, definition: object, result_id: object
+    ) -> None:
+        self.model = model
+        self.backend = backend
+        self.definition = definition
+        self.result_id = result_id
+        super().__init__()
+
+
+#: The same subagent, naming no model, so it runs whatever summoned it. Its
+#: middleware has to be told that model rather than nothing, which is the half
+#: `_with_helpers` spells out and the half nothing held.
+_INHERITING_SUBAGENT = _SUBAGENT.replace("model: cheap-model\n", "")
+
+
+def _with_a_subagent(cfg, session_dir, injected, definition: str = _SUBAGENT):
+    """One build in which an agent and its subagent both name the same middleware."""
+    (cfg.definitions / "subagents").mkdir(exist_ok=True)
+    (cfg.definitions / "subagents" / "reviewer.yaml").write_text(definition, encoding="utf-8")
+
+    built = build_agent(
+        cfg,
+        agent=_named(("wants",), subagents=("reviewer",)),
+        backend=backend_at(cfg, session_dir),
+        model=injected,
+        middleware_registry={"wants": _WantsEverything},
+    )
+
+    # `subagent["middleware"]` stays a subscript: the record types what
+    # `create_deep_agent` was handed, and what it is handed for a subagent is
+    # deepagents' own `SubAgent` mapping. Only the outer record gained a type.
+    subagent = next(s for s in declared_subagents(built) if s["name"] == "reviewer")
+    return (
+        next(m for m in built.middleware if type(m) is _WantsEverything),
+        next(m for m in subagent["middleware"] if type(m) is _WantsEverything),
+    )
+
+
+def test_a_subagent_that_inherits_tells_its_middleware_what_it_will_run(cfg, session_dir):
+    """The other half of the rule above, and the one nothing held: a subagent naming
+    no model runs whatever summoned it, and its middleware is owed that model rather
+    than `None`.
+
+    `as_subagent` leaves `model` off such a subagent's spec and deepagents hands it
+    the caller's, so nothing about the subagent itself says what it runs -- which is
+    why the value handed to the middleware has to be filled in here. Dropping that
+    fallback left every suite green.
+    """
+    injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+    mine, theirs = _with_a_subagent(cfg, session_dir, injected, _INHERITING_SUBAGENT)
+
+    assert theirs.model is injected, "the subagent's middleware was told nothing it runs"
+    assert mine.model is injected, "and the agent's own is unchanged by that"
+
+
+def test_a_subagent_that_inherits_is_given_no_model_of_its_own(cfg, session_dir):
+    """Why the rule above has to fill the value in: the spec carries no model at all,
+    so deepagents is what gives the subagent its caller's. A `model` here would pin
+    the subagent to whatever this build resolved, and "runs whatever summoned it"
+    would stop being true one level down.
+    """
+    injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+    (cfg.definitions / "subagents").mkdir(exist_ok=True)
+    (cfg.definitions / "subagents" / "reviewer.yaml").write_text(
+        _INHERITING_SUBAGENT, encoding="utf-8"
+    )
+
+    built = build_agent(
+        cfg,
+        agent=_named(("wants",), subagents=("reviewer",)),
+        backend=backend_at(cfg, session_dir),
+        model=injected,
+        middleware_registry={"wants": _WantsEverything},
+    )
+
+    subagent = next(s for s in declared_subagents(built) if s["name"] == "reviewer")
+    assert "model" not in subagent
+    # Not vacuous: one that names a model does carry it.
+    assert "model" in _a_pinned_subagent(cfg, session_dir, injected)
+
+
+def _a_pinned_subagent(cfg, session_dir, injected) -> dict:
+    """The same subagent, pinned, as the control for the rule above."""
+    (cfg.definitions / "subagents" / "reviewer.yaml").write_text(_SUBAGENT, encoding="utf-8")
+    built = build_agent(
+        cfg,
+        agent=_named(("wants",), subagents=("reviewer",)),
+        backend=backend_at(cfg, session_dir),
+        model=injected,
+        middleware_registry={"wants": _WantsEverything},
+    )
+    return next(s for s in declared_subagents(built) if s["name"] == "reviewer")
+
+
+def test_a_subagent_is_handed_its_own_model_rather_than_the_agents(cfg, session_dir):
+    """The bug this would have shipped with: a subagent's middleware running the
+    agent's model.
+
+    Handing over the agent's model is wrong in the one direction that costs money,
+    since a subagent pinned to a cheap model would be compacted by the expensive one.
+    The same mistake was made once already for a helper's inherited model and is
+    recorded beside `_with_helpers`.
+    """
+    injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+    mine, theirs = _with_a_subagent(cfg, session_dir, injected)
+
+    assert mine.model is injected, "the agent's own middleware runs the agent's model"
+    assert theirs.model is not injected
+    assert theirs.model.max_tokens == 321, "`cheap-model`'s ceiling, not the default's"
+
+
+def test_both_kinds_are_handed_the_same_things_to_want(cfg, session_dir):
+    """A key provisioned where the agent is assembled and not where a subagent is.
+
+    Both sites go through one builder, so they cannot differ by accident today; this
+    is what would catch a second mapping written inline at one of them. What it would
+    look like is a `middlewares:` line that builds in an agent file and refuses in a
+    subagent file -- the same name meaning two things one level apart, which is the
+    thing `offered_middleware` already exists to prevent for the registry.
+    """
+    injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+    mine, theirs = _with_a_subagent(cfg, session_dir, injected)
+
+    # Every want filled on both sides, or one of these would have raised rather
+    # than arrived: an unprovided want is refused when the agent is built.
+    assert mine.definition.name == "probed"
+    assert theirs.definition.name == "reviewer"
+    assert mine.backend is theirs.backend, "one session, one filesystem"
+
+
+class _WantsOnlyAModel(AgentMiddleware):
+    """A want a definition may name, opened so the refusal below can be reached."""
+
+    name = "_WantsOnlyAModel"
+    wants = frozenset({"model"})
+    yaml_settable = frozenset({"model"})
+
+    def __init__(self, model: object) -> None:
+        self.model = model
+        super().__init__()
+
+
+def test_a_middleware_naming_a_model_this_request_withheld_is_refused(cfg, session_dir):
+    """The ceiling a definition cannot write its way around.
+
+    A middleware's `model:` is a name in a definition file like a subagent's, so it
+    goes through the same endpoint check -- `refuse_ungranted_endpoint`, once, in
+    `model_named`. Without it a definition could route every compaction of every run
+    to an endpoint the caller explicitly refused, and nothing would say so.
+    """
+    spec = _named(
+        ("wants",), middleware_settings={"wants": {"model": "elsewhere-model"}}
+    )
+
+    with pytest.raises(CapabilityError, match="may not reach"):
+        build_agent(
+            cfg,
+            agent=spec,
+            capabilities=Capabilities(endpoints=("fake",)),
+            backend=backend_at(cfg, session_dir),
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"wants": _WantsOnlyAModel},
+        )
