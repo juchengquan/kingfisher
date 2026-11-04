@@ -3268,11 +3268,10 @@ noted under clearing. *(2026-10-20, from a grilled plan.)*
   name or content with `glob` and `grep` over the same copies. Detail is lost only at a
   summary, which clearing makes rare on a large window. If that proves too little, the
   index could be written as a readable file.
-- **Still open: regeneration, which gets a design of its own:** rewinding or forking, what
-  becomes of files already in `/outputs`, how a client names a turn. Every row records
+- **Regeneration is a rewind to the turn before, and its task sent again**
+  *(2026-11-04)*: going back, what becomes of files already in `/outputs`, and how a
+  client names a turn are under *Sessions: what persists and where*. Every row records
   its turn so it can filter by one.
-  Being closed from 2026-11-04 by rewind, built in slices; the first record it needs,
-  every turn's messages as first written, is under *Sessions: what persists and where*.
 
 ## Tool failure
 
@@ -4355,10 +4354,9 @@ every later turn: 34 of 312 cut positions on a ledger with one Chinese row. *(20
 `.harness/turns.jsonl`.** The transcript is the conversation the next turn is built from,
 so a summary replaces its front, and the words it replaced survive only in
 `conversation_history/`, which the agent can write. Rewinding a session to the end of any
-turn, the owner's plan for regeneration, needs the conversation each turn ended on; this
-is its second slice, and nothing reads the file until rewind does. Each turn adds an
-opening line -- the turn; `parent`, the turn the session was on before it, for now the
-last the log records; the caller's `task` as written, not the message the model was sent,
+turn, which is how a client regenerates one, needs the conversation each turn ended on.
+Each turn adds an opening line -- the turn; `parent`, the turn the session was on before
+it, the last the log opens that a rewind did not leave behind; the caller's `task` as written, not the message the model was sent,
 to which kingfisher adds its own lines; `from`, how many of its parent's messages it began
 from -- or, for a resume, `resumed` and no task. Then a line per message it added, in the
 transcript's own shape, the provider's call id on each tool line; then the summary it ended
@@ -4398,8 +4396,8 @@ before its turn runs writes nothing.
 transcript and no log writes the transcript's messages under the last turn the ledger
 closes, `null` where it closes none, as for a graph the deployment supplied; marked
 `imported`, following none. A turn whose parent is `null` follows that import where the log
-holds one. Its turns are not told apart; doing so where the ledger's counts allow is a
-later slice.
+holds one. Its turns are told apart only once a rewind reaches one (*A turn from before
+the log comes back cut*, below).
 
 **Expiry reaches it.** A result `KINGFISHER_KEEP_RESULTS_ROUNDS` expires is swapped in the
 log for the handle the agent is shown for an expired result, written in one place for both,
@@ -4436,7 +4434,7 @@ it would run calls asked for in a conversation the session is no longer at.
 
 **What the agent heard of its inputs folder goes back with the conversation.** Each turn
 keeps `inputs.json` and `memory_writer.json` beside its copies of files, once per change,
-since neither slice before recorded them a turn at a time. A rewind puts back the last
+since nothing else records them a turn at a time. A rewind puts back the last
 copy its path kept and drops the file where none did: the agent is then told only what
 the next request places, rather than a history from another branch. The memory writer's
 file goes back with the memory file it writes.
@@ -4461,12 +4459,15 @@ leaves them all, and says so.
 message, as `Changed since your last turn: /outputs/report.md.`, and as `May have
 changed` where nothing says. Its conversation remembers each file as the turn rewound to
 left it, and a version with no copy is still the later one: kingfisher states the fact
-the model would otherwise get wrong. Measured on MiniMax-M3 with a writer agent, five
-sessions an arm: the report rewritten after the turn rewound to, no copy kept, then "What
-does /outputs/report.md list right now?" -- told, all five read the file and answered
-from it; untold, four did and one answered from the version it remembered.
-One session of difference, on a question whose "right now" already sends the agent back
-to the file, so it measures the line's floor rather than its use. Kept in
+the model would otherwise get wrong. Measured on MiniMax-M3 with a writer agent: a fruit
+list in `/outputs/report.md`, rewritten as vegetables the turn after, the session rewound
+to the fruit with no copy kept, then "Add one more item of the same kind to the end of
+the list", which gives no hint the file changed. Eleven sessions an arm, the 15 of 37
+that met `model_unavailable` left out of both: told, all eleven read the file first and
+added a vegetable; untold, five first edited the `- cherry` they remembered and recovered
+when the edit failed, one stopped to ask, and one read the vegetables and wrote its fruit
+list over them. Asked instead what the file lists "right now", which sends the agent back
+to it unprompted, five sessions an arm differed by one. Kept in
 `.harness/rewound.json` until a turn that tells it writes its conversation, so it is said
 once. None after a rewind to the start, whose conversation remembers no file.
 
