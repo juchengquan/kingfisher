@@ -10,6 +10,7 @@ here would hold only what the test expected.
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import replace
 
 import pytest
@@ -19,13 +20,16 @@ from assets.middlewares.summarize_by_count import SummarizeByCount
 from kingfisher import START, Kingfisher, RewindError, SessionBusyError, TurnIdError
 from kingfisher.cli.__main__ import main
 from kingfisher.core.layout import (
+    ARTIFACTS_SEEN,
     FILE_HISTORY,
     HARNESS,
     INPUTS_SEEN,
+    KEPT_FILES,
     LEDGER_FILE,
     MEMORY_WRITER,
     PAUSED_MARK,
     TRANSCRIPT_FILE,
+    TURNS_FILE,
 )
 from kingfisher.core.request import Decision, DecisionError
 from kingfisher.core.result import AWAITING
@@ -371,3 +375,98 @@ def test_after_a_rewind_a_turn_keeps_the_copy_its_path_still_needs(rewinding):
     lines = {one["turn"]: one for one in map(json.loads, history.read_text().splitlines())}
     assert "dropped_in" not in lines[first.turn_id]["kept"]["outputs/r.md"]
     assert "dropped_in" in lines[second.turn_id]["kept"]["outputs/r.md"]
+
+
+def _as_before_the_log(cfg) -> None:
+    """The session as a version before the turn log left it: a ledger and a transcript,
+    and nothing recording turns or files."""
+    harness = cfg.workspace / "sessions" / "s" / HARNESS
+    for name in (TURNS_FILE, FILE_HISTORY, ARTIFACTS_SEEN):
+        (harness / name).unlink(missing_ok=True)
+    shutil.rmtree(harness / KEPT_FILES, ignore_errors=True)
+
+
+def test_a_turn_from_before_the_log_comes_back_cut_from_what_the_session_imported(rewinding):
+    """Refused, a session older than the log could not go back past its first turn on
+    this version; cut from anything but the ledger's count, it gets a conversation its
+    turn never ended on; and told nothing of its files, the agent trusts versions nothing
+    recorded."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    old = _say(kf, "TASK-ONE", _calls(("web_search", "q", "c1")), AIMessage("ANSWER-ONE"))
+    after_old = _transcript(rewinding)
+    _say(kf, "TASK-TWO", _calls(("web_search", "r", "c2")), AIMessage("ANSWER-TWO"))
+    # The last turn before the log, which the import is filed under: the one between it and
+    # the turn rewound to is left behind only by the ledger's own order.
+    _say(kf, "TASK-THREE", AIMessage("ANSWER-THREE"))
+    _as_before_the_log(rewinding)
+    (_outputs(rewinding) / "report.md").write_text("later", encoding="utf-8")
+    _say(kf, "TASK-NEW", AIMessage("ANSWER-NEW"))
+
+    done = kf.session("s").rewind(old.turn_id)
+
+    assert done.to == old.turn_id
+    assert _transcript(rewinding) == after_old
+    assert "outputs/report.md" in done.not_restored
+    turns = {turn.id: turn for turn in kf.session("s").turns()}
+    assert turns[old.turn_id].imported and turns[old.turn_id].current
+    Scripted.heard.clear()
+    next_turn = _say(kf, "TASK-FOUR", AIMessage("ok"))
+    assert "ANSWER-ONE" in _sent()
+    assert not any(word in _sent() for word in ("TASK-TWO", "ANSWER-THREE", "ANSWER-NEW"))
+    (unsure,) = [line for line in _asked().split(". ") if line.startswith("May have changed")]
+    assert "/outputs/report.md" in unsure
+    # Told of the results of the turn it now follows, and of none from the turns after it.
+    assert "A-0001" in _asked()
+    assert "A-0002" not in _asked()
+    assert {turn.id: turn.parent for turn in kf.session("s").turns()}[next_turn.turn_id] == (
+        old.turn_id
+    )
+
+
+def test_a_session_no_turn_has_logged_yet_still_goes_back(rewinding):
+    """Refused until a turn had imported its conversation, a session that ran nothing on
+    this version could not be rewound at all."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    old = _say(kf, "TASK-ONE", AIMessage("ANSWER-ONE"))
+    after_old = _transcript(rewinding)
+    last = _say(kf, "TASK-TWO", AIMessage("ANSWER-TWO"))
+    _as_before_the_log(rewinding)
+
+    kf.session("s").rewind(old.turn_id)
+
+    assert _transcript(rewinding) == after_old
+    listed = {turn.id: turn for turn in kf.session("s").turns()}
+    assert listed[last.turn_id].imported and not listed[last.turn_id].current
+    assert listed[old.turn_id].current
+
+
+def test_a_turn_from_before_the_log_that_cannot_be_cut_is_refused(rewinding):
+    """Cut without a count, or past a summary that rewrote the conversation's front, the
+    rewind would hand the agent a conversation its turn never ended on; and refused after
+    importing, a refusal would still have changed the session."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    old = _say(kf, "TASK-ONE", AIMessage("ANSWER-ONE"))
+    later = _say(kf, "TASK-TWO", AIMessage("ANSWER-TWO"))
+    _as_before_the_log(rewinding)
+    ledger = rewinding.workspace / "sessions" / "s" / HARNESS / LEDGER_FILE
+    written = ledger.read_text()
+
+    def closing(edit) -> None:
+        rows = [json.loads(line) for line in written.splitlines()]
+        ledger.write_text("".join(json.dumps(edit(row)) + "\n" for row in rows))
+
+    closing(
+        lambda row: {k: v for k, v in row.items() if k != "messages"}
+        if row.get("turn") == old.turn_id
+        else row
+    )
+    kept = _harness_files(rewinding)
+    with pytest.raises(RewindError, match="nowhere to cut"):
+        kf.session("s").rewind(old.turn_id)
+    assert _harness_files(rewinding) == kept
+
+    closing(lambda row: {**row, "summarised": True} if row.get("turn") == later.turn_id else row)
+    kept = _harness_files(rewinding)
+    with pytest.raises(RewindError, match="summary"):
+        kf.session("s").rewind(old.turn_id)
+    assert _harness_files(rewinding) == kept
