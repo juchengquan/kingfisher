@@ -28,11 +28,15 @@ class ScratchRunner:
     agent or another session's.
     """
 
-    def __init__(self, backend: Any, *, seconds: int) -> None:
+    def __init__(self, backend: Any, *, seconds: int, until: float | None = None) -> None:
         self._backend = backend
         # One clock for the call: ten runs of the longest command would hold the session
         # past the claim that counts on none outliving `execution_timeout_s`.
-        self._deadline = time.monotonic() + seconds
+        own = time.monotonic() + seconds
+        # And never past the turn's end: a call from `eval`'s code is no step of its own,
+        # so a program of them is one step the turn's deadline is never read inside.
+        self._deadline = own if until is None else min(own, until)
+        self._turn_ends = self._deadline != own
         self._closed = False
 
     def close(self) -> None:
@@ -120,7 +124,8 @@ class ScratchRunner:
 
     def _out_of_time(self) -> str | None:
         if self._left(None) < 1:
-            return "refused: this tool call has no time left to run anything in"
+            spent = "this turn" if self._turn_ends else "this tool call"
+            return f"refused: {spent} has no time left to run anything in"
         return None
 
     def _left(self, asked: int | None) -> int:

@@ -8,6 +8,7 @@ real folder that a real shell can swap.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import shutil
 import stat
@@ -28,7 +29,12 @@ from langgraph.checkpoint.memory import InMemorySaver
 from kingfisher import Kingfisher, Request, ScratchRun, ToolContext
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.scratch_runs import ScratchRunsMiddleware
+from kingfisher.core.agent.middlewares.scratch_runs import (
+    RunRule,
+    ScratchRunsMiddleware,
+    handing,
+    limit_answer,
+)
 from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.scratch import ScratchRunner
 from kingfisher.core.agent.tool_context import NOT_GRANTED
@@ -208,9 +214,18 @@ def test_a_subagents_tool_runs_under_the_subagents_own_grant(cfg, session_dir, b
     assert found["shout"] == answer
 
 
-def test_a_tool_called_from_code_is_refused(cfg, session_dir):
-    """`eval` passes its own context to every tool its code calls, so a run bound on
-    `eval`'s call would reach them all, with no gate and no grant looked at."""
+@pytest.mark.parametrize(
+    ("builtins", "answer"),
+    [(("eval", "execute"), "HI"), (("eval",), NOT_GRANTED)],
+    ids=["granted", "withheld"],
+)
+def test_a_tool_called_from_code_runs_under_the_agents_grant(
+    cfg, session_dir, way, builtins, answer
+):
+    """Refused outright, a program could not do what the same calls made one at a time
+    do; handed a run whatever the grant, a request withholding the shell would reach it
+    through code. Both ways: an async graph carries the rule to the tool on another thread.
+    """
     wired = replace(cfg, interpreter_enabled=True)
     _a_tool(wired)
 
@@ -218,31 +233,201 @@ def test_a_tool_called_from_code_is_refused(cfg, session_dir):
         wired,
         session_dir,
         "(async () => await tools.shout({text: 'hi'}))()",
-        capabilities=Capabilities(builtin_tools=("eval", "execute"), tools=("shout",)),
+        capabilities=Capabilities(builtin_tools=builtins, tools=("shout",)),
+        way=way,
     )
 
-    assert NOT_GRANTED in answered
+    assert answered == f"<result>{answer}</result>"
 
 
-def test_a_compiled_subagents_tool_is_refused(cfg, session_dir):
-    """A compiled subagent runs with none of kingfisher's middleware, so nothing binds a
-    run for its tools; they are refused rather than handed one some other way."""
+def test_a_run_a_wrapped_tool_kept_runs_nothing_after_its_call(cfg, session_dir, way):
+    """The wrapper binds a call from `eval` or a compiled subagent itself, so it must close
+    what it bound: left open, a tool keeping its context runs commands in every call after.
+    `has ended` rather than the generic refusal is what says a run was bound at all."""
     _a_tool(cfg)
     loaded = {one.name: one.tool for one in LocalToolRepository(tools_dir(cfg)).found}
-    (wrapped,) = guarded_tools([loaded["shout"]], paths_in(cfg, session_dir))
     graph = create_agent(
-        FakeToolCallingModel(responses=[_calls("shout", text="hi"), AIMessage(content="ok")]),
-        tools=[wrapped],
+        FakeToolCallingModel(
+            responses=[
+                _calls("shout", text="hi"),
+                _calls("shout_again", text="later"),
+                AIMessage(content="ok"),
+            ]
+        ),
+        tools=guarded_tools([loaded["shout"], loaded["shout_again"]], paths_in(cfg, session_dir)),
         context_schema=ToolContext,
     )
+    backend = backend_at(cfg, session_dir)
+    sent = {"messages": [{"role": "user", "content": "go"}]}
+    context = ToolContext(backend=PermittedBackend(backend, [], cfg.layout))
 
-    out = graph.invoke(
-        {"messages": [{"role": "user", "content": "go"}]},
-        context=ToolContext(backend=PermittedBackend(backend_at(cfg, session_dir), [], cfg.layout)),
+    with handing(RunRule(backend, 30, allowed=True)):
+        if way == "async":
+            out = asyncio.run(graph.ainvoke(sent, context=context))
+        else:
+            out = graph.invoke(sent, context=context)
+
+    found = {m.name: str(m.content) for m in out["messages"] if isinstance(m, ToolMessage)}
+    assert found["shout"] == "HI"
+    assert "has ended" in found["shout_again"], found
+
+
+#: A tool whose one run outlasts any turn here.
+SLOW = '''from langchain.tools import ToolRuntime
+
+from kingfisher import ToolContext
+
+
+def slow(runtime: ToolRuntime[ToolContext]) -> str:
+    """Sleep for longer than the turn lasts."""
+    ran = runtime.context.run(["/bin/sleep", "20"])
+    return ran.error or f"exit {ran.exit_code}"
+
+
+TOOLS = [slow]
+'''
+
+
+@pytest.mark.parametrize("called", ["directly", "from code"])
+def test_no_run_goes_past_the_turns_end(scripted, called):
+    """A program of calls is one step, and the turn's deadline is read only between steps,
+    so a run handed a whole `execution_timeout_s` per call held the session past the claim
+    that lets the next turn in. Through the service, the only thing that knows the deadline.
+    """
+    bounded = replace(scripted, interpreter_enabled=True, turn_timeout_s=3)
+    tools_dir(bounded).mkdir(parents=True, exist_ok=True)
+    (tools_dir(bounded) / "slow.py").write_text(SLOW, encoding="utf-8")
+    # Listed: under `"*"`, `eval` reaches no `tools.*` at all.
+    an_agent(bounded, builtin_tools="[eval, execute]", tools="[slow]")
+    call = (
+        _calls("slow")
+        if called == "directly"
+        else _calls("eval", code="(async () => await tools.slow({}))()")
+    )
+    Scripted.script.extend([call, AIMessage(content="done")])
+
+    started = time.monotonic()
+    Kingfisher(bounded, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
+
+    assert time.monotonic() - started < 12
+    # That the run was started at all: a call refused, or never made, passes the clock.
+    (result,) = [m for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
+    assert "exit" in str(result.content), result.content
+
+
+#: A compiled subagent bringing its own tool, the shape a deployment's code takes.
+RESEARCHER = '''
+def build(model, tools):
+    from langchain.agents import create_agent
+
+    return create_agent(model, tools)
+
+
+SUBAGENTS = [
+    {
+        "name": "researcher",
+        "description": "Shouts a file's first line.",
+        "build": build,
+        "tools": [{"name": "shout_line", "source": "bundled"}],
+    }
+]
+'''
+
+#: Its tool, renamed by a `ToolSpec`, reading through the backend and running a command.
+SHOUT_LINE = '''from langchain.tools import ToolRuntime
+
+from kingfisher import ToolContext, ToolSpec
+
+
+def _shouted(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
+    """Upper-case a file's first line by running `tr` over it."""
+    found = runtime.context.backend.read(file_path)
+    if found.error:
+        return found.error
+    line = found.file_data["content"].splitlines()[0]
+    ran = runtime.context.run(["/bin/sh", "-c", "tr a-z A-Z < in.txt"], {"in.txt": line.encode()})
+    return ran.error or ran.output
+
+
+TOOLS = [ToolSpec(_shouted, name="shout_line", description="Shout a file's first line.")]
+'''
+
+#: A declared subagent that hands the researcher its work.
+SUMMARIZER = """name: summarizer
+description: Hands the researcher its work.
+builtin_tools: {builtins}
+subagents: [researcher]
+system_prompt: |
+  You delegate.
+"""
+
+
+def _a_researcher(cfg, session_dir) -> None:
+    folder = subagents_dir(cfg) / "researcher"
+    (folder / "tools").mkdir(parents=True, exist_ok=True)
+    (folder / "researcher.py").write_text(RESEARCHER, encoding="utf-8")
+    (folder / "tools" / "shout_line.py").write_text(SHOUT_LINE, encoding="utf-8")
+    (session_dir / "inputs" / "notes.txt").write_text("alpha\nbeta\n", encoding="utf-8")
+
+
+#: The agent hands the researcher a task, in which it shouts.
+_RESEARCHED = [
+    _calls("task", description="shout it", subagent_type="researcher"),
+    _calls("shout_line", file_path="/inputs/notes.txt"),
+    AIMessage(content="shouted"),
+    AIMessage(content="done"),
+]
+
+
+@pytest.mark.parametrize(
+    ("builtins", "answer"),
+    [(("task", "execute"), "ALPHA"), (("task",), NOT_GRANTED)],
+    ids=["granted", "withheld"],
+)
+def test_a_compiled_subagents_tool_runs_under_the_agent_that_handed_it_the_work(
+    cfg, session_dir, builtins, answer
+):
+    """Refused outright, a deployment's tool could not run in its own subagent; handed a run
+    whatever the grant, a request withholding the shell would reach it by delegating. The
+    agent holds no offered tool, so only its handing work on gives it a rule to pass."""
+    _a_researcher(cfg, session_dir)
+
+    found = _results(
+        cfg,
+        session_dir,
+        *_RESEARCHED,
+        capabilities=Capabilities(builtin_tools=builtins, subagents=("researcher",)),
     )
 
-    (result,) = [m for m in out["messages"] if isinstance(m, ToolMessage)]
-    assert result.content == NOT_GRANTED
+    assert found["shout_line"].strip() == answer
+
+
+@pytest.mark.parametrize(
+    ("builtins", "answer"),
+    [("[task, execute]", "ALPHA"), ("[task]", NOT_GRANTED)],
+    ids=["granted", "withheld"],
+)
+def test_a_compiled_subagent_runs_under_the_subagent_that_handed_it_the_work(
+    cfg, session_dir, builtins, answer
+):
+    """Not under the agent's grant, which holds the shell either way: a subagent defined
+    never to run a command would get one run by delegating."""
+    _a_researcher(cfg, session_dir)
+    (subagents_dir(cfg) / "summarizer.yaml").write_text(
+        SUMMARIZER.format(builtins=builtins), encoding="utf-8"
+    )
+
+    found = _results(
+        cfg,
+        session_dir,
+        _calls("task", description="have it shouted", subagent_type="summarizer"),
+        *_RESEARCHED[:3],
+        AIMessage(content="summarized"),
+        AIMessage(content="done"),
+        capabilities=Capabilities(subagents=("summarizer", "researcher")),
+    )
+
+    assert found["shout_line"].strip() == answer
 
 
 def test_a_run_kept_past_its_call_runs_nothing(cfg, session_dir):
@@ -416,6 +601,33 @@ def test_a_limit_raising_for_a_subagent_refuses_only_its_tools_and_says_why(
     assert found == ["HI", answer]
 
 
+class _Quoting(ScratchRunLimit):
+    """A `ScratchRunLimit` whose lookup fails quoting the user it looked up."""
+
+    def allows(self, name: str, kind: str) -> bool:
+        msg = "no policy for user-4711"
+        raise LookupError(msg)
+
+
+def test_a_raising_limit_is_logged_by_its_type_and_place_never_its_words(caplog):
+    """Logged with its traceback, whose last line is its message, a limit's failure put the
+    user it looked up into the deployment's logs. The refused run is still told it: that
+    reaches the agent, not the log."""
+    with caplog.at_level(logging.WARNING):
+        answer = limit_answer(_Quoting(), "researcher", "compiled")
+
+    (record,) = caplog.records
+    assert record.exc_info is None
+    assert "user-4711" not in record.getMessage()
+    assert record.getMessage().startswith(
+        "the scratch run limit raised LookupError at unit/test_scratch_runs.py:"
+    )
+    assert answer == (
+        False,
+        "refused: this deployment's ScratchRunLimit raised LookupError: no policy for user-4711",
+    )
+
+
 async def _refused() -> bool:
     return False
 
@@ -576,12 +788,12 @@ def test_a_gated_shell_is_refused_whatever_the_limit_answers(cfg, session_dir, c
     [(_Limit(), "HI"), (_Raising(""), RAISED.replace("'helper'", "''"))],
     ids=["allowing", "raising"],
 )
-def test_a_tool_called_from_code_is_refused_whatever_the_limit_answers(
+def test_a_tool_called_from_code_answers_to_the_limit_as_a_direct_call_does(
     cfg, session_dir, limit, direct_answer
 ):
-    """`eval` hands its context to every tool its code calls, so neither a limit allowing
-    the agent nor the refusal bound for one raising may reach them through it. The direct
-    call under the same grant is the control."""
+    """A call from code is the agent's, so the limit's answer about the agent reaches it:
+    dropped there, a deployment refusing the agent would see its tools run from `eval`. The
+    direct call under the same grant is the control."""
     wired = replace(cfg, interpreter_enabled=True)
     _a_tool(wired)
     granted = Capabilities(builtin_tools=("eval", "execute"), tools=("shout",))
@@ -602,8 +814,34 @@ def test_a_tool_called_from_code_is_refused_whatever_the_limit_answers(
         scratch_run_limit=limit,
     )
 
-    assert NOT_GRANTED in answered
     assert direct == [direct_answer]
+    assert answered == f"<result>{direct_answer}</result>"
+
+
+@pytest.mark.parametrize(
+    ("limit", "answer"),
+    [
+        (_Limit("researcher"), NOT_GRANTED),
+        (_Raising("researcher"), RAISED.replace("'helper'", "'researcher'")),
+        (_Limit("other"), "ALPHA"),
+    ],
+    ids=["refusing", "raising", "another"],
+)
+def test_a_limit_is_asked_about_a_compiled_subagent_by_name(cfg, session_dir, limit, answer):
+    """Asked only about the graph that handed it the work, a deployment's limit naming the
+    subagent would be ignored -- the one `ports.md` shows refusing `researcher`."""
+    _a_researcher(cfg, session_dir)
+
+    found = _results(
+        cfg,
+        session_dir,
+        *_RESEARCHED,
+        capabilities=Capabilities(subagents=("researcher",)),
+        scratch_run_limit=limit,
+    )
+
+    assert found["shout_line"].strip() == answer
+    assert ("researcher", "compiled") in limit.asked
 
 
 @pytest.mark.parametrize("limit", [None, NoScratchRunLimit()], ids=["left-out", "default"])

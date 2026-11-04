@@ -834,6 +834,16 @@ directly, and `filter_tools_for_ptc` called on its own.*
   tool's own schema with langgraph's `_get_all_injected_args`. A wrapper has to
   advertise the inner tool's full `args_schema`, injected fields included, or the tool
   is called without them; `tool_call_schema` drops them.
+- **`eval`'s timeout is not counted while a tool from code runs.** Under a 2s timeout, a
+  program awaiting one tool that slept 4s returned after 4.1s with the tool's answer, a
+  sync tool and an `async` one alike: what is timed is the program's own work. So one
+  `eval` is one step whose length is the sum of its tools' calls -- up to 256 of them, the
+  library's `max_ptc_calls` -- and the turn's deadline, read between steps, is never read
+  inside it. *(2026-11-04, langchain-quickjs 0.3.8.)*
+- **A context variable set around the `eval` call reaches the tools its code calls**, on
+  a sync graph and an async one, a sync tool and an `async` one: the bridge runs each on
+  the outer loop from the program's thread, and both copy the context. *(2026-11-04,
+  langchain-quickjs 0.3.8.)*
 - **An exception the program does not catch leaves `eval` as itself.** The original is
   re-raised out of the evaluation and meets whatever wraps the `eval` call: in
   kingfisher, `GuardedCallsMiddleware` turned the backend's host-path refusal into a failed

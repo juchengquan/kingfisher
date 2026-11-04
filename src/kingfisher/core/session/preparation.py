@@ -532,12 +532,16 @@ class Preparation:
             raise
 
         asked = getattr(request, "task", "")
+        # One clock: what the turn is stopped at between chunks is what no run goes past.
+        deadline = monotonic() + cfg.turn_timeout_s
         return Prepared(
             graph=graph,
             files=files,
             harness=harness,
             saver=saver,
-            context=built.context if isinstance(built, Assembled) else None,
+            context=replace(built.context, deadline=deadline)
+            if isinstance(built, Assembled)
+            else None,
             granted=built.granted if isinstance(built, Assembled) else None,
             resume=resume,
             resuming=answering,
@@ -573,7 +577,7 @@ class Preparation:
                 # terminal state of the one it replaced.
                 *((decision_discarded(discarded),) if discarded else ()),
             ),
-            deadline=monotonic() + cfg.turn_timeout_s,
+            deadline=deadline,
             timeout_s=cfg.turn_timeout_s,
         )
 

@@ -238,7 +238,7 @@ SHARED_SETTINGS = {
             "budget",
         }
     ),
-    compiled: frozenset({"endpoints", "tools", "paths", "held", "gated"}),
+    compiled: frozenset({"endpoints", "tools", "paths", "held", "gated", "scratch_run_limit"}),
 }
 
 

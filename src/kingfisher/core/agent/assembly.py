@@ -553,9 +553,11 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         reachable: tuple[str, ...] | None = None,
         inner: Sequence[Any] = (),
         limit: ScratchRunLimit | None = None,
+        hands_to_compiled: bool = False,
     ) -> list[Any]:
         return standing_middleware(
             "agent",
+            hands_to_compiled=hands_to_compiled,
             name="" if agent is None else agent.name,
             inner=inner,
             names=guarded,
@@ -968,6 +970,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         reachable=tuple(spec["name"] for spec in supplied),
         inner=[*switched, *named],
         limit=scratch_run_limit,
+        hands_to_compiled=any("runnable" in spec for spec in supplied),
     )
 
     return assemble(surface.carried, permitted)

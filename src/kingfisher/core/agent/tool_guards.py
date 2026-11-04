@@ -5,8 +5,10 @@ from __future__ import annotations
 import inspect
 from collections.abc import Sequence
 from contextlib import AbstractContextManager, nullcontext
+from dataclasses import replace
 from typing import Any
 
+from langchain.tools import ToolRuntime
 from langchain_core.callbacks import AsyncCallbackManagerForToolRun, CallbackManagerForToolRun
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, StructuredTool, ToolException
@@ -18,9 +20,10 @@ from langchain_core.tools.base import _get_runnable_config_param, _signature_par
 
 from .host_paths import HostPathError
 from .middlewares.recorder import ran
+from .middlewares.scratch_runs import HANDED
 from .references import UnsafeReferenceError
 from .session_paths import SessionPaths, as_asked, refusal_text
-from .tool_context import naming
+from .tool_context import ToolContext, naming
 
 
 class GuardedTool(BaseTool):
@@ -42,9 +45,25 @@ class GuardedTool(BaseTool):
     #: The compiled subagent this tool was handed to, which `current_graph()` answers while
     #: it runs. `None` leaves the name alone: `eval`'s tools read the graph that ran `eval`.
     graph: str | None = None
+    #: The deployment's `ScratchRunLimit` on that subagent, as `limit_answer` gives it,
+    #: joined with the rule of whoever handed it the work.
+    limit: tuple[bool, str | None] = (True, None)
 
     def _named(self) -> AbstractContextManager[None]:
         return nullcontext() if self.graph is None else naming(self.graph)
+
+    def _with_runner(self, args: dict[str, Any]) -> tuple[dict[str, Any], Any]:
+        """`args` with the runtime they inject handed a runner for this call alone, under
+        the rule `eval` or `task` was called with; and the runner, to close after it."""
+        rule = HANDED.get()
+        for key, value in args.items():
+            if isinstance(value, ToolRuntime) and isinstance(value.context, ToolContext):
+                runner = None if rule is None else rule.narrowed(self.limit).runner(value.context)
+                if runner is None:
+                    return args, None
+                bound = replace(value, context=replace(value.context, scratch=runner))
+                return {**args, key: bound}, runner
+        return args, None
 
     def _translated(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         if self.paths is None:
@@ -86,7 +105,7 @@ class GuardedTool(BaseTool):
     ) -> Any:
         # No recorder sees this call, so the answer it feeds is stamped with it here.
         ran(self.inner.name)
-        args = self._translated(kwargs)
+        args, runner = self._with_runner(self._translated(kwargs))
         with self._named():
             try:
                 return self.inner._run(
@@ -96,6 +115,9 @@ class GuardedTool(BaseTool):
                 raise
             except Exception as exc:
                 raise self._failed(exc, kwargs) from exc
+            finally:
+                if runner is not None:
+                    runner.close()
 
     async def _arun(
         self,
@@ -105,7 +127,7 @@ class GuardedTool(BaseTool):
         **kwargs: Any,
     ) -> Any:
         ran(self.inner.name)
-        args = self._translated(kwargs)
+        args, runner = self._with_runner(self._translated(kwargs))
         # Read as `arun` reads it: a tool with no `_arun` of its own runs its `_run`.
         own = type(self.inner)._arun is not BaseTool._arun
         checked = self.inner._arun if own else self.inner._run
@@ -118,16 +140,28 @@ class GuardedTool(BaseTool):
                 raise
             except Exception as exc:
                 raise self._failed(exc, kwargs) from exc
+            finally:
+                if runner is not None:
+                    runner.close()
 
 
 def guarded_tools(
-    tools: Sequence[Any], paths: SessionPaths | None, *, graph: str | None = None
+    tools: Sequence[Any],
+    paths: SessionPaths | None,
+    *,
+    graph: str | None = None,
+    limit: tuple[bool, str | None] = (True, None),
 ) -> list[Any]:
-    """The offered tools a compiled subagent or `eval` is handed, each one wrapped."""
-    return [_guarded(one, paths, graph) for one in tools]
+    """The offered tools a compiled subagent or `eval` is handed, each one wrapped.
+
+    `limit` is the deployment's answer about the compiled subagent `graph`.
+    """
+    return [_guarded(one, paths, graph, limit) for one in tools]
 
 
-def _guarded(one: Any, paths: SessionPaths | None, graph: str | None) -> BaseTool:
+def _guarded(
+    one: Any, paths: SessionPaths | None, graph: str | None, limit: tuple[bool, str | None]
+) -> BaseTool:
     """One tool, wrapped without changing what it advertises.
 
     A plain function becomes the tool `create_agent` would make of it, refusing a
@@ -141,6 +175,7 @@ def _guarded(one: Any, paths: SessionPaths | None, graph: str | None) -> BaseToo
         inner=inner,
         paths=paths,
         graph=graph,
+        limit=limit,
         name=inner.name,
         description=inner.description,
         args_schema=declared,

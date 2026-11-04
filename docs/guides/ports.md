@@ -562,9 +562,9 @@ Things to know:
 
 An offered tool is handed
 [`runtime.context.run`](tools.md#a-tool-that-runs-a-command) where the agent or subagent
-calling it holds `execute`, ungated. Yours may refuse it to some of those graphs: a
-subagent whose tools should never start a process, say, though it may use the shell
-itself.
+calling it holds `execute`, ungated -- for a compiled subagent, where whoever handed it
+the work does. Yours may refuse it to some of those graphs: a subagent whose tools should
+never start a process, say, though it may use the shell itself.
 
 ```python
 from typing import Literal
@@ -572,7 +572,9 @@ from typing import Literal
 from kingfisher.plugins import ScratchRunLimit
 
 class NoRunsForResearch(ScratchRunLimit):
-    def allows(self, name: str, kind: Literal["agent", "subagent", "general-purpose"]) -> bool:
+    def allows(
+        self, name: str, kind: Literal["agent", "subagent", "general-purpose", "compiled"]
+    ) -> bool:
         return name != "researcher"
 
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(), scratch_run_limit=NoRunsForResearch())
@@ -582,10 +584,11 @@ The command does not take it. Left out, it is `NoScratchRunLimit`,
 which allows every graph kingfisher would hand a run.
 
 `allows` is told the graph's `name` and its `kind`: `"agent"` with the agent's name,
-empty for a request naming none; `"subagent"` with the name a definition gives it; or
+empty for a request naming none; `"subagent"` with the name a definition gives it;
 `"general-purpose"`, by that name, for each `general-purpose`: the agent's, handed the
-agent's tools, and the one beside every subagent holding `task`, handed that subagent's. One
-answer for the name answers for all of them.
+agent's tools, and the one beside every subagent holding `task`, handed that subagent's;
+or `"compiled"` with the name of a subagent whose definition built its graph, which runs
+none of kingfisher's middleware. One answer for the name answers for all of them.
 
 Things to know:
 
@@ -593,11 +596,12 @@ Things to know:
   Answering `True` for a graph refused `execute` hands it nothing: a request refused the
   shell stays refused through its tools.
 - **Kingfisher's own refusals stand whatever it answers.** A gated `execute` refuses,
-  a tool called from `eval`'s code is never handed a run, and `run_in_scratch` refuses
-  what it refuses.
+  and `run_in_scratch` refuses what it refuses.
+- **A call from `eval`'s code is the agent's**, so your answer about the agent is the
+  one it runs under. A compiled subagent's tools run under your answer about it *and*
+  your answer about the graph that handed it the work.
 - **It is asked once per graph built**, when the agent is built for a turn, and only of
-  a graph holding offered tools. Not of a compiled subagent, whose tools are never
-  handed a run.
+  a graph holding offered tools or handing work to a compiled subagent.
 - **An exception it raises refuses that graph's runs, not the turn.** It is logged as a
   warning, once per graph built, and each run a tool on that graph asks for comes back
   with an `error` naming it -- `refused: this deployment's ScratchRunLimit raised

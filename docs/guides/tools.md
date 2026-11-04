@@ -652,8 +652,9 @@ did not. `await runtime.context.arun(...)` is the same for an `async` tool.
 
 - **Only for an agent that may use the shell itself.** A tool is handed a run when the
   agent or subagent calling it holds `execute`, ungated; otherwise `error` says so and
-  nothing runs. A tool called from `eval`'s code is never handed one. A deployment may
-  refuse it to more graphs with a
+  nothing runs. A tool called from `eval`'s code is the agent's call, and runs where the
+  agent may. A compiled subagent's tool runs where whoever handed that subagent its work
+  may. A deployment may refuse it to more graphs, a compiled subagent among them, with a
   [`ScratchRunLimit`](ports.md#scratchrunlimit--which-graphs-tools-may-run-commands),
   never to fewer.
 - **`argv` is a program and its arguments**, not a shell line, so a file name is never
@@ -668,9 +669,10 @@ did not. `await runtime.context.arun(...)` is the same for an `async` tool.
   itself holds — an output is read through a descriptor, never from outside it, and a
   link or a FIFO left under the name is refused — so what is open is the bytes. Trust
   them as far as you trust the agent, and nowhere further.
-- **One clock for the call.** Every run in one call shares
-  `KINGFISHER_EXECUTION_TIMEOUT_S`, each given what is left, and what a call was
-  handed stops working when it returns.
+- **One clock for the call, and never past the turn.** Every run in one call shares
+  `KINGFISHER_EXECUTION_TIMEOUT_S`, each given what is left, and none runs past the
+  end of `KINGFISHER_TURN_TIMEOUT_S`. What a call was handed stops working when it
+  returns.
 - **Capped.** At most 32 MB of files in and 32 MB back, 64 outputs named, and the
   command's output cut where `execute`'s is.
 - **On kingfisher's own sessions only**, unless a deployment's backend offers

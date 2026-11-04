@@ -15,6 +15,7 @@ from langchain_core.runnables import Runnable
 
 from kingfisher.core.access import ALL, Selection, ceiling, narrowed, refuse_unoffered
 from kingfisher.core.agent.middlewares.clearing import result_clearing
+from kingfisher.core.agent.middlewares.scratch_runs import limit_answer
 from kingfisher.core.agent.middlewares.standing import FILESYSTEM, standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import (
@@ -37,6 +38,7 @@ from kingfisher.core.definitions.subagents.spec import (
     opens_skills,
 )
 from kingfisher.core.definitions.tools.spec import FoundTool, Offering, select, split_reference
+from kingfisher.core.interfaces import NoScratchRunLimit
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -192,6 +194,8 @@ def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfi
     held: frozenset[str] | None,
     #: What the agent stops on, as the names calls carry.
     gated: Collection[str],
+    #: Asked about this subagent by name, beside the rule of whoever hands it the work.
+    scratch_run_limit: ScratchRunLimit | None,
 ) -> dict[str, Any]:
     """A subagent its definition built itself, wrapped the way deepagents takes one."""
     model = model_object(
@@ -217,9 +221,14 @@ def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfi
     # a call carries, so a bundle's namesake of a gated tool goes too.
     granted = [one.tool for one in mine if one.name not in gated]
 
+    # Only where it holds a tool to run anything, as a graph kingfisher builds is asked.
+    limit = NoScratchRunLimit() if scratch_run_limit is None else scratch_run_limit
+    answer = limit_answer(limit, spec.name, "compiled") if granted else (True, None)
     # Wrapped: this graph gets no kingfisher middleware, so its tools carry their guards or
     # have none.
-    runnable = spec.build(model, guarded_tools(granted, paths, graph=spec.name))
+    runnable = spec.build(
+        model, guarded_tools(granted, paths, graph=spec.name, limit=answer)
+    )
     # `Runnable`, as `CompiledSubAgent` declares the field: a duck-type on `invoke` is too
     # loose, since deepagents also calls `with_config`.
     if not isinstance(runnable, Runnable):
@@ -315,6 +324,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
             default_model=runs,
             held=held,
             gated=gated,
+            scratch_run_limit=scratch_run_limit,
         )
 
     subagent: dict[str, Any] = {
@@ -386,6 +396,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
             *(one for one in extra_middleware or [] if one not in summarizing),
         ],
         names=frozenset(entry.name for entry in (*catalogue, *private)),
+        hands_to_compiled=any("runnable" in one for one in helpers or ()),
         paths=paths,
         layout=cfg.layout,
         permissions=permissions,

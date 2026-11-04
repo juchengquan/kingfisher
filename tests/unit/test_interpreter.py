@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import replace
 
@@ -265,8 +266,10 @@ def _with_code_tools(cfg, session_dir) -> str:
     return str(other / "theirs.txt")
 
 
-def _from_code(cfg, session_dir, code, *, capabilities=NARROWED, agent=None, **keywords):
-    """What one `eval` of `code` answered, and the turn's last word."""
+def _from_code(  # noqa: PLR0913 -- the build's two settings, and which loop drives it
+    cfg, session_dir, code, *, capabilities=NARROWED, agent=None, way="sync", **keywords
+):
+    """What one `eval` of `code` answered, and the turn's last word, driven `way`."""
     built = build_agent(
         cfg,
         backend=backend_at(cfg, session_dir),
@@ -286,12 +289,13 @@ def _from_code(cfg, session_dir, code, *, capabilities=NARROWED, agent=None, **k
         checkpointer=InMemorySaver() if agent is not None else None,
         **keywords,
     )
+    sent = {"messages": [{"role": "user", "content": "go"}]}
+    options: dict = {"config": {"configurable": {"thread_id": "from-code"}}}
     try:
-        out = built.graph.invoke(
-            {"messages": [{"role": "user", "content": "go"}]},
-            config={"configurable": {"thread_id": "from-code"}},
-            context=built.context,
-        )
+        if way == "async":
+            out = asyncio.run(built.graph.ainvoke(sent, context=built.context, **options))
+        else:
+            out = built.graph.invoke(sent, context=built.context, **options)
     finally:
         # A turn that raised skipped `after_agent`, and a runtime left open hangs the
         # process at exit instead of failing the test that opened it.
