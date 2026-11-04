@@ -72,13 +72,17 @@ class ToolContext:
     #: The turn's filesystem under its permissions: a deepagents `BackendProtocol` taking
     #: the file tools' virtual paths. `Any`, since naming that type would import it.
     backend: Any
-    #: Bound for one call by `ScratchRunsMiddleware`, and only where the calling agent may
+    #: Bound for one call, by `ScratchRunsMiddleware` or by the `GuardedTool` a call from
+    #: `eval` or a compiled subagent passes, and only where the agent the work came from may
     #: use the shell itself; `None` refuses every run.
     scratch: Any = None
     #: Who the turn runs for. `None` only for a build no turn asked for.
     caller: Caller | None = None
     #: What `caller` can use this turn, worked out only when a tool asks.
     reachable: Reachable | None = None
+    #: When the turn must stop, on `time.monotonic()`'s clock; no run goes past it. `None`
+    #: for a build no turn drives.
+    deadline: float | None = None
 
     def run(
         self,

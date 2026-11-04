@@ -2,16 +2,30 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Collection, Sequence
-from dataclasses import replace
-from typing import Any
+import inspect
+import logging
+from collections.abc import Awaitable, Callable, Collection, Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Any, Literal
 
 from langchain.agents.middleware import AgentMiddleware
 
 from kingfisher.core.agent.prompting import EXECUTE
 from kingfisher.core.agent.scratch import ScratchRunner
 from kingfisher.core.agent.tool_context import ToolContext
+from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.interfaces import ScratchRun
+from kingfisher.core.logged import raised
+
+if TYPE_CHECKING:
+    from kingfisher.core.interfaces import ScratchRunLimit
+
+_log = logging.getLogger(__name__)
+
+#: What a `ScratchRunLimit` is told a graph is.
+LimitKind = Literal["agent", "subagent", "general-purpose", "compiled"]
 
 
 class RefusingRunner:
@@ -31,12 +45,92 @@ class RefusingRunner:
         pass
 
 
+def limit_answer(limit: ScratchRunLimit, name: str, kind: LimitKind) -> tuple[bool, str | None]:
+    """Whether `limit` lets graph `name`'s tools run, and what a refused run is told, where
+    the limit failed to answer."""
+    try:
+        allows = limit.allows(name, kind)
+    except Exception as error:  # noqa: BLE001 -- a plugin's bug costs this graph its
+        # runs, never the turn, and never grants one.
+        _log.warning(
+            "the scratch run limit raised %s at %s on %s %r; its tools are refused a run",
+            *raised(error),
+            kind,
+            name,
+        )
+        return False, (
+            f"refused: this deployment's ScratchRunLimit raised {type(error).__name__}: {error}"
+        )
+    if allows is True or allows is False:
+        return allows, None
+    # Only `True` grants: an `async def allows` answers a coroutine, which is truthy, and
+    # read as a grant it handed every graph a run.
+    _log.warning(
+        "the scratch run limit answered %s on %s %r, not True or False; its tools are "
+        "refused a run",
+        type(allows).__name__,
+        kind,
+        name,
+    )
+    if inspect.iscoroutine(allows):
+        allows.close()
+    return False, (
+        f"refused: this deployment's ScratchRunLimit answered {type(allows).__name__}, "
+        "not True or False"
+    )
+
+
+@dataclass(frozen=True)
+class RunRule:
+    """Whether one graph's offered tools are handed a run, decided once for its build."""
+
+    backend: Any
+    seconds: int
+    allowed: bool
+    #: What a refused run is told where the limit, not the grant, took it away.
+    refusal: str | None = None
+
+    def narrowed(self, answer: tuple[bool, str | None]) -> RunRule:
+        """This rule, refused too where `answer`, a `limit_answer`, refuses.
+
+        The rule's own refusal is kept: it is the one that took the run away first.
+        """
+        allows, refusal = answer
+        if not self.allowed or allows:
+            return self
+        return replace(self, allowed=False, refusal=refusal)
+
+    def runner(self, context: ToolContext) -> ScratchRunner | RefusingRunner | None:
+        """What one call is handed as `context.scratch`; `None` refuses generically."""
+        if self.allowed:
+            return ScratchRunner(self.backend, seconds=self.seconds, until=context.deadline)
+        if self.refusal is not None:
+            return RefusingRunner(self.refusal)
+        return None
+
+
+#: The rule of the graph whose `eval` or `task` call is running: the one a tool reached
+#: from there obeys, since no `ScratchRunsMiddleware` stands between it and its caller.
+HANDED: ContextVar[RunRule | None] = ContextVar("kingfisher_run_rule", default=None)
+
+
+@contextmanager
+def handing(rule: RunRule) -> Iterator[None]:
+    """Have `HANDED` answer `rule` until the block ends."""
+    token = HANDED.set(rule)
+    try:
+        yield
+    finally:
+        HANDED.reset(token)
+
+
 class ScratchRunsMiddleware(AgentMiddleware):
     """Bind `runtime.context.run` for one offered tool's call, when the agent making it
     may use the shell itself.
 
-    By name, so `eval` is never bound: a tool its code calls inherits `eval`'s context,
-    and with it anything bound there. A gated `execute` refuses too, since nothing can
+    By name, so `eval` and `task` are never bound: what they run inherits their context,
+    and with it anything bound there. They get the rule instead, which each tool they
+    reach binds a runner of its own from. A gated `execute` refuses too, since nothing can
     pause for a person inside a tool.
     """
 
@@ -53,15 +147,17 @@ class ScratchRunsMiddleware(AgentMiddleware):
     ) -> None:
         super().__init__()
         self.names = names
-        self.backend = backend
-        self.seconds = seconds
         #: `None` is an unnarrowed grant, which holds the shell like any other built-in.
         #: The deployment's `ScratchRunLimit` is joined with `and`, so it can only take away.
         ruled = (tools is None or EXECUTE in tools) and EXECUTE not in gated
-        self.allowed = ruled and limit_allows
-        #: Only where kingfisher's own rule allowed the run, so the cause it names is the
-        #: one that took the run away.
-        self.refusal = limit_refusal if ruled and not self.allowed else None
+        self.rule = RunRule(
+            backend,
+            seconds,
+            allowed=ruled and limit_allows,
+            # Only where kingfisher's own rule allowed the run, so the cause it names is the
+            # one that took the run away.
+            refusal=limit_refusal if ruled and not limit_allows else None,
+        )
 
     def _bound(self, request: Any) -> tuple[Any, ScratchRunner | RefusingRunner | None]:
         runtime = request.runtime
@@ -72,17 +168,19 @@ class ScratchRunsMiddleware(AgentMiddleware):
             or not isinstance(context, ToolContext)
         ):
             return request, None
-        runner: ScratchRunner | RefusingRunner
-        if self.allowed:
-            runner = ScratchRunner(self.backend, seconds=self.seconds)
-        elif self.refusal is not None:
-            runner = RefusingRunner(self.refusal)
-        else:
+        runner = self.rule.runner(context)
+        if runner is None:
             return request, None
         bound = replace(runtime, context=replace(context, scratch=runner))
         return replace(request, runtime=bound), runner
 
+    def _hands(self, request: Any) -> bool:
+        return request.tool_call.get("name") in (INTERPRETER_TOOL, TASK_TOOL)
+
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        if self._hands(request):
+            with handing(self.rule):
+                return handler(request)
         bound, runner = self._bound(request)
         try:
             return handler(bound)
@@ -93,6 +191,9 @@ class ScratchRunsMiddleware(AgentMiddleware):
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
+        if self._hands(request):
+            with handing(self.rule):
+                return await handler(request)
         bound, runner = self._bound(request)
         try:
             return await handler(bound)

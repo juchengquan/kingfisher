@@ -3449,6 +3449,34 @@ direction, as a `PdfAttachments` that raises leaves kingfisher's verdict. Not ta
 treating an error as allowed, which would let a broken limit hand out the run it exists
 to take away. *(2026-10-22.)*
 
+**A tool called from `eval`'s code, or in a compiled subagent, runs under the graph the
+work came from.** This reverses *By name, never `eval`* for the tools those two reach, and
+the refusal of every compiled subagent's tools: a deployment's own tool, shipped in its own
+compiled subagent, could not run a command at all. Binding stays by name and never on
+`eval` or `task`. Their call publishes the graph's rule -- grant, gate and limit, decided
+once -- in a context variable, and the `GuardedTool` each tool they reach wears binds a
+runner of its own from it, for that one call, and closes it, so the run the original reason
+ruled out, one every tool the code reached could use, is still not built. Whoever handed
+over the work, not the agent: read off the agent, a subagent defined never to run a command
+would get one by handing the work to a compiled subagent. Not the request alone either,
+which is the same hole. A compiled subagent cannot write `builtin_tools`, so it holds no
+grant of its own, and the deployment's `ScratchRunLimit` is asked about it by name, as kind
+`compiled`, joined with *and*: asked about the handing graph alone, a limit naming the
+subagent would be ignored. So a graph that hands work to a compiled subagent is asked even
+when it holds no offered tool of its own. *(2026-11-04.)*
+
+**No run goes past the turn's end.** `ToolContext.deadline` carries the turn's, and a
+runner's clock ends with the call's or with that, whichever comes first. An `eval` is one
+step however many tools it calls, and its own timeout does not count their time
+(*The code sandbox* in `findings.md`). So a clock per call let one program hold its
+session past `claim_stale_after`, after which the next turn may take it over. Not taken:
+one clock per program, stricter than the claim needs; and renewing the claim while a turn
+lives. Renewal would also cover a slow tool and a `task()` from code, but it cannot tell a
+long step from a stuck one -- a hung tool would keep its session locked as long as the
+process lived -- and it changes every `Sessions`. Build it when a deployment needs a turn
+to outlast its deadline. Still open: refusing new `tools.*` and `task()` calls from code
+once the turn is out of time. *(2026-11-04.)*
+
 **An output is not evidence the command wrote it.** The run's folder is in the session's
 scratchpad because the Linux fences grant one session and nothing else, so the agent's
 shell and its file tools reach it while the run is going -- measured in one message

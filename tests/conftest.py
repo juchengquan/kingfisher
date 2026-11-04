@@ -628,6 +628,7 @@ COMPILED_UNWIRED: dict[str, Any] = {
     "paths": None,
     "held": None,
     "gated": (),
+    "scratch_run_limit": None,
 }
 SUBAGENT_UNWIRED: dict[str, Any] = {
     **COMPILED_UNWIRED,

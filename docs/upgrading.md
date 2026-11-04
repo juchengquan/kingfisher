@@ -18,6 +18,24 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## An offered tool may run commands from `eval` and in a compiled subagent, after #1201
+
+- **A tool called from `eval`'s code is handed `runtime.context.run`** where the agent
+  holds `execute`, ungated, as a direct call is. **So is a compiled subagent's tool**,
+  where the graph that handed that subagent its work holds it: the agent, or a subagent
+  naming it under `subagents:`. Both were refused before. If you relied on that to keep a
+  tool from starting a process, withhold `execute`, or refuse the graph in a
+  `ScratchRunLimit`.
+- **`ScratchRunLimit.allows` may be told `kind="compiled"`**, with the compiled subagent's
+  name, and a run there needs your answer about it *and* about the graph that handed it
+  the work. A limit that switches on three kinds, or annotates `kind` with the three, needs
+  the fourth. It is also asked about a graph that hands work to a compiled subagent and
+  holds no offered tool of its own, which it was not before.
+- **No run goes past the turn's end.** A run started near the end of
+  `KINGFISHER_TURN_TIMEOUT_S` is handed what is left of the turn, not a whole
+  `KINGFISHER_EXECUTION_TIMEOUT_S`. `ToolContext.deadline` says when that is, on
+  `time.monotonic()`'s clock, and is `None` for a build no turn drives.
+
 ## A session can be rewound to an earlier turn, after #1200
 
 - **`Session.turns()` and `Session.rewind(to)`**, with `aturns` and `arewind`. `turns()`

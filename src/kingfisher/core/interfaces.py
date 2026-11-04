@@ -427,21 +427,26 @@ class ScratchRunLimit(ABC):
     """Which graphs' offered tools a deployment refuses `ToolContext.run`, among those
     kingfisher would hand it to.
 
-    Asked once per graph built with offered tools: the agent, each subagent a definition
-    declares, and `general-purpose`. Its answer only takes away. A graph refused the shell,
-    or holding it behind a person, is refused a run whatever it says, and a tool called
-    from `eval`'s code is never handed one. An exception here is logged and refuses that
-    graph's tools their runs, naming it in each refusal; the other graphs are untouched.
+    Asked once per graph built with offered tools or able to hand work to a subagent: the
+    agent, each subagent a definition declares, `general-purpose`, and each compiled
+    subagent. Its answer only takes away. A graph refused the shell, or holding it behind a
+    person, is refused a run whatever it says; a tool called from `eval`'s code runs under
+    the agent's answer, and a compiled subagent's under its own and that of the graph that
+    handed it the work. An exception here is logged and refuses that graph's tools their
+    runs, naming it in each refusal; the other graphs are untouched.
     So does any answer but `True` or `False`: `allows` is called, never awaited, so an
     `async def` answers a coroutine, which is not a grant.
     """
 
     @abstractmethod
-    def allows(self, name: str, kind: Literal["agent", "subagent", "general-purpose"]) -> bool:
+    def allows(
+        self, name: str, kind: Literal["agent", "subagent", "general-purpose", "compiled"]
+    ) -> bool:
         """Whether the tools of graph `name` may run commands, where kingfisher would let them.
 
         `name` is the agent's, empty for a request naming none; the subagent's; or
-        `general-purpose` for deepagents' own.
+        `general-purpose` for deepagents' own. `compiled` is a subagent whose definition
+        built its graph, which runs none of kingfisher's middleware.
         """
         ...
 
@@ -450,7 +455,9 @@ class NoScratchRunLimit(ScratchRunLimit):
     """Every graph kingfisher would hand a run is handed one."""
 
     def allows(
-        self, name: str, kind: Literal["agent", "subagent", "general-purpose"]  # noqa: ARG002
+        self,
+        name: str,  # noqa: ARG002
+        kind: Literal["agent", "subagent", "general-purpose", "compiled"],  # noqa: ARG002
     ) -> bool:
         return True
 
