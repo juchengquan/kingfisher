@@ -413,6 +413,42 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how,
     assert not _claim(budgeted, session).exists()
 
 
+def test_a_turn_id_the_session_already_holds_is_refused_before_anything_changes(
+    scripted, tmp_path
+):
+    """The ledger names a turn only by its id, so two turns under one could not be told
+    apart; refused after its inputs were placed, it would still have replaced the
+    caller's file."""
+    from kingfisher import TurnIdError
+
+    an_agent(scripted)
+    kf = Kingfisher(scripted, sessions=LocalSessions())
+    session = start(scripted, "s")
+    folder = scripted.workspace / "sessions" / session
+    Scripted.script.append(AIMessage("first"))
+    kf.run(Request("go", agent="only", session_id=session, turn_id="req-77"))
+    kept = {path: path.read_bytes() for path in (folder / ".harness").iterdir()}
+    (tmp_path / "data.csv").write_text("new", encoding="utf-8")
+
+    with pytest.raises(TurnIdError, match="req-77"):
+        kf.run(
+            Request(
+                "again",
+                agent="only",
+                session_id=session,
+                turn_id="req-77",
+                inputs=(tmp_path / "data.csv",),
+            )
+        )
+
+    assert {path: path.read_bytes() for path in (folder / ".harness").iterdir()} == kept
+    assert not (folder / "inputs" / "data.csv").exists()
+    # The control: the same request under an id of its own runs.
+    Scripted.script.append(AIMessage("second"))
+    again = kf.run(Request("again", agent="only", session_id=session, turn_id="req-78"))
+    assert again.answer == "second"
+
+
 def test_a_caller_naming_one_file_twice_catches_it_by_the_front_door_name(cfg, tmp_path):
     """`InputsError` was filed as the deployment's and not exported, so a library caller
     could catch two `Request.inputs` of one filename only as `ValueError`, beside any bug."""

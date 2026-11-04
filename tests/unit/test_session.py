@@ -17,9 +17,9 @@ UNNAMABLE = ("", ".", "..", ".hidden", ".harness", "../../escaped", "/etc", "a/b
 def test_a_callers_own_turn_id_wins():
     """A service passes its own request id so it can tie a run back to the request.
 
-    What this no longer promises is de-duplication on a retry. That was `ensure` on
-    the same per-turn directory, and the directory went with `/runs`: two runs under
-    one id are now two runs, and a caller wanting one has to not ask twice.
+    What this does not promise is de-duplication on a retry. That was `ensure` on the
+    same per-turn directory, and the directory went with `/runs`. A session refuses an
+    id it already holds, so a retry under the same id is refused, not run twice.
     """
     session = Conversation(id="sess")
 
@@ -29,12 +29,24 @@ def test_a_callers_own_turn_id_wins():
 def test_two_turns_are_told_apart():
     """The id used to come from counting directories, which made a listing the
     counter and started a restored session again at `t001`. Nothing reads the
-    sequence -- it reaches a printed line, the run log and the result, and none of
-    them compares two -- so what is left to hold is only that they differ.
+    sequence, so what is left to hold is only that they differ.
     """
     session = Conversation(id="sess")
 
     assert session.allocate_turn().id != session.allocate_turn().id
+
+
+def test_a_made_id_the_session_already_holds_is_drawn_again(monkeypatch):
+    """Eight hex digits repeat over enough turns, and a made id the session already
+    held gave it two turns the ledger could not tell apart."""
+    from types import SimpleNamespace
+
+    from kingfisher.core.session import model
+
+    draws = iter(["deadbeef" + "0" * 24, "cafef00d" + "0" * 24])
+    monkeypatch.setattr(model, "uuid4", lambda: SimpleNamespace(hex=next(draws)))
+
+    assert Conversation(id="sess").allocate_turn(taken={"tdeadbeef"}).id == "tcafef00d"
 
 
 def test_a_session_directory_is_the_default_backends_root(workspace):

@@ -2067,6 +2067,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         "QuotaExceededError": "embedder",
         "SessionBusyError": "embedder",
         "SubagentError": "embedder",
+        "TurnIdError": "embedder",
         "UnknownSessionError": "embedder",
         # What `Session.artifact` raises for a name that is not an artifact, which a
         # caller fetching by a name it was handed tells apart from a session it cannot
@@ -3744,7 +3745,7 @@ def test_every_record_this_package_hands_out_is_frozen():
 CALLER_FACING_ERRORS = frozenset({
     "ArtifactError", "CallerError", "CapabilityError", "DecisionError", "InputsError",
     "MemoryEntryError", "QuotaExceededError", "ResultError", "SessionBusyError",
-    "SubagentError", "UnknownSessionError",
+    "SubagentError", "TurnIdError", "UnknownSessionError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.

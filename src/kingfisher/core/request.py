@@ -38,6 +38,7 @@ class Request:
     #: defaulted: the agent decides where every prompt goes and what it costs.
     agent: str | None = None
     session_id: str | None = None
+    #: The caller's own name for this turn. One its session already holds is refused.
     turn_id: str | None = None
     inputs: tuple[Path, ...] = ()
     capabilities: Capabilities = field(default_factory=Capabilities)
@@ -100,6 +101,7 @@ class Resume:
     session_id: str
     decisions: tuple[Decision, ...] = ()
     agent: str | None = None
+    #: As on `Request`: one its session already holds is refused.
     turn_id: str | None = None
     capabilities: Capabilities = field(default_factory=Capabilities)
     run_on: Mapping[str, RunOn] = field(default_factory=dict)
