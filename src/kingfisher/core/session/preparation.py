@@ -72,6 +72,7 @@ from .turn import (
     not_offered,
     turn_message,
 )
+from .turnlog import resuming
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -478,6 +479,13 @@ class Preparation:
             # `isinstance`, not a duck test on `.graph`, which would accept anything
             # carrying one.
             graph = built.graph if isinstance(built, Assembled) else built
+            # Now, before the resume runs on it and moves the state past the pause.
+            config = {"configurable": {"thread_id": session.id}}
+            answering = (
+                resuming(graph, config, saver, request.decisions)
+                if isinstance(request, Resume) and resume is not None
+                else None
+            )
             # Tools are read off the graph, the only honest answer to what was offered;
             # skills and subagents are asked of the functions `build_agent` asked.
             withheld = withheld_by_kind(
@@ -526,6 +534,7 @@ class Preparation:
             context=built.context if isinstance(built, Assembled) else None,
             granted=built.granted if isinstance(built, Assembled) else None,
             resume=resume,
+            resuming=answering,
             discarded=discarded,
             agent_name=agent.name if agent is not None else None,
             built_from=built_from(catalogue, agent)
@@ -548,7 +557,7 @@ class Preparation:
             if isinstance(built, Assembled)
             else None,
             config={
-                "configurable": {"thread_id": session.id},
+                **config,
                 "callbacks": [logger],
                 "recursion_limit": cfg.recursion_limit,
             },

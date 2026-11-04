@@ -24,9 +24,10 @@ from .model_reply import NOT_RUN
 from .recorded import (
     STAMP_PATTERN,
     arguments,
+    expired_handle,
     filed_at,
     kept_text,
-    stamp,
+    row_handle,
     stamped_id,
 )
 
@@ -453,6 +454,9 @@ class ResultClearingMiddleware(AgentMiddleware):
                 return None
             path = filed_at(self._route, row.id, row.tool, content)
             filing = (row.id, path, content)
+        if row.expired_in is not None and shown:
+            # The log keeps the same words for it, so they are written in one place.
+            return expired_handle(row), None
         again = f"call {row.tool} again to see it" if shown else f"call {row.tool} again for less"
         if row.expired_in is not None:
             where = f"expired, {again}"
@@ -463,7 +467,7 @@ class ResultClearingMiddleware(AgentMiddleware):
         else:
             return None
         cleared = "cleared;" if shown else f"cleared{UNSHOWN}:"
-        return f"{row.summary}\n({row.size:,} bytes, {cleared} {where}){stamp(row.id)}", filing
+        return row_handle(row, where, cleared=cleared), filing
 
 
 def _handed(cleared: _Pass, kept: frozenset[str]) -> tuple[Any, Command[Any] | None]:

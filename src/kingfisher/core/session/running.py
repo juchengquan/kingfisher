@@ -62,6 +62,7 @@ from .turn import (
     out_of_tokens,
     overrun,
 )
+from .turnlog import keep_turns
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -264,6 +265,17 @@ class Running:
         """Write what was said this turn, as records this package owns."""
         written = self._transcript_of(snapshot)
         if written:
+            # After the ledger and before the transcript: a write dying between leaves the
+            # transcript short of the ledger's count, which the next turn reports.
+            yield from keep_turns(
+                prepared.harness,
+                turn=prepared.turn.id,
+                task=prepared.task,
+                history=prepared.history,
+                resumed=prepared.resuming,
+                snapshot=snapshot,
+                ledger=prepared.ledger.earlier if prepared.ledger is not None else None,
+            )
             yield from write_transcript(prepared.harness, written)
             # Only with the message saying so: kept by a turn the agent never heard from,
             # what changed before it would never be said.

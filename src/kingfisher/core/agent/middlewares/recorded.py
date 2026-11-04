@@ -6,9 +6,12 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.session.store import ENTRY_ID
+
+if TYPE_CHECKING:
+    from kingfisher.core.result import LedgerEntry
 
 #: How much of one argument, and of a result's first line, a row keeps.
 ARG_LIMIT = 60
@@ -101,6 +104,17 @@ def stamped_id(text: str) -> str | None:
     """The id `text` ends in, or `None` where it ends in none."""
     found = _ENDING.search(text)
     return None if found is None else found.group("id")
+
+
+def row_handle(row: LedgerEntry, where: str, *, cleared: str = "cleared;") -> str:
+    """A recorded result as a handle in place of its text: its row's summary and size,
+    then `where` its whole text is now."""
+    return f"{row.summary}\n({row.size:,} bytes, {cleared} {where}){stamp(row.id)}"
+
+
+def expired_handle(row: LedgerEntry) -> str:
+    """What an expired result reads as once its text is gone from the conversation."""
+    return row_handle(row, f"expired, call {row.tool} again to see it")
 
 
 def kept_text(text: str, number: str, size: int) -> bytes | None:

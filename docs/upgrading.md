@@ -18,6 +18,22 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session keeps every turn's messages in `.harness/turns.jsonl`, after #1195
+
+- **Each turn that writes the conversation adds its messages to `.harness/turns.jsonl`**,
+  as first written and tagged with the turn, which a summary no longer takes away. Nothing
+  uses it yet: it is what rewinding a session will rebuild from. What the model is sent,
+  `RunResult` and the transcript are unchanged.
+- **A session holds more**, since the file keeps every word said, tool results included,
+  and it counts against `KINGFISHER_SESSION_MAX_BYTES`. A session near its cap reaches it
+  sooner. `KINGFISHER_KEEP_RESULTS_ROUNDS` swaps an expired result there for the handle
+  the agent is shown for it.
+- **A `Sessions` plugin's backend is asked for one more file a turn**: a download and an
+  upload of the whole file, which grows with the session. Keep the agent's shell out of
+  it as out of the rest of `/.harness`; `shell_denied` already checks the folder.
+- **Sessions from before need nothing.** The first turn on this version copies in the
+  conversation they hold.
+
 ## A turn id a session already holds is refused, after #1194
 
 `Request.turn_id` and `Resume.turn_id` must be unique within their session. A request
