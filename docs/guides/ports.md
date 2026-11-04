@@ -898,9 +898,9 @@ session that is not there makes it, empty and without a word, so a caller contin
 one that may have been swept asks `kf.session(session_id)` first: it answers `None`,
 and makes nothing, for a session that is gone.
 
-**And what it keeps about the session, under `/.harness`.** Its conversation, its
-inputs folder as the last turn found it, and a turn paused at an approval gate are all
-written
+**And what it keeps about the session, under `/.harness`.** Its conversation, every
+turn's messages as first written, its inputs folder as the last turn found it, and a
+turn paused at an approval gate are all written
 and read through your backend — which means your agent's shell can reach them too,
 unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own conversation is that fence, and it is yours to get

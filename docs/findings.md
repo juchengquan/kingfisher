@@ -444,6 +444,15 @@ for the next reader who reaches for one.*
   `test_once_a_turn_summarised_the_next_message_carries_the_index_and_not_the_delta`
   holds it.
   *(2026-10-12, deepagents 0.7.6; the budget 2026-10-13, deepagents 0.7.22.)*
+- **Its event holds the last summary alone, its cut counted from the first message held.**
+  Each summary replaces `_summarization_event`. A second one, in the same turn or in a
+  resume whose restored state carries the first, cuts within the summary and tail it was
+  shown and stores `prior_cutoff + effective_cutoff - 1`, an index into every message in
+  `messages`; it compacts only for an effective cutoff above zero, so the new cut is never
+  before the old. The summary message is in the event only, never in `messages`. A resume
+  that does not summarise ends on the event it restored, unchanged.
+  `test_the_log_rebuilds_the_conversation_across_summaries_pauses_and_resumes` drives all
+  three. *(2026-11-04, deepagents 0.7.22.)*
 - **A PDF reaches the model whole, and is counted at a quarter of its base64.**
   `read_file` returns a PDF as one `file` block whatever `offset` and `limit` say:
   `FilesystemBackend.read` base64-encodes the whole file for any extension in its
@@ -524,6 +533,14 @@ for the next reader who reaches for one.*
   gate, so a helper ran a gated `write_file` unpaused until each spec carried its own.
   A pause raised two levels down resumes from the agent's checkpoint, approved or
   rejected. *(2026-10-20, deepagents 0.7.22.)*
+- **A gate names no call by id.** `HumanInTheLoopMiddleware.after_model` makes one
+  `ActionRequest` -- name, arguments, description -- for each gated call of the last
+  `AIMessage`, in `tool_calls` order, skipping the calls it does not gate, and reads the
+  answers back by position. A subagent's pause arrives on the parent's `tools` task, and
+  the subagent's reply is in no state `get_state` reaches, `subgraphs=True` included; its
+  graph checkpoints in the turn's saver under the namespace `tools:<task id>`, where
+  `get_tuple` reads it. `test_a_subagents_answer_names_the_subagents_own_call` drives it.
+  *(2026-11-04, langchain 1.4.5, langgraph 1.2.15.)*
 
 - **deepagents reads a skills source one level deep.** One root source finds nothing in a
   nested layout; three folder sources find all nine. Four directories each holding a skill of

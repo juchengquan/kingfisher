@@ -41,32 +41,45 @@ class Message:
     summary: bool = False
 
 
+def as_record(message: Message) -> dict[str, Any]:
+    """One message as a line of the transcript holds it, every empty field left out."""
+    return {
+        "role": message.role,
+        **({"content": message.content} if message.content else {}),
+        **(
+            {
+                "tool_calls": [
+                    {"name": call.name, "args": call.args, "id": call.id}
+                    for call in message.tool_calls
+                ]
+            }
+            if message.tool_calls
+            else {}
+        ),
+        **({"call_id": message.call_id} if message.call_id else {}),
+        **({"name": message.name} if message.name else {}),
+        **({"summary": True} if message.summary else {}),
+    }
+
+
+def from_record(raw: Any) -> Message:
+    """What `as_record` wrote, read back. `KeyError` or `TypeError` where it is not one."""
+    return Message(
+        role=raw["role"],
+        content=raw.get("content", ""),
+        tool_calls=tuple(
+            ToolCall(name=call["name"], args=call.get("args", {}), id=call.get("id", ""))
+            for call in raw.get("tool_calls", ())
+        ),
+        call_id=raw.get("call_id", ""),
+        name=raw.get("name", ""),
+        summary=bool(raw.get("summary", False)),
+    )
+
+
 def as_json(messages: tuple[Message, ...]) -> str:
     """The transcript as one JSON object per line."""
-    return "".join(
-        json.dumps(
-            {
-                "role": message.role,
-                **({"content": message.content} if message.content else {}),
-                **(
-                    {
-                        "tool_calls": [
-                            {"name": call.name, "args": call.args, "id": call.id}
-                            for call in message.tool_calls
-                        ]
-                    }
-                    if message.tool_calls
-                    else {}
-                ),
-                **({"call_id": message.call_id} if message.call_id else {}),
-                **({"name": message.name} if message.name else {}),
-                **({"summary": True} if message.summary else {}),
-            },
-            sort_keys=True,
-        )
-        + "\n"
-        for message in messages
-    )
+    return "".join(json.dumps(as_record(message), sort_keys=True) + "\n" for message in messages)
 
 
 def from_json(document: str) -> tuple[Message, ...]:
@@ -80,18 +93,7 @@ def from_json(document: str) -> tuple[Message, ...]:
         if not line.strip():
             continue
         try:
-            raw = json.loads(line)
-            message = Message(
-                role=raw["role"],
-                content=raw.get("content", ""),
-                tool_calls=tuple(
-                    ToolCall(name=call["name"], args=call.get("args", {}), id=call.get("id", ""))
-                    for call in raw.get("tool_calls", ())
-                ),
-                call_id=raw.get("call_id", ""),
-                name=raw.get("name", ""),
-                summary=bool(raw.get("summary", False)),
-            )
+            message = from_record(json.loads(line))
         except (ValueError, KeyError, TypeError):
             break
         read.append(message)

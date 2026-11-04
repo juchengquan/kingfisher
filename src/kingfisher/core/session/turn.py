@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from .files import InputsChanged
     from .store import KeptLedger
     from .transcript import Message
+    from .turnlog import Resuming
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,9 @@ class Prepared:
     #: Answers to a turn that stopped for them, in langgraph's shape, or `None`. Never
     #: beside a message: a resume continues a graph mid-superstep.
     resume: dict[str, Any] | None = None
+    #: What the pause a resume answers left, read before the resume changes it; `None`
+    #: for an asked turn.
+    resuming: Resuming | None = None
     #: The agent this turn's graph was built from, by name, or `None` where none was
     #: resolved. Written beside a pause, so a resume naming a different agent can be refused.
     agent_name: str | None = None

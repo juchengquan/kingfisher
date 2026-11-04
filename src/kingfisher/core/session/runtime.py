@@ -640,6 +640,25 @@ def summarised_in(snapshot: Any) -> bool:
     return isinstance(values, Mapping) and values.get(SUMMARY_EVENT) is not None
 
 
+def held_in(snapshot: Any) -> list[Any]:
+    """Every message the state holds, those a summary stands for included."""
+    values = getattr(snapshot, "values", None)
+    return list(values.get("messages") or ()) if isinstance(values, Mapping) else []
+
+
+def summary_in(snapshot: Any) -> tuple[Any, int] | None:
+    """The summary deepagents last wrote and where it cut `held_in`, or `None`.
+
+    Only the last: a second summary in one turn replaces the first, its cut still counted
+    from the start of every message held.
+    """
+    values = getattr(snapshot, "values", None)
+    event = values.get(SUMMARY_EVENT) if isinstance(values, Mapping) else None
+    if not isinstance(event, Mapping):
+        return None
+    return event["summary_message"], event["cutoff_index"]
+
+
 #: The graph node a subagent's pause arrives on: it stopped inside the tool call that
 #: runs it, so the task belongs to the tool node rather than to any gate.
 TOOLS_NODE = "tools"
@@ -679,6 +698,73 @@ def pending_in(snapshot: Any) -> tuple[PendingDecision, ...]:
                     )
                 )
     return tuple(found)
+
+
+def calls_paused(snapshot: Any, saver: Any) -> dict[str, str]:
+    """The provider's id of each gated call a paused turn is waiting on, by the id
+    `pending_in` gives it; a call that cannot be found is left out."""
+    found: dict[str, str] = {}
+    for task in getattr(snapshot, "tasks", ()) or ():
+        for pause in getattr(task, "interrupts", ()) or ():
+            value = pause.value
+            if not isinstance(value, dict):
+                continue
+            requests = list(value.get("action_requests") or ())
+            for index, call in enumerate(_asked_about(requests, task, snapshot, saver)):
+                if call:
+                    found[f"{pause.id}{CALL_SEPARATOR}{index}"] = call
+    return found
+
+
+def _asked_about(
+    requests: Sequence[Any], task: Any, snapshot: Any, saver: Any
+) -> list[str | None]:
+    """The id of each call `requests` asks about, read off the message the gate stopped.
+
+    A subagent's message is in no state the snapshot reaches: its own graph keeps it
+    under a namespace of the tool task that runs it, a helper's one segment below that.
+    """
+    if getattr(task, "name", "") != TOOLS_NODE:
+        return _gated_calls(requests, held_in(snapshot))
+    thread = ((getattr(snapshot, "config", None) or {}).get("configurable") or {}).get(
+        "thread_id"
+    )
+    root = f"{task.name}:{task.id}"
+    spaces = getattr(saver, "storage", {}).get(thread, {})
+    # The deepest first: a helper's own stop surfaces on the task of the subagent above it.
+    for space in sorted((s for s in spaces if s == root or s.startswith(f"{root}|")), key=len,
+                        reverse=True):
+        kept = saver.get_tuple({"configurable": {"thread_id": thread, "checkpoint_ns": space}})
+        held = kept.checkpoint["channel_values"].get("messages") if kept else None
+        if all(found := _gated_calls(requests, held or ())):
+            return found
+    return [None] * len(requests)
+
+
+def _gated_calls(requests: Sequence[Any], messages: Sequence[Any]) -> list[str | None]:
+    """Each request matched to a call of the last reply in `messages`, by position.
+
+    `HumanInTheLoopMiddleware` asks about that reply's calls in the order the model wrote
+    them, skipping those it does not gate, and names none by id; so each is matched to the
+    next call with its name and arguments.
+    """
+    reply = next((one for one in reversed(messages) if isinstance(one, AIMessage)), None)
+    calls = list(reply.tool_calls) if reply is not None else []
+    found: list[str | None] = []
+    at = 0
+    for request in requests:
+        match = next(
+            (
+                index
+                for index in range(at, len(calls))
+                if calls[index]["name"] == request.get("name")
+                and calls[index].get("args") == request.get("args")
+            ),
+            None,
+        )
+        found.append(calls[match].get("id") if match is not None else None)
+        at = at if match is None else match + 1
+    return found
 
 
 def _subagent_behind(task: Any, snapshot: Any) -> str | None:
