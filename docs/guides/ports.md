@@ -263,9 +263,12 @@ kingfisher = Kingfisher(cfg, sessions=LocalSessions(), run_events=ShipToCollecto
 
 Each event is a flat mapping. `event` names it — `run_start`, `run_end`,
 `model_call`, `tool_start`, `tool_end`, `tool_error`, `model_error` — and `ts`,
-`session_id`, `turn_id`, `model` and `endpoint` ride on every one — on `model_call`
-and `model_error` the last two are the model that made the call, a subagent's own
-where it runs one, and elsewhere the main agent's. `model_call` carries `input_tokens`,
+`session_id`, `turn_id`, `turn_agent`, `model` and `endpoint` ride on every one — on
+`model_call` and `model_error` the last two are the model that made the call, a
+subagent's own where it runs one, and elsewhere the main agent's. `turn_agent` is the
+agent the turn's request named, which in one session may differ from turn to turn. It is
+`null` only on a graph you supplied with `graph=` where nothing is locked, which runs no
+agent from the definitions. `model_call` carries `input_tokens`,
 `output_tokens` and `cache_read`, which is what a bill is totalled from, and `cut_off`,
 true for a reply that stopped at the model's output cap.
 
@@ -277,7 +280,10 @@ writes it, so every `run_start` has one.
 
 Every model and tool event says where it came from, in the stream's words: `agent` is
 the subagent that made it, `null` for the agent the caller asked, and `delegations` the
-`task` calls it came from inside, outermost first, each by its call's id. A subagent a
+`task` calls it came from inside, outermost first, each by its call's id. So a call a
+subagent `reviewer` makes in a turn of `planner` carries `agent: "reviewer"` and
+`turn_agent: "planner"`, and `planner`'s own carry `agent: null` and the same
+`turn_agent`. A subagent a
 program starts with `task()` came from inside the `eval` call and the dispatch, as
 `["e1", "ptc_task_…"]`. Two runs of one subagent at once share an `agent` and differ
 in `delegations`. `tool_start`,

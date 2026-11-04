@@ -47,7 +47,9 @@ from tests.unit.test_subagent_helpers import HELPER, REVIEWER, _define
 
 
 def _logger(sink) -> RunLogger:
-    return RunLogger(sink, model="m", endpoint="gateway", session_id="s", turn_id="t1")
+    return RunLogger(
+        sink, model="m", endpoint="gateway", session_id="s", turn_id="t1", turn_agent="a"
+    )
 
 
 def _reply(**usage):
@@ -194,11 +196,46 @@ def test_a_subagents_calls_name_the_model_it_runs(scripted):
     ]
 
 
+def test_every_event_names_the_agent_its_turn_ran(scripted):
+    """No event said which agent a turn ran, so once a session could run another agent
+    each turn its record could not tell one agent's turns, or their subagents' calls, apart."""
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "helper.yaml").write_text(
+        "name: helper\ndescription: Helps.\nsystem_prompt: |\n  You help.\n", encoding="utf-8"
+    )
+    an_agent(scripted, "delegating", subagents="[helper]", builtin_tools="[task]")
+    an_agent(scripted, "plain")
+    start(scripted, "s")
+    asked = {"description": "go", "subagent_type": "helper"}
+    Scripted.script.extend([
+        AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}]),
+        AIMessage("helped"),
+        AIMessage("done"),
+        AIMessage("done again"),
+    ])
+    sink = RecordedEvents()
+    kf = Kingfisher(scripted, sessions=LocalSessions(), run_events=sink)
+
+    first = kf.run(Request("t", agent="delegating", session_id="s"))
+    second = kf.run(Request("t", agent="plain", session_id="s"))
+
+    assert {(e["turn_id"], e["turn_agent"]) for e in sink.events} == {
+        (first.turn_id, "delegating"),
+        (second.turn_id, "plain"),
+    }
+    assert [(e["agent"], e["turn_agent"]) for e in sink.named("model_call")] == [
+        (None, "delegating"),
+        ("helper", "delegating"),
+        (None, "delegating"),
+        (None, "plain"),
+    ]
+
+
 def test_a_failed_call_names_the_model_that_made_it():
     """`model_error` is the other event a call ends in, and kept the turn's stamp."""
     sink = RecordedEvents()
     logger = RunLogger(
-        sink, model="m", endpoint="gateway", session_id="s", turn_id="t1",
+        sink, model="m", endpoint="gateway", session_id="s", turn_id="t1", turn_agent="a",
         endpoints={"m": "gateway", "other": "elsewhere"},
     )
 
@@ -214,7 +251,7 @@ def test_a_call_on_a_model_the_catalogue_does_not_hold_keeps_the_turns_stamp():
     that model at endpoint "", half a stamp no route or price can be read from."""
     sink = RecordedEvents()
     logger = RunLogger(
-        sink, model="m", endpoint="gateway", session_id="s", turn_id="t1",
+        sink, model="m", endpoint="gateway", session_id="s", turn_id="t1", turn_agent="a",
         endpoints={"m": "gateway"},
     )
 

@@ -517,6 +517,9 @@ class Preparation:
                 endpoint=running.endpoint,
                 session_id=session.id,
                 turn_id=turn.id,
+                # Not `request.agent`, which on a supplied graph where nothing is locked is
+                # checked by nothing and names no agent that runs.
+                turn_agent=agent.name if agent is not None else None,
                 endpoints={name: p.endpoint for name, p in cfg.models.models.items()},
             )
         except BaseException:

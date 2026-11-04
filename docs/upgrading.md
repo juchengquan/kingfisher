@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Every run event names the agent its turn ran, after #1197
+
+- **Every event a `RunEvents` sink is handed carries `turn_agent`**, `run_start` and
+  `run_end` included: the agent the turn's request named, which since #1191 may differ
+  from one turn of a session to the next. `agent` keeps its meaning, the subagent that
+  made a model or tool call and `null` for the turn's own agent, so a subagent's call
+  carries both. It is a new key, so a sink reading the keys it knows is unchanged.
+- **It is `null` on a graph you supplied with `graph=` where nothing is locked**, which
+  runs no agent from the definitions, whatever the request named.
+- **Code that builds a `RunLogger` itself passes `turn_agent=`.**
+
 ## A session keeps a copy of each file a turn left, after #1196
 
 - **Every turn copies each file in `/outputs` and `/memory` that changed since the last
