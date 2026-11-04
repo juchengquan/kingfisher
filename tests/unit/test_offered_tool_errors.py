@@ -370,7 +370,9 @@ def test_a_converted_failure_still_reaches_the_run_log(cfg, session_dir):
         {"messages": [{"role": "user", "content": "go"}]},
         config={
             "callbacks": [
-                RunLogger(sink, model="m", endpoint="e", session_id="s", turn_id="t")
+                RunLogger(
+                    sink, model="m", endpoint="e", session_id="s", turn_id="t", turn_agent="a"
+                )
             ]
         },
     )

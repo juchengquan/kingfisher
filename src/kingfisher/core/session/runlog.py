@@ -78,7 +78,7 @@ class LoggedRunEvents(RunEvents):
 class RunLogger(BaseCallbackHandler):
     """Turns one turn's model and tool callbacks into events for a `RunEvents`."""
 
-    def __init__(  # noqa: PLR0913 -- the stamp's four fields, and where each model runs
+    def __init__(  # noqa: PLR0913 -- the stamp's five fields, and where each model runs
         self,
         sink: Any,
         *,
@@ -86,12 +86,16 @@ class RunLogger(BaseCallbackHandler):
         endpoint: str,
         session_id: str,
         turn_id: str,
+        turn_agent: str | None,
         endpoints: Mapping[str, str] | None = None,
     ) -> None:
         self._sink = sink
         self._stamp = {
             "session_id": session_id,
             "turn_id": turn_id,
+            # Not folded into `agent`, which is `None` for the turn's own agent so that a
+            # subagent's calls stand out: this names that agent, on every event.
+            "turn_agent": turn_agent,
             "model": model,
             "endpoint": endpoint,
         }
