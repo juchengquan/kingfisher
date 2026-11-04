@@ -18,7 +18,7 @@ from kingfisher.core.agent.prompting import FILE_TOOLS, WRITE_TODOS
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.result import MAIN, WORKING, LedgerEntry, Listed
 
-from .recorded import arguments, filed_at, stamp, summary
+from .recorded import arguments, filed_at, stamp, summary, unfiled
 from .results import answer_in, answered
 
 if TYPE_CHECKING:
@@ -334,9 +334,9 @@ class RecorderMiddleware(AgentMiddleware):
         that was never written.
         """
         if isinstance(answers, Exception):
-            why = f"{type(answers).__name__}: {answers}"
+            why = unfiled(answers)
         elif answers and answers[0].error:
-            why = str(answers[0].error)
+            why = unfiled(answers[0])
         else:
             return entry
         _log.warning(

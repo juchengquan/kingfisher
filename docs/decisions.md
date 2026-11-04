@@ -5293,6 +5293,19 @@ a turn ran, which a backend cannot do, and most wanted for the turn that crashed
 to the `kingfisher.run` logger or a sink the deployment passes, carrying `session_id` and
 `turn_id`.
 
+**Logs carry a turn's status, never its content.** Neither the run events nor
+kingfisher's warnings hold what a caller sent, what a tool was handed or returned, or
+what a model wrote: a task, a tool's input and its answer are their lengths, and a
+failure is its type and where it was raised. Never its message, which is content as
+well: measured, a tool called with a bad argument raises a `ValidationError` quoting
+the argument the model sent, and a `FileNotFoundError` names the path. A backend's
+refusal keeps deepagents' code and loses any other words. Logs reach whoever reads the
+deployment's logs and are kept on its terms, not the session's. The cost is a plugin's
+traceback: one that raises is logged by type and place, and its author logs the rest.
+What a turn reports to its caller is not a log, so `memory_store_failed` keeps the
+message. **The definitions keep theirs**: a refused change to them is logged as refused,
+because the operator wrote them and is the one reading. *(2026-11-04.)*
+
 **Still local, on purpose**: `LocalSessions`' confinement, because confining a shell means
 something only on the host that runs it; and a supplied runner, built from
 `<workspace>/sessions/<id>`, because a runner is about where commands run on this host.

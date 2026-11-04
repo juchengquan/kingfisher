@@ -12,8 +12,10 @@ from typing import Any
 from langchain_core.callbacks import BaseCallbackHandler
 from langgraph.errors import GraphInterrupt
 
+from kingfisher.core.agent.middlewares.results import answer_in
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.interfaces import RunEvents
+from kingfisher.core.logged import raised
 
 from . import runtime
 
@@ -76,7 +78,12 @@ class LoggedRunEvents(RunEvents):
 
 
 class RunLogger(BaseCallbackHandler):
-    """Turns one turn's model and tool callbacks into events for a `RunEvents`."""
+    """Turns one turn's model and tool callbacks into events for a `RunEvents`.
+
+    An event carries sizes, names, ids and an error's type, never what was asked, what a
+    tool was handed or answered, or an error's message: a deployment's logs reach people
+    the caller never sent any of it to.
+    """
 
     def __init__(  # noqa: PLR0913 -- the stamp's five fields, and where each model runs
         self,
@@ -111,9 +118,11 @@ class RunLogger(BaseCallbackHandler):
     def _write(self, event: str, **fields: Any) -> None:
         try:
             self._sink.record({"ts": time.time(), "event": event, **self._stamp, **fields})
-        except Exception:  # noqa: BLE001 -- a turn outlives a failing sink: `run_start`
+        except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing sink: `run_start`
             # and `run_end` are called outside langchain's guard around callbacks.
-            _log.warning("a RunEvents sink failed to record %r", event, exc_info=True)
+            _log.warning(
+                "a RunEvents sink failed to record %r: it raised %s at %s", event, *raised(exc)
+            )
 
     def _where(self, namespace: list[str], metadata: Mapping[str, Any]) -> dict[str, Any]:
         """Which agent a callback came from, and inside which delegations, as the stream
@@ -128,8 +137,9 @@ class RunLogger(BaseCallbackHandler):
             ],
         }
 
-    def run_start(self, task: str) -> None:
-        self._write("run_start", task=task)
+    def run_start(self, task: str, *, decisions: int | None = None) -> None:
+        """`decisions` is how many a resume answers, which asks no task."""
+        self._write("run_start", task_chars=len(task), decisions=decisions)
 
     def run_end(self, *, ok: bool, answer_chars: int, stop_reason: str | None) -> None:
         self._write("run_end", ok=ok, answer_chars=answer_chars, stop_reason=stop_reason)
@@ -187,10 +197,11 @@ class RunLogger(BaseCallbackHandler):
             self._delegations.entered(node.partition(":")[2], tool_call_id)
         held = {"tool": name, "call": tool_call_id or None, **self._where(namespace, found)}
         self._tools[run_id] = held
-        self._write("tool_start", **held, input_preview=str(input_str)[:400])
+        self._write("tool_start", **held, input_chars=len(str(input_str)))
 
     def on_tool_end(self, output: Any, *, run_id: Any = None, **_: Any) -> None:
-        self._write("tool_end", **self._tools.pop(run_id, {}), output_preview=str(output)[:400])
+        held = self._tools.pop(run_id, {})
+        self._write("tool_end", **held, output_chars=_answer_chars(output, held.get("call")))
 
     def on_tool_error(self, error: BaseException, *, run_id: Any = None, **_: Any) -> None:
         held = self._tools.pop(run_id, {})
@@ -198,13 +209,17 @@ class RunLogger(BaseCallbackHandler):
         # the call is left started, and the turn that resumes it starts it again.
         if isinstance(error, GraphInterrupt):
             return
-        self._write("tool_error", **held, error=f"{type(error).__name__}: {error}")
+        kind, at = raised(error)
+        self._write("tool_error", **held, error_type=kind, error_at=at)
 
     def on_llm_error(self, error: BaseException, *, run_id: Any = None, **_: Any) -> None:
+        kind, at = raised(error)
         self._write(
             "model_error",
             **self._calls.pop(run_id, {}),
-            error=f"{type(error).__name__}: {error}",
+            error_type=kind,
+            error_at=at,
+            status_code=_status_code(error),
         )
 
 
@@ -212,6 +227,30 @@ def _segments(metadata: Mapping[str, Any]) -> list[str]:
     """The node a callback ran in, after each graph it passed through: the segments
     before the last are the namespace the stream gives the same work."""
     return str(metadata.get(CHECKPOINT_NS) or "").split("|")
+
+
+def _answer_chars(output: Any, call: str | None) -> int | None:
+    """How long a tool's answer is as the model reads it, attachments left out as the
+    recorder leaves them; `None` where it holds no message for the call.
+
+    Not `str(output)`: a `ToolMessage` stringifies to its repr.
+    """
+    if isinstance(output, str):
+        return len(output)
+    answer = answer_in(output, call)
+    return None if answer is None else len(answer.text)
+
+
+def _status_code(error: BaseException) -> int | None:
+    """The provider's HTTP status: on the error, as the SDKs' errors carry it, or on its
+    response, as `httpx`'s does."""
+    for status in (
+        getattr(error, "status_code", None),
+        getattr(getattr(error, "response", None), "status_code", None),
+    ):
+        if isinstance(status, int):
+            return status
+    return None
 
 
 def _first_message(response: Any) -> Any:

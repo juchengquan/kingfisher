@@ -21,6 +21,7 @@ from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import NoScratchRunLimit
 from kingfisher.core.layout import Layout
+from kingfisher.core.logged import raised
 
 from .attachments import AttachmentsMiddleware
 from .builtin_tools import BuiltinToolsMiddleware, longest_command
@@ -67,10 +68,10 @@ def _limit_answer(limit: ScratchRunLimit, name: str, kind: Kind) -> tuple[bool, 
     except Exception as error:  # noqa: BLE001 -- a plugin's bug costs this graph its
         # runs, never the turn, and never grants one.
         _log.warning(
-            "the scratch run limit raised on %s %r; its tools are refused a run",
+            "the scratch run limit raised %s at %s on %s %r; its tools are refused a run",
+            *raised(error),
             kind,
             name,
-            exc_info=True,
         )
         return False, (
             f"refused: this deployment's ScratchRunLimit raised {type(error).__name__}: {error}"

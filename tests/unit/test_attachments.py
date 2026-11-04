@@ -792,7 +792,8 @@ def test_a_plugin_that_raises_leaves_kingfishers_verdict(cfg, session_dir, caplo
 
     assert _files([_answer(model, "c1")]), "the PDF that passes was not handed over"
     assert _answer(model, "c2").text.startswith("/inputs/big.pdf is a 300 KB PDF, too large")
-    assert caplog.text.count("the PDF attachments plugin raised on read_file's result") == 2
+    said = "the PDF attachments plugin raised RuntimeError at "
+    assert caplog.text.count(said) == caplog.text.count("in raising on read_file's result") == 2
 
 
 def test_every_graph_kingfisher_builds_asks_the_deployments_plugin(scripted):

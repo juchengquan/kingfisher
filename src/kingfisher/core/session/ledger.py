@@ -10,7 +10,7 @@ from dataclasses import replace
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.agent.middlewares.recorded import filed_at, kept_text, stamped_id
+from kingfisher.core.agent.middlewares.recorded import filed_at, kept_text, stamped_id, unfiled
 from kingfisher.core.result import ResultError
 
 from .steps import Steps, changing, on_host, reading
@@ -153,10 +153,10 @@ class Ledger:
         failure here is one the model may answer by running it twice.
         """
         failed = (
-            {number: f"{type(answers).__name__}: {answers}" for number, _, _ in wanted}
+            dict.fromkeys((number for number, _, _ in wanted), unfiled(answers))
             if isinstance(answers, BaseException)
             else {
-                number: str(answer.error)
+                number: unfiled(answer)
                 for (number, _, _), answer in zip(wanted, answers, strict=True)
                 if answer.error
             }

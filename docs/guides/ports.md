@@ -295,6 +295,20 @@ A `task` call whose subagent stopped for a decision has a `tool_start` and no en
 the turn that paused. The turn that resumes it writes a `tool_start` for it again, with
 the same `call`, and then its end.
 
+**Events carry sizes and error types, never content** — not what the caller asked,
+what a tool was handed or answered, or what a model wrote. `run_start` carries
+`task_chars`, the task's length, and `decisions`, how many a resume answers, `null` for
+a request. `tool_start` carries `input_chars`, the length of the call's arguments, and
+`tool_end` `output_chars`, the length of the answer's text as the model reads it,
+attachments left out, or `null` for an answer holding no message for the call.
+`tool_error` and `model_error` carry `error_type`, the exception's class, and
+`error_at`, where it was raised, as `folder/file.py:LINE in function`, or `null`; on
+`model_error`, `status_code` is the provider's HTTP status where the error carries one.
+An error's message is left out because it quotes what it was handed: a tool given a
+bad argument raises a `ValidationError` holding the argument the model sent.
+Kingfisher's own warnings keep the same rule, so a plugin of yours that raises is
+logged by its type and where; log its message in the plugin if you want it.
+
 **Wire nothing and they go to the `kingfisher.run` logger**, one JSON line per event
 at `INFO`, with the mapping itself on the record as `run_event` for a handler that
 ships structured logs. Python's default configuration drops `INFO`, so a
@@ -658,11 +672,12 @@ Things to know:
   deployment built itself is never numbered, and never asked about either.
 - **`None` from `key` keeps the session's memory** for that turn, and the turn says so
   with a `memory_unkeyed` event. A request without a user still runs.
-- **An exception never fails the turn.** It is logged with its traceback and reported as
-  `memory_store_failed`, naming the method and the error. From `key`, the turn keeps the
-  session's memory. From `load`, it reads the session's copy, which is what the last turn
-  left, and still hands its changes over at the end. From `apply`, the changes stay in
-  the session's copy only until its next turn reloads the user's memory.
+- **An exception never fails the turn.** It is logged by its type and where it was
+  raised, and reported to the caller as `memory_store_failed`, naming the method and the
+  error with its message. From `key`, the turn keeps the session's memory. From `load`,
+  it reads the session's copy, which is what the last turn left, and still hands its
+  changes over at the end. From `apply`, the changes stay in the session's copy only
+  until its next turn reloads the user's memory.
 - **The agent is told whose memory it is.** With a key, the memory block says the memory
   carries into this user's later conversations; without one, that it lasts for later
   turns of this one. `sent` builds without asking the store, so it shows the second.

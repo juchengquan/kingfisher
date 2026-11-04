@@ -8,6 +8,7 @@ yields missing outputs rather than a read or a write somewhere else.
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import shlex
@@ -75,7 +76,12 @@ class ScratchFolder:
             shutil.rmtree(self.name, dir_fd=self._parent)
         except OSError as left:
             # Swapped for a link or emptied by the command: what is there is the shell's.
-            _LOG.warning("a scratch run's folder %s was left behind: %s", self.path, left)
+            # Logged by its code alone: its text names a file the command made.
+            _LOG.warning(
+                "a scratch run's folder %s was left behind: %s",
+                self.path,
+                errno.errorcode.get(left.errno or 0, type(left).__name__),
+            )
         finally:
             os.close(self._fd)
             os.close(self._parent)
