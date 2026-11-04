@@ -107,7 +107,8 @@ class Session:
 
         A pause waiting on a decision is discarded, as a new request discards it.
         `SessionBusyError` while a turn holds the session, and `RewindError` for a turn
-        the session has no log of.
+        it cannot rebuild: one it never ran, or one from before its turn log that recorded
+        no length or that a summary has since rewritten.
         """
         return drive(self._service._rewind_in(self.id, to, self._opened))
 

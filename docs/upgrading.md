@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A rewind reaches turns from before the turn log, after #1204
+
+- **`Session.rewind` accepts a turn a session ran before it kept a turn log**, back to
+  turns run on a version with #1184. The conversation is the one the session imported
+  when its log began, cut at that turn's length in the ledger, and the turn is then
+  logged and listed by `turns()` with `imported` set.
+- **Refused with `RewindError`** for a turn from before #1184, which recorded no length,
+  and for a turn a summary has followed.
+- **Its files are left as they are**, and the next turn is told they may have changed.
+
 ## Warnings are events on your `RunEvents`, after #1203
 
 - **The structured record's attribute is `kingfisher`, not `run_event`.** Every record the

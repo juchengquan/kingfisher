@@ -273,3 +273,11 @@ def replayed(turns: Logged, path: Sequence[str | None]) -> tuple[Message, ...]:
             cut = line.get(CUT)
             said = [message, *said[cut:]] if isinstance(cut, int) else [*said, message]
     return tuple(said)
+
+
+def add_imported(harness: Any, turn: str | None, messages: Sequence[Message]) -> Steps[None]:
+    """Add `messages` to the log as the conversation `turn`, which ran before it, ended on."""
+    held = yield from harness.fetch(TURNS_FILE)
+    lines = [raw for raw, _ in _read(held)] if held is not None else []
+    lines += [json.dumps(one, ensure_ascii=False) for one in _imported(messages, turn)]
+    yield from harness.store(TURNS_FILE, ("\n".join(lines) + "\n").encode("utf-8"))

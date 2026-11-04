@@ -4443,7 +4443,7 @@ file goes back with the memory file it writes.
 path and before the conversation leaves a turn that follows the turn rewound to reading
 the old transcript, whose length the ledger's count for that turn then disagrees with,
 which the turn reports; the other order would leave it following the old turns from a
-conversation they never had. A turn from before the log is refused. *(2026-11-04.)*
+conversation they never had. *(2026-11-04.)*
 
 **A rewind puts the files in `/outputs` and `/memory` back as the turn left them.** It
 replays the file history along the path to that turn: a version kept is copied back by
@@ -4472,6 +4472,18 @@ once. None after a rewind to the start, whose conversation remembers no file.
 ran, a copy whose file changed on a branch left behind looked superseded, though it is
 the version the path still holds. The parents are read from the turn log only where the
 session has rewound and a budget is set. *(2026-11-04.)*
+
+**A turn from before the log comes back cut from the conversation the session imported.**
+A session older than the turn log imports its transcript at its first turn on this
+version, under the last turn its ledger closed; every ledger closing line since #1184
+says how many messages that turn left. A rewind to an earlier turn keeps that many of
+the imported messages and logs them as that turn's own import, so it is then a turn like
+any other: the next one follows it, `turns()` lists it, a rewind returns to it. A session
+no turn has logged yet imports first, as its next turn would. **Refused where the cut
+would not stand**: a turn whose line carries no count, from before #1184, and a turn with
+a summary after it, which rewrote the front the count indexes into. Every refusal comes
+before anything is written. **Its files are not known**: nothing recorded them, so they
+are left, and the next turn hears they may have changed. *(2026-11-04.)*
 
 **Narrowed once, for approval gates.** A turn stopped at an `interrupt_on` gate writes what
 its saver holds into `.harness/paused.state`, and a `Resume` reads it back and continues
