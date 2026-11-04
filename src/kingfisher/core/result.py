@@ -62,8 +62,9 @@ DECISIONS: tuple[str, ...] = ("approve", "reject", "respond")
 class PendingDecision:
     """One gated call a turn stopped on, and what may be answered about it."""
 
-    #: The tool call's own id, which a `Resume` answers by. Not a position: a turn may
-    #: have two gates, and the answer crosses a process and maybe a restart.
+    #: What a `Resume` answers by: `<interrupt>#<n>`, the pause and the call's place in it,
+    #: since the pause does not carry the tool call's own id. Never the place alone: a turn
+    #: may have two gates, and the answer crosses a process and maybe a restart.
     call_id: str
     tool: str
     args: Mapping[str, Any] = field(default_factory=dict)

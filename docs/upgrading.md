@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A turn id a session already holds is refused, after #1194
+
+`Request.turn_id` and `Resume.turn_id` must be unique within their session. A request
+naming an id its session already holds raises `TurnIdError`, a `ValueError` exported
+from `kingfisher`, before anything in the session changes: no input is placed and no
+pause is cleared.
+
+A deployment passing its own request ids is affected only if it reuses one, as a retry
+of the same request does. That retry used to run as a second turn and is refused now.
+Give each turn an id of its own, or leave `turn_id` unset and kingfisher makes one that
+the session does not already hold. A graph you supply with `graph=` keeps no ledger, so
+its turns are not checked.
+
 ## A session is open to whoever holds its id, after #1193
 
 - **`session()`, `asession()`, `sessions()` and `asessions()` take no caller.**

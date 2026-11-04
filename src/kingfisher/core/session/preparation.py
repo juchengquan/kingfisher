@@ -41,6 +41,7 @@ from .memory_writer import writer_model
 from .model import (
     Conversation,
     SessionBusyError,
+    TurnIdError,
     held_by_a_turn,
     refuse_files_of_another,
 )
@@ -231,6 +232,14 @@ class Preparation:
             )
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
         earlier = (yield from read_ledger(harness)) if self._graph is None else None
+        if earlier is not None and request.turn_id in earlier.turns:
+            # The ledger names a turn only by its id, so two turns under one could not be
+            # told apart in it.
+            msg = (
+                f"session {session.id} already has a turn {request.turn_id!r}; "
+                "give each turn an id of its own"
+            )
+            raise TurnIdError(msg)
         lost = history_lost(
             len(history), cut=cut, written=earlier.messages if earlier is not None else None
         )
@@ -440,7 +449,9 @@ class Preparation:
         try:
             saver = checkpointer if paused is None else self._restored(session, paused)
             # Before the build, because every row the graph records names the turn.
-            turn = session.allocate_turn(request.turn_id)
+            turn = session.allocate_turn(
+                request.turn_id, taken=earlier.turns if earlier is not None else ()
+            )
             ledger = (
                 Ledger(
                     turn.id,

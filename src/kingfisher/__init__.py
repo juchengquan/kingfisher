@@ -26,6 +26,7 @@ _EXPORTS = {
     "InputsError": "kingfisher.core.session.files",
     "QuotaExceededError": "kingfisher.core.session.model",
     "SessionBusyError": "kingfisher.core.session.model",
+    "TurnIdError": "kingfisher.core.session.model",
     "SubagentError": "kingfisher.core.definitions.subagents.spec",
     # For an offered tool file, outside the wheel by construction, to annotate
     # `runtime: ToolRuntime[ToolContext]`: a bare `ToolRuntime` has pydantic warn per call.
@@ -145,6 +146,7 @@ __all__ = [
     "SubagentError",
     "ToolContext",
     "ToolSpec",
+    "TurnIdError",
     "UnknownSessionError",
     "WorkspacePaths",
     "config_from_env",
@@ -223,6 +225,7 @@ if TYPE_CHECKING:
     from kingfisher.core.session.handle import Session as Session
     from kingfisher.core.session.model import QuotaExceededError as QuotaExceededError
     from kingfisher.core.session.model import SessionBusyError as SessionBusyError
+    from kingfisher.core.session.model import TurnIdError as TurnIdError
     from kingfisher.core.session.model import UnknownSessionError as UnknownSessionError
     from kingfisher.core.workspace import ensure_definitions as ensure_definitions
 

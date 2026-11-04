@@ -183,6 +183,8 @@ class KeptLedger:
     #: How many messages the last turn to write the conversation wrote, or `None` where
     #: no closing line says.
     messages: int | None = None
+    #: Every turn id a line names, a cut turn's rows included: ids a later turn may not take.
+    turns: frozenset[str] = frozenset()
 
     @property
     def since(self) -> tuple[LedgerEntry, ...]:
@@ -215,6 +217,7 @@ def _kept(text: str) -> KeptLedger:
     cut: list[list[LedgerEntry]] = []
     summarised = False
     messages: int | None = None
+    turns: set[str] = set()
     # Each turn's entries, until its closing line says whether it was a resume.
     unclosed: dict[str, list[LedgerEntry]] = {}
     for line in text.splitlines():
@@ -236,8 +239,10 @@ def _kept(text: str) -> KeptLedger:
         if isinstance(row.get("run"), str) and isinstance(row.get("access"), list):
             runs.setdefault(row["run"], []).append(_listed(row["access"]))
         if (entry := _entry(row)) is not None:
+            turns.add(entry.turn)
             unclosed.setdefault(entry.turn, []).append(entry)
         elif "id" not in row and isinstance(row.get("turn"), str):
+            turns.add(row["turn"])
             if isinstance(row.get(MESSAGES), int):
                 messages = row[MESSAGES]
             # By the turn a row names, not where it sits: rows a crash left unclosed would
@@ -264,6 +269,7 @@ def _kept(text: str) -> KeptLedger:
         unclosed=tuple(tuple(one) for one in cut),
         summarised=summarised,
         messages=messages,
+        turns=frozenset(turns),
     )
 
 

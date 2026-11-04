@@ -3,7 +3,7 @@ that name one."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
@@ -13,6 +13,10 @@ from weakref import WeakKeyDictionary
 
 class UnknownSessionError(ValueError):
     """A request named a session that does not exist."""
+
+
+class TurnIdError(ValueError):
+    """A request named a turn id its session already holds."""
 
 
 class SessionBusyError(ValueError):
@@ -103,10 +107,17 @@ class Conversation:
 
     id: str
 
-    def allocate_turn(self, turn_id: str | None = None) -> Turn:
-        """Name the next turn. A caller's own id wins, or one is made.
+    def allocate_turn(self, turn_id: str | None = None, *, taken: Collection[str] = ()) -> Turn:
+        """Name the next turn. A caller's own id wins, or one is made that `taken`, the
+        ids the session already holds, does not.
 
-        Made rather than counted, since nothing compares two. A caller's id ties a run to
-        the request that asked for it, and buys no de-duplication on retry.
+        A caller's id ties a run to the request that asked for it, and buys no
+        de-duplication on retry.
         """
-        return Turn(session_id=self.id, id=turn_id or f"t{uuid4().hex[:8]}")
+        if turn_id:
+            return Turn(session_id=self.id, id=turn_id)
+        # Drawn again, not trusted: eight hex digits do repeat over enough turns, and the
+        # ledger names a turn only by its id.
+        while (made := f"t{uuid4().hex[:8]}") in taken:
+            pass
+        return Turn(session_id=self.id, id=made)

@@ -3863,6 +3863,20 @@ again at `t001`. Nobody compares two turn ids -- one reaches a printed line, the
 and `RunResult` -- so `allocate_turn` generates one now, and a caller's own still wins.
 It buys no de-duplication on a retry, which the id never gave.
 
+**A session refuses a turn id it already holds** *(2026-11-04)*. "Nobody compares two
+turn ids" had stopped being true: the ledger names a turn only by its id -- a row by the
+turn that recorded it, an expiry by the turn that removed the file -- so two turns under
+one id could not be told apart, and rows a cut turn left open were closed by whichever
+later turn reused its id. Rewind, being built in slices, names a turn by its id and
+records each turn's parent by it. A caller's id still
+wins, but one the session holds is refused with `TurnIdError` under the claim, before
+inputs are placed or a pause is cleared; a made id that repeats one is drawn again,
+since eight hex digits repeat over enough turns. Refused rather than renamed: a caller
+passes its own id to tie the run to its request, and a renamed turn would cut that tie
+without a word. Still no de-duplication: a retry under the same id is refused, not
+answered with the first run's result. The ids held are the ones the ledger names, so a
+graph a deployment supplies, which keeps no ledger, is not checked yet.
+
 **A request's files go to `/inputs` with the session's.** Once a turn had nowhere of its
 own, a per-turn field and a per-session one were two fields for one operation, and they
 merged. Two turns sending one name no longer keep both: the second replaces it, visibly,
