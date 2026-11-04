@@ -150,7 +150,7 @@ def _broke(raised: BaseException) -> bool:
 def _told_next(charging: Charging, call: str) -> ToolMessage:
     """What the next turn's model was handed as the answer to `call`."""
     Scripted.script.append(AIMessage(content="noted"))
-    charging.kf().run(Request("did it go through?", session_id="s"))
+    charging.kf().run(Request("did it go through?", agent="only", session_id="s"))
     return next(
         one
         for one in Scripted.heard[-1]
@@ -398,7 +398,7 @@ def test_a_caller_is_let_go_of_while_a_hung_call_holds_the_session(charging, mon
             await turn
         waited = time.monotonic() - cancelled_at
         with pytest.raises(SessionBusyError):
-            await kf.arun(Request("again", session_id="s"))
+            await kf.arun(Request("again", agent="only", session_id="s"))
         charging.release.touch()
         claim = charging.cfg.workspace / "sessions" / "s" / ".harness" / "claim"
         await _until(lambda: not claim.exists())
