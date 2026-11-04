@@ -295,6 +295,32 @@ what closed the trap `_ENABLED` was introduced for — a deployment writing the
 path was setting a flag to a value no parser recognises, and skills went **off**
 with no error. The two can no longer arrive at one reader.
 
+## Its warnings
+
+Kingfisher raises three Python warnings, each about how it was set up rather than about
+a turn: an endpoint in `models.yaml` whose key is not set here, so its models are
+unavailable; a shell nothing confines, so each session's agent can read and change the
+other sessions' files; and a middleware class named like one of deepagents' own, which
+replaces it. Each is a `KingfisherWarning`, which is a `UserWarning`, and the missing key
+is also a `MissingCredentialsWarning`, for a fleet whose machines hold different keys:
+
+```python
+import warnings
+
+from kingfisher import KingfisherWarning, MissingCredentialsWarning
+
+warnings.simplefilter("ignore", MissingCredentialsWarning)  # the missing key alone
+warnings.simplefilter("ignore", KingfisherWarning)  # all three
+```
+
+Set the filter before the configuration is read: the missing key is said as `models.yaml`
+loads, before any `Kingfisher` exists. Python's default filter says each once per process.
+`PYTHONWARNINGS` and `-W` are read before an installed package can be imported, so they
+cannot name either class.
+
+Silencing the shell's warning leaves the shell as it was. A runtime that confines the
+process itself says so with `external`, which withdraws the warning.
+
 ## Checking it
 
 `kingfisher doctor` reports what stands between an install and a run: a missing

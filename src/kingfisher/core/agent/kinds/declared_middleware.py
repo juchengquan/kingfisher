@@ -20,6 +20,7 @@ from kingfisher.core.access import (
     refuse_written_wants,
 )
 from kingfisher.core.agent.models import SUMMARIZER, supplied_trigger
+from kingfisher.core.config import KingfisherWarning
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -307,5 +308,6 @@ def _warn_if_it_replaces_deepagents(
         f"beside it.{weight} If that is what you meant, there is nothing to do; if "
         f"it is not, rename the class -- the registry key it is reached by is "
         f"separate and can stay as it is.",
+        KingfisherWarning,
         stacklevel=2,
     )

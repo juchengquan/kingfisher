@@ -27,6 +27,7 @@ from kingfisher import (
     DecisionError,
     Held,
     InputsError,
+    MissingCredentialsWarning,
     QuotaExceededError,
     Request,
     ResultError,
@@ -44,7 +45,6 @@ from kingfisher import (
 from kingfisher.core.access import Datazone, ExtraDatazone, with_datazone
 
 # Private names, taken where they live: the command ships in the library's own wheel.
-from kingfisher.core.config import MissingCredentialsWarning
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.session.model import held_by_a_turn
 

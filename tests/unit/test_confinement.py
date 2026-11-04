@@ -22,6 +22,7 @@ from typing import Any, TypedDict
 
 import pytest
 
+from kingfisher import KingfisherWarning
 from kingfisher.core.agent.prompting import refuse_a_workspace_prompt
 from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import CommandResult, CommandRunner
@@ -831,7 +832,8 @@ def test_an_unconfined_shell_is_warned_about_when_its_backend_is_built(cfg, sess
     `test_off_is_warned_about_on_every_start` stayed green because it checks the text
     exists, not that anything says it.
     """
-    with pytest.warns(UserWarning, match="unconfined"):
+    # By the class a deployment silences every kingfisher warning by, not `UserWarning`.
+    with pytest.warns(KingfisherWarning, match="unconfined"):
         backend_at(cfg, session_dir, shell=UNFENCED)
 
 

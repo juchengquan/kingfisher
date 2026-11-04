@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher import KingfisherWarning
 from kingfisher.core import environment as config_module
 from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, Config, ConfigError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
@@ -277,7 +278,8 @@ def test_an_endpoint_without_its_key_is_dropped_and_warned_about(env):
     """
     del env["OPENAI_API_KEY"]
 
-    with pytest.warns(UserWarning, match="OPENAI_API_KEY"):
+    # By the class a deployment silences every kingfisher warning by, not `UserWarning`.
+    with pytest.warns(KingfisherWarning, match="OPENAI_API_KEY"):
         cfg = config_from_env(env)
 
     assert set(cfg.models.endpoints) == {"gateway"}

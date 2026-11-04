@@ -228,10 +228,18 @@ FOLDED_SETTINGS: Mapping[str, str] = MappingProxyType({
     "KINGFISHER_MODELS_FILE": "models.yaml",
 })
 
-class MissingCredentialsWarning(UserWarning):
+class KingfisherWarning(UserWarning):
+    """A setup kingfisher runs with that is probably not what was meant.
+
+    Every warning kingfisher raises is one, so a deployment silences them all by one class.
+    """
+
+
+class MissingCredentialsWarning(KingfisherWarning):
     """An endpoint in `models.yaml` whose key is not set here, so it was dropped.
 
-    Its own class so `doctor`, which reports this as a check, can silence it by name.
+    Its own class so `doctor`, which reports this as a check, and a fleet whose machines hold
+    different keys can silence it without silencing the rest.
     """
 
 

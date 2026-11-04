@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Kingfisher's warnings are all `KingfisherWarning`, after #1198
+
+- **Every warning kingfisher raises is a `KingfisherWarning`**, a `UserWarning` exported
+  from `kingfisher`, so `warnings.simplefilter("ignore", KingfisherWarning)` silences
+  them all: a missing key, an unconfined shell, and a middleware replacing one of
+  deepagents' own. A filter on `UserWarning` or on a warning's text works as before.
+- **`MissingCredentialsWarning` is a `KingfisherWarning`, and exported from `kingfisher`.**
+  A filter naming it works as before; import it from `kingfisher` rather than
+  `kingfisher.core.config`, which may move.
+
 ## Every run event names the agent its turn ran, after #1197
 
 - **Every event a `RunEvents` sink is handed carries `turn_agent`**, `run_start` and
