@@ -5,24 +5,29 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.layout import INPUTS_SEEN, TRANSCRIPT_FILE
+from kingfisher.core.layout import INPUTS_SEEN, MEMORY_WRITER, TRANSCRIPT_FILE
 from kingfisher.core.result import Rewound, TurnRecord
 
-from .file_history import read_history, restore_state
+from .file_history import BEFORE_FIRST, NO_RECORD, read_history, restore_files, restore_state
 from .model import START, RewindError, Start
 from .store import (
     RESUMED,
+    Drift,
+    HarnessFiles,
     KeptLedger,
     clear_pause,
     pending_from_mark,
     read_ledger,
     read_pause_mark,
+    write_drift,
     write_off_path,
     write_transcript,
 )
 from .turnlog import IMPORTED, PARENT, TASK, Logged, by_turn, path_to, read_turn_log, replayed
 
 if TYPE_CHECKING:
+    from kingfisher.core.layout import Layout
+
     from .steps import Steps
 
 
@@ -50,8 +55,9 @@ def turn_records(
     )
 
 
-def rewound(harness: Any, to: str | Start) -> Steps[Rewound]:
+def rewound(files: Any, layout: Layout, to: str | Start) -> Steps[Rewound]:
     """Put the session back where `to` left it, under a claim the caller holds."""
+    harness = HarnessFiles(files)
     turns = by_turn((yield from read_turn_log(harness)))
     ledger = yield from read_ledger(harness)
     if to is START:
@@ -82,8 +88,27 @@ def rewound(harness: Any, to: str | Start) -> Steps[Rewound]:
         yield from write_transcript(harness, said)
     else:
         yield from harness.drop(TRANSCRIPT_FILE)
-    yield from restore_state(harness, (yield from read_history(harness)), path, (INPUTS_SEEN,))
-    return Rewound(to=None if to is START else to, discarded=discarded)
+    records = yield from read_history(harness)
+    yield from restore_state(harness, records, path, (INPUTS_SEEN, MEMORY_WRITER))
+    restored, not_restored = yield from restore_files(files, harness, layout, records, path)
+    # Told to the next turn only where its conversation remembers the files: after a rewind
+    # to the start it remembers none, and finds them as they are.
+    unsure = {NO_RECORD, BEFORE_FIRST}
+    yield from write_drift(
+        harness,
+        Drift(
+            changed=tuple(one for one, why in not_restored.items() if why not in unsure),
+            unsure=tuple(one for one, why in not_restored.items() if why in unsure),
+        )
+        if path
+        else Drift(),
+    )
+    return Rewound(
+        to=None if to is START else to,
+        discarded=discarded,
+        restored=restored,
+        not_restored=not_restored,
+    )
 
 
 def _off_path(turns: Logged, path: list[str | None], ledger: KeptLedger) -> frozenset[str | None]:

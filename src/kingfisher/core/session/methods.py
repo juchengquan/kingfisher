@@ -195,7 +195,7 @@ class SessionMethods:
             )
             raise SessionBusyError(msg)
         try:
-            return (yield from rewound(HarnessFiles(files), to))
+            return (yield from rewound(files, self.cfg.layout, to))
         finally:
             yield changing(self._sessions, "release", self.cfg, session_id, claimed)
 

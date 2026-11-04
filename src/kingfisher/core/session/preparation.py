@@ -59,6 +59,7 @@ from .store import (
     KeptLedger,
     clear_pause,
     pending_from_mark,
+    read_drift,
     read_inputs_seen,
     read_ledger,
     read_pause_mark,
@@ -342,6 +343,7 @@ class Preparation:
         now = yield from inputs_seen(prepared.files, layout)
         # A first turn was told of nothing; a session older than the record, of unknown.
         before = (yield from read_inputs_seen(prepared.harness)) if history else {}
+        drift = yield from read_drift(prepared.harness)
         message = turn_message(
             asked,
             inputs_changed(before, now, placement),
@@ -349,8 +351,9 @@ class Preparation:
             layout=layout,
             note=getattr(request, "note", ""),
             unavailable=not_offered(history, prepared.granted),
+            drift=drift,
         )
-        return replace(prepared, message=message, inputs_seen=now)
+        return replace(prepared, message=message, inputs_seen=now, drift=drift)
 
     def _take_pause(
         self, request: Request | Resume, session: Conversation, harness: HarnessFiles

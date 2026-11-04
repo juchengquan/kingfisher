@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A rewind puts back the files a turn left, after #1202
+
+- **`Session.rewind` restores `/outputs` and `/memory`** as the turn rewound to left
+  them, from the copies each turn keeps, and the memory writer's unread lines with them.
+  `Rewound.restored` names the files put back, a file that turn did not have removed
+  among them; `Rewound.not_restored` names each file left as it is, with why.
+- **The next turn's message names the files left otherwise than its conversation
+  remembers them**, once: `Changed since your last turn: ...`. Kept in
+  `.harness/rewound.json` until then.
+- **A rewind to `START` leaves every file as it is**: nothing records the folders before
+  the first turn.
+
 ## An offered tool may run commands from `eval` and in a compiled subagent, after #1201
 
 - **A tool called from `eval`'s code is handed `runtime.context.run`** where the agent

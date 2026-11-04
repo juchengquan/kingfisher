@@ -19,14 +19,17 @@ from assets.middlewares.summarize_by_count import SummarizeByCount
 from kingfisher import START, Kingfisher, RewindError, SessionBusyError, TurnIdError
 from kingfisher.cli.__main__ import main
 from kingfisher.core.layout import (
+    FILE_HISTORY,
     HARNESS,
     INPUTS_SEEN,
     LEDGER_FILE,
+    MEMORY_WRITER,
     PAUSED_MARK,
     TRANSCRIPT_FILE,
 )
 from kingfisher.core.request import Decision, DecisionError
 from kingfisher.core.result import AWAITING
+from kingfisher.core.session.file_history import dropped_for_space
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
@@ -46,6 +49,11 @@ def rewinding(scripted):
 def _sent(index: int = 0) -> str:
     """Everything the model was handed on one call of the turn just run."""
     return "\n".join(str(message.content) for message in Scripted.heard[index])
+
+
+def _asked() -> str:
+    """The message the turn just run was sent as the user's, history left out."""
+    return str(next(one.content for one in reversed(Scripted.heard[0]) if one.type == "human"))
 
 
 def _harness_files(cfg) -> dict:
@@ -243,3 +251,123 @@ def test_the_command_lists_turns_and_rewinds(rewinding, at_the_command_line, cap
     marked = [line for line in printed.splitlines() if line.startswith("*")]
     assert len(marked) == 1
     assert first.turn_id in marked[0]
+
+
+def _outputs(cfg):
+    return cfg.workspace / "sessions" / "s" / "outputs"
+
+
+def test_a_rewind_puts_back_the_files_the_turn_left(rewinding):
+    """Left as the latest turn left them, the files would answer for a conversation the
+    caller took back: the agent reads a report it remembers writing differently."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    (_outputs(rewinding) / "report.md").write_text("LONG", encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("written"))
+    (_outputs(rewinding) / "report.md").write_text("SHORT", encoding="utf-8")
+    (_outputs(rewinding) / "extra.md").write_text("more", encoding="utf-8")
+    _say(kf, "shorten it", AIMessage("shortened"))
+
+    done = kf.session("s").rewind(first.turn_id)
+
+    assert (_outputs(rewinding) / "report.md").read_text(encoding="utf-8") == "LONG"
+    assert not (_outputs(rewinding) / "extra.md").exists()
+    assert set(done.restored) == {"outputs/report.md", "outputs/extra.md"}
+    assert dict(done.not_restored) == {}
+    Scripted.heard.clear()
+    _say(kf, "and now?", AIMessage("ok"))
+    assert "Changed since your last turn" not in _sent()
+
+
+def test_a_version_with_no_copy_is_left_and_the_next_turn_is_told_once(rewinding):
+    """Left without a word, the agent answers from the version its conversation
+    remembers; told on every turn after, a line that changes nothing costs every one."""
+    cfg = replace(rewinding, rewind_max_bytes=10)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    (_outputs(cfg) / "report.md").write_text("A" * 10, encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("written"))
+    (_outputs(cfg) / "report.md").write_text("B" * 10, encoding="utf-8")
+    _say(kf, "rewrite it", AIMessage("rewritten"))
+
+    done = kf.session("s").rewind(first.turn_id)
+
+    assert (_outputs(cfg) / "report.md").read_text(encoding="utf-8") == "B" * 10
+    assert "dropped for space" in done.not_restored["outputs/report.md"]
+    Scripted.heard.clear()
+    _say(kf, "what is in the report?", AIMessage("ok"))
+    assert "Changed since your last turn: /outputs/report.md." in _asked()
+    Scripted.heard.clear()
+    _say(kf, "and now?", AIMessage("ok"))
+    assert "Changed since your last turn" not in _asked()
+
+
+def test_the_memory_file_and_what_the_writer_has_not_read_go_back(rewinding):
+    """Left, the memory would keep what the caller rewound past, and the writer would
+    save facts from turns no longer on the path."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    folder = rewinding.workspace / "sessions" / "s"
+    memory, unread = folder / "memory" / "AGENTS.md", folder / HARNESS / MEMORY_WRITER
+    memory.write_text("- Prefers tables\n", encoding="utf-8")
+    unread.write_text(json.dumps({"turns": 1, "said": ["User: hello"]}), encoding="utf-8")
+    first = _say(kf, "hello", AIMessage("hi"))
+    kept_unread = unread.read_bytes()
+    memory.write_text("- Prefers tables\n- Is Bob\n", encoding="utf-8")
+    unread.write_text(json.dumps({"turns": 2, "said": ["User: I am Bob"]}), encoding="utf-8")
+    _say(kf, "I am Bob", AIMessage("noted"))
+
+    kf.session("s").rewind(first.turn_id)
+
+    assert memory.read_text(encoding="utf-8") == "- Prefers tables\n"
+    assert unread.read_bytes() == kept_unread
+
+
+def test_a_rewind_to_the_start_leaves_the_files_and_tells_nothing(rewinding):
+    """Nothing records the folders before the first turn: emptied on a guess, they lose
+    a caller's own files; told, an empty conversation is warned about files it never
+    saw."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    (_outputs(rewinding) / "report.md").write_text("LONG", encoding="utf-8")
+    _say(kf, "write it", AIMessage("written"))
+
+    done = kf.session("s").rewind(START)
+
+    assert (_outputs(rewinding) / "report.md").read_text(encoding="utf-8") == "LONG"
+    assert "before the first turn" in done.not_restored["outputs/report.md"]
+    Scripted.heard.clear()
+    _say(kf, "start over", AIMessage("ok"))
+    assert "changed since your last turn" not in _sent().lower()
+
+
+def test_a_copy_still_current_on_the_path_outlives_one_left_on_a_branch():
+    """Ranked in the order the turns ran, the copy t1 kept looks superseded by t2's,
+    though t2 was left behind and t1's is the version the path still has: dropped, a
+    later rewind to t3 could not put it back."""
+    def line(turn, size):
+        kept = {"outputs/r.md": {"mark": turn, "bytes": size}}
+        return {"turn": turn, "under": turn, "kept": kept}
+
+    records = [line("t1", 10), line("t2", 10), {"turn": "t3", "under": "t3"}]
+    parents = {"t1": None, "t2": "t1", "t3": "t1"}
+
+    assert dropped_for_space(records, 10, parents) == [(1, "outputs/r.md")]
+    # The control: in the order they ran, as before any rewind, t1's goes first.
+    assert dropped_for_space(records, 10) == [(0, "outputs/r.md")]
+
+
+def test_after_a_rewind_a_turn_keeps_the_copy_its_path_still_needs(rewinding):
+    """Ranked in the order the turns ran, the copy of the version rewound to went first
+    at the next turn over budget, and the session could not be put back there again."""
+    cfg = replace(rewinding, rewind_max_bytes=25)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    (_outputs(cfg) / "r.md").write_text("A" * 10, encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("ok"))
+    (_outputs(cfg) / "r.md").write_text("B" * 10, encoding="utf-8")
+    second = _say(kf, "rewrite it", AIMessage("ok"))
+    kf.session("s").rewind(first.turn_id)
+    (_outputs(cfg) / "n.md").write_text("C" * 10, encoding="utf-8")
+
+    _say(kf, "add a note", AIMessage("ok"))
+
+    history = cfg.workspace / "sessions" / "s" / HARNESS / FILE_HISTORY
+    lines = {one["turn"]: one for one in map(json.loads, history.read_text().splitlines())}
+    assert "dropped_in" not in lines[first.turn_id]["kept"]["outputs/r.md"]
+    assert "dropped_in" in lines[second.turn_id]["kept"]["outputs/r.md"]

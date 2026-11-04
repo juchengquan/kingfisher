@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.core.access import Held, with_datazone
 from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.config import Config, ConfigError
-from kingfisher.core.layout import PAUSED_STATE
+from kingfisher.core.layout import PAUSED_STATE, REWOUND_FILE
 from kingfisher.core.request import Request, Resume
 from kingfisher.core.result import (
     AWAITING,
@@ -282,6 +282,9 @@ class Running:
             # what changed before it would never be said.
             if prepared.inputs_seen is not None:
                 yield from write_inputs_seen(prepared.harness, prepared.inputs_seen)
+            # Told now, in a conversation that keeps it; a turn that wrote none tells it again.
+            if prepared.drift is not None:
+                yield from prepared.harness.drop(REWOUND_FILE)
 
     def _settle_pause(
         self, prepared: Prepared, snapshot: Any

@@ -106,12 +106,18 @@ class TurnRecord:
 
 @dataclass(frozen=True)
 class Rewound:
-    """What `Session.rewind` did. Files in `/outputs` and `/memory` stay as they are."""
+    """What `Session.rewind` did."""
 
     #: The turn the session now ends where, or `None` for its start.
     to: str | None
     #: What a pause was waiting on, which the rewind discarded.
     discarded: tuple[PendingDecision, ...] = ()
+    #: Files in `/outputs` and `/memory` put back as that turn left them, by their names
+    #: in the session as `RunResult.artifacts` gives them; one it did not have, removed.
+    restored: tuple[str, ...] = ()
+    #: Each file left as it is, with why: its version there has no copy, or nothing says
+    #: what it was. The next turn tells the agent which.
+    not_restored: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

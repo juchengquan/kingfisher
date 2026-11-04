@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from kingfisher.core.config import Config
 
     from .files import InputsChanged
-    from .store import KeptLedger
+    from .store import Drift, KeptLedger
     from .transcript import Message
     from .turnlog import Resuming
 
@@ -93,6 +93,9 @@ class Prepared:
     #: The inputs folder as this turn's message described it, kept with the transcript
     #: that carries the message; `None` where there is nothing to keep.
     inputs_seen: Mapping[str, str | None] | None = None
+    #: What the last rewind could not put back, which this turn's message tells and its
+    #: ending clears; `None` where no rewind left a notice.
+    drift: Drift | None = None
     #: The tool names this turn's graph offers, as `Assembled.granted`; `None` where
     #: nothing narrows them or the caller built the graph.
     granted: tuple[str, ...] | None = None
@@ -106,6 +109,7 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
     layout: Layout,
     note: str = "",
     unavailable: tuple[str, ...] = (),
+    drift: Drift | None = None,
 ) -> str:
     """The task and the caller's note, plus this turn's facts and nothing more.
 
@@ -119,6 +123,9 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
     # Each call the conversation shows invites another; refused, it costs a model call,
     # and on MiniMax-M3 one agent said it had re-read a file it no longer could.
     lacking = f" Not available on this turn: {', '.join(unavailable)}." if unavailable else ""
+    # After a rewind, the conversation remembers each file as the turn rewound to left it,
+    # and a version with no copy to put back is still the later one.
+    drifted = _drifted(drift) if drift is not None else ""
     # Here, never in the system prompt: a line changing every turn in the cached prefix
     # would miss the cache on every call.
     shown = ledger_shown(earlier) if earlier is not None else ""
@@ -131,8 +138,18 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
         f"{noted}"
         f"{layout.scratch_route} is yours to work in (from the shell, {layout.scratchpad})."
         f"{arrived}"
+        f"{drifted}"
         f"{lacking}"
         f"{ledger}"
+    )
+
+
+def _drifted(drift: Drift) -> str:
+    """The files a rewind left otherwise than the conversation remembers them, or nothing."""
+    changed = ", ".join(f"/{one}" for one in drift.changed)
+    unsure = ", ".join(f"/{one}" for one in drift.unsure)
+    return (f" Changed since your last turn: {changed}." if changed else "") + (
+        f" May have changed since your last turn: {unsure}." if unsure else ""
     )
 
 

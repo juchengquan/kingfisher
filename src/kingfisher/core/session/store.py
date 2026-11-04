@@ -20,6 +20,7 @@ from kingfisher.core.layout import (
     OFF_PATH_FILE,
     PAUSED_MARK,
     PAUSED_STATE,
+    REWOUND_FILE,
     TRANSCRIPT_FILE,
 )
 from kingfisher.core.result import LedgerEntry, Listed, PendingDecision
@@ -167,6 +168,41 @@ RESERVED = "reserved"
 #: Here because the ledger is written first: a conversation emptied by a full disk, cut on
 #: a line, or never written reads back whole, and only this says it is short.
 MESSAGES = "messages"
+
+
+@dataclass(frozen=True)
+class Drift:
+    """The files a rewind left otherwise than the turn it rewound to left them."""
+
+    #: Known to differ: their version there had no copy to put back.
+    changed: tuple[str, ...] = ()
+    #: Not known either way: nothing recorded them when that turn ended.
+    unsure: tuple[str, ...] = ()
+
+
+def read_drift(harness: Any) -> Steps[Drift | None]:
+    """What the last rewind could not put back, or `None` where no rewind left a notice."""
+    held = yield from harness.fetch(REWOUND_FILE)
+    try:
+        noted = json.loads(held) if held is not None else None
+    except ValueError:
+        return None
+    if not isinstance(noted, dict):
+        return None
+    listed = {
+        key: tuple(one for one in noted.get(key) or () if isinstance(one, str))
+        for key in ("changed", "unsure")
+    }
+    return Drift(**listed)
+
+
+def write_drift(harness: Any, drift: Drift) -> Steps[None]:
+    """Keep `drift` for the next turn to tell, or clear an older one where it holds none."""
+    if not drift.changed and not drift.unsure:
+        yield from harness.drop(REWOUND_FILE)
+        return
+    noted = {"changed": list(drift.changed), "unsure": list(drift.unsure)}
+    yield from harness.store(REWOUND_FILE, json.dumps(noted).encode("utf-8"))
 
 
 @dataclass(frozen=True)
