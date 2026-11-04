@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from contextlib import suppress
 from pathlib import PurePosixPath
 from threading import Lock
@@ -13,13 +12,13 @@ from .agent.assembly import builtin_tool_names
 from .config import Config, ConfigError
 from .definitions.catalogue import Definitions, resolve_definitions
 from .definitions.tools.spec import Offering, select
+from .logged import handed, warning
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from .definitions.definition import SpecBase
-
-logger = logging.getLogger(__name__)
+    from .interfaces import RunEvents
 
 
 class Versions:
@@ -29,8 +28,10 @@ class Versions:
     a wiring mistake, to fail at startup rather than serve an agent told about nothing.
     """
 
-    def __init__(self, cfg: Config) -> None:
+    def __init__(self, cfg: Config, sink: RunEvents) -> None:
         self._cfg = cfg
+        # The deployment's own, not a turn's: a refusal found outside any turn is said too.
+        self._sink = sink
         # One turn reads a changed folder while the others wait for what it read.
         self._lock = Lock()
         fresh = resolve_definitions(cfg)
@@ -73,11 +74,15 @@ class Versions:
         if held == self._refused:
             return
         self._refused = held
-        logger.warning(
-            "the definitions changed and the change was refused, so turns run on the set "
-            "that loaded last: %s: %s",
-            type(exc).__name__,
-            exc,
+        # With its message: the operator wrote the definitions, and is the one reading.
+        handed(
+            self._sink,
+            warning(
+                "definitions_refused",
+                "the definitions changed and the change was refused, so turns run on the "
+                f"set that loaded last: {type(exc).__name__}: {exc}",
+                error_type=type(exc).__name__,
+            ),
         )
 
 

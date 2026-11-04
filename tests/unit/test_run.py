@@ -120,7 +120,7 @@ def test_run_logs_usage_shaped_records(cfg):
         run_events=sink,
     )
 
-    records = sink.events
+    records = sink.of_turns
     events = [r["event"] for r in records]
     assert "run_start" in events
     assert "run_end" in events

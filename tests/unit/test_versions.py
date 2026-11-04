@@ -8,13 +8,20 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import Kingfisher
 from kingfisher.core.access import caller_holds
+from kingfisher.core.logged import WARNINGS_LOGGER
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions
 from tests.conftest import an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
 
-#: Where a refused change is said.
-VERSIONS_LOG = "kingfisher.core.versions"
+
+def _refusals(caplog) -> list:
+    """Each refused change said, as the default sink says it."""
+    return [
+        one
+        for one in caplog.records
+        if one.name == WARNINGS_LOGGER and one.kingfisher["event"] == "definitions_refused"
+    ]
 
 
 def _echo_returning(cfg, prefix: str) -> None:
@@ -69,9 +76,9 @@ def test_a_change_that_fails_leaves_turns_on_the_set_that_loaded_last(scripted, 
     words = tools_dir(scripted) / "echo" / "words.py"
 
     words.write_text("def echo(:\n", encoding="utf-8")
-    with caplog.at_level(logging.WARNING, logger=VERSIONS_LOG):
+    with caplog.at_level(logging.WARNING, logger=WARNINGS_LOGGER):
         answers = [_echoed(kf, scripted), _echoed(kf, scripted)]
-    refused = [one for one in caplog.records if one.name == VERSIONS_LOG]
+    refused = _refusals(caplog)
     _echo_returning(scripted, "FIXED:")
 
     assert answers == ["ECHO:x", "ECHO:x"]
@@ -87,11 +94,11 @@ def test_a_folder_that_goes_away_leaves_turns_on_the_set_that_loaded_last(script
     moved = scripted.definitions.with_name("moved")
     scripted.definitions.rename(moved)
 
-    with caplog.at_level(logging.WARNING, logger=VERSIONS_LOG):
+    with caplog.at_level(logging.WARNING, logger=WARNINGS_LOGGER):
         answers = [_echoed(kf, scripted), _echoed(kf, scripted)]
 
     assert answers == ["ECHO:x", "ECHO:x"]
-    assert [one.name for one in caplog.records].count(VERSIONS_LOG) == 1
+    assert len(_refusals(caplog)) == 1
 
 
 def test_a_skill_lock_changed_while_kingfisher_runs_is_in_force_on_the_next_call(cfg):

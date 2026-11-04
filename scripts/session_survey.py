@@ -337,7 +337,9 @@ def read_logs(paths: list[Path], sessions: dict[str, Session]) -> int:
     for path in paths:
         for event in _json_lines(path):
             name, sid = event.get("event"), event.get("session_id")
-            if not name or sid not in sessions:
+            # A warning is no step of the turn: taken for the one before a call, it would
+            # shorten that call's time. A log from before `level` holds run events alone.
+            if not name or sid not in sessions or event.get("level", "INFO") != "INFO":
                 continue
             read += 1
             by_turn[(sid, str(event.get("turn_id")))].append(event)

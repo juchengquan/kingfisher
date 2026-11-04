@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import threading
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -12,7 +11,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher.core.interfaces import ReturnedPdf
-from kingfisher.core.logged import raised
+from kingfisher.core.logged import raised, warn
 from kingfisher.core.session.threads import off_loop, thread_pool
 
 from .narrowing import tool_name
@@ -22,8 +21,6 @@ from .results import answer_in, answered
 if TYPE_CHECKING:
     from kingfisher.core.agent.models import SummarizerCount
     from kingfisher.core.interfaces import PdfAttachments
-
-_log = logging.getLogger(__name__)
 
 KB = 1024
 MB = KB * KB
@@ -290,11 +287,15 @@ class AttachmentsMiddleware(AgentMiddleware):
         try:
             instead = self._pdfs.replacement(pdf)
         except Exception as exc:  # noqa: BLE001 -- a deployment's hook failing leaves the verdict
-            _log.warning(
-                "the PDF attachments plugin raised %s at %s on %s's result; kingfisher's "
-                "verdict stands",
-                *raised(exc),
-                pdf.tool,
+            error_type, error_at = raised(exc)
+            warn(
+                "pdf_attachments_failed",
+                f"the PDF attachments plugin raised {error_type} at {error_at} on "
+                f"{pdf.tool}'s result; kingfisher's verdict stands",
+                tool=pdf.tool,
+                call=pdf.call_id or None,
+                error_type=error_type,
+                error_at=error_at,
             )
             return None
         if instead is None:
@@ -307,10 +308,12 @@ class AttachmentsMiddleware(AgentMiddleware):
         ):
             # Taken as handed over, nothing reached the model as an empty failed result
             # with no word why: to withhold a PDF, a plugin says so in text.
-            _log.warning(
-                "the PDF attachments plugin handed over nothing for %s's result; "
+            warn(
+                "pdf_attachments_empty",
+                f"the PDF attachments plugin handed over nothing for {pdf.tool}'s result; "
                 "kingfisher's verdict stands",
-                pdf.tool,
+                tool=pdf.tool,
+                call=pdf.call_id or None,
             )
             return None
         return blocks

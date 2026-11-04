@@ -10,7 +10,9 @@ import pytest
 
 from kingfisher import Kingfisher, Origin, Origins
 from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.logged import ORIGINS_LOGGER
 from kingfisher.plugins import LocalSessions
+from tests.conftest import RecordedEvents
 from tests.unit.test_backend_seam import Elsewhere
 
 
@@ -214,24 +216,26 @@ def test_no_value_on_the_line_contains_a_space(cfg, tmp_path):
 
 def test_starting_a_kingfisher_says_where_it_reads_from_once(cfg, caplog):
     """One record per construction, and that is the whole budget."""
-    caplog.set_level(logging.INFO, logger="kingfisher.origins")
+    caplog.set_level(logging.INFO, logger=ORIGINS_LOGGER)
 
     Kingfisher(cfg, sessions=LocalSessions())
 
-    records = [r for r in caplog.records if r.name == "kingfisher.origins"]
+    records = [r for r in caplog.records if r.name == ORIGINS_LOGGER]
     assert len(records) == 1
     assert str(cfg.workspace) in records[0].getMessage()
 
 
-def test_nothing_is_emitted_or_even_built_when_logging_is_off(cfg, monkeypatch, capsys):
-    """The promise this makes to every caller that existed before it."""
-    logging.getLogger("kingfisher.origins").setLevel(logging.WARNING)
-    monkeypatch.setattr(
-        Origins, "line", lambda self: pytest.fail("the line was built with logging off")
-    )
+def test_a_deployments_sink_hears_where_it_reads_from_with_logging_off(cfg):
+    """Built only once Python's logging asked for `INFO`, which nothing asks for unless
+    told to, the line never reached a deployment's own sink."""
+    logging.getLogger(ORIGINS_LOGGER).setLevel(logging.WARNING)
+    sink = RecordedEvents()
     try:
-        Kingfisher(cfg, sessions=LocalSessions())
+        Kingfisher(cfg, sessions=LocalSessions(), run_events=sink)
     finally:
-        logging.getLogger("kingfisher.origins").setLevel(logging.NOTSET)
+        logging.getLogger(ORIGINS_LOGGER).setLevel(logging.NOTSET)
 
-    assert capsys.readouterr().out == ""
+    (said,) = sink.events
+    assert (said["event"], said["level"]) == ("origins", "INFO")
+    assert said["message"].startswith(f"reading from: workspace={cfg.workspace} ")
+    assert "session_id" not in said, "an event outside any turn named one"

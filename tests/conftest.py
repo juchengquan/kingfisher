@@ -18,6 +18,7 @@ from kingfisher.core.agent.models import WIRE_FORMATS, summarizer_count
 from kingfisher.core.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
 from kingfisher.core.interfaces import RunEvents
 from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.logged import ORIGINS
 from kingfisher.core.workspace import ensure_definitions, ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.unit.scripted import Scripted
@@ -85,6 +86,11 @@ class RecordedEvents(RunEvents):
 
     def named(self, name: str) -> list[dict[str, Any]]:
         return [event for event in self.events if event["event"] == name]
+
+    @property
+    def of_turns(self) -> list[dict[str, Any]]:
+        """Every event but the line a `Kingfisher` writes as it is built."""
+        return [event for event in self.events if event["event"] != ORIGINS]
 
 
 @pytest.fixture

@@ -3,17 +3,14 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.interfaces import UnusedResults
-from kingfisher.core.logged import raised
+from kingfisher.core.logged import raised, warn
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
-
-_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -110,11 +107,13 @@ def settle_unused(plugin: UnusedResults, found: UnusedFiles) -> None:
     try:
         plugin.settle(found)
     except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing plugin, as a sink
-        _log.warning(
-            "session %s: the unused results plugin raised %s at %s; %d of %d file(s) left "
-            "for the next turn",
-            found.session_id,
-            *raised(exc),
-            found._left,
-            len(found),
+        error_type, error_at = raised(exc)
+        warn(
+            "unused_results_failed",
+            f"session {found.session_id}: the unused results plugin raised {error_type} at "
+            f"{error_at}; {found._left} of {len(found)} file(s) left for the next turn",
+            error_type=error_type,
+            error_at=error_at,
+            left=found._left,
+            files=len(found),
         )

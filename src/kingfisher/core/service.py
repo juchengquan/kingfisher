@@ -5,7 +5,7 @@ Each request builds its agent afresh on purpose: construction is cheap beside a 
 
 from __future__ import annotations
 
-import logging
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -47,6 +47,7 @@ from .interfaces import (
     hooks_of,
     refuse_unless_subclass,
 )
+from .logged import INFO, ORIGINS, handed
 from .origins import Origins
 from .reporting import what_opens
 from .request import Request, Resume, caller_of
@@ -72,10 +73,6 @@ if TYPE_CHECKING:
 
     from .agent.tool_context import Caller
     from .interfaces import RunEvents
-
-
-#: `kingfisher.origins`, and deliberately not `kingfisher`.
-logger = logging.getLogger("kingfisher.origins")
 
 
 class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
@@ -118,7 +115,10 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         # Only what sessions share: a session's own path is known once a request names it.
         self.workspace: Path = ensure_layout(self.cfg.workspace)
 
-        self._versions = Versions(self.cfg)
+        self.run_events: RunEvents = (
+            run_events if run_events is not None else LoggedRunEvents()
+        )
+        self._versions = Versions(self.cfg, self.run_events)
 
         # Sessions, not a backend: one backend shared by every session is one filesystem
         # for every caller, and nothing at the call site would look wrong.
@@ -132,9 +132,6 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
                 "Sessions, which brings aopen and asessions with it"
             )
             raise TypeError(msg)
-        self.run_events: RunEvents = (
-            run_events if run_events is not None else LoggedRunEvents()
-        )
         # `intersect` can only subtract, so no request can widen past this.
         self.grants: Capabilities = (
             self.cfg.grants if self.cfg.grants is not None else UNRESTRICTED
@@ -167,9 +164,17 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         self._graph = graph
 
         # Last, so the line reports what was resolved, and a wiring failure raises
-        # instead of announcing a deployment that never came up.
-        if logger.isEnabledFor(logging.INFO):
-            logger.info("reading from: %s", self.origins.line())
+        # instead of announcing a deployment that never came up. Built whatever Python's
+        # levels say: the sink decides what it keeps.
+        handed(
+            self.run_events,
+            {
+                "ts": time.time(),
+                "event": ORIGINS,
+                "level": INFO,
+                "message": f"reading from: {self.origins.line()}",
+            },
+        )
 
     @property
     def catalogue(self) -> Definitions:

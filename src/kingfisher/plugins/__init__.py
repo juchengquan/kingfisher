@@ -24,6 +24,7 @@ _EXPORTS = {
     "NoScratchRunLimit": "kingfisher.core.interfaces",
     "CommandRunner": "kingfisher.core.interfaces",
     "refuse_unless_subclass": "kingfisher.core.interfaces",
+    "warn": "kingfisher.core.logged",
     "CommandResult": "kingfisher.core.interfaces",
     "ScratchRun": "kingfisher.core.interfaces",
     "Definitions": "kingfisher.core.definitions.catalogue",
@@ -86,6 +87,7 @@ __all__ = [
     "reject_host_path",
     "scratch_runs_of",
     "unrouted_denials",
+    "warn",
     "why_no_shell",
 ]
 
@@ -120,6 +122,7 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import refuse_unless_subclass as refuse_unless_subclass
     from kingfisher.core.layout import DEFAULT_LAYOUT as DEFAULT_LAYOUT
     from kingfisher.core.layout import Layout as Layout
+    from kingfisher.core.logged import warn as warn
     from kingfisher.core.session.unused import DeleteUnusedResults as DeleteUnusedResults
     from kingfisher.core.session.unused import UnusedFile as UnusedFile
     from kingfisher.core.session.unused import UnusedFiles as UnusedFiles

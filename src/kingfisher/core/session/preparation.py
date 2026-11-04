@@ -20,6 +20,7 @@ from kingfisher.core.config import Config
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.layout import PAUSED_STATE
+from kingfisher.core.logged import stamp_warnings
 from kingfisher.core.reporting import (
     opening_events,
     subagent_only,
@@ -41,6 +42,7 @@ from .memory_writer import writer_model
 from .model import (
     Conversation,
     SessionBusyError,
+    Turn,
     TurnIdError,
     held_by_a_turn,
     refuse_files_of_another,
@@ -242,6 +244,16 @@ class Preparation:
                 "give each turn an id of its own"
             )
             raise TurnIdError(msg)
+        # Before the build, because every row the graph records names the turn; and before
+        # the memory store is asked, so that a warning from here on names it too.
+        turn = session.allocate_turn(
+            request.turn_id, taken=earlier.turns if earlier is not None else ()
+        )
+        stamp_warnings(
+            session_id=session.id,
+            turn_id=turn.id,
+            turn_agent=agent.name if agent is not None else None,
+        )
         lost = history_lost(
             len(history), cut=cut, written=earlier.messages if earlier is not None else None
         )
@@ -260,6 +272,7 @@ class Preparation:
             self._built_turn,
             request,
             session,
+            turn=turn,
             files=files,
             harness=harness,
             allowed=allowed,
@@ -430,6 +443,7 @@ class Preparation:
         request: Request | Resume,
         session: Conversation,
         *,
+        turn: Turn,
         files: Any,
         harness: HarnessFiles,
         allowed: Capabilities,
@@ -446,7 +460,7 @@ class Preparation:
         caller: Caller | None = None,
         users_memory: bool = False,
     ) -> Prepared:
-        """The saver, the graph and the turn itself: what setup builds rather than asks
+        """The saver, the graph and the turn's logger: what setup builds rather than asks
         for. On kingfisher's pool for `astream`, because building the agent is CPU-bound
         and on the loop would hold every other turn up.
         """
@@ -455,10 +469,6 @@ class Preparation:
         graph = None
         try:
             saver = checkpointer if paused is None else self._restored(session, paused)
-            # Before the build, because every row the graph records names the turn.
-            turn = session.allocate_turn(
-                request.turn_id, taken=earlier.turns if earlier is not None else ()
-            )
             ledger = (
                 Ledger(
                     turn.id,

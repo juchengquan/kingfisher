@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import subprocess
+import sys
 import traceback
 from collections import Counter
 from dataclasses import replace
@@ -17,11 +19,11 @@ from langchain_core.outputs import ChatGeneration, LLMResult
 from langgraph.types import Command
 
 from kingfisher import Kingfisher
-from kingfisher.core.interfaces import RunEvents
+from kingfisher.core.interfaces import PdfAttachments, RunEvents, UnusedResults
+from kingfisher.core.logged import ORIGINS_LOGGER, RUN_LOGGER, WARNINGS_LOGGER, warn
 from kingfisher.core.request import Decision, Request, Resume
 from kingfisher.core.session import running
 from kingfisher.core.session.runlog import (
-    RUN_LOGGER,
     LoggedRunEvents,
     RunLogger,
     usage_of,
@@ -48,6 +50,7 @@ from tests.unit.test_stream_delegations import (
     _twice,
 )
 from tests.unit.test_subagent_helpers import HELPER, REVIEWER, _define
+from tests.unit.test_unused_results import LEFT, STRAY, _folder
 
 
 def _logger(sink, *, session_id: str = "s") -> RunLogger:
@@ -167,10 +170,19 @@ def test_events_with_no_model_calls_total_zero():
     assert usage.cached_share is None  # not a division by zero
 
 
+class _Warning(StubAgent):
+    """A supplied graph that warns as it runs, as a plugin of the deployment's may."""
+
+    def stream(self, *args, **kwargs):
+        warn("probe_failed", "the probe failed")
+        yield from super().stream(*args, **kwargs)
+
+
 def test_a_sink_that_fails_does_not_fail_the_turn(cfg, caplog):
     """The sink is the deployment's code, and `run_start` and `run_end` are called from
-    kingfisher's own turn, where langchain's guard around callbacks does not reach. A
-    broken log shipper cost the caller their answer.
+    kingfisher's own turn, where langchain's guard around callbacks does not reach: a
+    broken log shipper cost the caller their answer. Told to the sink, its failure on a
+    warning would fail again, each time telling of the last.
     """
 
     class Broken(RunEvents):
@@ -178,18 +190,84 @@ def test_a_sink_that_fails_does_not_fail_the_turn(cfg, caplog):
             raise ConnectionRefusedError
 
     start(cfg, "s")
-    kf = Kingfisher(
-        cfg,
-        graph=StubAgent("42"),
-        sessions=LocalSessions(),
-        run_events=Broken(),
-    )
 
     with caplog.at_level(logging.WARNING):
+        kf = Kingfisher(cfg, graph=_Warning("42"), sessions=LocalSessions(), run_events=Broken())
         result = kf.run(Request("t", session_id="s"))
 
     assert result.answer == "42"
-    assert "run_start" in caplog.text, "the failure was swallowed without a word"
+    assert {r.name for r in caplog.records} == {WARNINGS_LOGGER}
+    assert [r.kingfisher["dropped"] for r in caplog.records] == [
+        "origins",
+        "run_start",
+        "probe_failed",
+        "run_end",
+    ]
+    assert {r.kingfisher["turn_id"] for r in caplog.records[1:]} == {result.turn_id}
+
+
+class _FailingPdfs(PdfAttachments):
+    def replacement(self, pdf):
+        raise RuntimeError(SAID)
+
+
+class _FailingSweep(UnusedResults):
+    def settle(self, found):
+        raise RuntimeError(SAID)
+
+
+@pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
+def test_a_turns_warnings_reach_the_deployments_sink_with_its_ids(scripted, awaited):
+    """A turn's warnings went to Python's logging whatever sink was wired, so a deployment
+    shipping its events elsewhere never heard its own plugins fail. Driven through both
+    loops, which each hold the sink around their own share of the turn, and from a
+    subagent's tool call and the turn's ending, which run on other threads.
+    """
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "helper.yaml").write_text(
+        'name: helper\ndescription: Reads.\nbuiltin_tools: ["read_file"]\n'
+        "system_prompt: |\n  You read.\n",
+        encoding="utf-8",
+    )
+    an_agent(scripted, subagents="[helper]", **EVERY_TOOL)
+    session = scripted.workspace / "sessions" / start(scripted, "s")
+    (session / "inputs" / "a.pdf").write_bytes(b"%PDF-1.4\n" + b"0" * 1024)
+    _folder(scripted).mkdir(parents=True, exist_ok=True)
+    (_folder(scripted) / STRAY).write_bytes(LEFT)
+    Scripted.script.extend([
+        _called("task", {"description": "read it", "subagent_type": "helper"}, "t1"),
+        _called("read_file", {"file_path": "/inputs/a.pdf"}, "s1"),
+        AIMessage("read"),
+        AIMessage("done"),
+    ])
+    sink = RecordedEvents()
+    kf = Kingfisher(
+        scripted,
+        sessions=LocalSessions(),
+        run_events=sink,
+        pdf_attachments=_FailingPdfs(),
+        unused_results=_FailingSweep(),
+    )
+    request = Request("go", agent="only", session_id="s")
+
+    result = asyncio.run(kf.arun(request)) if awaited else kf.run(request)
+
+    warned = {e["event"]: e for e in sink.events if e["level"] == "WARNING"}
+    assert sorted(warned) == ["pdf_attachments_failed", "unused_results_failed"]
+    pdf, sweep = warned["pdf_attachments_failed"], warned["unused_results_failed"]
+    for one in (pdf, sweep):
+        assert (one["session_id"], one["turn_id"], one["turn_agent"]) == (
+            "s",
+            result.turn_id,
+            "only",
+        )
+        assert one["error_type"] == "RuntimeError"
+        assert one["error_at"].startswith("unit/test_runlog.py:")
+        assert one["message"].startswith(("the PDF attachments plugin raised RuntimeError at ",
+                                          "session s: the unused results plugin raised "))
+    assert (pdf["agent"], pdf["call"], pdf["tool"]) == ("helper", "s1", "read_file")
+    assert (sweep["agent"], sweep["left"], sweep["files"]) == (None, 1, 1)
+    assert SAID not in json.dumps(sink.events, default=str), "an exception's message was sent"
 
 
 def test_a_turn_records_its_start_and_end(cfg):
@@ -204,8 +282,8 @@ def test_a_turn_records_its_start_and_end(cfg):
 
     result = kf.run(Request("t", session_id="s"))
 
-    assert [e["event"] for e in sink.events] == ["run_start", "run_end"]
-    assert {e["turn_id"] for e in sink.events} == {result.turn_id}
+    assert [e["event"] for e in sink.events] == ["origins", "run_start", "run_end"]
+    assert {e["turn_id"] for e in sink.of_turns} == {result.turn_id}
 
 
 @pytest.mark.parametrize(
@@ -227,7 +305,7 @@ def test_every_event_names_the_model_the_agent_runs(scripted, fields, runs):
     )
 
     assert "model_call" in {e["event"] for e in sink.events}
-    assert {(e["model"], e["endpoint"]) for e in sink.events} == {runs}
+    assert {(e["model"], e["endpoint"]) for e in sink.of_turns} == {runs}
 
 
 def test_a_subagents_calls_name_the_model_it_runs(scripted):
@@ -283,7 +361,7 @@ def test_every_event_names_the_agent_its_turn_ran(scripted):
     first = kf.run(Request("t", agent="delegating", session_id="s"))
     second = kf.run(Request("t", agent="plain", session_id="s"))
 
-    assert {(e["turn_id"], e["turn_agent"]) for e in sink.events} == {
+    assert {(e["turn_id"], e["turn_agent"]) for e in sink.of_turns} == {
         (first.turn_id, "delegating"),
         (second.turn_id, "plain"),
     }
@@ -347,24 +425,48 @@ def test_a_sink_that_is_empty_is_still_the_one_used(cfg):
 
     kf.run(Request("t", session_id="s"))
 
-    assert [e["event"] for e in sink] == ["run_start", "run_end"]
+    assert [e["event"] for e in sink] == ["origins", "run_start", "run_end"]
 
 
-def test_with_nothing_wired_the_events_go_to_the_run_logger(cfg, caplog):
-    """The default a deployment gets, and where it finds them: one JSON line per event
-    on `kingfisher.run`, with the mapping itself on the record for a handler that
-    ships structured logs.
+def test_with_nothing_wired_each_kind_of_event_goes_to_its_own_logger(cfg, caplog):
+    """The default a deployment gets, and where it finds them: run events as JSON lines on
+    `kingfisher.run`, warnings as their sentence on `kingfisher.warnings`, the origins line
+    on `kingfisher.origins`, each with the whole event on the record as `kingfisher` for a
+    handler that ships structured logs.
     """
     start(cfg, "s")
-    kf = Kingfisher(
-        cfg, graph=StubAgent("42"), sessions=LocalSessions()
+
+    with caplog.at_level(logging.INFO, logger="kingfisher"):
+        Kingfisher(cfg, graph=_Warning("42"), sessions=LocalSessions()).run(
+            Request("t", session_id="s")
+        )
+
+    heard = [r for r in caplog.records if r.name.startswith("kingfisher")]
+    assert [(r.name, r.levelname, r.kingfisher["event"]) for r in heard] == [
+        (ORIGINS_LOGGER, "INFO", "origins"),
+        (RUN_LOGGER, "INFO", "run_start"),
+        (WARNINGS_LOGGER, "WARNING", "probe_failed"),
+        (RUN_LOGGER, "INFO", "run_end"),
+    ]
+    origins, began, warned, _ = heard
+    assert origins.getMessage() == origins.kingfisher["message"]
+    assert origins.getMessage().startswith(f"reading from: workspace={cfg.workspace} ")
+    assert json.loads(began.getMessage()) == began.kingfisher
+    assert warned.getMessage() == "the probe failed"
+    assert not any(hasattr(r, "run_event") for r in heard)
+
+
+def test_with_logging_configured_by_nobody_a_warning_still_reaches_stderr():
+    """A client that set up nothing most needs to hear that a plugin of its broke, and a
+    `NullHandler` on `kingfisher` would leave Python's last resort nothing to print. In a
+    process of its own, since pytest's capture is itself a handler."""
+    probe = "from kingfisher.core.logged import warn; warn('probe_failed', 'the probe failed')"
+
+    ran = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True, timeout=60
     )
 
-    with caplog.at_level(logging.INFO, logger=RUN_LOGGER):
-        kf.run(Request("t", session_id="s"))
-
-    records = [r for r in caplog.records if r.name == RUN_LOGGER]
-    assert [r.run_event["event"] for r in records] == ["run_start", "run_end"]
+    assert ran.stderr == "the probe failed\n"
 
 
 def test_a_session_id_keeps_its_own_alphabet_in_the_log(caplog):
@@ -676,5 +778,5 @@ def test_a_turn_that_failed_before_its_reason_was_known_still_ends_with_none(
     with pytest.raises(RuntimeError):
         kf.run(Request("t", session_id="s"))
 
-    assert [e["event"] for e in sink.events] == ["run_start", "run_end"]
+    assert [e["event"] for e in sink.events] == ["origins", "run_start", "run_end"]
     assert sink.events[-1]["stop_reason"] is None

@@ -17,6 +17,25 @@ from kingfisher.plugins import LocalSessions
 from tests.conftest import an_agent, repository_root, start, verbs
 
 
+def test_log_keeps_a_warning_in_its_file_and_still_says_it(tmp_path, caplog):
+    """Handed the turn's warnings, `--log` took them off the terminal into its file, where
+    a command's user is not reading, so a plugin they wired broke without a word."""
+    import json
+    import logging
+
+    from kingfisher.cli.__main__ import _kept_in
+
+    sink = _kept_in(tmp_path / "turns.jsonl")
+    assert sink is not None
+    with caplog.at_level(logging.INFO, logger="kingfisher"):
+        sink.record({"event": "memory_store_failed", "level": "WARNING", "message": "it broke"})
+        sink.record({"event": "model_call", "level": "INFO", "message": "model_call"})
+
+    kept = (tmp_path / "turns.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [json.loads(line)["event"] for line in kept] == ["memory_store_failed", "model_call"]
+    assert [record.getMessage() for record in caplog.records] == ["it broke"]
+
+
 def test_bare_invocation_prints_help_and_does_nothing(capsys):
     """The safe default a shipped command needs."""
     assert main([]) == 0

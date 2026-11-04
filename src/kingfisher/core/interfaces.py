@@ -89,22 +89,27 @@ class CommandRunner(ABC):
 
 
 class RunEvents(ABC):
-    """Where a record of each turn goes: its start and end, every model and tool call.
+    """Where everything kingfisher logs goes: each turn's start and end and every model
+    and tool call, every warning, and where a `Kingfisher` reads from.
 
     Not session state: written as the turn runs and most wanted for a turn that
     crashed, so it goes where a deployment keeps its logs and outlives the session.
-    Every event carries `session_id` and `turn_id`.
+    An event raised in a turn carries `session_id` and `turn_id`; one raised outside
+    any turn carries neither.
     """
 
     @abstractmethod
     def record(self, event: Mapping[str, object]) -> None:
-        """Keep one event: a flat mapping whose `event` key names what happened.
+        """Keep one event: a flat mapping whose `event` key names what happened, `level`
+        how much it matters, as `INFO` or `WARNING`, and `message` what it says to a
+        person.
 
         Not always called from the turn's thread: tool calls made together run at once
         on an executor, and the async path hands each event to a worker thread. Their
         events can interleave, though each call's start comes before its end, so a sink
-        keeping state between events wants a lock. An exception here is logged and the
-        turn goes on, so a failing sink is heard from only in the log.
+        keeping state between events wants a lock. An exception here goes to Python's
+        logging, never back here, and the turn goes on: a failing sink is heard from only
+        there.
         """
         ...
 

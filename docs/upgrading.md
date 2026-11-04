@@ -18,6 +18,39 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Warnings are events on your `RunEvents`, after #1203
+
+- **The structured record's attribute is `kingfisher`, not `run_event`.** Every record the
+  default sink writes carries the whole event as `record.kingfisher`, on all three of its
+  loggers; `record.run_event` is gone. A handler or formatter reading `run_event` finds
+  nothing.
+- **Warnings moved to one logger, `kingfisher.warnings`.** Each was written on its own
+  module's logger, such as `kingfisher.core.session.memory`, or `kingfisher.core.versions`
+  for a refused change to the definitions, which a note below says to watch; a logging
+  configuration naming one of those — a level, a handler, a filter — now names a logger
+  nothing writes to. Name `kingfisher.warnings`, or `kingfisher` for every logger
+  kingfisher has, and tell warnings apart by `record.kingfisher["event"]`;
+  [`ports.md`](guides/ports.md#runevents--where-kingfishers-logs-go) lists each one's
+  name and fields. Their sentences are as they were.
+- **A sink of yours now hears warnings and the origins line too.** Every warning a turn
+  raises is handed to the `run_events=` sink, with the turn's `session_id`, `turn_id`,
+  `turn_agent` and `agent`, rather than to Python's logging, as is the `reading from:`
+  line, as `origins`, once per `Kingfisher`. Every event carries `level`, `INFO` or
+  `WARNING`, and `message`, a run event's being its name. A sink that took every event
+  for one of the seven run events — totalling `model_call`s by `event` is unaffected,
+  but one reading `turn_id` or `model` off every event raises on `origins` — should look
+  at `event` or `level` first. A sink that raises is still reported to Python's logging,
+  now as `run_events_failed` on `kingfisher.warnings`, and never to itself.
+- **`kingfisher run --log FILE` and `decide --log FILE` also keep the warnings in FILE**,
+  beside the run events, and still say them on stderr.
+- **The `reading from:` line is built on every construction**, whatever Python's levels
+  say, since a sink is handed it; it takes under a millisecond. On the default sink it is
+  still written only where `kingfisher.origins` is at `INFO`.
+- **`LoggedRunEvents()` takes no logger.** It writes to the three loggers by name.
+- **Unchanged**: with nothing configured, warnings reach stderr through Python's last
+  resort, and the default sink honours Python's levels. There is no level setting of
+  kingfisher's own.
+
 ## A rewind puts back the files a turn left, after #1202
 
 - **`Session.rewind` restores `/outputs` and `/memory`** as the turn rewound to left

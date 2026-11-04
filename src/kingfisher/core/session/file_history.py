@@ -7,7 +7,6 @@ import ctypes
 import errno
 import hashlib
 import json
-import logging
 import os
 import re
 import shutil
@@ -26,7 +25,7 @@ from kingfisher.core.layout import (
     KEPT_FILES,
     MEMORY_WRITER,
 )
-from kingfisher.core.logged import raised
+from kingfisher.core.logged import raised, warn
 
 from .files import artifacts_seen
 from .memory import without_any
@@ -42,8 +41,6 @@ if TYPE_CHECKING:
     from kingfisher.core.result import MemoryEntry
 
     from .turn import Prepared
-
-_log = logging.getLogger(__name__)
 
 # The keys of a line in `FILE_HISTORY`, which a rewind replays in the order the turns ran.
 TURN = "turn"
@@ -224,7 +221,10 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
     if now is None:
         # No line rather than a wrong one: each file the listing missed would read as
         # removed, and a rewind would delete it.
-        _log.warning("the files turn %s left were not kept: a listing came back cut short", turn)
+        warn(
+            "turn_files_not_kept",
+            f"the files turn {turn} left were not kept: a listing came back cut short",
+        )
         return
     before = (yield from read_listing(harness, ARTIFACTS_SEEN)) or {}
     records = yield from read_history(harness)
@@ -248,11 +248,12 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
                 continue
             # Not the file, which the agent named, nor `why`, which may quote the backend: the
             # history line keeps both, inside the session.
-            _log.warning(
-                "turn %s kept no copy of a file under /%s; its line in %s says why",
-                turn,
-                path.partition("/")[0],
-                FILE_HISTORY,
+            folder = path.partition("/")[0]
+            warn(
+                "turn_file_not_copied",
+                f"turn {turn} kept no copy of a file under /{folder}; its line in "
+                f"{FILE_HISTORY} says why",
+                folder=folder,
             )
         not_kept[path] = {MARK: mark, WHY: why}
     state = yield from _kept_state(harness, records, under)
@@ -379,7 +380,15 @@ def _on_this_host(backend: Any, path: str) -> tuple[Path | None, Path] | None:
     try:
         return host_path(backend, path)
     except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing plugin
-        _log.warning("%s.host_path raised %s at %s", type(backend).__name__, *raised(exc))
+        error_type, error_at = raised(exc)
+        warn(
+            "host_path_failed",
+            f"{type(backend).__name__}.host_path raised {error_type} at {error_at}",
+            plugin=type(backend).__name__,
+            method="host_path",
+            error_type=error_type,
+            error_at=error_at,
+        )
         return None
 
 
