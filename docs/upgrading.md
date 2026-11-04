@@ -18,6 +18,27 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A session keeps a copy of each file a turn left, after #1196
+
+- **Every turn copies each file in `/outputs` and `/memory` that changed since the last
+  turn ended** to `.harness/files/<turn>/`, and records which in `.harness/files.jsonl`, so
+  a session can be put back where any turn left it. No call does that yet. On a disk that
+  clones -- APFS, and btrfs or XFS on Linux -- a copy takes no space until one of the two
+  files changes; on ext4 and most others, every changed version takes its full size. The
+  first turn of a session from before copies everything in both folders, having nothing to
+  compare with.
+- **`KINGFISHER_SESSION_MAX_BYTES` no longer counts those copies**, so it no longer bounds
+  a session's disk. Set `KINGFISHER_REWIND_MAX_BYTES` (`Config.rewind_max_bytes`) to bound
+  the copies as well; unset keeps every one. `Session.size()` still reports all a backend
+  holds, copies included.
+- **A backend of your own may declare `copy(source, destination)`.** Where `host_path`
+  does not name both the file and its copy on this host, kingfisher asks it, and without it
+  downloads and uploads each copy whole through its own memory. **`own_copies`**, in
+  `tests/checks/backend.py`, holds one you declare; [`ports.md`](guides/ports.md) says what
+  it is asked.
+- **`Session.forget()` also takes the entry out of every copy of the memory file.** A
+  memory file a `MemoryStore` keyed is never copied.
+
 ## A session keeps every turn's messages in `.harness/turns.jsonl`, after #1195
 
 - **Each turn that writes the conversation adds its messages to `.harness/turns.jsonl`**,

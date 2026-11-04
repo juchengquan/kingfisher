@@ -3045,7 +3045,9 @@ text 30.7%. Those last have the file, so their handle points at it and says it m
 changed; a snapshot would be a second store to write and sweep. Inline `execute` scripts,
 what the user and agent said, and `task` answers exist nowhere else, and a failure is
 what stops the same call being made again, so they stay whole. The transcript keeps no
-status, so a replayed failure is known by its wording.
+status, so a replayed failure is known by its wording. **Since 2026-11-04 a session keeps
+each version of a file a turn left**, for a rewind (*A session keeps a copy of each version
+of a file a turn left*); a handle still points at the file as it is now.
 
 **Inside the model call, replacing in place, writing nothing.** A pass clears the request
 and returns the handles as a state update, so every later call and the transcript are
@@ -3933,6 +3935,88 @@ only the virtual form of a path, the agent passed it to `execute` 4 times in 10,
 failing and costing about three times the whole task; so a folder and its route
 correspond as every route does -- the route's name under the session root -- and folders
 are renamed rather than given prettier virtual names. *(2026-09-21.)*
+
+**A session keeps a copy of each version of a file a turn left in `/outputs` and
+`/memory`.** Putting a session back where any earlier turn left it, the rewind the owner
+asked for, needs the files as each turn left them, and nothing held them: each turn
+overwrote the last. At a turn's end, after the memory writer and the store, both folders
+are listed with the marks `inputs.json` uses, compared with `.harness/artifacts.json`, and
+each new or changed file is copied to `.harness/files/<turn>/<path in the session>`. A
+line a turn in `.harness/files.jsonl` says what it kept, with each mark and size, what it
+could not and why, and what went. Every turn writes one, so a turn with no line is one
+whose files are unknown, never one that changed nothing; a listing cut short writes none,
+since every file it missed would read as removed. A file whose listing carries no mark is
+copied every turn, as nothing tells it unchanged. A turn id becomes its folder only when
+it is one lower-case segment, else a digest of it: a caller names its own turns, and `T1`
+beside `t1` would share a folder on macOS.
+
+**"A second store to write and sweep" no longer decides it.** That was the cost against a
+snapshot kept only so clearing's handle for an edited file could point at it (*The scope
+is what was resent*). Rewinding needs the versions whatever a handle says, and the cost
+was measured on 2026-11-04 through a real `LocalSessions` backend, on an M4 Pro with APFS:
+a clone took 3-4 ms at 1 GB and at 3 GB and no disk until one side changed; a plain copy
+0.2-0.4 s a gigabyte; reading a file whole and writing it back 1.2-1.35 s at 3 GB, holding
+3.4 GB; listing 1,000 files about 135 ms. The sweep is the history budget, below. The tail
+past a turn's stop, measured at under a second (*The tail past the stop needs no term of
+its own*), now includes the listing and the copies, which is what the lock rule is for.
+
+**Not on the ledger's closing line, where the plan put it.** The closing line is the first
+thing a turn's ending writes, ahead of the transcript and the pause so that a result in
+either already has its row, and the memory writer rewrites the memory file after both.
+Carrying the files there would write the ledger twice a turn. A line of its own, keyed by
+its turn, is found from whatever branch the turn ends up on, so abandoning a branch moves
+nothing.
+
+**A copy is made on disk where the backend names both ends here, else by the backend's own
+`copy`, else read and written whole.** On disk it is a clone first -- `fclonefileat` on
+macOS, the `FICLONE` ioctl on Linux -- and a plain copy on any refusal, which ext4 and
+tmpfs give; the plain copy reports a real failure. The source is opened refusing a link,
+and refused where its path runs through one, because the copy is read outside every fence
+and a rewind hands it back to the agent. The backend's `copy` is read on the backend alone,
+since a composite may route the two paths to different backends; reading whole holds the
+file in memory, which is what a remote backend's `copy` avoids. A failed copy is recorded
+with its reason and left unmarked in `artifacts.json`, so the next turn copies the version
+if it is still there.
+
+**A turn past its deadline when its copies begin makes none.** The claim expires at the
+deadline plus the longest superstep bound and the memory writer's (*The grace period has
+to cover a shell command*), so until the deadline at least that bound is left -- 120 s at
+the least, since `ModelProfile.timeout_s` is in the `max` -- against about a second and a
+half for a 3 GB plain copy. Past it, a turn stopped by the deadline may have nothing left.
+Judged by the clock rather than `stop_reason`, so a turn that failed in a superstep
+straddling the deadline is covered too, and judged once, before the first copy. What it
+skipped is recorded as not kept and copied by the next turn. **Not built: a throughput
+estimate.** Nothing on this host needs one. A remote backend's rate is unknown, and its
+whole-file route is the one copy that could outlast even a full superstep bound; a
+deployment meeting that is the case that makes the estimate worth building.
+
+**The history has its own budget, and the session cap stops counting it.**
+`KINGFISHER_REWIND_MAX_BYTES`, read into `Config.rewind_max_bytes`, unset keeping every
+copy, as the session cap is unset. Over it, copies go by the newest turn each can still
+restore, oldest first: a copy restores its turn and each after it until the file next
+changes or goes, and the version there now goes last. **Not by age**, under which notes
+written once in the first turn go first, though every rewind needs them. A drop marks the
+line that made the copy with `dropped_in`, as an expired ledger row gains `expired_in`,
+and is written before the copy is removed, so the history never promises a copy that is
+gone; a file larger than the whole budget is never copied at all. A clone counts at its
+full size: it overcounts on a disk that clones, which keeps a session under its budget.
+A size the listing does not give counts as nothing, which only a backend's own `copy` on a
+backend listing no sizes meets. `KINGFISHER_SESSION_MAX_BYTES` subtracts the sizes the
+history records, and only once the backend's count is over the cap, so a session under it
+reads nothing more; the port's `size` is left alone, and `Session.size()` still answers
+what the backend holds. **The cost, taken:** with the history unbounded by default, the
+session cap no longer bounds a session's disk.
+
+**A memory file a `MemoryStore` keyed is not copied, and `forget` reaches every copy.**
+Keyed, the file is the user's memory, loaded over it at every turn's start, so a copy
+could restore nothing, and it would hold the user's entries where the store's own
+forgetting never reaches. `Session.forget` takes the entry out of each copy before the
+file itself, so a forget that fails part way can be asked again, by its id and by its
+text, numbering nothing: numbered now, a copy's entries would take ids the caller was
+never shown, and an id the file once gave another entry takes that one out of an old copy
+too: history lost, never a leak. **What still reads the copies:** the shell, as it reads the transcript. `.harness` is
+fenced against the shell's writes and against both of the file tools', which is what
+keeps a copy as the turn left it. *(2026-11-04.)*
 
 **`execute`'s own description states the shell's path rule, and a miss is answered
 with it.** deepagents' description says "Use absolute paths", and the only absolute paths

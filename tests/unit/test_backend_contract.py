@@ -13,7 +13,7 @@ from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import BackendProtocol, ReadResult, WriteResult
 
 from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH_ROUTE, Layout
-from kingfisher.plugins import LocalSessions, ScratchRun, scratch_runs_of
+from kingfisher.plugins import LocalSessions, ScratchRun, host_path, scratch_runs_of
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, backend_at
 from tests.checks import backend as backend_kit
 from tests.checks.backend import (
@@ -22,6 +22,7 @@ from tests.checks.backend import (
     filesystem_consistency,
     host_path_refusal,
     offloads_in_the_scratchpad,
+    own_copies,
     route_coverage,
     scratch_runs,
 )
@@ -299,3 +300,61 @@ def test_a_run_breaking_a_promise_fails_the_check(cfg, session_dir, kind, says):
 
     with pytest.raises(AssertionError, match=says):
         scratch_runs(lambda: (cfg, CompositeBackend(default=wrong, routes={})))
+
+
+# -- a turn's copies -----------------------------------------------------------
+
+
+class _Copying(WorkspaceScopedBackend):
+    """Kingfisher's own backend with a `copy` of its own, keeping every promise but `kind`'s."""
+
+    kind = ""
+
+    def copy(self, source: str, destination: str) -> str | None:
+        (got,) = self.download_files([source])
+        if got.content is None:
+            return None if self.kind == "answers None for a file not there" else got.error
+        if self.kind == "lands nothing":
+            return None
+        if self.kind == "links":
+            here, there = host_path(self, source), host_path(self, destination)
+            assert here is not None and there is not None
+            there[1].parent.mkdir(parents=True, exist_ok=True)
+            os.link(here[1], there[1])
+            return None
+        (put,) = self.upload_files([(destination, got.content)])
+        return put.error
+
+
+def _copying(cfg, session_dir, kind: str) -> _Copying:
+    real = backend_at(cfg, session_dir)
+    made = _Copying(
+        default=real.default,
+        routes=dict(real.routes),
+        session_dir=session_dir,
+        workspace=cfg.workspace,
+        layout=DEFAULT_LAYOUT,
+    )
+    made.kind = kind
+    return made
+
+
+def test_a_backend_s_own_copy_keeping_its_promises_passes(cfg, session_dir):
+    """The control the broken ones below stand beside: kingfisher's own backend declares no
+    `copy`, so without this the check is never seen to pass a real one."""
+    own_copies(lambda: (cfg, _copying(cfg, session_dir, "")))
+
+
+@pytest.mark.parametrize(
+    ("kind", "says"),
+    [
+        ("lands nothing", "a copy did not land"),
+        ("links", "changed with the file it was copied from"),
+        ("answers None for a file not there", "reads as a copy kept"),
+    ],
+)
+def test_a_copy_breaking_a_promise_fails_the_check(cfg, session_dir, kind, says):
+    """Each is a rewind restoring what no turn left: nothing, a file the agent has since
+    rewritten, or a copy that was never made."""
+    with pytest.raises(AssertionError, match=says):
+        own_copies(lambda: (cfg, _copying(cfg, session_dir, kind)))

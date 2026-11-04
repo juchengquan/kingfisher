@@ -174,6 +174,7 @@ class Environment:
                 keys_file=self.optional_path("KINGFISHER_MODEL_KEYS_FILE"),
             ),
             session_max_bytes=self.optional_number("KINGFISHER_SESSION_MAX_BYTES", least=0),
+            rewind_max_bytes=self.optional_number("KINGFISHER_REWIND_MAX_BYTES", least=0),
             skills_mounts=paths.skills_mounts,
             assets=paths.assets,
             skills_enabled=self.flag("KINGFISHER_SKILLS_ENABLED"),

@@ -187,6 +187,7 @@ LIMITS = {
     "execution_timeout_s": "KINGFISHER_EXECUTION_TIMEOUT_S",
     "turn_timeout_s": "KINGFISHER_TURN_TIMEOUT_S",
     "session_max_bytes": "KINGFISHER_SESSION_MAX_BYTES",
+    "rewind_max_bytes": "KINGFISHER_REWIND_MAX_BYTES",
     "recursion_limit": "KINGFISHER_RECURSION_LIMIT",
     "thread_pool_size": "KINGFISHER_THREAD_POOL_SIZE",
     "keep_results_rounds": "KINGFISHER_KEEP_RESULTS_ROUNDS",
@@ -218,6 +219,7 @@ FLOORS = {
     "KINGFISHER_RECURSION_LIMIT": 1,
     "KINGFISHER_THREAD_POOL_SIZE": 1,
     "KINGFISHER_SESSION_MAX_BYTES": 0,
+    "KINGFISHER_REWIND_MAX_BYTES": 0,
     "KINGFISHER_KEEP_RESULTS_ROUNDS": 1,
 }
 

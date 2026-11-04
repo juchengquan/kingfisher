@@ -30,6 +30,7 @@ from .checkpointing import (
     harness_mark,
     paused_state,
 )
+from .file_history import keep_turn_files
 from .files import collect_artifacts
 from .ledger import file_left, keep_ledger, sweep_results
 from .memory import kept_in_store
@@ -440,6 +441,8 @@ class Running:
                     if failed is not None:
                         turn.pending.append(failed)
             yield from self._sweep_results(prepared, turn.recorded)
+            # Last, after the memory writer and the store: the memory file as the turn left it.
+            yield from keep_turn_files(prepared, self.cfg)
         except OSError as exc:
             # A full disk refusing the record is no reason to lose the answer as well: it
             # was paid for, and nothing streamed it before `finished`.

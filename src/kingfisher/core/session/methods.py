@@ -6,10 +6,11 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.request import Request, Resume
 
+from .file_history import forget_in_copies, kept_bytes
 from .files import read_artifact
 from .handle import Session
 from .ledger import read_result
-from .memory import forget_entry, memory_entries
+from .memory import forget_entry, memory_entries, memory_entry
 from .model import (
     DEFAULT_SESSION,
     Conversation,
@@ -63,11 +64,16 @@ class SessionMethods:
         listing = yield reading(self._sessions, "sessions", self.cfg)
         return tuple(name for name, _ in listing)
 
-    def _refuse_if_over_budget(self, session: Conversation) -> Steps[None]:
+    def _refuse_if_over_budget(self, session: Conversation, harness: HarnessFiles) -> Steps[None]:
         """Stop a session that is already too large from growing further."""
         if self.cfg.session_max_bytes is None:
             return
         held = yield reading(self._sessions, "size", self.cfg, session.id)
+        if held > self.cfg.session_max_bytes:
+            # Less the copies of earlier turns' files, which `rewind_max_bytes` bounds: counted
+            # here, a session that rewrote one large report every turn would be refused for
+            # the history alone.
+            held -= yield from kept_bytes(harness)
         if held > self.cfg.session_max_bytes:
             msg = (
                 f"session {session.id} holds {held} bytes, over the "
@@ -155,6 +161,10 @@ class SessionMethods:
             )
             raise SessionBusyError(msg)
         try:
+            forgotten = yield from memory_entry(files, self.cfg.layout, entry_id)
+            # Before the file itself: failing after it, the forget could not be asked again,
+            # as the id would be gone from the file.
+            yield from forget_in_copies(HarnessFiles(files), self.cfg.layout, forgotten)
             yield from forget_entry(files, self.cfg.layout, entry_id)
         finally:
             yield changing(self._sessions, "release", self.cfg, session_id, claimed)

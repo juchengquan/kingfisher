@@ -89,6 +89,16 @@ MEMORY_WRITER = "memory_writer.json"
 #: Each file in the inputs folder as the last turn the agent heard from found it. Here,
 #: because a caller may write the inputs folder directly, and nothing else knows its past.
 INPUTS_SEEN = "inputs.json"
+#: A copy of each version of a file in the artifact folders that a turn left, as
+#: `files/<turn's folder>/<path in the session>`. Here, so the agent cannot rewrite the
+#: past a session is put back to.
+KEPT_FILES = "files"
+#: A line a turn, in the order they ran: which files it kept a copy of, which it could not
+#: and why, and which it removed.
+FILE_HISTORY = "files.jsonl"
+#: Each file in the artifact folders as the last turn left it, so the next copies only what
+#: changed.
+ARTIFACTS_SEEN = "artifacts.json"
 
 #: The folder name a catalogue may not use for its own skills, because a
 #: subagent's bundled skills already mean something under this root.

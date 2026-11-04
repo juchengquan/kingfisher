@@ -202,7 +202,7 @@ class Preparation:
         unprotected = tuple(getattr(files, "unprotected", ()))
 
         # Before the inputs are placed: placing them grows the session.
-        yield from self._refuse_if_over_budget(session)
+        yield from self._refuse_if_over_budget(session, harness)
 
         # Before the turn exists, so a missing file fails before anything else is asked.
         placement = yield from planned_inputs(

@@ -72,7 +72,8 @@ class Session:
         return await adrive(self._service._memory_in(self.id, self._opened))
 
     def forget(self, entry_id: str) -> None:
-        """Remove one entry from this session's memory file, with the lines continuing it.
+        """Remove one entry from this session's memory file, with the lines continuing it,
+        and from every earlier copy of the file the session keeps to put a turn back.
 
         `SessionBusyError` while a turn holds the session, and `MemoryEntryError`, naming
         the ids there are, for one the file does not hold. With a `MemoryStore` wired, a
