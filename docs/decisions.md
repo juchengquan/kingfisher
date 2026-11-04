@@ -4437,14 +4437,41 @@ keeps `inputs.json` and `memory_writer.json` beside its copies of files, once pe
 since neither slice before recorded them a turn at a time. A rewind puts back the last
 copy its path kept and drops the file where none did: the agent is then told only what
 the next request places, rather than a history from another branch. The memory writer's
-file waits for the slice that restores the memory file it writes.
+file goes back with the memory file it writes.
 
 **Written pause, path, conversation, inputs, in that order.** A rewind dying after the
 path and before the conversation leaves a turn that follows the turn rewound to reading
 the old transcript, whose length the ledger's count for that turn then disagrees with,
 which the turn reports; the other order would leave it following the old turns from a
-conversation they never had. **Not yet:** files in `/outputs` and `/memory` stay as they
-are, and a turn from before the log is refused. *(2026-11-04.)*
+conversation they never had. A turn from before the log is refused. *(2026-11-04.)*
+
+**A rewind puts the files in `/outputs` and `/memory` back as the turn left them.** It
+replays the file history along the path to that turn: a version kept is copied back by
+the routes a turn copies by, a file the turn did not have is removed, and the folders
+are listed again so the next turn copies only what it changes after. A version with no
+copy -- dropped for space, skipped past a deadline, held by a `MemoryStore` -- is left as
+it is and named in `Rewound.not_restored`, and so is every file where a turn on the way
+kept no record: rewritten or removed on a guess, a file would be lost to every later
+rewind too. **Before the first turn nothing records the folders**, so a rewind to `START`
+leaves them all, and says so.
+
+**The next turn is told which files are not as its conversation left them**, in its
+message, as `Changed since your last turn: /outputs/report.md.`, and as `May have
+changed` where nothing says. Its conversation remembers each file as the turn rewound to
+left it, and a version with no copy is still the later one: kingfisher states the fact
+the model would otherwise get wrong. Measured on MiniMax-M3 with a writer agent, five
+sessions an arm: the report rewritten after the turn rewound to, no copy kept, then "What
+does /outputs/report.md list right now?" -- told, all five read the file and answered
+from it; untold, four did and one answered from the version it remembered.
+One session of difference, on a question whose "right now" already sends the agent back
+to the file, so it measures the line's floor rather than its use. Kept in
+`.harness/rewound.json` until a turn that tells it writes its conversation, so it is said
+once. None after a rewind to the start, whose conversation remembers no file.
+
+**Copies are dropped down the tree once a rewind has made one.** By the order the turns
+ran, a copy whose file changed on a branch left behind looked superseded, though it is
+the version the path still holds. The parents are read from the turn log only where the
+session has rewound and a budget is set. *(2026-11-04.)*
 
 **Narrowed once, for approval gates.** A turn stopped at an `interrupt_on` gate writes what
 its saver holds into `.harness/paused.state`, and a `Resume` reads it back and continues

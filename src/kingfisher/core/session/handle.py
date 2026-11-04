@@ -98,9 +98,12 @@ class Session:
 
     def rewind(self, to: str | Start) -> Rewound:
         """Put this session back where turn `to` ended, or before its first turn for
-        `START`: its conversation, which tool results the next turn is told of, and what it
-        heard of its inputs folder. The turns after it are kept, so a rewind to one of them
-        returns. Files in `/outputs` and `/memory` stay as they are.
+        `START`: its conversation, which tool results the next turn is told of, what it
+        heard of its inputs folder, and its files in `/outputs` and `/memory`. The turns
+        after it are kept, so a rewind to one of them returns. A file whose version there
+        has no copy is left as it is, named in `Rewound.not_restored`, and the next turn
+        tells the agent; before the first turn nothing records the files, so a rewind to
+        `START` leaves them all.
 
         A pause waiting on a decision is discarded, as a new request discards it.
         `SessionBusyError` while a turn holds the session, and `RewindError` for a turn

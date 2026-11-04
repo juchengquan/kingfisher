@@ -13,6 +13,7 @@ import re
 import shutil
 import stat
 import sys
+from collections.abc import Mapping
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
@@ -30,7 +31,8 @@ from kingfisher.core.logged import raised
 from .files import artifacts_seen
 from .memory import without_any
 from .steps import Steps, changing, on_host, reading
-from .store import read_listing, write_listing
+from .store import read_listing, read_off_path, write_listing
+from .turnlog import PARENT, read_turn_log
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -175,7 +177,9 @@ def kept_bytes(harness: Any) -> Steps[int]:
 
 
 def dropped_for_space(
-    records: list[dict[str, Any]], budget: int | None
+    records: list[dict[str, Any]],
+    budget: int | None,
+    parents: Mapping[str, str | None] | None = None,
 ) -> list[tuple[int, str]]:
     """The copies to remove, as `(line, path)`, to bring what they hold within `budget`.
 
@@ -183,6 +187,10 @@ def dropped_for_space(
     and every one after until its file next changes or goes, and one whose file has not
     since is the version there now, so it goes last. Not by age: a file written once in
     the first turn would go first, though every rewind needs it.
+
+    `parents`, each turn's, where a rewind has made the turns a tree: then "after" is down
+    every branch from the copy's turn, not later in the order they ran, or a version still
+    current on the path would go first for having changed on a branch left behind.
     """
     if budget is None:
         return []
@@ -192,8 +200,11 @@ def dropped_for_space(
             mentioned.setdefault(path, []).append(at)
     ranked = []
     for at, path, size in _held(records):
-        later = [one for one in mentioned[path] if one > at]
-        restores_up_to = later[0] - 1 if later else len(records)
+        if parents is not None:
+            restores_up_to = _reach(records, at, path, parents)
+        else:
+            later = [one for one in mentioned[path] if one > at]
+            restores_up_to = later[0] - 1 if later else len(records)
         ranked.append((restores_up_to, at, path, size))
     over = sum(size for *_, size in ranked) - budget
     dropped = []
@@ -255,7 +266,17 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
             state=state,
         )
     )
-    dropped = dropped_for_space(records, cfg.rewind_max_bytes)
+    # The tree only where a rewind made one: until then the order the turns ran is it.
+    parents = (
+        {
+            line["turn"]: line.get(PARENT)
+            for line in (yield from read_turn_log(harness))
+            if PARENT in line and isinstance(line.get("turn"), str)
+        }
+        if cfg.rewind_max_bytes is not None and (yield from read_off_path(harness))
+        else None
+    )
+    dropped = dropped_for_space(records, cfg.rewind_max_bytes, parents)
     for at, path in dropped:
         records[at][KEPT][path][DROPPED_IN] = turn
     # Patched as parsed, so a key another version wrote survives.
@@ -272,6 +293,29 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
     }
     if seen != before:
         yield from write_listing(harness, ARTIFACTS_SEEN, seen)
+
+
+def _reach(
+    records: list[dict[str, Any]], at: int, path: str, parents: Mapping[str, str | None]
+) -> int:
+    """The newest line whose turn the copy on line `at` still restores, down every branch
+    from its turn until `path` next changes there: the last line, the turn now ending,
+    where it is that turn's version, which no other copy outranks."""
+    children: dict[str | None, list[str]] = {}
+    for turn, parent in parents.items():
+        children.setdefault(parent, []).append(turn)
+    line = {record[TURN]: number for number, record in enumerate(records)}
+    newest = at
+    waiting = list(children.get(records[at][TURN], ()))
+    while waiting:
+        turn = waiting.pop()
+        number = line.get(turn)
+        if number is not None and path in _named(records[number]):
+            continue
+        if number is not None:
+            newest = max(newest, number)
+        waiting.extend(children.get(turn, ()))
+    return newest
 
 
 def _not_to_copy(path: str, size: int | None, prepared: Prepared, cfg: Config) -> str | None:
@@ -468,3 +512,83 @@ def restore_state(
         else:
             yield from harness.store(name, held)
     return tuple(dropped)
+
+
+
+#: Why a file has no version to go back to, where no copy failed but a record is missing.
+NO_RECORD = "no record says what the folders held when that turn ended"
+BEFORE_FIRST = "nothing records what the folders held before the first turn"
+
+
+def restore_files(
+    files: Any, harness: Any, layout: Layout, records: list[dict[str, Any]], path: list[str | None]
+) -> Steps[tuple[tuple[str, ...], dict[str, str]]]:
+    """Put each file in the artifact folders back as the last turn of `path` left it: the
+    paths put back, a file that turn did not have removed among them, and each path that
+    could not be, with why.
+
+    A file whose version there is unknown is left as it is: removed or rewritten on a
+    guess, it would be lost to every later rewind as well.
+    """
+    now = yield from artifacts_seen(files, layout)
+    if now is None:
+        return (), dict.fromkeys(layout.artifact_dirs, "a listing of it came back cut short")
+    held = _held_at(records, path)
+    if held is None:
+        return (), dict.fromkeys(sorted(now), NO_RECORD if path else BEFORE_FIRST)
+    restored: list[str] = []
+    not_restored: dict[str, str] = {}
+    for where in sorted({*held, *now}):
+        if where not in held:
+            yield changing(files, "delete", f"/{where}")
+            restored.append(where)
+            continue
+        under, mark, why = held[where]
+        if where in now and mark is not None and now[where][0] == mark:
+            continue
+        if under is None:
+            not_restored[where] = why or "its version has no copy"
+            continue
+        _, refused = yield from _copied(
+            files, f"{HARNESS_ROUTE}{KEPT_FILES}/{under}/{where}", f"/{where}", None
+        )
+        if refused is None:
+            restored.append(where)
+        else:
+            not_restored[where] = refused
+    # As the folders are now, so the next turn copies only what it changes after this.
+    after = yield from artifacts_seen(files, layout)
+    if after is not None:
+        listed = {one: mark for one, (mark, _) in after.items()}
+        yield from write_listing(harness, ARTIFACTS_SEEN, listed)
+    return tuple(restored), not_restored
+
+
+def _held_at(
+    records: list[dict[str, Any]], path: list[str | None]
+) -> dict[str, tuple[str | None, str | None, str | None]] | None:
+    """Each file the artifact folders held when the last turn of `path` ended, as the
+    folder of its copy or `None`, its mark, and why there is no copy; `None` where that is
+    unknown, because that turn or one before it since the first to keep a record has none.
+    """
+    by_turn = {record[TURN]: record for record in records}
+    first = next((at for at, turn in enumerate(path) if turn in by_turn), None)
+    if first is None or any(turn not in by_turn for turn in path[first:]):
+        return None
+    held: dict[str, tuple[str | None, str | None, str | None]] = {}
+    for turn in path[first:]:
+        record = by_turn[turn]
+        removed = record.get(REMOVED)
+        for gone in removed if isinstance(removed, list) else ():
+            held.pop(gone, None)
+        under = _under(record)
+        for where, kept in _entries(record, KEPT).items():
+            dropped = kept.get(DROPPED_IN)
+            if dropped is not None:
+                why = f"its copy was dropped for space in turn {dropped}"
+                held[where] = (None, kept.get(MARK), why)
+            else:
+                held[where] = (under, kept.get(MARK), None if under else "its copy has no folder")
+        for where, missing in _entries(record, NOT_KEPT).items():
+            held[where] = (None, missing.get(MARK), str(missing.get(WHY) or "it has no copy"))
+    return held

@@ -413,10 +413,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="put a session back where an earlier turn left it",
         description=(
             "The session's conversation, which tool results its next turn is told\n"
-            "of, and what it heard of its inputs folder go back to where the turn\n"
-            "ended. The turns after it are kept, so rewinding to one of them returns.\n"
-            "Files in /outputs and /memory stay as they are. A pause waiting on a\n"
-            "decision is discarded."
+            "of, what it heard of its inputs folder, and the files in /outputs and\n"
+            "/memory go back to where the turn ended. The turns after it are kept, so\n"
+            "rewinding to one of them returns. A file with no copy of that version is\n"
+            "left as it is, and the next turn is told. A pause waiting on a decision\n"
+            "is discarded."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1046,7 +1047,10 @@ def _rewind(args: argparse.Namespace) -> int:
     done = session.rewind(START if args.to_start else args.to)
     where = f"where turn {done.to} ended" if done.to is not None else "at its start"
     print(f"session {args.session} is now {where}")
-    print("files in /outputs and /memory are as they were")
+    for name in done.restored:
+        print(f"  put back {name}")
+    for name, why in done.not_restored.items():
+        print(f"  left {name} as it is: {why}")
     for pending in done.discarded:
         print(f"  discarded the decision {pending.call_id} on {pending.tool}")
     return 0

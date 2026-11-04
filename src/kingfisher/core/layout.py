@@ -81,6 +81,9 @@ TURNS_FILE = "turns.jsonl"
 #: turn log so a rewind can return to them; written by a rewind alone, so a session that
 #: never rewound has none.
 OFF_PATH_FILE = "off_path.json"
+#: Which files a rewind could not put back, until the next turn that tells the agent has
+#: written its conversation: what the agent remembers of them is no longer what is there.
+REWOUND_FILE = "rewound.json"
 #: Written only by a turn stopped at an approval gate, deleted once answered or superseded.
 PAUSED_STATE = "paused.state"
 #: What the paused checkpoint was built against and is waiting on, and its presence is what
