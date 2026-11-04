@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import inspect
-import logging
 from collections.abc import Awaitable, Callable, Collection, Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -17,12 +16,10 @@ from kingfisher.core.agent.scratch import ScratchRunner
 from kingfisher.core.agent.tool_context import ToolContext
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.interfaces import ScratchRun
-from kingfisher.core.logged import raised
+from kingfisher.core.logged import raised, warn
 
 if TYPE_CHECKING:
     from kingfisher.core.interfaces import ScratchRunLimit
-
-_log = logging.getLogger(__name__)
 
 #: What a `ScratchRunLimit` is told a graph is.
 LimitKind = Literal["agent", "subagent", "general-purpose", "compiled"]
@@ -52,11 +49,15 @@ def limit_answer(limit: ScratchRunLimit, name: str, kind: LimitKind) -> tuple[bo
         allows = limit.allows(name, kind)
     except Exception as error:  # noqa: BLE001 -- a plugin's bug costs this graph its
         # runs, never the turn, and never grants one.
-        _log.warning(
-            "the scratch run limit raised %s at %s on %s %r; its tools are refused a run",
-            *raised(error),
-            kind,
-            name,
+        error_type, error_at = raised(error)
+        warn(
+            "scratch_run_limit_failed",
+            f"the scratch run limit raised {error_type} at {error_at} on {kind} {name!r}; "
+            "its tools are refused a run",
+            kind=kind,
+            graph=name,
+            error_type=error_type,
+            error_at=error_at,
         )
         return False, (
             f"refused: this deployment's ScratchRunLimit raised {type(error).__name__}: {error}"
@@ -65,12 +66,13 @@ def limit_answer(limit: ScratchRunLimit, name: str, kind: LimitKind) -> tuple[bo
         return allows, None
     # Only `True` grants: an `async def allows` answers a coroutine, which is truthy, and
     # read as a grant it handed every graph a run.
-    _log.warning(
-        "the scratch run limit answered %s on %s %r, not True or False; its tools are "
-        "refused a run",
-        type(allows).__name__,
-        kind,
-        name,
+    warn(
+        "scratch_run_limit_not_a_bool",
+        f"the scratch run limit answered {type(allows).__name__} on {kind} {name!r}, not "
+        "True or False; its tools are refused a run",
+        kind=kind,
+        graph=name,
+        answered=type(allows).__name__,
     )
     if inspect.iscoroutine(allows):
         allows.close()

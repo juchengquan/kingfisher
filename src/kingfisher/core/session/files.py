@@ -6,12 +6,12 @@ elsewhere holds the session there, and a directory on this host is one the agent
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.layout import Layout
+from kingfisher.core.logged import warn
 from kingfisher.core.result import ArtifactError
 
 from .steps import Steps, changing, on_host, reading
@@ -21,8 +21,6 @@ if TYPE_CHECKING:
 
 # The layout arrives as an argument, never as `layout`'s route constants such as
 # `INPUTS_ROUTE`: a deployment may rename the folders a caller's files cross.
-
-_log = logging.getLogger(__name__)
 
 
 class InputsError(ValueError):
@@ -211,10 +209,12 @@ def collect_artifacts(backend: Any, layout: Layout) -> Steps[tuple[str, ...]]:
                 # Reported, not raised: the turn has run, and failing it now would lose
                 # its answer over a listing. Not `result.error`, a backend's own words,
                 # which may name what the agent left there.
-                _log.warning(
-                    "artifacts under /%s/ may be incomplete: %s",
-                    name,
-                    "the listing failed" if result.error else "the listing was cut short",
+                why = "the listing failed" if result.error else "the listing was cut short"
+                warn(
+                    "artifacts_incomplete",
+                    f"artifacts under /{name}/ may be incomplete: {why}",
+                    folder=name,
+                    reason=why,
                 )
             found.update(
                 match["path"].lstrip("/")

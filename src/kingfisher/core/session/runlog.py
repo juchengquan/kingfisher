@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import logging
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -15,7 +13,7 @@ from langgraph.errors import GraphInterrupt
 from kingfisher.core.agent.middlewares.results import answer_in
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.interfaces import RunEvents
-from kingfisher.core.logged import raised
+from kingfisher.core.logged import INFO, handed, logged, raised
 
 from . import runtime
 
@@ -23,12 +21,6 @@ MODEL_CALL = "model_call"
 
 #: Where langgraph puts, in a callback's metadata, the node it ran in.
 CHECKPOINT_NS = "langgraph_checkpoint_ns"
-
-#: Where `LoggedRunEvents` writes, and so where a deployment that wired nothing finds
-#: its run events: one JSON line per event, at INFO.
-RUN_LOGGER = "kingfisher.run"
-
-_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -58,23 +50,11 @@ def usage_of(events: Iterable[Mapping[str, Any]]) -> Usage:
 
 
 class LoggedRunEvents(RunEvents):
-    """`RunEvents` into the `kingfisher.run` logger.
-
-    `extra` carries the mapping for a handler that ships structured records. Checked
-    before serialising: `json.dumps` runs whether or not the line is kept, and the
-    default configuration drops INFO.
-    """
-
-    def __init__(self, logger: logging.Logger | None = None) -> None:
-        self._logger = logger or logging.getLogger(RUN_LOGGER)
+    """`RunEvents` into Python's logging, where a deployment that wired nothing finds them,
+    as `logged` writes them."""
 
     def record(self, event: Mapping[str, object]) -> None:
-        if self._logger.isEnabledFor(logging.INFO):
-            self._logger.info(
-                "%s",
-                json.dumps(event, ensure_ascii=False, default=str),
-                extra={"run_event": dict(event)},
-            )
+        logged(event)
 
 
 class RunLogger(BaseCallbackHandler):
@@ -116,13 +96,19 @@ class RunLogger(BaseCallbackHandler):
         self._delegations = runtime.Delegations()
 
     def _write(self, event: str, **fields: Any) -> None:
-        try:
-            self._sink.record({"ts": time.time(), "event": event, **self._stamp, **fields})
-        except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing sink: `run_start`
-            # and `run_end` are called outside langchain's guard around callbacks.
-            _log.warning(
-                "a RunEvents sink failed to record %r: it raised %s at %s", event, *raised(exc)
-            )
+        # Through `handed`, never the sink itself: a turn outlives a failing sink, and
+        # `run_start` and `run_end` are called outside langchain's guard around callbacks.
+        handed(
+            self._sink,
+            {
+                "ts": time.time(),
+                "event": event,
+                "level": INFO,
+                "message": event,
+                **self._stamp,
+                **fields,
+            },
+        )
 
     def _where(self, namespace: list[str], metadata: Mapping[str, Any]) -> dict[str, Any]:
         """Which agent a callback came from, and inside which delegations, as the stream

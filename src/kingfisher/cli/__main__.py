@@ -48,6 +48,7 @@ from kingfisher.core.access import Datazone, ExtraDatazone, with_datazone
 
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.logged import logged
 from kingfisher.core.session.model import held_by_a_turn
 
 from .health import _retired, examine, worst
@@ -55,7 +56,7 @@ from .listing import as_json, failed, origins_document, render
 from .progress import show
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Mapping
     from typing import TextIO
 
     from kingfisher import Config, Kingfisher, PendingDecision, RunResult
@@ -180,7 +181,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help=(
             "append what the turn did -- each model call with its tokens, each tool "
-            "call -- to FILE as JSON lines. Without it, nothing is kept"
+            "call, each warning -- to FILE as JSON lines; warnings are still said on "
+            "stderr. Without it, nothing is kept"
         ),
     )
     doing.add_argument(
@@ -635,7 +637,16 @@ def _kept_in(log: Path | None) -> JsonlRunEvents | None:
         return None
     from kingfisher.plugins import JsonlRunEvents  # noqa: PLC0415
 
-    return JsonlRunEvents(log.expanduser())
+    class KeptAndSaid(JsonlRunEvents):
+        """The file, and each warning on stderr as well: a command's user reads the
+        terminal, and a plugin they wired that broke must still say so there."""
+
+        def record(self, event: Mapping[str, object]) -> None:
+            super().record(event)
+            if event.get("level") == "WARNING":
+                logged(event)
+
+    return KeptAndSaid(log.expanduser())
 
 
 def _drive(

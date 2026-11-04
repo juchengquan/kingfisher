@@ -5395,6 +5395,43 @@ What a turn reports to its caller is not a log, so `memory_store_failed` keeps t
 message. **The definitions keep theirs**: a refused change to them is logged as refused,
 because the operator wrote them and is the one reading. *(2026-11-04.)*
 
+**Warnings are events on `RunEvents`, and the client chooses its logging.** Every
+warning kingfisher raises, and the line a `Kingfisher` writes once built, is an event
+handed to the sink the deployment passed, the one its run events go to, with `event`,
+`level` and `message`, and inside a turn the turn's ids. They were warnings on a logger
+per module, so a deployment shipping its events elsewhere never heard its own plugin
+fail, nor which turn it failed in. A context variable holds the turn's sink and ids
+around each share of the turn's work, never across a yield to its caller, and the
+threads a turn runs on copy it. The origins line and a refused change to the definitions
+are the `Kingfisher`'s own, and it hands them to its sink itself. A plugin's warning
+belongs in the same stream, so `warn` is on `kingfisher.plugins`. The origins line is
+built on every construction now, 0.4 ms measured, since a sink is handed it whatever
+Python's levels say. **Not taken: moving kingfisher's own logging to loguru.** An app on
+Python's logging would hear nothing until it bridged, and LangChain and httpx log through
+Python's logging anyway. *(2026-11-04.)*
+
+**The sink is the switch: there is no `KINGFISHER_LOG_LEVEL`.** A level applied before
+every sink would drop `model_call`, at `INFO`, which a deployment bills from; and a
+second setting for what Python's levels already say makes the order things start in
+decide which one wins. The default sink honours Python's levels, and `kingfisher` covers
+all three of its loggers, measured, where `disabled` on it silences none of them.
+**Rejected middle ground: the shipped sinks reading it.** A deployment that totals
+tokens from `kingfisher.run`'s lines loses them the same way. *(2026-11-04.)*
+
+**Nothing configured keeps warnings on stderr.** No `NullHandler` on `kingfisher`, the
+usual advice to a library: a client that set up nothing most needs to hear that its
+plugin broke, which Python's last resort prints. *(2026-11-04.)*
+
+**A record carries the event as one attribute, `kingfisher`, not a field each.** It
+replaced `run_event`: one name taken from the record instead of five, and a clear line
+between kingfisher's `session_id` and a host app's own. Measured, a `%`-style format
+cannot index into it where a `{`-style one can, as `{kingfisher[session_id]}`; and
+either style fails the same way on an app's own records, which lack the field whatever
+it is called. *(2026-11-04.)*
+
+**Out of scope: tags on LangChain's runs for a tracer.** The turn's ids on every run
+would change what a saved checkpoint holds. *(2026-11-04.)*
+
 **Still local, on purpose**: `LocalSessions`' confinement, because confining a shell means
 something only on the host that runs it; and a supplied runner, built from
 `<workspace>/sessions/<id>`, because a runner is about where commands run on this host.

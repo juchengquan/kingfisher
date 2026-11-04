@@ -2234,6 +2234,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         # How deepagents will list one skills source, which `ports.md` offers for
         # comparing what a backend serves with what kingfisher read.
         "list_skills": "document",
+        # How a plugin's warning reaches the deployment's `RunEvents` beside kingfisher's,
+        # which `ports.md` writes out for a plugin author; the scratch folder uses it.
+        "warn": "document",
     },
 }
 

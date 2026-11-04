@@ -2,7 +2,7 @@
 
 Kingfisher reaches the world through the interfaces in
 [`core/interfaces.py`](../../src/kingfisher/core/interfaces.py) — what runs a shell
-command, and where each turn's record goes — and through the `sessions` every
+command, and where kingfisher's logs go — and through the `sessions` every
 deployment names. The interfaces have defaults; the sessions have none to fall back
 on, and kingfisher's own, `LocalSessions`, works on one host with its own disk. This
 page is for a deployment that needs one of them to be something else — a sandbox, a
@@ -64,7 +64,7 @@ when left out:
 | **What a turn may hand over or run** | `pdf_attachments` | [below](#pdfattachments--what-the-model-is-handed-in-place-of-a-pdf) |
 | | `scratch_run_limit` | [below](#scratchrunlimit--which-graphs-tools-may-run-commands) |
 | | `subagent_middlewares` | [below](#subagentmiddlewares--what-a-portable-subagent-runs) |
-| **After the turn** | `run_events` | [below](#runevents--where-each-turns-record-goes) |
+| **After the turn** | `run_events` | [below](#runevents--where-kingfishers-logs-go) |
 | | `unused_results` | [below](#unusedresults--what-becomes-of-a-saved-result-nothing-names) |
 | **What outlives the session** | `memory_store` | [below](#memorystore--a-users-memory-across-their-sessions) |
 
@@ -246,10 +246,12 @@ Things to know:
   so your `ShellPrompt` is the only thing the agent is told about where files are. An
   agent or subagent not granted `execute` is never sent it.
 
-## `RunEvents` — where each turn's record goes
+## `RunEvents` — where kingfisher's logs go
 
-What a turn did — its start and end, every model call with its token counts, every
-tool call — as one event at a time, while it happens:
+Everything kingfisher logs, as one event at a time, while it happens: what a turn did —
+its start and end, every model call with its token counts, every tool call — every
+warning, and the line a `Kingfisher` writes once it is built, saying where it reads
+from:
 
 ```python
 from kingfisher.plugins import RunEvents
@@ -261,8 +263,16 @@ class ShipToCollector(RunEvents):
 kingfisher = Kingfisher(cfg, sessions=LocalSessions(), run_events=ShipToCollector())
 ```
 
-Each event is a flat mapping. `event` names it — `run_start`, `run_end`,
-`model_call`, `tool_start`, `tool_end`, `tool_error`, `model_error` — and `ts`,
+One sink hears all of it, and yours decides where it goes: Python's logging, loguru, a
+collector, or nowhere.
+
+Each event is a flat mapping, and four keys ride on every one: `event`, a stable name
+for what happened; `level`, `"INFO"` or `"WARNING"`, the names Python's logging and
+loguru share; `message`, what it says to a person; and `ts`. A name is stable: renaming
+one is a change [`upgrading.md`](../upgrading.md) records.
+
+**Run events** are at `INFO`, and their `message` is their name. `event` is `run_start`,
+`run_end`, `model_call`, `tool_start`, `tool_end`, `tool_error` or `model_error`, and
 `session_id`, `turn_id`, `turn_agent`, `model` and `endpoint` ride on every one — on
 `model_call` and `model_error` the last two are the model that made the call, a
 subagent's own where it runs one, and elsewhere the main agent's. `turn_agent` is the
@@ -295,6 +305,38 @@ A `task` call whose subagent stopped for a decision has a `tool_start` and no en
 the turn that paused. The turn that resumes it writes a `tool_start` for it again, with
 the same `call`, and then its end.
 
+**Warnings** are at `WARNING`, and their `message` is a sentence for whoever reads the
+log. One raised in a turn carries the turn's `session_id`, `turn_id` and `turn_agent`,
+`agent` as a run event does — the subagent whose tool call raised it, `null` otherwise —
+and `call`, the tool call's id, where the warning knows it. One raised outside any turn
+carries none of them: they are left out, not `null`. Each warning's own fields follow,
+and its sentence says them again:
+
+| `event` | When | Its fields |
+|---|---|---|
+| `artifacts_incomplete` | listing a folder of artifacts at a turn's end failed or was cut short | `folder`, `reason` |
+| `definitions_refused` | the definitions changed and the change failed its checks; the sentence keeps the error's message, since you wrote them | `error_type` |
+| `host_path_failed` | a backend's `host_path` raised | `plugin`, `method`, `error_type`, `error_at` |
+| `memory_store_failed` | a `MemoryStore` call raised | `plugin`, `method`, `error_type`, `error_at` |
+| `pdf_attachments_empty` | your `PdfAttachments` handed over nothing | `tool`, `call` |
+| `pdf_attachments_failed` | your `PdfAttachments` raised | `tool`, `call`, `error_type`, `error_at` |
+| `result_not_filed` | a result leaving the conversation could not be saved | `result`, `path`, `reason` |
+| `result_not_kept` | a result too long to show whole could not be saved | `tool`, `call`, `result`, `path`, `reason` |
+| `run_events_failed` | a sink raised, below | `dropped`, `error_type`, `error_at` |
+| `scratch_folder_left` | a scratch run's folder could not be removed | `path`, `reason` |
+| `scratch_run_limit_failed` | your `ScratchRunLimit` raised | `kind`, `graph`, `error_type`, `error_at` |
+| `scratch_run_limit_not_a_bool` | your `ScratchRunLimit` answered neither `True` nor `False` | `kind`, `graph`, `answered` |
+| `turn_file_not_copied` | a file a turn left could not be copied; `files.jsonl` says which and why | `folder` |
+| `turn_files_not_kept` | no file a turn left was copied, a listing having come back cut short | none |
+| `unused_results_failed` | your `UnusedResults` raised | `error_type`, `error_at`, `left`, `files` |
+
+`plugin` is the class that raised and `method` what it was asked; `reason` is a fixed
+phrase or deepagents' code for a refusal, such as `permission_denied`.
+
+**The origins line** is `origins`, at `INFO`, written once as a `Kingfisher` is built,
+with no ids. Its `message` is `reading from: workspace=… definitions=…` and every place
+it reads from beside them.
+
 **Events carry sizes and error types, never content** — not what the caller asked,
 what a tool was handed or answered, or what a model wrote. `run_start` carries
 `task_chars`, the task's length, and `decisions`, how many a resume answers, `null` for
@@ -309,20 +351,76 @@ bad argument raises a `ValidationError` holding the argument the model sent.
 Kingfisher's own warnings keep the same rule, so a plugin of yours that raises is
 logged by its type and where; log its message in the plugin if you want it.
 
-**Wire nothing and they go to the `kingfisher.run` logger**, one JSON line per event
-at `INFO`, with the mapping itself on the record as `run_event` for a handler that
-ships structured logs. Python's default configuration drops `INFO`, so a
-deployment that wants them either configures logging or passes a sink — and
-`kingfisher run` and `decide` keep none unless given `--log FILE`, which appends one
-JSON line per event.
+**Wire nothing and they go to Python's logging**, through three loggers: run events to
+`kingfisher.run` at `INFO`, one JSON line each; warnings to `kingfisher.warnings` at
+`WARNING`, as their sentence; and the origins line to `kingfisher.origins` at `INFO`.
+Every record carries the whole event as one attribute, `record.kingfisher`, for a
+handler that ships structured logs — `record.kingfisher["session_id"]`, so nothing
+kingfisher adds lands on a name your own records use. With logging configured by
+nobody, Python's last resort prints warnings to stderr and drops the rest, so a
+deployment that set up nothing still hears that a plugin of its failed. `kingfisher
+run` and `decide` keep no run events unless given `--log FILE`, which appends one JSON
+line per event, warnings and the origins line included, and still says each warning on
+stderr.
+
+**Switching them off is the sink's call.** Kingfisher has no level setting of its own:
+one applied before every sink would drop `model_call`, which a bill is totalled from.
+On the default sink Python's levels decide —
+`logging.getLogger("kingfisher").setLevel(logging.ERROR)` silences all three loggers,
+and setting `kingfisher.run` or `kingfisher.warnings` alone touches only that one. Not
+`logging.getLogger("kingfisher").disabled = True`: that stops records logged on
+`kingfisher` itself and none of its children's, and every record kingfisher writes is
+a child's.
+
+**On loguru**, until kingfisher ships a sink for it: the standard bridge, the
+`InterceptHandler` loguru's documentation gives, passes on a record's message and
+nothing else, so the event is lost on the way. Bind it into loguru's context where the
+bridge logs, as one field:
+
+```python
+bound = logger.bind(kingfisher=record.kingfisher) if hasattr(record, "kingfisher") else logger
+bound.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+```
+
+Or skip Python's logging: a sink of your own can hand each event to loguru itself, as
+`logger.bind(kingfisher=dict(event)).log(event["level"], event["message"])`.
+
+**A warning of your own goes to the same sink.** A plugin of yours that has something
+to say about a turn says it with `warn`, and the deployment hears it beside
+kingfisher's own, carrying the turn's ids:
+
+```python
+from kingfisher.plugins import MemoryStore, warn
+
+class RedisMemory(MemoryStore):
+    def load(self, key):
+        try:
+            return self._primary.load(key)
+        except redis.TimeoutError:
+            warn(
+                "redis_memory_on_replica",
+                f"the memory store timed out after {self.timeout}s; read from the replica",
+                timeout_s=self.timeout,
+            )
+            return self._replica.load(key)
+```
+
+`warn(event, message, **fields)` hands the turn's sink a warning, at `WARNING`, with the
+ids a turn stamps on its own; outside a turn it goes to `kingfisher.warnings`. Lead its
+name with your plugin's, so no warning kingfisher adds can take it, and hold it to the
+same rule: nothing in the sentence or a field that a caller, a tool or a model said. A
+field cannot replace `event`, `level`, `message`, `ts` or the turn's ids, and a sink
+that fails on it is reported as on any event, below.
 
 **Not session state.** They used to be a file in the session's `.harness`, deleted
 with it. They outlive the session now, because a log is most wanted for the turn
 that went wrong, and keeping them is your retention policy rather than
 kingfisher's. `session_id` and `turn_id` are how one session's are found again.
 
-**A sink that raises does not fail the turn.** The failure is logged as a warning
-and the turn goes on — so a sink that is failing is heard from only in your logs.
+**A sink that raises does not fail the turn.** Its failure goes to Python's logging,
+never back to the sink, where it would fail again: `run_events_failed` on
+`kingfisher.warnings`, naming the event it `dropped`, and the turn goes on. So a sink
+that is failing is heard from only there — on stderr, where nothing is configured.
 It is called once per event, and not always from the thread running the turn: tool
 calls a model makes together run at once, on an executor's threads, and on the
 async path langchain hands each event to a worker thread. So the events of tool

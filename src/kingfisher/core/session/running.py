@@ -13,6 +13,7 @@ from kingfisher.core.access import Held, with_datazone
 from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.config import Config, ConfigError
 from kingfisher.core.layout import PAUSED_STATE, REWOUND_FILE
+from kingfisher.core.logged import TurnWarnings, warning_into
 from kingfisher.core.request import Request, Resume
 from kingfisher.core.result import (
     AWAITING,
@@ -66,10 +67,10 @@ from .turn import (
 from .turnlog import keep_turns
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import AsyncIterable, Callable, Iterable, Sequence
 
     from kingfisher.core.config import Endpoint
-    from kingfisher.core.interfaces import MemoryStore, UnusedResults
+    from kingfisher.core.interfaces import MemoryStore, RunEvents, UnusedResults
 
     from .transcript import Message
 
@@ -98,6 +99,39 @@ class _Turn:
     memory: MemoryChanges = field(default_factory=MemoryChanges)
     #: Why the ending could not keep all the turn did, or `None`.
     keep_failure: str | None = None
+
+
+#: What the turn's stream hands back once it has nothing more.
+_DONE = object()
+
+
+def _within(
+    heard: TurnWarnings, stream: Callable[..., Iterable[Any]], /, *args: Any, **kwargs: Any
+) -> Iterator[Any]:
+    """`stream(*args, **kwargs)`, each item made inside the turn's warnings and handed on
+    outside them, where the caller's own code runs."""
+    with warning_into(heard):
+        items = iter(stream(*args, **kwargs))
+    while True:
+        with warning_into(heard):
+            item = next(items, _DONE)
+        if item is _DONE:
+            return
+        yield item
+
+
+async def _awithin(
+    heard: TurnWarnings, stream: Callable[..., AsyncIterable[Any]], /, *args: Any, **kwargs: Any
+) -> AsyncIterator[Any]:
+    """`_within`, for the graph's async stream."""
+    with warning_into(heard):
+        items = aiter(stream(*args, **kwargs))
+    while True:
+        with warning_into(heard):
+            item = await anext(items, _DONE)
+        if item is _DONE:
+            return
+        yield item
 
 
 def _asked(value: str | Request | Resume) -> Request | Resume:
@@ -191,6 +225,7 @@ class Running:
     _sessions: Any
     _prepare_steps: Callable[..., Steps[Prepared]]
     _delete_session_steps: Callable[[str], Steps[str | None]]
+    run_events: RunEvents
     unused_results: UnusedResults
     memory_store: MemoryStore | None
 
@@ -534,21 +569,24 @@ class Running:
         files: Any = None,
     ) -> Iterator[RunEvent]:
         """One turn, on the graph's own stream."""
-        turn = _Turn(drive(self._prepare_steps(request, source_ids=source_ids, files=files)))
+        heard = TurnWarnings(self.run_events)
+        with warning_into(heard):
+            turn = _Turn(drive(self._prepare_steps(request, source_ids=source_ids, files=files)))
         try:
             with self._turn_outcome(turn):
                 # Inside, not before: a caller that stops reading during these must still
                 # end the turn.
                 yield from turn.prepared.events
-                for chunk in turn.prepared.graph.stream(
-                    self._payload(turn), **self._driving(turn)
+                for chunk in _within(
+                    heard, turn.prepared.graph.stream, self._payload(turn), **self._driving(turn)
                 ):
                     yield from self._read(turn, *chunk)
                     if (stop := self._bound(turn)) is not None:
                         yield stop
                         break
         finally:
-            self._end_turn(turn)
+            with warning_into(heard):
+                self._end_turn(turn)
         yield from self._ending(turn)
 
     async def _astream_turn(
@@ -560,21 +598,24 @@ class Running:
     ) -> AsyncGenerator[RunEvent, None]:
         """The same turn on the graph's async stream; an `AsyncGenerator` so `astream` can
         `aclose` it."""
-        prepared, cancelled = await adrive_finished(
-            self._prepare_steps(request, source_ids=source_ids, files=files)
-        )
+        heard = TurnWarnings(self.run_events)
+        with warning_into(heard):
+            prepared, cancelled = await adrive_finished(
+                self._prepare_steps(request, source_ids=source_ids, files=files)
+            )
         turn = _Turn(prepared)
         if cancelled is not None:
             # The cancel arrived while the turn was being built, so the built turn is
             # the caller's to let go of: ended the way any turn ends, then the cancel.
-            await self._aend_turn(turn)
+            with warning_into(heard):
+                await self._aend_turn(turn)
             raise cancelled
         try:
             with self._turn_outcome(turn):
                 for event in turn.prepared.events:
                     yield event
-                async for chunk in turn.prepared.graph.astream(
-                    self._payload(turn), **self._driving(turn)
+                async for chunk in _awithin(
+                    heard, turn.prepared.graph.astream, self._payload(turn), **self._driving(turn)
                 ):
                     for event in self._read(turn, *chunk):
                         yield event
@@ -582,7 +623,8 @@ class Running:
                         yield stop
                         break
         finally:
-            await self._aend_turn(turn)
+            with warning_into(heard):
+                await self._aend_turn(turn)
         for event in self._ending(turn):
             yield event
 

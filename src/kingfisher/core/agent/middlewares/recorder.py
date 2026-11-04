@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -16,6 +15,7 @@ from langchain_core.messages import ToolMessage
 from kingfisher.core.access import Audience, jointly, listed, stated, unlisted
 from kingfisher.core.agent.prompting import FILE_TOOLS, WRITE_TODOS
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
+from kingfisher.core.logged import warn
 from kingfisher.core.result import MAIN, WORKING, LedgerEntry, Listed
 
 from .recorded import arguments, filed_at, stamp, summary, unfiled
@@ -23,8 +23,6 @@ from .results import answer_in, answered
 
 if TYPE_CHECKING:
     from kingfisher.core.session.ledger import Filing, Ledger
-
-_log = logging.getLogger(__name__)
 
 #: The calls that start a run: `eval` as well as `task`, since a program can start a
 #: subagent, whose results would otherwise read as calls the agent made itself.
@@ -339,8 +337,14 @@ class RecorderMiddleware(AgentMiddleware):
             why = unfiled(answers[0])
         else:
             return entry
-        _log.warning(
-            "the result of %s %s was not kept at %s: %s", entry.tool, entry.id, entry.path, why
+        warn(
+            "result_not_kept",
+            f"the result of {entry.tool} {entry.id} was not kept at {entry.path}: {why}",
+            tool=entry.tool,
+            call=entry.call,
+            result=entry.id,
+            path=entry.path,
+            reason=why,
         )
         return self._ledger.unkept(entry)
 

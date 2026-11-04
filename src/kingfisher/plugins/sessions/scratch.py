@@ -9,7 +9,6 @@ yields missing outputs rather than a read or a write somewhere else.
 from __future__ import annotations
 
 import errno
-import logging
 import os
 import shlex
 import shutil
@@ -17,12 +16,12 @@ import stat
 import uuid
 from typing import TYPE_CHECKING
 
+from kingfisher.core.logged import warn
+
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
     from types import TracebackType
-
-_LOG = logging.getLogger(__name__)
 
 #: Whether this host opens a name relative to a held folder, which every step below rests
 #: on. Windows does not, and `run_in_scratch` refuses there.
@@ -77,10 +76,12 @@ class ScratchFolder:
         except OSError as left:
             # Swapped for a link or emptied by the command: what is there is the shell's.
             # Logged by its code alone: its text names a file the command made.
-            _LOG.warning(
-                "a scratch run's folder %s was left behind: %s",
-                self.path,
-                errno.errorcode.get(left.errno or 0, type(left).__name__),
+            why = errno.errorcode.get(left.errno or 0, type(left).__name__)
+            warn(
+                "scratch_folder_left",
+                f"a scratch run's folder {self.path} was left behind: {why}",
+                path=str(self.path),
+                reason=why,
             )
         finally:
             os.close(self._fd)

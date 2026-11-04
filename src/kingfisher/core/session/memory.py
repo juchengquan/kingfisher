@@ -6,12 +6,11 @@ caller can be told which entries a turn added, changed or removed.
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.logged import raised
+from kingfisher.core.logged import raised, warn
 from kingfisher.core.result import MemoryChanges, MemoryEntry, MemoryEntryError, RunEvent
 
 from .steps import Steps, changing, on_host, reading
@@ -22,8 +21,6 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.tool_context import Caller
     from kingfisher.core.interfaces import MemoryStore
     from kingfisher.core.layout import Layout
-
-_log = logging.getLogger(__name__)
 
 _NUMBERED = re.compile(r"^- \[m(\d+)\] (.*)$")
 _BARE = re.compile(r"^- (.*\S.*)$")
@@ -345,7 +342,15 @@ _INSTEAD = {
 def store_failed(store: MemoryStore, call: str, exc: Exception) -> RunEvent:
     """The event, and the log line, for a store call that raised."""
     named = f"{type(store).__name__}.{call}"
-    _log.warning("%s raised %s at %s; the turn goes on", named, *raised(exc))
+    error_type, error_at = raised(exc)
+    warn(
+        "memory_store_failed",
+        f"{named} raised {error_type} at {error_at}; the turn goes on",
+        plugin=type(store).__name__,
+        method=call,
+        error_type=error_type,
+        error_at=error_at,
+    )
     return RunEvent(
         kind="memory_store_failed",
         text=f"{named} raised {type(exc).__name__}: {exc}; {_INSTEAD[call]}",

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import bisect
-import logging
 import threading
 from collections.abc import Sequence
 from dataclasses import replace
@@ -11,6 +10,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.agent.middlewares.recorded import filed_at, kept_text, stamped_id, unfiled
+from kingfisher.core.logged import warn
 from kingfisher.core.result import ResultError
 
 from .steps import Steps, changing, on_host, reading
@@ -32,8 +32,6 @@ from .unused import UnusedFiles, settle_unused
 if TYPE_CHECKING:
     from kingfisher.core.interfaces import UnusedResults
     from kingfisher.core.result import LedgerEntry, Listed
-
-_log = logging.getLogger(__name__)
 
 #: One result to file: its id, where it goes, and what the file holds.
 Filing = tuple[str, str, bytes]
@@ -165,7 +163,13 @@ class Ledger:
         )
         for number, path, _ in wanted:
             if number in failed:
-                _log.warning("result %s was not filed at %s: %s", number, path, failed[number])
+                warn(
+                    "result_not_filed",
+                    f"result {number} was not filed at {path}: {failed[number]}",
+                    result=number,
+                    path=path,
+                    reason=failed[number],
+                )
         kept = {number: path for number, path, _ in wanted if number not in failed}
         changes: dict[str, dict[str, Any]] = {n: {"path": p} for n, p in kept.items()}
         if lose:
