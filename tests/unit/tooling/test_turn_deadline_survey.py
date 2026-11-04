@@ -86,8 +86,9 @@ def test_the_survey_reads_what_a_turn_past_its_limit_logs(scripted, tmp_path):
     kf.run(Request("go", agent="only", session_id="s"))
     # Cut short, the turn left the model's last reply unread.
     Scripted.script.clear()
-    # A program handing a subagent three lookups, the third begun past the limit and the two
-    # model calls after the second and third lookups too.
+    # A program handing a subagent three lookups: the second ends past the limit, so the
+    # third is refused and the turn ends inside its claim, while the two model calls after
+    # the second lookup still run.
     Scripted.script.extend(
         [
             _call(
@@ -103,19 +104,41 @@ def test_the_survey_reads_what_a_turn_past_its_limit_logs(scripted, tmp_path):
     kf.run(Request("again", agent="only", session_id="s"))
 
     survey = _survey()
-    report = survey.survey(survey.read_turns([log]), limit=2, grace=0.5)
+    # The claim lapses at 3s: past the second turn's end, 2.25s here, and before the first's,
+    # which its three lookups in a row keep past 3.3s however fast the runner.
+    report = survey.survey(survey.read_turns([log]), limit=2, grace=1.0)
 
     turns, programs, subagents = report["turns"], report["programs"], report["subagents"]
     assert (turns["n"], turns["stopped_by_their_limit"]) == (2, 2)
-    assert turns["ran_past_the_claim"] == 2
-    assert turns["running_when_the_claim_lapsed"] == {"a program": 2}
+    assert turns["ran_past_the_claim"] == 1
+    assert turns["running_when_the_claim_lapsed"] == {"a program": 1}
     assert programs["n"] == 2
     assert programs["tool_calls_in_one"]["max"] == 4
     assert programs["offered_calls_begun_after_the_limit"] == 1
     assert programs["built_in_calls_begun_after_the_limit"] == 1
     assert (subagents["n"], subagents["started_from_a_program"]) == (1, 1)
-    assert subagents["tool_calls_begun_after_the_limit"] == 1
+    assert subagents["tool_calls_begun_after_the_limit"] == 0
     assert subagents["model_calls_begun_after_the_limit"] == 2
     # What it prints is counts: no id, and no offered tool's name.
     printed = survey.render(report)
     assert "lookup" not in printed and "helper" not in printed
+
+
+def test_a_subagents_tool_call_begun_past_the_limit_is_counted():
+    """A turn here refuses a subagent's call once it is out of time, so the run above begins
+    none, and a count that never rose would pass it -- reading a log from a deployment
+    without that refusal as one whose subagents stop. Driven against events built here."""
+    task = {"tool": "task", "call": "t1", "agent": None, "delegations": []}
+    inside = {"tool": "lookup", "agent": "helper", "delegations": ["t1"]}
+    events = [
+        {"event": "run_start", "ts": 0.0},
+        {"event": "tool_start", "ts": 0.1, **task},
+        {"event": "tool_start", "ts": 0.5, "call": "h1", **inside},
+        {"event": "tool_end", "ts": 0.9, "call": "h1", **inside},
+        {"event": "tool_start", "ts": 1.2, "call": "h2", **inside},
+        {"event": "tool_end", "ts": 1.3, "call": "h2", **inside},
+        {"event": "tool_end", "ts": 1.4, **task},
+        {"event": "run_end", "ts": 1.5, "stop_reason": "max_duration"},
+    ]
+    [helper] = _survey().survey_turn(events, limit=1, grace=0.5).subagents
+    assert helper["late_tool_calls"] == 1
