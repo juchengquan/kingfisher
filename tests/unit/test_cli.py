@@ -4,36 +4,20 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
+import logging
 import re
 import tokenize
 from pathlib import Path
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Origin
 from kingfisher.cli.__main__ import build_parser, main
 from kingfisher.core.definitions.skills.catalogue import reachable
 from kingfisher.plugins import LocalSessions
 from tests.conftest import an_agent, repository_root, start, verbs
-
-
-def test_log_keeps_a_warning_in_its_file_and_still_says_it(tmp_path, caplog):
-    """Handed the turn's warnings, `--log` took them off the terminal into its file, where
-    a command's user is not reading, so a plugin they wired broke without a word."""
-    import json
-    import logging
-
-    from kingfisher.cli.__main__ import _kept_in
-
-    sink = _kept_in(tmp_path / "turns.jsonl")
-    assert sink is not None
-    with caplog.at_level(logging.INFO, logger="kingfisher"):
-        sink.record({"event": "memory_store_failed", "level": "WARNING", "message": "it broke"})
-        sink.record({"event": "model_call", "level": "INFO", "message": "model_call"})
-
-    kept = (tmp_path / "turns.jsonl").read_text(encoding="utf-8").splitlines()
-    assert [json.loads(line)["event"] for line in kept] == ["memory_store_failed", "model_call"]
-    assert [record.getMessage() for record in caplog.records] == ["it broke"]
 
 
 def test_bare_invocation_prints_help_and_does_nothing(capsys):
@@ -584,6 +568,130 @@ def test_a_verb_other_than_run_says_a_warning_plainly_too(cfg, monkeypatch, caps
     assert [line for line in err.splitlines()
             if line.startswith("warning: ") and "THERE_KEY is not set" in line]
     assert "UserWarning" not in err
+
+
+# -- kingfisher's own log lines, which the command alone prints -------------
+
+
+def _failing_plugins(scripted, monkeypatch) -> list[str]:
+    """`main`'s arguments for a real turn in session `s` whose PDF plugin, in the subagent
+    `helper`, and unused results plugin raise. The command takes no plugin, so it is handed
+    them here."""
+    import kingfisher
+    from kingfisher.cli import __main__ as entry
+    from tests.conftest import EVERY_TOOL, subagents_dir
+    from tests.unit.scripted import Scripted
+    from tests.unit.test_runlog import _called, _FailingPdfs, _FailingSweep
+    from tests.unit.test_unused_results import LEFT, STRAY, _folder
+
+    subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(scripted) / "helper.yaml").write_text(
+        'name: helper\ndescription: Reads.\nbuiltin_tools: ["read_file"]\n'
+        "system_prompt: |\n  You read.\n",
+        encoding="utf-8",
+    )
+    an_agent(scripted, subagents="[helper]", **EVERY_TOOL)
+    session = scripted.workspace / "sessions" / start(scripted, "s")
+    (session / "inputs" / "a.pdf").write_bytes(b"%PDF-1.4\n" + b"0" * 1024)
+    _folder(scripted).mkdir(parents=True, exist_ok=True)
+    (_folder(scripted) / STRAY).write_bytes(LEFT)
+    Scripted.script.extend([
+        _called("task", {"description": "read it", "subagent_type": "helper"}, "t1"),
+        _called("read_file", {"file_path": "/inputs/a.pdf"}, "s1"),
+        AIMessage("read"),
+        AIMessage("done"),
+    ])
+    real = kingfisher.Kingfisher
+    monkeypatch.setattr(
+        kingfisher,
+        "Kingfisher",
+        lambda cfg, **given: real(
+            cfg, pdf_attachments=_FailingPdfs(), unused_results=_FailingSweep(), **given
+        ),
+    )
+    monkeypatch.setattr(entry, "config_from_env", lambda: scripted)
+    return ["run", "go", "--agent", "only", "--session", "s"]
+
+
+def test_a_warning_on_the_terminal_names_the_session_turn_and_subagent_it_came_from(
+    scripted, monkeypatch, capsys
+):
+    """Said bare, a plugin's failure on stderr did not say which session, turn or subagent
+    it came from."""
+    assert main(_failing_plugins(scripted, monkeypatch)) == 0
+
+    err = capsys.readouterr().err
+    (turn,) = re.findall(r"session s  turn (\S+)", err)
+    assert sorted(line.split(" plugin raised")[0] for line in err.splitlines()
+                  if " plugin raised" in line) == [
+        f"[s {turn} helper] the PDF attachments",
+        f"[s {turn}] session s: the unused results",
+    ]
+
+
+@pytest.mark.parametrize("kept", [False, True], ids=["stderr alone", "with --log"])
+@pytest.mark.parametrize(
+    ("level", "shown"),
+    [
+        ([], {"warnings"}),
+        (["--log-level", "info"], {"warnings", "run events", "origins"}),
+        (["--log-level", "off"], set()),
+    ],
+    ids=["default", "info", "off"],
+)
+def test_the_log_level_decides_which_of_kingfishers_lines_stderr_shows(  # noqa: PLR0913, PLR0917 -- pytest's fixtures
+    level, shown, kept, scripted, monkeypatch, capsys, tmp_path
+):
+    """Run events shown by default, none under `info` or a line under `off`; or, as `--log`
+    once did, a plugin's failure taken off the terminal into a file nobody there reads."""
+    log = ["--log", str(tmp_path / "turns.jsonl")] if kept else []
+
+    main([*_failing_plugins(scripted, monkeypatch), *level, *log])
+
+    lines = capsys.readouterr().err.splitlines()
+    seen = {
+        "warnings": any(" plugin raised " in line for line in lines),
+        # As its name and fields: a JSON line on a terminal is one nobody reads.
+        "run events": any(re.fullmatch(r"\[s \S+\] run_start .*task_chars=2\b.*", line)
+                          for line in lines),
+        "origins": any(line.startswith("reading from: ") for line in lines),
+    }
+    assert {kind for kind, there in seen.items() if there} == shown, lines
+
+
+def test_log_keeps_every_event_whatever_stderr_shows(scripted, monkeypatch, tmp_path):
+    """A level reaching `--log FILE` would drop `model_call` from the record a deployment
+    totals its tokens from."""
+    log = tmp_path / "turns.jsonl"
+
+    main([*_failing_plugins(scripted, monkeypatch), "--log", str(log), "--log-level", "off"])
+
+    kept = {json.loads(line)["event"] for line in log.read_text(encoding="utf-8").splitlines()}
+    assert {
+        "origins", "run_start", "model_call", "tool_start", "tool_end", "run_end",
+        "pdf_attachments_failed", "unused_results_failed",
+    } <= kept
+
+
+def test_a_command_run_in_process_leaves_kingfishers_logging_as_it_found_it(
+    cfg, monkeypatch, capsys
+):
+    """A handler left on `kingfisher` after `main` returned would say every later line twice,
+    in each test that runs the command in-process and in a program that calls `main`."""
+    from kingfisher.plugins import warn
+
+    def turn():
+        warn("probe_failed", "the probe failed")
+        yield _finished()
+
+    logger = logging.getLogger("kingfisher")
+    before = (logger.level, list(logger.handlers))
+    for level in ("info", "warning"):
+        _ran(monkeypatch, turn(), cfg)
+        main(["run", "t", "--agent", "assistant", "--log-level", level])
+
+    assert capsys.readouterr().err.count("the probe failed") == 2
+    assert (logger.level, logger.handlers) == before
 
 
 def test_a_subagents_prose_is_progress_rather_than_answer(cfg, monkeypatch, capsys):

@@ -5434,6 +5434,12 @@ tokens from `kingfisher.run`'s lines loses them the same way. *(2026-11-04.)*
 usual advice to a library: a client that set up nothing most needs to hear that its
 plugin broke, which Python's last resort prints. *(2026-11-04.)*
 
+**The command owns its terminal, so it prefixes its lines and has a level.** `kingfisher`
+leads each line with the session, turn and subagent its event carries, and `run` and
+`decide` take `--log-level` for what stderr shows of kingfisher's own loggers. The library
+still has none, and `--log FILE` keeps every event whatever the level, so nothing billed
+from the file is lost. *(2026-11-04.)*
+
 **A record carries the event as one attribute, `kingfisher`, not a field each.** It
 replaced `run_event`: one name taken from the record instead of five, and a clear line
 between kingfisher's `session_id` and a host app's own. Measured, a `%`-style format
