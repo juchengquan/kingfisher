@@ -58,6 +58,9 @@ def _write(directory, name, body):
 
 
 def test_a_python_file_and_a_yaml_file_share_the_directory(cfg):
+    """A `subagents/` folder holding a `.py` beside a `.yaml` would lose one of the two,
+    or read the compiled one as prompted, if either walk took the other's files.
+    """
     root = cfg.definitions / "subagents"
     _write(root, "researcher.py", COMPILED.format(name="researcher"))
     _write(root, "reviewer.yaml", PROMPTED)
@@ -91,6 +94,10 @@ def test_a_package_still_has_its_documents_read(cfg):
 
 
 def test_a_leading_underscore_keeps_a_flat_helper_private(cfg):
+    """A helper module beside the subagent files, imported as one of them, runs at
+    discovery and is refused for declaring no `SUBAGENTS`, so a flat folder could share
+    no code.
+    """
     root = cfg.definitions / "subagents"
     _write(root, "researcher.py", COMPILED.format(name="researcher"))
     _write(root, "_shared.py", "raise AssertionError('never imported')\n")
@@ -241,6 +248,9 @@ _OURS = frozenset({
 
 
 def test_an_unknown_key_lists_what_the_format_takes():
+    """An unknown key such as `temperature`, refused without the keys a declaration does
+    take, leaves its author guessing what to write instead.
+    """
     with pytest.raises(SubagentError, match="temperature") as raised:
         declared(_entry(temperature=0.2), "researcher.py")
 
@@ -248,6 +258,9 @@ def test_an_unknown_key_lists_what_the_format_takes():
 
 
 def test_build_has_to_be_callable():
+    """A `build` that is not a function would load with the rest and fail only when an
+    agent is built, as a `TypeError` naming no file.
+    """
     with pytest.raises(SubagentError, match="cannot be called"):
         declared({"name": "r", "description": "d", "build": "nope"}, "researcher.py")
 
@@ -281,6 +294,9 @@ def test_a_compiled_declaration_asks_for_every_tool_with_the_star():
 
 
 def test_the_model_fields_mean_what_they_mean_in_yaml():
+    """A compiled declaration's `model` left unread builds its graph on whatever
+    summoned it, not the model its file names.
+    """
     spec = declared(_entry(model="cheap-model"), "researcher.py")
 
     assert spec.wanted == "cheap-model"
@@ -345,6 +361,9 @@ def test_the_compiled_shape_is_deepagents_own(cfg, session_dir):
 
 
 def test_a_build_that_returns_nothing_is_refused(cfg, session_dir):
+    """A `build` that returns `None` hands deepagents no graph, and it fails on
+    `.with_config` naming neither the subagent nor the file that built it.
+    """
     _write(
         cfg.definitions / "subagents",
         "researcher.py",

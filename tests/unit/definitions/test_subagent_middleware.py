@@ -49,6 +49,9 @@ NAMES_AUDIT = (
 
 
 def test_a_definition_gets_the_middleware_it_names(cfg, session_dir):
+    """A subagent naming `audit` built without the class the deployment registered for
+    it runs without that hook, with nothing to say so.
+    """
     define(cfg, NAMES_AUDIT)
 
     built = build(cfg, registry={"audit": Audited}, subagents=("reviewer",))
@@ -80,6 +83,9 @@ def test_an_unregistered_name_fails_loudly(cfg, session_dir):
 
 
 def test_kingfisher_hands_its_registry_to_the_agent(cfg):
+    """A `middlewares=` registry the service did not keep would build every agent
+    against an empty one, refusing each name a definition writes as unregistered.
+    """
     registry = {"audit": Audited}
 
     kf = Kingfisher(
@@ -105,6 +111,9 @@ def test_registering_is_not_permitting(cfg, session_dir):
 
 
 def test_a_granted_name_goes_through(cfg, session_dir):
+    """The control: a clamp refusing a named middleware whatever the request granted
+    would pass the rule above.
+    """
     define(cfg, NAMES_AUDIT)
 
     built = build(
@@ -126,6 +135,10 @@ def test_a_granted_name_goes_through(cfg, session_dir):
 
 
 def test_grants_clamp_middleware_like_everything_else():
+    """A request naming `rate_limit` beyond a grant of `audit` alone would be handed it,
+    if middlewares took the request's word instead of being clamped as every other axis
+    is.
+    """
     granted = Capabilities(middlewares=("audit",))
 
     narrowed = granted.intersect(Capabilities(middlewares=("audit", "rate_limit")))
@@ -149,12 +162,19 @@ def test_the_field_parses_in_both_yaml_forms():
 
 
 def test_omitting_it_means_none():
+    """Read as everything, a subagent's forgotten `middlewares:` line would run every
+    middleware the deployment registered.
+    """
     spec = a_subagent("name: r\ndescription: d\nsystem_prompt: |\n  Body.\n", "r.md")
 
     assert spec.middlewares is None
 
 
 def test_a_request_with_no_opinion_is_still_unrestricted():
+    """A default request read as restricted would be refused by every supplied graph,
+    and one withholding all middleware read as unrestricted would be served a graph
+    built with it.
+    """
     assert Capabilities().is_unrestricted
     assert not Capabilities(middlewares=()).is_unrestricted
 

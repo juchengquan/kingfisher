@@ -1157,6 +1157,10 @@ def test_seeding_twice_unchanged_is_silent(cfg):
 
 
 def test_an_edited_copy_is_reported_and_still_replaced(cfg):
+    """Seeding wrote over an edited copy in silence, reporting it as seeded like a file
+    that was never there; refusing instead would make re-seeding after an upgrade
+    impossible.
+    """
     seeding.seed(cfg.definitions, FIXTURE)
     edited = subagents_dir(cfg) / "probe-agent.yaml"
     edited.write_text("name: probe-agent\ndescription: mine\n"

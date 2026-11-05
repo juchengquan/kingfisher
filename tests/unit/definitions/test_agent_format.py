@@ -43,6 +43,10 @@ def _read(text: str, name: str = "surveyor.yaml"):
 
 
 def test_a_whole_definition_reads_as_written():
+    """A field misread on the way in, such as `memory: false` taken as no opinion or a
+    `where::what` tool cut to its bare name, runs an agent other than the one its file
+    describes.
+    """
     spec = _read(WHOLE)
 
     assert spec.name == "surveyor"
@@ -63,6 +67,9 @@ def test_three_fields_are_required_and_nothing_else_is():
 
 
 def test_a_missing_required_field_is_refused_by_name():
+    """An agent file without its name, description or prompt dies on a bare `KeyError`
+    or runs with an empty prompt, instead of being told which field to add.
+    """
     assert REQUIRED, "no required fields -- this walks nothing and passes"
     for missing in sorted(REQUIRED):
         written = "".join(text for field, text in REQUIRED.items() if field != missing)
@@ -117,6 +124,10 @@ def test_leaving_skills_and_subagents_out_grants_none():
 
 
 def test_a_tool_may_say_where_it_lives_and_the_claim_is_kept():
+    """A `where::what` claim dropped on reading leaves the listing nothing to hold
+    against the tool's real file, so an agent naming a tool that has moved is never
+    reported.
+    """
     spec = _read(WHOLE)
 
     assert spec.tool_sources == {"csv_profile": "csv_profile"}
@@ -160,6 +171,9 @@ def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():
 
 
 def test_each_declined_field_says_why_it_is_declined():
+    """Refused as merely unknown, a declined field reads as one not built yet, and hides
+    that `permissions:` would drop the rules keeping /inputs and /skills read-only.
+    """
     for field, expected in [
             ("permissions: [x]", "replace"),
             ("response_format: {}", "what a .run returns"),
@@ -235,6 +249,9 @@ def test_yaml_spellings_of_true_are_accepted():
 
 
 def test_metadata_is_carried_and_a_bag_with_no_shape_is_refused():
+    """A `metadata:` mapping lost on reading never reaches the caller who wrote it, and
+    `metadata: gold` would fail inside `dict()` naming neither the file nor the field.
+    """
     assert _read(MINIMAL.rstrip() + "\nmetadata:\n  owner: data-eng\n", "plain.yaml").metadata == {
         "owner": "data-eng"
     }
@@ -312,6 +329,9 @@ def test_an_agent_naming_several_models_is_refused():
 
 
 def test_an_agent_naming_one_model_is_untouched():
+    """The control: a reader refusing every `model:` would pass the rule above, and
+    leave no agent able to name the model it runs.
+    """
     assert _read(MINIMAL.rstrip() + "\nmodel: gpt-5\n", "plain.yaml").wanted == "gpt-5"
 
 
@@ -319,6 +339,9 @@ def test_an_agent_naming_one_model_is_untouched():
 
 
 def test_an_agent_may_say_who_reaches_it():
+    """A `source_ids:` line dropped on reading opens the agent to every caller, the
+    answer meant only for a file that says nothing.
+    """
     spec = _read(MINIMAL.rstrip() + "\nsource_ids: [A, B]\n", "plain.yaml")
 
     assert spec.source_ids == ("A", "B")

@@ -25,10 +25,16 @@ def selected(value: object, **asked: Any) -> object:
 
 
 def test_star_still_means_everything():
+    """Taken entry by entry like a long-form list, `["*"]` would be refused as an entry
+    named the star, or read as one skill called `*` that nothing defines.
+    """
     assert selected(["*"], key="skills") == ALL
 
 
 def test_an_empty_list_still_means_none():
+    """Read as no restriction, `skills: []` would hand a definition that asked for no
+    skills every one in the catalogue.
+    """
     assert selected([], key="skills") == ()
 
 
@@ -59,6 +65,9 @@ def test_a_bare_name_and_the_same_name_written_long_are_still_twice():
 
 
 def test_a_star_mixed_with_names_is_refused():
+    """`source_ids: ["*", A]` would admit only callers holding `A`, the star matched as
+    a name nobody holds, though its author also wrote everyone.
+    """
     with pytest.raises(AgentError, match="cannot mean both"):
         read.source_ids(["*", "A"])
 
@@ -130,6 +139,9 @@ def test_everyone_cannot_be_part_of_a_requirement():
 
 
 def test_a_definitions_own_line_reads_a_requirement():
+    """A requirement `{finance, senior}` read as its names apart would admit a caller
+    holding either one, where the line asks for both.
+    """
     assert read.source_ids(["admin", {"finance": None, "senior": None}]) == (
         "admin",
         frozenset({"finance", "senior"}),

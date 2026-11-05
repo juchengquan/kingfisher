@@ -68,6 +68,10 @@ SPLITS = [
 
 
 def test_a_written_reference_splits_into_a_claim_and_a_name():
+    """Split wrong, a reference claims a file no tool is in or a name none has, so a
+    nested path, a pasted trailing slash or spaces around `::` refuse a definition that
+    was right.
+    """
     wrong = [
         f"{written!r} split to {split_reference(written)}, wanted {expected}"
         for written, expected in SPLITS
@@ -100,6 +104,9 @@ def test_a_definition_keeps_what_it_wrote():
 
 
 def test_the_claims_travel_beside_the_names():
+    """A claim lost on the way to `tool_sources` lets a moved tool go unnoticed, and one
+    invented for a short-form entry would refuse it for a file it never named.
+    """
     spec = _spec(tools="csv_profile::csv_columns, plain")
 
     assert dict(spec.tool_sources) == {"csv_columns": "csv_profile"}
@@ -125,6 +132,10 @@ def test_the_derived_field_cannot_be_written_by_hand():
 
 
 def test_a_path_that_still_describes_where_the_tool_is_passes():
+    """The control for the refusal below, and the slash it has to see past: the offering
+    says `csv_profile/` where the claim says `csv_profile`, so a raw comparison refuses
+    a reference that is right.
+    """
     _offering({"csv_columns": "csv_profile/"}).refuse_moved(
         _spec(tools="csv_profile::csv_columns").tool_sources, subject=SUBJECT
     )
@@ -229,6 +240,10 @@ CLASHING = ("a/t.py::fetch", "b/t.py::fetch")
 
 
 def test_either_spelling_of_a_unique_tool_reaches_the_offering():
+    """Left as written, `csv_profile::csv_columns` matches nothing in an offering that
+    keeps a unique tool's bare name, so the grant the shipped `surveyor` and `profiler`
+    write is refused or quietly emptied.
+    """
     wrong = [
         f"{written!r} reached {_offering(UNIQUE).spelt((written,))}"
         for written in ("csv_profile::csv_columns", "csv_profile/::csv_columns", "csv_columns")
@@ -243,6 +258,9 @@ def test_a_name_the_offering_cannot_place_comes_back_as_written():
 
 
 def test_a_grant_that_names_nothing_is_left_alone():
+    """Iterated, the star is the string `*` and would come back as a grant of one tool
+    by that name, turning everything into nothing, while `None` would raise.
+    """
     for written in (ALL, None):
         assert _offering(UNIQUE).spelt(written) == written, written
 

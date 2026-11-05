@@ -91,6 +91,10 @@ def test_narrowing_neither_axis_means_no_allowlist_at_all():
 
 
 def test_a_grant_cannot_reach_past_what_is_offered():
+    """Taken as written, a tools-axis name would reach the allowlist unoffered, and
+    `execute` written there would let the shell through a `builtin_tools: []` that
+    withheld it.
+    """
     assert WORKSPACE.permitted((), ("http_fetch", "not_here")) == ("http_fetch",)
 
 
@@ -128,6 +132,10 @@ def test_one_axis_left_unresolved_is_refused_rather_than_guessed():
 
 
 def test_an_offering_is_built_from_what_the_repository_found():
+    """An offering that dropped a found tool's name or file would refuse a grant for a
+    tool that exists, or leave an unknown name's refusal unable to say where the real
+    ones live.
+    """
     class FakeTool:
         name = "http_fetch"
 

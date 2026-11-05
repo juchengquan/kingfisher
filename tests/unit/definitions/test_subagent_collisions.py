@@ -83,6 +83,9 @@ def test_activating_both_is_refused(cfg, session_dir):
 
 
 def test_the_refusal_names_both_files(cfg, session_dir):
+    """A refusal of the two `surveyor`s that did not name both files would leave the
+    caller guessing which one to drop from the request.
+    """
     _two_vendors(cfg)
 
     with pytest.raises(CapabilityError) as raised:

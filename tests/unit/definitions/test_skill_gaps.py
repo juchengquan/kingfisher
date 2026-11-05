@@ -72,6 +72,9 @@ def test_subtracting_an_ambiguous_name_says_which_ones(cfg):
 
 
 def test_the_ambiguous_refusal_names_both_spellings():
+    """Naming only one source's `lookup`, the refusal would have its reader exclude that
+    one and leave the other granted.
+    """
     offered = ("legal::lookup", "research::lookup")
 
     with pytest.raises(CapabilityError) as raised:
@@ -90,6 +93,9 @@ def test_a_genuinely_unknown_name_is_still_unknown():
 
 
 def test_subtracting_a_qualified_name_works():
+    """A qualified name refused as ambiguous, or taking every `lookup` with it, would
+    leave no way to exclude one party's skill and keep the other's.
+    """
     assert all_but(("research::lookup",), offered=("legal::lookup", "research::lookup")) == (
         "legal::lookup",
     )

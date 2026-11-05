@@ -103,6 +103,9 @@ def test_the_refusal_names_both_spellings(cfg):
 
 
 def test_a_qualified_name_resolves(cfg):
+    """Refused or respelled, `research::lookup` would leave a request no way to name
+    either party's `lookup`, though the bare name's refusal says to write exactly that.
+    """
     assert _two_parties(cfg).resolve("research::lookup") == "research::lookup"
 
 
@@ -117,6 +120,9 @@ def test_a_qualified_name_from_the_wrong_source_is_refused(cfg):
 
 
 def test_a_request_may_activate_one_of_them(cfg, session_dir):
+    """The control for the refusal below: a build refusing any skill two parties ship
+    would pass it, and leave neither `lookup` reachable from a request.
+    """
     _two_parties(cfg)
 
     wired = replace(cfg, skills_enabled=True)
@@ -129,6 +135,9 @@ def test_a_request_may_activate_one_of_them(cfg, session_dir):
 
 
 def test_a_request_naming_it_bare_is_refused_at_build(cfg, session_dir):
+    """deepagents keeps the last of two skills called `lookup`, so a bare `lookup` taken
+    at build would tell the model about whichever source was read last.
+    """
     _two_parties(cfg)
 
     with pytest.raises(CapabilityError, match="more than one source"):
