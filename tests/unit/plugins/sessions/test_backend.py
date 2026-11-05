@@ -405,14 +405,14 @@ def test_a_subagent_gets_the_correction_too(cfg, session_dir):
 
 def test_what_tools_cache_under_home_is_disposed_of_with_the_session(cfg, session_dir):
     """`reap` removes session directories and nothing else."""
-    from kingfisher.plugins.sessions.folders import LocalSessionDirs
+    from kingfisher.plugins.sessions.folders import remove_tree
 
     home = Path(shell_env(cfg, session_dir)["HOME"])
     home.mkdir(parents=True, exist_ok=True)
     (home / ".cache").mkdir()
     (home / ".cache" / "big.bin").write_bytes(b"x" * 1000)
 
-    assert LocalSessionDirs().remove_tree(session_dir) is None
+    assert remove_tree(session_dir) is None
     assert not home.exists(), "the cache outlived the session it belonged to"
 
 

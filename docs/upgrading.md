@@ -18,6 +18,21 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `LoguruEvents` is `LoguruRunEvents`, after #1215
+
+- **Renamed, with no alias**: `from kingfisher.plugins import LoguruEvents` now raises
+  `ImportError`. Import `LoguruRunEvents`, the same class under the name `JsonlRunEvents`
+  already follows.
+- **Unchanged**: the extra is still `kingfisher[loguru]`, and each record is as the
+  section after #1207 says.
+
+## `pydantic-settings` no longer comes with kingfisher, after #1215
+
+- **kingfisher no longer depends on `pydantic-settings`**, which nothing in it imported.
+  An app or tool file that imports `pydantic_settings` and had it only through
+  kingfisher names it among its own dependencies, or a fresh install no longer has it.
+- **Unchanged**: `pydantic` and `anthropic` are still dependencies, at the same ranges.
+
 ## A record `Inventory.by_kind()` answers has no `origin`, after #1212
 
 Each record named, beside its kind's name, error and count, the `Origin` the kind was

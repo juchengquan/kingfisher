@@ -52,7 +52,7 @@ from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.logged import RUN_LOGGER, logged
 from kingfisher.core.session.model import held_by_a_turn
 
-from .health import _retired, examine, worst
+from .health import examine, retired, worst
 from .listing import as_json, failed, origins_document, render
 from .progress import show
 
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
     from typing import TextIO
 
-    from kingfisher import Config, Kingfisher, PendingDecision, RunResult
+    from kingfisher import Config, Kingfisher, PendingDecision, RunResult, Session
     from kingfisher.plugins import JsonlRunEvents
 
 #: Read from the working directory only: a bare `load_dotenv()` walks up looking for
@@ -1056,13 +1056,7 @@ def _reap(args: argparse.Namespace) -> int:
 
 def _artifact(args: argparse.Namespace) -> int:
     """Fetch one file a turn produced, to a file or to standard output."""
-    cfg = config_from_env()
-    kf = _configured(cfg)
-    session = kf.session(args.session)
-    if session is None:
-        msg = f"no session {args.session!r}"
-        raise UnknownSessionError(msg)
-    content = session.artifact(args.name)
+    content = _opened(_configured(config_from_env()), args.session).artifact(args.name)
     if args.out is None:
         # The buffer, not `print`: a text stream would re-encode a PDF.
         sys.stdout.buffer.write(content)
@@ -1079,13 +1073,7 @@ def _artifact(args: argparse.Namespace) -> int:
 
 def _result(args: argparse.Namespace) -> int:
     """Fetch one tool result's text, to a file or to standard output."""
-    cfg = config_from_env()
-    kf = _configured(cfg)
-    session = kf.session(args.session)
-    if session is None:
-        msg = f"no session {args.session!r}"
-        raise UnknownSessionError(msg)
-    text = session.result(args.id)
+    text = _opened(_configured(config_from_env()), args.session).result(args.id)
     if args.out is None:
         sys.stdout.write(text)
         sys.stdout.flush()
@@ -1097,7 +1085,7 @@ def _result(args: argparse.Namespace) -> int:
     return 0
 
 
-def _opened(kf: Kingfisher, session_id: str) -> Any:
+def _opened(kf: Kingfisher, session_id: str) -> Session:
     session = kf.session(session_id)
     if session is None:
         msg = f"no session {session_id!r}"
@@ -1136,13 +1124,9 @@ def _rewind(args: argparse.Namespace) -> int:
 
 def _reap_one(kf: Kingfisher, session_id: str) -> int:
     """Reap one session by name, whatever is running in it."""
-    session = kf.session(session_id)
-    if session is None:
-        # Refused here: deleting answers `None` for nothing there too, so a mistyped id
-        # would report work nothing did.
-        msg = f"no session {session_id!r}"
-        raise UnknownSessionError(msg)
-    failure = session.delete()
+    # Looked up first: deleting answers `None` for nothing there too, so a mistyped id
+    # would report work nothing did.
+    failure = _opened(kf, session_id).delete()
     if failure:
         print(f"not reaped -- {failure}", file=sys.stderr)
         return 1
@@ -1161,7 +1145,7 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
         # Before the error: `examine` needs a `Config`, and a deployment still setting
         # retired variables can fail for want of what replaced them, such as `models.yaml`.
         # On `stderr`, so `--json` emits a document or nothing.
-        for check in _retired():
+        for check in retired():
             print(f"{check.verdict}  {check.name}  {check.detail}", file=sys.stderr)
             print(f"      -> {check.remedy}", file=sys.stderr)
         raise

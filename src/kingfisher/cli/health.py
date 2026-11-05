@@ -355,7 +355,7 @@ def _mb(value: int | None) -> str:
     return "unknown" if value is None else f"{value // (1024 * 1024)}MB"
 
 
-def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
+def retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
     """Settings this deployment still carries that nothing reads any more.
 
     A warning, not a failure: the deployment runs, on defaults that may be what it wanted.
@@ -404,7 +404,7 @@ def examine(
         sessions = configured_sessions()
     checks: list[Check] = []
     # First: a setting that stopped being read looks exactly like one nobody set.
-    checks += _retired()
+    checks += retired()
     checks += _models(cfg)
     checks += _certificates()
     confined = health_isolation.fence_of(cfg, sessions)

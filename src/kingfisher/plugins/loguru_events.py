@@ -1,4 +1,4 @@
-"""`LoguruEvents`: every event into loguru, for an app that logs through it."""
+"""`LoguruRunEvents`: every event into loguru, for an app that logs through it."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ from kingfisher.core.interfaces import RunEvents
 try:
     from loguru import logger
 except ModuleNotFoundError as missing:
-    msg = "LoguruEvents needs loguru, which is an extra: pip install 'kingfisher[loguru]'"
+    msg = "LoguruRunEvents needs loguru, which is an extra: pip install 'kingfisher[loguru]'"
     raise ModuleNotFoundError(msg, name=missing.name) from missing
 
 
-class LoguruEvents(RunEvents):
+class LoguruRunEvents(RunEvents):
     """Each event as a loguru record at its `level`, saying its `message`, with the whole
     event as `record["extra"]["kingfisher"]`."""
 

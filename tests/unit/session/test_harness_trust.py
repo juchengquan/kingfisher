@@ -160,9 +160,9 @@ def test_a_session_key_still_set_is_reported_as_read_by_nothing():
     """Set by a deployment that followed the upgrade notes of the day before. It now
     does nothing, and the only thing that will ever say so is this.
     """
-    from kingfisher.cli.health import _retired
+    from kingfisher.cli.health import retired
 
-    (check,) = _retired({"KINGFISHER_SESSION_KEY": "a" * 64})
+    (check,) = retired({"KINGFISHER_SESSION_KEY": "a" * 64})
 
     assert check.verdict == "warn"
     assert "KINGFISHER_SESSION_KEY" in check.detail

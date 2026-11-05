@@ -20,7 +20,7 @@ from kingfisher.core.definitions.catalogue import bundled_skills_route
 from kingfisher.core.layout import DEFAULT_LAYOUT, SKILLS_ROUTE, Layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, _claim_at
-from kingfisher.plugins.sessions.folders import LocalSessionDirs
+from kingfisher.plugins.sessions.folders import remove_tree
 from tests.checks import sessions as sessions_kit
 from tests.checks.sessions import CONTRACT_SESSIONS, SESSIONS_CHECKS
 from tests.unit.service.test_run import StubAgent
@@ -114,7 +114,7 @@ class GivesBackAnyClaim(LocalSessions):
     """A release that never reads the token, as `release(cfg, session_id)` was."""
 
     def release(self, cfg, session_id, token, /):
-        LocalSessionDirs().remove_tree(_claim_at(cfg, session_id))
+        remove_tree(_claim_at(cfg, session_id))
 
 
 class OneLockForAll(LocalSessions):

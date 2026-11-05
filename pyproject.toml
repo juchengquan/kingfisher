@@ -105,10 +105,12 @@ dependencies = [
     # builds, so under `requires-python` 6.0 installs nowhere.
     "pyyaml>=6.0.1",
     "python-dotenv>=1.2.2",
-    #
+    # The library imports none of it, but core/session/runtime.py reads its errors by
+    # shape -- `status_code`, `body`, class names -- which the next major may change.
     "anthropic>=0.120.0,<1",
+    # Imported by tool files, which run in this process: an `args_schema` is a pydantic
+    # model, as in assets/tools/sql_explain.py.
     "pydantic>=2.12.5,<3",
-    "pydantic-settings>=2.10.0,<3",
 ]
 
 [project.optional-dependencies]
@@ -122,7 +124,7 @@ dependencies = [
 # written without the authority its target required -- so a lower pin installs a
 # fence with known holes in the one thing it is here to do.
 fence = ["sandlock>=0.8.8; sys_platform == 'linux'"]
-# `LoguruEvents`, for an app that logs through loguru. An extra because an app that
+# `LoguruRunEvents`, for an app that logs through loguru. An extra because an app that
 # does not should not install it. The floor is the lowest that runs on 3.12, measured
 # against its tests: 0.3 imports `distutils`, which 3.12 removed. No higher, because the
 # app installing this already pins a loguru, and a floor above what the sink needs is a

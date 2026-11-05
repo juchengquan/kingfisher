@@ -48,38 +48,42 @@ def session_dir(sessions_root: Path, session_id: str) -> Path:
     return Path(sessions_root) / session_id
 
 
-class LocalSessionDirs:
-    """Session directories on this host, for `LocalSessions` and the turn lock."""
+def create_exclusive(path: Path) -> bool:
+    """Make the folder, `False` where it is there already."""
+    try:
+        path.mkdir()
+    except FileExistsError:
+        return False
+    return True
 
-    def create_exclusive(self, path: Path) -> bool:
-        try:
-            path.mkdir()
-        except FileExistsError:
-            return False
-        return True
 
-    def mark_used(self, path: Path) -> None:
-        # A session gone is the sweep winning a race, not an error: the turn fails on its
-        # next read.
-        with suppress(OSError):
-            path.touch(exist_ok=True)
+def touch_session(path: Path) -> None:
+    """Record a session's folder as used now."""
+    # A session gone is the sweep winning a race, not an error: the turn fails on its
+    # next read.
+    with suppress(OSError):
+        path.touch(exist_ok=True)
 
-    def listing(self, path: Path) -> tuple[tuple[str, float], ...]:
-        if not path.is_dir():
-            return ()
-        return tuple(
-            (p.name, p.stat().st_mtime)
-            for p in path.iterdir()
-            if p.is_dir() and names_a_session(p.name)
-        )
 
-    def remove_tree(self, path: Path) -> str | None:
-        try:
-            # not ignore_errors: partials must surface
-            shutil.rmtree(path, onexc=unlock_and_retry)
-        except OSError as exc:
-            return f"directory not removed ({exc.strerror})"
-        return None
+def sessions_under(root: Path) -> tuple[tuple[str, float], ...]:
+    """Each session folder under `root`, and when it was last used."""
+    if not root.is_dir():
+        return ()
+    return tuple(
+        (p.name, p.stat().st_mtime)
+        for p in root.iterdir()
+        if p.is_dir() and names_a_session(p.name)
+    )
+
+
+def remove_tree(path: Path) -> str | None:
+    """Remove a folder and all it holds, or say why it is not gone."""
+    try:
+        # not ignore_errors: partials must surface
+        shutil.rmtree(path, onexc=unlock_and_retry)
+    except OSError as exc:
+        return f"directory not removed ({exc.strerror})"
+    return None
 
 
 def ensure_session_layout(session_dir: Path, layout: Layout) -> Path:

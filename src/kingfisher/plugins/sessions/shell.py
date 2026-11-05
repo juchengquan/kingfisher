@@ -9,7 +9,6 @@ import shutil
 import sys
 import threading
 import uuid
-from collections.abc import Mapping
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path

@@ -388,12 +388,12 @@ and setting `kingfisher.run` or `kingfisher.warnings` alone touches only that on
 `kingfisher` itself and none of its children's, and every record kingfisher writes is
 a child's.
 
-**On loguru**, pass `LoguruEvents`, which `pip install 'kingfisher[loguru]'` brings:
+**On loguru**, pass `LoguruRunEvents`, which `pip install 'kingfisher[loguru]'` brings:
 
 ```python
-from kingfisher.plugins import LoguruEvents
+from kingfisher.plugins import LoguruRunEvents
 
-kingfisher = Kingfisher(cfg, sessions=LocalSessions(), run_events=LoguruEvents())
+kingfisher = Kingfisher(cfg, sessions=LocalSessions(), run_events=LoguruRunEvents())
 ```
 
 Each event is a loguru record at its `level`, saying its `message`, with the whole event
@@ -401,8 +401,8 @@ as one field, `record["extra"]["kingfisher"]`. `logger.disable("kingfisher")` si
 them, as it would any library's. That is the reason to pass this rather than write your
 own: loguru names a record after the module that logged it, so a sink of yours calling
 loguru is named after your app, and `disable("kingfisher")` misses it without a word.
-`LoguruEvents` logs from kingfisher's module, so a sink of yours that wraps it, to send
-each event somewhere else as well, keeps the switch working.
+`LoguruRunEvents` logs from kingfisher's module, so a sink of yours that wraps it, to
+send each event somewhere else as well, keeps the switch working.
 
 LangChain and httpx still log through Python's logging, so keep loguru's standard
 bridge, the `InterceptHandler` its documentation gives, for their records.
@@ -566,7 +566,9 @@ Things to know:
   deployment that replaces that middleware and also wires this plugin is refused when
   the agent is built — the replacement would take the slot, and the text would never
   be sent. A replacement written to add text after the cached part is what this plugin
-  is for: drop it.
+  is for: drop it. The command wires the plugin with `--tell` or without, so `run`,
+  `decide` and `prompt` refuse the replacement even where a `Kingfisher` built without
+  `turn_instructions=` takes it.
 
 ## `PdfAttachments` — what the model is handed in place of a PDF
 
@@ -1109,6 +1111,8 @@ Without it a tool's run is refused, saying so; kingfisher builds no stand-in fro
 - The command sees an environment of its own, not the shell's and not this process's.
 - `files` and `missing`: each output that came back, and why each other one did not. An
   output that is a link is not followed; the bytes are read wherever no fence stands.
+- What comes back comes to at most 32 MB, since it is read into kingfisher's own process:
+  an output past that is named in `missing`, not read.
 - `timeout` and `stop` end the command and everything it started: `timeout` in seconds,
   `stop` a `threading.Event` that `arun` sets when its caller is cancelled.
 - A refusal is `ScratchRun(error=...)`, never an exception.

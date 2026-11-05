@@ -197,7 +197,7 @@ jobs:
       # as a provider's model windows, so a floor run would answer for that too.
       # Every public name reaches the private imports a floor has to cover;
       # `tool_guards.py`'s import of `_signature_parameters` needs
-      # `langchain-core` 1.6.7, and this is the step it fails. `LoguruEvents` by
+      # `langchain-core` 1.6.7, and this is the step it fails. `LoguruRunEvents` by
       # name, since no name on `kingfisher` imports the `loguru` floor.
       - name: Every public name loads
         run: |
@@ -205,6 +205,6 @@ jobs:
           import kingfisher
           for name in kingfisher._EXPORTS:
               getattr(kingfisher, name)
-          from kingfisher.plugins import LoguruEvents
-          print(f'{len(kingfisher._EXPORTS)} public names and LoguruEvents, at the floors')
+          from kingfisher.plugins import LoguruRunEvents
+          print(f'{len(kingfisher._EXPORTS)} public names and LoguruRunEvents, at the floors')
           "

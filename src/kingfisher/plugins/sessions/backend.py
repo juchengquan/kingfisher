@@ -32,11 +32,14 @@ from kingfisher.core.interfaces import CommandRunner, Sessions, refuse_unless_su
 from kingfisher.core.layout import Layout
 
 from .folders import (
-    LocalSessionDirs,
+    create_exclusive,
     ensure_session_layout,
     refuse_linked_folders,
+    remove_tree,
     session_bytes,
     session_dir,
+    sessions_under,
+    touch_session,
 )
 from .links import RootedBackend
 from .permissions import protect_inputs, writable_inputs
@@ -534,16 +537,16 @@ class LocalSessions(Sessions):
         return built
 
     def sessions(self, cfg: Config) -> tuple[tuple[str, float], ...]:
-        return LocalSessionDirs().listing(cfg.sessions_root)
+        return sessions_under(cfg.sessions_root)
 
     def mark_used(self, cfg: Config, session_id: str) -> None:
-        LocalSessionDirs().mark_used(_where(cfg, session_id))
+        touch_session(_where(cfg, session_id))
 
     def size(self, cfg: Config, session_id: str) -> int:
         return session_bytes(_where(cfg, session_id))
 
     def delete(self, cfg: Config, session_id: str) -> str | None:
-        return LocalSessionDirs().remove_tree(_where(cfg, session_id))
+        return remove_tree(_where(cfg, session_id))
 
     def where(self, cfg: Config) -> Path | None:
         """Where this keeps its sessions on this host, for the origins line.
@@ -559,14 +562,14 @@ class LocalSessions(Sessions):
     def claim(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
     ) -> str | None:
-        dirs, path = LocalSessionDirs(), _claim_at(cfg, session_id)
+        path = _claim_at(cfg, session_id)
         token = uuid.uuid4().hex
-        if _take(dirs, path, token):
+        if _take(path, token):
             return token
         judged = _identity(path)
         if judged is None:
             # Released between the two looks: one more try, as for a slot never held.
-            return token if _take(dirs, path, token) else None
+            return token if _take(path, token) else None
         if self.held(cfg, session_id, stale_after=stale_after, now=now):
             return None
         # Moved aside under a name only the claim judged stale has, rather than deleted:
@@ -586,7 +589,7 @@ class LocalSessions(Sessions):
             with suppress(OSError):
                 aside.rename(path)
             return None
-        return token if _take(dirs, path, token) else None
+        return token if _take(path, token) else None
 
     def release(self, cfg: Config, session_id: str, token: str, /) -> None:
         path = _claim_at(cfg, session_id)
@@ -600,13 +603,13 @@ class LocalSessions(Sessions):
             # APFS refuses even a rename on a full disk, and a claim left behind locks the
             # session until it is stale. Removed in place, a claim that replaced this one
             # could go with it, which needs a turn outliving `stale_after`, as a takeover does.
-            LocalSessionDirs().remove_tree(path)
+            remove_tree(path)
             return
         if _identity(gone) != token:
             with suppress(OSError):
                 gone.rename(path)
             return
-        LocalSessionDirs().remove_tree(gone)
+        remove_tree(gone)
 
     def held(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
@@ -632,18 +635,18 @@ CLAIM = "claim"
 _TOKEN, _TAKEN = "token", "taken"
 
 
-def _take(dirs: LocalSessionDirs, path: Path, token: str) -> bool:
+def _take(path: Path, token: str) -> bool:
     """Create the claim, naming its taker; `False` where one is there."""
     # So a sweep can claim a session laid out without a `.harness`. Not `parents=True`:
     # a session deleted under a starting turn would be listed again, holding the claim.
     path.parent.mkdir(exist_ok=True)
-    if not dirs.create_exclusive(path):
+    if not create_exclusive(path):
         return False
     try:
         (path / _TOKEN).write_text(token, encoding="utf-8")
     except BaseException:
         # A claim with no token is no taker's to release, and holds the session until stale.
-        dirs.remove_tree(path)
+        remove_tree(path)
         raise
     return True
 
