@@ -42,7 +42,7 @@ _EXPORTS = {
     "LocalSessions": "kingfisher.plugins.sessions.backend",
     "backend_at": "kingfisher.plugins.sessions.backend",
     "JsonlRunEvents": "kingfisher.plugins.events",
-    "LoguruEvents": "kingfisher.plugins.loguru_events",
+    "LoguruRunEvents": "kingfisher.plugins.loguru_events",
     "ShellSettings": "kingfisher.plugins.sessions.sandbox.confinement",
     "InstructionsFile": "kingfisher.core.agent.prompting",
     "DeleteUnusedResults": "kingfisher.core.session.unused",
@@ -65,7 +65,7 @@ __all__ = [
     "JsonlRunEvents",
     "Layout",
     "LocalSessions",
-    "LoguruEvents",
+    "LoguruRunEvents",
     "MemoryStore",
     "NoScratchRunLimit",
     "PdfAttachments",
@@ -129,7 +129,7 @@ if TYPE_CHECKING:
     from kingfisher.core.session.unused import UnusedFile as UnusedFile
     from kingfisher.core.session.unused import UnusedFiles as UnusedFiles
     from kingfisher.plugins.events import JsonlRunEvents as JsonlRunEvents
-    from kingfisher.plugins.loguru_events import LoguruEvents as LoguruEvents
+    from kingfisher.plugins.loguru_events import LoguruRunEvents as LoguruRunEvents
     from kingfisher.plugins.sessions.backend import LocalSessions as LocalSessions
     from kingfisher.plugins.sessions.backend import backend_at as backend_at
     from kingfisher.plugins.sessions.sandbox.confinement import ShellSettings as ShellSettings

@@ -1442,8 +1442,8 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # the Linux shell fence, which is the OS in the most literal sense this table holds
     # -- Landlock, applied to a process before it execs. Optional and Linux-only, so
     # both imports of `sandlock` are inside functions behind an `ImportError` or a
-    # platform check, and a macOS install never sees it. And `loguru`, for `LoguruEvents`
-    # alone: an extra too, loaded only by naming that class.
+    # platform check, and a macOS install never sees it. And `loguru`, for
+    # `LoguruRunEvents` alone: an extra too, loaded only by naming that class.
     "plugins": frozenset({"deepagents", "loguru", "sandlock"}),
     # Registering skills means handing them to the runtime that reads them: `registry`
     # asks deepagents which skills an agent will actually have. That cannot be done from
@@ -1671,7 +1671,7 @@ def test_the_cross_plugin_rule_tells_its_own_from_another(tmp_path):
     written = tmp_path / "probe.py"
     written.write_text(
         "from kingfisher.plugins.events import JsonlRunEvents\n"
-        "from kingfisher.plugins.sessions.folders import LocalSessionDirs\n"
+        "from kingfisher.plugins.sessions.folders import session_dir\n"
     )
 
     assert _other_plugins(written, "sessions") == ["kingfisher.plugins.events"]
@@ -1789,7 +1789,7 @@ def test_the_outsider_rule_tells_a_door_s_name_from_a_private_one(tmp_path):
         "from kingfisher.core.interfaces import Sessions\n"
         "from kingfisher.core.layout import HARNESS\n"
         "from kingfisher.plugins import CommandRunner\n"
-        "from kingfisher.plugins.sessions.folders import LocalSessionDirs\n"
+        "from kingfisher.plugins.sessions.folders import session_dir\n"
     )
 
     assert _past_the_doors(written, as_written=False) == {
@@ -1800,7 +1800,7 @@ def test_the_outsider_rule_tells_a_door_s_name_from_a_private_one(tmp_path):
         "kingfisher.core.workspace",
         "kingfisher.core.layout:HARNESS",
         "kingfisher.core.interfaces:Sessions",
-        "kingfisher.plugins.sessions.folders:LocalSessionDirs",
+        "kingfisher.plugins.sessions.folders:session_dir",
     }
 
 
@@ -2160,9 +2160,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         "stream": "embedder",
     },
     "kingfisher.plugins": {
-        # The five a plugin implements, written in `core/interfaces.py` and checked
-        # below to still be there. `ports.md` gives `CommandRunner`, `RunEvents`,
-        # `UnusedResults` and `Sessions` a section each, and `configuration.md`'s
+        # What a plugin implements, each written in `core/interfaces.py` and checked
+        # below to still be there. `ports.md` gives each but `Instructions` a section,
+        # `formats.md` writes that one out as `instructions=`, and `configuration.md`'s
         # `KINGFISHER_SESSIONS` row names the type a factory returns.
         "Sessions": "interface",
         "RunEvents": "interface",
@@ -2205,7 +2205,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         "DeleteUnusedResults": "embedder",
         "AgentsMiddlewares": "embedder",
         # `ports.md` passes it for an app that logs through loguru.
-        "LoguruEvents": "document",
+        "LoguruRunEvents": "document",
         # `ports.md` names it as what a deployment leaving the limit out is given.
         "NoScratchRunLimit": "document",
         # What `UnusedResults.settle` is handed, which `ports.md` writes out in its

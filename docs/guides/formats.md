@@ -932,9 +932,9 @@ deployment script choosing which definitions to install, an ownership report, a
 check that every subagent names a team:
 
 ```python
-from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
+from kingfisher.plugins import Definitions
 
-for spec in LocalSubagentRepository(cfg.catalogue_roots["subagents"]).specs.values():
+for spec in Definitions.from_config(cfg).subagents.specs.values():
     print(spec.name, spec.metadata.get("owner", "unowned"))
 ```
 

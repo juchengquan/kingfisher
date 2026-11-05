@@ -10,7 +10,7 @@ from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.core.session.files import InputsError
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
-from kingfisher.plugins.sessions.folders import LocalSessionDirs
+from kingfisher.plugins.sessions.folders import remove_tree
 from kingfisher.plugins.sessions.permissions import protect_inputs, writable_inputs
 from tests.conftest import macos, start, supplied
 
@@ -356,7 +356,7 @@ def test_a_session_that_was_given_inputs_can_still_be_removed(cfg, session_dir, 
     drive(supplied((source,), backend_at(cfg, session_dir), cfg.layout))
     assert not os.access(session_dir / "inputs", os.W_OK), "not hardened; test proves nothing"
 
-    failure = LocalSessionDirs().remove_tree(session_dir)
+    failure = remove_tree(session_dir)
 
     assert failure is None, f"still not removable: {failure}"
     assert not session_dir.exists()
@@ -371,7 +371,7 @@ def test_removal_reaches_through_nested_hardened_directories(session_dir):
         (inputs / "a" / "b" / "deep.csv").write_text("x")
     protect_inputs(session_dir, DEFAULT_LAYOUT)
 
-    assert LocalSessionDirs().remove_tree(session_dir) is None
+    assert remove_tree(session_dir) is None
     assert not session_dir.exists()
 
 
@@ -382,7 +382,7 @@ def test_a_directory_we_cannot_unlock_is_reported_not_raised(session_dir, monkey
     protect_inputs(session_dir, DEFAULT_LAYOUT)
     _refuse("inputs", monkeypatch)
 
-    failure = LocalSessionDirs().remove_tree(session_dir)
+    failure = remove_tree(session_dir)
 
     assert failure is not None, "reported success without deleting"
     assert "directory not removed" in failure
@@ -405,7 +405,7 @@ def test_an_unrelated_failure_leaves_inputs_hardened(session_dir, monkeypatch):
         return real(path, **kwargs)
 
     monkeypatch.setattr(os, "unlink", busy)
-    failure = LocalSessionDirs().remove_tree(session_dir)
+    failure = remove_tree(session_dir)
     monkeypatch.undo()
 
     assert failure is not None, "reported success despite a failed unlink"

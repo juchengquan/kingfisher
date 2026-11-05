@@ -9,7 +9,7 @@ from kingfisher.core.layout import (
 )
 from kingfisher.core.workspace import EXAMPLE, EXAMPLES, ensure_definitions, ensure_layout
 from kingfisher.plugins import LocalSessions
-from kingfisher.plugins.sessions.folders import LocalSessionDirs, ensure_session_layout
+from kingfisher.plugins.sessions.folders import create_exclusive, ensure_session_layout
 
 
 def test_layout_is_created_and_idempotent(tmp_path):
@@ -199,11 +199,10 @@ def test_turn_names_are_claimed_exclusively(workspace):
     """
     from concurrent.futures import ThreadPoolExecutor
 
-    dirs = LocalSessionDirs()
     runs = workspace / "scratch"
     runs.mkdir(parents=True, exist_ok=True)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        won = list(pool.map(lambda _: dirs.create_exclusive(runs / "t001"), range(8)))
+        won = list(pool.map(lambda _: create_exclusive(runs / "t001"), range(8)))
 
     assert sum(won) == 1, "two callers both believed they had claimed the name"

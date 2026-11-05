@@ -33,8 +33,8 @@ class CommandResult:
     truncated: bool = False
 
 
-#: What one scratch run may carry in, and again what it may bring back. A backend hands
-#: files over whole, into kingfisher's own process, so the bound is set before the run.
+#: What one scratch run's files may come to going in, checked before a backend is asked.
+#: What comes back is the backend's to bound, which `ports.md` asks of it.
 MAX_SCRATCH_BYTES = 32 * 1024 * 1024
 
 #: How many files one scratch run may name to bring back.
@@ -123,7 +123,8 @@ class Sessions(ABC):
 
     `open` is typed by its call, not its return: deepagents decides what a backend is
     with `isinstance` against its own base class, so an object with a backend's
-    methods would still get no shell. `refuse_unusable_backend` asks once there is an object.
+    methods would still get no shell. `why_no_shell`, on `kingfisher.plugins`, asks once
+    there is an object.
 
     Each takes the `Config` because the default serves every workspace and keeps its
     sessions there; a deployment's own may ignore it.
@@ -153,9 +154,10 @@ class Sessions(ABC):
 
     What `open` returns, held by `tests/checks/backend.py`: deepagents recognises it
     as running commands and it routes every path kingfisher denies -- both refused at
-    startup by `refuse_unusable_backend` -- and it reads back what it was given, keeps
-    deepagents' own files in the scratchpad, keeps the shell out of `/.harness` and
-    `/inputs`, refuses a host path, and copies a file where it declares `copy`.
+    startup, and asked by `why_no_shell` and `unrouted_denials` on `kingfisher.plugins`
+    -- and it reads back what it was given, keeps deepagents' own files in the
+    scratchpad, keeps the shell out of `/.harness` and `/inputs`, refuses a host path,
+    and copies a file where it declares `copy`.
     """
 
     @abstractmethod

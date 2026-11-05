@@ -1,4 +1,4 @@
-"""`LoguruEvents`: kingfisher's events as an app on loguru hears them."""
+"""`LoguruRunEvents`: kingfisher's events as an app on loguru hears them."""
 
 from __future__ import annotations
 
@@ -34,9 +34,9 @@ class Wrapped(RunEvents):
 
 @pytest.fixture
 def sink() -> RunEvents:
-    from kingfisher.plugins import LoguruEvents
+    from kingfisher.plugins import LoguruRunEvents
 
-    return LoguruEvents()
+    return LoguruRunEvents()
 
 
 @pytest.fixture

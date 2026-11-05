@@ -1071,8 +1071,8 @@ def test_a_session_that_will_not_go_exits_non_zero(cfg, monkeypatch, capsys):
     _looking_at(monkeypatch, cfg)
     start(cfg, "stuck")
     monkeypatch.setattr(
-        "kingfisher.plugins.sessions.folders.LocalSessionDirs.remove_tree",
-        lambda self, path: "directory not removed (Permission denied)",
+        "kingfisher.plugins.sessions.backend.remove_tree",
+        lambda path: "directory not removed (Permission denied)",
     )
 
     assert main(["reap", "--all"]) == 1
