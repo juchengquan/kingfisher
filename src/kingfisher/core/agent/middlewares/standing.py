@@ -174,7 +174,6 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # subagent, whose tools run under this graph's rule and are in no `names` of its.
     if names or hands_to_compiled:
         limit = NoScratchRunLimit() if scratch_run_limit is None else scratch_run_limit
-        allows, refusal = limit_answer(limit, name, kind)
         standing.append(
             ScratchRunsMiddleware(
                 names,
@@ -182,8 +181,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
                 tools=granted,
                 gated=gated,
                 seconds=execution_timeout_s,
-                limit_allows=allows,
-                limit_refusal=refusal,
+                limit=limit_answer(limit, name, kind),
             )
         )
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.

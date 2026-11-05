@@ -106,13 +106,13 @@ def _stopped(reply: AIMessage, calls: int) -> AIMessage:
 
 
 class StepBudgetMiddleware(AgentMiddleware):
-    """Tell an agent past 80% of its budget how many calls it has left, on every such call,
-    and stop a subagent at the end of its own.
+    """Tell an agent past `WARN_AT` of its budget how many calls it has left, on every such
+    call, and stop a subagent at the end of its own.
 
-    A turn either finished well inside its 50 calls or ran to the limit and stopped
-    mid-work; told, it can end on an answer. The note goes last and is never stored: the
-    transcript stays clean and it never piles up. Last, it would take the conversation's
-    cache breakpoint, which `PromptCachingMiddleware` moves back onto what is stored.
+    A turn either finished well inside its budget or ran to the limit and stopped mid-work;
+    told, it can end on an answer. The note goes last and is never stored: the transcript
+    stays clean and it never piles up. Last, it would take the conversation's cache
+    breakpoint, which `PromptCachingMiddleware` moves back onto what is stored.
     """
 
     def __init__(self, budget: StepBudget, *, subagent: bool = False) -> None:

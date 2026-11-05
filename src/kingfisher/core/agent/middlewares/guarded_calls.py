@@ -10,8 +10,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import ToolException
 
-from kingfisher.core.agent.host_paths import HostPathError
-from kingfisher.core.agent.references import UnsafeReferenceError
+from kingfisher.core.agent.host_paths import HostPathError, UnsafeReferenceError
 from kingfisher.core.agent.session_paths import (
     SessionPaths,
     as_asked,
@@ -73,17 +72,20 @@ class GuardedCallsMiddleware(AgentMiddleware):
 
     def _translated(self, request: Any) -> Any:
         """The same call with its path arguments made real, or the request unchanged when
-        it names no tool of ours or there is no session to translate against."""
+        it names no tool of ours or there is no session to translate against; or, for a
+        path that climbs out, the failed result to answer with, reported the way
+        `reject_host_path` reports one."""
         call = request.tool_call
         paths = self.paths
         if paths is None or call.get("name") not in self.names:
             return request
-        args = call.get("args") or {}
-        return replace(request, tool_call={**call, "args": paths.translated(args)})
-
-    def _refusal(self, request: Any, escaped: ValueError) -> ToolMessage:
-        """A path that climbs out, reported the way `reject_host_path` reports one."""
-        return failed(request.tool_call, refusal_text(escaped, self.paths))
+        # Around the translation alone: a built-in's host-path refusal caught here would
+        # read as the translation's rule.
+        try:
+            args = paths.translated(call.get("args") or {})
+        except (UnsafeReferenceError, HostPathError) as escaped:
+            return failed(call, refusal_text(escaped, paths))
+        return replace(request, tool_call={**call, "args": args})
 
     def _failed(self, request: Any, exc: Exception) -> ToolMessage | None:
         """The result to hand back, or `None` when the exception is not this one's."""
@@ -116,12 +118,8 @@ class GuardedCallsMiddleware(AgentMiddleware):
         return answered(result, answer, answer.model_copy(update={"content": said}))
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        # Two catches, the first around the translation alone: a built-in's host-path
-        # refusal caught there would read as the translation's rule.
-        try:
-            translated = self._translated(request)
-        except (UnsafeReferenceError, HostPathError) as escaped:
-            return self._refusal(request, escaped)
+        if isinstance(translated := self._translated(request), ToolMessage):
+            return translated
         try:
             return self._told_to_the_model(request, handler(translated))
         except Exception as exc:
@@ -132,10 +130,8 @@ class GuardedCallsMiddleware(AgentMiddleware):
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        try:
-            translated = self._translated(request)
-        except (UnsafeReferenceError, HostPathError) as escaped:
-            return self._refusal(request, escaped)
+        if isinstance(translated := self._translated(request), ToolMessage):
+            return translated
         try:
             return self._told_to_the_model(request, await handler(translated))
         except Exception as exc:

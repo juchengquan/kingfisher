@@ -1112,7 +1112,7 @@ def test_the_shipped_assistant_writes_the_key_its_middleware_opens(shipped):
 def test_the_shipped_assistant_is_why_it_is_not_seeded(shipped):
     """The reason a plain `seed` leaves it behind: unregistered, its middleware is refused."""
     with pytest.raises(CapabilityError, match="names unregistered middleware"):
-        declared_middleware(_assistant(shipped), {}, ALL, kind="agent")
+        declared_middleware(_assistant(shipped), {}, ALL, kind="agent", provisions={})
 
 
 def test_the_shipped_assistant_builds_against_the_registry_it_documents(shipped):

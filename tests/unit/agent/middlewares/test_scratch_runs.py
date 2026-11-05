@@ -1025,7 +1025,7 @@ def test_a_run_is_bound_only_by_name_and_only_under_the_shell(tools, gated, limi
         tools=tools,
         gated=gated,
         seconds=30,
-        limit_allows=limit,
+        limit=(limit, None),
     )
 
     handed = _handed(middleware, name, ToolContext(backend=None))
@@ -1041,7 +1041,7 @@ def test_a_context_kingfisher_did_not_make_is_passed_on_untouched():
         tools=None,
         gated=(),
         seconds=30,
-        limit_allows=True,
+        limit=(True, None),
     )
 
     assert _handed(middleware, "shout", None) is None

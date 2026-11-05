@@ -19,9 +19,9 @@ from langchain_core.messages import AIMessage, ToolMessage
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import read_only_permissions
 from kingfisher.core.agent.backend import miscased
+from kingfisher.core.agent.host_paths import UnsafeReferenceError
 from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.prompting import miscased_path, stray_save
-from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start

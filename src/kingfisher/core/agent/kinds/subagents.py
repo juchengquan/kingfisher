@@ -122,7 +122,7 @@ def _subject(spec: SubagentSpec | AgentSpec) -> str:
     return f"{kind} {spec.name!r}"
 
 
-def model_object(  # a parameter per rule picking the model: folding two hides which answered
+def model_of(  # a parameter per rule picking the model: folding two hides which answered
     spec: SubagentSpec | AgentSpec,
     cfg: Config,
     *,
@@ -130,7 +130,7 @@ def model_object(  # a parameter per rule picking the model: folding two hides w
     run_on: RunOn | None = None,
     inherited: Any = None,
 ) -> Any | None:
-    """The model instance this subagent runs, or `None` to leave it inheriting."""
+    """The model instance this definition runs, or `inherited` where it asks for none."""
     model_id = resolved_model(spec.wanted, override=run_on)
     if model_id is None:
         return inherited
@@ -144,7 +144,7 @@ def clearing_mark(
     run_on: RunOn | None = None,
     inherited: int | None = None,
 ) -> int | None:
-    """The `clear_results_at` of the entry `model_object` builds this subagent from, or
+    """The `clear_results_at` of the entry `model_of` builds this subagent from, or
     `inherited`, its summoner's, where it runs its summoner's model."""
     model_id = resolved_model(spec.wanted, override=run_on)
     if model_id is None:
@@ -178,7 +178,7 @@ def indistinct(
     return None
 
 
-def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfisher did not build
+def compiled_subagent(  # noqa: PLR0913 -- one per thing still decided for a graph kingfisher did not build
     spec: SubagentSpec,
     cfg: Config,
     *,
@@ -198,7 +198,7 @@ def compiled(  # noqa: PLR0913 -- one per thing still decided for a graph kingfi
     scratch_run_limit: ScratchRunLimit | None,
 ) -> dict[str, Any]:
     """A subagent its definition built itself, wrapped the way deepagents takes one."""
-    model = model_object(
+    model = model_of(
         spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model
     )
     if model is None:
@@ -310,7 +310,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     """Translate kingfisher's definition into deepagents' `SubAgent`."""
     if spec.build is not None:
         # deepagents runs a built graph as given, so nothing below applies to it.
-        return compiled(
+        return compiled_subagent(
             spec,
             cfg,
             endpoints=endpoints,
@@ -454,7 +454,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
 
     # An instance, not a name: deepagents' `init_chat_model` would infer its own provider and
     # read credentials from the environment, around the catalogue and the profile's params.
-    built = model_object(
+    built = model_of(
         spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model
     )
     if built is not None:

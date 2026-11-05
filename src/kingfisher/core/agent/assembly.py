@@ -61,7 +61,7 @@ from .kinds.declared_middleware import (
 from .kinds.subagents import (
     as_subagent,
     clearing_mark,
-    model_object,
+    model_of,
     subagent_helpers,
     subagent_skills,
 )
@@ -252,9 +252,9 @@ def _running(
     """The model this agent's graph runs, and its entry's `clear_results_at`, if any.
 
     A model the deployment passed in has no entry. The entry is looked up by the name
-    `model_object` builds from, so the mark is this model's and not the default's.
+    `model_of` builds from, so the mark is this model's and not the default's.
     """
-    mine = None if agent is None else model_object(agent, cfg, endpoints=endpoints)
+    mine = None if agent is None else model_of(agent, cfg, endpoints=endpoints)
     if injected is not None:
         return injected, None
     profile, _ = cfg.models.resolve(None if agent is None else agent.wanted)
@@ -485,11 +485,11 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
 
     def indexing(sources: list[Any], tools: Sequence[str] | None) -> CatalogueSkillsMiddleware:
         """Every skill's index, in deepagents' slot, written for an agent granted `tools`."""
-        held = tools is None or EXECUTE in tools
+        shelled = tools is None or EXECUTE in tools
         return CatalogueSkillsMiddleware(
             backend=backend,
             sources=sources,
-            system_prompt=skills_index(cfg.layout, shell, shelled=held),
+            system_prompt=skills_index(cfg.layout, shell, shelled=shelled),
         )
 
     skills_at: int | None = None
@@ -721,7 +721,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         )
         choosing = subagent_middlewares or AgentsMiddlewares()
 
-        def _middleware_of(spec: SubagentSpec) -> tuple[SubagentSpec, str | None]:
+        def middleware_of(spec: SubagentSpec) -> tuple[SubagentSpec, str | None]:
             """`spec`, holding the agent's middleware the deployment chose for it if it
             is portable, and who chose it: one written to travel cannot name any."""
             # No agent resolved is nothing to inherit, as `_deployment_middleware` answers.
@@ -736,7 +736,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                 middleware_settings={one: settings[one] for one in chosen if one in settings},
             ), "this deployment's SubagentMiddlewares"
 
-        def _built(  # noqa: PLR0913 -- by keyword, so a mark is never passed for a model
+        def built(  # noqa: PLR0913 -- by keyword, so a mark is never passed for a model
             name: str,
             *,
             # This subagent's model, not the agent's.
@@ -749,7 +749,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         ) -> dict[str, Any]:
             """One subagent, with the request's ceiling on every axis, and beside its helpers
             a `general-purpose` of its own where its grant holds `task`."""
-            selecting, chosen_by = _middleware_of(defined[name])
+            selecting, chosen_by = middleware_of(defined[name])
 
             def built_as(  # noqa: PLR0913 -- what differs between the subagent and its copy
                 spec: SubagentSpec,
@@ -866,14 +866,14 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         # nested one none, and refuses a nested spec with no model.
         root = running
 
-        def _with_helpers(
+        def with_helpers(
             name: str, *, nested: bool, inherited: Any = None, inherited_mark: int | None
         ) -> Any:
             # `inherited` alone in the key: the mark comes with the model it was read beside.
             key = (name, nested, id(inherited))
             if key not in compiled:
                 override = wanted.get(name)
-                mine = model_object(
+                mine = model_of(
                     defined[name],
                     cfg,
                     endpoints=capabilities.endpoints,
@@ -886,7 +886,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                     defined[name], cfg, run_on=override, inherited=inherited_mark
                 )
                 helpers = [
-                    _with_helpers(
+                    with_helpers(
                         helper,
                         nested=True,
                         # Its parent's model, not the agent's: "runs whatever
@@ -900,7 +900,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                         defined[name], defined, activated, held=held, listing=listing
                     )
                 ]
-                compiled[key] = _built(
+                compiled[key] = built(
                     name,
                     # What this subagent actually runs: its own model, else its
                     # summoner's, which deepagents hands a spec that names none.
@@ -913,7 +913,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             return compiled[key]
 
         extras["subagents"] = [
-            _with_helpers(n, nested=False, inherited_mark=mark) for n in activated
+            with_helpers(n, nested=False, inherited_mark=mark) for n in activated
         ]
 
     # deepagents adds a `general-purpose` subagent with the agent's capabilities and none

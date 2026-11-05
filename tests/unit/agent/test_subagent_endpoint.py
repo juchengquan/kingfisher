@@ -11,7 +11,7 @@ from langchain_core.runnables import RunnableLambda
 
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.kinds.subagents import compiled
+from kingfisher.core.agent.kinds.subagents import compiled_subagent
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
@@ -293,9 +293,9 @@ def test_a_built_subagent_naming_no_model_is_held_to_the_endpoints_too(
 
     if refused:
         with pytest.raises(CapabilityError, match="the default model 'fake-model'"):
-            compiled(spec, cfg, **unwired(COMPILED_UNWIRED, endpoints=endpoints))
+            compiled_subagent(spec, cfg, **unwired(COMPILED_UNWIRED, endpoints=endpoints))
     else:
-        built = compiled(spec, cfg, **unwired(COMPILED_UNWIRED, endpoints=endpoints))
+        built = compiled_subagent(spec, cfg, **unwired(COMPILED_UNWIRED, endpoints=endpoints))
         assert built["name"] == "researcher"
 
 

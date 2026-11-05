@@ -14,7 +14,7 @@ from kingfisher.core.interfaces import ReturnedPdf
 from kingfisher.core.logged import raised, warn
 from kingfisher.core.session.threads import off_loop, thread_pool
 
-from .narrowing import tool_name
+from .narrowing import requested_tool_name
 from .recorded import readable_size
 from .results import answer_in, answered
 
@@ -59,11 +59,11 @@ def pdf_allowance(trigger: int, count: SummarizerCount) -> int:
     the trigger. Unscaled, as a reply's usage would scale it later in the turn.
     """
     small, large = (count.each([_carrying_pdf(size)]) for size in _PROBE_BYTES)
-    # A counter that charges a PDF nothing cannot be filled by one; held to the four
-    # characters a token this assumed before, rather than dividing by nothing.
+    # A counter that charges a PDF nothing cannot be filled by one; held to four
+    # characters a token, rather than dividing by nothing.
     if large <= small:
         return trigger * 3 // 2
-    # Whole numbers throughout: four characters a token gives exactly the old figure.
+    # Whole numbers throughout, so four characters a token gives the fallback's figure exactly.
     return trigger * (_PROBE_BYTES[1] - _PROBE_BYTES[0]) // (2 * (large - small))
 
 
@@ -208,7 +208,7 @@ class AttachmentsMiddleware(AgentMiddleware):
         # Inside `GrantedOnlyMiddleware`, so these are the tools the model may call. Not the
         # catalogue's names: `standing_middleware` gets every tool, granted or not.
         self._offered = frozenset(
-            name for tool in request.tools if (name := tool_name(tool)) is not None
+            name for tool in request.tools if (name := requested_tool_name(tool)) is not None
         )
         if self._passed:
             # Answered by now, and counted from the conversation from here on.

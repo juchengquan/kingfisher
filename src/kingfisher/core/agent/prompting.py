@@ -1,8 +1,8 @@
 """Assembling the system prompt from the markdown that ships with the package.
 
-Nothing here may import more than `Config`, the layout, `READ_FILE` and the standard library:
-`ShellPrompt` is exported, and a module importing deepagents would load the provider
-SDKs behind it for anyone naming it.
+Nothing here may import the agent runtime: `ShellPrompt` and `InstructionsFile` are
+exported, and a module loading deepagents would load the provider SDKs behind it for anyone
+naming one. `test_a_public_name_that_runs_no_agent_loads_no_runtime` holds it.
 """
 
 from __future__ import annotations
@@ -431,16 +431,8 @@ def session_section(layout: Layout) -> str:
 def what_you_make_goes(outputs_route: str, scratch_route: str) -> str:
     """Where the agent's own files go, worded once for every refusal that offers it.
 
-    Three refuse a write and offer this: a deny rule's, a fence's -- which `builtin_tools`
-    reads out of the shell's own output -- and a save outside the session's folders. A
-    model reading three wordings for one rule reads three rules. Each folder with what it
-    is for, because choosing between them is the whole use of the sentence: `/outputs` is
-    handed back and `/scratchpad` is not.
-
-    Here rather than beside the first of the three: this module already holds the prose a
-    model reads on a misstep, and it is the one both others may import -- it takes nothing
-    but `Config`, the layout and `READ_FILE`, which is why nothing importing it loads the
-    provider SDKs.
+    Each folder with what it is for, because choosing between them is the whole use of the
+    sentence: `/outputs` is handed back and `/scratchpad` is not.
     """
     return (
         f"Save what you make under `{outputs_route}<name>` to hand it back, or under "
@@ -475,7 +467,7 @@ def subagent_prompt(prompt: str, instructions: str, layout: Layout) -> str:
 
 
 def system_prompt(
-    cfg: Config | None = None,
+    cfg: Config,
     agent: str = "",
     shell: ShellPrompt | None = None,
     instructions: str = "",
@@ -488,10 +480,10 @@ def system_prompt(
     `tools` is the agent's allowlist, `None` where nothing narrows it.
     """
     return render_system_prompt(
-        cite_results=cfg.cite_results if cfg else True,
-        keep_results_rounds=cfg.keep_results_rounds if cfg else None,
+        cite_results=cfg.cite_results,
+        keep_results_rounds=cfg.keep_results_rounds,
         ahead=_in_order(agent, instructions),
-        layout=cfg.layout if cfg else DEFAULT_LAYOUT,
+        layout=cfg.layout,
         shell=shell,
         tools=None if tools is None else _DESCRIBED.intersection(tools),
     )

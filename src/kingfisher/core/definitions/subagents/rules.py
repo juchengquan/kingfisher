@@ -77,7 +77,7 @@ def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
             stack.append((name, True))
             spec = specs.get(name)
             # `*` is every definition here, as `subagent_helpers` expands it: the two must
-            # agree, since `_with_helpers` has no re-entry guard and relies on this walk.
+            # agree, since `with_helpers` has no re-entry guard and relies on this walk.
             if spec is None or spec.subagents is None:
                 named: tuple[str, ...] = ()
             elif spec.subagents == ALL:

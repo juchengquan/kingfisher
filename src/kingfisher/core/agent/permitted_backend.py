@@ -34,8 +34,8 @@ from deepagents.middleware.filesystem import (
 )
 
 from .backend import folders_of, miscased, strays
+from .host_paths import UnsafeReferenceError
 from .prompting import miscased_path, stray_save
-from .references import UnsafeReferenceError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
