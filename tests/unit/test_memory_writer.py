@@ -273,6 +273,30 @@ def test_an_entry_the_agent_saved_holding_a_context_value_is_dropped_too(scripte
     assert "Payments" not in _memory_file(scripted).read_text(encoding="utf-8")
 
 
+def test_a_dropped_entry_takes_its_lines_past_a_blank_one(scripted):
+    """Removing a dropped entry stopped at a blank line, so the indented line after it --
+    where the check found the value -- stayed saved, read as part of the entry above."""
+    kf = _writing(scripted, memory_every=2)
+    edit = {
+        "file_path": "/memory/AGENTS.md",
+        "old_string": "# Project memory\n",
+        "new_string": "# Project memory\n\n- Likes EUR\n- Bills through\n\n  ACME-CORP-7781\n",
+    }
+
+    result, _ = _turn(
+        kf,
+        AIMessage(content="", tool_calls=[{"name": "edit_file", "args": edit, "id": "c1"}]),
+        AIMessage(content="noted"),
+        context={"account": "acme-corp-7781"},
+    )
+
+    assert _writer_calls() == [], "the control: the writer ran on the first turn"
+    assert result.memory.dropped == (MemoryEntry("m2", "Bills through ACME-CORP-7781"),)
+    saved = _memory_file(scripted).read_text(encoding="utf-8")
+    assert "ACME" not in saved
+    assert "- [m1] Likes EUR" in saved, "the control: the entry above stays"
+
+
 # -- what it is shown --------------------------------------------------------------
 
 

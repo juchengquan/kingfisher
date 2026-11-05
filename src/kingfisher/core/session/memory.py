@@ -73,6 +73,39 @@ def _entry_named(entries: tuple[MemoryEntry, ...], entry_id: str) -> MemoryEntry
     raise MemoryEntryError(msg)
 
 
+def _owned(lines: list[str]) -> tuple[list[int | None], list[tuple[str | None, str]]]:
+    """Which entry each line belongs to, by its place in the second list, and each entry's
+    id, `None` where it is not numbered yet, with its text."""
+    owners: list[int | None] = []
+    found: list[tuple[str | None, list[str]]] = []
+    for line in lines:
+        if numbered_line := _NUMBERED.match(line):
+            found.append((f"m{numbered_line.group(1)}", [numbered_line.group(2).strip()]))
+        elif bare := _BARE.match(line):
+            found.append((None, [bare.group(1).strip()]))
+        # Continued by the rule `numbered` reads it by: the last entry above, whatever is
+        # between. Stopping at a blank line would keep a line the identifier check read as
+        # the entry's, and with it the value the check dropped the entry for.
+        elif found and line[:1].isspace() and line.strip():
+            found[-1][1].append(line.strip())
+        else:
+            owners.append(None)
+            continue
+        owners.append(len(found) - 1)
+    return owners, [(written, " ".join(said)) for written, said in found]
+
+
+def _less(text: str, gone: Callable[[str | None, str], bool]) -> str:
+    """`text` less every entry `gone` answers true for, given its id and text, each with
+    the lines continuing it."""
+    lines = text.split("\n")
+    owners, found = _owned(lines)
+    dropped = {at for at, (written, said) in enumerate(found) if gone(written, said)}
+    return "\n".join(
+        line for line, owner in zip(lines, owners, strict=True) if owner not in dropped
+    )
+
+
 def without(text: str, entry_id: str) -> str:
     """`text` numbered, less the entry `entry_id` and the lines continuing it.
 
@@ -80,19 +113,7 @@ def without(text: str, entry_id: str) -> str:
     """
     written, entries = numbered(text)
     _entry_named(entries, entry_id)
-    kept: list[str] = []
-    owner = None
-    for line in written.split("\n"):
-        if entry := _NUMBERED.match(line):
-            owner = f"m{entry.group(1)}"
-        # Continued by the rule `numbered` reads it by, or this would drop lines it did
-        # not count as the entry's, or keep some it did.
-        elif not (line[:1].isspace() and line.strip()):
-            kept.append(line)
-            continue
-        if owner != entry_id:
-            kept.append(line)
-    return "\n".join(kept)
+    return without_entries(written, frozenset({entry_id}))
 
 
 def without_any(text: str, entry: MemoryEntry) -> str:
@@ -103,28 +124,7 @@ def without_any(text: str, entry: MemoryEntry) -> str:
     was never shown; and the entry's earlier wording is still the entry, while its text
     alone finds it where it was not yet numbered.
     """
-    lines = text.split("\n")
-    owners: list[int | None] = []
-    found: list[tuple[str | None, list[str]]] = []
-    for line in lines:
-        if numbered_line := _NUMBERED.match(line):
-            found.append((f"m{numbered_line.group(1)}", [numbered_line.group(2).strip()]))
-        elif bare := _BARE.match(line):
-            found.append((None, [bare.group(1).strip()]))
-        # Continued by the rule `numbered` reads it by: the last entry above, whatever is
-        # between.
-        elif found and line[:1].isspace() and line.strip():
-            found[-1][1].append(line.strip())
-        else:
-            owners.append(None)
-            continue
-        owners.append(len(found) - 1)
-    gone = {
-        at
-        for at, (written, said) in enumerate(found)
-        if written == entry.id or " ".join(said) == entry.text
-    }
-    return "\n".join(line for line, owner in zip(lines, owners, strict=True) if owner not in gone)
+    return _less(text, lambda written, said: written == entry.id or said == entry.text)
 
 
 def changes(
@@ -147,16 +147,7 @@ def changes(
 
 def without_entries(text: str, ids: frozenset[str]) -> str:
     """`text` less the entries `ids` names, each with the lines continuing it."""
-    kept: list[str] = []
-    skipping = False
-    for line in text.split("\n"):
-        if skipping and line[:1].isspace() and line.strip():
-            continue
-        found = _NUMBERED.match(line)
-        skipping = found is not None and f"m{found.group(1)}" in ids
-        if not skipping:
-            kept.append(line)
-    return "\n".join(kept)
+    return _less(text, lambda written, _: written in ids)
 
 
 def with_entries(text: str | None, entries: tuple[MemoryEntry, ...]) -> str:
