@@ -21,6 +21,9 @@ def two_agents(cfg):
 
 
 def test_a_caller_reaches_an_agent_their_source_id_is_listed_on(two_agents):
+    """A caller holding A must reach an agent locked to A, or the refusals below pass
+    against a lock that admits nobody.
+    """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     assert agent_named(kf, "assistant", source_ids=("A",)) is not None
 
@@ -45,6 +48,9 @@ def test_the_listing_in_that_refusal_names_only_reachable_agents(two_agents):
 
 
 def test_a_caller_who_reaches_no_agent_is_told_the_definitions_offer_none(cfg):
+    """A caller who reaches no agent would be told "the definitions offer" followed by
+    nothing, where the refusal owes them `none`.
+    """
     an_agent(cfg, "assistant", source_ids="[B]")
     kf = Kingfisher(cfg, sessions=LocalSessions())
     with pytest.raises(CapabilityError, match="definitions offer none"):
@@ -52,11 +58,17 @@ def test_a_caller_who_reaches_no_agent_is_told_the_definitions_offer_none(cfg):
 
 
 def test_unscoped_still_reaches_every_agent(two_agents):
+    """`UNSCOPED`, read as a caller holding nothing, would lock a run that has no caller
+    out of every agent with a `source_ids:` line.
+    """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     assert agent_named(kf, "assistant", source_ids=UNSCOPED) is not None
 
 
 def test_a_deployment_with_no_vocabulary_reaches_every_agent(cfg):
+    """A deployment that writes no lock anywhere would have a call naming nobody refused
+    for not saying who is calling, though nothing it runs is locked.
+    """
     an_agent(cfg, "assistant")
     assert agent_named(Kingfisher(cfg, sessions=LocalSessions()), "assistant") is not None
 

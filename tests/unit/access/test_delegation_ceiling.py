@@ -343,6 +343,10 @@ NARROWING = [
     (("b", "a"), ("a", "b"), ("b", "a")),  # the selection's order is kept
 ]
 def test_the_rule_itself():
+    """A wrong answer from `narrowed` on any pair in the table -- widening past the cap,
+    `None` not absorbing, the selection's order lost -- mis-narrows requests and
+    subagents alike.
+    """
     assert NARROWING, "no cases -- the three rules below would walk nothing and pass"
     wrong = [
         f"{selection!r} under {cap!r} gave {narrowed(selection, by=cap)!r}, wanted {expected!r}"
@@ -354,6 +358,9 @@ def test_the_rule_itself():
 
 
 def test_a_request_is_narrowed_by_it():
+    """A request clamped by a rule that drifted from `narrowed` would get a different
+    answer from a subagent under the same cap.
+    """
     wrong = []
     for selection, cap, expected in NARROWING:
         got = Capabilities(tools=cap).intersect(Capabilities(tools=selection)).tools
