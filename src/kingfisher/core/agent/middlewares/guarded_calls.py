@@ -18,7 +18,7 @@ from kingfisher.core.agent.session_paths import (
     where_to_write,
 )
 from kingfisher.core.definitions.subagents import TASK_TOOL
-from kingfisher.core.session.runtime import unavailable
+from kingfisher.core.session.provider_errors import unavailable
 
 from .results import answer_in, answered, failed
 

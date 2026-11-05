@@ -12,7 +12,8 @@ from langchain_core.messages import AIMessage, ToolMessage
 from kingfisher import ConfigError, Kingfisher, Request
 from kingfisher.core.agent.middlewares.guarded_calls import GuardedCallsMiddleware
 from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
-from kingfisher.core.session.runtime import ModelUnavailableError, unavailable
+from kingfisher.core.session.provider_errors import unavailable
+from kingfisher.core.session.runtime import ModelUnavailableError
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
 from tests.unit.scripted import Scripted

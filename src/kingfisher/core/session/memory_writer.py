@@ -14,7 +14,7 @@ from kingfisher.core.agent.prompting import memory_writer_prompt
 from kingfisher.core.layout import MEMORY_WRITER
 from kingfisher.core.result import MemoryChanges, MemoryEntry, RunEvent
 
-from . import runtime
+from . import provider_errors, runtime
 from .memory import changes, listed, memory_text, with_entries, without_entries
 from .steps import Steps, changing, on_host
 
@@ -158,7 +158,7 @@ def _revised(
         answer = yield on_host(_asked, prepared.memory_model, layout, entries, said)
     # Any failure: the memory stays as it was and the turn still succeeds.
     except Exception as exc:  # noqa: BLE001
-        return None, f"its call failed: {type(exc).__name__}: {runtime.said(exc)}"
+        return None, f"its call failed: {type(exc).__name__}: {provider_errors.said(exc)}"
     try:
         revised = listed(answer, entries)
     except ValueError as exc:

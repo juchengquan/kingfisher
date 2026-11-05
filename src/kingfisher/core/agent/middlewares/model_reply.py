@@ -10,13 +10,13 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from kingfisher.core.session.provider_errors import unavailable
 from kingfisher.core.session.runtime import (
     ModelUnavailableError,
     call_block_id,
     cut_off,
     cut_off_mark,
     output_limit,
-    unavailable,
     with_call_args,
 )
 
