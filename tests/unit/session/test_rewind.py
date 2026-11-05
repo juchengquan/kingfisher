@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import json
 import shutil
+import threading
 from dataclasses import replace
 
 import pytest
 from langchain_core.messages import AIMessage
 
 from assets.middlewares.summarize_by_count import SummarizeByCount
-from kingfisher import START, Kingfisher, RewindError, SessionBusyError, TurnIdError
+from kingfisher import START, Kingfisher, Request, RewindError, SessionBusyError, TurnIdError
 from kingfisher.cli.__main__ import main
 from kingfisher.core.layout import (
     ARTIFACTS_SEEN,
@@ -33,11 +34,13 @@ from kingfisher.core.layout import (
 )
 from kingfisher.core.request import Decision, DecisionError
 from kingfisher.core.result import AWAITING
+from kingfisher.core.session import preparation
 from kingfisher.core.session.file_history import dropped_for_space
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
 from tests.unit.session.test_turn_log import TOOLS, _calls, _resume, _say, _searches, _transcript
+from tests.unit.stand_ins import StubAgent
 
 
 @pytest.fixture
@@ -193,6 +196,43 @@ def test_a_refused_rewind_changes_nothing(rewinding):
     LocalSessions().release(rewinding, "s", held)
 
     assert _harness_files(rewinding) == kept
+
+
+def test_turns_logged_under_one_id_are_listed_and_a_rewind_behind_them_is_refused(cfg, monkeypatch):
+    """A supplied graph's session that ran two turns under one id, before #1208 refused it,
+    logged the second's line in place of the first's: the walk back came round forever, so
+    `turns` and `rewind` never returned, and one cut short would rebuild a conversation no
+    turn ended on."""
+    start(cfg, "s")
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+    for turn_id in ("req-76", "req-77", "req-78"):
+        kf.run(Request(turn_id, agent="only", session_id="s", turn_id=turn_id))
+
+    def no_id_held(harness):
+        # The check as it was before #1208, which read no log; a step, like the one it replaces.
+        yield from ()
+        return frozenset()
+
+    with monkeypatch.context() as patched:
+        patched.setattr(preparation, "logged_turns", no_id_held)
+        kf.run(Request("again", agent="only", session_id="s", turn_id="req-77"))
+    # Past the loop, so a walk from it meets the loop partway rather than at its start.
+    kf.run(Request("req-79", agent="only", session_id="s", turn_id="req-79"))
+
+    listed: list = []
+    # On a thread, since the walk never ending would hang the suite rather than fail it.
+    worker = threading.Thread(target=lambda: listed.extend(kf.session("s").turns()), daemon=True)
+    worker.start()
+    worker.join(10)
+    assert [turn.id for turn in listed] == ["req-76", "req-77", "req-78", "req-79"]
+
+    kept = _harness_files(cfg)
+    for behind in ("req-77", "req-78", "req-79"):
+        with pytest.raises(RewindError, match="lead back into each other"):
+            kf.session("s").rewind(behind)
+    assert _harness_files(cfg) == kept
+    # The control: a turn from before the reuse is not behind the loop, and goes back.
+    assert kf.session("s").rewind("req-76").to == "req-76"
 
 
 def test_a_result_left_on_a_branch_is_still_read_by_its_id(rewinding):
