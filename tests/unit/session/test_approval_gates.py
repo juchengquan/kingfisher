@@ -631,6 +631,9 @@ def _gated_on_echo(cfg) -> None:
 
     `echo` is a package whose helper module holds the code, which is the file a reload
     in one process keeps stale; `count` reaches the agent only through its subagent.
+    `researcher` is a package too, whose files a pause recorded none of, and its folder
+    is named otherwise on purpose: a rule recording a package only under its subagent's
+    name passes a folder called `researcher`.
     """
     package = tools_dir(cfg) / "echo"
     package.mkdir(parents=True)
@@ -650,11 +653,20 @@ def _gated_on_echo(cfg) -> None:
         "system_prompt: |\n  You help.\n",
         encoding="utf-8",
     )
+    research = subagents_dir(cfg) / "research"
+    research.mkdir()
+    (research / "__init__.py").write_text(
+        "from .prompt import PROMPT\n\n"
+        'SUBAGENTS = [{"name": "researcher", "description": "Researches.", '
+        '"system_prompt": PROMPT}]\n',
+        encoding="utf-8",
+    )
+    (research / "prompt.py").write_text('PROMPT = "You research."\n', encoding="utf-8")
     an_agent(
         cfg,
         tools="[echo]",
         skills="[s1]",
-        subagents="[helper]",
+        subagents="[helper, researcher]",
         middlewares="[quiet]",
         builtin_tools="[read_file, task]",
         interrupt_on="[echo]",
@@ -692,11 +704,18 @@ def _approved(paused: Any) -> Resume:
         ("skills/s1/SKILL.md", True),
         ("middlewares/quiet.py", True),
         ("tools/count.py", True),
+        ("subagents/research/prompt.py", True),
         ("tools/spare.py", False),
         ("agents/only.yaml", True),
     ],
     ids=[
-        "tool-helper", "skill", "middleware", "subagents-tool", "control-unused", "agents-own-file"
+        "tool-helper",
+        "skill",
+        "middleware",
+        "subagents-tool",
+        "subagent-package",
+        "control-unused",
+        "agents-own-file",
     ],
 )
 def test_a_resume_is_refused_once_what_its_agent_uses_changed(scripted, edited, refused):

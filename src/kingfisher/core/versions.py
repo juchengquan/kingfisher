@@ -158,11 +158,17 @@ def _named_by(definitions: Definitions, spec: SpecBase, *, seen: set[str]) -> se
             continue
         seen.add(key)
         helper = subagents.specs[key]
-        where = PurePosixPath(subagents.sources[key])
-        # A folder named after the subagent is its own, as its bundle is.
-        places.add(
-            f"subagents/{where.parent}/" if where.parent.name == helper.name
-            else f"subagents/{where}"
-        )
+        source = subagents.sources[key]
+        where = PurePosixPath(source)
+        # A folder named after the subagent is its own, as its bundle is, and holds any
+        # package defining it there, so it is asked first.
+        if where.parent.name == helper.name:
+            places.add(f"subagents/{where.parent}/")
+        # A package is its own folder too, whatever it is called: from the source as
+        # written, since a path drops the `/` that marks one.
+        elif source.endswith("/"):
+            places.add(f"subagents/{source}")
+        else:
+            places.add(f"subagents/{where}")
         places |= _named_by(definitions, helper, seen=seen)
     return places

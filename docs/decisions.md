@@ -4571,7 +4571,11 @@ them, as one after a library upgrade is; one whose agent names nothing that chan
 ahead, which is why it is not every file in the definitions. The agent's own file is left
 out while a session keeps a copy of it, since that copy is what a resume reads. A pause
 written before the record resumes unchecked, as every pause did. Until then a tool edited
-across a restart was resumed with nothing said. *(2026-11-02.)*
+across a restart was resumed with nothing said. *(2026-11-02.)* A subagent defined in a
+package was recorded as nothing until 2026-11-05, and a pause from before then is refused
+once rather than recognised: nothing recorded from a package's folder is also what a
+subagent added since looks like to an agent given every one, and the gap was three days
+old. *(2026-11-05.)*
 
 What the old per-session sqlite bought survives by another route, measured rather than
 assumed: a conversation deleted with its session (one workspace held 132 orphaned threads

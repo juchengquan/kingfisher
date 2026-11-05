@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A resume is refused once a file in a subagent's package changed, after #1229
+
+- **A paused turn records every file of the package a subagent is defined in**, whatever
+  its folder is called, and a `Resume` after one of them changed raises `DecisionError`,
+  as it already did for the agent's other files. It recorded none of them, so a turn
+  approved after an edit to one ran on the edited code with nothing said.
+- **A pause written before this, by an agent with a subagent defined in a package, is
+  refused on its first resume**, naming the package's files as changed though nothing
+  touched them.
+  Send the session a plain request instead, which supersedes the pause.
+
 ## `LoguruEvents` is `LoguruRunEvents`, after #1215
 
 - **Renamed, with no alias**: `from kingfisher.plugins import LoguruEvents` now raises
