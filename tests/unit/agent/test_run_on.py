@@ -122,9 +122,6 @@ def test_naming_a_model_replaces_the_file_wholesale(cfg, session_dir):
     """`second-opinion` names `gpt-5`, which this deployment's catalogue does not define
     -- so without the override it would not build at all, and the grant admitting
     `cheap-model` is what lets it.
-
-    `test_a_granted_model_goes_through` stood above this with the same body and no
-    docstring: two names for one assertion, and the one carrying the reason is this.
     """
     _define(cfg, PINNED)
 
