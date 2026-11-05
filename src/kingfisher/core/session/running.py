@@ -28,7 +28,7 @@ from kingfisher.core.result import (
 
 from . import runtime
 from .checkpointing import (
-    harness_mark,
+    library_versions,
     paused_state,
 )
 from .file_history import keep_turn_files
@@ -57,7 +57,6 @@ from .store import (
 from .threads import finished
 from .turn import (
     Prepared,
-    consume,
     decision_needed,
     model_unavailable,
     out_of_steps,
@@ -134,7 +133,7 @@ async def _awithin(
         yield item
 
 
-def _asked(value: str | Request | Resume) -> Request | Resume:
+def _as_request(value: str | Request | Resume) -> Request | Resume:
     """Whatever a caller handed in, as one of the two things a turn starts from."""
     return value if isinstance(value, Request | Resume) else Request.coerce(value)
 
@@ -344,7 +343,7 @@ class Running:
             {
                 AGENT_MARK: prepared.agent_name or "",
                 PENDING_MARK: pending_as_mark(waiting),
-                **harness_mark(),
+                **library_versions(),
                 **(
                     {BUILT_FROM_MARK: dict(prepared.built_from)}
                     if prepared.built_from is not None
@@ -372,7 +371,7 @@ class Running:
         """
         # Coerced here: setup reads the session id first, and a bare string has none.
         yield from self._stream_turn(
-            _asked(request), source_ids=with_datazone(source_ids, datazone, extra_datazones),
+            _as_request(request), source_ids=with_datazone(source_ids, datazone, extra_datazones),
             files=files,
         )
 
@@ -498,16 +497,18 @@ class Running:
 
     def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
         """One stream chunk, read as events. The answer accumulates on `turn`."""
-        turn.answer, events = consume(
-            namespace,
-            mode,
-            chunk,
-            turn.answer,
-            turn.subagent_names,
-            seen=turn.seen,
-            delegations=turn.delegations,
+        if (text := runtime.answer_in(namespace, mode, chunk)) is not None:
+            turn.answer = text
+        return tuple(
+            runtime.events_in(
+                namespace,
+                mode,
+                chunk,
+                turn.subagent_names,
+                seen=turn.seen,
+                delegations=turn.delegations,
+            )
         )
-        return events
 
     def _payload(self, turn: _Turn) -> Any:
         """What the graph is driven with: a conversation, or the answers a resume re-enters
@@ -685,7 +686,7 @@ class Running:
         `wrap_model_call` raises the first time this reaches it.
         """
         turn = self._astream_turn(
-            _asked(request), source_ids=with_datazone(source_ids, datazone, extra_datazones),
+            _as_request(request), source_ids=with_datazone(source_ids, datazone, extra_datazones),
             files=files,
         )
         try:

@@ -733,7 +733,7 @@ def test_what_opens_agrees_with_the_withheld_report(zoned):
             checkpointer=None,
             agent=spec,
             held=held,
-            files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
+            files=drive(kf._open_files(session.name, catalogue=kf.catalogue)),
             session_id=session.name,
             catalogue=kf.catalogue,
         ).graph

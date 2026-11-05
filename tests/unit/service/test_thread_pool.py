@@ -32,9 +32,11 @@ def test_a_second_size_in_one_process_is_refused(cfg, no_pool_yet):
     """Ignored, whichever service was built first would size the pool for every other,
     and one that asked for more would queue behind a number it never chose.
     """
-    first = _service(cfg, 8)
+    _service(cfg, 8)
+    made = threads._POOL.executor
     # The control: the same size again is the same pool, not a refusal.
-    assert _service(cfg, 8)._pool is first._pool
+    _service(cfg, 8)
+    assert made is not None and threads._POOL.executor is made
     with pytest.raises(ConfigError, match=r"holds 8 threads and this service asks for 16"):
         _service(cfg, 16)
 

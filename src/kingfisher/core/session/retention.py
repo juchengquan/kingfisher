@@ -9,6 +9,8 @@ from enum import Enum
 
 @dataclass(frozen=True)
 class SweepResult:
+    """What one reap removed, how many sessions it spared, and what it could not remove."""
+
     removed: tuple[str, ...]
     #: Sessions a running turn held, and so spared.
     kept: int

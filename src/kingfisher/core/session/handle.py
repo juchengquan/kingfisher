@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 class Session:
     """One session, handed out by `Kingfisher.session` or `Kingfisher.sessions`.
 
-    The caller is checked once, when this is handed out: its agent and the caller's
-    source ids are fixed by then, so asking again could not answer differently. A session
-    deleted since answers `UnknownSessionError`, except to `delete`.
+    No caller is checked: a session is open to whoever holds its id, and who may hold it
+    is the deployment's to settle. A session deleted since answers `UnknownSessionError`,
+    except to `delete`.
     """
 
     id: str
@@ -122,11 +122,11 @@ class Session:
         Handed to the turn as `files=`, the turn runs on it rather than opening another,
         which on a remote backend is a second sandbox.
         """
-        return drive(self._service._files_in(self.id, self._opened))
+        return drive(self._service._existing_files(self.id, self._opened))
 
     async def afiles(self) -> Any:
         """`files`, for a caller on an event loop."""
-        return await adrive(self._service._files_in(self.id, self._opened))
+        return await adrive(self._service._existing_files(self.id, self._opened))
 
     def size(self) -> int:
         """How many bytes this session holds, as its backend counts them."""

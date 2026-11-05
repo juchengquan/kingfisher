@@ -5496,7 +5496,7 @@ runtime for a caller nobody type-checks. *(2026-10-05.)*
 
 **What a session opens is checked where it is opened.** Run only where an agent was built,
 which beside a graph is never, the check let a backend with no shell reach kingfisher's own
-calls and fail at `claim` with an `AttributeError`. It runs in `_files_for` on every
+calls and fail at `claim` with an `AttributeError`. It runs in `_open_files` on every
 session opened, for an `isinstance` and a scan of the routes. *(2026-10-05.)*
 
 **The runner belongs to the sessions, not to `Kingfisher`.** `Kingfisher(runner=)` worked
@@ -6281,7 +6281,7 @@ placing inputs, under "Reversed: a session is named by the request" below.*
 **Reversed: `files_for` opened only a session a turn issued.** It opened through the
 session backends' `open`, which makes what it is asked for, so a made-up id became a
 session a turn would accept -- the route above, back by another door. It was made to
-refuse an id the listing lacked, at the public doors and not in `_files_for`, where it
+refuse an id the listing lacked, at the public doors and not in `_open_files`, where it
 would refuse every turn that starts a session. *(2026-10-07.)* Undone 2026-10-14 by the
 reversal below: an unused id starts a session by design. What the check reached for is
 held by the id itself -- `names_a_session` admits one visible path segment, so a made-up
@@ -6493,17 +6493,16 @@ implementations. Everything else is private and may move with no deprecation win
 kingfisher` is 5.0ms and `kingfisher.plugins` 5.1ms, against 909ms and 3,143 modules for
 `Kingfisher`. *(Measured 2026-10-17, Python 3.12.7, best of seven fresh interpreters.)*
 
-**One session, one handle, checked once.** `Kingfisher` keeps what is asked of the
-service -- `run`, `stream` and their twins, `session`, `sessions`, `reap`, `origins` --
-and one session is asked through the `Session` that `session` hands out: `pending`,
-`artifact`, `files`, `size`, `delete`, each with an `a` twin. It replaced `SessionInfo`
-and five pairs of id-taking methods, some of which checked `source_ids` and some not,
-so whether a caller could act on a session depended on which method was asked.
-`session` checks once; a session's agent and the caller's ids are fixed when it opens,
-so no later answer could differ. `None` answers both an absent session and one out of
-reach, so a leaked id is worth nothing, and `create=True` still answers `None` for one
-that exists out of reach. The handle keeps its backend, so a narrowed read opens one
-sandbox, not two.
+**One session, one handle.** `Kingfisher` keeps what is asked of the service -- `run`,
+`stream` and their twins, `session`, `sessions`, `reap`, `origins` -- and one session is
+asked through the `Session` that `session` hands out: `pending`, `artifact`, `result`,
+`memory`, `forget`, `turns`, `rewind`, `files`, `size`, `delete`, each with an `a` twin.
+It replaced `SessionInfo` and five pairs of id-taking methods, some of which checked
+`source_ids` and some not, so whether a caller could act on a session depended on which
+method was asked. `session` checks no caller, since a session is open to whoever holds
+its id (*Reversed: a session answers only callers in its datazones*), and answers `None`
+only for a session that is not there. The handle keeps its backend, so asking it twice
+opens one sandbox, not two.
 
 **Not taken: `s.run(...)` on the handle.** It would be a second way to start a turn,
 and a first turn makes its session, which no handle exists for yet. *(2026-10-17.)*

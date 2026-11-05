@@ -255,7 +255,7 @@ def test_every_sequence_is_driven_or_delegated_to():
     sequences = _sequences()
     # The control beside the escape: a rule that collected nothing would pass
     # against every forgotten call there is.
-    assert {"read_pause_mark", "read_transcript", "fetch", "_files_for"} <= set(sequences)
+    assert {"read_pause_mark", "read_transcript", "fetch", "_open_files"} <= set(sequences)
 
     undriven: list[str] = []
     for root in CALLERS:

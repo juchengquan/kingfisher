@@ -74,9 +74,7 @@ DEFAULT_SESSION = "default"
 
 
 def unknown_session(session_id: str) -> UnknownSessionError:
-    """The refusal for a session that is not there, and for one this caller may not
-    touch. One wording for both, so that holding a real id teaches nothing.
-    """
+    """The refusal for a session that is not there."""
     return UnknownSessionError(f"no session {session_id!r}")
 
 
@@ -111,7 +109,7 @@ def refuse_files_of_another(files: Any, session_id: str) -> None:
         raise UnknownSessionError(msg)
 
 
-def known(entries: Sequence[tuple[str, float]]) -> tuple[tuple[str, float], ...]:
+def most_recent_first(entries: Sequence[tuple[str, float]]) -> tuple[tuple[str, float], ...]:
     """Every `(id, last_used)` the sessions list, most recently used first."""
     return tuple(sorted(entries, key=lambda entry: -entry[1]))
 

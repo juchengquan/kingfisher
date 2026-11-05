@@ -32,7 +32,7 @@ from kingfisher.core.versions import built_from
 from . import runtime
 from .checkpointing import (
     build_session_checkpointer,
-    harness_mark,
+    library_versions,
     resumed_saver,
 )
 from .files import InputsPlacement, inputs_changed, inputs_seen, place_inputs, planned_inputs
@@ -41,10 +41,8 @@ from .memory import UsersMemory, as_file, settled_memory, users_memory
 from .memory_writer import writer_model
 from .model import (
     Conversation,
-    SessionBusyError,
     Turn,
     TurnIdError,
-    held_by_a_turn,
     refuse_files_of_another,
 )
 from .runlog import RunLogger
@@ -98,9 +96,10 @@ class Preparation:
     _graph: Any
     _session_for: Callable[..., Steps[Conversation]]
     _refuse_if_over_budget: Callable[..., Steps[None]]
-    _files_for: Callable[..., Steps[Any]]
+    _open_files: Callable[..., Steps[Any]]
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
-    _agent_named: Callable[..., AgentSpec | None]
+    _claim_or_refuse: Callable[[str, str], Steps[Any]]
+    _agent_named: Callable[..., AgentSpec]
     _graph_for: Callable[..., Any]
 
     def _prepare_steps(
@@ -140,7 +139,7 @@ class Preparation:
             # Asked before the open, which makes the session it is asked for: a refusal
             # may take back only a session this request made.
             made = session.id not in (yield from self._known_steps())
-            files = yield from self._files_for(session.id, catalogue=catalogue)
+            files = yield from self._open_files(session.id, catalogue=catalogue)
         else:
             made = False
             refuse_files_of_another(files, session.id)
@@ -150,15 +149,7 @@ class Preparation:
         yield changing(self._sessions, "mark_used", cfg, session.id)
         # Before the other refusals: those read the session, and a turn arriving halfway
         # through would be reading it as it moved.
-        claimed = yield changing(
-            self._sessions, "claim", cfg, session.id, stale_after=cfg.claim_stale_after
-        )
-        if claimed is None:
-            msg = (
-                f"session {session.id} is {held_by_a_turn(cfg.claim_stale_after)}; "
-                "wait, or start another session"
-            )
-            raise SessionBusyError(msg)
+        claimed = yield from self._claim_or_refuse(session.id, "wait, or start another session")
         try:
             history, cut = yield from read_transcript(harness)
             if history or cut:
@@ -214,7 +205,7 @@ class Preparation:
 
         allowed = self.grants.intersect(request.capabilities)
         # Before the build: a resume runs on a saver that already holds the pause.
-        paused, resume, discarded, pause = yield from self._take_pause(
+        paused, resume, discarded, pause = yield from self._read_pause(
             request, session, harness
         )
         if agent is None and (self._graph is None or held is not None):
@@ -369,7 +360,7 @@ class Preparation:
         )
         return replace(prepared, message=message, inputs_seen=now, drift=drift)
 
-    def _take_pause(
+    def _read_pause(
         self, request: Request | Resume, session: Conversation, harness: HarnessFiles
     ) -> Steps[
         tuple[bytes | None, dict[str, Any] | None, tuple[str, ...], dict[str, Any] | None]
@@ -422,7 +413,7 @@ class Preparation:
             names = "names no agent" if request.agent is None else f"names {request.agent!r}"
             msg = f"session {session.id} paused under agent {was!r}, and this resume {names}"
             raise DecisionError(msg)
-        now = harness_mark()
+        now = library_versions()
         if moved := sorted(k for k, v in now.items() if k in held and held[k] != v):
             msg = (
                 f"session {session.id} paused before {', '.join(moved)} moved "
@@ -430,14 +421,6 @@ class Preparation:
                 "the pause did not survive the upgrade and the turn must be asked again"
             )
             raise DecisionError(msg)
-
-    def _checkpointer(self) -> Any:
-        """The saver this turn runs on, empty.
-
-        Always new: the transcript carries the conversation, so a saver that remembered
-        earlier turns would hand the model each of them twice.
-        """
-        return build_session_checkpointer()
 
     def _built_turn(  # noqa: PLR0913 -- everything setup decided, for its on-host part
         self,
@@ -466,10 +449,13 @@ class Preparation:
         and on the loop would hold every other turn up.
         """
         cfg = self.cfg
-        checkpointer = self._checkpointer()
         graph = None
         try:
-            saver = checkpointer if paused is None else self._restored(session, paused)
+            # New for every turn but a resume: the transcript carries the conversation, so
+            # a saver that remembered earlier turns would hand the model each of them twice.
+            saver = (
+                build_session_checkpointer() if paused is None else self._restored(session, paused)
+            )
             ledger = (
                 Ledger(
                     turn.id,

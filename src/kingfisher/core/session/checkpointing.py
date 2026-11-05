@@ -29,17 +29,17 @@ _SERDE = JsonPlusSerializer(allowed_msgpack_modules=None)
 
 #: What a checkpoint's shape depends on: all three build the node names it refers to,
 #: so a move in any one can leave it naming nodes the rebuilt graph does not have.
-HARNESS_LIBRARIES: tuple[str, ...] = ("deepagents", "langchain", "langgraph")
+CHECKPOINT_LIBRARIES: tuple[str, ...] = ("deepagents", "langchain", "langgraph")
 
 
-def harness_mark() -> dict[str, str]:
+def library_versions() -> dict[str, str]:
     """What a checkpoint written now was built against, for a resume to check.
 
     Checked rather than discovered on load: a pause outliving a deploy is ordinary,
     and earns a sentence rather than a deserialiser's traceback.
     """
     marked: dict[str, str] = {}
-    for name in HARNESS_LIBRARIES:
+    for name in CHECKPOINT_LIBRARIES:
         with suppress(PackageNotFoundError):
             marked[name] = version(name)
     return marked

@@ -25,7 +25,12 @@ USAGE = {"input_tokens": 900, "output_tokens": 10, "total_tokens": 910}
 
 
 def _events(namespace: Any, mode: str, chunk: Any, seen: runtime.SeenMessages) -> list[Any]:
-    return list(runtime.events_in(namespace, mode, chunk, seen=seen))
+    return list(
+        runtime.events_in(
+            namespace, mode, chunk, runtime.SubagentNames(), seen=seen,
+            delegations=runtime.Delegations(),
+        )
+    )
 
 
 def test_a_message_the_conversation_already_held_is_not_announced_again():
@@ -77,16 +82,6 @@ def test_each_graph_is_judged_by_its_own_conversation():
 
     assert [e.kind for e in theirs] == ["tool_result"]
     assert ours == [], "a subagent's conversation took the place of the agent's"
-
-
-def test_without_the_stream_s_history_every_message_is_reported():
-    """`events_in` called alone, as before this existed, still reports what it is
-    handed: the history is the turn's to keep, and a caller with none gets no filter."""
-    result = ToolMessage("found", tool_call_id="c1", name="web_search", id="t1")
-
-    events = list(runtime.events_in((), "updates", {"tools": {"messages": [result]}}))
-
-    assert [e.kind for e in events] == ["tool_result"]
 
 
 TOOLS = '''

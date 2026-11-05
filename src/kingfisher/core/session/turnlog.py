@@ -140,10 +140,7 @@ def _imported(history: Sequence[Message], turn: str | None) -> list[dict[str, An
 def _last_closed(ledger: KeptLedger, *, besides: str) -> str | None:
     """The last turn the ledger closes, never `besides`, the turn now ending, whose own
     closing line is written before this file."""
-    closed = [
-        row["turn"] for line in ledger.lines
-        if "id" not in (row := json.loads(line)) and row.get("turn") not in (None, besides)
-    ]
+    closed = [row["turn"] for row in ledger.closings if row["turn"] != besides]
     return closed[-1] if closed else None
 
 

@@ -286,31 +286,12 @@ def sweep_results(  # noqa: PLR0913 -- by keyword, so no route is passed for a s
     unused_results: UnusedResults,
     session_id: str,
 ) -> Steps[None]:
-    """Hand `unused_results` the result files no row names, once the conversation is
-    written.
+    """Hand `unused_results` every result file a recorder wrote that no row names, and only
+    those, once the conversation is written.
 
     After the transcript, not the ledger: a file the sweep removes may still be named by
     the conversation the turn is about to write, and a crash between the two leaves that
     conversation naming a file that has gone.
-    """
-    yield from _swept(
-        files,
-        ledger.earlier.paths | {e.path for e in entries if e.path},
-        tool_results_route=tool_results_route,
-        unused_results=unused_results,
-        session_id=session_id,
-    )
-
-
-def _swept(
-    files: Any,
-    named: frozenset[str] | set[str],
-    *,
-    tool_results_route: str,
-    unused_results: UnusedResults,
-    session_id: str,
-) -> Steps[None]:
-    """Hand over every result file a recorder wrote that no row names, and only those.
 
     Only a turn that died before writing its rows leaves one, beside the files of expired
     rows. One turn runs at a time, so no running turn is about to name it.
@@ -318,6 +299,7 @@ def _swept(
     A recorder's own names rather than whatever the folder holds: the agent's file
     tools are refused this folder, but its shell is not.
     """
+    named = ledger.earlier.paths | {e.path for e in entries if e.path}
     listing = yield reading(files, "ls", tool_results_route)
     unused = [
         (one["path"], one.get("size"))

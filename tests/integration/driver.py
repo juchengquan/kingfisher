@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -49,7 +51,7 @@ from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.seeding import SEED_HINT
 from kingfisher.core.interfaces import RunEvents
 from kingfisher.core.layout import DEFAULT_LAYOUT, OUTPUTS
-from kingfisher.core.session.runlog import usage_of
+from kingfisher.core.session.runlog import MODEL_CALL
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 
@@ -75,6 +77,32 @@ class _Recorded(RunEvents):
 
     def record(self, event: Any) -> None:
         self.events.append(dict(event))
+
+
+@dataclass(frozen=True)
+class Usage:
+    """What a run's model calls cost, totalled from its events."""
+
+    calls: int
+    input_tokens: int
+    output_tokens: int
+    cache_read: int
+
+    @property
+    def cached_share(self) -> float | None:
+        """Fraction of input tokens served from cache, or None if none were sent."""
+        return self.cache_read / self.input_tokens if self.input_tokens else None
+
+
+def usage_of(events: Iterable[Mapping[str, Any]]) -> Usage:
+    """Total the model calls among these events."""
+    calls = [e for e in events if e.get("event") == MODEL_CALL]
+    return Usage(
+        calls=len(calls),
+        input_tokens=sum(e.get("input_tokens", 0) for e in calls),
+        output_tokens=sum(e.get("output_tokens", 0) for e in calls),
+        cache_read=sum(e.get("cache_read", 0) for e in calls),
+    )
 
 
 def _usage_summary(events: list[Any]) -> str:

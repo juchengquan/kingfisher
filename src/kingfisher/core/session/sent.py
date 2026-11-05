@@ -35,8 +35,8 @@ class Preview:
     _graph: Any
     _session_for: Callable[..., Steps[Conversation]]
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
-    _files_for: Callable[..., Steps[Any]]
-    _agent_named: Callable[..., AgentSpec | None]
+    _open_files: Callable[..., Steps[Any]]
+    _agent_named: Callable[..., AgentSpec]
     _graph_for: Callable[..., Any]
 
     def sent(self, request: Request, *, source_ids: Held | None = None) -> Sent:
@@ -68,16 +68,12 @@ class Preview:
         session = yield from self._session_for(request)
         held = caller_holds(catalogue.vocabulary, source_ids)
         made = session.id not in (yield from self._known_steps())
-        files = yield from self._files_for(session.id, catalogue=catalogue)
+        files = yield from self._open_files(session.id, catalogue=catalogue)
         try:
-            sent = yield from self._looked(request, session.id, files, held, catalogue)
-        except BaseException:
+            return (yield from self._looked(request, session.id, files, held, catalogue))
+        finally:
             if made:
                 yield changing(self._sessions, "delete", self.cfg, session.id)
-            raise
-        if made:
-            yield changing(self._sessions, "delete", self.cfg, session.id)
-        return sent
 
     def _looked(
         self,
@@ -99,15 +95,13 @@ class Preview:
             session_id=session_id,
             catalogue=catalogue,
         )
-        name = agent.name if agent is not None else ""
         # As a turn's teardown does: the caught call can have started the code
         # interpreter's runtime, and one left open deadlocks the process at exit.
         try:
-            sent = yield on_host(
-                first_call, built, request.task, agent=name, session_id=session_id
+            return (
+                yield on_host(
+                    first_call, built, request.task, agent=agent.name, session_id=session_id
+                )
             )
-        except BaseException:
+        finally:
             yield on_host(release_interpreter, self.cfg, built.graph)
-            raise
-        yield on_host(release_interpreter, self.cfg, built.graph)
-        return sent

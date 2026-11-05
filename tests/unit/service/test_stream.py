@@ -338,7 +338,12 @@ def test_the_adapter_owns_the_stream_modes(cfg):
 
     assert runtime.answer_in((), "values", values) == "42"
     assert runtime.answer_in((), "updates", values) is None
-    assert list(runtime.events_in((), "values", values)) == []
+    assert list(
+        runtime.events_in(
+            (), "values", values, runtime.SubagentNames(), seen=runtime.SeenMessages(),
+            delegations=runtime.Delegations(),
+        )
+    ) == []
 
 
 def test_run_is_a_drain_of_stream(cfg):

@@ -195,6 +195,8 @@ class MemoryChanges:
 
 @dataclass(frozen=True)
 class RunResult:
+    """What one turn hands back: its answer, what it left in the session, and why it stopped."""
+
     session_id: str
     #: A caller's own id where it supplied one, so a service can tie the run to its
     #: request; otherwise one made here. Not a sequence: nothing compares two.
@@ -250,6 +252,9 @@ ARG_PREVIEW = 60
 
 #: How much of what a subagent was asked heads its delegation.
 ASKED_PREVIEW = 100
+
+#: How much of a tool's result its line shows; `text` keeps it whole for consumers.
+RESULT_PREVIEW = 800
 
 
 def _flatten(value: Any, limit: int) -> str:
@@ -346,15 +351,10 @@ class RunEvent:
         """The bracketed tag, naming the subagent when one produced this."""
         return f"{kind}:{self.agent}" if self.agent else kind
 
-    def _line(self, limit: int = 800) -> str:
-        """One-line rendering. `text` keeps full fidelity for consumers."""
-        flat = " ".join(self.text.split())
-        return flat if len(flat) <= limit else flat[: limit - 1] + "…"
-
     def __str__(self) -> str:  # noqa: PLR0911 -- one branch per kind; fewer would nest more
         if self.kind == "token":
             # A fragment split mid-word, so untagged even for a subagent, and not passed
-            # through `_line`, which would flatten the markdown being written.
+            # through `_flatten`, which would flatten the markdown being written.
             return self.text
         if self.kind == "model_call":
             pairs = zip(self.tools, self.args or ({},) * len(self.tools), strict=True)
@@ -367,7 +367,7 @@ class RunEvent:
                 f"(in={self.usage.get('input_tokens', 0)} cached={cached}){cut}"
             )
         if self.kind == "tool_result":
-            return f"[{self._tag('tool ')}] {self.tool}: {self._line()}"
+            return f"[{self._tag('tool ')}] {self.tool}: {_flatten(self.text, RESULT_PREVIEW)}"
         if self.kind == "delegation_start":
             # The first line of what it was asked: all that tells two runs of one apart.
             asked = next(iter(self.text.strip().splitlines()), "")

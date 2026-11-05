@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -21,32 +20,6 @@ MODEL_CALL = "model_call"
 
 #: Where langgraph puts, in a callback's metadata, the node it ran in.
 CHECKPOINT_NS = "langgraph_checkpoint_ns"
-
-
-@dataclass(frozen=True)
-class Usage:
-    """What a run's model calls cost, totalled from its events."""
-
-    calls: int
-    input_tokens: int
-    output_tokens: int
-    cache_read: int
-
-    @property
-    def cached_share(self) -> float | None:
-        """Fraction of input tokens served from cache, or None if none were sent."""
-        return self.cache_read / self.input_tokens if self.input_tokens else None
-
-
-def usage_of(events: Iterable[Mapping[str, Any]]) -> Usage:
-    """Total the model calls among these events."""
-    calls = [e for e in events if e.get("event") == MODEL_CALL]
-    return Usage(
-        calls=len(calls),
-        input_tokens=sum(e.get("input_tokens", 0) for e in calls),
-        output_tokens=sum(e.get("output_tokens", 0) for e in calls),
-        cache_read=sum(e.get("cache_read", 0) for e in calls),
-    )
 
 
 class LoggedRunEvents(RunEvents):
