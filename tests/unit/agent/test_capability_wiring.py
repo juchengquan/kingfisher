@@ -167,6 +167,9 @@ def test_an_unrestricted_run_is_offered_the_shell(cfg, session_dir):
 
 
 def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, session_dir):
+    """A request granted one skill would be shown, or could read, the skills it was not
+    granted, or be shown not even the one it was.
+    """
     _write_skill(cfg.definitions, "tabular-qa")
     _write_skill(cfg.definitions, "other")
 
@@ -269,6 +272,10 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, session_dir):
 
 
 def test_activating_a_subagent_passes_its_definition_through(cfg, session_dir):
+    """An activated subagent would reach deepagents without the prompt its file wrote,
+    with a model it never named, or without the empty `tools` that keeps it from being
+    handed the agent's own.
+    """
     _write_subagent(cfg.definitions)
     built = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
@@ -488,6 +495,9 @@ def test_a_subagent_with_restricted_tools_builds_for_real(cfg, session_dir):
 
 
 def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, session_dir):
+    """A subagent whose definition names only `read_file` and `glob` would be handed
+    every built-in, the shell among them.
+    """
     _write_subagent(cfg.definitions, RESTRICTED_SUBAGENT, "reader.yaml")
     built = build_agent(cfg, backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
@@ -737,6 +747,9 @@ def test_an_agent_with_no_tools_says_none_rather_than_unknown(fake_model):
 
 
 def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
+    """A graph kingfisher did not build would be listed as holding no tools, a fact
+    nobody read off it, rather than as one that could not be read.
+    """
     from kingfisher.core.agent.kinds.tools import registered_tools
 
     assert registered_tools(_hand_written_graph()) is None

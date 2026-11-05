@@ -674,7 +674,10 @@ def test_one_helper_under_two_parents_is_two_subagents(cfg, session_dir):
 def test_a_helper_under_an_unpinned_subagent_still_runs_the_agents_model(
     cfg, session_dir
 ):
-    """The other half, and the one that must not have changed."""
+    """The other half, and the one that must not have changed: under a subagent that
+    pins no model, a helper handed only what its parent built is handed no model, and
+    deepagents refuses a nested spec without one.
+    """
     define_each(cfg, REVIEWER, HELPER)
     main = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 

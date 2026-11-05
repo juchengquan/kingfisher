@@ -48,6 +48,9 @@ def test_messiness_avoids_the_asserted_region():
 
 
 def test_dataset_carries_real_messiness():
+    """A dataset with no casing variants, outlier or duplicate rows would ask the agent
+    for issues that are not there, and grade it on a clean file.
+    """
     text, truth = build_dataset()
     rows = _rows(text)
 
@@ -63,6 +66,9 @@ def test_task_states_its_own_output_contract():
 
 
 def test_checks_pass_on_a_correct_answer():
+    """The control: checks failing every answer would turn each smoke run red, and pass
+    the tests below that a wrong one fails.
+    """
     payload = {
         "artifacts": [],
         "assumptions": [],
@@ -116,6 +122,9 @@ def test_checks_are_immune_to_rewording():
 
 
 def test_a_wrong_number_fails_loudly():
+    """A wrong count or a missing total would grade as correct, or fail without saying
+    what was expected or that it was missing.
+    """
     payload = {"answer": {"row_count": 1, "data_quality_issues": []}}
     checks = {c.name: c for c in check_result(payload)}
 
@@ -126,6 +135,9 @@ def test_a_wrong_number_fails_loudly():
 
 
 def test_a_non_object_answer_fails_cleanly():
+    """An answer written as prose would raise inside the grading, or be graded as
+    findings, instead of failing as the wrong shape.
+    """
     checks = {c.name: c for c in check_result({"answer": "1012 rows"})}
     assert not checks["answer_shape"].ok
 

@@ -129,6 +129,9 @@ def test_naming_a_model_replaces_the_file_wholesale(cfg, session_dir):
 
 
 def test_an_override_reaches_another_endpoint(cfg, session_dir):
+    """An override to a model served elsewhere would swap the model's name and keep the
+    old endpoint, sending the subagent's requests somewhere that does not serve it.
+    """
     routed = replace(
         cfg,
         models=replace(
@@ -228,4 +231,7 @@ def test_an_agent_granting_no_subagents_refuses_a_run_on(scripted):
 
 
 def test_a_request_carries_none_by_default():
+    """A request that names no override would carry one, putting a subagent on a model
+    its caller never asked for.
+    """
     assert Request("go").run_on == {}

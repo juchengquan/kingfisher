@@ -121,6 +121,9 @@ def test_the_async_path_behaves_the_same():
 
 
 def test_the_async_path_leaves_a_built_in_alone_too():
+    """On the async path a built-in's exception would come back as an offered tool's,
+    ahead of the wording `GuardedCallsMiddleware` gives a refused host path or a
+    subagent that could not reach its model."""
     guard = OfferedToolFailureMiddleware(frozenset({"csv_profile"}))
 
     with pytest.raises(FileNotFoundError):

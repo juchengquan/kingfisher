@@ -967,6 +967,8 @@ def test_each_run_is_given_what_is_left_of_the_call(monkeypatch):
 
 
 def test_a_backend_without_the_method_is_refused_by_name():
+    """On a session backend offering no `run_in_scratch`, a tool's run would raise
+    instead of coming back refused with that method named."""
     ran = ScratchRunner(StateBackend(), seconds=30).run(["/bin/true"], {}, outputs=(), timeout=None)
 
     assert ran.error is not None
@@ -974,6 +976,8 @@ def test_a_backend_without_the_method_is_refused_by_name():
 
 
 def test_a_context_with_nothing_bound_refuses():
+    """A tool calling `run` where nothing was bound for its call would raise on the
+    missing runner instead of being told its caller may not run commands."""
     assert ToolContext(backend=None).run(["/bin/true"]).error == NOT_GRANTED
 
 
@@ -1019,6 +1023,9 @@ def _handed(middleware: ScratchRunsMiddleware, name: str, context: Any) -> Any:
     ],
 )
 def test_a_run_is_bound_only_by_name_and_only_under_the_shell(tools, gated, limit, name, bound):
+    """A run bound where the caller holds no ungated `execute` or the deployment's limit
+    refuses it, or bound on `eval`, whose code hands it to every tool it calls, runs
+    commands for a request refused them."""
     middleware = ScratchRunsMiddleware(
         frozenset({"shout"}),
         backend=_Recording(),
@@ -1057,6 +1064,8 @@ def _scratchpad_runs(session_dir) -> list[str]:
 
 
 def test_outputs_come_back_and_the_folder_goes(cfg, session_dir):
+    """A run would hand back less than its command wrote, say nothing of an output it
+    never made, or leave its folder, inputs and all, in the session's scratchpad."""
     ran = backend_at(cfg, session_dir).default.run_in_scratch(
         ["/bin/sh", "-c", "tr a-z A-Z < in.txt > out.txt; printf done"],
         {"in.txt": b"hi"},
@@ -1270,6 +1279,8 @@ def test_an_output_the_agent_planted_mid_run_comes_back_as_the_commands_own(
 
 
 def test_a_command_past_its_time_is_stopped_and_its_folder_still_goes(cfg, session_dir):
+    """A command past its time left running would hold the session past the claim's
+    grace, and a run stopped there would leave its folder in the scratchpad."""
     ran = backend_at(cfg, session_dir).default.run_in_scratch(
         ["/bin/sleep", "30"], {}, outputs=[], timeout=1
     )
@@ -1373,6 +1384,8 @@ def test_a_host_that_cannot_hold_the_folder_runs_nothing(cfg, session_dir, monke
 
 @pytest.mark.parametrize("argv", [["-u", "x"], ["A=b"]])
 def test_a_program_env_would_read_as_its_own_is_refused(cfg, session_dir, argv):
+    """Handed to `/usr/bin/env`, a first argument that is an option or a `NAME=value` is
+    read as env's own, letting a tool change the environment its run is given."""
     ran = backend_at(cfg, session_dir).default.run_in_scratch(argv, {}, outputs=[])
 
     assert ran.error is not None

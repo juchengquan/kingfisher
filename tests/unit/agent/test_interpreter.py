@@ -44,6 +44,9 @@ def test_it_is_off_unless_a_deployment_wires_it(cfg, session_dir):
 
 
 def test_wiring_it_adds_one_tool(cfg, session_dir):
+    """Enabling the interpreter would add no `eval`, and the test above would pass
+    against a sandbox that is never wired at all.
+    """
     wired = replace(cfg, interpreter_enabled=True)
     graph = build_agent(
         wired, backend=backend_at(wired, session_dir), model=_model()

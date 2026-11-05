@@ -95,6 +95,9 @@ def elsewhere(cfg):
 
 
 def test_the_catalogue_is_where_endpoints_and_models_come_from(tmp_path):
+    """The endpoints, models and default a deployment writes in `models.yaml` would not
+    be the ones its `Config` resolves a prompt to.
+    """
     cfg = config_from_env(written(tmp_path))
 
     assert set(cfg.models.endpoints) == {"minimax"}
@@ -141,6 +144,9 @@ def test_naming_a_model_the_catalogue_does_not_define_is_refused(tmp_path):
 
 
 def test_a_subagent_runs_the_model_it_names(cfg, session_dir):
+    """A subagent naming a model on another endpoint would run some other model, or send
+    this one's name to the deployment's own endpoint.
+    """
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
     spec = build(elsewhere(cfg), session_dir)
@@ -233,6 +239,9 @@ def test_a_subagent_nobody_activated_cannot_break_the_build(cfg, session_dir):
 
 
 def test_an_endpoint_a_request_may_not_reach_is_refused(cfg, session_dir):
+    """A request granted no endpoints would still have a subagent's prompts and files
+    sent wherever its model resolves, on the deployment's credentials.
+    """
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
     with pytest.raises(CapabilityError, match="may not"):
@@ -240,6 +249,9 @@ def test_an_endpoint_a_request_may_not_reach_is_refused(cfg, session_dir):
 
 
 def test_a_granted_endpoint_goes_through(cfg, session_dir):
+    """The control: a subagent granted its endpoint runs there, so the refusal above is
+    the grant and not a subagent that never builds.
+    """
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
     spec = build(elsewhere(cfg), session_dir, endpoints=("openai",))
@@ -296,6 +308,9 @@ def test_a_built_subagent_naming_no_model_is_held_to_the_endpoints_too(
 
 
 def test_grants_clamp_endpoints_like_everything_else():
+    """A caller asking for an endpoint the deployment did not grant would be given it,
+    and route prompts, and their bill, wherever it named.
+    """
     granted = Capabilities(endpoints=("minimax",))
 
     assert granted.intersect(Capabilities(endpoints=("minimax", "openai"))).endpoints == (

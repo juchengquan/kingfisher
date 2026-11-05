@@ -189,21 +189,34 @@ class MarksNothingAsync(LocalSessions):
     ids=["aclaim", "arelease", "asize", "amark_used"],
 )
 def test_the_kit_catches_an_async_twin_that_disagrees(cfg, check, backends, said):
+    """A kit blind to an `aclaim`, `arelease`, `asize` or `amark_used` that disagrees
+    with its sync twin passes a deployment whose async turns share a held session, leave
+    it busy, miscount its quota or leave it to `reap`.
+    """
     with pytest.raises(AssertionError, match=said):
         _check(check)(lambda: (cfg, backends()))
 
 
 def test_the_kit_catches_an_adelete_that_leaves_the_session(cfg):
+    """A kit that passed an `adelete` removing nothing would let a deployment leave an
+    async caller's deletion undone, with nothing said.
+    """
     with pytest.raises(AssertionError, match="still listed"):
         _check("adelete_removes_the_session")(lambda: (cfg, KeepsEverythingAsync()))
 
 
 def test_the_kit_catches_an_aopen_that_reaches_another_session(cfg):
+    """A kit that passed an `aopen` reaching another session would let a deployment put
+    an async caller's reads where the sync path never looks.
+    """
     with pytest.raises(AssertionError, match="reach different sessions"):
         _check("aopen_reaches_the_session_open_does")(lambda: (cfg, AsyncElsewhere()))
 
 
 def test_the_kit_catches_an_asessions_that_disagrees_with_sessions(cfg):
+    """A kit that passed an `asessions` listing nothing would let a deployment's session
+    exist for a sync caller and not for an async one.
+    """
     with pytest.raises(AssertionError, match="does not list the sessions"):
         _check("asessions_lists_what_sessions_does")(lambda: (cfg, ListsNothingAsync()))
 
@@ -227,6 +240,9 @@ def test_the_kit_catches_two_sessions_on_one_filesystem(cfg):
 
 
 def test_the_kit_catches_a_claim_that_is_not_exclusive(cfg):
+    """A kit that passed a claim taken by a plain write, which never fails, would let a
+    deployment run two turns in one session at once.
+    """
     with pytest.raises(AssertionError, match="still holds"):
         _check("a_claim_is_exclusive")(lambda: (cfg, Overwriting()))
 
@@ -236,6 +252,9 @@ def test_the_kit_catches_a_claim_that_is_not_exclusive(cfg):
     ["a_claim_is_released_only_by_its_token", "a_late_release_leaves_the_claim_that_took_over"],
 )
 def test_the_kit_catches_a_release_that_ignores_its_token(cfg, check):
+    """A kit that passed a release ignoring its token would let any caller holding a
+    session id, or a turn whose claim was taken over, end the turn running there.
+    """
     with pytest.raises(AssertionError, match="gave back"):
         _check(check)(lambda: (cfg, GivesBackAnyClaim()))
 
@@ -450,6 +469,9 @@ def test_the_command_lists_what_the_named_backend_keeps(told_about_a_remote_back
 
 
 def test_the_command_reaps_where_the_named_backend_keeps_them(told_about_a_remote_backend):
+    """`reap` ignoring `KINGFISHER_SESSIONS` would sweep a local `sessions/` that holds
+    none of them, and a deployment's own sessions would never be swept.
+    """
     cfg = told_about_a_remote_backend
     remote_backends().open(cfg, "old")
 

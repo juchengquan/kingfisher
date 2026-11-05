@@ -466,6 +466,9 @@ def test_each_page_drawn_is_saved_and_said_in_a_line_of_its_own(drawing, handed)
 ])
 @draws_in_the_fence
 def test_pages_or_a_scale_it_cannot_draw_are_refused(drawing, args, says):
+    """Pages past the end, a scale past 2 or pages written in words would reach the
+    drawing, or fail without telling the model what it may ask for instead.
+    """
     with pytest.raises(ValueError, match=re.escape(says)):
         drawing(file_path="/inputs/report.pdf", **args)
 

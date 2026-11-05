@@ -108,6 +108,9 @@ def test_a_blank_shell_sandbox_reads_as_the_default():
 
 @macos
 def test_auto_confines_and_says_nothing(cfg, tmp_path):
+    """On a Mac the default mode would leave the shell unconfined, warn on every start
+    about a sandbox that is working, or wrap commands in a profile never written.
+    """
     chosen = confinement.resolve(
         confinement.AUTO, **_places(cfg), layout=DEFAULT_LAYOUT
     )

@@ -84,6 +84,9 @@ def test_a_subagent_still_gets_them_when_the_deployment_wired_them(cfg, session_
 
 
 def test_a_definition_can_name_the_skills_its_subagent_gets(cfg, session_dir):
+    """A subagent naming one skill would be granted the others offered beside it, or
+    hold its name in a form the `source::name` index never matches.
+    """
     offer_skills(cfg, "tabular-qa", "code-review")
     define(cfg, "name: reviewer\ndescription: d\nbuiltin_tools: [read_file]\n"
         "skills: [tabular-qa]\n"
@@ -198,6 +201,9 @@ def test_writing_the_star_on_both_tool_lines_lets_every_tool_through(cfg, sessio
 
 
 def test_both_can_be_named_together(cfg, session_dir):
+    """A definition naming both `builtin_tools` and `skills` would keep only one of the
+    two, handing its subagent every tool or no index.
+    """
     offer_skills(cfg, "tabular-qa")
     define(
         cfg,
