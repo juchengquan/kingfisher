@@ -143,6 +143,9 @@ def test_directory_write_bit_is_dropped_so_files_cannot_be_deleted(workspace):
 
 
 def test_writable_inputs_restores_protection_afterwards(workspace):
+    """A folder still read-only inside `writable_inputs` refuses every supplied file,
+    and one left writable after it leaves the caller's files open to any write.
+    """
     with writable_inputs(workspace, DEFAULT_LAYOUT) as inputs:
         (inputs / "new.csv").write_text("y")
         assert os.access(inputs, os.W_OK)
@@ -294,6 +297,9 @@ def test_two_sources_with_one_basename_are_refused(cfg, session_dir, tmp_path):
 
 
 def test_a_missing_source_is_refused_before_anything_is_written(cfg, session_dir, tmp_path):
+    """A request naming one file that is not there would still leave the others it named
+    in the session's inputs, for a later turn to find as though supplied.
+    """
     good = tmp_path / "good.csv"
     good.write_text("x")
 
@@ -331,6 +337,9 @@ def test_resupplying_replaces_and_says_so(cfg, session_dir, tmp_path):
 
 
 def test_nothing_is_replaced_on_a_first_supply(cfg, session_dir, tmp_path):
+    """A file supplied for the first time would reach the agent as `Replaced` rather
+    than new, and be counted in the caller's report as an overwrite.
+    """
     source = tmp_path / "new.csv"
     source.write_text("x")
 
@@ -338,6 +347,7 @@ def test_nothing_is_replaced_on_a_first_supply(cfg, session_dir, tmp_path):
 
 
 def test_supplying_nothing_touches_nothing(cfg, session_dir):
+    """A turn supplying no files would be reported as having placed or replaced some."""
     placement = drive(supplied((), backend_at(cfg, session_dir), cfg.layout))
 
     assert placement.placed == ()

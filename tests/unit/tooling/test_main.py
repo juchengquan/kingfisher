@@ -36,6 +36,10 @@ def _a_result() -> RunResult:
 
 
 def test_structural_events_render_one_per_line():
+    """A start or a model call jammed onto another line, or a call shown without what it
+    was called with and its token counts, leaves the terminal saying less than the run
+    log knows.
+    """
     text, _ = _render(
         [
             RunEvent(kind="run_start", text="t001"),
@@ -522,6 +526,9 @@ def test_naming_both_forms_of_one_kind_is_refused(cfg):
 
 
 def test_a_typo_in_a_subtraction_is_refused(cfg):
+    """`--without-builtin-tools exec` would subtract nothing and leave the shell
+    granted, to a caller who believes it withheld.
+    """
     with pytest.raises(CapabilityError, match="cannot exclude unknown name"):
         main._grants(cfg, _args(without_builtin_tools="exec"))
 

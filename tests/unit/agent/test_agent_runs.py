@@ -127,6 +127,8 @@ def test_a_request_that_names_no_agent_is_refused_once_the_definitions_have_any(
 
 
 def test_the_refusal_lists_what_the_definitions_actually_offer(cfg):
+    """A request naming an agent the definitions lack would be refused without being
+    told the names it could have asked for."""
     _agents(cfg, NARROW, CHEAP)
     service = Kingfisher(cfg, sessions=LocalSessions())
 
@@ -135,7 +137,8 @@ def test_the_refusal_lists_what_the_definitions_actually_offer(cfg):
 
 
 def test_an_empty_definitions_folder_is_told_how_to_get_one(cfg):
-    """The other half of that message."""
+    """The other half of that message: with nothing defined, a refusal listing `none`
+    leaves a reader who only installed the package no way to get an agent."""
     service = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(CapabilityError, match="kingfisher seed"):

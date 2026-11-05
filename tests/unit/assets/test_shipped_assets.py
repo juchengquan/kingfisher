@@ -52,6 +52,9 @@ def test_no_shipped_skill_names_its_own_files_by_where_the_catalogue_puts_it(shi
 
 
 def test_every_preset_subagent_parses(shipped):
+    """A shipped subagent that fails to parse, sits where the catalogue cannot reach it,
+    or carries a stub for a prompt would reach every deployment that seeds the presets.
+    """
     specs = LocalSubagentRepository(shipped / "subagents").specs
 
     # `profiler` ships in `subagents/analysis/`, and is named `profiler` all the same: a

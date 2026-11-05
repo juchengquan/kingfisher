@@ -189,6 +189,10 @@ def test_nothing_the_agent_is_told_sends_it_to_a_run_directory():
 
 
 def test_no_instructions_leave_the_base_prompt_untouched(cfg):
+    """With no agent text and no instructions, a separator left for the empty parts, or
+    a `Config` default the renderer does not share, sends a deployment a prompt other
+    than the shipped one this file's rules read.
+    """
     assert system_prompt(cfg) == shipped()
 
 

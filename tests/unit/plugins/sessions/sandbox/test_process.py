@@ -182,6 +182,9 @@ def test_a_command_is_asked_to_stop_inside_its_time_and_not_before_it(timeout, g
 
 
 def test_a_stop_given_grace_asks_first_too(tmp_path):
+    """A command its caller stops would be killed outright, leaving what the reaper
+    adopted to init, or asked only at its deadline, holding a turn its caller let go of.
+    """
     import threading
 
     mark = tmp_path / "asked"

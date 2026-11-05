@@ -49,6 +49,9 @@ def _events(cfg, agent):
 
 
 def test_stream_yields_progress_then_a_terminal_result(cfg):
+    """The stream would not open with `run_start`, would drop the model call or tool
+    result in between, or would carry the turn's result on an event other than its
+    closing `finished`."""
     events = _events(cfg, _agent_with_a_tool_call())
     kinds = [e.kind for e in events]
 
@@ -61,6 +64,9 @@ def test_stream_yields_progress_then_a_terminal_result(cfg):
 
 
 def test_stream_surfaces_tool_names_and_cache_usage(cfg):
+    """A model call's event would not name the tools called or its `cache_read`, nor a
+    tool result's its tool and text, leaving a caller unable to tell what ran or whether
+    the cache was hit."""
     events = _events(cfg, _agent_with_a_tool_call())
 
     (call,) = [e for e in events if e.kind == "model_call"]

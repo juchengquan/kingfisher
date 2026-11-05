@@ -65,6 +65,9 @@ def test_run_tells_the_agent_where_to_work_in_the_task(cfg):
 
 
 def test_run_logs_usage_shaped_records(cfg):
+    """A turn's records would miss its start or its end, or the model and endpoint that
+    tell a zero `cache_read` from a gateway that never caches.
+    """
     start(cfg, "logged")
     agent = StubAgent("ok")
     sink = RecordedEvents()
@@ -124,6 +127,9 @@ def test_request_rejects_an_empty_task():
 
 
 def test_coerce_is_idempotent():
+    """Coercing what is already a request would rebuild it from its task, dropping the
+    session, agent and grants its caller set.
+    """
     original = Request("t", session_id="s")
     assert Request.coerce(original) is original
     assert Request.coerce("t").task == "t"

@@ -247,6 +247,9 @@ class FakePlacement:
 
 
 def test_a_quiet_turn_opens_with_only_run_start():
+    """A turn with nothing to report would still open with a warning or a placement
+    line, telling the caller of a weakened guard or files that never arrived.
+    """
     events = opening_events("t001", (), FakePlacement())
 
     assert [(e.kind, e.text) for e in events] == [("run_start", "t001")]
@@ -263,6 +266,9 @@ def test_replacing_an_input_is_counted_not_just_listed():
 
 
 def test_placing_without_replacing_says_nothing_about_replacement():
+    """A placement that replaced nothing would still report a count of replacements,
+    flagging the one dangerous case where it did not happen.
+    """
     events = opening_events("t001", (), FakePlacement(("fresh.csv",)))
 
     (placed,) = [e for e in events if e.kind == "inputs_placed"]
@@ -279,6 +285,9 @@ def test_unhardened_paths_are_reported_before_the_run_starts():
 
 
 def test_a_bare_task_is_told_only_where_to_work():
+    """A task with nothing new in its inputs would reach the model with lines about
+    files that did not change, or without the line saying where it may work.
+    """
     message = turn_message("do a thing", InputsChanged(), layout=DEFAULT_LAYOUT)
 
     assert message == (

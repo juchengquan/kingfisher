@@ -169,6 +169,9 @@ READS_THE_HOST = frozenset({"/root/", "/proc/", "/sys/", "/dev/"})
 
 
 def test_the_prefixes_a_tool_argument_is_refused_are_the_ones_named_here():
+    """A prefix dropped from `NOT_FOR_TOOLS`, or a host root it stops taking, lets a
+    tool argument read the host, while the rule below loses that case and stays green.
+    """
     assert set(NOT_FOR_TOOLS) - set(HOST_ROOTS) == READS_THE_HOST
     assert set(HOST_ROOTS) < set(NOT_FOR_TOOLS), "a tool argument takes the host roots too"
 

@@ -148,6 +148,9 @@ def test_each_entry_point_drives_the_graph_its_own_way(cfg):
 
 
 def test_arun_returns_what_run_returns(cfg):
+    """An async turn would hand an `arun` caller another answer, a different completion,
+    or no turn id, where `run` fills all three.
+    """
     start(cfg, "s")
     synchronous = service(cfg).run(Request("go", session_id="s"))
 

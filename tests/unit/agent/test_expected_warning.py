@@ -29,6 +29,9 @@ def _emitted(caplog, message: str, *args: object) -> bool:
 
 
 def test_the_expected_drop_is_silenced(caplog):
+    """The warning `max_snapshot_bytes=1` makes inevitable would print into the middle
+    of the agent's streamed prose, once a turn.
+    """
     quieten_expected_snapshot_drop()
 
     assert not _emitted(
