@@ -253,15 +253,6 @@ def test_a_folded_prompt_is_refused_because_it_reflows():
         _read(written, "plain.yaml")
 
 
-def test_the_error_says_which_format_the_broken_file_is_in():
-    """`AgentError` rather than `SubagentError`, and that is the whole reason
-    `read` is its own function rather than a shared one taking a parser: it is
-    what tells somebody which of two folders to open.
-    """
-    with pytest.raises(AgentError):
-        _read("name: plain\n", "plain.yaml")
-
-
 # -- the directory ----------------------------------------------------------
 
 
@@ -271,12 +262,6 @@ def _write(root: Path, where: str, name: str, description: str = "One.") -> None
     path.parent.mkdir(parents=True, exist_ok=True)
     body = f"name: {name}\ndescription: {description}\nsystem_prompt: |\n  Go.\n"
     path.write_text(body, encoding="utf-8")
-
-
-def test_a_folder_is_organisation_and_the_name_field_is_the_identity(tmp_path):
-    _write(tmp_path, "support/triage.yaml", "triage", "Sorts.")
-
-    assert set(LocalAgentRepository(tmp_path).specs) == {"triage"}
 
 
 def test_a_folder_called_tools_is_organisation_here_too(tmp_path):

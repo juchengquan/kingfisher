@@ -209,13 +209,6 @@ def test_an_offered_tool_may_not_shadow_a_builtin(cfg):
 # makes -- but it no longer does it quietly.
 
 
-def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
-    result = seeding.seed(cfg.definitions, FIXTURE)
-
-    assert result.written
-    assert result.overwritten == ()
-
-
 def test_seeding_does_not_claim_the_catalogue_example(cfg):
     """It is not a definition, and it is no longer seeding's to write."""
     result = seeding.seed(cfg.definitions, FIXTURE)
@@ -1142,21 +1135,6 @@ def test_the_rule_holds_below_the_top_level(cfg, tmp_path):
     assert [s.label for s in done.skipped] == ["subagents/analysis/deep.yaml"]
 
 
-def test_everything_takes_what_the_default_leaves(cfg, tmp_path):
-    """For the deployment that has already registered the names."""
-    source = tmp_path / "presets"
-    (source / "agents").mkdir(parents=True)
-    (source / "agents" / "wired.yaml").write_text(
-        "name: wired\ndescription: d\nmiddlewares: [audit]\nsystem_prompt: |\n  Hi.\n",
-        encoding="utf-8",
-    )
-
-    done = seeding.seed(cfg.definitions, source, everything=True)
-
-    assert "agents/wired.yaml" in done.written
-    assert not done.skipped
-
-
 def test_a_definition_that_does_not_parse_is_copied_rather_than_judged(cfg, tmp_path):
     """Seeding is not a validator, and a broken file has a loader whose job is to say so
     in the terms of its own format.
@@ -1237,24 +1215,9 @@ def test_a_held_back_definition_is_not_reported_as_overwritten(cfg, tmp_path):
     assert mine.read_text(encoding="utf-8") == "edited by me\n"
 
 
-def test_a_dotfile_is_not_reported_as_overwritten(cfg, tmp_path):
-    """A second seed warned it overwrote the definitions folder's `.DS_Store`, which the copy never
-    touches."""
-    source = _grouped_source(tmp_path)
-    seeding.seed(cfg.definitions, source)
-    mine = subagents_dir(cfg) / "group" / ".DS_Store"
-    mine.write_text("mine", encoding="utf-8")
-
-    result = seeding.seed(cfg.definitions, source)
-
-    assert "subagents/group/.DS_Store" not in result.overwritten
-    assert mine.read_text(encoding="utf-8") == "mine"
-
-
 def test_an_edited_copy_beside_what_seed_leaves_out_still_warns(cfg, tmp_path):
-    """The control for `test_a_held_back_definition_is_not_reported_as_overwritten` and
-    `test_a_dotfile_is_not_reported_as_overwritten`: in the same folder, a file the copy
-    does replace is still named."""
+    """The control for `test_a_held_back_definition_is_not_reported_as_overwritten`: in
+    the same folder, a file the copy does replace is still named."""
     source = _grouped_source(tmp_path)
     seeding.seed(cfg.definitions, source)
     (subagents_dir(cfg) / "group" / "plain.yaml").write_text("edited\n", encoding="utf-8")

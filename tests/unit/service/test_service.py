@@ -232,21 +232,6 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
     assert [e.kind for e in events][-1] == "finished"  # and the run went on
 
 
-def test_the_module_level_helpers_are_unchanged(cfg):
-    """`run("do a thing")` was the whole public surface before this object, and is
-    unaffected by it.
-    """
-    from kingfisher import run
-
-    result = run(
-        "say hello",
-        cfg=cfg,
-        graph=StubAgent("hello"),
-        sessions=LocalSessions(),
-    )
-    assert result.answer == "hello"
-
-
 # -- what a turn opens with -----------------------------------------------
 #
 # Both of these were inline in setup, when it was one function of 123 lines.
@@ -328,23 +313,6 @@ def test_an_empty_note_leaves_the_message_as_it_was():
     assert message == (
         "do a thing\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
     )
-
-
-def test_files_supplied_with_the_request_are_named():
-    """They went to a directory of the turn's own and are session inputs now, so the
-    one line that used to name two places names one.
-    """
-    message = turn_message("analyse", InputsChanged(new=("fresh.csv",)), layout=DEFAULT_LAYOUT)
-
-    assert "New files in /inputs/: fresh.csv." in message
-
-
-def test_the_turn_message_carries_no_output_convention():
-    """What the task should *produce* is the task's business."""
-    message = turn_message("say hello", InputsChanged(), layout=DEFAULT_LAYOUT)
-
-    assert "report" not in message.lower()
-    assert ".md" not in message
 
 
 # -- a refused request leaves no turn behind ------------------------------
@@ -491,13 +459,6 @@ def test_a_narrowed_request_is_told_what_it_did_not_grant(cfg):
 
     (said,) = [e for e in events if e.kind == "withheld"]
     assert said.text == "2 tool(s) not granted: execute, ls"
-
-
-def test_an_unrestricted_request_is_told_nothing(cfg):
-    """Nothing was withheld, so there is nothing to say."""
-    events = opening_events("t001", (), FakePlacement(), ())
-
-    assert [e.kind for e in events] == ["run_start"]
 
 
 def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
@@ -663,18 +624,6 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
     prepared = drive(service._prepare_steps(asked))
 
     assert [kind for kind, _ in withheld_told(prepared.events)] == ["builtin tool"]
-
-
-def test_each_kind_gets_its_own_line(cfg):
-    events = opening_events(
-        "t001",
-        (),
-        FakePlacement(),
-        (("tool", ("execute",)), ("subagent", ("extractor",))),
-    )
-
-    said = [e.text for e in events if e.kind == "withheld"]
-    assert said == ["1 tool(s) not granted: execute", "1 subagent(s) not granted: extractor"]
 
 
 # -- a turn that ends early --------------------------------------------------
@@ -1061,5 +1010,3 @@ def test_a_supplied_graph_under_a_policy_still_resolves_one(cfg, monkeypatch):
 
     assert asked == ["only"]
     assert reported and reported[0] is not None
-
-

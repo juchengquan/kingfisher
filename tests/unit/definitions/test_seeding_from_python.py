@@ -43,18 +43,6 @@ def test_the_readme_flow_seeds_a_definitions_folder(tmp_path, assets):
     assert (paths.definitions / "skills").is_dir()
 
 
-def test_laying_out_alone_writes_the_example_catalogue(tmp_path):
-    """`models.yaml.example` arrives with the layout, before anything is seeded."""
-    paths = WorkspacePaths(tmp_path / "definitions")
-
-    ensure_definitions(paths.definitions)
-
-    assert (paths.definitions / "models.yaml.example").is_file(), (
-        "laying out the definitions folder no longer writes the example catalogue, so "
-        "the README's ordering has stopped meaning anything"
-    )
-
-
 def test_the_flow_writes_nothing_into_a_workspace(tmp_path, assets):
     """Seeding laid a workspace out and put `models.yaml.example` in it, where nothing
     reads it: the catalogue and every definition are read from the definitions folder.
@@ -109,20 +97,6 @@ def test_everything_takes_what_the_default_leaves(tmp_path, assets):
         )
 
 
-def test_a_workspace_paths_is_destination_enough(tmp_path, assets):
-    """`seed` takes a destination, not a whole `Config`.
-
-    Driven rather than asserted about the annotation, because what matters is that it
-    works with no catalogue on disk and no workspace named -- the state this asserts by
-    never writing either.
-    """
-    paths = WorkspacePaths(tmp_path / "definitions")
-    assert paths.workspace is None, "no workspace, deliberately"
-    assert not (paths.definitions / "models.yaml").exists(), "no catalogue yet, deliberately"
-
-    assert seed(paths.definitions, definitions_source(paths.assets, assets)).written
-
-
 def test_no_source_configured_says_how_to_name_one(tmp_path, monkeypatch):
     """Nothing ships, so there is no set to fall back on."""
     monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
@@ -133,17 +107,6 @@ def test_no_source_configured_says_how_to_name_one(tmp_path, monkeypatch):
 
 
 # -- the script on the live shelf ----------------------------------------
-
-
-def test_the_example_script_seeds_a_definitions_folder(tmp_path, assets):
-    """`tests/integration/seed_example.py` is driven, not just readable."""
-    done = seed_definitions(tmp_path / "definitions", assets)
-
-    assert done.written
-    assert (tmp_path / "definitions" / "agents" / "operator.yaml").is_file()
-    assert (tmp_path / "definitions" / "models.yaml.example").is_file(), (
-        "the example stopped laying the folder out before seeding it"
-    )
 
 
 def test_the_example_script_takes_everything_too(tmp_path, assets):

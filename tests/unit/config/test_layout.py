@@ -188,47 +188,6 @@ def test_the_shell_path_rule_and_matcher_follow_a_renamed_layout():
     assert missed("cat: /inputs/x: No such file or directory", virtual) is None
 
 
-def test_a_refused_tool_path_points_at_the_renamed_routes():
-    from kingfisher.core.agent.session_paths import SessionPaths, refusal_text
-
-    paths = SessionPaths(None, Path("/w/sessions"), MOVED)
-    text = refusal_text(ValueError("nope"), paths)
-    assert "`/in/<name>`" in text
-    assert "`/out/<name>`" in text
-    assert "/inputs/" not in text
-
-
-def test_a_refused_write_points_at_the_renamed_folders():
-    """The other pair, and not `refusal_text`'s: a write is refused *because* the path is
-    kept, so `/inputs/<name>` is the one folder it may not offer.
-    """
-    from kingfisher.core.agent.session_paths import SessionPaths, where_to_write
-
-    paths = SessionPaths(None, Path("/w/sessions"), MOVED)
-    text = where_to_write("Error: permission denied for write on /in/x.txt", paths)
-
-    assert "`/out/<name>`" in text
-    assert "`/scratch/<name>`" in text
-    assert "/outputs/" not in text
-    assert "/in/<name>" not in text
-
-
-def test_a_fence_refusal_note_points_at_the_renamed_folders():
-    """The third of the corrections, and the one that names a folder as well as offering
-    two: a renamed layout that reached the fence and not the note would have the shell
-    refuse `/in/` and the note call it `/inputs/`.
-    """
-    from kingfisher.core.agent.middlewares.builtin_tools import kept_note
-
-    kept, *_ = MOVED.shell_read_only
-    said = kept_note(kept, MOVED)
-
-    assert f"`/{kept}/` is not yours to write" in said
-    assert "`/out/<name>`" in said
-    assert "`/scratch/<name>`" in said
-    assert "/outputs/" not in said
-
-
 def test_a_refused_host_path_suggests_the_renamed_scratch(tmp_path):
     from kingfisher.core.agent.host_paths import HostPathError, reject_host_path
 

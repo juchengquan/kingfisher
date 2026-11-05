@@ -24,16 +24,6 @@ system_prompt: |
 
 """
 
-FULL = """name: reviewer
-description: "Checks an analysis for arithmetic errors."
-tools: [read_file, glob, grep]
-model: MiniMax-M2.5
-system_prompt: |
-  You review analyses.
-
-"""
-
-
 def test_minimal_definition_parses():
     spec = a_subagent(MINIMAL, "reviewer.yaml")
 
@@ -43,14 +33,6 @@ def test_minimal_definition_parses():
     # Left out, so none: read as the caller's, a forgotten line would hand over the shell.
     assert (spec.builtin_tools, spec.tools) == (None, None)
     assert spec.wanted is None
-
-
-def test_optional_fields_and_quoting():
-    spec = a_subagent(FULL, "reviewer.yaml")
-
-    assert spec.tools == ("read_file", "glob", "grep")
-    assert spec.wanted == "MiniMax-M2.5"
-    assert spec.description == "Checks an analysis for arithmetic errors."  # unquoted
 
 
 def test_malformed_definitions_are_rejected():
@@ -477,15 +459,6 @@ def test_metadata_is_carried_verbatim():
     spec = a_subagent(definition, "reviewer.yaml")
 
     assert spec.metadata == {"tier": "gold", "retries": 3, "tags": ["a", "b"]}
-
-
-def test_metadata_defaults_to_empty():
-    """Absent is the common case, and an empty mapping saves every reader a `None` check
-    for a field that means "nothing extra".
-    """
-    spec = a_subagent(MINIMAL, "reviewer.yaml")
-
-    assert spec.metadata == {}
 
 
 def test_metadata_must_be_a_mapping():

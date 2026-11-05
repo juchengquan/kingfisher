@@ -7101,6 +7101,21 @@ description pinned, a routed file found twice, and ordinary cases their edge cas
 Of 312 breaks, a doomed test alone caught none, and a routed file found twice again is
 still caught by the control the two deleted tests sat beside. *(2026-10-28.)*
 
+**The files nobody had read held the ordinary case twice, and little else.** Settings,
+the command, seeding, the definition formats and the service's own surface are mostly
+which model is billed, who reaches what, or a refusal a person reads. The ninth slice
+took 53 of the 683 items in eighteen of them: a setting read where the limits table reads
+it too, a seed into a folder that did not exist where every seed is into one, a whole
+form parsed beside the edge cases that start from it, and three notes after a miss on a
+renamed layout. Three stayed though other tests make most of their checks, each the one
+check of something: a public method handed its own type, an agent's exact tools, and a
+stream's result carried by one event. The gate broke what writes into a person's folders
+as well -- `seeding.py`, `workspace.py` -- and the session's own copies in `rewind.py`,
+`file_history.py` and `turnlog.py`, and `session_paths.py`, where those notes are
+written; and it broke any line outside the keep-list that only a doomed test runs, of
+which there was none. Of 833 breaks, no doomed test noticed 435, a test that stays caught
+398, and a doomed test alone caught none. *(2026-11-05.)*
+
 **Growth is held by a rule in `CLAUDE.md`, not by anything in CI.** 557 of the 608 commits
 since September were written with Claude, which reads that file on every task. The growth
 is spread evenly -- a third each from PRs adding up to five tests, six to ten, and more --

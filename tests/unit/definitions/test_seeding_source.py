@@ -42,14 +42,6 @@ def test_nothing_ships_to_seed_from(shipped):
     assert seeding.kinds_at(Path(seeding.__file__).parent.parent) == ()
 
 
-def test_seeding_from_the_worked_set_writes_all_of_it(cfg, shipped):
-    written = seeding.seed(cfg.definitions, shipped).written
-
-    assert any(entry.startswith("skills/") for entry in written), written
-    assert any(entry.startswith("subagents/") for entry in written), written
-    assert any(entry.startswith("tools/") for entry in written), written
-
-
 def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(tmp_path):
     """It is kingfisher's own, not a definition, so it does not come from the source --
     and a caller's own directory has no reason to hold one.
@@ -90,34 +82,6 @@ def test_an_explicit_directory_beats_the_variable(tmp_path):
     resolved = seeding.definitions_source(configured, asked_for)
 
     assert resolved == asked_for
-
-
-def test_the_variable_is_used_when_nothing_was_asked_for(tmp_path):
-    """`kingfisher seed` with no `--from`, which is the common invocation."""
-
-    configured = _definitions(tmp_path / "configured", "skills/theirs/SKILL.md")
-
-    assert seeding.definitions_source(configured) == configured
-
-
-def test_the_variable_reaches_a_first_run(monkeypatch, tmp_path):
-    """On `WorkspacePaths`, not only on `Config`."""
-    from kingfisher.core.environment import paths_from_env
-
-    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "definitions"))
-    monkeypatch.setenv("KINGFISHER_ASSETS", str(tmp_path / "mine"))
-
-    assert paths_from_env().assets == tmp_path / "mine"
-
-
-def test_no_variable_is_not_an_error_by_itself(monkeypatch, tmp_path):
-    """A workspace seeded once runs for years without this being set."""
-    from kingfisher.core.environment import paths_from_env
-
-    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "definitions"))
-    monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
-
-    assert paths_from_env().assets is None
 
 
 def test_the_refusal_says_both_ways_of_answering_it(tmp_path, monkeypatch):

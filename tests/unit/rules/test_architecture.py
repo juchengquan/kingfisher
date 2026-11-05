@@ -3756,10 +3756,8 @@ def test_every_record_this_package_hands_out_is_frozen():
     """A record edited in place after it was handed across a layer, which nothing
     downstream would notice and no other rule here can see.
 
-    `test_the_record_cannot_be_edited_after_it_is_handed_back` says "frozen, like
-    everything else a caller is handed here" and checks one of them. Measured on a
-    mutation run: unfreezing any of the other fifty-seven left the whole suite
-    green, so the claim in that docstring was true and unguarded.
+    Read from the tree rather than tried on each record: measured on a mutation run,
+    unfreezing any of fifty-seven records left the whole suite green.
     """
     mutable = []
     for path in _every(_package_modules(), "the package"):

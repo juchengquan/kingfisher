@@ -8,7 +8,7 @@ import pytest
 
 from kingfisher import KingfisherWarning
 from kingfisher.core import environment as config_module
-from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, FOLDED_SETTINGS, Config, ConfigError
+from kingfisher.core.config import FOLDED_SETTINGS, Config, ConfigError
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.environment import Environment, config_from_env
 from tests.conftest import FAKE_CATALOGUE, repository_root, subagents_dir
@@ -170,12 +170,6 @@ def test_a_setting_that_moved_one_kind_is_refused(env, tmp_path, setting):
 # -- what it resolves to ---------------------------------------------------
 
 
-def test_the_thread_pool_size_is_read_from_its_setting(env):
-    """Read but not passed on, every service would run on the default and say nothing."""
-    assert config_from_env(env).thread_pool_size == DEFAULT_THREAD_POOL_SIZE
-    assert config_from_env({**env, "KINGFISHER_THREAD_POOL_SIZE": "8"}).thread_pool_size == 8
-
-
 def test_citing_results_is_on_unless_turned_off(env):
     """Read with the wrong default, every deployment that never set it would stop
     telling the model it may cite a result, which is the provenance the ledger is for.
@@ -317,30 +311,6 @@ def test_hosted_tracing_is_disabled_explicitly(monkeypatch):
     assert os.environ["LANGCHAIN_TRACING_V2"] == "false"
 
 
-def test_the_host_side_roots_are_no_longer_settings(env):
-    """Both existed to move harness state out of the workspace, and there is none
-    left to move: claims, pinned agents and conversations are inside their
-    sessions, run events go to a logger, and what remains in `.kingfisher` -- the
-    marker, the sandbox profile and the skills view -- describes the workspace rather
-    than any session in it.
-
-    `KINGFISHER_SCRATCH_DIR` could not have survived either way. `TMPDIR` is a
-    session directory now, and `session_bytes` counts one directory, so a scratch
-    directory that is both per-session and elsewhere is a cost the quota cannot
-    see -- which is half of why it moved.
-    """
-    cfg = config_from_env(
-        {
-            **env,
-            "KINGFISHER_STATE_DIR": "/somewhere/else",
-            "KINGFISHER_SCRATCH_DIR": "/tmp/somewhere",
-        }
-    )
-
-    for gone in ("state_dir", "state_root", "scratch_dir", "scratch_root"):
-        assert not hasattr(cfg, gone), f"{gone} is still a setting"
-
-
 def test_every_kind_is_read_from_its_own_name_in_the_definitions_folder(env, tmp_path):
     """Asked of the kinds rather than listed, so a sixth kind meets this the day it is
     added -- the way `middlewares` arrived once with no way to reach it.
@@ -356,17 +326,6 @@ def test_every_kind_is_read_from_its_own_name_in_the_definitions_folder(env, tmp
         "INSTRUCTIONS.md": definitions / "INSTRUCTIONS.md",
         "skill_locks.yaml": definitions / "skill_locks.yaml",
     }
-
-
-def test_the_definitions_can_be_shared_between_workspaces(env, tmp_path):
-    """The point of the folder: one reviewed set of definitions, deployed once, rather
-    than a copy per workspace that nobody can audit centrally.
-    """
-    one = config_from_env(env)
-    other = config_from_env({**env, "KINGFISHER_WORKSPACE": str(tmp_path / "other")})
-
-    assert one.workspace != other.workspace
-    assert one.catalogue_roots == other.catalogue_roots
 
 
 def _looked_up() -> set[str]:
@@ -538,16 +497,6 @@ def test_the_variables_that_chose_a_model_are_gone(env):
     assert "ignored" not in repr(cfg)
 
 
-def test_the_execution_timeout_is_named_for_what_it_bounds(env):
-    """It was `KINGFISHER_TIMEOUT_S` and bounded a model call as well as the shell and
-    the interpreter -- three unrelated jobs for one number.
-    """
-    cfg = config_from_env({**env, "KINGFISHER_EXECUTION_TIMEOUT_S": "45"})
-
-    assert cfg.execution_timeout_s == 45
-    assert not [f for f in fields(cfg) if f.name == "timeout_s"]
-
-
 def test_the_two_records_cannot_disagree_about_where_things_go(tmp_path):
     """`Config` and `WorkspacePaths` answer the same question, and one of them is used
     to seed while the other is used to serve.
@@ -595,47 +544,6 @@ def test_a_reader_answers_from_the_mapping_it_was_given(monkeypatch):
     reading = Environment({"KINGFISHER_RECURSION_LIMIT": "7"})
 
     assert reading.optional_number("KINGFISHER_RECURSION_LIMIT", least=1) == 7
-
-
-def test_one_path_reading_now_rather_than_two(tmp_path):
-    """`_optional_path` was defined twice -- once inside `paths_from_env`, once inside
-    `config_from_env` -- because a closure over `environ` was the only way to share
-    it while `environ` was a parameter.
-    """
-    from kingfisher.core.environment import Environment
-
-    reading = Environment({"KINGFISHER_DEFINITIONS_DIR": "defs", "KINGFISHER_ASSETS": "assets"})
-
-    assert reading.optional_path("KINGFISHER_ASSETS") == Path("assets").resolve()
-    assert reading.paths().assets == reading.optional_path("KINGFISHER_ASSETS")
-    assert reading.optional_path("KINGFISHER_UNSET") is None
-
-
-def test_the_exported_functions_are_the_class(tmp_path, monkeypatch):
-    """`paths_from_env` stays a function because callers import it, and it has to keep
-    answering identically -- so it is asserted against the reader rather than left to
-    look obvious.
-    """
-    from kingfisher.core.environment import Environment, paths_from_env
-
-    environ = {
-        "KINGFISHER_WORKSPACE": str(tmp_path / "ws"),
-        "KINGFISHER_DEFINITIONS_DIR": str(tmp_path / "defs"),
-    }
-
-    assert paths_from_env(environ) == Environment(environ).paths()
-
-
-def test_a_reader_with_no_mapping_reads_the_process(monkeypatch, tmp_path):
-    """The default that `os.environ if environ is None` used to express, now in one
-    place instead of at the top of every function.
-    """
-    from kingfisher.core.environment import Environment
-
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
-    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "defs"))
-
-    assert Environment.current().paths().workspace == (tmp_path / "ws").resolve()
 
 
 def test_the_two_forms_of_the_test_catalogue_agree(tmp_path):

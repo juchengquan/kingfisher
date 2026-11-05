@@ -7,7 +7,7 @@ from kingfisher.core.layout import (
     HARNESS,
     LAYOUT_DIRS,
 )
-from kingfisher.core.workspace import EXAMPLE, EXAMPLES, ensure_definitions, ensure_layout
+from kingfisher.core.workspace import EXAMPLE, ensure_definitions, ensure_layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.folders import create_exclusive, ensure_session_layout
 
@@ -28,16 +28,6 @@ def test_the_workspace_layout_holds_nothing_a_person_writes(tmp_path):
     ws = ensure_layout(tmp_path / "ws")
 
     assert {p.name for p in ws.iterdir()} == set(LAYOUT_DIRS)
-
-
-def test_the_definitions_folder_is_laid_out_and_idempotent(tmp_path):
-    folder = ensure_definitions(tmp_path / "definitions")
-    ensure_definitions(folder)
-
-    for name in DEFINITION_KINDS:
-        assert (folder / name).is_dir(), name
-    for name in EXAMPLES:
-        assert (folder / name).is_file(), name
 
 
 def test_a_kind_folder_already_in_the_workspace_is_kept(tmp_path):
@@ -127,18 +117,6 @@ def test_the_example_lands_beside_the_catalogue_it_describes(tmp_path):
     assert (paths.authored_files["models.yaml"].parent / EXAMPLE).is_file()
 
 
-def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):
-    """Kingfisher ran git once -- `pre_run_commit` snapshotted the tracked tier before
-    each turn -- and that went with `adapters/workspace_git.py`.
-
-    It was also wrong rather than merely idle: it named two of the five things a
-    workspace holds, so `Library/` sat outside it and a `git add -A` offered to
-    commit a 21MB pip cache. An operator who wants their workspace versioned is
-    better served writing the rules they want than inheriting stale ones.
-    """
-    assert not (workspace / ".gitignore").exists()
-
-
 def sweep(workspace, sessions=None):
     """`reap`, over the sessions under this workspace."""
     import time
@@ -173,13 +151,6 @@ def test_sweep_failures_are_reported_not_swallowed(workspace):
     # Each failure names the session it belongs to, so the report is actionable.
     assert {f.split(":")[0] for f in result.failures} == {"a", "b"}
     assert all("refused" in f for f in result.failures)
-
-
-def test_the_layout_names_no_genre_of_output():
-    """`/reports` privileged one kind of result in the workspace structure itself."""
-    assert "reports" not in LAYOUT_DIRS
-    assert "reports" not in DEFAULT_LAYOUT.session_dirs
-    assert "outputs" in DEFAULT_LAYOUT.session_dirs
 
 
 def test_one_pass_makes_a_whole_session(tmp_path):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.core.inventory import Grant, Inventory, inventory
+from kingfisher.core.inventory import Grant, inventory
 from tests.conftest import subagents_dir, tools_dir
 
 A_TOOL = '''
@@ -145,7 +145,6 @@ def test_a_tool_catalogue_that_will_not_load_is_carried_not_raised(cfg):
     assert found.subagents_error is None  # and the other catalogues still answered
 
 
-
 SHADOWING_TOOL = '''
 from langchain_core.tools import tool
 
@@ -260,15 +259,6 @@ def test_a_tool_says_which_module_defined_it(cfg):
     assert found.tool_sources["probe_one"] == "probe.py"
 
 
-def test_the_record_says_where_each_catalogue_resolved_to(cfg):
-    """A catalogue can be deployed outside the workspace and shared."""
-    found = inventory(cfg)
-
-    assert found.origins.skills.path == cfg.skills_dir
-    assert found.origins.subagents.path == subagents_dir(cfg)
-    assert found.origins.tools.path == cfg.catalogue_roots["tools"]
-
-
 def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):
     """Frozen, and its mappings are proxies."""
     found = inventory(cfg)
@@ -294,27 +284,6 @@ def test_a_resolved_catalogue_is_not_resolved_twice(cfg, monkeypatch):
     # And the handed-over one is what was read, rather than being accepted and
     # ignored -- which would pass the line above and answer from somewhere else.
     assert found.origins.skills.path == cfg.skills_dir
-
-
-def test_the_record_is_the_only_shape_callers_need(cfg):
-    """`Inventory` is what phase 2 makes public, so it is worth saying out loud that it
-    carries every field the driver prints -- a caller who has one needs nothing else
-    from the library to render a listing.
-    """
-    found = inventory(cfg)
-
-    assert isinstance(found, Inventory)
-    for name in (
-        # One field where there were four -- the workspace and three of the four
-        # catalogue paths -- and it answers for every place rather than
-        # those three.
-        "origins", "builtin_tools", "tools",
-        "tool_sources", "tools_error", "skills", "skills_unloadable",
-        "skills_misplaced", "skills_misfiled", "subagents", "subagent_sources",
-        "subagents_error",
-        "skills_enabled",
-    ):
-        assert hasattr(found, name), name
 
 
 def test_the_whole_job_is_reachable_through_the_front_door(cfg, shipped):
