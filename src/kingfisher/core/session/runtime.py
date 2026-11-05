@@ -20,26 +20,6 @@ from .transcript import Message, Role, ToolCall
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
 OutOfSteps = GraphRecursionError
 
-#: A provider declining a request it may serve later: a rate limit or quota, and the
-#: 5xx range, where Anthropic's 529 "overloaded" sits. A 401 is a configuration error,
-#: and the rest of the 4xx range is a request that will fail the same way again.
-TOO_MANY_REQUESTS = 429
-SERVER_ERROR = 500
-BAD_REQUEST = 400
-
-#: Anthropic's names for those same refusals, all that an error sent inside a stream
-#: carries: the stream began as a 200, and the SDK raises it with that status.
-UNSERVED_TYPES = frozenset({"overloaded_error", "api_error", "rate_limit_error"})
-#: And the one for a 400, which a stream's error is just as able to carry.
-REFUSED_TYPE = "invalid_request_error"
-
-#: Matched by name through the class's ancestry, so neither SDK -- nor httpx, which both
-#: send through -- is imported here.
-TIMED_OUT = frozenset({"APITimeoutError", "TimeoutException", "ModelTimeoutError"})
-UNREACHED = frozenset(
-    {"APIConnectionError", "NetworkError", "RemoteProtocolError", "ModelConnectionError"}
-)
-
 
 class ModelUnavailableError(Exception):
     """A model call the provider could not serve now, which ends a turn as a stop."""
@@ -48,53 +28,6 @@ class ModelUnavailableError(Exception):
         super().__init__(why)
         self.why = why
 
-
-def unavailable(exc: BaseException) -> str | None:
-    """Why the provider could not answer, where trying again later can work, else `None`.
-
-    The causes are read too: langchain re-raises an SDK's error as one of its own.
-    """
-    seen: set[int] = set()
-    one: BaseException | None = exc
-    while one is not None and id(one) not in seen:
-        seen.add(id(one))
-        if isinstance(one, ModelUnavailableError):
-            return one.why
-        status = getattr(one, "status_code", None)
-        if isinstance(status, int) and (status == TOO_MANY_REQUESTS or status >= SERVER_ERROR):
-            return f"{status}: {said(one)}"
-        kind = error_type(one)
-        if isinstance(status, int) and status < BAD_REQUEST and kind in UNSERVED_TYPES:
-            return f"{kind}: {said(one)}"
-        names = {cls.__name__ for cls in type(one).__mro__}
-        # Before the connection check: both SDKs' timeout is a kind of connection error.
-        if names & TIMED_OUT or isinstance(one, TimeoutError):
-            return "the request timed out"
-        if names & UNREACHED or isinstance(one, ConnectionError):
-            return "the connection to the provider failed"
-        one = one.__cause__ or one.__context__
-    return None
-
-
-def error_type(exc: BaseException) -> str | None:
-    """The provider's name for the error, on the exception or in the body it came with."""
-    kind = getattr(exc, "type", None)
-    if not isinstance(kind, str):
-        body = getattr(exc, "body", None)
-        inner = body.get("error") if isinstance(body, dict) else None
-        kind = inner.get("type") if isinstance(inner, dict) else None
-    # A body is whatever JSON the stream sent, and a list in it is unhashable.
-    return kind if isinstance(kind, str) else None
-
-
-def said(exc: BaseException) -> str:
-    """The provider's own words, from the body where it sent one."""
-    body = getattr(exc, "body", None)
-    if isinstance(body, dict):
-        inner = body.get("error", body)
-        if isinstance(inner, dict) and isinstance(inner.get("message"), str):
-            return inner["message"][:PREVIEW]
-    return str(getattr(exc, "message", None) or exc)[:PREVIEW]
 
 #: How much of a tool result or message to keep on an event.
 PREVIEW = 300

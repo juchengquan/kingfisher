@@ -3,7 +3,6 @@ stream, and what a turn leaves once it ends."""
 
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
@@ -11,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import Held, with_datazone
 from kingfisher.core.agent.interpreter import release_interpreter
-from kingfisher.core.config import Config, ConfigError
+from kingfisher.core.config import Config
 from kingfisher.core.layout import PAUSED_STATE, REWOUND_FILE
 from kingfisher.core.logged import TurnWarnings, warning_into
 from kingfisher.core.request import Request, Resume
@@ -36,6 +35,7 @@ from .files import collect_artifacts
 from .ledger import file_left, keep_ledger, sweep_results
 from .memory import kept_in_store
 from .memory_writer import kept_memory
+from .provider_errors import refused_request
 from .steps import (
     Steps,
     adrive,
@@ -68,7 +68,6 @@ from .turnlog import keep_turns
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Callable, Iterable, Sequence
 
-    from kingfisher.core.config import Endpoint
     from kingfisher.core.interfaces import MemoryStore, RunEvents, UnusedResults
 
     from .transcript import Message
@@ -136,84 +135,6 @@ async def _awithin(
 def _as_request(value: str | Request | Resume) -> Request | Resume:
     """Whatever a caller handed in, as one of the two things a turn starts from."""
     return value if isinstance(value, Request | Resume) else Request.coerce(value)
-
-
-#: Matched on the exception's `status_code`, not its class: `anthropic` and `openai`
-#: each raise their own `AuthenticationError`, and the command may import neither.
-UNAUTHORIZED = 401
-CLIENT_ERROR = 400
-
-
-def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
-    """A provider's 401 as the configuration error it is, or `None` for anything else.
-
-    The endpoint is matched by the failed request's URL, not taken as the default: a
-    subagent may run elsewhere. The shell is named because `load_dotenv` runs with
-    `override=False`, so an exported key beats the one in `.env`.
-    """
-    if getattr(exc, "status_code", None) != UNAUTHORIZED:
-        return None
-    named = _endpoint_of(exc, cfg)
-    where = f"endpoint {named[0][0]!r}" if named else "the model endpoint"
-    if named and (entry := named[0][1].key_entry):
-        return ConfigError(
-            f"{where} rejected the key from entry {entry!r} in {cfg.models.keys_file} "
-            f"(401); that entry is the one to check"
-        )
-    supplied = f" from {named[0][1].key_env}" if named and named[0][1].key_env else ""
-    return ConfigError(
-        f"{where} rejected the key{supplied} (401). A value exported in the shell "
-        f"overrides the one in .env, so check the environment before the file"
-    )
-
-
-def refused_request(exc: BaseException, cfg: Config) -> ConfigError | None:
-    """A provider's 4xx, or the same refusal sent inside a stream, as the configuration
-    error it is, or `None` for anything else.
-
-    Not a 429, which may pass and ends a turn as a stop before this is reached. The rest
-    of the range -- a model name the endpoint does not serve, a request it will not
-    take -- fails the same way on every retry, so the fix is in the deployment.
-    """
-    if (refused := refused_credentials(exc, cfg)) is not None:
-        return refused
-    status = getattr(exc, "status_code", None)
-    if not isinstance(status, int) or status == runtime.TOO_MANY_REQUESTS:
-        return None
-    # Named by its type: a stream's error carries the 200 the stream began with.
-    if status < CLIENT_ERROR and runtime.error_type(exc) == runtime.REFUSED_TYPE:
-        code: int | str = runtime.REFUSED_TYPE
-    elif CLIENT_ERROR <= status < runtime.SERVER_ERROR:
-        code = status
-    else:
-        return None
-    named = _endpoint_of(exc, cfg)
-    where = f"endpoint {named[0][0]!r} ({named[0][1].base_url})" if named else "the endpoint"
-    model = _model_of(exc)
-    which = f"model {model!r}" if model else "the model"
-    return ConfigError(f"{where} refused a call to {which} ({code}): {runtime.said(exc)}")
-
-
-def _endpoint_of(exc: BaseException, cfg: Config) -> list[tuple[str, Endpoint]]:
-    """The configured endpoints the failed request was sent to, by its URL."""
-    url = str(getattr(getattr(getattr(exc, "response", None), "request", None), "url", ""))
-    return [
-        (name, endpoint)
-        for name, endpoint in cfg.models.endpoints.items()
-        if url.startswith(endpoint.base_url)
-    ]
-
-
-def _model_of(exc: BaseException) -> str | None:
-    """The model the failed request named, read from the body it sent."""
-    request = getattr(getattr(exc, "response", None), "request", None)
-    try:
-        body = json.loads(getattr(request, "content", b"") or b"{}")
-    # httpx raises `RequestNotRead`, a `RuntimeError`, for a body it streamed.
-    except (ValueError, TypeError, RuntimeError):
-        return None
-    model = body.get("model") if isinstance(body, dict) else None
-    return model if isinstance(model, str) else None
 
 
 class Running:
