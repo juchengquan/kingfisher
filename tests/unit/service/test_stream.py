@@ -6,7 +6,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.run import stream
 from kingfisher.plugins import LocalSessions
 from tests.conftest import start
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent
 
 
 def _agent_with_a_tool_call() -> StubAgent:

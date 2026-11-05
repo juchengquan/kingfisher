@@ -14,14 +14,8 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.plugins import backend_at
 from tests.conftest import on_backend
-
-
-@pytest.fixture
-def tools(shipped):
-    return {tool_name(one.tool): one.tool for one in LocalToolRepository(shipped / "tools").found}
 
 
 @pytest.fixture

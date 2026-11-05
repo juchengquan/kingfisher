@@ -18,7 +18,8 @@ from kingfisher.core.agent.middlewares.caching import kept_last
 from kingfisher.core.layout import MEMORY
 from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel
-from tests.unit.agent.middlewares.test_turn_instructions import Sent, _breakpoints
+from tests.unit.agent.middlewares.test_turn_instructions import _breakpoints
+from tests.unit.stand_ins import Sent
 
 #: Where a turn's second call is past 80% of its steps, so carries the step budget's note.
 LIMIT = 6

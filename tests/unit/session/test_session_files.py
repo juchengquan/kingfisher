@@ -4,26 +4,21 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 from dataclasses import asdict, replace
-from pathlib import Path
 from typing import Any
 
 import pytest
-from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
+from deepagents.backends import CompositeBackend, FilesystemBackend
 from deepagents.backends.protocol import GlobResult
 from langchain_core.messages import AIMessage
 
 from kingfisher import ArtifactError, Kingfisher, Request, UnknownSessionError
 from kingfisher.cli.__main__ import main
-from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.interfaces import Sessions
 from kingfisher.core.layout import (
     DEFAULT_LAYOUT,
     HARNESS,
     INPUTS,
     LEDGER_FILE,
-    SKILLS_ROUTE,
     TRANSCRIPT_FILE,
     Layout,
 )
@@ -41,78 +36,11 @@ from kingfisher.core.session.transcript import Message, as_json
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import EVERY_TOOL, Through, an_agent, start, supplied
 from tests.unit.scripted import Scripted
+from tests.unit.stand_ins import Elsewhere
 
 
 def _calls(name: str, **args: str) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call-{name}"}])
-
-
-class ElsewhereFiles(CompositeBackend):
-    """One session's filesystem in a directory kingfisher is never told about."""
-
-    def __init__(self, kept: Path, skills: Path) -> None:
-        super().__init__(
-            default=LocalShellBackend(root_dir=kept),
-            routes={
-                route: FilesystemBackend(
-                    root_dir=skills if route == SKILLS_ROUTE else kept / route.strip("/")
-                )
-                for route in DEFAULT_LAYOUT.routed_paths()
-            },
-        )
-
-
-class Elsewhere(Sessions):
-    """`Sessions` keeping each session under `root`, never in its directory.
-
-    What a remote sandbox looks like from here: a working filesystem the agent can
-    read, write and run commands in, sharing nothing with the workspace kingfisher
-    holds. Routed the way `route_coverage` asks, so it is refused for nothing but the
-    thing under test.
-    """
-
-    def __init__(self, root: Path) -> None:
-        self.root = root
-
-    def open(self, cfg, session_id, /, *, catalogue=None):
-        kept = self.root / session_id
-        for name in (*DEFAULT_LAYOUT.session_dirs, HARNESS):
-            (kept / name).mkdir(parents=True, exist_ok=True)
-        skills = (catalogue or Definitions.from_config(cfg)).skills.root
-        return ElsewhereFiles(kept, skills)
-
-    def sessions(self, cfg):
-        if not self.root.is_dir():
-            return ()
-        return tuple((p.name, p.stat().st_mtime) for p in self.root.iterdir() if p.is_dir())
-
-    def mark_used(self, cfg, session_id):
-        (self.root / session_id).touch()
-
-    def size(self, cfg, session_id):
-        return sum(p.stat().st_size for p in (self.root / session_id).rglob("*") if p.is_file())
-
-    def delete(self, cfg, session_id):
-        shutil.rmtree(self.root / session_id, ignore_errors=True)
-
-    # A lock that never goes stale, which is all a test double needs.
-    def claim(self, cfg, session_id, /, *, stale_after, now=None):
-        lock = self.root / session_id / HARNESS / "claim"
-        lock.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            lock.mkdir()
-        except FileExistsError:
-            return None
-        (lock / "token").write_text(session_id, encoding="utf-8")
-        return session_id
-
-    def release(self, cfg, session_id, token, /):
-        lock = self.root / session_id / HARNESS / "claim"
-        if (lock / "token").is_file() and (lock / "token").read_text(encoding="utf-8") == token:
-            shutil.rmtree(lock, ignore_errors=True)
-
-    def held(self, cfg, session_id, /, *, stale_after, now=None):
-        return (self.root / session_id / HARNESS / "claim").is_dir()
 
 
 # -- a turn ------------------------------------------------------------------

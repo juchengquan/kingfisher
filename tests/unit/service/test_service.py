@@ -35,7 +35,7 @@ from tests.conftest import (
     withheld_told,
 )
 from tests.unit.scripted import Scripted
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent
 
 
 def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
@@ -375,7 +375,7 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how,
     from kingfisher.core.session.files import InputsError
     from kingfisher.core.session.model import QuotaExceededError
     from tests.conftest import RecordedEvents, start
-    from tests.unit.access.test_tenancy import _claim
+    from tests.unit.stand_ins import claim_of
 
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
@@ -410,7 +410,7 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how,
         kf.run(Request("go", session_id=session, inputs=inputs))
 
     assert recorded.named("run_start") == []
-    assert not _claim(budgeted, session).exists()
+    assert not claim_of(budgeted, session).exists()
 
 
 def test_a_turn_id_the_session_already_holds_is_refused_before_anything_changes(

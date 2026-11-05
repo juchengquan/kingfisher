@@ -225,7 +225,7 @@ def test_a_turn_that_neither_paused_nor_resumed_deletes_nothing_at_its_end(cfg, 
 
     from kingfisher import Kingfisher, Request
     from kingfisher.plugins import LocalSessions
-    from tests.unit.service.test_run import StubAgent
+    from tests.unit.stand_ins import StubAgent
 
     deleted: list[str] = []
     deleting = CompositeBackend.delete

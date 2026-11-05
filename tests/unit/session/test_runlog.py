@@ -39,9 +39,9 @@ from tests.conftest import (
 )
 from tests.integration.driver import usage_of
 from tests.unit.agent.middlewares.test_cut_replies import reply
-from tests.unit.agent.test_subagent_helpers import HELPER, REVIEWER, _define
+from tests.unit.agent.test_subagent_helpers import HELPER, REVIEWER
+from tests.unit.conftest import define_each
 from tests.unit.scripted import Scripted
-from tests.unit.service.test_run import StubAgent
 from tests.unit.session.test_stream_delegations import (
     TWICE,
     TWO_ANSWERS,
@@ -51,6 +51,7 @@ from tests.unit.session.test_stream_delegations import (
     _twice,
 )
 from tests.unit.session.test_unused_results import LEFT, STRAY, _folder
+from tests.unit.stand_ins import StubAgent
 
 
 def _logger(sink, *, session_id: str = "s") -> RunLogger:
@@ -650,7 +651,7 @@ def test_two_runs_of_one_subagent_are_told_apart_in_the_record(cfg, session_dir)
 def test_a_helpers_events_carry_the_whole_chain_in_the_record(scripted):
     """The innermost id alone would make two helpers of one subagent look alike again,
     and a `task` call filed under the delegation it starts would be inside itself."""
-    _define(scripted, REVIEWER, HELPER)
+    define_each(scripted, REVIEWER, HELPER)
     an_agent(scripted, subagents="[reviewer, second-opinion]", **EVERY_TOOL)
     start(scripted, "s")
     Scripted.script.extend(

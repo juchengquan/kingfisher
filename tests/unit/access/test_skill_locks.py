@@ -9,6 +9,7 @@ from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skill_locks import SkillLockError
 from kingfisher.plugins import LocalSessions
 from tests.conftest import an_agent, subagents_dir
+from tests.unit.conftest import lock_skills
 
 
 def _skill(root, folder: str, name: str) -> None:
@@ -21,7 +22,7 @@ def _skill(root, folder: str, name: str) -> None:
 
 def _locked(cfg, text: str) -> Definitions:
     """The catalogue, with `skill_locks.yaml` beside its skills folder."""
-    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(text, encoding="utf-8")
+    lock_skills(cfg, text)
     return Definitions.from_config(cfg)
 
 
@@ -101,9 +102,7 @@ def test_a_skill_lock_alone_makes_every_call_say_who_is_calling(cfg):
     every call unscoped, and the locked skill would be told to everyone."""
     _skill(cfg.skills_dir, "audit", "audit")
     an_agent(cfg, builtin_tools="[read_file]", skills="[audit]")
-    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(
-        "- name: audit\n  source_ids: [A]\n", encoding="utf-8"
-    )
+    lock_skills(cfg, "- name: audit\n  source_ids: [A]\n")
 
     with pytest.raises(CallerError, match="source_ids="):
         Kingfisher(cfg, sessions=LocalSessions()).run("anything")
@@ -183,9 +182,7 @@ def test_a_skill_a_lock_shuts_is_refused_to_read_file(cfg, session_dir, caller):
     skill, would leave a locked skill readable by `read_file` to the caller it shuts out."""
     from tests.unit.agent.test_capability_wiring import _reads_a_skill
 
-    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(
-        "- name: tabular-qa\n  source_ids: [A]\n", encoding="utf-8"
-    )
+    lock_skills(cfg, "- name: tabular-qa\n  source_ids: [A]\n")
 
     read = _reads_a_skill(cfg, session_dir, held=frozenset({caller}))
 
@@ -209,7 +206,7 @@ def test_doctor_says_how_many_skills_are_locked_and_where(cfg, written, verdict,
 
     _skill(cfg.skills_dir, "audit", "audit")
     if written is not None:
-        (cfg.skills_dir.parent / "skill_locks.yaml").write_text(written, encoding="utf-8")
+        lock_skills(cfg, written)
 
     (check,) = [one for one in examine(cfg) if one.name == "skill locks"]
 

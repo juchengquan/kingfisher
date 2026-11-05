@@ -146,7 +146,7 @@ def sweep(workspace, sessions=None):
     from kingfisher import Kingfisher
     from kingfisher.core.config import Config
     from tests.conftest import FAKE_CATALOGUE
-    from tests.unit.service.test_run import StubAgent
+    from tests.unit.stand_ins import StubAgent
 
     definitions = ensure_definitions(workspace.parent / "definitions")
     cfg = Config(workspace=workspace, definitions=definitions, models=FAKE_CATALOGUE)

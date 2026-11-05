@@ -8,10 +8,7 @@ from typing import Any
 
 import pytest
 from langchain.agents.middleware import AgentMiddleware
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, SystemMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
-from pydantic import Field
 
 from kingfisher import Kingfisher, Request
 from kingfisher.cli.configured import CommandTurnInstructions
@@ -32,24 +29,9 @@ from tests.conftest import (
     subagents_dir,
 )
 from tests.unit.scripted import Scripted
+from tests.unit.stand_ins import Sent
 
 TEXT = "This session is for the Q3 audit."
-
-
-class Sent(ChatAnthropic):
-    """Keeps every request as it would go out, cache breakpoints and all, and answers from
-    a script. A `ChatAnthropic` because only one is sent breakpoints."""
-
-    sent: list[dict[str, Any]] = Field(default_factory=list)
-    script: list[AIMessage] = Field(default_factory=list)
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        self.sent.append(self._get_request_payload(messages, stop=stop, **kwargs))
-        reply = self.script.pop(0) if self.script else AIMessage(content="ok")
-        return ChatResult(generations=[ChatGeneration(message=reply)])
-
-    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
-        return self._generate(messages, stop=stop, **kwargs)
 
 
 def _model(*script: AIMessage) -> Sent:

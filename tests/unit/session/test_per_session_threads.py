@@ -25,7 +25,7 @@ from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_bytes
 from tests.conftest import FakeToolCallingModel, Through, an_agent
 from tests.unit.scripted import Scripted
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent
 
 TRANSCRIPT = f"{HARNESS}/{TRANSCRIPT_FILE}"
 

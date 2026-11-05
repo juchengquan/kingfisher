@@ -25,20 +25,8 @@ from tests.conftest import (
     subagents_dir,
     tools_dir,
 )
+from tests.unit.conftest import define, offer_skills
 from tests.unit.scripted import Scripted
-
-
-def define(cfg, body: str, name: str = "reviewer") -> None:
-    (cfg.definitions / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.definitions / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
-
-
-def offer_skills(cfg, *names: str) -> None:
-    for name in names:
-        (cfg.skills_dir / name).mkdir(parents=True, exist_ok=True)
-        (cfg.skills_dir / name / "SKILL.md").write_text(
-            f"---\nname: {name}\ndescription: A procedure.\n---\nBody.\n", encoding="utf-8"
-        )
 
 
 def build(cfg, session_dir, **caps):

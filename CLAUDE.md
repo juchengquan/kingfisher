@@ -97,8 +97,10 @@ record of it, and it stays however short the rest gets.
 **A test goes in the folder named for what it tests.** `tests/unit/` mirrors the
 package -- `session/` for `core/session/`, `plugins/sessions/sandbox/` for the fence --
 with `rules/` for checks over the whole tree and `tooling/` for the scripts'. Keep each
-file name unique across folders: pytest imports a test module by its bare name, and two
-of one name fail collection.
+file name unique across folders: the docs cite a test by its bare file name, which names
+one file only while no two share it, and `test_no_two_test_modules_share_a_name` refuses
+a pair pytest would collect without a word. A stand-in more than one test module drives
+goes in `tests/unit/stand_ins.py`, not in the test that wrote it first.
 
 **Who may import what is enforced, not remembered.**
 `tests/unit/rules/test_architecture.py` parses imports against `THIRD_PARTY`, one entry

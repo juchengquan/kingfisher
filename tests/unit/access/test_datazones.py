@@ -33,6 +33,7 @@ from kingfisher.core.session.model import QuotaExceededError
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import Through, agent_named, start, subagents_dir, tools_dir
+from tests.unit.conftest import lock_skills
 from tests.unit.scripted import Scripted
 
 if TYPE_CHECKING:
@@ -842,9 +843,7 @@ system_prompt: |
 
 def _lock_payroll(cfg) -> None:
     """`payroll-handling` locked to `pii`, beside the skills folder."""
-    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(
-        "- name: payroll-handling\n  source_ids: [pii]\n", encoding="utf-8"
-    )
+    lock_skills(cfg, "- name: payroll-handling\n  source_ids: [pii]\n")
 
 
 def _skilled(cfg, *, enabled: bool = True) -> Kingfisher:

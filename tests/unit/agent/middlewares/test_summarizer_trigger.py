@@ -34,7 +34,7 @@ from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, subagents_dir
-from tests.unit.session.test_offloads import _Shown
+from tests.unit.stand_ins import Shown
 
 #: The notice a summariser in deepagents' place is built with, which is not the subject
 #: here but for the one test asking what it says.
@@ -355,7 +355,7 @@ def test_a_turn_refuses_a_pdf_its_summarizer_would_fire_on(cfg, session_dir):
 
     def handed(agent: str) -> ToolMessage:
         read = {"name": "read_file", "args": {"file_path": "/inputs/doc.pdf"}, "id": "c1"}
-        model = _Shown(
+        model = Shown(
             responses=[AIMessage(content="", tool_calls=[read]), AIMessage(content="done")]
         )
         built = _built(cfg, session_dir, agent=_spec(cfg, agent), model=model)

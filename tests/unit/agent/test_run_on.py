@@ -14,7 +14,8 @@ from kingfisher.core.config import Endpoint, ModelProfile
 from kingfisher.core.definitions.subagents.spec import RunOn
 from kingfisher.core.request import Request
 from kingfisher.plugins import backend_at
-from tests.conftest import FakeToolCallingModel, subagents_dir
+from tests.conftest import FakeToolCallingModel
+from tests.unit.conftest import define_each
 
 ELSEWHERE = Endpoint(
     "openai_responses",
@@ -35,14 +36,6 @@ description: Checks figures.
 system_prompt: |
   You check figures.
 """
-
-
-def _define(cfg, *definitions: str) -> None:
-    directory = subagents_dir(cfg)
-    directory.mkdir(parents=True, exist_ok=True)
-    for body in definitions:
-        name = body.split("\n")[0].removeprefix("name: ").strip()
-        (directory / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
 def _built(
@@ -78,7 +71,7 @@ def test_a_request_cannot_name_a_model_by_default(cfg, session_dir):
     granted nothing can choose nothing, so nothing changes for a deployment that
     never opts in.
     """
-    _define(cfg, PINNED)
+    define_each(cfg, PINNED)
 
     assert Capabilities().models is None
 
@@ -95,7 +88,7 @@ def test_only_the_models_a_deployment_granted(cfg, session_dir, monkeypatch):
     """Per name rather than on/off: "on" with no list means any caller may name the most
     expensive model you have credentials for.
     """
-    _define(cfg, PINNED)
+    define_each(cfg, PINNED)
 
     with pytest.raises(CapabilityError, match="expensive-model"):
         _built(
@@ -123,7 +116,7 @@ def test_naming_a_model_replaces_the_file_wholesale(cfg, session_dir):
     -- so without the override it would not build at all, and the grant admitting
     `cheap-model` is what lets it.
     """
-    _define(cfg, PINNED)
+    define_each(cfg, PINNED)
 
     specs = _built(
         cfg,
@@ -144,7 +137,7 @@ def test_an_override_reaches_another_endpoint(cfg, session_dir):
             models={**cfg.models.models, "gpt-5": ModelProfile("gpt-5", "openai")},
         ),
     )
-    _define(routed, PLAIN)
+    define_each(routed, PLAIN)
 
     specs = _built(
         routed,
@@ -168,7 +161,7 @@ def test_an_endpoint_the_request_may_not_reach_is_still_refused(cfg, session_dir
             models={**cfg.models.models, "gpt-5": ModelProfile("gpt-5", "openai")},
         ),
     )
-    _define(routed, PLAIN)
+    define_each(routed, PLAIN)
 
     with pytest.raises(CapabilityError, match="may not"):
         build_agent(
@@ -193,7 +186,7 @@ def test_naming_a_subagent_the_request_did_not_activate_is_refused(cfg, session_
     for its own reasons and this passes without the guard ever running, which is what
     it did before.
     """
-    _define(cfg, PLAIN, PINNED)
+    define_each(cfg, PLAIN, PINNED)
 
     with pytest.raises(CapabilityError, match="did not activate"):
         _built(

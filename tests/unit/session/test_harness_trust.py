@@ -16,10 +16,9 @@ from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from tests.checks.backend import shell_denied
 from tests.conftest import an_agent, start
-from tests.unit.plugins.sessions.test_backend_seam import Elsewhere
 from tests.unit.scripted import Scripted
-from tests.unit.service.test_run import StubAgent
 from tests.unit.session.test_approval_gates import _gated, _write
+from tests.unit.stand_ins import ElsewhereRunner, StubAgent
 
 
 def _harness_file(cfg, session_id: str, name: str):
@@ -54,7 +53,7 @@ class _TheirOwn:
     [
         lambda: {"graph": StubAgent("ok"), "sessions": LocalSessions()},
         lambda: {"sessions": _WrappingTheDefault()},
-        lambda: {"sessions": LocalSessions(runner=lambda _d: Elsewhere())},
+        lambda: {"sessions": LocalSessions(runner=lambda _d: ElsewhereRunner())},
         lambda: {"sessions": LocalSessions(shell=ShellSettings(sandbox="off"))},
     ],
     ids=["graph", "wrapped-default", "runner", "sandbox-off"],

@@ -32,7 +32,9 @@ from tests.conftest import (
     subagents_dir,
     tools_dir,
 )
+from tests.unit.conftest import define_each
 from tests.unit.scripted import Scripted
+from tests.unit.stand_ins import tools_of
 
 REVIEWER = """name: reviewer
 description: Checks figures.
@@ -81,14 +83,6 @@ ELSEWHERE_REVIEWER = REVIEWER.replace("name: reviewer", "name: auditor").replace
 )
 
 
-def _define(cfg, *definitions: str) -> None:
-    directory = subagents_dir(cfg)
-    directory.mkdir(parents=True, exist_ok=True)
-    for body in definitions:
-        name = body.split("\n")[0].removeprefix("name: ").strip()
-        (directory / f"{name}.yaml").write_text(body, encoding="utf-8")
-
-
 def _build(cfg, session_dir, *, subagents=("reviewer", "second-opinion")):
     # `.graph` here rather than inside the accessors below: every one of them walks
     # `.nodes`, so pushing the unwrap down would work and hide which layer holds a
@@ -103,9 +97,9 @@ def _build(cfg, session_dir, *, subagents=("reviewer", "second-opinion")):
 
 def _subagent(graph, name: str):
     """One of the agent's own subagents, compiled."""
-    from tests.unit.access.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.stand_ins import subagent_graphs
 
-    return _subagent_graphs(graph)[name]
+    return subagent_graphs(graph)[name]
 
 
 def _helper(graph, subagent: str, name: str):
@@ -117,22 +111,16 @@ def _helper(graph, subagent: str, name: str):
     either, so asserting against it proves nothing. A mutation that handed every
     helper the parent's `task` went undetected until this existed.
     """
-    from tests.unit.access.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.stand_ins import subagent_graphs
 
-    return _subagent_graphs(_subagent(graph, subagent))[name]
+    return subagent_graphs(_subagent(graph, subagent))[name]
 
 
 def _subagents_of(graph) -> set[str]:
     """The subagents this compiled agent can reach, by name."""
-    from tests.unit.access.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.stand_ins import subagent_graphs
 
-    return set(_subagent_graphs(graph))
-
-
-def _tools_of(graph) -> set[str]:
-    node = getattr(graph, "nodes", {}).get("tools")
-    by_name = getattr(getattr(node, "bound", None), "tools_by_name", {})
-    return set(by_name)
+    return set(subagent_graphs(graph))
 
 
 # -- the format ------------------------------------------------------------
@@ -209,7 +197,7 @@ def test_a_subagent_naming_no_helpers_may_leave_task_out(written):
 
 def test_a_helper_may_have_helpers_of_its_own(cfg, session_dir):
     """Three levels, which the format refused until now."""
-    _define(cfg, REVIEWER, NESTING_HELPER, CHECKER)
+    define_each(cfg, REVIEWER, NESTING_HELPER, CHECKER)
 
     graph = _build(cfg, session_dir, subagents=("reviewer", "second-opinion", "checker"))
     helper = _helper(graph, "reviewer", "second-opinion")
@@ -221,7 +209,7 @@ def test_a_cycle_is_refused_when_the_catalogue_loads(cfg, session_dir):
     """The only thing left standing between a catalogue and an endless build, now that
     depth is unbounded.
     """
-    _define(cfg, REVIEWER, CYCLIC_HELPER)
+    define_each(cfg, REVIEWER, CYCLIC_HELPER)
 
     with pytest.raises(SubagentError, match="reach themselves"):
         _build(cfg, session_dir)
@@ -231,7 +219,7 @@ def test_the_refusal_names_the_whole_loop(cfg, session_dir):
     """One edge does not say which link to cut, and whoever reads this may own none of
     the files in it.
     """
-    _define(cfg, REVIEWER, CYCLIC_HELPER)
+    define_each(cfg, REVIEWER, CYCLIC_HELPER)
 
     with pytest.raises(SubagentError) as raised:
         _build(cfg, session_dir)
@@ -289,28 +277,28 @@ def test_delegation_stops_at_a_helpers_own_general_purpose(cfg, session_dir):
     Asked of the helper *inside* `reviewer`, not the standalone subagent of the same
     name, which is built apart and would pass whatever this change did.
     """
-    from tests.unit.access.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.stand_ins import subagent_graphs
 
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
     graph = _build(cfg, session_dir)
 
-    reviewers = _subagent_graphs(_subagent(graph, "reviewer"))
-    helpers = _subagent_graphs(_helper(graph, "reviewer", "second-opinion"))
+    reviewers = subagent_graphs(_subagent(graph, "reviewer"))
+    helpers = subagent_graphs(_helper(graph, "reviewer", "second-opinion"))
 
     assert set(helpers) == {"general-purpose"}
-    assert "task" not in _tools_of(reviewers["general-purpose"])
-    assert "task" not in _tools_of(helpers["general-purpose"])
+    assert "task" not in tools_of(reviewers["general-purpose"])
+    assert "task" not in tools_of(helpers["general-purpose"])
 
 
 def test_a_helper_is_not_handed_the_parents_task_tool(cfg, session_dir):
     """The harvested `task` is bound to the *parent's* subagent list: a helper's own reaches
     its own `general-purpose` and nothing its parent can."""
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir)
 
     assert _subagents_of(_helper(graph, "reviewer", "second-opinion")) == {"general-purpose"}
-    assert "read_file" in _tools_of(_helper(graph, "reviewer", "second-opinion"))
+    assert "read_file" in tools_of(_helper(graph, "reviewer", "second-opinion"))
 
 
 # -- the subagent can actually subagent ------------------------------------
@@ -318,21 +306,21 @@ def test_a_helper_is_not_handed_the_parents_task_tool(cfg, session_dir):
 
 def test_a_subagent_that_names_a_helper_gets_a_task_tool(cfg, session_dir):
     """What the whole change is for."""
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir)
 
-    assert "task" in _tools_of(_subagent(graph, "reviewer"))
+    assert "task" in tools_of(_subagent(graph, "reviewer"))
 
 
 def test_a_subagent_that_names_none_gets_no_task_tool(cfg, session_dir):
     """A subagent whose line leaves `task` out gets none, and so no `general-purpose`:
     the line is the switch, and nothing else turns it on."""
-    _define(cfg, HELPER.replace(STAR, "builtin_tools: [read_file, ls]\n"))
+    define_each(cfg, HELPER.replace(STAR, "builtin_tools: [read_file, ls]\n"))
 
     graph = _build(cfg, session_dir, subagents=("second-opinion",))
 
-    assert "task" not in _tools_of(_subagent(graph, "second-opinion"))
+    assert "task" not in tools_of(_subagent(graph, "second-opinion"))
 
 
 # -- the caller decides ----------------------------------------------------
@@ -340,7 +328,7 @@ def test_a_subagent_that_names_none_gets_no_task_tool(cfg, session_dir):
 
 def test_a_helper_the_caller_did_not_name_is_dropped(cfg, session_dir):
     """Not refused: dropped, leaving the subagent its own `general-purpose`."""
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir, subagents=("reviewer",))
 
@@ -351,7 +339,7 @@ def test_a_helper_nothing_defines_is_refused(cfg, session_dir):
     """The other half of the rule every field here follows: a name nothing defines is a
     mistake in the definition, not a narrower caller.
     """
-    _define(cfg, REVIEWER.replace("second-opinion", "nobody"))
+    define_each(cfg, REVIEWER.replace("second-opinion", "nobody"))
 
     with pytest.raises(CapabilityError, match="unknown subagent"):
         _build(cfg, session_dir, subagents=("reviewer",))
@@ -361,11 +349,11 @@ def test_granting_everything_reaches_the_helper_too(cfg, session_dir):
     """`ALL` is every subagent the definitions offer, so a caller who narrowed nothing
     has named the helper as much as anything else.
     """
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir, subagents=ALL)
 
-    assert "task" in _tools_of(_subagent(graph, "reviewer"))
+    assert "task" in tools_of(_subagent(graph, "reviewer"))
 
 
 # -- and it actually runs --------------------------------------------------
@@ -373,7 +361,7 @@ def test_granting_everything_reaches_the_helper_too(cfg, session_dir):
 
 def test_a_subagent_consults_its_helper_end_to_end(cfg, session_dir):
     """Building is not running, and the two have come apart before."""
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
 
     def calls(who: str) -> AIMessage:
         return AIMessage(
@@ -480,7 +468,7 @@ def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monke
     shared = HELPER.replace("second-opinion", "shared")
     left = REVIEWER.replace("reviewer", "left").replace("second-opinion", "shared")
     right = REVIEWER.replace("reviewer", "right").replace("second-opinion", "shared")
-    _define(cfg, left, right, shared)
+    define_each(cfg, left, right, shared)
 
     from kingfisher.core.agent.kinds import subagents as delegation
 
@@ -645,7 +633,7 @@ def test_a_helper_runs_the_model_of_the_subagent_that_summoned_it(cfg, session_d
     the subagent above -- not the main agent, which for a subagent's own `general-purpose`
     would put its every call on the expensive model.
     """
-    _define(cfg, CHEAP_REVIEWER, HELPER)
+    define_each(cfg, CHEAP_REVIEWER, HELPER)
     main = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
     built = build_agent(
@@ -666,7 +654,7 @@ def test_one_helper_under_two_parents_is_two_subagents(cfg, session_dir):
     """A helper naming no model runs whatever reached it, so the same name under two
     differently-pinned parents is two different agents.
     """
-    _define(cfg, CHEAP_REVIEWER, ELSEWHERE_REVIEWER, HELPER)
+    define_each(cfg, CHEAP_REVIEWER, ELSEWHERE_REVIEWER, HELPER)
 
     assembled = build_agent(
         cfg,
@@ -687,7 +675,7 @@ def test_a_helper_under_an_unpinned_subagent_still_runs_the_agents_model(
     cfg, session_dir
 ):
     """The other half, and the one that must not have changed."""
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
     main = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
     built = build_agent(
@@ -717,7 +705,7 @@ def test_a_helper_runs_deepagents_summarizer(cfg, session_dir):
     """A helper's conversation was never summarised, and grew until the model refused it:
     `create_sub_agent` builds its stack from the spec alone, where `create_deep_agent`
     gives every other graph deepagents' own summariser."""
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
     model = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
     built = build_agent(
@@ -742,7 +730,7 @@ def test_a_helper_naming_its_own_summarizer_runs_that_one_alone(cfg, session_dir
     deepagents', and a helper's is no different."""
     from tests.unit.agent.middlewares.test_summarizer_trigger import Early
 
-    _define(
+    define_each(
         cfg, REVIEWER, HELPER.replace("system_prompt:", "middlewares: [early]\nsystem_prompt:")
     )
     an_agent(cfg, middlewares="[early]", subagents="[reviewer, second-opinion]", **EVERY_TOOL)
@@ -765,7 +753,7 @@ def test_a_helpers_clearing_and_pdfs_are_sized_by_the_summarizer_it_runs(cfg, se
     its stack, both are, on a window of its model's own."""
     from tests.unit.agent.middlewares.test_summarizer_trigger import _allowance, _high
 
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
     model = FakeToolCallingModel(
         responses=[AIMessage(content="ok")], profile={"max_input_tokens": 100_000}
     )
@@ -790,7 +778,7 @@ def test_a_helpers_history_is_kept_apart_from_its_summoners(cfg, session_dir):
     """The task tool hands a helper its summoner's state, the summariser's own keys among
     them: had the session id that names a history file come too, the helper's evicted
     messages would have been appended to its summoner's. Driven, both summarising."""
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
     for name, mark in (("a.txt", "REVIEWERS"), ("b.txt", "HELPERS")):
         line = f"{mark} " + "x" * 280 + "\n"
         (session_dir / "inputs" / name).write_text(line * 100, encoding="utf-8")
@@ -846,7 +834,7 @@ def test_a_helpers_own_summarizer_stands_where_its_default_would(cfg, session_di
     from tests.unit.agent.middlewares.test_summarizer_trigger import Early
 
     def helpers_stack(helper: str) -> list:
-        _define(cfg, REVIEWER, helper)
+        define_each(cfg, REVIEWER, helper)
         built = build_agent(
             cfg,
             backend=backend_at(cfg, session_dir),
@@ -899,7 +887,7 @@ def test_a_helpers_refusal_for_length_is_clearings_to_answer_first(scripted, nam
     middlewares_dir(scripted).mkdir(parents=True, exist_ok=True)
     (middlewares_dir(scripted) / "own.py").write_text(OWN_SUMMARIZER, encoding="utf-8")
     own = HELPER.replace("system_prompt:", "middlewares: [own]\nsystem_prompt:")
-    _define(scripted, REVIEWER, own if named else HELPER)
+    define_each(scripted, REVIEWER, own if named else HELPER)
     an_agent(scripted, middlewares="[own]", subagents="[reviewer, second-opinion]", **EVERY_TOOL)
     start(scripted, "s")
 
@@ -979,7 +967,7 @@ def test_a_helper_naming_its_own_filesystem_middleware_builds_with_that_one(cfg,
     "Please remove duplicate middleware instances": deepagents' merge keeps one of two
     sharing that name in every other stack, and a helper's meets no merge. It goes first,
     where that merge puts one."""
-    _define(
+    define_each(
         cfg, REVIEWER, HELPER.replace("system_prompt:", "middlewares: [own-fs]\nsystem_prompt:")
     )
     an_agent(cfg, middlewares="[own-fs]", subagents="[reviewer, second-opinion]", **EVERY_TOOL)
@@ -997,7 +985,7 @@ def test_a_portable_helper_runs_the_agents_own_filesystem_middleware(cfg, sessio
     its own `FilesystemMiddleware` failed at build every turn that reached one."""
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "surveyor.py").write_text(PORTABLE_HELPER, encoding="utf-8")
-    _define(cfg, REVIEWER.replace("[second-opinion]", "[surveyor]"))
+    define_each(cfg, REVIEWER.replace("[second-opinion]", "[surveyor]"))
     an_agent(cfg, middlewares="[own-fs]", subagents="[reviewer, surveyor]", **EVERY_TOOL)
 
     built = _built_with_own_filesystem(cfg, session_dir)
@@ -1013,7 +1001,7 @@ def test_a_helper_naming_no_filesystem_middleware_runs_kingfishers(cfg, session_
     """The control: with none named, a helper's one is kingfisher's own, which leaves a long
     result for the recorder to save rather than offloading a copy of deepagents', and stays
     among kingfisher's, behind the summariser clearing measures after."""
-    _define(cfg, REVIEWER, HELPER)
+    define_each(cfg, REVIEWER, HELPER)
 
     built = build_agent(
         cfg,
@@ -1054,7 +1042,7 @@ def test_a_subagent_holds_the_to_do_list_where_its_line_grants_it(scripted, who,
         reviewer = reviewer.replace('builtin_tools: ["*"]', f"builtin_tools: {line}")
     elif who == "second-opinion":
         reviewer = REVIEWER
-    _define(scripted, reviewer, helper)
+    define_each(scripted, reviewer, helper)
     an_agent(scripted, subagents="[reviewer, second-opinion]", **EVERY_TOOL)
     chain = {"reviewer": ["reviewer"], "second-opinion": ["reviewer", "second-opinion"]}
     plan = {"todos": [{"content": "x", "status": "pending"}]}

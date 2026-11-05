@@ -21,6 +21,7 @@ from kingfisher.core.agent.middlewares.guarded_calls import (
 )
 from kingfisher.plugins import backend_at
 from tests.conftest import FAKE_COUNT, STANDING_UNWIRED
+from tests.unit.stand_ins import through_hooks
 
 
 class _Request:
@@ -269,7 +270,7 @@ def _subagent_with_a_failing_tool(cfg, session_dir):
     from kingfisher.core.access.capabilities import Capabilities
     from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
-    from tests.unit.access.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.stand_ins import subagent_graphs
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "always_fails.py").write_text(ALWAYS_FAILS, encoding="utf-8")
@@ -282,7 +283,7 @@ def _subagent_with_a_failing_tool(cfg, session_dir):
         model=FakeToolCallingModel(responses=_calls("always_fails")),
         capabilities=Capabilities(subagents=("helper",)),
     ).graph
-    return _subagent_graphs(graph)["helper"]
+    return subagent_graphs(graph)["helper"]
 
 
 def test_a_failing_offered_tool_does_not_stop_a_subagent_either(cfg, session_dir):
@@ -336,7 +337,7 @@ def test_a_helper_below_a_subagent_is_guarded_too(cfg, session_dir):
     from kingfisher.core.access.capabilities import Capabilities
     from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
-    from tests.unit.access.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.stand_ins import subagent_graphs
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "always_fails.py").write_text(ALWAYS_FAILS, encoding="utf-8")
@@ -350,7 +351,7 @@ def test_a_helper_below_a_subagent_is_guarded_too(cfg, session_dir):
         model=FakeToolCallingModel(responses=_calls("always_fails")),
         capabilities=Capabilities(subagents=("helper", "deeper")),
     ).graph
-    nested = _subagent_graphs(_subagent_graphs(graph)["helper"])["deeper"]
+    nested = subagent_graphs(subagent_graphs(graph)["helper"])["deeper"]
 
     out = nested.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
@@ -387,52 +388,6 @@ def test_a_converted_failure_still_reaches_the_run_log(cfg, session_dir):
 #
 # Driven through what `standing_middleware` builds, not one guard alone: the translator
 # caught every error raised below it, and no test of a single class could see that.
-
-
-def _through(stack, call: dict, tool, way: str = "sync"):
-    """What the model reads back for `call`, through each tool hook of `stack` in the
-    order langchain composes them, the first outermost."""
-    from functools import partial
-
-    from langchain.agents.middleware import AgentMiddleware, ToolCallRequest
-    from langchain.tools import ToolRuntime
-    from langchain_core.messages.tool import tool_call
-
-    state = {"messages": []}
-    runtime = ToolRuntime(
-        state=state,
-        context=None,
-        config={},
-        stream_writer=lambda _chunk: None,
-        tool_call_id=call["id"],
-        store=None,
-    )
-    request = ToolCallRequest(
-        tool_call=tool_call(name=call["name"], args=call["args"], id=call["id"]),
-        tool=tool,
-        state=state,
-        runtime=runtime,
-    )
-    hooked = [
-        one for one in stack if type(one).wrap_tool_call is not AgentMiddleware.wrap_tool_call
-    ]
-    if way == "sync":
-        handler = partial(_ran, tool)
-        for one in reversed(hooked):
-            handler = partial(one.wrap_tool_call, handler=handler)
-        return handler(request)
-    ahandler = partial(_aran, tool)
-    for one in reversed(hooked):
-        ahandler = partial(one.awrap_tool_call, handler=ahandler)
-    return asyncio.run(ahandler(request))
-
-
-def _ran(tool, request):
-    return tool.invoke({"type": "tool_call", **request.tool_call})
-
-
-async def _aran(tool, request):
-    return await tool.ainvoke({"type": "tool_call", **request.tool_call})
 
 
 @pytest.fixture
@@ -482,7 +437,7 @@ def test_a_built_in_refusing_a_host_path_reads_as_written_beside_an_offered_tool
     refused = _raising(HostPathError("'/Users/me/x.csv' is a host path. Use '/inputs/x.csv'."))
     call = {"name": "read_file", "args": {"note": "x"}, "id": "c1"}
 
-    answer = _through(stack, call, refused)
+    answer = through_hooks(stack, call, refused)
 
     assert answer.content == "Error: '/Users/me/x.csv' is a host path. Use '/inputs/x.csv'."
     assert answer.status == "error"
@@ -538,7 +493,7 @@ def test_a_deployments_middleware_that_falls_over_ends_the_turn_on_either_kind_o
 
     for name in ("probe", "read_file"):
         with pytest.raises(RuntimeError, match="fell over"):
-            _through(stack, {"name": name, "args": {"note": "x"}, "id": "c1"}, probe)
+            through_hooks(stack, {"name": name, "args": {"note": "x"}, "id": "c1"}, probe)
 
 
 def test_the_tools_own_failure_is_still_answered_for_the_tool_under_that_middleware(
@@ -556,7 +511,7 @@ def test_the_tools_own_failure_is_still_answered_for_the_tool_under_that_middlew
     stack = _stack_around(cfg, session_dir, paths, [_Quiet()])
     probe = _raising(FileNotFoundError(MISSING))
 
-    answer = _through(stack, {"name": "probe", "args": {"note": "x"}, "id": "c1"}, probe)
+    answer = through_hooks(stack, {"name": "probe", "args": {"note": "x"}, "id": "c1"}, probe)
 
     assert answer.status == "error"
     assert MISSING in answer.content
@@ -584,7 +539,7 @@ def test_an_offered_tool_fails_alike_through_the_stack_and_on_a_compiled_subagen
     probe = _raising(raised)
     call = {"name": "probe", "args": {"note": note}, "id": "c1"}
 
-    middleware = _through(stack, call, probe, way)
+    middleware = through_hooks(stack, call, probe, way)
     guarded = guarded_tools([probe], paths)[0]
     called = {"type": "tool_call", **call}
     compiled = guarded.invoke(called) if way == "sync" else asyncio.run(guarded.ainvoke(called))
@@ -609,7 +564,7 @@ def test_a_split_grep_whose_path_is_refused_fails_once(stack):
     searched = {"pattern": "alpha|beta", "path": "/Users/me/notes"}
     call = {"name": "grep", "args": searched, "id": "c1"}
 
-    answer = _through(stack, call, grep)
+    answer = through_hooks(stack, call, grep)
 
     assert answer.content == f"Error: {said}"
     assert answer.status == "error"

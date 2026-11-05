@@ -12,7 +12,7 @@ from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeGraph, FakeToolCallingModel, start
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent
 
 
 class StreamingFake(GenericFakeChatModel):

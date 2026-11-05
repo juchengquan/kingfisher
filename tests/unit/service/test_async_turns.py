@@ -8,7 +8,6 @@ import threading
 import time
 from dataclasses import replace
 from functools import partial
-from pathlib import Path
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -19,20 +18,13 @@ from kingfisher.core.session import running, runtime
 from kingfisher.core.session.model import SessionBusyError
 from kingfisher.plugins import LocalSessions
 from tests.conftest import start
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent, claim_of
 
 
 def service(cfg, graph=None):
     return Kingfisher(
         cfg, graph=graph or StubAgent("ok"), sessions=LocalSessions()
     )
-
-
-def _claim(cfg, session_id: str) -> Path:
-    from kingfisher.core.layout import HARNESS
-    from kingfisher.plugins.sessions.backend import CLAIM
-
-    return cfg.workspace / "sessions" / session_id / HARNESS / CLAIM
 
 
 class _SlowAgent(StubAgent):
@@ -259,7 +251,7 @@ def test_cancelling_leaves_the_session_free(cfg):
 
     asyncio.run(cancel_mid_turn())
 
-    assert not _claim(cfg, session).exists(), "the turn's claim outlived the cancel"
+    assert not claim_of(cfg, session).exists(), "the turn's claim outlived the cancel"
     assert kf.run(Request("again", session_id=session)).completed
 
 
@@ -299,7 +291,7 @@ def test_a_real_cancelled_task_also_leaves_the_session_free(cfg):
 
     asyncio.run(cancel_the_task())
 
-    assert not _claim(cfg, session).exists()
+    assert not claim_of(cfg, session).exists()
     assert kf.run(Request("again", session_id=session)).completed
 
 
@@ -382,7 +374,7 @@ def test_cancelling_twice_still_leaves_the_session_free(cfg, how):
         await _cancel_twice(kf, session, how)
         # No await between the cancellation and these two, so nothing gets a
         # chance to tidy up on the turn's behalf.
-        held = _claim(cfg, session).exists()
+        held = claim_of(cfg, session).exists()
         try:
             admitted = kf.run(Request("after", session_id=session)).completed
         except SessionBusyError:
@@ -441,7 +433,7 @@ def test_cancelling_during_setup_leaves_the_session_free(cfg, monkeypatch):
         with pytest.raises(asyncio.CancelledError):
             await task
         # No await between the cancel returning and this.
-        return _claim(cfg, session).exists()
+        return claim_of(cfg, session).exists()
 
     assert not asyncio.run(cancel_during_setup()), "setup's claim outlived the cancel"
     assert kf.run(Request("again", session_id=session)).completed
@@ -467,7 +459,7 @@ def test_cancelling_during_setup_any_way_leaves_the_session_free(cfg, monkeypatc
 
     async def cancel_then_look() -> bool:
         await _cancel_twice(kf, session, how)
-        return _claim(cfg, session).exists()
+        return claim_of(cfg, session).exists()
 
     assert not asyncio.run(cancel_then_look()), f"{how} left setup's claim behind"
     monkeypatch.setattr(Kingfisher, "_built_turn", built)
@@ -552,7 +544,7 @@ def test_cancelling_at_any_step_of_setup_leaves_the_session_free(cfg, monkeypatc
         asyncio.run(cancel_at(target))
         monkeypatch.setattr(steps_module, "_awaited", real)
         step = made[target - 1]
-        assert not _claim(policied, session).exists(), f"cancelled at {step!r}, the claim stayed"
+        assert not claim_of(policied, session).exists(), f"cancelled at {step!r}, the claim stayed"
         assert kf.run(asked, source_ids=held).completed, f"cancelled at {step!r}, unusable"
 
 
@@ -650,7 +642,7 @@ def test_the_turns_ending_runs_to_the_end_however_often_it_is_cancelled(cfg, mon
         monkeypatch.setattr(steps_module, "_awaited", real)
         step = made[target - 1]
         assert reached == len(made), f"cancelled at {step!r}, the ending stopped at {reached}"
-        assert not _claim(cfg, session).exists(), f"cancelled at {step!r}, the claim stayed"
+        assert not claim_of(cfg, session).exists(), f"cancelled at {step!r}, the claim stayed"
         assert kf.run(asked).completed, f"cancelled at {step!r}, the session was left unusable"
 
 
@@ -679,7 +671,7 @@ def test_a_healthy_ending_lets_go_of_the_claim_and_the_interpreter(cfg, monkeypa
     _drive(service(cfg), Request("go", session_id=session), how)
 
     assert released
-    assert not _claim(cfg, session).exists()
+    assert not claim_of(cfg, session).exists()
 
 
 @pytest.mark.parametrize("how", DRIVES)
@@ -695,7 +687,7 @@ def test_an_ending_whose_record_fails_still_lets_go_of_the_interpreter(cfg, monk
     _drive(service(cfg), Request("go", session_id=session), how)
 
     assert released, "the interpreter outlived an ending that failed to record"
-    assert not _claim(cfg, session).exists()
+    assert not claim_of(cfg, session).exists()
 
 
 def _refused(self, prepared, snapshot):
@@ -733,7 +725,7 @@ def test_an_ending_whose_state_read_fails_still_lets_go_of_the_session(cfg, monk
     with pytest.raises(RuntimeError, match="could not be read"):
         _drive(service(cfg), Request("go", session_id=session), how)
 
-    assert not _claim(cfg, session).exists(), "the claim outlived a failed state read"
+    assert not claim_of(cfg, session).exists(), "the claim outlived a failed state read"
     assert released
 
 

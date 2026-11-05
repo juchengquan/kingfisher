@@ -15,7 +15,8 @@ from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn
 from kingfisher.core.request import Request
 from kingfisher.core.session.steps import drive
-from tests.conftest import EVERY_TOOL, a_subagent, an_agent, start, subagents_dir
+from tests.conftest import EVERY_TOOL, a_subagent, an_agent, start
+from tests.unit.conftest import define_each
 
 ASKED = """name: second-opinion
 description: Answers again, elsewhere.
@@ -36,14 +37,6 @@ description: Checks figures.
 system_prompt: |
   You check figures.
 """
-
-
-def _define(cfg, *definitions: str) -> None:
-    directory = subagents_dir(cfg)
-    directory.mkdir(parents=True, exist_ok=True)
-    for body in definitions:
-        name = body.split("\n")[0].removeprefix("name: ").strip()
-        (directory / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
 def _elsewhere(cfg, url: str):
@@ -81,7 +74,7 @@ def test_a_second_endpoint_pointing_at_the_same_host_is_reported(cfg, session_di
     `api.minimaxi.com`.
     """
     same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
-    _define(same, ASKED)
+    define_each(same, ASKED)
 
     found = _found(same, ("second-opinion",))
 
@@ -97,7 +90,7 @@ def test_granting_every_subagent_reports_what_naming_them_reports(cfg, session_d
     back with nothing to report.
     """
     same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
-    _define(same, ASKED)
+    define_each(same, ASKED)
 
     everything = _found(same, ALL)
 
@@ -108,7 +101,7 @@ def test_granting_every_subagent_reports_what_naming_them_reports(cfg, session_d
 def test_a_second_endpoint_somewhere_else_is_not_reported(cfg, session_dir):
     """The negative control."""
     elsewhere = _elsewhere(cfg, "https://api.openai.com/v1")
-    _define(elsewhere, ASKED)
+    define_each(elsewhere, ASKED)
 
     assert _found(elsewhere, ("second-opinion",)) == {}
 
@@ -120,7 +113,7 @@ def test_pinning_the_deployments_own_model_is_reported(cfg, session_dir):
     """Reads as a decision, behaves as a no-op -- and stops being a no-op the day
     someone runs it on a deployment whose default differs.
     """
-    _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
+    define_each(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
 
     found = _found(cfg, ("cheap",))
 
@@ -132,14 +125,14 @@ def test_pinning_a_different_model_is_not_reported(cfg, session_dir):
     another entry.
     """
     elsewhere = _elsewhere(cfg, "https://api.openai.com/v1")
-    _define(elsewhere, ASKED_FOR_A_MODEL.format(model="gpt-5"))
+    define_each(elsewhere, ASKED_FOR_A_MODEL.format(model="gpt-5"))
 
     assert _found(elsewhere, ("cheap",)) == {}
 
 
 def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
     """`cheap-model` is a different model and the same machine."""
-    _define(cfg, ASKED_FOR_A_MODEL.format(model="cheap-model"))
+    define_each(cfg, ASKED_FOR_A_MODEL.format(model="cheap-model"))
 
     assert "same host" in _found(cfg, ("cheap",))["cheap"]
 
@@ -147,8 +140,8 @@ def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
 def test_the_main_agent_is_the_one_its_own_model_names(cfg, session_dir):
     """Compared against the deployment's default, so with the agent pinned elsewhere a
     subagent on the default was reported as matching it and one on its own model was not."""
-    _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
-    _define(cfg, ASKED_FOR_A_MODEL.format(model="elsewhere-model").replace("cheap", "far"))
+    define_each(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
+    define_each(cfg, ASKED_FOR_A_MODEL.format(model="elsewhere-model").replace("cheap", "far"))
     agent = read(
         DefinitionText(
             "name: pinned\ndescription: d\nmodel: elsewhere-model\nbuiltin_tools: ['*']\n"
@@ -165,7 +158,7 @@ def test_the_main_agent_is_the_one_its_own_model_names(cfg, session_dir):
 
 def test_a_subagent_that_asked_for_nothing_is_never_reported(cfg, session_dir):
     """`reviewer` runs on the deployment's own model on purpose."""
-    _define(cfg, ASKED_FOR_NOTHING)
+    define_each(cfg, ASKED_FOR_NOTHING)
 
     assert _found(cfg, ("reviewer",)) == {}
 
@@ -174,7 +167,7 @@ def test_a_request_that_activated_no_subagents_is_asked_nothing(cfg, session_dir
     """Written `subagents=None` rather than left at the default, which stopped meaning
     "none" once an agent could declare a roster of its own.
     """
-    _define(cfg, ASKED)
+    define_each(cfg, ASKED)
 
     assert indistinct_subagents(cfg, Capabilities(subagents=None)) == ()
 
@@ -184,7 +177,7 @@ def test_a_request_that_activated_no_subagents_is_asked_nothing(cfg, session_dir
 
 def test_an_override_onto_the_deployments_own_model_is_reported(cfg, session_dir):
     """A caller may put a subagent on the main model deliberately."""
-    _define(cfg, ASKED_FOR_A_MODEL.format(model="cheap-model"))
+    define_each(cfg, ASKED_FOR_A_MODEL.format(model="cheap-model"))
 
     found = _found(
         cfg,
@@ -206,7 +199,7 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
     from kingfisher.plugins import LocalSessions
 
     same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
-    _define(same, ASKED)
+    define_each(same, ASKED)
     an_agent(same, subagents="[second-opinion]", **EVERY_TOOL)
     service = Kingfisher(same, sessions=LocalSessions())
     start(same, "s")
@@ -233,7 +226,7 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
     from kingfisher import Kingfisher
     from kingfisher.plugins import LocalSessions
 
-    _define(cfg, ASKED_FOR_NOTHING)
+    define_each(cfg, ASKED_FOR_NOTHING)
     an_agent(cfg, subagents="[reviewer]", **EVERY_TOOL)
     service = Kingfisher(cfg, sessions=LocalSessions())
     start(cfg, "quiet")
@@ -280,7 +273,7 @@ def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):
     """Kingfisher cannot know that a subagent needs to differ, so this is only ever a
     report: `reviewer` names the deployment's own model on purpose.
     """
-    _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
+    define_each(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
     spec = _spec_from(
         ELSEWHERE_BY_MODEL.format(model=cfg.models.default)
     )
@@ -294,7 +287,7 @@ def test_a_model_the_deployment_cannot_run_is_left_to_the_build(cfg, session_dir
     `cfg.models.resolve` outside it, so a subagent pinned to a model this deployment does
     not have raised `ConfigError` from a report instead of being skipped.
     """
-    _define(cfg, ASKED_FOR_A_MODEL.format(model="no-such-model"))
+    define_each(cfg, ASKED_FOR_A_MODEL.format(model="no-such-model"))
 
     assert _found(cfg, ("cheap",)) == {}
 
@@ -305,9 +298,9 @@ def test_a_supplied_graph_runs_beside_a_subagent_it_cannot_run(cfg, session_dir)
     """
     from kingfisher import Kingfisher
     from kingfisher.plugins import LocalSessions
-    from tests.unit.service.test_run import StubAgent
+    from tests.unit.stand_ins import StubAgent
 
-    _define(cfg, ASKED_FOR_A_MODEL.format(model="no-such-model"))
+    define_each(cfg, ASKED_FOR_A_MODEL.format(model="no-such-model"))
     service = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
     start(cfg, "s")
 

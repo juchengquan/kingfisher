@@ -482,7 +482,7 @@ def test_a_deployment_can_supply_models_without_a_file_at_all(tmp_path):
     from kingfisher import Kingfisher
     from kingfisher.core.request import Request
     from tests.conftest import FAKE_CATALOGUE
-    from tests.unit.service.test_run import StubAgent
+    from tests.unit.stand_ins import StubAgent
 
     definitions = tmp_path / "definitions"
     definitions.mkdir()

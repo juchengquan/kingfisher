@@ -19,7 +19,6 @@ import pytest
 from pypdf import PdfReader
 
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.plugins import backend_at
 from tests.conftest import a_pdf, on_backend, repository_root
 
@@ -67,11 +66,6 @@ LINE = re.compile(
     r"Saved (?P<name>\S+) \((?P<kind>[^,]+), (?P<size>\d+(?:\.\d)?) (?P<unit>B|KB|MB)\) "
     r"to (?P<path>/\S+)(?: — (?P<note>.+))?"
 )
-
-
-@pytest.fixture
-def tools(shipped):
-    return {tool_name(one.tool): one.tool for one in LocalToolRepository(shipped / "tools").found}
 
 
 @pytest.fixture

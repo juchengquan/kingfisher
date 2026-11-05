@@ -8,6 +8,7 @@ import pytest
 
 from kingfisher.cli.__main__ import main
 from tests.conftest import EVERY_TOOL, an_agent, subagents_dir
+from tests.unit.conftest import lock_skills
 
 
 def test_listing_reports_definitions_that_will_not_load(cfg, at_the_command_line, capsys):
@@ -1835,15 +1836,10 @@ system_prompt: |
 """
 
 
-def _locked(cfg, text: str) -> None:
-    """`skill_locks.yaml`, beside the skills folder."""
-    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(text, encoding="utf-8")
-
-
 def test_a_skills_lock_is_printed_once_as_a_tools_is(cfg, at_the_command_line, capsys):
     """A skill has one lock now, so a per-skill roll-up of its uses could only repeat it."""
     _workspace(cfg, TELLS_A, skills=("routine",))
-    _locked(cfg, "- name: routine\n  source_ids: [A]\n")
+    lock_skills(cfg, "- name: routine\n  source_ids: [A]\n")
 
     assert main(["list"]) == 0
 
@@ -1856,7 +1852,7 @@ def test_a_lock_file_that_will_not_load_fails_the_listing(cfg, at_the_command_li
     """Startup refuses the file, so a listing passing over it would be the only green
     thing in a deployment that cannot start."""
     _workspace(cfg, TELLS_A, skills=("routine",))
-    _locked(cfg, "- name: routine\n  source_ids: [A]\n- name: nowhere\n  source_ids: [A]\n")
+    lock_skills(cfg, "- name: routine\n  source_ids: [A]\n- name: nowhere\n  source_ids: [A]\n")
 
     assert main(["list"]) == 1
 
@@ -1905,7 +1901,7 @@ def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(
     the two should not have to translate.
     """
     _workspace(cfg, BOTH, skills=("routine",))
-    _locked(cfg, "- name: routine\n  source_ids: [{A, B}]\n")
+    lock_skills(cfg, "- name: routine\n  source_ids: [{A, B}]\n")
 
     shown = capsys.readouterr().out if main(["list"]) == 0 else ""
     assert "agent both  [{A, B}]" in shown

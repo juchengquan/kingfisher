@@ -42,6 +42,7 @@ from tests.conftest import (
     subagents_dir,
     tools_dir,
 )
+from tests.unit.conftest import lock_skills
 from tests.unit.scripted import Scripted
 
 TOOL = '''
@@ -885,11 +886,6 @@ skills: [audit, review]
 system_prompt: |
   You do the task.
 """
-
-
-def lock_skills(cfg, text: str) -> None:
-    """`skill_locks.yaml`, beside the skills folder as a deployment keeps it."""
-    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(text, encoding="utf-8")
 
 
 @pytest.fixture

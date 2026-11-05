@@ -23,8 +23,7 @@ from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend, _claim_a
 from kingfisher.plugins.sessions.folders import remove_tree
 from tests.checks import sessions as sessions_kit
 from tests.checks.sessions import CONTRACT_SESSIONS, SESSIONS_CHECKS
-from tests.unit.service.test_run import StubAgent
-from tests.unit.session.test_session_files import Elsewhere
+from tests.unit.stand_ins import Elsewhere, StubAgent
 
 #: A layout renaming every folder a deployment may, beside the shipped one.
 RENAMED = Layout(inputs="in", outputs="out", memory="mem", scratchpad="scratch")

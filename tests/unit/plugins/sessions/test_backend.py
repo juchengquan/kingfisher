@@ -364,7 +364,7 @@ def test_a_subagent_gets_the_correction_too(cfg, session_dir):
     from kingfisher.core.access.capabilities import Capabilities
     from kingfisher.core.agent.assembly import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir
-    from tests.unit.access.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.stand_ins import subagent_graphs
 
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "writer.yaml").write_text(
@@ -390,7 +390,7 @@ def test_a_subagent_gets_the_correction_too(cfg, session_dir):
         model=FakeToolCallingModel(responses=responses),
         capabilities=Capabilities(subagents=("writer",)),
     ).graph
-    out = _subagent_graphs(graph)["writer"].invoke(
+    out = subagent_graphs(graph)["writer"].invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
     )
 

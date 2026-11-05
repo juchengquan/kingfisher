@@ -13,7 +13,7 @@ from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.logged import ORIGINS_LOGGER
 from kingfisher.plugins import LocalSessions
 from tests.conftest import RecordedEvents
-from tests.unit.plugins.sessions.test_backend_seam import Elsewhere
+from tests.unit.stand_ins import ElsewhereRunner
 
 
 def test_a_plain_definitions_folder_reports_every_catalogue_as_derived(cfg):
@@ -138,7 +138,7 @@ def test_kingfishers_own_backends_with_a_runner_still_keep_kingfishers_sessions(
     class Theirs(LocalSessions):
         pass
 
-    with_runner = Kingfisher(cfg, sessions=LocalSessions(runner=lambda _where: Elsewhere()))
+    with_runner = Kingfisher(cfg, sessions=LocalSessions(runner=lambda _where: ElsewhereRunner()))
     subclassed = Kingfisher(cfg, sessions=Theirs())
 
     assert with_runner.origins.sessions == Origin("default", cfg.workspace / "sessions")

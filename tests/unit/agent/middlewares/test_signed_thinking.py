@@ -37,7 +37,7 @@ from tests.unit.agent.middlewares.test_clearing import (
     _subagent,
     bulky,  # noqa: F401 -- the fixture the every-graph walk is built on
 )
-from tests.unit.agent.middlewares.test_turn_instructions import Sent
+from tests.unit.stand_ins import Sent
 
 #: The test catalogue's default and where it is served.
 HERE = {"endpoint": "fake", "address": FAKE_ENDPOINT.base_url, "model": "fake-model"}
