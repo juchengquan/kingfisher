@@ -17,13 +17,14 @@ from tests.unit.scripted import Scripted
 
 SURVEY = Path(__file__).resolve().parents[3] / "scripts" / "turn_deadline_survey.py"
 
-#: Long enough that, of three in a row, the third begins past a one-second limit.
+#: Over half the two-second limit, so the third of three in a row begins past it, with 0.9s
+#: before the second for the turn to reach the first: a macOS runner has taken over 0.4.
 LOOKUP = '''import time
 
 
 def lookup(n: int) -> str:
     """Look a customer up."""
-    time.sleep(0.6)
+    time.sleep(1.1)
     return f"row{n}"
 
 
@@ -57,7 +58,7 @@ def test_the_survey_reads_what_a_turn_past_its_limit_logs(scripted, tmp_path):
     """The survey copies kingfisher's event and field names rather than importing them, so
     one renamed here would leave it reporting no program and no subagent: the deployment's
     log would read as nothing ever running past its limit."""
-    bounded = replace(scripted, interpreter_enabled=True, turn_timeout_s=1)
+    bounded = replace(scripted, interpreter_enabled=True, turn_timeout_s=2)
     tools_dir(bounded).mkdir(parents=True, exist_ok=True)
     (tools_dir(bounded) / "lookup.py").write_text(LOOKUP, encoding="utf-8")
     subagents_dir(bounded).mkdir(parents=True, exist_ok=True)
@@ -102,7 +103,7 @@ def test_the_survey_reads_what_a_turn_past_its_limit_logs(scripted, tmp_path):
     kf.run(Request("again", agent="only", session_id="s"))
 
     survey = _survey()
-    report = survey.survey(survey.read_turns([log]), limit=1, grace=0.5)
+    report = survey.survey(survey.read_turns([log]), limit=2, grace=0.5)
 
     turns, programs, subagents = report["turns"], report["programs"], report["subagents"]
     assert (turns["n"], turns["stopped_by_their_limit"]) == (2, 2)
