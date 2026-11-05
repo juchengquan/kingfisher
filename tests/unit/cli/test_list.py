@@ -1939,6 +1939,9 @@ def test_a_callers_view_carries_no_audiences(policied, capsys):
 
 
 def test_a_callers_view_drops_an_agent_they_cannot_open(cfg, at_the_command_line, capsys):
+    """A caller's listing that kept an agent locked to other source ids offers them one
+    their turn would be refused, and shows them a definition that is not theirs to see.
+    """
     _workspace(cfg, NARROW)
 
     assert main(["list", "--as", "C"]) == 0
@@ -2014,6 +2017,9 @@ def test_the_operators_own_view_is_not_refused_with_it(
 
 
 def test_no_vocabulary_means_no_access_section(cfg, at_the_command_line, capsys):
+    """A workspace that locks nothing, the default, would have `list` print an access
+    section with no lock in it, or fail reading names in use that are not there.
+    """
     from tests.conftest import an_agent
 
     an_agent(cfg, "plain")

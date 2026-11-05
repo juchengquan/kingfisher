@@ -13,6 +13,10 @@ from kingfisher.plugins.sessions.folders import create_exclusive, ensure_session
 
 
 def test_layout_is_created_and_idempotent(tmp_path):
+    """Every start lays the workspace out again, so a layout that raised on folders an
+    earlier start made, or skipped one, stops the second start or leaves sessions
+    nowhere to go.
+    """
     ws = ensure_layout(tmp_path / "ws")
     ensure_layout(ws)
     for name in LAYOUT_DIRS:

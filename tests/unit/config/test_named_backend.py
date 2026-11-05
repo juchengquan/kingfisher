@@ -91,6 +91,9 @@ def _forget_what_was_built():
 
 
 def test_a_named_factory_is_called_and_its_backends_returned():
+    """A factory imported but not called, or whose result is not what comes back, leaves
+    the deployment's sessions unused.
+    """
     assert isinstance(named(f"{HERE}:make_backends"), Recording)
 
 
@@ -103,6 +106,9 @@ def test_the_factory_is_called_once_per_resolution():
 
 
 def test_a_spec_that_does_not_name_two_things_is_refused():
+    """A setting with no colon is refused as a module that cannot be imported, sending
+    its reader hunting for a package rather than telling them to write `module:name`.
+    """
     with pytest.raises(ConfigError, match="module:name") as caught:
         named("no-colon-here")
 
@@ -120,6 +126,9 @@ def test_a_module_that_will_not_import_is_refused():
 
 
 def test_an_attribute_that_is_not_there_is_refused():
+    """A name the module does not define is a configuration mistake, and a bare
+    `AttributeError` traceback would not say which variable named it.
+    """
     with pytest.raises(ConfigError, match="does not define"):
         named(f"{HERE}:no_such_factory")
 
@@ -144,11 +153,18 @@ def test_a_factory_that_raises_is_left_alone():
 
 
 def test_naming_nothing_is_the_default():
+    """A blank `KINGFISHER_SESSIONS`, as an empty `.env` line sets it, refused as naming
+    nothing stops the command for a deployment that never chose sessions at all.
+    """
     assert type(configured_sessions({})) is LocalSessions
     assert type(configured_sessions({SETTING: "  "})) is LocalSessions, "blank is unset"
 
 
 def test_a_named_factory_is_what_the_command_line_runs_on():
+    """A command that ignored `KINGFISHER_SESSIONS`, or refused it for the spaces around
+    it, has `sessions` and `reap` act on a local `sessions/` instead of the
+    deployment's.
+    """
     assert isinstance(configured_sessions({SETTING: f" {HERE}:make_backends "}), Recording)
 
 

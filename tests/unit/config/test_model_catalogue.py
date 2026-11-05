@@ -174,12 +174,16 @@ def test_a_clearing_mark_under_extra_is_refused(tmp_path):
 
 
 def test_a_models_key_is_the_id_sent_on_the_wire(tmp_path):
+    """A model sent under any id but its key in `models:` reaches the provider as a name
+    the file never gave it."""
     models = loaded(tmp_path).models
 
     assert models["tuned"].model == "tuned"
 
 
 def test_every_param_is_carried(tmp_path):
+    """A param that parses and is then dropped leaves the model on a default the entry
+    looks to have set, with nothing saying so."""
     models = loaded(tmp_path).models
     tuned = models["tuned"]
 
@@ -346,6 +350,9 @@ def test_a_model_naming_an_undefined_endpoint_is_refused(tmp_path):
 
 
 def test_an_endpoint_without_its_key_is_dropped_with_its_models(tmp_path):
+    """An endpoint this machine has no key for, kept or dropped without its models,
+    leaves `models` offering one that cannot run, and `doctor` no endpoint to warn
+    about."""
     body = GOOD.replace(
         "default: main-model",
         "  other:\n    api: openai_responses\n    base_url: https://example.invalid/v1\n"
@@ -394,26 +401,37 @@ def test_an_unbuildable_api_is_refused_before_a_missing_key_drops_it(tmp_path):
 
 
 def test_a_missing_file_is_refused_with_an_example(tmp_path):
+    """A missing catalogue raising anything but a `ConfigError` saying where it looked
+    is a traceback at the first thing a new deployment hits."""
     with pytest.raises(ConfigError, match="no model catalogue at"):
         load(tmp_path / "absent.yaml", KEYS)
 
 
 def test_malformed_yaml_names_the_file(tmp_path):
+    """A `models.yaml` that does not parse, escaping as a bare `yaml.YAMLError`, is a
+    traceback the command's `ConfigError` handler never catches."""
     with pytest.raises(ConfigError, match="not valid YAML"):
         loaded(tmp_path, "endpoints: [unclosed\n")
 
 
 def test_a_missing_default_is_refused(tmp_path):
+    """A catalogue with no `default:` would be refused as naming a default `''` the file
+    does not define, which reads as a typo rather than a line left out."""
     with pytest.raises(ConfigError, match="no 'default' model named"):
         loaded(tmp_path, GOOD.replace("default: main-model\n", ""))
 
 
 def test_an_endpoint_missing_a_required_key_is_refused(tmp_path):
+    """An endpoint with no `base_url` builds with the URL unset, and its prompts and key
+    go to the vendor's default host instead of the gateway."""
     with pytest.raises(ConfigError, match="missing required key 'base_url'"):
         loaded(tmp_path, GOOD.replace("    base_url: https://example.invalid/anthropic\n", ""))
 
 
 def test_a_model_missing_its_endpoint_is_refused(tmp_path):
+    """A model with no `endpoint:` would be refused as naming an endpoint `''` the file
+    does not define, sending its reader to the endpoints rather than to the line left
+    out."""
     with pytest.raises(ConfigError, match="missing required key 'endpoint'"):
         loaded(tmp_path, GOOD.replace("  main-model:\n    endpoint: gateway", "  main-model:"))
 
@@ -659,6 +677,9 @@ def test_a_keys_file_entry_is_read_without_the_whitespace_around_it(tmp_path):
 
 
 def test_an_entry_the_keys_file_lacks_drops_the_endpoint_naming_both(tmp_path):
+    """A keys file without an endpoint's entry stops a deployment whose other endpoints
+    have theirs, or drops it with a warning that sends the reader to the environment
+    instead of naming the entry and the file."""
     named = keys_at(tmp_path, "unrelated: sk-x\n")
 
     with pytest.warns(MissingCredentialsWarning, match="entry 'gateway' in"):
@@ -724,6 +745,9 @@ def test_a_malformed_keys_file_is_refused_without_printing_the_key(tmp_path, bod
 
 
 def test_a_keys_file_it_cannot_read_refuses_to_start(tmp_path):
+    """A named keys file kingfisher cannot read escapes as a bare `PermissionError`, or
+    drops its endpoints as if no file were named, where a path somebody wrote is a
+    mistake to say at once."""
     named = keys_at(tmp_path)
     named.chmod(0)
     try:

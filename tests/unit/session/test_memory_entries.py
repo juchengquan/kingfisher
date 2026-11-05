@@ -36,6 +36,9 @@ def test_numbering_twice_changes_nothing():
 
 
 def test_an_indented_line_continues_the_entry_above_it():
+    """An entry wrapped onto an indented line, read as its first line alone, hides an
+    edit to the rest from the turn's report and hands the caller half of what is
+    remembered."""
     _, entries = numbered("- [m1] Short answers\n  even shorter on Fridays\n")
 
     assert entries == (MemoryEntry("m1", "Short answers even shorter on Fridays"),)
@@ -51,6 +54,8 @@ def test_an_id_written_twice_keeps_the_first_and_numbers_the_second():
 
 
 def test_headings_and_prose_are_kept_and_are_not_entries():
+    """Numbering that rewrote or dropped a heading or a line of prose, or read one as an
+    entry, would mangle the file the agent keeps and report its layout as remembered."""
     text = "# Project memory\n\nNotes the agent keeps.\n\n## Conventions\n- Likes EUR\n"
 
     written, entries = numbered(text)
@@ -60,6 +65,8 @@ def test_headings_and_prose_are_kept_and_are_not_entries():
 
 
 def test_changes_are_read_by_id():
+    """Changes matched by text or by place report an edited entry as one removed and
+    another added, or a removed entry as changed into the one after it."""
     before = (MemoryEntry("m1", "Likes EUR"), MemoryEntry("m2", "Short answers"))
     after = (MemoryEntry("m1", "Likes EUR, rounded"), MemoryEntry("m3", "Reviews on Mondays"))
 
@@ -127,6 +134,8 @@ def test_a_line_written_before_the_turn_is_numbered_at_its_start_and_not_reporte
 
 
 def test_a_turn_that_leaves_memory_alone_reports_nothing(scripted):
+    """A turn that reported a memory change it did not make sends the caller a
+    `memory_updated` for a file nobody touched."""
     kf = _remembering(scripted)
     start(scripted, "s")
 

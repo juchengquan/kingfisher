@@ -70,6 +70,9 @@ def test_the_default_layout_is_the_module_constants():
 
 
 def test_a_renamed_layout_spells_every_route_from_its_leaves():
+    """A path still spelled from a default leaf, or a deepagents folder renamed with its
+    parent, sends the prompt, a deny rule or a fence to a folder a renamed session does
+    not have."""
     assert MOVED.inputs_route == "/in/"
     assert MOVED.memory_route == "/mem/"
     assert MOVED.outputs_route == "/out/"
@@ -90,6 +93,9 @@ def test_a_renamed_layout_spells_every_route_from_its_leaves():
 
 
 def test_a_renamed_layout_routes_and_denies_under_its_own_names():
+    """Mounts and deny rules spelled for the default layout leave a renamed session's
+    inputs and kept records writable to the file tools, and deepagents refuses a deny
+    rule for a kept record left unmounted."""
     routed = MOVED.routed_paths()
     assert {"/in/", "/mem/", "/scratch/results/"} <= set(routed)
     # Every kept record is mounted, because a deny rule under no route is refused.
@@ -127,11 +133,16 @@ def test_a_reserved_name_is_refused(name):
 
 @pytest.mark.parametrize("name", ["a/b", ".hidden", "", "with space"])
 def test_a_name_that_is_not_a_bare_folder_is_refused(name):
+    """A leaf holding a slash, a leading dot or nothing at all is a path rather than one
+    folder, and every route, deny scope and fence built from it points somewhere other
+    than a folder of its own."""
     with pytest.raises(ValueError, match="bare folder name"):
         Layout(memory=name)
 
 
 def test_two_leaves_that_collide_are_refused():
+    """Two leaves given one name are one folder, so the caller's inputs, which the agent
+    may not write, are also the outputs it writes."""
     with pytest.raises(ValueError, match="collide"):
         Layout(inputs="same", outputs="same")
 
@@ -155,6 +166,8 @@ def test_two_leaves_differing_only_in_case_collide():
 
 
 def test_read_only_permissions_deny_the_renamed_scopes():
+    """Deny rules spelled for the default layout leave a renamed session's inputs and
+    saved results writable to the file tools."""
     scopes = [p.paths[0] for p in read_only_permissions(MOVED)]
     assert "/in/**" in scopes
     assert "/scratch/results/**" in scopes
@@ -162,6 +175,8 @@ def test_read_only_permissions_deny_the_renamed_scopes():
 
 
 def test_the_memory_helpers_name_the_renamed_folder():
+    """Under a renamed memory folder, the agent is told to read a memory file that is
+    not there, and a request that declined memory can still read the one that is."""
     assert memory_sources(MOVED) == ["/mem/AGENTS.md"]
     assert memory_is_denied(MOVED).paths == ["/mem/**"]
 
@@ -189,6 +204,9 @@ def test_the_shell_path_rule_and_matcher_follow_a_renamed_layout():
 
 
 def test_a_refused_host_path_suggests_the_renamed_scratch(tmp_path):
+    """A refused host path suggesting `/scratchpad/<name>` sends the model's retry under
+    a renamed layout to a folder the session does not have, so its file lands where
+    nothing looks."""
     from kingfisher.core.agent.host_paths import HostPathError, reject_host_path
 
     workspace = tmp_path
@@ -203,6 +221,9 @@ def test_a_refused_host_path_suggests_the_renamed_scratch(tmp_path):
 
 
 def test_backend_at_mounts_and_lays_out_the_renamed_leaves(cfg):
+    """A backend that mounts or makes the default folders under a renamed layout leaves
+    the routes the prompt names unmounted, and deepagents evicting into a scratchpad the
+    session does not have."""
     moved = replace(cfg, layout=MOVED)
     session = _laid_out(moved, MOVED)
     backend = backend_at(moved, session)

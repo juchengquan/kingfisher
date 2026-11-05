@@ -453,6 +453,9 @@ def test_a_sweep_leaves_no_claim_behind(cfg):
 
 
 def test_deleting_a_session_takes_its_claim_with_it(cfg):
+    """Deleting a session but not its claim leaves one nobody holds, and a caller
+    reusing the id has its first turn refused as busy until the window runs out.
+    """
     kf = service(cfg)
     session = start(cfg, "s")
     claim = claim_of(cfg, session)
