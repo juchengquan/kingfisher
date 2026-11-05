@@ -79,6 +79,8 @@ def test_the_writer_runs_on_the_fourth_turn_by_default_and_not_before(scripted):
 
 
 def test_memory_every_sets_how_many_turns_it_waits(scripted):
+    """A writer that kept its default rather than reading `memory_every` runs on every
+    fourth turn whatever the deployment set."""
     kf = _writing(scripted, memory_every=3)
 
     _turn(kf, AIMessage(content="one"))
@@ -122,6 +124,9 @@ def test_it_runs_on_a_summarised_turn_and_reads_what_the_summary_dropped(scripte
 
 
 def test_with_memory_off_it_never_runs(scripted):
+    """With memory off, a writer still counting turns pays a model call on each due turn
+    and keeps what was said in `.harness` for a deployment that chose to remember
+    nothing."""
     an_agent(scripted, **EVERY_TOOL)
     start(scripted, "s")
     kf = Kingfisher(replace(scripted, memory_every=1), sessions=LocalSessions())
@@ -137,6 +142,9 @@ def test_with_memory_off_it_never_runs(scripted):
 
 
 def test_its_revised_list_is_written_numbered_and_reported(scripted):
+    """A writer's list saved unnumbered, over the file's heading, or kept out of the
+    turn's report leaves entries no `forget` can name and a caller not told memory
+    changed."""
     kf = _writing(scripted, memory_every=2)
     memory = _memory_file(scripted)
     memory.write_text("# Project memory\n\n- [m1] Short answers\n", encoding="utf-8")
@@ -183,6 +191,9 @@ def test_an_id_the_list_never_held_is_numbered_afresh():
 
 
 def test_a_fenced_list_is_read_and_none_keeps_nothing():
+    """A list the model fenced unasked, or the `none` its instructions tell it to
+    answer, is thrown away as not a list, so memory keeps what the writer meant to
+    change or clear."""
     assert listed("```\n- Likes EUR\n```", ()) == (MemoryEntry("m1", "Likes EUR"),)
     assert listed("none", (MemoryEntry("m1", "Likes EUR"),)) == ()
 
@@ -389,6 +400,9 @@ def test_the_writer_is_never_sent_the_turn_text_the_note_or_a_tool_result(script
 
 
 def test_memory_writer_names_the_model_and_its_absence_means_the_agents(scripted):
+    """A writer that ignored `memory_writer:` runs on the agent's own model where a
+    cheaper one was named, and one that required it never runs for a catalogue naming
+    none."""
     running = object()
 
     assert writer_model(scripted, running, "*")() is running
@@ -397,6 +411,8 @@ def test_memory_writer_names_the_model_and_its_absence_means_the_agents(scripted
 
 
 def test_a_memory_writer_naming_no_model_is_refused(tmp_path):
+    """A misspelt `memory_writer:` that loaded fails every writer call from inside a
+    turn, leaving memory uncurated with only a `memory_not_updated` event to say why."""
     body = """
 endpoints:
   gateway:

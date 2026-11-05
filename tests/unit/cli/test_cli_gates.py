@@ -417,6 +417,9 @@ def test_an_answer_resume_would_refuse_is_refused_through_the_command(
 def test_asking_about_a_session_that_does_not_exist_says_that_instead(
     cfg, monkeypatch, capsys
 ):
+    """A mistyped session id answered with "not waiting on a decision" sends its reader
+    looking for a turn that never paused, rather than at the id.
+    """
     monkeypatch.setattr(cli, "config_from_env", lambda: cfg)
 
     code = cli._decide(_decide_args(session="never-opened"))

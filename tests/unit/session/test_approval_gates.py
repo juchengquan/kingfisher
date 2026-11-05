@@ -350,6 +350,9 @@ def test_two_gated_calls_are_answered_one_each(cfg, session_dir, rejection_first
 
 
 def test_a_resume_for_a_session_that_is_not_waiting_is_refused(cfg):
+    """A resume for a session whose last turn finished has no pause to answer, and must
+    say so rather than fail on the missing pause or run decisions against nothing.
+    """
     kf = Kingfisher(cfg, graph=_gated(calls=[], after="ok"), sessions=LocalSessions())
     ran = kf.run(Request("just answer"))
 

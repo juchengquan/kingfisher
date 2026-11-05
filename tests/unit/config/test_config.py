@@ -248,6 +248,10 @@ def test_the_keys_file_resolves_like_the_other_path_settings(env, tmp_path, monk
 
 
 def test_endpoints_and_models_come_from_the_file(env):
+    """A catalogue that added a model or endpoint the file does not list, or took its
+    default from anywhere but `default:`, sends prompts somewhere the deployment never
+    chose.
+    """
     cfg = config_from_env(env)
 
     assert set(cfg.models.endpoints) == {"gateway", "openai"}

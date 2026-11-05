@@ -38,6 +38,10 @@ def _session_dir(cfg: Config, session_id: str):
 
 
 def test_the_conversation_is_a_file_inside_the_session(cfg):
+    """A conversation kept outside its session's directory is orphaned when the
+    directory is deleted any way but kingfisher's own, which left 132 threads behind in
+    one real workspace.
+    """
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
 
     result = kf.run(Request("go"))

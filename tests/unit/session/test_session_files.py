@@ -94,6 +94,9 @@ def _produced(
 
 
 def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg):
+    """A fetch that refused a nested name the turn reported, or read anything but that
+    file, leaves the caller a listed result it cannot open.
+    """
     kf = _produced(cfg, "outputs/nested/out.csv", "a,b\n")
 
     assert Through(kf).artifact("s", "outputs/nested/out.csv") == b"a,b\n"
@@ -142,6 +145,9 @@ def test_a_refused_name_never_reaches_the_backend(name):
 
 
 def test_a_name_that_is_not_there_is_refused_by_name(cfg):
+    """A fetch of a missing file that returned nothing rather than refusing by name
+    hands the caller an empty answer to write out as the file.
+    """
     kf = _produced(cfg)
 
     with pytest.raises(ArtifactError, match=r"outputs/missing\.txt"):
@@ -149,6 +155,9 @@ def test_a_name_that_is_not_there_is_refused_by_name(cfg):
 
 
 def test_a_session_that_is_not_there_is_the_same_error_as_ever(cfg):
+    """Asked for a file in a session that does not exist, a fetch that made the session
+    or answered with a missing file hides that the id is wrong.
+    """
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
     with pytest.raises(UnknownSessionError):
@@ -309,6 +318,9 @@ def test_a_name_starting_with_a_dot_is_collected_at_any_depth(cfg, session_dir):
 
 
 def test_the_command_writes_an_artifact_where_it_is_told(at_the_command_line, tmp_path, capsys):
+    """An `artifact --out` that wrote somewhere else, or not at all, tells the person it
+    wrote a copy that is not where they asked.
+    """
     _produced(at_the_command_line, "outputs/out.txt", "result")
     out = tmp_path / "copy.txt"
 
@@ -373,6 +385,9 @@ def test_the_command_prints_a_result_by_its_id_and_refuses_one_it_has_not(
 
 
 def test_the_command_refuses_a_name_that_is_not_an_artifact(at_the_command_line, capsys):
+    """An `ArtifactError` the command does not catch exits 1, the code its help gives a
+    turn that ran and stopped, with a traceback where the refusal belongs.
+    """
     _produced(at_the_command_line)
 
     code = main(["artifact", "--session", "s", ".harness/transcript.jsonl"])

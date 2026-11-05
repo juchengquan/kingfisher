@@ -60,6 +60,10 @@ class Remote:
 
 
 def test_a_healthy_workspace_passes_everything(cfg):
+    """The control for every failure below: a `doctor` that failed a healthy workspace
+    would pass them all, and one that dropped a check would say nothing about what that
+    check stops.
+    """
     checks = examine(cfg)
 
     assert {check.name for check in checks} >= {
@@ -145,6 +149,9 @@ def test_a_broken_agent_catalogue_is_a_failure_too(cfg):
 
 
 def test_a_broken_tool_catalogue_is_a_failure_too(cfg):
+    """A tool file `doctor` passes stops the deployment it called ready, and a failure
+    there raised rather than carried takes the other catalogues' answers down with it.
+    """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "twice.py").write_text(BROKEN_TOOL, encoding="utf-8")
 
@@ -441,6 +448,9 @@ def test_the_command_prints_a_remedy_for_what_it_can_fix(cfg, at_the_command_lin
 
 
 def test_the_json_form_carries_the_same_checks(cfg, at_the_command_line, capsys):
+    """A `--json` form that dropped a check, or a field of one, tells a script less than
+    the person reading the text is told.
+    """
     assert main(["doctor", "--json"]) == 0
 
     document = json.loads(capsys.readouterr().out)
@@ -1132,7 +1142,10 @@ def test_swapping_fails_because_it_is_the_silent_one(cfg, monkeypatch):
 
 
 def test_a_filesystem_larger_than_the_limit_fails(cfg, monkeypatch):
-    """The other half of the same trap."""
+    """The other half of the same trap: with swap off, a memory filesystem sized past
+    the memory limit kills the container once it fills, and `doctor` would call that
+    arrangement ok.
+    """
     _backing(
         monkeypatch, filesystem="tmpfs", size_bytes=2048 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
@@ -1497,6 +1510,10 @@ def test_credentials_say_where_each_key_came_from(cfg):
 
 
 def test_a_missing_key_still_says_where_the_others_came_from(cfg, tmp_path):
+    """A warning for one missing key loses where the other keys came from, and a remedy
+    knowing only variables tells a deployment keyed from a keys file to set one it never
+    uses.
+    """
     from kingfisher.core.config import MissingCredentialsWarning
 
     with pytest.warns(MissingCredentialsWarning):
@@ -1610,6 +1627,9 @@ def test_a_keys_file_a_linux_fence_does_not_grant_is_said_to_be_hidden(
 
 
 def test_a_keys_file_the_sandbox_hides_is_said_to_be_hidden(cfg, tmp_path, monkeypatch):
+    """The control beside the macOS warnings above: a check that warned about every keys
+    file would pass them, while telling an operator whose key is hidden to move it.
+    """
     from kingfisher.plugins.sessions.sandbox.confinement import SANDBOX_EXEC
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1623,6 +1643,10 @@ def test_a_keys_file_the_sandbox_hides_is_said_to_be_hidden(cfg, tmp_path, monke
 
 
 def test_with_no_fence_a_keys_file_is_readable_wherever_it_is(cfg, tmp_path, monkeypatch):
+    """With no fence running, a keys file where the macOS sandbox would hide it is one
+    the agent's shell reads, so judging it by its place alone calls a reachable key
+    safe.
+    """
     monkeypatch.setenv("HOME", str(tmp_path))
     _fenced_by(monkeypatch, "")
     hidden = tmp_path / ".config" / "kingfisher" / "keys.yaml"

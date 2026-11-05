@@ -388,6 +388,8 @@ def test_a_tool_is_read_as_each_provider_is_sent_it(tool, parameters):
 
 
 def test_the_command_prints_each_block_under_what_wrote_it(cfg, at_the_command_line, capsys):
+    """A `prompt` that left out `--tell`'s text, or printed a block without naming what
+    wrote it, shows a person a prompt other than the one their turn is sent."""
     an_agent(cfg, "only", **EVERY_TOOL)
 
     assert main(["prompt", "--agent", "only", "--tell", TOLD]) == 0
@@ -401,6 +403,8 @@ def test_the_command_prints_each_block_under_what_wrote_it(cfg, at_the_command_l
 
 
 def test_the_command_answers_json_for_a_script(cfg, at_the_command_line, capsys):
+    """A `prompt --json` that printed the text form, or left out the agent, a block's
+    source or the tools, breaks the script reading it."""
     an_agent(cfg, "only", **EVERY_TOOL)
 
     assert main(["prompt", "--agent", "only", "--json"]) == 0

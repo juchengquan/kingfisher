@@ -276,6 +276,9 @@ def test_the_refusal_names_the_file_it_looked_at(tmp_path, monkeypatch, capsys):
 
 
 def test_as_parses_a_comma_separated_list():
+    """`--as A,B` read as one id, or with the spaces around each name kept, holds source
+    ids no definition names, so the caller reaches less than the person typing it meant.
+    """
     from kingfisher.cli.__main__ import _held
 
     assert _held("A,B") == ("A", "B")

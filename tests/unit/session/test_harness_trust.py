@@ -143,6 +143,10 @@ def test_doctor_warns_where_nothing_it_can_see_keeps_the_shell_out(cfg, sessions
 
 
 def test_doctor_is_satisfied_where_the_sandbox_keeps_the_shell_out(cfg):
+    """The control for the warnings above: a check that warned everywhere would pass
+    them, and tell a deployment fenced by kingfisher's own sandbox to go looking for a
+    fence it already has.
+    """
     from kingfisher.cli.health_isolation import _session_files, fence_of
     from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
 

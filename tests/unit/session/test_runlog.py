@@ -139,6 +139,9 @@ def test_a_run_event_carries_sizes_and_error_types_never_what_was_said():
 
 
 def test_usage_totals_the_model_calls_it_was_handed():
+    """A model call's event without its token counts, or the cache reads langchain files
+    under `input_token_details`, undercounts what a turn cost wherever the events are
+    totalled."""
     sink = RecordedEvents()
     logger = _logger(sink)
     logger.run_start("a task")
@@ -162,6 +165,9 @@ def test_usage_totals_the_model_calls_it_was_handed():
 
 
 def test_events_with_no_model_calls_total_zero():
+    """A cache share taken over no input tokens raises `ZeroDivisionError`, which the
+    integration driver's usage line reaches for a run whose provider reported no
+    usage."""
     sink = RecordedEvents()
     _logger(sink).run_start("a task")
 
@@ -272,6 +278,8 @@ def test_a_turns_warnings_reach_the_deployments_sink_with_its_ids(scripted, awai
 
 
 def test_a_turn_records_its_start_and_end(cfg):
+    """A turn whose sink missed its start or end, or heard them under another turn's id,
+    leaves a deployment's log nothing to tie to the result the caller was handed."""
     sink = RecordedEvents()
     start(cfg, "s")
     kf = Kingfisher(
