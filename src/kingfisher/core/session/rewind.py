@@ -52,7 +52,7 @@ def turn_records(
     # The turns ran in the order the log holds them, so the last one a rewind did not leave
     # behind is where the session is.
     head = [turn for turn in turns if turn not in off_path]
-    current = set(path_to(turns, head[-1])) if head else set()
+    current = set(path_to(turns, head[-1])[0]) if head else set()
     return tuple(
         TurnRecord(
             id=turn,
@@ -77,7 +77,13 @@ def rewound(files: Any, layout: Layout, to: str | Start) -> Steps[Rewound]:
     if to is START:
         path = []
     elif to in turns:
-        path = path_to(turns, to)
+        path, looped = path_to(turns, to)
+        if looped:
+            msg = (
+                f"turn {to!r} cannot be rebuilt: two turns of this session ran under one id, "
+                "and the turns before it lead back into each other"
+            )
+            raise RewindError(msg)
     elif to in ledger.turns:
         turns = yield from _imported_back(harness, turns, ledger, to)
         path = [to]

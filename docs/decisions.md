@@ -3909,7 +3909,10 @@ answered with the first run's result. The ids held are the ones the ledger names
 for a graph a deployment supplies, which keeps no ledger, the ones its turn log opens:
 unchecked, a second turn under one id was logged as its own parent, and `turns` and
 `rewind` walked that loop forever. A graph built here reads only the ledger, which is
-written before the log and so names every turn the log does.
+written before the log and so names every turn the log does. A session logged before
+the check keeps its loop: the walk back stops where it comes round, so `turns` still
+lists it, and a rewind to a turn behind the loop is refused, since a log naming two
+turns by one id cannot say which conversation either ended on.
 
 **A request's files go to `/inputs` with the session's.** Once a turn had nowhere of its
 own, a per-turn field and a per-session one were two fields for one operation, and they

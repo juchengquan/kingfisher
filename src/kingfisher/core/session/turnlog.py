@@ -247,17 +247,24 @@ def by_turn(lines: Sequence[dict[str, Any]]) -> Logged:
     return turns
 
 
-def path_to(turns: Logged, target: str | None) -> list[str | None]:
-    """The turns from the first to `target`, each the parent of the next."""
+def path_to(turns: Logged, target: str | None) -> tuple[list[str | None], bool]:
+    """The turns from the first to `target`, each the parent of the next, and whether the
+    walk back came round to a turn already on it; the path then starts where it did."""
     path = [target]
+    seen = {target}
     while not turns[path[-1]][0].get(IMPORTED):
         parent = turns[path[-1]][0].get(PARENT)
         # `null` names the imported conversation where the log holds one under no turn,
         # and otherwise nothing: a first turn, or the first after a rewind to the start.
         if parent not in turns:
             break
+        # Two turns under one id, which a session could log before such ids were refused:
+        # the second's line takes the first's place, and the walk back comes round to it.
+        if parent in seen:
+            return list(reversed(path)), True
         path.append(parent)
-    return list(reversed(path))
+        seen.add(parent)
+    return list(reversed(path)), False
 
 
 def replayed(turns: Logged, path: Sequence[str | None]) -> tuple[Message, ...]:
