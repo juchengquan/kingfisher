@@ -187,6 +187,30 @@ def test_a_fenced_list_is_read_and_none_keeps_nothing():
     assert listed("none", (MemoryEntry("m1", "Likes EUR"),)) == ()
 
 
+class _NoMemoryFile(LocalSessions):
+    """Sessions that open without a memory file, as a deployment's own may."""
+
+    def open(self, cfg, session_id, /, **opened):
+        files = super().open(cfg, session_id, **opened)
+        (cfg.workspace / "sessions" / session_id / "memory" / "AGENTS.md").unlink(missing_ok=True)
+        return files
+
+
+def test_a_memory_file_the_writer_makes_is_among_its_turns_artifacts(scripted):
+    """The turn's files were listed before the writer ran, so a memory file it made where
+    the session had none was saved but missing from that turn's artifacts."""
+    an_agent(scripted, **EVERY_TOOL)
+    start(scripted, "s")
+    cfg = replace(scripted, memory_enabled=True, memory_every=1)
+    kf = Kingfisher(cfg, sessions=_NoMemoryFile())
+
+    result, _ = _turn(kf, AIMessage(content="noted"), AIMessage(content="- Likes EUR"))
+
+    saved = _memory_file(scripted).read_text(encoding="utf-8")
+    assert "Likes EUR" in saved, "the control: the writer made the file"
+    assert "memory/AGENTS.md" in result.artifacts
+
+
 # -- how it fails ----------------------------------------------------------------
 
 
@@ -224,6 +248,30 @@ def test_an_answer_not_kept_leaves_memory_as_it_was_and_says_why(scripted, answe
     assert not result.memory
     (said,) = _kinds(events, "memory_not_updated")
     assert why in said
+
+
+def test_a_memory_pass_that_cannot_write_still_names_the_turns_files(scripted, monkeypatch):
+    """Listed only once the writer and the store had finished, a turn's files would go
+    unnamed whenever either could not write, as on a full disk."""
+    from kingfisher.core.session import running
+
+    def refused(*_args, **_kwargs):
+        yield from ()
+        msg = "the backend refused the write"
+        raise OSError(msg)
+
+    monkeypatch.setattr(running, "kept_memory", refused)
+    kf = _writing(scripted, memory_every=1)
+    write = {"file_path": "/outputs/report.md", "content": "figures"}
+
+    result, _ = _turn(
+        kf,
+        AIMessage(content="", tool_calls=[{"name": "write_file", "args": write, "id": "c1"}]),
+        AIMessage(content="done"),
+    )
+
+    assert result.keep_failure == "the backend refused the write", "the control: it failed"
+    assert "outputs/report.md" in result.artifacts
 
 
 # -- the identifier check --------------------------------------------------------
