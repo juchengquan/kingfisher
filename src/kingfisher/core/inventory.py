@@ -49,7 +49,7 @@ from .definitions.tools.spec import (
     reference,
     split_reference,
 )
-from .origins import Origin, Origins
+from .origins import Origins
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})
@@ -88,8 +88,6 @@ class Catalogued:
     error: str | None
     #: How many the agent can reach. Zero is a fact about the definitions, not a failure.
     defined: int
-    #: Where this kind was read from, and whether that is where the configuration says.
-    origin: Origin
     #: What one of these is on disk, for a message saying what to fix: a file or a module.
     written_as: str
 
@@ -256,23 +254,11 @@ class Inventory:
         Spelled out rather than read by name, so a type checker follows the fields.
         """
         return (
-            Catalogued("agents", self.agents_error, len(self.agents), self.origins.agents, "file"),
-            Catalogued("skills", None, len(self.skills), self.origins.skills, "file"),
-            Catalogued(
-                "subagents",
-                self.subagents_error,
-                len(self.subagents),
-                self.origins.subagents,
-                "file",
-            ),
-            Catalogued("tools", self.tools_error, len(self.tools), self.origins.tools, "module"),
-            Catalogued(
-                "middlewares",
-                self.middlewares_error,
-                len(self.middlewares),
-                self.origins.middlewares,
-                "module",
-            ),
+            Catalogued("agents", self.agents_error, len(self.agents), "file"),
+            Catalogued("skills", None, len(self.skills), "file"),
+            Catalogued("subagents", self.subagents_error, len(self.subagents), "file"),
+            Catalogued("tools", self.tools_error, len(self.tools), "module"),
+            Catalogued("middlewares", self.middlewares_error, len(self.middlewares), "module"),
         )
 
     @property

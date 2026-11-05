@@ -21,8 +21,6 @@ from .documents import load
 if TYPE_CHECKING:
     from pathlib import Path
 
-FILENAME = SKILL_LOCKS_FILE
-
 _KNOWN = ("name", "source_ids", "datazone")
 
 
@@ -52,24 +50,24 @@ def read_locks(path: Path) -> tuple[SkillLock, ...]:
     try:
         document = load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        msg = f"{FILENAME}: cannot read it ({' '.join(str(exc).split())})"
+        msg = f"{SKILL_LOCKS_FILE}: cannot read it ({' '.join(str(exc).split())})"
         raise SkillLockError(msg) from exc
     if document is None:
         return ()
     if not isinstance(document, list):
         msg = (
-            f"{FILENAME}: this file is a list, one entry per skill -- "
+            f"{SKILL_LOCKS_FILE}: this file is a list, one entry per skill -- "
             f"- {{name: audit, source_ids: [A]}} -- got {type(document).__name__}"
         )
         raise SkillLockError(msg)
-    read = fields.Reader(source=FILENAME, error=SkillLockError)
+    read = fields.Reader(source=SKILL_LOCKS_FILE, error=SkillLockError)
     locks: dict[str, SkillLock] = {}
     for position, entry in enumerate(document, start=1):
         lock = _one(entry, position=position, read=read)
         if lock.name in locks:
             # Both, and no pick: which of two audiences is meant is only the author's to say.
             msg = (
-                f"{FILENAME}: {lock.name!r} is locked twice, to "
+                f"{SKILL_LOCKS_FILE}: {lock.name!r} is locked twice, to "
                 f"{_said(locks[lock.name])} and to {_said(lock)}. Keep the one you mean"
             )
             raise SkillLockError(msg)
@@ -81,23 +79,22 @@ def _one(entry: object, *, position: int, read: fields.Reader) -> SkillLock:
     """One entry, refused unless it locks one named skill to somebody."""
     if not isinstance(entry, Mapping):
         msg = (
-            f"{FILENAME}: entry {position} is not a mapping; an entry is "
+            f"{SKILL_LOCKS_FILE}: entry {position} is not a mapping; an entry is "
             f"{{name: <skill>, source_ids: [...]}}, with datazone: if it needs one"
         )
         raise SkillLockError(msg)
     read.refuse_unrecognised(entry, known=_KNOWN)
     name = fields.text(entry.get("name"))
     if not name or name == ALL:
-        msg = f"{FILENAME}: entry {position} names no skill; write name: <skill>"
+        msg = f"{SKILL_LOCKS_FILE}: entry {position} names no skill; write name: <skill>"
         raise SkillLockError(msg)
-    where = f"{FILENAME}: {name}"
+    where = f"{SKILL_LOCKS_FILE}: {name}"
     source_ids = (
         ALL
         if entry.get("source_ids") is None
         else read.audience_list(
             entry["source_ids"],
             where=f"{where}: source_ids",
-            lone_name=True,
             left_out="tell everyone about it",
         )
     )

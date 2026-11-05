@@ -16,6 +16,7 @@ from .config import (
     Config,
     ConfigError,
     WorkspacePaths,
+    refuse_missing_definitions,
 )
 
 # `Config` and the rest are imported to use, not re-exported: their one import path is
@@ -135,15 +136,8 @@ class Environment:
         paths = self.paths()
         # `require` only ever raises here, in the words every required setting gets.
         workspace = paths.workspace or Path(self.require("KINGFISHER_WORKSPACE"))
-        # Before the catalogue is read, which would say only that `models.yaml` is
-        # missing. Never created here: several deployments may read the folder, and
-        # making it would hide a failed mount behind an empty one.
-        if not paths.definitions.is_dir():
-            msg = (
-                f"KINGFISHER_DEFINITIONS_DIR is {paths.definitions}, which is not a "
-                "directory. `kingfisher seed` makes one and fills it"
-            )
-            raise ConfigError(msg)
+        # Before the catalogue is read, which would say only that `models.yaml` is missing.
+        refuse_missing_definitions(paths.definitions)
         # One file, unlike the definition roots: endpoints and models cross-reference,
         # and a split would let half a catalogue load.
         models_file = paths.authored_files["models.yaml"]
@@ -186,12 +180,12 @@ class Environment:
 
 
 def paths_from_env(environ: Mapping[str, str] | None = None) -> WorkspacePaths:
-    """`Environment.paths`, at the name callers already import."""
+    """The `WorkspacePaths` this environment names, without reading the model catalogue."""
     return Environment.current(environ).paths()
 
 
 def config_from_env(environ: Mapping[str, str] | None = None) -> Config:
-    """`Environment.config`, at the name callers already import."""
+    """The `Config` this environment names."""
     return Environment.current(environ).config()
 
 

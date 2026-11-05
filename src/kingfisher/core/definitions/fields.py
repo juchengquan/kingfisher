@@ -179,11 +179,10 @@ class Reader:
         self,
         value: object,
         *,
-        absent: Selection,
         key: str,
         refuse_all: str | None = None,
     ) -> Selection:
-        """One name-list field, or what its absence means for that field."""
+        """One name-list field, or `None` when it is absent."""
         if isinstance(value, str) and value.strip() == ALL:
             if refuse_all is not None:
                 # Before the bracket advice below, which would send the reader to write
@@ -207,7 +206,8 @@ class Reader:
 
         written = names(value)
         if written is None:
-            return absent
+            # Every grant field alike: a forgotten line grants none, so fails closed.
+            return None
         if ALL not in written:
             return written
         if refuse_all is not None:
@@ -226,7 +226,6 @@ class Reader:
         self,
         value: object,
         *,
-        absent: Selection,
         key: str,
     ) -> tuple[Selection, Mapping[str, Mapping[str, object]]]:
         """One name-list field whose entries may also carry settings."""
@@ -241,7 +240,7 @@ class Reader:
             raise self.error(msg)
         if not isinstance(value, (list, tuple)):
             # A bare `"*"`, one name, or nothing: none can carry a setting.
-            return self.selection(value, absent=absent, key=key), MappingProxyType({})
+            return self.selection(value, key=key), MappingProxyType({})
 
         written, carried = self._entries(value, key=key, extra=("settings",))
         settings = {
@@ -250,7 +249,7 @@ class Reader:
         }
 
         # Back through `selection`, so the star, mixing and absence are decided in one place.
-        return self.selection(written, absent=absent, key=key), MappingProxyType(settings)
+        return self.selection(written, key=key), MappingProxyType(settings)
 
     def _entries(
         self,
@@ -385,15 +384,12 @@ class Reader:
         return self.audience_list(
             value,
             where=f"{self.source}: source_ids",
-            lone_name=True,
             left_out="open it to everyone",
         )
 
-    def audience_list(
-        self, listed: object, *, where: str, lone_name: bool, left_out: str
-    ) -> Audience:
+    def audience_list(self, listed: object, *, where: str, left_out: str) -> Audience:
         """A list of source ids, any entry of which may be a set `{a, b}`."""
-        if isinstance(listed, str) and lone_name and listed.strip() and listed.strip() != ALL:
+        if isinstance(listed, str) and listed.strip() and listed.strip() != ALL:
             # A list of one, not an answer: a lone name meets every check a listed one does.
             listed = [listed]
         if isinstance(listed, (Mapping, set, frozenset)):
@@ -515,7 +511,6 @@ class Reader:
         self,
         value: object,
         *,
-        absent: Selection,
         key: str,
         refuse_all: str | None = None,
         locked: str,
@@ -524,16 +519,15 @@ class Reader:
         if isinstance(value, Mapping):
             self._refuse_mapping(value, key=key, locked=locked)
         if not isinstance(value, (list, tuple)):
-            return self.selection(value, absent=absent, key=key, refuse_all=refuse_all)
+            return self.selection(value, key=key, refuse_all=refuse_all)
         # Through `_entries`, which refuses an entry written long and a name written twice.
         written, _ = self._entries(value, key=key, extra=(), locked=locked)
-        return self.selection(written, absent=absent, key=key, refuse_all=refuse_all)
+        return self.selection(written, key=key, refuse_all=refuse_all)
 
     def sourced(  # noqa: PLR0913 -- separate questions about one field; an object hides which
         self,
         value: object,
         *,
-        absent: Selection,
         key: str,
         refuse_all: str | None = None,
         refuse_bundled: str | None = None,
@@ -550,7 +544,7 @@ class Reader:
             self._refuse_mapping(value, key=key, locked=locked)
         if not isinstance(value, (list, tuple)):
             # A bare `"*"`, one name, or nothing: none can carry anything beside a name.
-            return self.selection(value, absent=absent, key=key, refuse_all=refuse_all), ()
+            return self.selection(value, key=key, refuse_all=refuse_all), ()
 
         extra = ("source",)
         # Both sources through one `_entries`, so a name written shared and bundled is
@@ -573,7 +567,6 @@ class Reader:
                 raise self.error(msg)
         chosen = self.selection(
             [name for name in written if name not in bundled],
-            absent=absent,
             key=key,
             refuse_all=refuse_all,
         )

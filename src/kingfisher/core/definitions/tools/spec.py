@@ -174,6 +174,18 @@ def select(granted: Selection, found: Sequence[FoundTool]) -> tuple[FoundTool, .
     return tuple(one for one in found if written_form(one, among=among) in wanted)
 
 
+def carried(granted: Selection, found: Sequence[FoundTool]) -> tuple[FoundTool, ...]:
+    """What the agent itself holds: everything granted, minus the ambiguous."""
+    chosen = select(granted, found)
+    clashing = set(duplicated(chosen))
+    return tuple(one for one in chosen if one.name not in clashing)
+
+
+def ambiguous(granted: Selection, found: Sequence[FoundTool]) -> tuple[str, ...]:
+    """The names `carried` had to leave behind, for a caller that must say so."""
+    return duplicated(select(granted, found))
+
+
 def placed(entry: str, offered: Iterable[str]) -> str:
     """One written entry as the offering spells it, or unchanged if it cannot.
 
@@ -204,16 +216,6 @@ class Offering:
             offered=tuple(written_form(one, among=among) for one in found),
             sources={one.name: one.source for one in found if among[one.name] == 1},
         )
-
-    def carried(self, granted: Selection, found: Sequence[FoundTool]) -> tuple[FoundTool, ...]:
-        """What the agent itself holds: everything granted, minus the ambiguous."""
-        chosen = select(granted, found)
-        clashing = set(duplicated(chosen))
-        return tuple(one for one in chosen if one.name not in clashing)
-
-    def ambiguous(self, granted: Selection, found: Sequence[FoundTool]) -> tuple[str, ...]:
-        """The names `carried` had to leave behind, for a caller that must say so."""
-        return duplicated(select(granted, found))
 
     def spelt(self, selection: Selection) -> Selection:
         """A written grant in the spelling this offering uses."""

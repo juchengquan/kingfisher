@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .capabilities import ALL
 from .reach import stated
 from .source_ids import (
     DATAZONE_PREFIX,
@@ -144,6 +143,6 @@ def audit(*kinds: Kind) -> AccessReport:
         unrestricted=tuple(
             (kind, name)
             for kind, name, said in walked(*kinds)
-            if said.source_ids == ALL and said.datazone is None
+            if said.says_nothing
         )
     )

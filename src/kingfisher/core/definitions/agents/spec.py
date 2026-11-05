@@ -108,10 +108,8 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     prompt = read_prompt(document, read)
 
     # `source: shared` is accepted so an entry reads the same here as in a subagent file.
-    # Absent grants none on both tool axes, as everywhere: a forgotten line fails closed.
     written_tools, _ = read.sourced(
         document.get("tools"),
-        absent=None,
         key="tools",
         same=bare_name,
         refuse_bundled=_NO_FOLDER,
@@ -119,7 +117,6 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     )
     written_skills, _ = read.sourced(
         document.get("skills"),
-        absent=None,
         key="skills",
         refuse_bundled=_NO_FOLDER,
         locked=fields.SKILL_LOCK,
@@ -127,11 +124,10 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     written_subagents = read.names_only(
         # No `refuse_all`: `["*"]` loops only for a subagent, which would name itself.
         document.get("subagents"),
-        absent=None,
         key="subagents",
         locked=fields.SUBAGENT_LOCK,
     )
-    builtin = read.selection(document.get("builtin_tools"), absent=None, key="builtin_tools")
+    builtin = read.selection(document.get("builtin_tools"), key="builtin_tools")
     # At load: at the call the allowlist refuses `task`, and the model quietly answers
     # without its subagents -- or `read_file`, and it spends a call on every skill it opens.
     complaint = uncallable_helpers(builtin, written_subagents) or unopenable_skills(
@@ -144,7 +140,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     # No audience, deliberately: `middlewares` names code the deployment registered,
     # which is granted rather than reachable.
     written_middleware, middleware_settings = read.selection_with_settings(
-        document.get("middlewares"), absent=None, key="middlewares"
+        document.get("middlewares"), key="middlewares"
     )
 
     return AgentSpec(
@@ -179,7 +175,6 @@ def _gated_tools(written: object, read: fields.Reader) -> tuple[str, ...]:
         raise read.error(msg)
     names = read.selection(
         written,
-        absent=None,
         key="interrupt_on",
         refuse_all=(
             "everywhere else in this file the star means 'no limit', and gating every "
