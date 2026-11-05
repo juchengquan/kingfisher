@@ -4724,9 +4724,9 @@ carried on, by whoever holds its id, from any datazone; keeping an id from calle
 should not have it is the deployment's. *(2026-11-04.)*
 
 **The claim moving in deleted `_discard_dead_claims` outright.** It existed because a claim
-could outlive the session it named; one inside that session cannot. The cost is that
-`busy` is asked per session rather than read from one listing. The claim is on the
-session's backend now; see *A session is its backend*.
+could outlive the session it named; one inside that session cannot. The cost is that a
+sweep tries each session's claim in turn rather than reading every claim from one
+listing. The claim is on the session's backend now; see *A session is its backend*.
 
 **A constant's property and a constant's wiring need separate rules.**
 `claim_stale_after` is the turn deadline plus the longest model timeout, so a claim
@@ -4774,7 +4774,9 @@ busy count, the difference between the two `expired` calls `Disposal` already ma
 sentences rather than one, because three things can be true: every survivor is busy, some
 are and the rest too young, or the age decided -- the control, held by the existing rule
 about which age is named. *(2026-10-11, from an architecture review. The age went on
-2026-11-01, and `busy` with it: one reason is left, and `kept` counts it.)*
+2026-11-01, and `busy` with it: one reason is left, and `kept` counts it. `SweepPlan` went
+on 2026-11-05: a sweep takes each claim without asking `held` first, and a refused claim
+is what `kept` counts.)*
 
 **A follow-up to a session that is gone is not refused; the caller asks first.** A turn
 naming a session that is not there makes it, so one swept or deleted between two turns
