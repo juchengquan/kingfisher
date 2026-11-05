@@ -140,6 +140,9 @@ def test_a_source_id_spelled_like_a_held_datazone_is_refused_where_written(zoned
 
 
 def test_a_caller_in_a_datazone_holds_it_beside_their_source_ids(zoned):
+    """A datazone held bare would open whatever a lock names `finance` as a source id,
+    and one held in place of the caller's ids would shut them out of what `A` opens.
+    """
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
     held = caller_holds(kf.vocabulary, with_datazone(("A",), "finance"))
@@ -305,6 +308,9 @@ def test_a_subagent_says_its_datazone_in_every_form():
 
 
 def test_a_datazone_is_one_name():
+    """A datazone written as a list reads as an any-of that a datazone cannot say, so
+    loading it would lock the subagent to something other than what was meant.
+    """
     with pytest.raises(SubagentError, match="one name"):
         declared(
             {"name": "s", "description": "d", "system_prompt": "Go.", "datazone": ["hr"]},
@@ -363,6 +369,9 @@ def test_an_entry_has_no_datazone(zoned):
 
 
 def test_a_tool_says_its_datazone_and_the_loader_keeps_it(tmp_path):
+    """A loader that dropped a `ToolSpec`'s datazone would open the payroll tool to
+    callers in every zone.
+    """
     (tmp_path / "pay.py").write_text(TOOLS, encoding="utf-8")
 
     found = {one.name: one for one in LocalToolRepository(tmp_path).found}
@@ -372,6 +381,10 @@ def test_a_tool_says_its_datazone_and_the_loader_keeps_it(tmp_path):
 
 
 def test_a_tool_datazone_that_is_not_one_name_is_refused():
+    """An empty datazone on a `ToolSpec` must be refused naming its file and tool, not
+    loaded as a zone that no caller can be in.
+    """
+
     def count(path: str) -> str:
         """Count the lines in a text file."""
         return "0"
@@ -408,6 +421,9 @@ def test_a_misspelt_datazone_starts_and_locks_its_holder_shut(zoned, where):
 
 
 def test_a_finance_caller_gets_the_finance_tool_and_subagent(zoned):
+    """A finance caller must reach the finance tool and subagent, or the refusals below
+    pass against a build that shuts every zoned definition to everyone.
+    """
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
     tools, subagents = built(kf, ("A",), "finance")
@@ -417,6 +433,9 @@ def test_a_finance_caller_gets_the_finance_tool_and_subagent(zoned):
 
 
 def test_a_caller_in_another_datazone_gets_neither(zoned):
+    """A build that ignored a datazone would hand a caller in `hr` the payroll tool and
+    the ledger subagent locked to finance.
+    """
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
     tools, subagents = built(kf, ("A",), "hr")
@@ -427,7 +446,9 @@ def test_a_caller_in_another_datazone_gets_neither(zoned):
 
 
 def test_a_caller_with_an_extra_datazone_gets_what_it_requires(zoned):
-    """The control beside it is `hr` alone, which reaches neither."""
+    """An extra datazone ignored by the build shuts a caller out of the zone above their
+    own, and the control, `hr` alone, stops this passing where zones lock nothing.
+    """
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
     tools, subagents = built(kf, ("A",), "hr", ("finance",))
@@ -460,6 +481,9 @@ def test_a_caller_in_no_datazone_gets_only_what_is_for_any(zoned):
 
 
 def test_unscoped_reaches_every_datazone(zoned):
+    """`UNSCOPED` holds no datazone, so, read like a caller in none, it would lose every
+    zoned tool and subagent a run with no caller is meant to reach.
+    """
     kf = Kingfisher(zoned, sessions=LocalSessions())
 
     tools, subagents = built(kf, UNSCOPED, None)
@@ -469,6 +493,9 @@ def test_unscoped_reaches_every_datazone(zoned):
 
 
 def test_the_listing_agrees_with_the_build(zoned):
+    """A listing that ignored datazones would show a caller in `hr` the payroll tool and
+    ledger subagent their build never hands them.
+    """
     finance = inventory(zoned, source_ids=["A"], datazone="finance")
     hr = inventory(zoned, source_ids=["A"], datazone="hr")
 
@@ -479,6 +506,9 @@ def test_the_listing_agrees_with_the_build(zoned):
 
 
 def test_the_command_line_names_a_datazone(zoned, at_the_command_line, capsys):
+    """A command that dropped `--datazone` before the listing would show a finance
+    caller none of the tools their zone opens.
+    """
     assert main(["list", "--as", "A", "--datazone", "finance"]) == 0
     assert "payroll" in capsys.readouterr().out
 
@@ -487,6 +517,9 @@ def test_the_command_line_names_a_datazone(zoned, at_the_command_line, capsys):
 
 
 def test_the_command_line_names_extra_datazones(zoned, at_the_command_line, capsys):
+    """A command that dropped `--extra-datazones`, read `x,finance` as one zone, or took
+    extras without `--datazone` would list a caller the wrong side of the finance lock.
+    """
     assert main(["list", "--as", "A", "--datazone", "hr", "--extra-datazones", "x,finance"]) == 0
     assert "payroll" in capsys.readouterr().out
 

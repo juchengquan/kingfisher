@@ -321,6 +321,9 @@ def test_the_deployments_own_grants_still_bound_a_caller(policied):
 
 
 def test_a_caller_the_audience_admits_gets_the_tool(policied):
+    """A caller holding A must get the tool locked to A, or the exclusion below passes
+    against a build that attaches it to nobody.
+    """
     assert "line_count" in built(policied_kf(policied), ["A"], "s1")
 
 
@@ -387,10 +390,16 @@ def test_a_subagent_restricted_only_by_datazone_is_not_named(cfg):
 
 
 def test_a_definition_that_restricts_is_not_named(policied):
+    """A report that named an agent carrying a `source_ids:` line would tell the
+    operator a locked agent is open to everyone.
+    """
     assert inventory(policied).access_report.is_clean
 
 
 def test_the_report_reads_as_a_sentence(cfg):
+    """The printed report would name the open definitions without saying they are
+    reachable by everyone, which is the only reason it shows them.
+    """
     an_agent(cfg, "assistant")
     an_agent(cfg, "locked", source_ids="[A]")
     rendered = "\n".join(inventory(cfg).access_report.lines())
@@ -903,6 +912,9 @@ def with_skills(cfg):
 
 
 def test_a_skills_own_lock_narrows_the_selection(with_skills):
+    """A skill locked to A in `skill_locks.yaml` would still be handed to a caller
+    holding B by an agent whose own lock admits B.
+    """
     kf = Kingfisher(with_skills, sessions=LocalSessions())
     agent = agent_named(kf, "skilled", source_ids=UNSCOPED)
 

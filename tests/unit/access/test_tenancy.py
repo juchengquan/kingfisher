@@ -352,6 +352,10 @@ def test_sessions_come_back_most_recently_used_first(cfg):
 
 
 def test_a_deleted_session_stops_being_listed(cfg):
+    """A deleted session still listed or found by a lookup would let a service hand out
+    an id with nothing behind it, and a delete reaching past its own id would take
+    `kept` with it.
+    """
     kf = service(cfg)
     kept = start(cfg, "kept")
     gone = start(cfg, "gone")

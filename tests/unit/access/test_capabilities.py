@@ -36,6 +36,9 @@ def test_the_two_ends_are_all_and_none():
 
 
 def test_names_are_de_duplicated_but_keep_their_order():
+    """A name a grant repeats would be carried twice through every narrowing, and
+    de-duplicating through a set would reorder the names the caller wrote.
+    """
     caps = Capabilities(builtin_tools=("read_file", "glob", "read_file"))
     assert caps.builtin_tools == ("read_file", "glob")
 
@@ -69,6 +72,9 @@ def test_intersect_of_an_empty_grant_yields_nothing():
 
 
 def test_intersect_handles_each_dimension_independently():
+    """An axis narrowed by another axis's two sides would grant a caller names from the
+    wrong list, such as skills taken from the subagents a request asked for.
+    """
     granted = Capabilities(builtin_tools=("read_file",), skills=("tabular-qa",), subagents=ALL)
     asked = Capabilities(builtin_tools=("read_file", "execute"), subagents=("reviewer",))
 
@@ -157,11 +163,17 @@ def test_a_refusal_of_memory_wins_from_either_side():
 
 
 def test_declaring_no_middleware_approves_nothing():
+    """A definition with no `middlewares:` line holds `None` there, so a check that
+    iterated it would fail the build of every definition that names no middleware.
+    """
     assert approved_middleware(None, registered=(), granted=None, subject="x") == ()
     assert approved_middleware((), registered=("audit",), granted=None, subject="x") == ()
 
 
 def test_registered_and_granted_names_go_through():
+    """A middleware both registered and granted must come through, or the refusals below
+    pass against a check that refuses every name.
+    """
     approved = approved_middleware(
         ("audit",), registered=("audit", "ratelimit"), granted=("audit",), subject="x"
     )
@@ -234,14 +246,23 @@ def test_an_unrestricted_grant_withholds_nothing():
 
 
 def test_a_grant_of_nothing_withholds_everything():
+    """Read as no opinion rather than as nothing, a `None` grant would tell a caller who
+    was granted no tools that none were withheld.
+    """
     assert withheld(None, offered=("a", "b")) == ("a", "b")
 
 
 def test_it_names_what_the_definitions_offer_and_the_grant_does_not():
+    """A report that missed what a whitelist leaves out would let the caller find out
+    only when the model reaches for a tool mid-turn and is refused.
+    """
     assert withheld(("a",), offered=("a", "b", "c")) == ("b", "c")
 
 
 def test_a_grant_of_everything_withholds_nothing():
+    """A grant naming every tool on offer would be reported as withholding some, warning
+    a caller of a gap their grant does not have.
+    """
     assert withheld(("a", "b"), offered=("a", "b")) == ()
 
 
@@ -277,10 +298,16 @@ def test_a_grant_written_today_goes_stale_when_a_tool_arrives():
 
 
 def test_it_is_everything_offered_but_the_named():
+    """An exclusion resolved to anything but every other name on offer would hand over
+    the tool `--without-tools` was written to keep back, or take the rest away.
+    """
     assert all_but(("b",), offered=("a", "b", "c")) == ("a", "c")
 
 
 def test_excluding_nothing_grants_the_lot():
+    """Subtracting nothing must resolve to every name on offer now, not to none of them,
+    nor to an `ALL` that would admit tools added later.
+    """
     assert all_but((), offered=("a", "b")) == ("a", "b")
 
 
@@ -298,6 +325,9 @@ def test_a_name_that_excludes_nothing_is_refused():
 
 
 def test_the_refusal_names_what_is_actually_on_offer():
+    """A refusal of a typo like `exec` that did not list what is on offer would leave
+    the reader guessing that `execute` was meant.
+    """
     with pytest.raises(CapabilityError, match=r"definitions offer \('execute', 'ls'\)"):
         all_but(("exec",), offered=("ls", "execute"))
 
@@ -332,6 +362,9 @@ def test_the_result_is_an_ordinary_grant_that_narrowing_still_clamps():
 
 
 def test_a_name_nothing_offers_is_refused_whoever_named_it():
+    """Any kind or subject whose refusal lost who named the name, what kind it was or
+    what is really offered would send its reader to the wrong file.
+    """
     for kind in ("skill", "subagent", "tool"):
         for subject in ("this request", "subagent 'reviewer'"):
             with pytest.raises(CapabilityError) as raised:
@@ -385,6 +418,9 @@ def test_a_caller_that_can_say_more_than_names_says_it():
 
 
 def test_names_that_are_all_offered_say_nothing():
+    """Names that are all on offer, and an empty ask of an empty offer, must go through,
+    or every refusal here passes against a check that refuses all.
+    """
     refuse_unoffered(("real",), offered=("real", "other"), kind="skill", subject="x")
     refuse_unoffered((), offered=(), kind="skill", subject="x")
 

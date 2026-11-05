@@ -41,14 +41,19 @@ def test_any_one_source_id_is_enough():
 
 
 def test_no_overlap_reaches_nothing():
+    """A caller holding none of an audience's names would reach what it locks."""
     assert not reaches(("A", "B"), frozenset({"C"}))
 
 
 def test_a_star_audience_reaches_everyone():
+    """`ALL` is the string `"*"`, so an audience of everyone checked name by name
+    would open only to a caller holding a source id called `*`."""
     assert reaches(ALL, frozenset({"C"}))
 
 
 def test_a_caller_holding_nothing_reaches_nothing():
+    """A caller holding no source id, read like the `None` that means no caller to
+    narrow for, would reach every locked definition."""
     assert not reaches(("A",), frozenset())
 
 
@@ -71,6 +76,8 @@ def test_all_passes_through_untouched():
 
 
 def test_none_passes_through_untouched():
+    """A narrowing that read a selection as names would raise on the `None` held by
+    every definition that leaves `tools:`, `skills:` or `subagents:` unwritten."""
     assert reaching(None, audience=("A",), held=frozenset({"A"})) is None
 
 
@@ -83,6 +90,8 @@ def test_a_source_id_is_held_as_itself_and_nothing_more():
 
 
 def test_no_source_ids_at_all_holds_nothing():
+    """An empty list, read as no caller to narrow for rather than a caller holding
+    nothing, would reach every locked definition."""
     assert held_by(vocabulary(), []) == frozenset()
 
 
@@ -133,6 +142,8 @@ def test_naming_nobody_where_nothing_is_locked_is_no_caller():
 
 
 def test_unscoped_is_a_sentinel_and_not_a_source_id_name():
+    """As `None`, `UNSCOPED` could not be told from a call that forgot to say who is
+    calling, and as a string or a sequence it would be taken for source ids."""
     assert UNSCOPED is not None
     assert not isinstance(UNSCOPED, str | tuple | list)
 
@@ -141,6 +152,8 @@ def test_unscoped_is_a_sentinel_and_not_a_source_id_name():
 
 
 def test_an_inline_conjunction_needs_every_part():
+    """A set entry satisfied by any one of its names would open a lock needing both A
+    and B to a caller holding A alone."""
     both = (frozenset({"A", "B"}),)
 
     assert reaches(both, frozenset({"A", "B"}))
@@ -200,6 +213,8 @@ def test_one_lock_anywhere_is_enough_to_switch_checking_on(kind, said):
 
 
 def test_an_audience_is_written_the_way_the_listing_writes_it():
+    """The listing writing a set as Python prints one, or its names in hash order,
+    would show a lock in a form that cannot be read against the file that wrote it."""
     assert spell(ALL) == ALL
     assert spell(("A", "B")) == "A, B"
     assert spell(("admin", frozenset({"B", "A"}))) == "admin, {A, B}"
@@ -218,6 +233,8 @@ def test_reaching_one_audience_is_that_audience():
 
 
 def test_a_set_stays_a_set():
+    """A way of several names unwrapped as though it held one would turn a lock
+    needing A and B into one needing only one of them."""
     assert jointly([(frozenset({"A", "B"}),)]) == (frozenset({"A", "B"}),)
 
 
@@ -242,6 +259,8 @@ def test_a_way_no_other_needs_less_than_is_dropped():
 
 
 def test_two_ways_that_need_different_things_are_both_kept():
+    """Of two ways that each need a different name, a join keeping one or neither
+    would shut out the callers who hold only the other."""
     assert jointly([("A", "B")]) == ("A", "B")
 
 

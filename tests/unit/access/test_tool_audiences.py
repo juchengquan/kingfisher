@@ -198,6 +198,9 @@ def test_an_empty_audience_says_leaving_it_out_opens_the_tool_to_everyone():
 
 
 def test_the_loader_copies_the_audience_into_the_catalogue(tmp_path):
+    """A loader that dropped a `ToolSpec`'s `source_ids` would open the tool to every
+    caller of an agent that lists it.
+    """
     (tmp_path / "line_count.py").write_text(TOOL, encoding="utf-8")
 
     (one,) = LocalToolRepository(tmp_path).found
