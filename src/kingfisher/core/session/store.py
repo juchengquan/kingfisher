@@ -73,7 +73,7 @@ class HarnessFiles:
             raise OSError(msg)
 
 
-def read_transcript(harness: Any) -> Steps[tuple[tuple[Message, ...], bool]]:
+def read_transcript(harness: HarnessFiles) -> Steps[tuple[tuple[Message, ...], bool]]:
     """What was said in this session before now, or nothing for a first turn; and whether
     a damaged line ended the reading early."""
     held = yield from harness.fetch(TRANSCRIPT_FILE)
@@ -84,23 +84,23 @@ def read_transcript(harness: Any) -> Steps[tuple[tuple[Message, ...], bool]]:
     return read, len(read) < sum(1 for line in text.splitlines() if line.strip())
 
 
-def write_transcript(harness: Any, messages: tuple[Message, ...]) -> Steps[None]:
+def write_transcript(harness: HarnessFiles, messages: tuple[Message, ...]) -> Steps[None]:
     """Replace this session's transcript with what it now holds."""
     yield from harness.store(TRANSCRIPT_FILE, as_json(messages).encode("utf-8"))
 
 
-def read_inputs_seen(harness: Any) -> Steps[dict[str, str | None] | None]:
+def read_inputs_seen(harness: HarnessFiles) -> Steps[dict[str, str | None] | None]:
     """The inputs folder as the last turn the agent heard from found it, or `None` where
     no turn kept it."""
     return (yield from read_listing(harness, INPUTS_SEEN))
 
 
-def write_inputs_seen(harness: Any, seen: Mapping[str, str | None]) -> Steps[None]:
+def write_inputs_seen(harness: HarnessFiles, seen: Mapping[str, str | None]) -> Steps[None]:
     """Keep the inputs folder as this turn found it."""
     yield from write_listing(harness, INPUTS_SEEN, seen)
 
 
-def read_listing(harness: Any, name: str) -> Steps[dict[str, str | None] | None]:
+def read_listing(harness: HarnessFiles, name: str) -> Steps[dict[str, str | None] | None]:
     """Each file a listing kept as `name` holds, with its version mark, or `None` where no
     turn kept one."""
     held = yield from harness.fetch(name)
@@ -118,7 +118,7 @@ def read_listing(harness: Any, name: str) -> Steps[dict[str, str | None] | None]
     }
 
 
-def write_listing(harness: Any, name: str, seen: Mapping[str, str | None]) -> Steps[None]:
+def write_listing(harness: HarnessFiles, name: str, seen: Mapping[str, str | None]) -> Steps[None]:
     """Keep a listing as `name`."""
     yield from harness.store(
         name, json.dumps(dict(seen), sort_keys=True, ensure_ascii=False).encode("utf-8")
@@ -170,7 +170,7 @@ class Drift:
     unsure: tuple[str, ...] = ()
 
 
-def read_drift(harness: Any) -> Steps[Drift | None]:
+def read_drift(harness: HarnessFiles) -> Steps[Drift | None]:
     """What the last rewind could not put back, or `None` where no rewind left a notice."""
     held = yield from harness.fetch(REWOUND_FILE)
     try:
@@ -186,7 +186,7 @@ def read_drift(harness: Any) -> Steps[Drift | None]:
     return Drift(**listed)
 
 
-def write_drift(harness: Any, drift: Drift) -> Steps[None]:
+def write_drift(harness: HarnessFiles, drift: Drift) -> Steps[None]:
     """Keep `drift` for the next turn to tell, or clear an older one where it holds none."""
     if not drift.changed and not drift.unsure:
         yield from harness.drop(REWOUND_FILE)
@@ -261,7 +261,7 @@ class KeptLedger:
         return None
 
 
-def read_ledger(harness: Any) -> Steps[KeptLedger]:
+def read_ledger(harness: HarnessFiles) -> Steps[KeptLedger]:
     """This session's ledger, or an empty one where no turn has written it."""
     held = yield from harness.fetch(LEDGER_FILE)
     if held is None:
@@ -271,7 +271,7 @@ def read_ledger(harness: Any) -> Steps[KeptLedger]:
     return _kept(held.decode("utf-8", errors="replace"), (yield from read_off_path(harness)))
 
 
-def read_off_path(harness: Any) -> Steps[frozenset[str | None]]:
+def read_off_path(harness: HarnessFiles) -> Steps[frozenset[str | None]]:
     """The turns a rewind left off the session's path, or none where it never rewound.
 
     Unreadable reads as none: the ledger then lists a branch's results beside the path's,
@@ -287,7 +287,7 @@ def read_off_path(harness: Any) -> Steps[frozenset[str | None]]:
     return frozenset(one for one in listed if one is None or isinstance(one, str))
 
 
-def write_off_path(harness: Any, turns: frozenset[str | None]) -> Steps[None]:
+def write_off_path(harness: HarnessFiles, turns: frozenset[str | None]) -> Steps[None]:
     """Keep `turns` as the ones off the session's path."""
     listed = sorted(turns, key=lambda one: (one is not None, one or ""))
     yield from harness.store(OFF_PATH_FILE, json.dumps(listed).encode("utf-8"))
@@ -439,7 +439,7 @@ def patched(earlier: KeptLedger, changes: Mapping[str, Mapping[str, Any]]) -> Ke
 
 
 def write_ledger(  # noqa: PLR0913 -- three marks, by keyword so none is passed for another
-    harness: Any,
+    harness: HarnessFiles,
     earlier: KeptLedger,
     entries: Sequence[LedgerEntry],
     *,
@@ -523,7 +523,7 @@ def pending_as_mark(waiting: Sequence[PendingDecision]) -> list[dict[str, Any]]:
     ]
 
 
-def read_pause_mark(harness: Any) -> Steps[dict[str, Any] | None]:
+def read_pause_mark(harness: HarnessFiles) -> Steps[dict[str, Any] | None]:
     """What the paused checkpoint beside this was built against, or `None`."""
     written = yield from harness.fetch(PAUSED_MARK)
     if written is None:
@@ -537,16 +537,16 @@ def read_pause_mark(harness: Any) -> Steps[dict[str, Any] | None]:
     return held if isinstance(held, dict) else None
 
 
-def write_pause_mark(harness: Any, mark: Mapping[str, Any]) -> Steps[None]:
+def write_pause_mark(harness: HarnessFiles, mark: Mapping[str, Any]) -> Steps[None]:
     """Record what the checkpoint written beside this was built against."""
     yield from harness.store(PAUSED_MARK, json.dumps(dict(mark), sort_keys=True).encode("utf-8"))
 
 
-def take_pause(harness: Any, mark: Mapping[str, Any], turn_id: str) -> Steps[None]:
+def take_pause(harness: HarnessFiles, mark: Mapping[str, Any], turn_id: str) -> Steps[None]:
     """Record that `turn_id` is answering the pause `mark` describes."""
     yield from write_pause_mark(harness, {**mark, TAKEN_MARK: turn_id})
 
 
-def clear_pause(harness: Any) -> Steps[None]:
+def clear_pause(harness: HarnessFiles) -> Steps[None]:
     """Drop a pause, answered or superseded. Safe where there was never one."""
     yield from harness.drop(PAUSED_STATE, PAUSED_MARK)

@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from kingfisher.core.config import Config
     from kingfisher.core.layout import Layout
 
+    from .store import HarnessFiles
     from .turn import Prepared
 
 #: What the writer's answer is held to, and told. Over either, it is not kept.
@@ -76,7 +77,7 @@ class _Unread:
     paused_at: int | None = None
 
 
-def _not_yet_read(harness: Any) -> Steps[_Unread]:
+def _not_yet_read(harness: HarnessFiles) -> Steps[_Unread]:
     held = yield from harness.fetch(MEMORY_WRITER)
     if held is None:
         return _Unread()

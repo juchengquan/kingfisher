@@ -122,7 +122,9 @@ def rewound(files: Any, layout: Layout, to: str | Start) -> Steps[Rewound]:
     )
 
 
-def _imported_back(harness: Any, turns: Logged, ledger: KeptLedger, to: str) -> Steps[Logged]:
+def _imported_back(
+    harness: HarnessFiles, turns: Logged, ledger: KeptLedger, to: str
+) -> Steps[Logged]:
     """The log with `to`, a turn from before it, added as the conversation it ended on: the
     one the session imported when its log began, cut at the ledger's count for `to`.
 

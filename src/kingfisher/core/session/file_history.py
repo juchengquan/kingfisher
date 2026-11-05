@@ -30,7 +30,7 @@ from kingfisher.core.logged import raised, warn
 from .files import artifacts_seen
 from .memory import without_any
 from .steps import Steps, changing, on_host, reading
-from .store import read_listing, read_off_path, write_listing
+from .store import HarnessFiles, read_listing, read_off_path, write_listing
 from .turnlog import PARENT, read_turn_log
 
 if TYPE_CHECKING:
@@ -108,7 +108,7 @@ def folder_for(turn: str) -> str:
     return f"_{hashlib.sha256(turn.encode('utf-8')).hexdigest()[:32]}"
 
 
-def read_file_history(harness: Any) -> Steps[list[dict[str, Any]]]:
+def read_file_history(harness: HarnessFiles) -> Steps[list[dict[str, Any]]]:
     """Every line of the history, oldest turn first; none where no turn wrote one."""
     held = yield from harness.fetch(FILE_HISTORY)
     if held is None:
@@ -163,7 +163,7 @@ def _held(records: list[dict[str, Any]]) -> list[tuple[int, str, int]]:
     return held
 
 
-def kept_bytes(harness: Any) -> Steps[int]:
+def kept_bytes(harness: HarnessFiles) -> Steps[int]:
     """What this session's copies of earlier versions come to, by its own history.
 
     A clone counts its whole size although it shares its blocks: subtracted from a size that
@@ -444,7 +444,7 @@ def _clone(source: int, target: Path) -> None:
     raise OSError(errno.ENOTSUP, "no clones on this platform", str(target))
 
 
-def forget_in_copies(harness: Any, layout: Layout, entry: MemoryEntry) -> Steps[None]:
+def forget_in_copies(harness: HarnessFiles, layout: Layout, entry: MemoryEntry) -> Steps[None]:
     """Take `entry` out of every kept copy of the memory file, so no rewind brings back what a
     caller forgot."""
     memory_file = layout.memory_file_route.lstrip("/")
@@ -463,7 +463,7 @@ def forget_in_copies(harness: Any, layout: Layout, entry: MemoryEntry) -> Steps[
 
 
 def _kept_state(
-    harness: Any, records: list[dict[str, Any]], under: str
+    harness: HarnessFiles, records: list[dict[str, Any]], under: str
 ) -> Steps[dict[str, dict[str, str]]]:
     """Each of `STATE_KEPT` as this turn left it, copied beside its files unless the last
     copy of it is the same, which is named instead."""
@@ -497,7 +497,10 @@ def _state_of(record: dict[str, Any]) -> dict[str, dict[str, str]]:
 
 
 def restore_state(
-    harness: Any, records: list[dict[str, Any]], path: list[str | None], names: tuple[str, ...]
+    harness: HarnessFiles,
+    records: list[dict[str, Any]],
+    path: list[str | None],
+    names: tuple[str, ...],
 ) -> Steps[tuple[str, ...]]:
     """Put back each of `names` as the last turn of `path` to keep it left it, and drop one
     no turn of `path` kept; the names dropped.
@@ -530,7 +533,11 @@ BEFORE_FIRST = "nothing records what the folders held before the first turn"
 
 
 def restore_files(
-    files: Any, harness: Any, layout: Layout, records: list[dict[str, Any]], path: list[str | None]
+    files: Any,
+    harness: HarnessFiles,
+    layout: Layout,
+    records: list[dict[str, Any]],
+    path: list[str | None],
 ) -> Steps[tuple[tuple[str, ...], dict[str, str]]]:
     """Put each file in the artifact folders back as the last turn of `path` left it: the
     paths put back, a file that turn did not have removed among them, and each path that

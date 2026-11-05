@@ -17,10 +17,14 @@ from . import runtime
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    from kingfisher.core.agent.tool_context import ToolContext
     from kingfisher.core.config import Config
 
     from .files import InputsChanged
-    from .store import Drift, KeptLedger
+    from .ledger import Ledger
+    from .model import Conversation, Turn
+    from .runlog import RunLogger
+    from .store import Drift, HarnessFiles, KeptLedger
     from .transcript import Message
     from .turnlog import Resuming
 
@@ -31,33 +35,33 @@ class Prepared:
 
     graph: Any
     message: str
-    session: Any
-    turn: Any
-    logger: Any
+    session: Conversation
+    turn: Turn
+    logger: RunLogger
     config: dict[str, Any]
     events: tuple[RunEvent, ...]
     deadline: float
     timeout_s: float
     #: The backend the session's files are reached through: the one the graph runs on,
     #: so what is placed and collected is what the agent read and wrote.
-    files: Any = None
+    files: Any
     #: What kingfisher keeps about the session under `/.harness`, through `files`.
-    harness: Any = None
+    harness: HarnessFiles
+    #: What this turn's tools returned, kept when it ends, or `None` for a graph the
+    #: caller built, which nothing here can hook.
+    ledger: Ledger | None
     #: The saver the turn ran on, which a turn stopping at a gate writes out before
     #: letting it go.
     saver: Any = None
     #: What a graph kingfisher built is driven with, or `None` for one the caller built,
     #: whose context is not known here.
-    context: Any = None
+    context: ToolContext | None = None
     #: What was said in this session before now: the saver holds one turn only, so
     #: this is where a conversation comes from.
     history: tuple[Message, ...] = ()
     #: Why `history` is shorter than the last turn left it, or `None` where it is whole.
     #: Carried to the end as well as announced, as `discarded` is.
     history_lost: str | None = None
-    #: What this turn's tools returned, kept when it ends, or `None` for a graph the
-    #: caller built, which nothing here can hook.
-    ledger: Any = None
     #: Answers to a turn that stopped for them, in langgraph's shape, or `None`. Never
     #: beside a message: a resume continues a graph mid-superstep.
     resume: dict[str, Any] | None = None
