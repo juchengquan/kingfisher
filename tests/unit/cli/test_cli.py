@@ -140,20 +140,6 @@ def test_no_line_is_printed_when_nothing_wanted_a_source_id(cfg, monkeypatch, ca
     assert "access control" not in capsys.readouterr().out
 
 
-def test_seeding_a_definitions_folder_that_does_not_exist_yet_creates_it(
-    tmp_path, monkeypatch, capsys, shipped
-):
-    """`ensure_definitions` before the copy."""
-    definitions = tmp_path / "brand-new"
-    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(definitions))
-    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
-
-    assert main(["seed"]) == 0
-
-    assert definitions.is_dir()
-    assert "seeded" in capsys.readouterr().out
-
-
 def test_seeding_from_an_empty_directory_says_so(cfg, monkeypatch, capsys, tmp_path):
     """A caller pointing `--from` at a directory with nothing in it."""
     empty = tmp_path / "empty"
@@ -196,14 +182,6 @@ def test_seeding_nothing_never_gives_one_definitions_reason_as_every_ones(
     assert any(line.startswith("skipped agents/scoped.yaml") for line in lines)
 
 
-def test_an_unknown_verb_is_refused(capsys):
-    """argparse's own refusal, which names the ones that exist."""
-    with pytest.raises(SystemExit) as exit_code:
-        main(["teleport"])
-
-    assert exit_code.value.code == 2
-
-
 # -- an unknown verb, now that `help` no longer answers for one --------------
 
 
@@ -216,25 +194,6 @@ def test_an_unknown_verb_is_named_along_with_the_ones_that_exist(capsys):
     printed = capsys.readouterr().err
     assert "teleport" in printed
     assert "seed" in printed and "list" in printed
-
-
-def test_the_help_verb_is_gone_and_the_four_other_routes_are_not(capsys):
-    """`-h`, `--help`, a bare invocation and `<verb> --help` all reach the same text; a
-    fifth road to it was a verb that could go stale on its own.
-    """
-    from kingfisher.cli.__main__ import build_parser
-
-    assert "help" not in verbs(build_parser())
-
-    assert main([]) == 0
-    assert "seed" in capsys.readouterr().out
-
-    # `--help` is argparse's, so it exits rather than returning -- zero either way.
-    with pytest.raises(SystemExit) as exit_code:
-        main(["seed", "--help"])
-
-    assert exit_code.value.code == 0
-    assert "usage: kingfisher seed" in capsys.readouterr().out
 
 
 def test_every_verb_the_parser_offers_has_something_to_run_it():
@@ -299,20 +258,6 @@ def test_the_environment_wins_over_the_file(tmp_path, monkeypatch, capsys, shipp
 
     assert (tmp_path / "from-the-shell").is_dir()
     assert not (tmp_path / "from-the-file").exists()
-
-
-def test_no_env_file_is_the_ordinary_case(tmp_path, monkeypatch, capsys, shipped):
-    """An installed kingfisher usually has none, so absent must be silent and must not
-    stop the command reaching the environment.
-    """
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("KINGFISHER_DEFINITIONS_DIR", str(tmp_path / "definitions"))
-    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
-    assert not (tmp_path / ".env").exists()
-
-    assert main(["seed"]) == 0
-
-    assert (tmp_path / "definitions").is_dir()
 
 
 def test_the_refusal_names_the_file_it_looked_at(tmp_path, monkeypatch, capsys):

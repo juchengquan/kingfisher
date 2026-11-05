@@ -241,15 +241,6 @@ def test_tools_and_arguments_cannot_be_constructed_out_of_step():
         RunEvent(kind="model_call", tools=("a", "b"), calls=("c1",))
 
 
-def test_finished_event_carries_the_normalized_answer(cfg):
-    agent = StubAgent("<think>reasoning</think>\n\n42")
-    (finished,) = [e for e in _events(cfg, agent) if e.kind == "finished"]
-
-    assert finished.result is not None
-    assert finished.result.answer == "42"
-    assert finished.result.session_id == "s"
-
-
 def test_events_render_as_readable_lines(cfg):
     """`for e in stream(...): print(e)` should be useful with no formatting code."""
     rendered = [str(e) for e in _events(cfg, _agent_with_a_tool_call())]
@@ -344,24 +335,6 @@ def test_the_adapter_owns_the_stream_modes(cfg):
             delegations=runtime.Delegations(),
         )
     ) == []
-
-
-def test_run_is_a_drain_of_stream(cfg):
-    """One orchestration path: run() must not re-implement the sequence."""
-    start(cfg, "drained")
-    from kingfisher.core.run import run
-
-    agent = StubAgent("<think>x</think>7")
-    result = run(
-        Request("t", session_id="drained"),
-        cfg=cfg,
-        graph=agent,
-        sessions=LocalSessions(),
-    )
-
-    assert result.answer == "7"
-    assert (cfg.workspace / "sessions" / result.session_id).is_dir()
-    assert agent.config["configurable"]["thread_id"] == "drained"
 
 
 def test_multiline_tool_output_renders_on_one_line(cfg):

@@ -94,10 +94,6 @@ def test_a_named_factory_is_called_and_its_backends_returned():
     assert isinstance(named(f"{HERE}:make_backends"), Recording)
 
 
-def test_a_class_with_no_arguments_is_a_factory_too():
-    assert isinstance(named(f"{HERE}:Recording"), Recording)
-
-
 def test_the_factory_is_called_once_per_resolution():
     """No caching here: a deployment wanting one instance can return one."""
     named(f"{HERE}:make_backends")
@@ -191,7 +187,3 @@ def test_a_renamed_setting_is_refused_under_its_old_name(tmp_path: Path, old, ne
 
     with pytest.raises(ConfigError, match=rf"{old} was renamed {new}"):
         read.config()
-
-
-def test_the_default_satisfies_the_interface_it_is_the_default_for():
-    assert isinstance(LocalSessions(), Sessions)

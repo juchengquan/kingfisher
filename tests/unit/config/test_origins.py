@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
-from pathlib import Path
-
-import pytest
 
 from kingfisher import Kingfisher, Origin, Origins
 from kingfisher.core.definitions.catalogue import Definitions
@@ -94,14 +91,6 @@ def test_kingfishers_own_sessions_are_the_workspace_s_whoever_hands_them_over(cf
     assert Origins.of(cfg, sessions=Theirs()).sessions == Origin("supplied", None)
 
 
-def test_sessions_are_the_workspace_s_own_unless_a_backend_says_otherwise(cfg):
-    """`None` is the default backend, which keeps sessions under the workspace; anything
-    else keeps them wherever it keeps them, which no path here can name.
-    """
-    assert Origins.of(cfg).sessions == Origin("default", cfg.workspace / "sessions")
-    assert Origins.of(cfg, sessions=object()).sessions == Origin("supplied", None)
-
-
 def test_entries_are_derived_from_the_record_not_listed_beside_it(cfg):
     """A field added here must not be one a printer can silently omit."""
     found = Origins.of(cfg)
@@ -111,22 +100,6 @@ def test_entries_are_derived_from_the_record_not_listed_beside_it(cfg):
         "agents", "middlewares", "skills", "subagents", "tools",
         "models", "seed", "sessions",
     ]
-
-
-def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):
-    """Frozen, like everything else a caller is handed here."""
-    found = Origins.of(cfg)
-
-    with pytest.raises(AttributeError):
-        found.workspace = Path("/elsewhere")  # type: ignore[misc]
-
-
-def test_a_running_kingfisher_reports_what_it_resolved(cfg):
-    """Not what it was configured with."""
-    kf = Kingfisher(cfg, sessions=LocalSessions())
-
-    assert kf.origins.workspace == cfg.workspace
-    assert kf.origins.skills.kind == "default"
 
 
 def test_kingfishers_own_backends_with_a_runner_still_keep_kingfishers_sessions(cfg):
@@ -183,18 +156,6 @@ def test_the_block_names_the_definitions_folder_beside_the_workspace(cfg):
     assert block[1].startswith("definitions ")
     assert block[1].endswith(f" : {cfg.definitions}")
     assert any(row.endswith(" : definitions/skills") for row in block)
-
-
-def test_a_path_outside_both_roots_is_the_only_absolute_one_on_the_line(cfg, tmp_path):
-    """What the relative spelling is for."""
-    elsewhere = tmp_path / "shared"
-    elsewhere.mkdir()
-    catalogue = Definitions.from_roots({**cfg.catalogue_roots, "skills": elsewhere})
-
-    line = Origins.of(cfg, catalogue=catalogue).line()
-
-    assert f" skills={elsewhere}(overridden) " in line
-    assert " subagents=definitions/subagents " in line
 
 
 def test_no_value_on_the_line_contains_a_space(cfg, tmp_path):

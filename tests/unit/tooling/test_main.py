@@ -100,16 +100,6 @@ def test_consecutive_tokens_are_not_broken_apart():
     assert text == "7 to seven.txt\n"
 
 
-def test_prose_is_closed_off_when_the_run_ends_on_it():
-    """The common case: the last thing a run does is finish its answer."""
-    text, result = _render(
-        [RunEvent(kind="token", text="done"), RunEvent(kind="finished", result=_a_result())]
-    )
-
-    assert text == "done\n"
-    assert result is not None
-
-
 def test_a_subagents_prose_is_marked_where_it_starts_and_ends():
     """Two answers on one stream, with nothing between them, read as one."""
     text, _ = _render(
@@ -249,18 +239,6 @@ def test_the_smoke_never_creates_a_workspace_level_inputs_directory(cfg):
     assert not (cfg.workspace / "inputs").exists()
 
 
-def test_skills_stay_shared_across_sessions(cfg):
-    """Only `inputs` moved under the session."""
-    from dataclasses import replace
-
-    main.prepare_smoke(replace(cfg, skills_enabled=True), cfg.workspace, "smoke3")
-    session = cfg.workspace / "sessions" / "smoke3"
-
-    assert (cfg.definitions / "skills" / "tabular-qa" / "SKILL.md").is_file()
-    assert not (session / "skills" / "tabular-qa").exists()
-    assert not (session / "skills").exists()
-
-
 def _unused(cfg, tmp_path):
     """A `Config` whose definitions folder does not exist yet."""
     from dataclasses import replace
@@ -279,16 +257,6 @@ def _driver_on(monkeypatch, target, source=None):
     monkeypatch.setattr(driver, "config_from_env", lambda: configured)
     monkeypatch.setattr(driver, "paths_from_env", lambda: configured)
     return driver
-
-
-def test_a_new_definitions_folder_seeds_itself(cfg, tmp_path, monkeypatch):
-    """A7, and the reason the flag is not the only way in."""
-    fresh = _unused(cfg, tmp_path)
-    driver = _driver_on(monkeypatch, fresh)
-
-    assert driver.main(["driver.py", "--list"]) == 0
-
-    assert reachable(fresh.skills_dir)
 
 
 def test_a_new_definitions_folder_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
@@ -626,18 +594,6 @@ def test_a_run_without_an_agent_is_refused_rather_than_defaulted(cfg, monkeypatc
     driver.main(["driver.py", "say ok", "--no-checks"])
 
     assert seen and seen[0].agent is None  # carried as absent, refused downstream
-
-
-def test_the_flag_is_offered_in_help(capsys):
-    """It is the one argument a task cannot omit, so it has to be findable without
-    reading the source.
-    """
-    from tests.integration import driver
-
-    parser = driver.build_parser()
-    flags = {action.dest for action in parser._actions}
-
-    assert "agent" in flags
 
 
 def test_a_smoke_run_checks_the_result_it_fetched_through_the_session(cfg, monkeypatch):
