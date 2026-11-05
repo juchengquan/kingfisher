@@ -20,7 +20,7 @@ from kingfisher.core.layout import TURNS_FILE
 
 from . import runtime
 from .steps import Steps
-from .store import RESUMED, KeptLedger, read_ledger, read_off_path
+from .store import RESUMED, HarnessFiles, KeptLedger, read_ledger, read_off_path
 from .transcript import Message, as_record, from_record
 
 if TYPE_CHECKING:
@@ -177,7 +177,7 @@ def _read(held: bytes) -> list[tuple[str, dict[str, Any]]]:
 
 
 def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it ended on
-    harness: Any,
+    harness: HarnessFiles,
     *,
     turn: str,
     task: str,
@@ -219,13 +219,13 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
     yield from harness.store(TURNS_FILE, ("\n".join(written) + "\n").encode("utf-8"))
 
 
-def read_turn_log(harness: Any) -> Steps[list[dict[str, Any]]]:
+def read_turn_log(harness: HarnessFiles) -> Steps[list[dict[str, Any]]]:
     """Every line of the log, as written; none where no turn wrote one."""
     held = yield from harness.fetch(TURNS_FILE)
     return [] if held is None else [line for _, line in _read(held)]
 
 
-def logged_turns(harness: Any) -> Steps[frozenset[str]]:
+def logged_turns(harness: HarnessFiles) -> Steps[frozenset[str]]:
     """Every turn id the log names, on every branch."""
     lines = yield from read_turn_log(harness)
     return frozenset(line["turn"] for line in lines if isinstance(line.get("turn"), str))
@@ -278,7 +278,9 @@ def replayed(turns: Logged, path: Sequence[str | None]) -> tuple[Message, ...]:
     return tuple(said)
 
 
-def add_imported(harness: Any, turn: str | None, messages: Sequence[Message]) -> Steps[None]:
+def add_imported(
+    harness: HarnessFiles, turn: str | None, messages: Sequence[Message]
+) -> Steps[None]:
     """Add `messages` to the log as the conversation `turn`, which ran before it, ended on."""
     held = yield from harness.fetch(TURNS_FILE)
     lines = [raw for raw, _ in _read(held)] if held is not None else []

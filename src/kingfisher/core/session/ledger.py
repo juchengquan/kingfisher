@@ -245,7 +245,7 @@ def file_left(
 
 
 def keep_ledger(
-    harness: Any,
+    harness: HarnessFiles,
     ledger: Ledger,
     *,
     summarised: bool,
