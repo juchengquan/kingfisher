@@ -95,7 +95,7 @@ dependencies = [
     "langgraph>=1.2.12,<2",
     "langgraph-checkpoint>=4.1,<5",
     # Imported directly, by the areas `THIRD_PARTY` in
-    # tests/unit/test_architecture.py grants it to -- the table rather than a list
+    # tests/unit/rules/test_architecture.py grants it to -- the table rather than a list
     # of files, because the table is held to the imports both ways and a list
     # here is held to nothing. A dependency justified by a file that is gone is a
     # dependency nobody can re-examine. It also arrives transitively through

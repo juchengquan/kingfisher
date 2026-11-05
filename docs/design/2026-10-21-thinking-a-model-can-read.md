@@ -87,8 +87,9 @@ One pull request each, off main, in this order.
    name, its `base_url` and the model that served it -- name and address both, since a
    gateway moved under one name is another signer, and so is a second account at one
    address -- and a call sends the thinking only of replies recorded as its own. A reply
-   with no record compares by `model_name`. `tests/unit/test_signed_thinking.py` builds
-   the request each chat model would send.
+   with no record compares by `model_name`.
+   `tests/unit/agent/middlewares/test_signed_thinking.py` builds the request each chat
+   model would send.
 2. **Keep the two notes in the conversation.** Store the step note and the note asking
    again as a message after the tool results, instead of adding them to one request.
    `ChatAnthropic` sends a message stored there inside the same user message as the

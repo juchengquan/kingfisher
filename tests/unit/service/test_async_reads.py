@@ -1,0 +1,161 @@
+"""The async paths keep the event loop free: no sync port call is made on its thread."""
+
+from __future__ import annotations
+
+import asyncio
+from dataclasses import replace
+
+import pytest
+from deepagents.backends import CompositeBackend, FilesystemBackend
+
+from kingfisher import Kingfisher
+from kingfisher.core.request import Request
+from kingfisher.plugins import LocalSessions
+from tests.conftest import an_agent, start
+from tests.unit.service.test_run import StubAgent
+
+#: Every sync method the async paths can reach, on the classes that answer them.
+PORT_METHODS = {
+    LocalSessions: (
+        "open", "sessions", "mark_used", "size", "delete", "claim", "release", "held",
+    ),
+    CompositeBackend: ("download_files", "upload_files", "ls", "glob", "delete"),
+    FilesystemBackend: ("download_files", "upload_files", "ls", "glob", "delete"),
+}
+
+
+def _on_the_loop() -> bool:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
+@pytest.fixture
+def sync_calls(monkeypatch) -> list[tuple[str, bool]]:
+    """Each sync port call made, and whether it was made on the event loop's thread.
+
+    Recorded rather than raised: raised, the error is thrown into the sequence like any
+    other failure, and the test would be reading whatever that turned into.
+    """
+    made: list[tuple[str, bool]] = []
+    for cls, names in PORT_METHODS.items():
+        for name in names:
+            monkeypatch.setattr(cls, name, _recorded(made, cls, name))
+    return made
+
+
+def _recorded(made: list[tuple[str, bool]], cls: type, name: str):
+    original = getattr(cls, name)
+
+    def recorded(self, *args, **kwargs):
+        made.append((f"{cls.__name__}.{name}", _on_the_loop()))
+        return original(self, *args, **kwargs)
+
+    return recorded
+
+
+@pytest.mark.parametrize("wiring", ["graph", "sessions"])
+def test_the_async_reads_make_no_sync_port_call_on_the_loop(cfg, sync_calls, wiring):
+    """Driven with `drive` rather than `adrive`, or with a sync call between two steps,
+    they still return the right answer -- and hold every coroutine on the loop for the
+    round trip, which nothing else in the suite would notice.
+    """
+    an_agent(cfg, "only_a", source_ids="[A]")
+    policied = cfg
+    kf = (
+        Kingfisher(
+            policied, graph=StubAgent("ok"), sessions=LocalSessions()
+        )
+        if wiring == "graph"
+        else Kingfisher(policied, sessions=LocalSessions())
+    )
+    start(policied, "s")
+    produced = policied.workspace / "sessions" / "s" / "outputs" / "out.txt"
+    produced.parent.mkdir(parents=True, exist_ok=True)
+    produced.write_text("result")
+    sync_calls.clear()
+
+    async def read_all():
+        session = await kf.asession("s")
+        return (session, await session.apending(), await session.aartifact("outputs/out.txt"))
+
+    found, waiting, content = asyncio.run(read_all())
+
+    assert (found is not None, waiting, content) == (True, (), b"result")
+    # The control: the ports were reached at all, so an empty list below is not a
+    # patch that missed.
+    assert sync_calls, "no sync port method was reached, on any thread"
+    on_the_loop = sorted({name for name, loop in sync_calls if loop})
+    assert not on_the_loop, f"made on the event loop's thread: {on_the_loop}"
+
+
+def test_an_async_turn_makes_no_sync_port_call_on_the_loop(cfg, sync_calls, tmp_path):
+    """Setup and the turn's ending are round trips to the session's backend: the lookup,
+    the open, the pin, the claim, the inputs, and at the end the pause, the transcript,
+    the listing and the claim again. Made on the loop, each holds every other turn up
+    for as long as the backend takes, and every answer still comes back right.
+    """
+    an_agent(cfg, "only_a", source_ids="[A]")
+    policied = replace(
+        cfg,
+        session_max_bytes=10**9,
+    )
+    supplied = tmp_path / "in.csv"
+    supplied.write_text("a,b\n")
+    kf = Kingfisher(
+        policied, graph=StubAgent("ok"), sessions=LocalSessions()
+    )
+    start(policied, "s")
+    sync_calls.clear()
+
+    asked = Request("go", agent="only_a", session_id="s", inputs=(supplied,))
+    result = asyncio.run(kf.arun(asked, source_ids=("A",)))
+
+    assert result.completed
+    assert sync_calls, "no sync port method was reached, on any thread"
+    on_the_loop = sorted({name for name, loop in sync_calls if loop})
+    assert not on_the_loop, f"made on the event loop's thread: {on_the_loop}"
+
+
+def test_opening_a_sessions_files_makes_no_sync_port_call_on_the_loop(cfg, sync_calls):
+    """`files_for` on the loop is a session's backend -- a sandbox, on a remote one --
+    opened while every other coroutine waits for it.
+    """
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    start(cfg, "s")
+    sync_calls.clear()
+
+    async def opened():
+        return await (await kf.asession("s")).afiles()
+
+    files = asyncio.run(opened())
+
+    assert files is not None
+    assert sync_calls, "no sync port method was reached, on any thread"
+    on_the_loop = sorted({name for name, loop in sync_calls if loop})
+    assert not on_the_loop, f"made on the event loop's thread: {on_the_loop}"
+
+
+def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
+    cfg, sync_calls, tmp_path
+):
+    """Refused once claimed -- here over inputs naming a file that is not there -- setup
+    gave the claim back with the sync `release`, on the loop, a round trip every other
+    turn waited through on a remote backend.
+    """
+    from kingfisher.core.session.files import InputsError
+
+    kf = Kingfisher(
+        cfg, graph=StubAgent("ok"), sessions=LocalSessions()
+    )
+    start(cfg, "s")
+    sync_calls.clear()
+
+    with pytest.raises(InputsError):
+        asyncio.run(kf.arun(Request("go", session_id="s", inputs=(tmp_path / "nope.csv",))))
+
+    released = [loop for name, loop in sync_calls if name == "LocalSessions.release"]
+    assert released, "the claim was never given back"
+    assert not any(released), "the claim was given back on the event loop's thread"

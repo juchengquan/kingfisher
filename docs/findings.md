@@ -38,7 +38,7 @@ wrong.*
   `lc_agent_name`. Kingfisher has streamed that way since the day of the probe
   and tags a subagent's `model_call`, `tool_result` and `token` events with
   `agent=<name>` -- `SubagentNames` in `core/session/runtime.py`, held
-  by `tests/unit/test_stream_subagents.py`.
+  by `tests/unit/session/test_stream_subagents.py`.
 - **langgraph's `tasks` stream names the call that started a subagent.** A start event
   for a `tools` node carries an `id` equal to the namespace segment its subagent's
   chunks arrive under, `tools:<id>`, and an `input` holding the one call it runs:
@@ -47,8 +47,8 @@ wrong.*
   helpers map at every level, a compiled subagent's as well, under `stream` and
   `astream` alike. deepagents' `task` tool passes no call id into the subagent's config,
   so on the stream this is the only place it is. `Delegations` in
-  `core/session/runtime.py`, held by `tests/unit/test_stream_delegations.py`. *(2026-10-27, langgraph 1.2.15, deepagents
-  0.7.22.)*
+  `core/session/runtime.py`, held by `tests/unit/session/test_stream_delegations.py`.
+  *(2026-10-27, langgraph 1.2.15, deepagents 0.7.22.)*
 - **A step announces all its tasks before running any.** `tick` in
   `langgraph/pregel/_loop.py` emits every task start of the step together, so each
   sibling's start precedes any sibling's output, and `map_debug_tasks` hands over each
@@ -78,7 +78,7 @@ wrong.*
   usage. `values` arrives after a step's writes and `updates` before them, so the ids
   the conversation held at the last `values` are what tell a rewrite apart --
   `SeenMessages` in `core/session/runtime.py`, held by
-  `tests/unit/test_rewritten_events.py`. *(2026-10-16, langgraph 1.2.15.)*
+  `tests/unit/session/test_rewritten_events.py`. *(2026-10-16, langgraph 1.2.15.)*
 - **A middleware reaches the `custom` stream from inside the model call.**
   `request.runtime.stream_writer` on a `ModelRequest` is langgraph's writer for the
   node, a no-op where nothing streams, and what it is handed arrives as a `custom`
@@ -369,7 +369,7 @@ for the next reader who reaches for one.*
   which `FilesystemMiddleware` and `SummarizationMiddleware` read only when the
   backend is a `CompositeBackend`: anything else is `/` whatever it carries. The
   `grep` tool's description says offloaded results are under `/large_tool_results/`
-  "by default", and does not change with the root. `tests/unit/test_offloads.py`
+  "by default", and does not change with the root. `tests/unit/session/test_offloads.py`
   drives both evictions. *(2026-10-11, deepagents 0.7.6.)* The limits are the same at
   0.7.22, which adds a third way in: `execute` writes its output to
   `large_tool_results/<call id>` as it runs, and hands back the stub itself, when the
@@ -552,10 +552,10 @@ for the next reader who reaches for one.*
 
 ## Tool shapes
 
-What an offered tool may be written as is pinned by `tests/unit/test_tool_shapes.py`
--- a `BaseTool` from `@tool`, a `BaseTool` subclass, or a plain function -- so it is
-not repeated here. What that file does not say is what the decorator is *for*, which
-cost an experiment to establish.
+What an offered tool may be written as is pinned by
+`tests/unit/definitions/test_tool_shapes.py` -- a `BaseTool` from `@tool`, a `BaseTool`
+subclass, or a plain function -- so it is not repeated here. What that file does not say
+is what the decorator is *for*, which cost an experiment to establish.
 
 - **`@tool` buys control, not capability.** A plain function reaches the graph, is
   offered to the model, dispatches, and is covered by `OfferedToolFailureMiddleware`
@@ -580,7 +580,7 @@ cost an experiment to establish.
 - **The return annotation is read by nobody**, and what langchain does with the
   value is `json.dumps` first and `repr` when that fails, so `None` reaches the
   model as `null` and an ordinary object as its repr. Pinned by
-  `tests/unit/test_tool_returns.py`, so the cases are not listed twice. What the
+  `tests/unit/agent/test_tool_returns.py`, so the cases are not listed twice. What the
   test cannot say is which versions answered: langchain-core 1.5.5, langgraph
   1.2.11, deepagents 0.7.6. *(2026-09-04.)*
 - **A list or a tuple is read twice, and the second reading is the stricter.**
@@ -591,7 +591,7 @@ cost an experiment to establish.
   `("three", "columns")` reaches the model as JSON text, a list or tuple of blocks as
   blocks, a string beside an image block as JSON with the image's base64 in it, and
   `[]` as empty content. Reading `_format_output` alone predicts the first of those
-  wrong. Pinned by `tests/unit/test_tool_returns.py`. *(2026-10-12,
+  wrong. Pinned by `tests/unit/agent/test_tool_returns.py`. *(2026-10-12,
   langgraph-prebuilt 1.1.0.)*
 - **A `Command` returned by an offered tool is applied, not wrapped.**
   `_format_output` hands back any `ToolOutputMixin` untouched, and both
@@ -662,7 +662,7 @@ survives *re-wrapping* a tool, which nothing above needed to ask.
 ## The run context, and the permissions around a backend
 
 What `ToolContext` and `PermittedBackend` were built on.
-`tests/unit/test_tool_context.py` pins the ones a turn depends on, so what is here
+`tests/unit/agent/test_tool_context.py` pins the ones a turn depends on, so what is here
 is the part a test cannot say: which versions answered, and what was tried that
 did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6.
 *(2026-09-30.)*
