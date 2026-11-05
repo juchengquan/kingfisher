@@ -127,6 +127,8 @@ def test_inputs_become_read_only_to_the_os(workspace):
     with writable_inputs(workspace, DEFAULT_LAYOUT) as inputs:
         (inputs / "input.csv").write_text("a,b\n1,2\n")
 
+    # Again, though `writable_inputs` has just done it: `open` runs this every turn, and
+    # a second call that toggled the bits rather than clearing them reopens the folder.
     protect_inputs(workspace, DEFAULT_LAYOUT)
 
     with pytest.raises(PermissionError):
@@ -150,12 +152,6 @@ def test_writable_inputs_restores_protection_afterwards(workspace):
         (inputs / "new.csv").write_text("y")
         assert os.access(inputs, os.W_OK)
 
-    assert not os.access(workspace / "inputs", os.W_OK)
-
-
-def test_protect_inputs_is_idempotent(workspace):
-    protect_inputs(workspace, DEFAULT_LAYOUT)
-    protect_inputs(workspace, DEFAULT_LAYOUT)
     assert not os.access(workspace / "inputs", os.W_OK)
 
 
