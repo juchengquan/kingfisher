@@ -626,6 +626,24 @@ MIDDLEWARES = [Quiet]
 '''
 
 
+CLERK = '''
+def build(model, tools):
+    from langchain.agents import create_agent
+
+    return create_agent(model, tools)
+
+
+SUBAGENTS = [
+    {
+        "name": "clerk",
+        "description": "Files.",
+        "build": build,
+        "tools": [{"name": "look", "source": "bundled"}],
+    }
+]
+'''
+
+
 def _gated_on_echo(cfg) -> None:
     """An agent built from definitions, gated on its tool `echo`.
 
@@ -633,7 +651,10 @@ def _gated_on_echo(cfg) -> None:
     in one process keeps stale; `count` reaches the agent only through its subagent.
     `researcher` is a package too, whose files a pause recorded none of, and its folder
     is named otherwise on purpose: a rule recording a package only under its subagent's
-    name passes a folder called `researcher`.
+    name passes a folder called `researcher`. `clerk` is a package inside a folder of its
+    own name, whose `tools/` beside the package is its bundle: a rule asking whether it is
+    a package before whether its folder is named after it records the package alone.
+    Compiled, since a portable entry cannot take a bundled tool.
     """
     package = tools_dir(cfg) / "echo"
     package.mkdir(parents=True)
@@ -662,11 +683,16 @@ def _gated_on_echo(cfg) -> None:
         encoding="utf-8",
     )
     (research / "prompt.py").write_text('PROMPT = "You research."\n', encoding="utf-8")
+    clerk = subagents_dir(cfg) / "clerk"
+    (clerk / "clerk").mkdir(parents=True)
+    (clerk / "clerk" / "__init__.py").write_text(CLERK, encoding="utf-8")
+    (clerk / "tools").mkdir()
+    (clerk / "tools" / "look.py").write_text(COUNT.replace("count", "look"), encoding="utf-8")
     an_agent(
         cfg,
         tools="[echo]",
         skills="[s1]",
-        subagents="[helper, researcher]",
+        subagents="[helper, researcher, clerk]",
         middlewares="[quiet]",
         builtin_tools="[read_file, task]",
         interrupt_on="[echo]",
@@ -705,6 +731,7 @@ def _approved(paused: Any) -> Resume:
         ("middlewares/quiet.py", True),
         ("tools/count.py", True),
         ("subagents/research/prompt.py", True),
+        ("subagents/clerk/tools/look.py", True),
         ("tools/spare.py", False),
         ("agents/only.yaml", True),
     ],
@@ -714,6 +741,7 @@ def _approved(paused: Any) -> Resume:
         "middleware",
         "subagents-tool",
         "subagent-package",
+        "subagent-package-bundle",
         "control-unused",
         "agents-own-file",
     ],
