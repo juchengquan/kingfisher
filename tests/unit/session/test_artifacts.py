@@ -14,7 +14,7 @@ from kingfisher.core.session.files import collect_artifacts, read_artifact
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import start
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent
 
 #: A deployment that renamed every leaf it may rename. The rules below pair it with
 #: the default, because what went wrong was not the renamed path being wrong -- it was

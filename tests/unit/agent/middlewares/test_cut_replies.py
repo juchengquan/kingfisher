@@ -27,8 +27,8 @@ from kingfisher.core.session.transcript import from_json
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import EVERY_TOOL, RecordedEvents, an_agent, start, subagents_dir
-from tests.unit.agent.middlewares.test_turn_instructions import Sent
 from tests.unit.scripted import Scripted
+from tests.unit.stand_ins import Sent
 
 #: The output reservation each cut reply here spent, which is what it reached.
 CAP = 32_768

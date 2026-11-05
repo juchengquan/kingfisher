@@ -20,11 +20,6 @@ from tests.conftest import a_pdf, on_backend
 
 
 @pytest.fixture
-def tools(shipped):
-    return {tool_name(one.tool): one.tool for one in LocalToolRepository(shipped / "tools").found}
-
-
-@pytest.fixture
 def handed(cfg, session_dir, fake_model):
     """The backend a turn hands its tools."""
     return build_agent(

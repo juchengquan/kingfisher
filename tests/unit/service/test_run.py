@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 import pytest
-from langchain_core.messages import AIMessage
 
 from kingfisher.core.request import Request
 from kingfisher.core.result import END_TURN, STOP_REASONS, RunResult, normalize_answer
@@ -12,50 +10,8 @@ from kingfisher.core.run import run
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.permissions import writable_inputs
-from tests.conftest import FakeGraph, RecordedEvents, start
-
-
-class StubAgent(FakeGraph):
-    """Stands in for the compiled graph so the orchestration is testable."""
-
-    def __init__(
-        self,
-        answer: str,
-        *,
-        updates: list | None = None,
-        tokens: list | None = None,
-        subagent: tuple | None = None,
-    ) -> None:
-        self.answer = answer
-        self.updates = updates or []
-        self.tokens = tokens or []
-        self.subagent = subagent or ()
-        self.state: dict | None = None
-        self.config: dict | None = None
-
-    def stream(self, state, config, stream_mode=None, subgraphs=False):
-        self.state, self.config = state, config
-        for chunk in self.tokens:
-            yield (self.subagent, "messages", chunk)
-        for update in self.updates:
-            yield (self.subagent, "updates", update)
-        yield ((), "values", {"messages": [AIMessage(content=self.answer)]})
-
-    async def astream(self, state, config, stream_mode=None, subgraphs=False):
-        """The async twin, because a compiled graph has one and `astream` drives it.
-
-        A stub offering only `stream` would make every async test fail for the
-        stub's reason rather than the code's -- and one offering only this would
-        hide a sync path that had stopped working.
-        """
-        for chunk in self.stream(state, config, stream_mode, subgraphs):
-            yield chunk
-
-    def get_state(self, config):
-        """What a real graph holds when the turn ends."""
-        del config
-        sent = list((self.state or {}).get("messages", []))
-        return SimpleNamespace(values={"messages": [*sent, AIMessage(content=self.answer)]})
+from tests.conftest import RecordedEvents, start
+from tests.unit.stand_ins import StubAgent
 
 
 def test_normalize_strips_inlined_reasoning():

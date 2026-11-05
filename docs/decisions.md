@@ -7276,6 +7276,19 @@ bare name still holds, and the move was checked by collecting the same 4,582
 `file::name` ids before and after. `test_a_test_sits_on_its_shelf_and_in_its_folder`
 refuses a test module left loose in `tests/unit/`. *(2026-11-05, from a review.)*
 
+**Each test module is imported once.** Under pytest's default import mode a test module
+was imported by its bare name, and again as `tests.unit...` by every module that took
+something from it. The conftest and 31 test modules were loaded twice by the end of
+collection, 37 by the end of a run, and a class from one copy was not the class the
+other's tests held -- the trap `scripted.py` was written around.
+`--import-mode=importlib` imports each once under its dotted name and collects the same
+4,581 ids. No `__init__.py` was added, since that mode needs none. A stand-in more than
+one test module took from another went to `tests/unit/stand_ins.py`, and helpers copied
+across files to the conftest of the folder holding their users. File names stay unique
+although pytest no longer refuses two: a citation by bare name has to name one file, so
+`test_no_two_test_modules_share_a_name` refuses what the default mode used to.
+*(2026-11-05, from a review.)*
+
 ## Proposals, and what became of them
 
 What is still being argued is in `docs/design/`, and `docs/README.md` lists it,

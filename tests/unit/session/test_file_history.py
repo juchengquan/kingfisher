@@ -29,12 +29,12 @@ from kingfisher.core.session.model import QuotaExceededError
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from tests.conftest import start
-from tests.unit.service.test_run import StubAgent
 from tests.unit.session.test_memory_store import Shelf
 from tests.unit.session.test_memory_store import _kingfisher as _with_store
 from tests.unit.session.test_memory_store import _turn as _store_turn
 from tests.unit.session.test_memory_writer import _turn as _writer_turn
 from tests.unit.session.test_memory_writer import _writing
+from tests.unit.stand_ins import StubAgent
 
 
 def _session(cfg, session_id: str = "s") -> Path:

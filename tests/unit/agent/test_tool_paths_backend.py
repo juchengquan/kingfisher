@@ -19,7 +19,7 @@ from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced, shell_confinement
 from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
-from tests.unit.session.test_session_files import Elsewhere, ElsewhereFiles
+from tests.unit.stand_ins import Elsewhere, ElsewhereFiles
 
 FIRST_LINE = '''
 def first_line(path: str) -> str:

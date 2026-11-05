@@ -18,17 +18,13 @@ from tests.conftest import (
     a_subagent,
     middleware_of,
 )
+from tests.unit.conftest import define, offer_skills
 
 
 class Audited(AgentMiddleware):
     """Stands in for whatever a deployment actually registers."""
 
     name = "Audited"
-
-
-def define(cfg, body: str, name: str = "reviewer") -> None:
-    (cfg.definitions / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.definitions / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
 def build(cfg, registry=None, **caps):
@@ -192,7 +188,6 @@ TOOLS = [always_fails]
 def test_what_a_subagent_carries_is_pinned_here_and_only_here(cfg, session_dir):
     """The exact stack, in order, for a definition that triggers every branch."""
     from tests.conftest import tools_dir
-    from tests.unit.agent.test_subagent_skills import offer_skills
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "always_fails.py").write_text(A_TOOL, encoding="utf-8")

@@ -13,6 +13,7 @@ from kingfisher import Capabilities, Kingfisher
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, middlewares_dir, start, subagents_dir, tools_dir
+from tests.unit.conftest import lock_skills
 from tests.unit.scripted import Scripted
 
 ASKS = '''import json
@@ -132,9 +133,7 @@ def _deployment(cfg) -> None:
     (middlewares_dir(cfg) / "counted.py").write_text(COUNTED, encoding="utf-8")
     # `shared-skill` only this agent lists, and `told-skill` is locked to sales.
     an_agent(cfg, source_ids="[ID-AUDIT, ID-SALES]", skills="[shared-skill]", **EVERY_TOOL)
-    (cfg.skills_dir.parent / "skill_locks.yaml").write_text(
-        "- name: told-skill\n  source_ids: [ID-SALES]\n", encoding="utf-8"
-    )
+    lock_skills(cfg, "- name: told-skill\n  source_ids: [ID-SALES]\n")
     an_agent(cfg, "hidden", source_ids="[ID-SALES]")
     an_agent(cfg, "pattern", **PATTERN)
 

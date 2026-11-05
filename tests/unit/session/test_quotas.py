@@ -16,7 +16,7 @@ from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.folders import session_bytes
 from tests.conftest import EVERY_TOOL, FakeGraph, an_agent, start
 from tests.unit.scripted import Scripted
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent
 
 
 class SlowAgent(FakeGraph):

@@ -15,9 +15,9 @@ from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_dir
 from tests.conftest import EVERY_TOOL, Through, an_agent, start
 from tests.unit.scripted import Scripted
-from tests.unit.service.test_run import StubAgent
 from tests.unit.session.test_session import UNNAMABLE
-from tests.unit.session.test_session_files import Elsewhere, _calls
+from tests.unit.session.test_session_files import _calls
+from tests.unit.stand_ins import Elsewhere, StubAgent
 
 DOORS = ("stream", "astream", "run", "arun")
 

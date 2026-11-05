@@ -12,6 +12,7 @@ from kingfisher.core.logged import WARNINGS_LOGGER
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions
 from tests.conftest import an_agent, start, tools_dir
+from tests.unit.conftest import lock_skills
 from tests.unit.scripted import Scripted
 
 
@@ -108,8 +109,7 @@ def test_a_skill_lock_changed_while_kingfisher_runs_is_in_force_on_the_next_call
     (cfg.skills_dir / "s1" / "SKILL.md").write_text(
         "---\nname: s1\ndescription: A skill.\n---\nDo it.\n", encoding="utf-8"
     )
-    locks = cfg.skills_dir.parent / "skill_locks.yaml"
-    locks.write_text("- name: s1\n  source_ids: [A, B]\n", encoding="utf-8")
+    lock_skills(cfg, "- name: s1\n  source_ids: [A, B]\n")
     kf = Kingfisher(cfg, sessions=LocalSessions())
 
     def shut_to_a() -> frozenset[str]:
@@ -117,6 +117,6 @@ def test_a_skill_lock_changed_while_kingfisher_runs_is_in_force_on_the_next_call
         return catalogue.skills_shut(caller_holds(catalogue.vocabulary, ["A"]))
 
     assert shut_to_a() == frozenset()
-    locks.write_text("- name: s1\n  source_ids: [B]\n", encoding="utf-8")
+    lock_skills(cfg, "- name: s1\n  source_ids: [B]\n")
 
     assert shut_to_a() == {"catalogue::s1"}

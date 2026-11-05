@@ -20,7 +20,7 @@ from kingfisher.core.session.model import (
 )
 from kingfisher.plugins import LocalSessions
 from tests.conftest import FakeGraph, Through, start
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent, claim_of
 
 
 def service(cfg, **kwargs):
@@ -100,14 +100,6 @@ def test_grants_are_unrestricted_by_default(cfg):
 # double-click.
 
 
-def _claim(cfg, session_id: str) -> Path:
-    """One session's turn slot, which lives inside the session it guards."""
-    from kingfisher.core.layout import HARNESS
-    from kingfisher.plugins.sessions.backend import CLAIM
-
-    return cfg.workspace / "sessions" / session_id / HARNESS / CLAIM
-
-
 def test_a_second_turn_on_a_busy_session_is_refused(cfg):
     """Refused, not queued: a queue hides a wait as long as whatever the other turn is
     doing, and tells a racing caller nothing.
@@ -140,7 +132,7 @@ def test_a_claim_a_full_disk_will_not_move_aside_is_still_given_back(cfg, monkey
         patched.setattr(Path, "rename", full)
         service(cfg).run(Request("first", session_id=session))
 
-    assert not _claim(cfg, session).exists()
+    assert not claim_of(cfg, session).exists()
     assert service(cfg).run(Request("second", session_id=session)).answer == "ok"
 
 
@@ -160,7 +152,7 @@ def test_a_claim_whose_token_cannot_be_written_is_not_left_behind(cfg, monkeypat
         with pytest.raises(OSError, match="No space left"):
             service(cfg).run(Request("first", session_id=session))
 
-    assert not _claim(cfg, session).exists()
+    assert not claim_of(cfg, session).exists()
     assert service(cfg).run(Request("second", session_id=session)).answer == "ok"
 
 
@@ -175,7 +167,7 @@ def test_the_slot_goes_back_when_the_turn_ends(cfg):
     second = service.run(Request("second", session_id="s"))
 
     assert second.turn_id != first.turn_id
-    assert not _claim(cfg, "s").exists()
+    assert not claim_of(cfg, "s").exists()
 
 
 def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
@@ -190,7 +182,7 @@ def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
     with pytest.raises(ValueError):
         service.run(Request("go", session_id="s", inputs=(tmp_path / "gone.csv",)))
 
-    assert not _claim(cfg, "s").exists()
+    assert not claim_of(cfg, "s").exists()
     assert service.run(Request("after", session_id="s")).turn_id
 
 
@@ -217,7 +209,7 @@ def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
 
     session = start(cfg, "s")
     assert LocalSessions().claim(cfg, session, stale_after=3600)
-    claim = _claim(cfg, session)
+    claim = claim_of(cfg, session)
 
     assert claim.exists()
     assert claim.is_relative_to(cfg.workspace / "sessions" / session)
@@ -341,7 +333,7 @@ def test_asking_does_not_disturb_the_session(cfg):
     assert kf.sessions()
 
     assert directory.stat().st_mtime == pytest.approx(stale, abs=1)
-    assert not _claim(cfg, session).exists()
+    assert not claim_of(cfg, session).exists()
 
 
 def test_sessions_come_back_most_recently_used_first(cfg):

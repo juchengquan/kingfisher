@@ -51,13 +51,12 @@ from tests.conftest import (
     tools_dir,
     unwired,
 )
-from tests.unit.agent.middlewares.test_offered_tool_errors import _through
 from tests.unit.scripted import Scripted
-from tests.unit.session.test_offloads import _Shown
+from tests.unit.stand_ins import Shown, through_hooks
 
 KB = 1024
 
-#: What deepagents' summariser fires at on a model with no profile, as `_Shown` has none.
+#: What deepagents' summariser fires at on a model with no profile, as `Shown` has none.
 UNPROFILED = summarizer_trigger(FakeToolCallingModel(responses=[]))
 
 #: Past the allowance with no profile by a margin, and not a PDF anything parses:
@@ -120,9 +119,9 @@ TOOLS = [export_pdf, pdf_as, pdf_in_command, chart, export_deck]
 '''
 
 
-def _calls(*calls: tuple[str, dict]) -> _Shown:
+def _calls(*calls: tuple[str, dict]) -> Shown:
     """A model that makes each call in turn, then answers."""
-    return _Shown(
+    return Shown(
         responses=[
             *(
                 AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"c{n}"}])
@@ -136,7 +135,7 @@ def _calls(*calls: tuple[str, dict]) -> _Shown:
 def _run(  # noqa: PLR0913 -- by keyword, each the one way a test varies the build
     cfg,
     session_dir,
-    model: _Shown,
+    model: Shown,
     capabilities: Capabilities | None = None,
     *,
     wait=False,
@@ -159,7 +158,7 @@ def _run(  # noqa: PLR0913 -- by keyword, each the one way a test varies the bui
     return built.graph.invoke(turn, config={"recursion_limit": 20}, context=built.context)
 
 
-def _answer(model: _Shown, call_id: str = "c1") -> ToolMessage:
+def _answer(model: Shown, call_id: str = "c1") -> ToolMessage:
     """The tool result the model was handed for `call_id`, as it was handed."""
     (answer,) = [
         m for m in model.shown[-1] if isinstance(m, ToolMessage) and m.tool_call_id == call_id
@@ -336,7 +335,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
     from kingfisher.core.agent.middlewares.step_budget import StepBudget
     from kingfisher.core.session.ledger import Ledger
     from kingfisher.core.session.store import KeptLedger
-    from tests.unit.agent.middlewares.test_offered_tool_errors import _through
+    from tests.unit.stand_ins import through_hooks
 
     data = "A" * (400 * KB)
 
@@ -364,7 +363,7 @@ def test_a_replaced_pdf_is_a_failed_call_and_leaves_no_saved_row(cfg, session_di
     )
     call = {"name": "export_pdf", "args": {"note": "x"}, "id": "c1"}
 
-    answer = _through(stack, call, export_pdf, way)
+    answer = through_hooks(stack, call, export_pdf, way)
 
     assert answer.text.startswith("export_pdf's result is a 300 KB PDF"), answer.text
     assert answer.status == "error"
@@ -443,10 +442,10 @@ def _pdf_of(session_dir, name: str, size: int) -> dict:
     return {"file_path": f"/inputs/{name}"}
 
 
-def _together(*calls: tuple[str, dict]) -> _Shown:
+def _together(*calls: tuple[str, dict]) -> Shown:
     """A model asking for every call in one reply, then answering."""
     asked = [{"name": name, "args": args, "id": f"c{n}"} for n, (name, args) in enumerate(calls, 1)]
-    return _Shown(responses=[AIMessage(content="", tool_calls=asked), AIMessage(content="done")])
+    return Shown(responses=[AIMessage(content="", tool_calls=asked), AIMessage(content="done")])
 
 
 def test_pdfs_each_under_the_allowance_are_stopped_where_together_they_pass_it(
@@ -707,7 +706,7 @@ def test_a_pdf_replaced_with_text_leaves_the_turn_room_for_the_next(cfg, session
     stack, _ = _stacked(cfg, session_dir, asking)
     call = {"name": "export_two", "args": {"note": "x"}, "id": "c1"}
 
-    answer = _through(stack, call, export_two, way)
+    answer = through_hooks(stack, call, export_two, way)
 
     assert "3 pages" in answer.text
     assert len(_files([answer])) == 1, "the PDF beside the replaced one was refused"
@@ -724,7 +723,7 @@ def test_the_plugin_is_told_of_a_pdf_that_passed_beside_it_in_the_same_batch(
     stack, _ = _stacked(cfg, session_dir, asking)
     call = {"name": "export_two", "args": {"note": "x"}, "id": "c1"}
 
-    answer = _through(stack, call, export_two, way)
+    answer = through_hooks(stack, call, export_two, way)
 
     assert len(_files([answer])) == 1, "the control: kingfisher let one of the two through"
     first, _ = asking.asked
@@ -740,7 +739,7 @@ def test_a_refused_pdf_the_plugin_replaces_is_a_call_that_succeeded(cfg, session
         cfg, session_dir, _Asking(lambda pdf: f"{pdf.verdict}: 412 pages; read it in parts")
     )
 
-    answer = _through(stack, EXPORT, export_pdf, way)
+    answer = through_hooks(stack, EXPORT, export_pdf, way)
 
     assert "too_large: 412 pages; read it in parts" in answer.text
     assert not _files([answer]), "the model was handed the PDF whole"
@@ -759,7 +758,7 @@ def test_a_pdf_the_plugin_hands_back_is_judged_again_and_asked_about_once(
     ])
     stack, ledger = _stacked(cfg, session_dir, asking)
 
-    answer = _through(stack, EXPORT, export_pdf, way)
+    answer = through_hooks(stack, EXPORT, export_pdf, way)
 
     assert answer.text.startswith("export_pdf's result is a 300 KB PDF, too large"), answer.text
     assert answer.status == "error"

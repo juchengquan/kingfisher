@@ -27,7 +27,7 @@ from tests.conftest import (
     tools_dir,
     unwired,
 )
-from tests.unit.agent.test_subagent_skills import offer_skills
+from tests.unit.conftest import offer_skills
 
 
 class _Offered(AgentMiddleware):
@@ -169,7 +169,7 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
     two first and the model read a refusal under a heading for each part."""
     from langchain_core.tools import tool
 
-    from tests.unit.agent.middlewares.test_offered_tool_errors import _through
+    from tests.unit.stand_ins import through_hooks
 
     stack = standing_middleware(
         "agent",
@@ -194,7 +194,7 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
         return "found"
 
     call = {"name": "grep", "args": {"pattern": "alpha|beta"}, "id": "c1"}
-    answer = _through(stack, call, grep)
+    answer = through_hooks(stack, call, grep)
 
     assert answer.content == (
         "Error: grep is not available for this request. Available tools: read_file."

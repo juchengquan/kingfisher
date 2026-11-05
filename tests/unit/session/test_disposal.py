@@ -11,13 +11,8 @@ from kingfisher.core.request import Request
 from kingfisher.core.session import retention
 from kingfisher.plugins import LocalSessions
 from tests.conftest import Through, start
-
-# The two helpers both halves of the old file build against, left where the other
-# half needs them too -- as `test_tenancy` itself takes `StubAgent` from
-# `test_run`. `_claim` reads a session's turn slot, which is a question both
-# "may this caller take a turn" and "may this session be swept" have to ask.
-from tests.unit.access.test_tenancy import _claim, service
-from tests.unit.service.test_run import StubAgent
+from tests.unit.access.test_tenancy import service
+from tests.unit.stand_ins import StubAgent, claim_of
 
 
 class Stuck(LocalSessions):
@@ -183,7 +178,7 @@ def test_a_sweep_gives_back_the_claim_it_took_when_the_delete_fails(cfg, monkeyp
     result = kf.reap(now=time.time())
 
     assert result.failures
-    assert not _claim(cfg, session).exists()
+    assert not claim_of(cfg, session).exists()
 
 
 class RemovedFirst(LocalSessions):
@@ -261,7 +256,7 @@ def test_a_claim_left_by_a_dead_process_stops_sparing_its_session(cfg):
 
     kf = service(cfg)
     crashed = start(cfg, "crashed")
-    _claim(cfg, crashed).mkdir(parents=True, exist_ok=True)
+    claim_of(cfg, crashed).mkdir(parents=True, exist_ok=True)
 
     decade = time.time() + 10 * 365 * 24 * 3600
     result = kf.reap(now=decade)
@@ -276,13 +271,13 @@ def test_a_claim_someone_could_still_hold_spares_its_session(cfg):
 
     kf = service(cfg)
     running = start(cfg, "running")
-    _claim(cfg, running).mkdir(parents=True, exist_ok=True)
+    claim_of(cfg, running).mkdir(parents=True, exist_ok=True)
 
     result = kf.reap(now=time.time())
 
     assert result.removed == ()
     assert kf.session(running) is not None
-    assert _claim(cfg, running).exists()
+    assert claim_of(cfg, running).exists()
 
 
 def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
@@ -291,7 +286,7 @@ def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
 
     kf = service(cfg)
     held = start(cfg, "held")
-    _claim(cfg, held).mkdir(parents=True, exist_ok=True)
+    claim_of(cfg, held).mkdir(parents=True, exist_ok=True)
     now = time.time()
 
     inside = kf.reap(now=now + cfg.claim_stale_after - 60)
@@ -456,7 +451,7 @@ def test_a_sweep_leaves_no_claim_behind(cfg):
 
     kf = service(cfg)
     crashed = start(cfg, "crashed")
-    claim = _claim(cfg, crashed)
+    claim = claim_of(cfg, crashed)
     claim.mkdir(parents=True, exist_ok=True)
 
     kf.reap(now=time.time() + 10 * 365 * 24 * 3600)
@@ -468,7 +463,7 @@ def test_a_sweep_leaves_no_claim_behind(cfg):
 def test_deleting_a_session_takes_its_claim_with_it(cfg):
     kf = service(cfg)
     session = start(cfg, "s")
-    claim = _claim(cfg, session)
+    claim = claim_of(cfg, session)
     claim.mkdir(parents=True, exist_ok=True)
 
     Through(kf).delete(session)
@@ -480,7 +475,7 @@ def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg):
     """Why the leftover mattered rather than merely accumulated."""
     kf = service(cfg)
     start(cfg, "reused")
-    _claim(cfg, "reused").mkdir(parents=True, exist_ok=True)
+    claim_of(cfg, "reused").mkdir(parents=True, exist_ok=True)
     Through(kf).delete("reused")
 
     start(cfg, "reused")
@@ -496,7 +491,7 @@ def test_a_claim_is_stale_the_moment_its_age_reaches_stale_after(cfg):
     assert LocalSessions().claim(cfg, session, stale_after=50.0)
     # Whole seconds, set rather than read: an mtime from the clock would put the
     # boundary between two floats this could not name exactly.
-    os.utime(_claim(cfg, session), (1000.0, 1000.0))
+    os.utime(claim_of(cfg, session), (1000.0, 1000.0))
 
     assert LocalSessions().held(cfg, session, stale_after=50.0, now=1049.0)
     assert not LocalSessions().held(cfg, session, stale_after=50.0, now=1050.0)

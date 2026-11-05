@@ -29,6 +29,7 @@ from tests.conftest import (
     subagents_dir,
     unwired,
 )
+from tests.unit.stand_ins import subagent_graphs
 
 HELPER = """name: helper
 description: Asks for every tool, so it holds whatever it is given.
@@ -45,37 +46,6 @@ def _with_helper(cfg, definition: str = HELPER, name: str = "helper.yaml"):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / name).write_text(definition, encoding="utf-8")
     return cfg
-
-
-def _subagent_graphs(graph):
-    """The compiled subagents, which live in the `task` tool's closure."""
-    node = getattr(graph, "nodes", {}).get("tools")
-    task_tool = getattr(getattr(node, "bound", None), "tools_by_name", {}).get("task")
-    found: dict = {}
-
-    def walk(obj, depth=0):
-        if depth > 4 or found:
-            return
-        for attribute in ("func", "__closure__"):
-            value = getattr(obj, attribute, None)
-            if attribute == "__closure__":
-                for cell in value or ():
-                    try:
-                        contents = cell.cell_contents
-                    except ValueError:
-                        continue
-                    if isinstance(contents, dict) and any(
-                        hasattr(v, "nodes") for v in contents.values()
-                    ):
-                        found.update(contents)
-                        return
-                    walk(contents, depth + 1)
-            elif value is not None:
-                walk(value, depth + 1)
-
-    if task_tool is not None:
-        walk(task_tool)
-    return found
 
 
 def _model():
@@ -115,7 +85,7 @@ def test_a_subagent_may_not_use_what_its_caller_was_denied(cfg, session_dir):
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     ).graph
 
-    subagent = _subagent_graphs(graph).get("helper")
+    subagent = subagent_graphs(graph).get("helper")
     assert subagent is not None, "the declared subagent was not compiled"
 
     out = subagent.invoke(
@@ -164,7 +134,7 @@ def test_a_subagent_that_withheld_a_tool_itself_is_the_one_named(cfg, session_di
         capabilities=Capabilities(subagents=("reader",)),
     ).graph
 
-    subagent = _subagent_graphs(graph).get("reader")
+    subagent = subagent_graphs(graph).get("reader")
     assert subagent is not None, "the declared subagent was not compiled"
 
     out = subagent.invoke(
@@ -199,7 +169,7 @@ def test_the_builtin_subagent_arrives_with_the_ceiling_on(cfg, session_dir):
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     ).graph
 
-    subagent = _subagent_graphs(graph).get("general-purpose")
+    subagent = subagent_graphs(graph).get("general-purpose")
     assert subagent is not None, "the built-in subagent should still be reachable"
 
     out = subagent.invoke(
@@ -223,7 +193,7 @@ def test_the_builtin_survives_when_no_subagents_are_named(cfg, session_dir):
         capabilities=Capabilities(builtin_tools=("read_file", "task")),
     ).graph
 
-    subagent = _subagent_graphs(graph).get("general-purpose")
+    subagent = subagent_graphs(graph).get("general-purpose")
     assert subagent is not None
 
     out = subagent.invoke(
@@ -329,7 +299,7 @@ def test_a_subagent_writes_only_where_the_agent_may(cfg, session_dir, subagent, 
         capabilities=Capabilities(subagents=("helper",)),
     ).graph
 
-    _subagent_graphs(graph)[subagent].invoke(
+    subagent_graphs(graph)[subagent].invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
     )
 
@@ -661,7 +631,7 @@ def test_the_wildcard_means_everything(cfg, session_dir):
     """
     graph = _build(cfg, session_dir, STAR)
 
-    subagent = _subagent_graphs(graph).get("helper")
+    subagent = subagent_graphs(graph).get("helper")
     assert subagent is not None
 
     spec = a_subagent(STAR, "helper.yaml")
@@ -696,7 +666,7 @@ def test_a_tool_the_request_withheld_is_still_dropped(cfg, session_dir):
         capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     ).graph
 
-    subagent = _subagent_graphs(graph).get("helper")
+    subagent = subagent_graphs(graph).get("helper")
     assert subagent is not None  # built, not refused
 
 
@@ -706,7 +676,7 @@ def test_a_definition_naming_no_tools_is_unaffected(cfg, session_dir):
     """
     graph = _build(cfg, session_dir, HELPER)
 
-    assert _subagent_graphs(graph).get("helper") is not None
+    assert subagent_graphs(graph).get("helper") is not None
 
 
 def test_a_builtin_named_under_tools_says_which_list_it_belongs_in(cfg, session_dir):
@@ -860,7 +830,7 @@ def test_a_subagent_granted_no_offered_tool_is_built_without_its_callers(cfg, se
         capabilities=Capabilities(subagents=("helper",)),
     ).graph
 
-    held = _tool_node(_subagent_graphs(graph)["helper"])
+    held = _tool_node(subagent_graphs(graph)["helper"])
 
     assert "peek" in _tool_node(graph), "the agent has to hold it for this to prove anything"
     assert "read_file" in held, "and this is the subagent's tool node, not an empty read"

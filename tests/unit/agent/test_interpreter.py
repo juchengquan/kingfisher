@@ -26,8 +26,9 @@ from tests.conftest import (
     subagents_dir,
     tools_dir,
 )
-from tests.unit.agent.test_subagent_helpers import _helper, _tools_of
+from tests.unit.agent.test_subagent_helpers import _helper
 from tests.unit.scripted import Scripted
+from tests.unit.stand_ins import tools_of
 
 
 def _model():
@@ -457,7 +458,7 @@ def test_a_nested_helper_is_handed_no_sandbox(cfg, session_dir):
     ).graph
 
     assert "eval" in dispatched(graph), "the sandbox was not wired -- this proves nothing"
-    assert "eval" not in _tools_of(_helper(graph, "outer", "helper"))
+    assert "eval" not in tools_of(_helper(graph, "outer", "helper"))
 
 
 # -- giving the runtime back ----------------------------------------------

@@ -12,7 +12,7 @@ from kingfisher import Kingfisher
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions
 from tests.conftest import an_agent, start
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent
 
 #: Every sync method the async paths can reach, on the classes that answer them.
 PORT_METHODS = {

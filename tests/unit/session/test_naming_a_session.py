@@ -16,7 +16,7 @@ from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import Through, macos
 from tests.unit.service.test_files_for import DOORS, _turn
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent
 
 DEFAULT = "default"
 

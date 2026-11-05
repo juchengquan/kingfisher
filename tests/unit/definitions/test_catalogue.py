@@ -380,7 +380,7 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
 
     from kingfisher.core.definitions import catalogue as catalogue_module
     from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
-    from tests.unit.service.test_run import StubAgent
+    from tests.unit.stand_ins import StubAgent
 
     (subagents_dir(cfg) / "a.yaml").write_text(
         "name: alpha\ndescription: A.\nsystem_prompt: |\n  x\n", encoding="utf-8"
@@ -410,7 +410,7 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
 def test_a_definition_written_after_wiring_is_this_deployments(cfg):
     """Read once at wiring, a definition added afterwards waited for a restart; a new file
     changes which files there are, which an edit to one does not."""
-    from tests.unit.service.test_run import StubAgent
+    from tests.unit.stand_ins import StubAgent
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
 

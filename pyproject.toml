@@ -309,7 +309,12 @@ pythonpath = ["."]
 # So the default is sized for the run that goes wrong across the whole suite,
 # which is the one nobody can read. Pass `--tb=long` for the single test you are
 # debugging, where the frames are the point.
-addopts = ["--tb=line"]
+#
+# `importlib`, so a test module or a conftest is imported once, under the dotted name
+# another module imports it by. The default imports each under its bare name as well,
+# and a class from the second copy is another class: a script queued on one never
+# reaches code holding the other.
+addopts = ["--tb=line", "--import-mode=importlib"]
 
 [tool.ty.environment]
 python-version = "3.12"

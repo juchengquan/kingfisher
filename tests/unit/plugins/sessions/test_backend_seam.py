@@ -9,15 +9,13 @@ from kingfisher import Kingfisher
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.config import ConfigError
-from kingfisher.core.interfaces import CommandResult, CommandRunner
 from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS
 from kingfisher.core.request import Request
 from kingfisher.core.run import run, stream
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins.sessions.backend import LocalSessions, WorkspaceScopedBackend, backend_at
 from tests.conftest import agent_for, an_agent
-from tests.unit.service.test_run import StubAgent
-from tests.unit.session.test_session_files import Elsewhere as KeptElsewhere
+from tests.unit.stand_ins import Elsewhere, ElsewhereRunner, StubAgent
 
 
 class Substitute(WorkspaceScopedBackend):
@@ -47,21 +45,6 @@ class NotABackend:
     """What a deployment returns when it builds one from nothing: whatever methods it
     wrote, and none of the inheritance deepagents decides by.
     """
-
-
-class Elsewhere(CommandRunner):
-    """A runner that ships its commands off this machine, which is the case where
-    losing it matters: the confinement names paths on *this* host.
-    """
-
-    @property
-    def local(self) -> bool:
-        return False
-
-    def run(
-        self, command: str, *, timeout: int | None = None
-    ) -> CommandResult:  # pragma: no cover -- wired, never driven: no turn is run here
-        raise NotImplementedError
 
 
 def test_a_service_with_no_filesystem_named_is_refused(cfg):
@@ -99,7 +82,7 @@ def test_a_pre_built_graph_reaches_its_session_through_the_backends_named(cfg, t
     source.write_text("alpha\n")
     remote = tmp_path / "remote"
     kf = Kingfisher(
-        cfg, graph=StubAgent("ok"), sessions=KeptElsewhere(remote)
+        cfg, graph=StubAgent("ok"), sessions=Elsewhere(remote)
     )
 
     session_id = kf.run(Request("t", inputs=(source,))).session_id
@@ -175,7 +158,7 @@ def test_the_runner_the_session_backends_hold_runs_the_turns_commands(cfg, sessi
     way. Read off the backend the turn was set up on, not off what `open` was handed.
     """
     an_agent(cfg)
-    runner = Elsewhere()
+    runner = ElsewhereRunner()
     service = Kingfisher(cfg, sessions=LocalSessions(runner=lambda _where: runner))
 
     prepared = drive(service._prepare_steps(Request("go", agent="only")))

@@ -41,7 +41,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.backend import SessionBackends
 from kingfisher.core.config import DEFAULT_THREAD_POOL_SIZE, Config
 from tests.conftest import FAKE_CATALOGUE, StubCheckpointer
-from tests.unit.service.test_run import StubAgent
+from tests.unit.stand_ins import StubAgent
 
 #: One round trip to the remote backend.
 LATENCY = 0.05

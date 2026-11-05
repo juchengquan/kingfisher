@@ -25,6 +25,7 @@ from tests.conftest import (
     subagents_dir,
     unwired,
 )
+from tests.unit.conftest import define
 
 #: A second endpoint, on a different wire format, so a test can tell "went
 #: elsewhere" from "went to the default" by which attribute the value landed on.
@@ -62,11 +63,6 @@ def written(tmp_path, body: str = CATALOGUE):
         "KINGFISHER_DEFINITIONS_DIR": str(definitions),
         "MINIMAX_API_KEY": "sk-gateway",
     }
-
-
-def define(cfg, body: str, name: str = "reviewer") -> None:
-    (cfg.definitions / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.definitions / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
 def build(cfg, session_dir, *, run_on=None, **caps):

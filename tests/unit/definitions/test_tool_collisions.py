@@ -13,7 +13,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
-from tests.unit.access.test_delegation_ceiling import _subagent_graphs
+from tests.unit.stand_ins import subagent_graphs
 
 TOOL = """
 from langchain_core.tools import tool
@@ -97,7 +97,7 @@ def test_each_subagent_holds_the_tool_it_named(cfg, session_dir):
             subagents=("agent_vendor_a", "agent_vendor_b"),
         ),
     ).graph
-    subagents = _subagent_graphs(graph)
+    subagents = subagent_graphs(graph)
 
     assert _fetch_from(subagents["agent_vendor_a"]) == "from vendor_a"
     assert _fetch_from(subagents["agent_vendor_b"]) == "from vendor_b"
@@ -152,7 +152,7 @@ def test_a_grant_of_everything_still_works(cfg, session_dir):
     ).graph
 
     assert _fetch_from(graph) is None, "the parent cannot tell them apart"
-    assert _fetch_from(_subagent_graphs(graph)["agent_vendor_a"]) == "from vendor_a"
+    assert _fetch_from(subagent_graphs(graph)["agent_vendor_a"]) == "from vendor_a"
 
 
 def test_a_subagent_can_actually_call_the_one_it_named(cfg, session_dir):
@@ -185,7 +185,7 @@ def test_a_subagent_can_actually_call_the_one_it_named(cfg, session_dir):
         ),
     ).graph
 
-    out = _subagent_graphs(graph)["agent_vendor_b"].invoke(
+    out = subagent_graphs(graph)["agent_vendor_b"].invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={"recursion_limit": 6},
     )
@@ -297,7 +297,7 @@ def test_a_subagent_still_cannot_reach_past_the_request(cfg, session_dir):
         ),
     ).graph
 
-    out = _subagent_graphs(graph)["agent_vendor_b"].invoke(
+    out = subagent_graphs(graph)["agent_vendor_b"].invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={"recursion_limit": 6},
     )

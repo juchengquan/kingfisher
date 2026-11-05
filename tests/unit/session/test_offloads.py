@@ -4,8 +4,6 @@ and previews, and the messages deepagents keeps aside.
 
 from __future__ import annotations
 
-from typing import Any
-
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.core.access.capabilities import Capabilities
@@ -15,7 +13,7 @@ from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
-from tests.unit.access.test_delegation_ceiling import _subagent_graphs
+from tests.unit.stand_ins import Shown, subagent_graphs
 
 #: deepagents' names for the two folders, under whatever root the backend gives it.
 EVICTED = "large_tool_results"
@@ -33,18 +31,8 @@ TOOLS = [loud]
 '''
 
 
-class _Shown(FakeToolCallingModel):
-    """Keeps what it was shown on every call."""
-
-    shown: list[list[Any]] = []
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        self.shown.append(list(messages))
-        return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
-
-
-def _calls_loud() -> _Shown:
-    return _Shown(
+def _calls_loud() -> Shown:
+    return Shown(
         responses=[
             AIMessage(content="", tool_calls=[{"name": "loud", "args": {}, "id": "c1"}]),
             AIMessage(content="done"),
@@ -68,7 +56,7 @@ def _with_loud(cfg) -> None:
     (tools_dir(cfg) / "loud.py").write_text(LOUD, encoding="utf-8")
 
 
-def _previewed_into_the_results_folder(model: _Shown, session_dir) -> None:
+def _previewed_into_the_results_folder(model: Shown, session_dir) -> None:
     """The preview the model was shown names the results folder, and the whole is there.
 
     And nothing lands in deepagents' own folder: `standing_middleware` turns its offloading
@@ -124,7 +112,7 @@ def test_a_subagent_s_long_results_are_saved_the_same_way(cfg, session_dir):
         ledger=_a_ledger(),
     ).graph
 
-    _subagent_graphs(graph)["lister"].invoke(
+    subagent_graphs(graph)["lister"].invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
     )
 
@@ -137,7 +125,7 @@ def test_a_request_too_long_to_send_is_kept_in_the_scratchpad(cfg, session_dir):
     """
     # About 250,000 characters, past the 50,000 tokens it keeps in a user message.
     request = "\n".join(f"line {n:06d} " + "y" * 90 for n in range(2_500))
-    model = _Shown(responses=[AIMessage(content="done")])
+    model = Shown(responses=[AIMessage(content="done")])
 
     build_agent(cfg, backend=backend_at(cfg, session_dir), model=model).graph.invoke(
         {"messages": [{"role": "user", "content": request}]}, config={"recursion_limit": 8}
@@ -221,7 +209,7 @@ def test_a_result_no_wider_than_the_cap_in_characters_is_shown_whole(cfg, sessio
     """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "wide.py").write_text(WIDE, encoding="utf-8")
-    model = _Shown(
+    model = Shown(
         responses=[
             AIMessage(content="", tool_calls=[{"name": "wide", "args": {}, "id": "c1"}]),
             AIMessage(content="done"),
@@ -249,7 +237,7 @@ def test_a_long_result_from_a_tool_we_do_not_record_is_not_offloaded(cfg, sessio
     big.parent.mkdir(parents=True, exist_ok=True)
     big.write_text("\n".join(f"row {n:05d} " + "x" * 90 for n in range(1_000)), encoding="utf-8")
     asked = {"file_path": "/outputs/big.txt", "limit": 1_000}
-    model = _Shown(
+    model = Shown(
         responses=[
             AIMessage(content="", tool_calls=[{"name": "read_file", "args": asked, "id": "c1"}]),
             AIMessage(content="done"),

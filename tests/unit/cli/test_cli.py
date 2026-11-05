@@ -1005,10 +1005,10 @@ def test_reap_alone_removes_nothing(cfg, monkeypatch, capsys):
 
 def _busy(cfg, session_id: str) -> str:
     """A session a turn is holding."""
-    from tests.unit.access.test_tenancy import _claim
+    from tests.unit.stand_ins import claim_of
 
     start(cfg, session_id)
-    _claim(cfg, session_id).write_text("held", encoding="utf-8")
+    claim_of(cfg, session_id).write_text("held", encoding="utf-8")
     return session_id
 
 
@@ -1166,7 +1166,7 @@ def test_policied_definitions_still_delete_the_session_their_run_used(
     above never asks who is calling.
     """
     from kingfisher.cli import __main__ as entry
-    from tests.unit.service.test_run import StubAgent
+    from tests.unit.stand_ins import StubAgent
 
     # The agent's own `source_ids:` is the lock, so these definitions already refuse a
     # call that says nobody -- there is no policy to hand in beside it.

@@ -1,9 +1,9 @@
 """A model a turn the service runs can be scripted with.
 
-A module of its own rather than a class in `conftest`, because pytest imports
-`conftest` under a name of its own: a test importing `tests.conftest` gets a second
-copy of the class, and a script queued on it never reaches the one the service
-builds.
+The catalogue row names the class by its module, so a script reaches the model the
+service builds only when it was queued on that module's class. Outside the test modules
+and `conftest`, this file has one name under any import mode; they have one only under
+the `importlib` mode `pyproject.toml` sets.
 """
 
 from __future__ import annotations

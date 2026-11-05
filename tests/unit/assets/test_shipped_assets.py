@@ -30,7 +30,8 @@ from kingfisher.core.definitions.tools.spec import Offering, out_of_reach
 from kingfisher.core.layout import SCRATCH
 from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, middleware_of, repository_root, subagent_of
-from tests.unit.agent.test_subagent_helpers import _subagent, _subagents_of, _tools_of
+from tests.unit.agent.test_subagent_helpers import _subagent, _subagents_of
+from tests.unit.stand_ins import tools_of
 
 
 def test_no_shipped_skill_names_its_own_files_by_where_the_catalogue_puts_it(shipped):
@@ -702,7 +703,7 @@ def test_the_typed_preset_is_handed_its_tool_and_shown_its_skill(
     shown = index._format_skills_list(index.before_agent({}, None, {})["skills_metadata"])
 
     assert "semver" in shown
-    assert "order_versions" in _tools_of(_subagent(built.graph, "versions"))
+    assert "order_versions" in tools_of(_subagent(built.graph, "versions"))
 
 
 def test_the_typed_presets_tool_orders_by_precedence_rather_than_as_text(shipped):

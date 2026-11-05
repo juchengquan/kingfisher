@@ -1186,6 +1186,27 @@ def test_a_test_sits_on_its_shelf_and_in_its_folder():
     assert (REPO / "tests" / "integration").is_dir()
 
 
+def _test_names_shared(root: Path) -> list[str]:
+    seen: dict[str, int] = {}
+    for path in root.rglob("test_*.py"):
+        seen[path.name] = seen.get(path.name, 0) + 1
+    return sorted(name for name, count in seen.items() if count > 1)
+
+
+def test_no_two_test_modules_share_a_name(tmp_path):
+    """Two test modules of one name, which a citation by bare file name cannot tell apart,
+    and which pytest collects without a word under the import mode `pyproject.toml` sets.
+    """
+    for folder in ("a", "b"):
+        (tmp_path / folder).mkdir()
+        (tmp_path / folder / "test_twice.py").touch()
+    (tmp_path / "a" / "test_once.py").touch()
+    assert _test_names_shared(tmp_path) == ["test_twice.py"], "the rule sees no pair at all"
+
+    shared = _test_names_shared(REPO / "tests")
+    assert not shared, f"{shared} each name more than one test module — rename one"
+
+
 def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     """Every reference in the tree resolves once the thirteen are fixed, so the rule
     above passes whether it discriminates or answers nothing at all.

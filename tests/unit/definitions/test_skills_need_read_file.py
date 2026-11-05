@@ -36,6 +36,7 @@ from tests.conftest import (
     subagents_dir,
     withheld_told,
 )
+from tests.unit.conftest import offer_skills
 
 HEAD = "name: n\ndescription: d\nsystem_prompt: |\n  Go.\n"
 
@@ -150,14 +151,6 @@ def test_the_tool_a_skill_is_opened_with_is_a_built_in(cfg):
 # -- dropped for a request that withholds it ---------------------------------
 
 
-def offer(cfg, *names: str) -> None:
-    for name in names:
-        (cfg.skills_dir / name).mkdir(parents=True, exist_ok=True)
-        (cfg.skills_dir / name / "SKILL.md").write_text(
-            f"---\nname: {name}\ndescription: A procedure.\n---\nBody.\n", encoding="utf-8"
-        )
-
-
 def build(cfg, session_dir, *, agent: AgentSpec | None = None, **caps):
     wired = replace(cfg, skills_enabled=True)
     return build_agent(
@@ -194,7 +187,7 @@ def test_a_request_withholding_read_file_is_told_of_no_skills(cfg, session_dir, 
     """Narrowing `read_file` away left the index and the prompt's skills text in place, so
     the model opened a skill and was refused, once per skill it tried.
     """
-    offer(cfg, "alpha")
+    offer_skills(cfg, "alpha")
 
     built = build(
         cfg, session_dir, agent=EVERYTHING, builtin_tools=("ls", "execute"), skills=skills
@@ -206,7 +199,7 @@ def test_a_request_withholding_read_file_is_told_of_no_skills(cfg, session_dir, 
 @pytest.mark.parametrize("skills", [ALL, ("alpha",)], ids=["every skill", "named"])
 def test_a_request_keeping_read_file_is_still_told_of_its_skills(cfg, session_dir, skills):
     """The control: dropping skills for every narrowed request would pass the rule above."""
-    offer(cfg, "alpha")
+    offer_skills(cfg, "alpha")
 
     built = build(
         cfg,

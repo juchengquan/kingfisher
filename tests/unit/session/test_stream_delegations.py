@@ -24,7 +24,8 @@ from kingfisher.core.result import RunEvent
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, start
-from tests.unit.agent.test_subagent_helpers import HELPER, REVIEWER, _define
+from tests.unit.agent.test_subagent_helpers import HELPER, REVIEWER
+from tests.unit.conftest import define_each
 from tests.unit.scripted import Scripted
 
 #: What two runs of one subagent say, a word at a time.
@@ -134,7 +135,7 @@ def test_the_main_agents_events_are_inside_no_delegation(cfg, session_dir):
 def test_a_helper_carries_the_whole_chain(scripted):
     """The innermost id alone would make two helpers of one subagent look alike again,
     and the outermost alone the same one level down."""
-    _define(scripted, REVIEWER, HELPER)
+    define_each(scripted, REVIEWER, HELPER)
     an_agent(scripted, subagents="[reviewer, second-opinion]", **EVERY_TOOL)
     start(scripted, "s")
     Scripted.script.extend(
@@ -232,7 +233,7 @@ WRITE = {"name": "write_file", "args": {"file_path": "/outputs/r.txt", "content"
 def _dispatching(scripted, program: str, *script: AIMessage | Exception, **agent: str) -> Any:
     """`reviewer`, and an agent whose first reply runs `program` as the call `e1`."""
     cfg = replace(scripted, interpreter_enabled=True)
-    _define(cfg, "name: reviewer\ndescription: Reviews.\nbuiltin_tools: [write_file]\n"
+    define_each(cfg, "name: reviewer\ndescription: Reviews.\nbuiltin_tools: [write_file]\n"
             "system_prompt: |\n  You review.\n")
     an_agent(cfg, subagents="[reviewer]", builtin_tools="[eval, task, write_file]", **agent)
     start(cfg, "s")
