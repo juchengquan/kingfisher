@@ -18,10 +18,9 @@ from langchain_core.tools import BaseTool, StructuredTool, ToolException
 # `RunnableConfig` above is imported to run, not only to type.
 from langchain_core.tools.base import _get_runnable_config_param, _signature_parameters
 
-from .host_paths import HostPathError
+from .host_paths import HostPathError, UnsafeReferenceError
 from .middlewares.recorder import ran
 from .middlewares.scratch_runs import HANDED
-from .references import UnsafeReferenceError
 from .session_paths import SessionPaths, as_asked, refusal_text
 from .tool_context import ToolContext, naming
 

@@ -413,7 +413,7 @@ def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
     the cases that matter -- a compiled graph, this stub, whatever a class constructs
     to, and `None` -- `Runnable` is what separates the first from the rest.
     """
-    from kingfisher.core.agent.kinds.subagents import compiled
+    from kingfisher.core.agent.kinds.subagents import compiled_subagent
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
 
     class OnlyInvoke:
@@ -428,7 +428,7 @@ def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
     )
 
     with pytest.raises(SubagentError, match="not a graph"):
-        compiled(spec, cfg, **COMPILED_UNWIRED)
+        compiled_subagent(spec, cfg, **COMPILED_UNWIRED)
 
 
 def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
@@ -438,7 +438,7 @@ def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
     """
     from langchain_core.runnables import RunnableLambda
 
-    from kingfisher.core.agent.kinds.subagents import compiled
+    from kingfisher.core.agent.kinds.subagents import compiled_subagent
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
 
     not_a_graph = RunnableLambda(lambda state: state)
@@ -446,7 +446,7 @@ def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
         name="researcher", description="d", system_prompt="", build=lambda model, tools: not_a_graph
     )
 
-    subagent = compiled(spec, cfg, **COMPILED_UNWIRED)
+    subagent = compiled_subagent(spec, cfg, **COMPILED_UNWIRED)
 
     assert subagent["runnable"] is not_a_graph
 
@@ -586,7 +586,7 @@ def test_a_compiled_subagent_is_handed_the_tool_it_named_either_way(cfg):
     from langchain_core.runnables import RunnableLambda
     from langchain_core.tools import tool
 
-    from kingfisher.core.agent.kinds.subagents import compiled
+    from kingfisher.core.agent.kinds.subagents import compiled_subagent
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
     from kingfisher.core.definitions.tools.spec import FoundTool, tool_name
 
@@ -609,7 +609,7 @@ def test_a_compiled_subagent_is_handed_the_tool_it_named_either_way(cfg):
         build=build,
     )
 
-    compiled(
+    compiled_subagent(
         spec,
         cfg,
         catalogue=(FoundTool(tool=probe, source="probe.py"),),

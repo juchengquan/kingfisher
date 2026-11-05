@@ -19,8 +19,8 @@ from .steps import Steps, changing, on_host, reading
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-# The layout arrives as an argument, never as `layout`'s route constants such as
-# `INPUTS_ROUTE`: a deployment may rename the folders a caller's files cross.
+# The layout arrives as an argument, never as one of `layout`'s route constants: a
+# deployment may rename the folders a caller's files cross.
 
 
 class InputsError(ValueError):

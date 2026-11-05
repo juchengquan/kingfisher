@@ -11,8 +11,8 @@ from langchain_core.messages import AIMessage
 from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent, read_only_permissions
+from kingfisher.core.agent.host_paths import UnsafeReferenceError
 from kingfisher.core.agent.permitted_backend import PermittedBackend, host_path
-from kingfisher.core.agent.references import UnsafeReferenceError
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at

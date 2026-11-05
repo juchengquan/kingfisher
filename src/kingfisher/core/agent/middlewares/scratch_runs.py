@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable, Collection, Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
 
@@ -19,10 +19,7 @@ from kingfisher.core.interfaces import ScratchRun
 from kingfisher.core.logged import raised, warn
 
 if TYPE_CHECKING:
-    from kingfisher.core.interfaces import ScratchRunLimit
-
-#: What a `ScratchRunLimit` is told a graph is.
-LimitKind = Literal["agent", "subagent", "general-purpose", "compiled"]
+    from kingfisher.core.interfaces import GraphKind, ScratchRunLimit
 
 
 class RefusingRunner:
@@ -42,7 +39,7 @@ class RefusingRunner:
         pass
 
 
-def limit_answer(limit: ScratchRunLimit, name: str, kind: LimitKind) -> tuple[bool, str | None]:
+def limit_answer(limit: ScratchRunLimit, name: str, kind: GraphKind) -> tuple[bool, str | None]:
     """Whether `limit` lets graph `name`'s tools run, and what a refused run is told, where
     the limit failed to answer."""
     try:
@@ -127,8 +124,8 @@ def handing(rule: RunRule) -> Iterator[None]:
 
 
 class ScratchRunsMiddleware(AgentMiddleware):
-    """Bind `runtime.context.run` for one offered tool's call, when the agent making it
-    may use the shell itself.
+    """Bind a runner for one offered tool's call, as the `context.scratch` its
+    `runtime.context.run` goes through, when the agent making it may use the shell itself.
 
     By name, so `eval` and `task` are never bound: what they run inherits their context,
     and with it anything bound there. They get the rule instead, which each tool they
@@ -144,22 +141,14 @@ class ScratchRunsMiddleware(AgentMiddleware):
         tools: Sequence[str] | None,
         gated: Collection[str],
         seconds: int,
-        limit_allows: bool,
-        limit_refusal: str | None = None,
+        #: The deployment's `ScratchRunLimit` on this graph, as `limit_answer` gives it.
+        limit: tuple[bool, str | None],
     ) -> None:
         super().__init__()
         self.names = names
         #: `None` is an unnarrowed grant, which holds the shell like any other built-in.
-        #: The deployment's `ScratchRunLimit` is joined with `and`, so it can only take away.
         ruled = (tools is None or EXECUTE in tools) and EXECUTE not in gated
-        self.rule = RunRule(
-            backend,
-            seconds,
-            allowed=ruled and limit_allows,
-            # Only where kingfisher's own rule allowed the run, so the cause it names is the
-            # one that took the run away.
-            refusal=limit_refusal if ruled and not limit_allows else None,
-        )
+        self.rule = RunRule(backend, seconds, allowed=ruled).narrowed(limit)
 
     def _bound(self, request: Any) -> tuple[Any, ScratchRunner | RefusingRunner | None]:
         runtime = request.runtime

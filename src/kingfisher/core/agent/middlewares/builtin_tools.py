@@ -41,7 +41,7 @@ from kingfisher.core.definitions.skills import READ_FILE
 from kingfisher.core.layout import Layout
 from kingfisher.core.session.store import ENTRY_ID
 
-from .narrowing import tool_name
+from .narrowing import requested_tool_name
 from .recorder import RUN
 from .results import failed
 
@@ -304,12 +304,7 @@ def _overlong(request: Any, longest: int) -> ToolMessage | None:
         return None
     if seconds <= longest:
         return None
-    return ToolMessage(
-        content=f"Error: timeout {asked}s exceeds maximum allowed ({longest}s).",
-        name=EXECUTE,
-        tool_call_id=call["id"],
-        status="error",
-    )
+    return failed(call, f"Error: timeout {asked}s exceeds maximum allowed ({longest}s).")
 
 
 def _unreadable(request: Any) -> ToolMessage | None:
@@ -603,12 +598,12 @@ def _joined(call: dict[str, Any], parts: list[str], answers: list[Any]) -> Any:
         return answers[0]
     said = [f"Searched `{call['args']['pattern']}` as separate literal parts."]
     said += [f"matches for `{part}`:\n{one.text}" for part, one in zip(parts, answers, strict=True)]
-    failed = all(one.status == "error" for one in answers)
+    all_failed = all(one.status == "error" for one in answers)
     return ToolMessage(
         content="\n\n".join(said),
         tool_call_id=call["id"],
         name=call.get("name"),
-        status="error" if failed else "success",
+        status="error" if all_failed else "success",
     )
 
 
@@ -628,25 +623,22 @@ def _split(request: Any) -> list[str] | None:
 
 
 class BuiltinToolsMiddleware(AgentMiddleware):
-    """Put the shell's own line in `execute`'s description, on a shell exporting the
-    session root say how a missed path is spelt there, and keep deepagents' host paths
-    from a shell that is not on this host, and from a graph `execute`'s line has told the
-    session root; have `read_file` read 1,000 lines unless told
-    otherwise, and `grep` search each string of `a|b`, and say so; say nothing of the shell or of
-    `write_todos` to a graph not holding it; have each built-in's description name only
-    the tools the graph holds; and refuse a command asked to run longer than `longest`,
-    a `read_file` of audio, video or slides, which no model here is handed as they are,
-    a path spelling one of the session's folders in other capitals, and a save outside
-    every folder of the session.
+    """deepagents' built-in tools as this graph's model is handed them:
+
+    - the shell's own line in `execute`'s description, and on a shell exporting the
+      session root, how a missed path is spelt there;
+    - deepagents' host paths kept from a shell that is not on this host, and from a graph
+      `execute`'s line has told the session root;
+    - `read_file` reading `READ_LINES` lines unless told otherwise, and `grep` searching
+      each string of `a|b`, each saying so;
+    - nothing said of the shell or of `write_todos` to a graph not holding it, and each
+      built-in's description naming only the tools the graph holds;
+    - refused: a command asked to run longer than `longest`, a `read_file` of audio, video
+      or slides, which no model here is handed as they are, a path spelling one of the
+      session's folders in other capitals, and a save outside every folder of the session.
 
     The shell's line goes in the description, not the system prompt: a subagent gets none
-    of the harness's shell section, and the description reaches every graph holding it. At
-    deepagents' 100 lines, a third of every call a turn made was `read_file` paging, most
-    naming a limit of 100 because the description did: so the description changes with
-    the default, and a limit the model names is left as it is. `grep` is literal, and
-    models wrote `a|b` anyway, nearly always finding nothing and searching again. The
-    prose deepagents and langchain add of a tool arrives whether or not the graph holds
-    it, and a model told of a tool calls it, each call spent on a refusal.
+    of the harness's shell section, and the description reaches every graph holding it.
     """
 
     def __init__(  # noqa: PLR0913 -- one keyword per thing said of the shell and the tools
@@ -689,7 +681,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
 
     def _told(self, request: Any) -> Any:
         # Inside `GrantedOnlyMiddleware`, so the request holds only what was granted.
-        held = {tool_name(tool) for tool in request.tools}
+        held = {requested_tool_name(tool) for tool in request.tools}
         lines = _held_lines(held)
         tools = [
             _offered(_described(_naming_held(tool, lines), self._rule, self._timed))

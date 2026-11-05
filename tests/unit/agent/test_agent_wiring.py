@@ -128,11 +128,11 @@ def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(
     assert "/skills" not in built.system_prompt
 
 
-def test_system_prompt_carries_no_host_paths_or_session_ids():
+def test_system_prompt_carries_no_host_paths_or_session_ids(cfg):
     """Q19/Q20: the prompt must stay byte-identical across workspaces and sessions, or
     the cached prefix is invalidated on every run.
     """
-    text = system_prompt()
+    text = system_prompt(cfg)
     assert "/Users/" not in text
     assert "/home/" not in text
     assert "session_id" not in text
@@ -344,7 +344,7 @@ def test_the_warning_names_both_of_the_deployments_two_names():
     """A deployment has two names for one middleware and only one is the problem."""
     with pytest.warns(UserWarning) as recorded:
         declared_middleware(
-            _named(("audit",)), {"audit": FilesystemMiddleware}, ALL, kind="subagent"
+            _named(("audit",)), {"audit": FilesystemMiddleware}, ALL, kind="subagent", provisions={}
         )
 
     message = _replacement_warnings(recorded)[0]
@@ -364,12 +364,14 @@ def test_the_warning_names_both_of_the_deployments_two_names():
 def test_replacing_one_deepagents_needs_says_so_more_loudly(replacement, its_job, the_others):
     """One job sentence served both, telling a SubAgentMiddleware it backed the file tools."""
     with pytest.warns(UserWarning) as recorded:
-        declared_middleware(_named(("audit",)), {"audit": replacement}, ALL, kind="agent")
+        declared_middleware(
+            _named(("audit",)), {"audit": replacement}, ALL, kind="agent", provisions={}
+        )
     required = _replacement_warnings(recorded)[0]
 
     with pytest.warns(UserWarning) as recorded:
         declared_middleware(
-            _named(("summarize",)), {"summarize": _Summarization}, ALL, kind="agent"
+            _named(("summarize",)), {"summarize": _Summarization}, ALL, kind="agent", provisions={}
         )
     ordinary = _replacement_warnings(recorded)[0]
 
@@ -494,7 +496,7 @@ class _WantsEverything(AgentMiddleware):
 
 #: The same subagent, naming no model, so it runs whatever summoned it. Its
 #: middleware has to be told that model rather than nothing, which is the half
-#: `_with_helpers` spells out and the half nothing held.
+#: `with_helpers` spells out and the half nothing held.
 _INHERITING_SUBAGENT = _SUBAGENT.replace("model: cheap-model\n", "")
 
 
@@ -585,7 +587,7 @@ def test_a_subagent_is_handed_its_own_model_rather_than_the_agents(cfg, session_
     Handing over the agent's model is wrong in the one direction that costs money,
     since a subagent pinned to a cheap model would be compacted by the expensive one.
     The same mistake was made once already for a helper's inherited model and is
-    recorded beside `_with_helpers`.
+    recorded beside `with_helpers`.
     """
     injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
 

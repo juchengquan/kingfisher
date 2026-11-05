@@ -2034,8 +2034,8 @@ middleware a deployment makes available. Nothing behaves differently; these name
 - **`from kingfisher import UnsafeReferenceError` fails.** Nothing raised it at a
   caller: a tool handed a path its turn may not reach gets the refusal as a failed
   tool result the model corrects from, as with `HostPathError`, so an `except` naming
-  it never fired. Delete the `except`. The class is still
-  `kingfisher.core.agent.references.UnsafeReferenceError`, which may move.
+  it never fired. Delete the `except`. The class is now
+  `kingfisher.core.agent.host_paths.UnsafeReferenceError`, which may move.
 - **`kingfisher run` with two `--input`s of one filename exits `2`**, saying
   `InputsError: <name>: supplied twice`. It printed a traceback and exited `1`, the
   code for a turn that ran and stopped at a bound.

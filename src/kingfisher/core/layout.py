@@ -117,7 +117,6 @@ def _route(*parts: str) -> str:
     return "/" + "/".join(parts) + "/"
 
 
-INPUTS_ROUTE = _route(INPUTS)
 SKILLS_ROUTE = _route(SKILLS)
 BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 

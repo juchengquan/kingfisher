@@ -254,7 +254,7 @@ def test_a_subagent_refuses_the_same_shapes_as_its_own_error():
 def test_a_deployments_defaults_apply_when_a_definition_wrote_nothing():
     spec = agent_spec(written("middlewares: [audit]\n"))
 
-    (built,) = declared_middleware(spec, {"audit": Audit}, ALL, kind="agent")
+    (built,) = declared_middleware(spec, {"audit": Audit}, ALL, kind="agent", provisions={})
 
     assert built.level == "INFO"
     assert built.destination == "/var/log/audit"
@@ -269,7 +269,7 @@ def test_a_definition_overrides_the_default_for_a_key_it_may_write():
         written("middlewares:\n  - name: audit\n    settings:\n      level: DEBUG\n")
     )
 
-    (built,) = declared_middleware(spec, {"audit": Audit}, ALL, kind="agent")
+    (built,) = declared_middleware(spec, {"audit": Audit}, ALL, kind="agent", provisions={})
 
     assert built.level == "DEBUG", "the definition's value did not win"
     assert built.destination == "/var/log/audit", "an unwritten key stayed the deployment's"
@@ -282,7 +282,7 @@ def test_a_key_the_class_did_not_offer_is_refused():
     )
 
     with pytest.raises(CapabilityError, match="does not accept"):
-        declared_middleware(spec, {"audit": Audit}, ALL, kind="agent")
+        declared_middleware(spec, {"audit": Audit}, ALL, kind="agent", provisions={})
 
 
 def test_a_class_offering_nothing_says_so_rather_than_printing_an_empty_list():
@@ -292,7 +292,7 @@ def test_a_class_offering_nothing_says_so_rather_than_printing_an_empty_list():
     )
 
     with pytest.raises(CapabilityError, match="takes no settings from a definition"):
-        declared_middleware(spec, {"bare": Bare}, ALL, kind="agent")
+        declared_middleware(spec, {"bare": Bare}, ALL, kind="agent", provisions={})
 
 
 def test_a_class_that_declares_neither_attribute_still_builds():
@@ -301,7 +301,7 @@ def test_a_class_that_declares_neither_attribute_still_builds():
     """
     spec = agent_spec(written("middlewares: [bare]\n"))
 
-    (built,) = declared_middleware(spec, {"bare": Bare}, ALL, kind="agent")
+    (built,) = declared_middleware(spec, {"bare": Bare}, ALL, kind="agent", provisions={})
 
     assert type(built).__name__ == "Bare"
 
@@ -314,7 +314,7 @@ def test_an_old_style_factory_still_works():
     spec = agent_spec(written("middlewares: [audit]\n"))
     registry = {"audit": lambda: Audit(level="WARN", destination="/dev/null")}
 
-    (built,) = declared_middleware(spec, registry, ALL, kind="agent")
+    (built,) = declared_middleware(spec, registry, ALL, kind="agent", provisions={})
 
     assert built.level == "WARN"
 
@@ -329,7 +329,7 @@ def test_settings_written_for_a_factory_are_refused_rather_than_dropped():
     registry = {"audit": lambda: Audit(level="WARN", destination="/dev/null")}
 
     with pytest.raises(CapabilityError, match="factory taking no arguments"):
-        declared_middleware(spec, registry, ALL, kind="agent")
+        declared_middleware(spec, registry, ALL, kind="agent", provisions={})
 
 
 def test_a_class_whose_defaults_miss_an_argument_names_the_registry_entry():
@@ -340,7 +340,7 @@ def test_a_class_whose_defaults_miss_an_argument_names_the_registry_entry():
     spec = agent_spec(written("middlewares: [needy]\n"))
 
     with pytest.raises(CapabilityError, match="could not build middleware 'needy'"):
-        declared_middleware(spec, {"needy": NeedsAnArgument}, ALL, kind="agent")
+        declared_middleware(spec, {"needy": NeedsAnArgument}, ALL, kind="agent", provisions={})
 
 
 def test_a_class_attribute_is_not_mutated_by_the_merge():
@@ -349,11 +349,11 @@ def test_a_class_attribute_is_not_mutated_by_the_merge():
         written("middlewares:\n  - name: audit\n    settings:\n      level: DEBUG\n")
     )
 
-    declared_middleware(spec, {"audit": Audit}, ALL, kind="agent")
+    declared_middleware(spec, {"audit": Audit}, ALL, kind="agent", provisions={})
 
     assert Audit.defaults == {"level": "INFO", "destination": "/var/log/audit"}
     plain = agent_spec(written("middlewares: [audit]\n"))
-    (second,) = declared_middleware(plain, {"audit": Audit}, ALL, kind="agent")
+    (second,) = declared_middleware(plain, {"audit": Audit}, ALL, kind="agent", provisions={})
     assert second.level == "INFO", "the first build's setting leaked into the second"
 
 
@@ -367,7 +367,7 @@ def test_a_withheld_name_is_refused_even_when_it_carries_settings():
     )
 
     with pytest.raises(CapabilityError, match="may not use"):
-        declared_middleware(spec, {"audit": Audit}, (), kind="agent")
+        declared_middleware(spec, {"audit": Audit}, (), kind="agent", provisions={})
 
 
 def test_a_star_that_resolves_to_a_registry_takes_no_settings_with_it():
@@ -376,7 +376,9 @@ def test_a_star_that_resolves_to_a_registry_takes_no_settings_with_it():
     """
     spec = agent_spec(written('middlewares: ["*"]\n'))
 
-    built = declared_middleware(spec, {"audit": Audit, "bare": Bare}, ALL, kind="agent")
+    built = declared_middleware(
+        spec, {"audit": Audit, "bare": Bare}, ALL, kind="agent", provisions={}
+    )
 
     assert sorted(type(m).__name__ for m in built) == ["Audit", "Bare"]
     audit = next(m for m in built if type(m).__name__ == "Audit")

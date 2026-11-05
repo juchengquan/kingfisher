@@ -1524,12 +1524,12 @@ def test_a_compiled_subagents_bundle_wins_a_name_the_catalogue_also_defines(cfg,
     Asserted on the list `build` *receives*, which is the only place the duplicate is
     visible. Through a built graph it is not: `tools_by_name` is a dict, so counting
     its keys can never see two, and the later entry wins by accident of order -- an
-    earlier version of this test asserted exactly that and passed against a `compiled`
+    earlier version of this test asserted exactly that and passed against a `compiled_subagent`
     that deduplicated nothing.
     """
     from langchain_core.runnables import RunnableLambda
 
-    from kingfisher.core.agent.kinds.subagents import compiled
+    from kingfisher.core.agent.kinds.subagents import compiled_subagent
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
     from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 
@@ -1550,7 +1550,7 @@ def test_a_compiled_subagents_bundle_wins_a_name_the_catalogue_also_defines(cfg,
         handed.extend(tools)
         return RunnableLambda(lambda value: value)
 
-    compiled(
+    compiled_subagent(
         SubagentSpec(
             name="surveyor",
             description="A compiled subagent.",

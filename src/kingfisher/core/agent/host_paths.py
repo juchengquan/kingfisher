@@ -1,4 +1,5 @@
-"""Refusing a host path handed to a file tool, and telling the model what to use instead."""
+"""Refusing a host path handed to a file tool, and telling the model what to use instead;
+and the refusal of a path a turn may not reach."""
 
 from __future__ import annotations
 
@@ -29,6 +30,10 @@ HOST_PATH_SAID = "is a host path"
 
 class HostPathError(ValueError):
     """A host path reached a file tool."""
+
+
+class UnsafeReferenceError(ValueError):
+    """A reference names somewhere other than where it was allowed to."""
 
 
 def reject_host_path(

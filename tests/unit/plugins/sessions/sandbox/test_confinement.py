@@ -26,7 +26,7 @@ from kingfisher import KingfisherWarning
 from kingfisher.core.agent.prompting import refuse_a_workspace_prompt
 from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import CommandResult, CommandRunner
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, HISTORY, INPUTS_ROUTE, Layout
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, HISTORY, Layout
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -1040,13 +1040,13 @@ def test_the_shell_cannot_lift_the_bits_on_the_callers_inputs(cfg, session_dir):
     not pass this.
     """
     backend = backend_at(cfg, session_dir)
-    backend.upload_files([(f"{INPUTS_ROUTE}given.txt", b"as written")])
+    backend.upload_files([(f"{DEFAULT_LAYOUT.inputs_route}given.txt", b"as written")])
 
     lifted = backend.execute(
         "chmod u+w inputs inputs/given.txt && printf FORGED > inputs/given.txt"
     )
     removed = backend.execute("rm -rf inputs")
-    (held,) = backend.download_files([f"{INPUTS_ROUTE}given.txt"])
+    (held,) = backend.download_files([f"{DEFAULT_LAYOUT.inputs_route}given.txt"])
 
     assert lifted.exit_code != 0 and held.content == b"as written"
     assert removed.exit_code != 0 and (session_dir / "inputs").is_dir()

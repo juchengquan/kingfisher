@@ -428,6 +428,10 @@ class AgentsMiddlewares(SubagentMiddlewares):
         return middlewares
 
 
+#: What a `ScratchRunLimit` is told a graph is.
+GraphKind = Literal["agent", "subagent", "general-purpose", "compiled"]
+
+
 class ScratchRunLimit(ABC):
     """Which graphs' offered tools a deployment refuses `ToolContext.run`, among those
     kingfisher would hand it to.
@@ -444,9 +448,7 @@ class ScratchRunLimit(ABC):
     """
 
     @abstractmethod
-    def allows(
-        self, name: str, kind: Literal["agent", "subagent", "general-purpose", "compiled"]
-    ) -> bool:
+    def allows(self, name: str, kind: GraphKind) -> bool:
         """Whether the tools of graph `name` may run commands, where kingfisher would let them.
 
         `name` is the agent's, empty for a request naming none; the subagent's; or
@@ -462,7 +464,7 @@ class NoScratchRunLimit(ScratchRunLimit):
     def allows(
         self,
         name: str,  # noqa: ARG002
-        kind: Literal["agent", "subagent", "general-purpose", "compiled"],  # noqa: ARG002
+        kind: GraphKind,  # noqa: ARG002
     ) -> bool:
         return True
 

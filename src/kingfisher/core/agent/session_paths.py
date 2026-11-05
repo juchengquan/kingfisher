@@ -7,7 +7,7 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from kingfisher.core.layout import INPUTS_ROUTE, OUTPUTS_ROUTE, SCRATCH_ROUTE, Layout
+from kingfisher.core.layout import OUTPUTS_ROUTE, SCRATCH_ROUTE, Layout
 
 from .host_paths import HOST_PATH_SAID, HOST_ROOTS, HostPathError
 from .prompting import what_you_make_goes
@@ -152,18 +152,16 @@ def as_asked(text: str, args: Mapping[str, Any]) -> str:
     return _QUOTED.sub(_said, text)
 
 
-def refusal_text(escaped: ValueError, paths: SessionPaths | None = None) -> str:
+def refusal_text(escaped: ValueError, paths: SessionPaths) -> str:
     """What the model is told when a path is refused, in one place.
 
     The middleware and `GuardedTool` both say it, so the rule reads the same either way
-    and the model can correct itself. Without `paths`, the default spellings are used.
+    and the model can correct itself.
     """
-    inputs_route = paths.inputs_route if paths is not None else INPUTS_ROUTE
-    outputs_route = paths.outputs_route if paths is not None else OUTPUTS_ROUTE
     return (
         f"Error: {escaped}. Tool paths are the same virtual paths the file "
-        f"tools take, rooted at this session -- `{inputs_route}<name>`, "
-        f"`{outputs_route}<name>` -- and cannot climb out of it."
+        f"tools take, rooted at this session -- `{paths.inputs_route}<name>`, "
+        f"`{paths.outputs_route}<name>` -- and cannot climb out of it."
     )
 
 
@@ -182,9 +180,8 @@ def where_to_write(text: str, paths: SessionPaths | None = None) -> str:
     a folder is kept is the prompt's to say before the call rather than this message's
     after it. Beside `refusal_text` so the pair offers the model the same folders.
 
-    The default is unreached rather than a fallback -- a deny rule comes from a session's
-    layout, so a build with none raises no refusal to rewrite -- and is here only so the
-    pair is called the same way. Measured; not worth a case of its own.
+    Without `paths` the shipped routes are said, which no build reaches: a deny rule comes
+    from a session's layout, so a build with none raises no refusal to rewrite.
     """
     if _REFUSED_WRITE not in text:
         return text

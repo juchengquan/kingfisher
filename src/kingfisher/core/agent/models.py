@@ -385,7 +385,7 @@ def model_named(
 ) -> BaseChatModel:
     """The model a written name means, on an endpoint this request may reach.
 
-    Shared with `model_object`: a copy that skipped the endpoint check would send a run
+    Shared with `model_of`: a copy that skipped the endpoint check would send a run
     to an endpoint the caller refused, silently.
     """
     try:

@@ -73,14 +73,13 @@ def declared_middleware(  # noqa: PLR0913 -- `chosen_by` only for a portable sub
     allowed: Selection,
     *,
     kind: str,
-    provisions: Mapping[str, Any] | None = None,
+    provisions: Mapping[str, Any],
     chosen_by: str | None = None,
 ) -> list[Any]:
     """Build the middleware a definition asked for, agent or subagent.
 
-    `provisions` fills a class's `wants`; it defaults to nothing so a caller with no graph
-    around it can still build a middleware that wants none. `chosen_by` names who chose
-    `spec.middlewares` when its definition did not.
+    `provisions` fills a class's `wants`. `chosen_by` names who chose `spec.middlewares`
+    when its definition did not.
     """
     subject = f"{kind} {spec.name!r}"
     approved = approved_middleware(
@@ -98,7 +97,7 @@ def declared_middleware(  # noqa: PLR0913 -- `chosen_by` only for a portable sub
             wrote.get(name) or {},
             registered_as=name,
             subject=subject,
-            provisions=provisions or {},
+            provisions=provisions,
         )
         _warn_if_it_replaces_deepagents(instance, registered_as=name, subject=subject)
         built.append(instance)

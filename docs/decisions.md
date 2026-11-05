@@ -255,14 +255,14 @@ inline.
 
 **A wanted key is a name in yaml and an object in Python.** A `model` a definition
 writes is resolved -- catalogue lookup, endpoint check, instance -- in `model_named`,
-which `model_object` calls too: two copies of those steps, one forgetting the endpoint
+which `model_of` calls too: two copies of those steps, one forgetting the endpoint
 check, is a run sent where the caller refused. `backend` and `definition` have no name
 a file could carry, so a value written for one is refused, on the class.
 
 **A subagent is handed its own model, not its agent's.** Its model is not built until
 `as_subagent`'s last line, so the one in scope where its middleware is made is the
 agent's -- wrong in the direction that costs money, since a subagent pinned to the cheap
-model would be compacted by the expensive one. `_with_helpers` passes the right one.
+model would be compacted by the expensive one. `with_helpers` passes the right one.
 
 **The example is `compaction.py`, and it runs.** It is the motivating case: handed
 `model: "gpt-5"` as a string, langchain's summarizer calls `init_chat_model`, which
@@ -513,9 +513,10 @@ instead, a middleware wrapping `task` would read the subagent for the agent's ow
 that ran `eval`. *(2026-10-30.)*
 
 **And what every graph shares is said at each call, never defaulted.** `standing_middleware`,
-`as_subagent` and `compiled` take no default for the settings one build's graphs share --
-file rules, gates, the caller's ceilings and source ids, the budget, ledger and recorder,
-the turn's text, the deployment's PDF and run limits -- because each default meant no rule.
+`as_subagent` and `compiled_subagent` take no default for the settings one build's graphs
+share -- file rules, gates, the caller's ceilings and source ids, the budget, ledger and
+recorder, the turn's text, the deployment's PDF and run limits -- because each default
+meant no rule.
 Dropped one at a time from each call site, 25 of 28 omissions failed a test; `permissions`,
 dropped at any of the three, passed the whole suite, and the subagent then wrote into
 `/skills/` and the saved tool results. Forgetting one is now refused by `ty` and by every
@@ -3549,9 +3550,9 @@ because it says what each folder is *for*, and choosing between them is the whol
 the sentence; the two that only named the folders were mine, written first and worse.
 
 In `prompting` rather than beside the first of the three, since it already holds the prose
-a model reads on a misstep and is the module the other two may import: it takes nothing but
-`Config`, the layout and `READ_FILE`, which is what keeps anything naming it from loading
-the provider SDKs. **Not `refusal_text`**, which reads as a fourth and is not one: a path
+a model reads on a misstep and is the module the other two may import: it imports nothing
+that loads the agent runtime, which is what keeps anything naming it from loading the
+provider SDKs. **Not `refusal_text`**, which reads as a fourth and is not one: a path
 that climbed out of the session is answered with the shape a tool path has, and it names
 `/inputs/<name>` as a spelling -- a folder no write may land in. Offering it as a
 destination would make it wrong. *(2026-10-22.)*
