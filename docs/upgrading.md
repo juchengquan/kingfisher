@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A record `Inventory.by_kind()` answers has no `origin`, after #1212
+
+Each record named, beside its kind's name, error and count, the `Origin` the kind was
+read from. Nothing read it, and `Inventory.origins` holds the same value. Code reading
+`kind.origin` now fails with `AttributeError`: read `getattr(found.origins, kind.name)`,
+or the kind by name, as `found.origins.tools`.
+
 ## A graph you supply refuses a turn id its session holds, after #1208
 
 #1194 refused a reused `Request.turn_id` or `Resume.turn_id` only where kingfisher built

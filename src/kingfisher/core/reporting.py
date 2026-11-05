@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from .access import (
     ALL,
+    UNRESTRICTED,
     Audience,
     Capabilities,
     Opened,
@@ -31,7 +32,7 @@ from .agent.kinds.tools import (
 )
 from .definitions.catalogue import Definitions
 from .definitions.subagents.spec import opens_skills
-from .definitions.tools.spec import Offering, admitted, out_of_reach, placed
+from .definitions.tools.spec import Offering, admitted, ambiguous, carried, out_of_reach, placed
 from .result import RunEvent
 
 if TYPE_CHECKING:
@@ -56,7 +57,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
     something they cannot act on. The catalogue is passed rather than re-derived, so
     this is measured against the directories the agent was built from.
     """
-    default = Capabilities()
+    default = UNRESTRICTED
     offered_tools = tuple(offered_tool_names(cfg, catalogue=catalogue))
     # A skill may be written bare or as `source::name`, and the agent file and registry
     # may differ: compared as written, an audience `catalogue::audit` hides no `audit`.
@@ -203,7 +204,7 @@ def what_opens(
     offering = Offering.of(found)
     # `spelt` first, as a run spells a grant: `carried` matches the catalogue's spelling,
     # so a `file.py::name` entry would skip that tool's lock.
-    for one in offering.carried(offering.spelt(offered.tools), found):
+    for one in carried(offering.spelt(offered.tools), found):
         reasons.see(path, one.audience)
     for audience in _skills_told(cfg, catalogue, allowed=offered):
         reasons.see(path, audience)
@@ -216,7 +217,7 @@ def what_opens(
         under = jointly((path, stated(spec).audience))
         reasons.see(under)
         shared = spec.declares(None)
-        for one in offering.carried(offering.spelt(shared.tools), found):
+        for one in carried(offering.spelt(shared.tools), found):
             reasons.see(under, one.audience)
         # Its own folder's tools, which no grant reaches, still answer to their own
         # locks. Asked unscoped: filtered for this caller they would be invisible here,
@@ -258,7 +259,7 @@ def _skills_told(
 def subagent_only(allowed: Capabilities, *, catalogue: Definitions) -> tuple[str, ...]:
     """Names this run was granted that only a subagent can actually ask for."""
     found = catalogue.tools.found
-    return Offering.of(found).ambiguous(allowed.tools, found)
+    return ambiguous(allowed.tools, found)
 
 
 def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning kind

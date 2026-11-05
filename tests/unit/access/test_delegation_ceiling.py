@@ -19,7 +19,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.kinds.subagents import as_subagent, subagent_skills
 from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
 from kingfisher.core.definitions.agents.spec import AgentSpec
-from kingfisher.core.definitions.skills.registry import Listed, SkillRegistry
+from kingfisher.core.definitions.skills.registry import ListedSkill, SkillRegistry
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.plugins import backend_at
 from tests.conftest import (
@@ -483,7 +483,7 @@ def offering(*names: str) -> SkillRegistry:
     """A registry of skills sitting directly under the root, which is one source."""
     return SkillRegistry(
         offered={
-            f"catalogue::{name}": Listed(name=name, path=f"/{name}/SKILL.md", description="")
+            f"catalogue::{name}": ListedSkill(name=name, path=f"/{name}/SKILL.md", description="")
             for name in names
         }
     )

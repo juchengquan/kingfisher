@@ -86,7 +86,7 @@ class Capabilities:
     @property
     def is_unrestricted(self) -> bool:
         """True when nothing is narrowed, so the agent can be built as configured."""
-        return self == Capabilities()
+        return self == UNRESTRICTED
 
     def intersect(self, other: Capabilities) -> Capabilities:
         """Narrow these capabilities by another set. Never widens."""

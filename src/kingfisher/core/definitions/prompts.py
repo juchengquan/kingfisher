@@ -117,7 +117,6 @@ def _entry(written: object, where: str, read: fields.Reader) -> SlotEntry:
             read.audience_list(
                 written["source_ids"],
                 where=f"{where}: source_ids",
-                lone_name=True,
                 left_out="make this entry the slot's default",
             ),
             datazone,

@@ -147,6 +147,20 @@ def refuse_overlap(workspace: Path, definitions: Path) -> None:
         raise ConfigError(msg)
 
 
+def refuse_missing_definitions(definitions: Path) -> None:
+    """Refuse a definitions folder that is not there.
+
+    Never created: several deployments may read the folder, and making it would hide a
+    failed mount or staging behind a catalogue that is merely empty.
+    """
+    if not definitions.is_dir():
+        msg = (
+            f"KINGFISHER_DEFINITIONS_DIR is {definitions}, which is not a directory. "
+            "`kingfisher seed` makes one and fills it"
+        )
+        raise ConfigError(msg)
+
+
 @dataclass(frozen=True)
 class WorkspacePaths:
     """Where a deployment keeps things, before anything has been read."""

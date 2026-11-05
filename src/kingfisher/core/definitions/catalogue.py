@@ -19,7 +19,13 @@ from kingfisher.core.access import (
     collected,
     reaches,
 )
-from kingfisher.core.config import NO_MOUNTS, Config, ConfigError, definition_roots_for
+from kingfisher.core.config import (
+    NO_MOUNTS,
+    SKILL_LOCKS_FILE,
+    Config,
+    ConfigError,
+    refuse_missing_definitions,
+)
 from kingfisher.core.layout import BUNDLED_SKILLS_ROUTE, RESERVED_SKILL_FOLDER, SKILLS_ROUTE
 
 from . import skill_locks
@@ -97,14 +103,14 @@ class Definitions:
             "tools": self.tools.root,
             **{f"skills/{label}": mount for label, mount in self.skills.mounts.items()},
         }
-        locks = Path(self.skills.root).parent / skill_locks.FILENAME
+        locks = Path(self.skills.root).parent / SKILL_LOCKS_FILE
         return {
             **{
                 f"{kind}/{path.relative_to(root).as_posix()}": path
                 for kind, root in roots.items()
                 for path in _files_under(Path(root))
             },
-            **({skill_locks.FILENAME: locks} if locks.is_file() else {}),
+            **({SKILL_LOCKS_FILE: locks} if locks.is_file() else {}),
         }
 
     @cached_property
@@ -182,7 +188,7 @@ class Definitions:
         Beside the definitions, which is the skills folder's parent: inside it, the agent
         could read the file.
         """
-        return skill_locks.read_locks(self.skills.root.parent / skill_locks.FILENAME)
+        return skill_locks.read_locks(self.skills.root.parent / SKILL_LOCKS_FILE)
 
     @cached_property
     def locked_skills(self) -> Mapping[str, SkillLock]:
@@ -201,7 +207,7 @@ class Definitions:
                 raise SkillLockError(self._unlockable(lock.name, registry))
             if (first := found.get(meant)) is not None:
                 msg = (
-                    f"{skill_locks.FILENAME}: {first.name!r} and {lock.name!r} are one "
+                    f"{SKILL_LOCKS_FILE}: {first.name!r} and {lock.name!r} are one "
                     f"skill ({meant!r}), locked twice. Keep the one you mean"
                 )
                 raise SkillLockError(msg)
@@ -210,7 +216,7 @@ class Definitions:
 
     def _unlockable(self, name: str, registry: SkillRegistry) -> str:
         """Why a lock means no one skill."""
-        where = f"{skill_locks.FILENAME}: locks {name!r}"
+        where = f"{SKILL_LOCKS_FILE}: locks {name!r}"
         bare = skill_registry.split_qualified(name)[1]
         with suppress(SubagentError):
             if owners := sorted(
@@ -431,18 +437,10 @@ DEFINITION_KINDS: tuple[str, ...] = tuple(f.name for f in fields(Definitions))
 def resolve_definitions(cfg: Config) -> Definitions:
     """This deployment's definitions, read from the folder `cfg` names.
 
-    Nothing is created: making a missing folder would hide a failed mount or staging
-    behind a catalogue that is merely empty. A missing kind folder means none of that kind.
+    A missing kind folder means none of that kind.
     """
-    if not cfg.definitions.is_dir():
-        msg = (
-            f"KINGFISHER_DEFINITIONS_DIR is {cfg.definitions}, which is not a directory. "
-            "`kingfisher seed` makes one and fills it"
-        )
-        raise ConfigError(msg)
-    return Definitions.from_roots(
-        definition_roots_for(cfg.definitions), skills_mounts=cfg.skills_mounts
-    )
+    refuse_missing_definitions(cfg.definitions)
+    return Definitions.from_config(cfg)
 
 
 def doubled_skill(skills: Selection, registry: SkillRegistry) -> str | None:

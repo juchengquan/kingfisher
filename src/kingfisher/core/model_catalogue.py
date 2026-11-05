@@ -344,7 +344,7 @@ def _models(
 
     # An endpoint not in the file is a mistake and refused; one dropped for want of a key
     # is this machine's situation, not the file's, and takes its models quietly.
-    declared = set(_mapping(document.get("endpoints"), f"{source}: endpoints"))
+    declared = set(declared_endpoints)
     for name, profile in profiles.items():
         if profile.endpoint not in declared:
             msg = (

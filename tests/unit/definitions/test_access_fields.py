@@ -24,40 +24,35 @@ def selected(value: object, **asked: Any) -> object:
     return chosen
 
 
-def test_omitted_respects_the_fields_own_absent_value():
-    """`tools` inherits everything when omitted; `skills` grants none."""
-    assert selected(None, absent=None, key="skills") is None
-
-
 def test_star_still_means_everything():
-    assert selected(["*"], absent=ALL, key="skills") == ALL
+    assert selected(["*"], key="skills") == ALL
 
 
 def test_an_empty_list_still_means_none():
-    assert selected([], absent=ALL, key="skills") == ()
+    assert selected([], key="skills") == ()
 
 
 def test_an_entry_that_is_neither_a_name_nor_a_mapping_is_refused():
     """`- [A]` has no reading."""
     with pytest.raises(AgentError, match="neither a name nor a mapping"):
-        selected([["A"]], absent=ALL, key="skills")
+        selected([["A"]], key="skills")
 
 
 def test_long_entries_that_restrict_nothing_are_just_names():
     """The degenerate case reads as what it is, rather than being refused."""
-    assert selected([{"name": "a"}, {"name": "b"}], absent=ALL, key="skills") == ("a", "b")
+    assert selected([{"name": "a"}, {"name": "b"}], key="skills") == ("a", "b")
 
 
 def test_an_entry_may_not_be_named_the_star():
     """The star is a property of the field, not of an entry."""
     with pytest.raises(AgentError, match="does not take"):
-        selected([{"name": "*"}], absent=ALL, key="skills")
+        selected([{"name": "*"}], key="skills")
 
 
 def test_a_bare_name_and_the_same_name_written_long_are_still_twice():
     """The spellings mix in one list, so the check is on names and not shapes."""
     with pytest.raises(AgentError, match="names 'audit' twice"):
-        selected(["audit", {"name": "audit"}], absent=ALL, key="skills")
+        selected(["audit", {"name": "audit"}], key="skills")
 
 
 # -- requiring several source ids at once ---------------------------------------

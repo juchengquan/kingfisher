@@ -130,8 +130,8 @@ source, and deny rules are built from the path rather than the name.
 that loaded from `research/` vouched for a broken `legal/lookup`: no `unloadable` line,
 `doctor` green, and `legal::lookup` refused with nothing saying why -- in the very case
 sources exist for. Measured on 2026-10-11, distinct names as control. The two sides are
-spelled differently on purpose, since `Listed.path` already carries a mount's label and
-prefixing both makes every mounted skill read as unloadable;
+spelled differently on purpose, since `ListedSkill.path` already carries a mount's label
+and prefixing both makes every mounted skill read as unloadable;
 `test_a_broken_skill_in_a_mount_is_reported_under_its_label` asserts the whole tuple
 because a membership test passed against that mistake. *(2026-10-11, from an
 architecture review.)*
@@ -146,8 +146,8 @@ agent will not load is reported, not refused.
 private listers, sync or async, should mean one edit. The registry wraps both as
 `list_skills` and `alist_skills`, which `core.agent.middlewares.narrowing` calls;
 `test_only_the_registry_names_the_private_listers` fails if another module names
-either, and both are pinned. A listing becomes a `Listed` where it arrives, so its keys
-are read in one function; the skills index hands deepagents' own dictionaries back,
+either, and both are pinned. A listing becomes a `ListedSkill` where it arrives, so its
+keys are read in one function; the skills index hands deepagents' own dictionaries back,
 because its formatting reads them. *(2026-09-16.)*
 
 **And the repository stopped answering `names`.** Listing directories one level down,
@@ -1166,7 +1166,7 @@ prose and helpers used `delegate` as often, so readers asked whether the two dif
 where a script reads; the upgrading notes list all four. *(2026-10-11.)*
 
 **Seeding keeps its own tolerant reader, and the spellings it covers are held.**
-`source_ids_named` and `middleware_named` read one field from a document that may not
+`_source_ids_named` and `middleware_named` read one field from a document that may not
 parse, because seeding runs before there is a catalogue and must decide about every
 file rather than choke on it. **Measured, and the replacement is what would cause the
 bug**: a definition naming source ids and missing a `description` is left behind today,

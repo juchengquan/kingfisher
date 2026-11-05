@@ -94,7 +94,7 @@ async def alist_skills(backend: Any, path: str) -> list[Any]:
 
 
 @dataclass(frozen=True)
-class Listed:
+class ListedSkill:
     """One loaded skill, read off deepagents' metadata where a listing arrives."""
 
     name: str
@@ -114,7 +114,7 @@ class SkillRegistry:
 
     #: Every skill that loaded, keyed by `source::name`: two parties may both ship a skill
     #: of one name.
-    offered: Mapping[str, Listed]
+    offered: Mapping[str, ListedSkill]
     unloadable: tuple[str, ...] = ()
     #: Skills deepagents filed under a name their directory does not have, as
     #: `(directory, name)`: offered under the header's name, which nobody typed.
@@ -216,17 +216,17 @@ def read(repository: LocalSkillRepository) -> SkillRegistry:
     ]
 
     # One listing per source, kept apart: deepagents merges by name and lets the last win.
-    offered: dict[str, Listed] = {}
-    loaded: list[Listed] = []
+    offered: dict[str, ListedSkill] = {}
+    loaded: list[ListedSkill] = []
     missing: list[str] = []
     for directory, prefix, labelled, deepest in places:
         backend = FilesystemBackend(root_dir=str(directory))
-        here: list[Listed] = []
+        here: list[ListedSkill] = []
         for label, path in labelled:
             for one in list_skills(backend, path):
                 # The prefix is the mount's route segment: without it a mounted skill's deny
                 # rule names a path that does not exist, and the skill stays readable.
-                entry = Listed(
+                entry = ListedSkill(
                     name=one["name"],
                     path=f"{prefix}{one['path']}",
                     description=one["description"],
@@ -237,7 +237,7 @@ def read(repository: LocalSkillRepository) -> SkillRegistry:
 
         # Directories that looked like a skill and did not load. Compared by directory, not
         # name: sources under one root share this list, and two may ship one name. The two
-        # sides differ on purpose: `Listed.path` carries the mount prefix, and
+        # sides differ on purpose: `ListedSkill.path` carries the mount prefix, and
         # `relative_to` does not.
         kept = {str(PurePosixPath(one.path).parent).lstrip("/") for one in here}
         missing.extend(

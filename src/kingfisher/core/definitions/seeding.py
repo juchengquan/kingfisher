@@ -13,10 +13,10 @@ from pathlib import Path
 
 import yaml
 
-from kingfisher.core.config import ConfigError, definition_roots_for
+from kingfisher.core.config import SKILL_LOCKS_FILE, ConfigError, definition_roots_for
 from kingfisher.core.workspace import ensure_definitions
 
-from . import importing, skill_locks
+from . import importing
 from .catalogue import DEFINITION_KINDS
 from .documents import decode, load
 
@@ -146,14 +146,14 @@ class Seeded:
         return f"nothing to seed — {self.source} holds none of {', '.join(DEFINITION_KINDS)}"
 
 
-def source_ids_named(fields: Mapping[str, object]) -> tuple[str, ...]:
+def _source_ids_named(fields: Mapping[str, object]) -> tuple[str, ...]:
     """Every source id a definition names, from fields that may not be valid."""
     found: list[str] = []
     _collect(fields.get("source_ids"), into=found)
     return tuple(dict.fromkeys(found))
 
 
-def datazones_named(fields: Mapping[str, object]) -> tuple[str, ...]:
+def _datazones_named(fields: Mapping[str, object]) -> tuple[str, ...]:
     """The datazone a definition names, from fields that may not be valid.
 
     One name, never a list, and only ever a definition's own top-level field: an agent
@@ -166,7 +166,7 @@ def datazones_named(fields: Mapping[str, object]) -> tuple[str, ...]:
     return ()
 
 
-def audiences_in_code(text: str) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+def _audiences_in_code(text: str) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
     """The source ids and datazones a Python definition names, as its source says them,
     and each audience it computes instead, as written.
 
@@ -421,9 +421,9 @@ def _deployment_specific(path: Path, *, kind: str) -> _Wanted | None:
         fields = {} if isinstance(decoded, str) else decoded
         if named := middleware_named(fields):
             return "middlewares", named, (), ()
-        return _audienced(source_ids_named(fields), datazones_named(fields))
+        return _audienced(_source_ids_named(fields), _datazones_named(fields))
     if path.suffix == ".py" and kind in AUDIENCED_KINDS:
-        return _audienced(*audiences_in_code(text))
+        return _audienced(*_audiences_in_code(text))
     return None
 
 
@@ -437,8 +437,8 @@ def _locks_named(path: Path) -> _Wanted | None:
         return None
     lines = [one for one in entries if isinstance(one, dict)] if isinstance(entries, list) else []
     return _audienced(
-        tuple(dict.fromkeys(name for one in lines for name in source_ids_named(one))),
-        tuple(dict.fromkeys(zone for one in lines for zone in datazones_named(one))),
+        tuple(dict.fromkeys(name for one in lines for name in _source_ids_named(one))),
+        tuple(dict.fromkeys(zone for one in lines for zone in _datazones_named(one))),
     )
 
 
@@ -640,17 +640,17 @@ def _copy(
 
     # Beside the kinds rather than one of them, and nothing but locks, so it waits for
     # --all as a locked definition does.
-    locks = tree / skill_locks.FILENAME
+    locks = tree / SKILL_LOCKS_FILE
     if locks.is_file():
         if not everything and (wanted := _locks_named(locks)) is not None:
             wants, names, datazones, _ = wanted
             skipped.append(
-                Skipped(skill_locks.FILENAME, names, wants=wants, datazones=datazones)
+                Skipped(SKILL_LOCKS_FILE, names, wants=wants, datazones=datazones)
             )
         else:
-            target = definitions / skill_locks.FILENAME
-            overwritten += _overwritten(locks, target, skill_locks.FILENAME, lambda *_: {})
+            target = definitions / SKILL_LOCKS_FILE
+            overwritten += _overwritten(locks, target, SKILL_LOCKS_FILE, lambda *_: {})
             shutil.copy(locks, target)
-            written.append(skill_locks.FILENAME)
+            written.append(SKILL_LOCKS_FILE)
 
     return written, overwritten, skipped

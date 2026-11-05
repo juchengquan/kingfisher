@@ -341,7 +341,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     # A list of names, as a file writes it, and absent grants none: `["*"]` asks for every
     # tool the request granted. What each tool admits is in the tool's own file.
     written_tools, own_tools = read.sourced(
-        entry.get("tools"), absent=None, key="tools", same=bare_name, locked=fields.TOOL_LOCK
+        entry.get("tools"), key="tools", same=bare_name, locked=fields.TOOL_LOCK
     )
     source_ids = read.source_ids(entry.get("source_ids"))
     return SubagentSpec(
@@ -371,7 +371,7 @@ def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
     prompt = read_prompt(entry, read)
     # Absent grants none, so a spec typed to deepagents' `SubAgent`, which has no word for
     # this, holds no built-in until the deployment's own file adds one.
-    builtin = read.selection(entry.get("builtin_tools"), absent=None, key="builtin_tools")
+    builtin = read.selection(entry.get("builtin_tools"), key="builtin_tools")
     _refuse_the_sandbox(builtin, source=source)
     carried = _carried(entry, read)
     # Named by directory: the skills in one are not read until the catalogue is.
@@ -403,7 +403,7 @@ NO_NAMES_HERE = (
 )
 
 
-def _carried(entry: Mapping[str, object], reader: fields.Reader) -> Mapping[str, Any]:
+def _carried(entry: Mapping[str, object], read: fields.Reader) -> Mapping[str, Any]:
     """What a portable entry brought in `tools` and `skills`."""
     carried: dict[str, Any] = {}
     if (tools := entry.get("tools")) is not None:
@@ -411,21 +411,21 @@ def _carried(entry: Mapping[str, object], reader: fields.Reader) -> Mapping[str,
         # iterates, so `tools: my_tool` would pass a duck test and loop over its fields.
         if not isinstance(tools, (list, tuple)):
             msg = (
-                f"{reader.source}: tools is {type(tools).__name__}; it takes a "
+                f"{read.source}: tools is {type(tools).__name__}; it takes a "
                 f"list of the tools themselves -- write tools: [my_tool]"
             )
             raise SubagentError(msg)
         # A mapping is a document's long form, and names rather than carries, as a string does.
         if named := [one for one in tools if isinstance(one, (str, Mapping))]:
-            msg = f"{reader.source}: tools names {named!r} -- {NO_NAMES_HERE}"
+            msg = f"{read.source}: tools names {named!r} -- {NO_NAMES_HERE}"
             raise SubagentError(msg)
         carried["tools"] = tuple(tools)
     if (skills := entry.get("skills")) is not None:
-        carried["skills"] = _skills_directories(skills, reader)
+        carried["skills"] = _skills_directories(skills, read)
     return carried
 
 
-def _skills_directories(value: object, reader: fields.Reader) -> tuple[Path, ...]:
+def _skills_directories(value: object, read: fields.Reader) -> tuple[Path, ...]:
     """The directories a definition resolved for its own skills.
 
     One path or a list, the list being deepagents' own `SubAgent["skills"]`. Each is a
@@ -434,34 +434,34 @@ def _skills_directories(value: object, reader: fields.Reader) -> tuple[Path, ...
     """
     values = list(value) if isinstance(value, (list, tuple)) else [value]
     if not values:
-        msg = f"{reader.source}: skills is empty; leave it out for a subagent with none"
+        msg = f"{read.source}: skills is empty; leave it out for a subagent with none"
         raise SubagentError(msg)
-    found = tuple(_skills_directory(one, reader) for one in values)
+    found = tuple(_skills_directory(one, read) for one in values)
     # Either way round, a skill would be listed twice: once from each directory.
     for i, one in enumerate(found):
         for other in found[i + 1 :]:
             a, b = one.resolve(), other.resolve()
             if a.is_relative_to(b) or b.is_relative_to(a):
                 msg = (
-                    f"{reader.source}: skills names {str(one)!r} and {str(other)!r}, "
+                    f"{read.source}: skills names {str(one)!r} and {str(other)!r}, "
                     f"and one holds the other, so its skills would be offered twice"
                 )
                 raise SubagentError(msg)
     return found
 
 
-def _skills_directory(value: object, reader: fields.Reader) -> Path:
+def _skills_directory(value: object, read: fields.Reader) -> Path:
     """One skills directory, absolute: a relative one depends on where kingfisher started."""
     if not isinstance(value, (str, Path)):
         msg = (
-            f"{reader.source}: skills holds a {type(value).__name__}; it takes the "
+            f"{read.source}: skills holds a {type(value).__name__}; it takes the "
             f"directory the skills are in, as a path, or a list of them"
         )
         raise SubagentError(msg)
     found = Path(value)
     if not found.is_absolute():
         msg = (
-            f"{reader.source}: skills is {str(found)!r}, which is relative -- "
+            f"{read.source}: skills is {str(found)!r}, which is relative -- "
             f"it would be resolved against whatever directory kingfisher was started "
             f"in. Write an absolute path, which for a definition beside its own "
             f"skills is Path(__file__).parent / 'skills'"
@@ -469,7 +469,7 @@ def _skills_directory(value: object, reader: fields.Reader) -> Path:
         raise SubagentError(msg)
     if not found.is_dir():
         msg = (
-            f"{reader.source}: skills is {str(found)!r}, which is not a directory on "
+            f"{read.source}: skills is {str(found)!r}, which is not a directory on "
             f"this host. A portable entry names its skills where they sit on disk, "
             f"not by a path inside the agent's backend such as '/skills/...'"
         )
@@ -549,30 +549,28 @@ def _refuse_the_sandbox(builtin_tools: Selection, *, source: str) -> None:
 
 def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     """One definition, from its decoded fields."""
-    reader = fields.Reader(source=source.name, error=SubagentError)
+    read = fields.Reader(source=source.name, error=SubagentError)
     # Before the required fields, so `nmae:` is reported as a typo, not a missing `name`.
-    reader.refuse_unrecognised(document, known=KNOWN, declined=REFUSED)
-    reader.require(document, "name", "description")
-    prompt = read_prompt(document, reader)
+    read.refuse_unrecognised(document, known=KNOWN, declined=REFUSED)
+    read.require(document, "name", "description")
+    prompt = read_prompt(document, read)
 
-    wanted = fields.wanted_model(document, reader)
+    wanted = fields.wanted_model(document, read)
 
-    # Absent grants none on every field, tools included: a forgotten line fails closed.
-    builtin = reader.selection(document.get("builtin_tools"), absent=None, key="builtin_tools")
+    builtin = read.selection(document.get("builtin_tools"), key="builtin_tools")
     _refuse_the_sandbox(builtin, source=source.name)
 
     # Kept as written, `where::what` and all: two folders may each define a `fetch`, and
     # only the reference says which. `Offering.permitted` flattens it for the allowlist.
-    written_tools, own_tools = reader.sourced(
-        document.get("tools"), absent=None, key="tools", same=bare_name, locked=fields.TOOL_LOCK
+    written_tools, own_tools = read.sourced(
+        document.get("tools"), key="tools", same=bare_name, locked=fields.TOOL_LOCK
     )
     # Read as the agent format reads it: settings must mean the same in either file.
-    written_middleware, middleware_settings = reader.selection_with_settings(
-        document.get("middlewares"), absent=None, key="middlewares"
+    written_middleware, middleware_settings = read.selection_with_settings(
+        document.get("middlewares"), key="middlewares"
     )
-    written_skills, own_skills = reader.sourced(
+    written_skills, own_skills = read.sourced(
         document.get("skills"),
-        absent=None,
         key="skills",
         locked=fields.SKILL_LOCK,
         refuse_all=(
@@ -582,9 +580,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             "and arrives as none. Name the procedures this one uses"
         ),
     )
-    written_subagents = reader.names_only(
+    written_subagents = read.names_only(
         document.get("subagents"),
-        absent=None,
         key="subagents",
         refuse_all=(
             "it would mean every definition in the catalogue, which includes this "
@@ -600,7 +597,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     if complaint is not None:
         msg = f"{source.name}: {complaint}"
         raise SubagentError(msg)
-    source_ids = reader.source_ids(document.get("source_ids"))
+    source_ids = read.source_ids(document.get("source_ids"))
 
     return SubagentSpec(
         name=fields.text(document["name"]),
@@ -616,7 +613,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         subagents=written_subagents,
         bundled={"tools": own_tools, "skills": own_skills},
         wanted=wanted,
-        metadata=reader.mapping(document.get("metadata"), key="metadata"),
+        metadata=read.mapping(document.get("metadata"), key="metadata"),
         source_ids=source_ids,
-        datazone=reader.datazone(document.get("datazone")),
+        datazone=read.datazone(document.get("datazone")),
     )

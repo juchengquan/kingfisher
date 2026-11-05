@@ -257,11 +257,11 @@ class AccessReport:
         """The report, ready to print, or nothing at all when there is nothing."""
         if self.is_clean:
             return ()
-        said: list[str] = ["access:"]
-        if self.unrestricted:
-            said.append("  no source_ids: line, so reachable by everyone:")
-            said.extend(f"    {kind} {name}" for kind, name in self.unrestricted)
-        return tuple(said)
+        return (
+            "access:",
+            "  no source_ids: line, so reachable by everyone:",
+            *(f"    {kind} {name}" for kind, name in self.unrestricted),
+        )
 
 
 @dataclass(frozen=True)

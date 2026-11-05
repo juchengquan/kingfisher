@@ -17,6 +17,7 @@ from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 
 from kingfisher.core.access import (
     ALL,
+    UNRESTRICTED,
     Capabilities,
     CapabilityError,
     Selection,
@@ -375,7 +376,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     """
     # The agent file is the baseline and the request only subtracts from it. One
     # function, because the run's report of what it activated reads the same answer.
-    asked = capabilities or Capabilities()
+    asked = capabilities or UNRESTRICTED
     capabilities = for_the_caller(agent, asked, held=held)
     roots = catalogue or Definitions.from_config(cfg)
     # Before anything reads the skills, a subagent's included: it is told only what its

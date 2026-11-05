@@ -10,7 +10,7 @@ from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import ToolError
-from kingfisher.core.definitions.tools.spec import FoundTool, Offering, out_of_reach
+from kingfisher.core.definitions.tools.spec import FoundTool, Offering, carried, out_of_reach
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -101,7 +101,7 @@ class ToolSurface:
         if self.offering is None:
             return tuple(one.tool for one in self.found)
         return tuple(
-            one.tool for one in self.offering.carried(self.offered_grant, self.found)
+            one.tool for one in carried(self.offered_grant, self.found)
         )
 
     @property
