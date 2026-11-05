@@ -91,6 +91,10 @@ def test_building_a_backend_does_not_make_the_skills_folder(cfg, session_dir):
 
 
 def test_validation_offers_only_what_will_load(cfg):
+    """Offered though deepagents cannot parse it, a skill with no description was
+    granted to a caller who activated it, and the agent ran with no skills at all and
+    nothing said.
+    """
     _skill(cfg.skills_dir, "good", GOOD.format(name="good", desc="A fine skill."))
     _skill(cfg.skills_dir, "nodesc", "---\nname: nodesc\n---\nBody.\n")
 

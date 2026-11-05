@@ -107,6 +107,10 @@ def test_a_name_on_its_own_is_what_it_always_was():
 
 
 def test_a_name_written_long_carries_its_settings():
+    """A long entry read without its settings, or as a name spelled like its mapping,
+    builds the middleware on the deployment's defaults or asks for one nothing
+    registered.
+    """
     spec = agent_spec(
         written("middlewares:\n  - name: audit\n    settings:\n      level: DEBUG\n")
     )
@@ -224,6 +228,9 @@ def test_a_bare_name_and_the_same_name_written_long_are_still_twice():
 
 
 def test_an_entry_that_is_neither_a_name_nor_a_mapping_is_refused():
+    """`middlewares: [3]` would fail inside the reader as a `TypeError` naming neither
+    the file nor the entry, rather than saying what an entry may be.
+    """
     with pytest.raises(AgentError, match="neither a name nor a mapping"):
         agent_spec(written("middlewares: [3]\n"))
 
@@ -252,6 +259,9 @@ def test_a_subagent_refuses_the_same_shapes_as_its_own_error():
 
 
 def test_a_deployments_defaults_apply_when_a_definition_wrote_nothing():
+    """A middleware named without settings and built without its registry `defaults` is
+    refused at its constructor, though the deployment said what to call it with.
+    """
     spec = agent_spec(written("middlewares: [audit]\n"))
 
     (built,) = declared_middleware(spec, {"audit": Audit}, ALL, kind="agent", provisions={})

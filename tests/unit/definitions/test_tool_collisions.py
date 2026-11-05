@@ -212,6 +212,9 @@ def test_a_bare_name_two_files_offer_is_refused(cfg, session_dir):
 
 
 def test_the_refusal_names_both_files(cfg, session_dir):
+    """Refusing the bare `fetch` without spelling out both files' references leaves its
+    reader to find the two files before they can write either one.
+    """
     _two_vendors(cfg)
 
     with pytest.raises(CapabilityError) as raised:

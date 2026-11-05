@@ -352,7 +352,9 @@ def test_a_subagents_own_bundled_tool_can_be_gated(scripted):
 
 
 def test_the_same_bundle_without_the_gate_runs_it(scripted):
-    """The control for the rule above."""
+    """The control: a bundled `mask` that paused whether or not a gate named it would
+    pass the rule above.
+    """
     _a_bundle(scripted)
 
     result = _delegated(scripted, "redactor", "mask", gate=None)

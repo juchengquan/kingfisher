@@ -25,6 +25,9 @@ system_prompt: |
 """
 
 def test_minimal_definition_parses():
+    """A subagent of only the three required fields, loading with one of them lost or
+    its absent tool lines read as its caller's, runs as something its file never said.
+    """
     spec = a_subagent(MINIMAL, "reviewer.yaml")
 
     assert spec.name == "reviewer"
@@ -57,10 +60,16 @@ def test_malformed_definitions_are_rejected():
 
 
 def test_specs_are_empty_when_the_directory_is_absent(tmp_path):
+    """A definitions folder with no `subagents/` would fail on the missing directory
+    rather than offer no subagents, which is all it means.
+    """
     assert LocalSubagentRepository(tmp_path / "subagents").specs == {}
 
 
 def test_specs_key_on_the_declared_name_not_the_filename(tmp_path):
+    """Keyed on the filename, `misnamed.yaml` would be offered as `misnamed`, a name its
+    file never says, and a request for `reviewer` refused.
+    """
     directory = tmp_path / "subagents"
     directory.mkdir()
     (directory / "misnamed.yaml").write_text(MINIMAL, encoding="utf-8")
@@ -387,6 +396,9 @@ def test_a_plain_prompt_is_refused():
 
 
 def test_a_quoted_prompt_is_refused():
+    """A quoted prompt folds its line breaks as `>` does, so a numbered procedure
+    reaches the subagent as one run-on line.
+    """
     with pytest.raises(SubagentError, match="reflows it"):
         a_subagent(HEAD + 'system_prompt: "Recompute the figure."\n', "reviewer.yaml")
 
@@ -430,6 +442,9 @@ def _spec(model: str | None = None) -> SubagentSpec:
 
 
 def test_a_definition_that_pins_nothing_runs_what_everything_else_does():
+    """Given a model here, a subagent whose file names none would stop running on
+    whatever summoned it.
+    """
     assert resolved_model(_spec().wanted) is None
 
 

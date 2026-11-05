@@ -238,7 +238,9 @@ def test_a_subagent_withholding_read_file_is_told_of_none_of_its_own_skills(cfg,
 
 
 def test_a_subagent_keeping_read_file_is_still_told_of_its_own_skills(cfg, session_dir):
-    """The control for the rule above."""
+    """The control: dropping a subagent's own skills index whatever its grant would pass
+    the rule above.
+    """
     assert len(bundled_index(cfg, session_dir, "ls", READ_FILE)) == 1
 
 

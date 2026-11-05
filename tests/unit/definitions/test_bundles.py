@@ -194,7 +194,9 @@ def test_assets_under_a_folder_no_definition_claims_are_reported(tmp_path):
 
 
 def test_a_real_bundle_is_not_reported_as_orphaned(tmp_path):
-    """The other half."""
+    """The control: an orphan report naming every folder with a `tools/` in it passes
+    the rule above, and tells each working bundle its definition was renamed.
+    """
     define(tmp_path / "surveyor", "surveyor")
     (tmp_path / "surveyor" / "tools").mkdir()
 

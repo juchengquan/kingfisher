@@ -27,6 +27,9 @@ def _write(directory, name: str, body: str):
 
 
 def test_a_module_contributes_the_tools_it_names(tmp_path):
+    """A module read by anything but its `TOOLS` offers the wrong tools, none or every
+    callable it holds, the imported `tool` decorator included.
+    """
     found = LocalToolRepository(_write(tmp_path / "tools", "maths.py", MODULE)).found
     tools = [one.tool for one in found]
 
@@ -93,6 +96,9 @@ def test_private_modules_are_skipped(tmp_path):
 
 
 def test_the_export_must_be_a_sequence_not_a_single_tool(tmp_path):
+    """`TOOLS = add` is a tool, and a tool iterates, so taken as a list it would be
+    walked field by field rather than offering `add`.
+    """
     body = MODULE.replace("TOOLS = [add]", "TOOLS = add")
     directory = _write(tmp_path / "tools", "wrong.py", body)
 

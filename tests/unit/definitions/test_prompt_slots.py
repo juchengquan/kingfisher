@@ -76,6 +76,8 @@ def test_every_matching_entry_is_sent_in_file_order():
 
 
 def test_the_default_is_sent_only_where_nothing_matched():
+    """A caller no entry names is sent the slot empty, or text keyed on sources they
+    never selected, instead of the slot's default."""
     told = _read(FIGURES).prompt_for(frozenset({"audit_log"}))
 
     assert "Give figures as the source states them." in told
@@ -118,6 +120,8 @@ def test_a_run_with_no_caller_is_told_what_any_caller_could_be():
 
 
 def test_the_short_form_is_sent_as_written():
+    """A plain `|` prompt altered by the caller's grant would change what every
+    definition written before the long form sends, though none of them writes a slot."""
     spec = _read(HEAD + "system_prompt: |\n  You do the work.\n")
 
     assert spec.slots == {}
@@ -138,18 +142,24 @@ def test_a_blank_no_slot_fills_is_refused():
 
 
 def test_a_slot_placed_nowhere_is_refused():
+    """A slot with no blank in the text for it to fill is never sent, and nothing would
+    say that its entries are dead."""
     _refused(
         FIGURES.replace("{{figures}}", "Figures."), "defines figures, placed nowhere"
     )
 
 
 def test_slots_do_not_nest():
+    """Filling is one pass, so a slot named inside an entry's text would reach the model
+    as its braces."""
     _refused(
         FIGURES.replace("Headcount is in FTE.", "See {{figures}}."), "slots do not nest"
     )
 
 
 def test_a_slot_has_one_default():
+    """Two entries naming no audience would both be sent to a caller nothing else
+    matched, which nobody writing a slot means."""
     _refused(
         FIGURES.replace("      - source_ids: [hr_db]\n        text:", "      - text:"),
         "a slot has one default",
@@ -157,10 +167,15 @@ def test_a_slot_has_one_default():
 
 
 def test_an_entry_for_everyone_is_refused_since_that_is_the_default():
+    """`source_ids: ["*"]` on an entry is a second spelling of the slot's default, and
+    kept as an entry it would match every caller, so the real default would never be
+    sent."""
     _refused(FIGURES.replace("[hr_db]", '["*"]'), "what the slot's default is for")
 
 
 def test_an_unknown_key_in_an_entry_is_refused():
+    """A misspelt `source_id:` leaves its entry naming nobody, turning text meant for
+    `hr_db` into a default sent to every caller nothing else matched."""
     _refused(FIGURES.replace("source_ids: [hr_db]", "source_id: [hr_db]"), "did you mean")
 
 
@@ -173,6 +188,8 @@ def test_a_plain_one_line_entry_is_refused_since_a_hash_cuts_it():
 
 
 def test_the_long_forms_text_must_be_literal_too():
+    """Checked on the short form alone, `text: >` under the long form would fold a
+    numbered procedure into one run-on line before the model saw it."""
     _refused(
         FIGURES.replace("  text: |\n    You answer", "  text: >\n    You answer"),
         r"system_prompt\.text is written as '>'",
@@ -180,6 +197,8 @@ def test_the_long_forms_text_must_be_literal_too():
 
 
 def test_the_long_form_needs_its_text():
+    """Written long without `text`, a prompt would be empty, and the one refusal left
+    would be about slots placed nowhere rather than the text it lacks."""
     _refused(
         HEAD + "system_prompt:\n  slots:\n    x:\n      - text: |\n          Y.\n",
         "written long needs its text",
@@ -187,6 +206,8 @@ def test_the_long_form_needs_its_text():
 
 
 def test_a_subagent_reads_the_long_form_the_same_way():
+    """A subagent reader taking the short form alone would refuse the long form an agent
+    may write, or send its model the braces of a blank no slot fills."""
     spec = a_subagent(FIGURES.replace("name: analyst", "name: extractor"), "extractor.yaml")
 
     assert "Headcount is in FTE." in spec.prompt_for(frozenset({"hr_db"}))
