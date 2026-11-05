@@ -228,10 +228,38 @@ class Running:
     unused_results: UnusedResults
     memory_store: MemoryStore | None
 
-    def _keep(self, prepared: Prepared, snapshot: Any) -> Steps[tuple[str, ...]]:
-        """Persist what this turn produced, and name it."""
-        yield from self._record_transcript(prepared, snapshot)
-        return (yield from collect_artifacts(prepared.files, self.cfg.layout))
+    def _keep_memory(self, turn: _Turn, snapshot: Any) -> Steps[None]:
+        """The memory writer's pass over this turn, and the store's copy, where the session
+        keeps memory."""
+        prepared = turn.prepared
+        if prepared.memory is None:
+            return
+        turn.memory, said = yield from kept_memory(
+            prepared,
+            snapshot,
+            cfg=self.cfg,
+            answer=turn.answer,
+            ok=turn.ok,
+            paused=bool(turn.awaiting),
+        )
+        turn.pending.extend(said)
+        # Only what changed: the store merges it into what other sessions saved since.
+        # A dropped entry is a removal to the store, or its next load brings it back.
+        store = self.memory_store
+        if turn.memory and prepared.memory_key is not None and store is not None:
+            failed = yield from kept_in_store(
+                store,
+                prepared.memory_key,
+                replace(
+                    turn.memory,
+                    removed=turn.memory.removed + turn.memory.dropped,
+                    dropped=(),
+                ),
+                prepared.files,
+                self.cfg.layout,
+            )
+            if failed is not None:
+                turn.pending.append(failed)
 
     def _settled(self, prepared: Prepared) -> Any:
         """This turn's final graph state, or `None` where there is none.
@@ -449,34 +477,14 @@ class Running:
                     answer_chars=len(turn.answer),
                     stop_reason=stopped,
                 )
-            turn.kept = yield from self._keep(prepared, snapshot)
-            if prepared.memory is not None:
-                turn.memory, said = yield from kept_memory(
-                    prepared,
-                    snapshot,
-                    cfg=self.cfg,
-                    answer=turn.answer,
-                    ok=turn.ok,
-                    paused=bool(turn.awaiting),
-                )
-                turn.pending.extend(said)
-                # Only what changed: the store merges it into what other sessions saved since.
-                # A dropped entry is a removal to the store, or its next load brings it back.
-                store = self.memory_store
-                if turn.memory and prepared.memory_key is not None and store is not None:
-                    failed = yield from kept_in_store(
-                        store,
-                        prepared.memory_key,
-                        replace(
-                            turn.memory,
-                            removed=turn.memory.removed + turn.memory.dropped,
-                            dropped=(),
-                        ),
-                        prepared.files,
-                        self.cfg.layout,
-                    )
-                    if failed is not None:
-                        turn.pending.append(failed)
+            yield from self._record_transcript(prepared, snapshot)
+            try:
+                yield from self._keep_memory(turn, snapshot)
+            finally:
+                # After the writer and the store, either of which may make the memory file
+                # this turn hands back; and however they end, so a failed write still
+                # leaves the rest named.
+                turn.kept = yield from collect_artifacts(prepared.files, self.cfg.layout)
             yield from self._sweep_results(prepared, turn.recorded)
             # Last, after the memory writer and the store: the memory file as the turn left it.
             yield from keep_turn_files(prepared, self.cfg)
