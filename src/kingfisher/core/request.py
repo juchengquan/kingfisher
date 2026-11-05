@@ -13,7 +13,7 @@ from .agent.tool_context import Caller
 from .definitions.subagents.spec import RunOn
 
 
-def _context(given: Mapping[str, str], owner: object) -> None:
+def _freeze_context(given: Mapping[str, str], owner: object) -> None:
     """Refuse a `context` that is not text to text, then freeze it."""
     if not isinstance(given, Mapping):
         msg = f"context is a mapping of names to text -- got {type(given).__name__}"
@@ -56,7 +56,7 @@ class Request:
         if not self.task or not self.task.strip():
             msg = "task must not be empty"
             raise ValueError(msg)
-        _context(self.context, self)
+        _freeze_context(self.context, self)
         # Normalise at the edge so everything downstream sees real paths.
         object.__setattr__(self, "inputs", tuple(Path(p) for p in self.inputs))
 
@@ -110,7 +110,7 @@ class Resume:
     context: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        _context(self.context, self)
+        _freeze_context(self.context, self)
         if not self.session_id or not self.session_id.strip():
             msg = "session_id must not be empty"
             raise ValueError(msg)

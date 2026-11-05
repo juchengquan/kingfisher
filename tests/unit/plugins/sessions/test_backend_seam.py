@@ -206,7 +206,7 @@ def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
         service.grants,
         agent=agent_for(service, asked),
         held=None,
-        files=drive(service._files_for(session_dir.name, catalogue=service.catalogue)),
+        files=drive(service._open_files(session_dir.name, catalogue=service.catalogue)),
         session_id=session_dir.name,
         catalogue=service.catalogue,
     )

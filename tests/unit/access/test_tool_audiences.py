@@ -448,7 +448,7 @@ def test_the_run_report_agrees_with_the_build(policied):
             checkpointer=None,
             agent=agent,
             held=held,
-            files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
+            files=drive(kf._open_files(session.name, catalogue=kf.catalogue)),
             session_id=session.name,
             catalogue=kf.catalogue,
         ).graph

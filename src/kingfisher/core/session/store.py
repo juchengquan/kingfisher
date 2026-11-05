@@ -41,8 +41,13 @@ class HarnessFiles:
 
     def fetch(self, name: str) -> Steps[bytes | None]:
         """`name`'s content, or `None` where the session has none."""
-        (content,) = yield from self._download(name)
-        return content
+        (answer,) = yield reading(self._backend, "download_files", [f"{HARNESS_ROUTE}{name}"])
+        if answer.error == "file_not_found":
+            return None
+        if answer.error is not None:
+            msg = f"the session's backend could not read {answer.path}: {answer.error}"
+            raise OSError(msg)
+        return answer.content
 
     def store(self, name: str, content: bytes) -> Steps[None]:
         """Replace `name`."""
@@ -66,21 +71,6 @@ class HarnessFiles:
         if left:
             msg = f"the session's backend kept {', '.join(left)} after deleting it"
             raise OSError(msg)
-
-    def _download(self, *names: str) -> Steps[list[bytes | None]]:
-        answers = yield reading(
-            self._backend, "download_files", [f"{HARNESS_ROUTE}{name}" for name in names]
-        )
-        found: list[bytes | None] = []
-        for answer in answers:
-            if answer.error == "file_not_found":
-                found.append(None)
-            elif answer.error is not None:
-                msg = f"the session's backend could not read {answer.path}: {answer.error}"
-                raise OSError(msg)
-            else:
-                found.append(answer.content)
-        return found
 
 
 def read_transcript(harness: Any) -> Steps[tuple[tuple[Message, ...], bool]]:
@@ -211,6 +201,8 @@ class KeptLedger:
 
     #: Its rows and closing lines as written, which the turn writes back ahead of its own.
     lines: tuple[str, ...] = ()
+    #: Its closing lines, parsed, in the order the turns ran, on the path or not.
+    closings: tuple[Mapping[str, Any], ...] = ()
     #: The highest number a call has been given, a row or not, so the next is one past it.
     last: int = 0
     #: Every file a row names, which the sweep keeps.
@@ -330,6 +322,7 @@ def _kept(text: str, off_path: frozenset[str | None] = frozenset()) -> KeptLedge
     every, on_path = _Track(), _Track()
     messages: int | None = None
     turns: set[str] = set()
+    closings: list[Mapping[str, Any]] = []
     # Each turn's entries, until its closing line says whether it was a resume.
     unclosed: dict[str, list[LedgerEntry]] = {}
     for line in text.splitlines():
@@ -355,6 +348,7 @@ def _kept(text: str, off_path: frozenset[str | None] = frozenset()) -> KeptLedge
             unclosed.setdefault(entry.turn, []).append(entry)
         elif "id" not in row and isinstance(row.get("turn"), str):
             turns.add(row["turn"])
+            closings.append(row)
             # By the turn a row names, not where it sits: rows a crash left unclosed would
             # otherwise be counted as the next turn's.
             closed = unclosed.pop(row["turn"], [])
@@ -370,6 +364,7 @@ def _kept(text: str, off_path: frozenset[str | None] = frozenset()) -> KeptLedge
                 on_path.close(row, list(closed), [one for one in left if one.turn not in off_path])
     return KeptLedger(
         lines=tuple(lines),
+        closings=tuple(closings),
         last=last,
         paths=frozenset(paths),
         runs={run: tuple(found) for run, found in runs.items()},

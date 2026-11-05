@@ -427,7 +427,7 @@ def reported(kf, source_ids, name: str, *, asked_for: Capabilities | None = None
         checkpointer=None,
         agent=agent,
         held=held,
-        files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
+        files=drive(kf._open_files(session.name, catalogue=kf.catalogue)),
         session_id=session.name,
         catalogue=kf.catalogue,
     ).graph
@@ -847,7 +847,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         checkpointer=None,
         agent=agent_for(kf, request, source_ids=held),
         held=caller_holds(kf.vocabulary, held),
-        files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
+        files=drive(kf._open_files(session.name, catalogue=kf.catalogue)),
         session_id=session.name,
         catalogue=kf.catalogue,
     ).graph
@@ -945,7 +945,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
         checkpointer=None,
         agent=agent_for(kf, request, source_ids=held),
         held=caller_holds(kf.vocabulary, held),
-        files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
+        files=drive(kf._open_files(session.name, catalogue=kf.catalogue)),
         session_id=session.name,
         catalogue=kf.catalogue,
     )
@@ -970,7 +970,7 @@ def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tupl
         checkpointer=None,
         agent=agent,
         held=caller_holds(kf.vocabulary, held),
-        files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
+        files=drive(kf._open_files(session.name, catalogue=kf.catalogue)),
         session_id=session.name,
         catalogue=kf.catalogue,
     ).graph
@@ -1077,7 +1077,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills):
         checkpointer=None,
         agent=agent_for(kf, request, source_ids=held),
         held=caller_holds(kf.vocabulary, held),
-        files=drive(kf._files_for(session.name, catalogue=kf.catalogue)),
+        files=drive(kf._open_files(session.name, catalogue=kf.catalogue)),
         session_id=session.name,
         catalogue=kf.catalogue,
     )

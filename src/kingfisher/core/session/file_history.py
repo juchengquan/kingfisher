@@ -108,7 +108,7 @@ def folder_for(turn: str) -> str:
     return f"_{hashlib.sha256(turn.encode('utf-8')).hexdigest()[:32]}"
 
 
-def read_history(harness: Any) -> Steps[list[dict[str, Any]]]:
+def read_file_history(harness: Any) -> Steps[list[dict[str, Any]]]:
     """Every line of the history, oldest turn first; none where no turn wrote one."""
     held = yield from harness.fetch(FILE_HISTORY)
     if held is None:
@@ -170,7 +170,7 @@ def kept_bytes(harness: Any) -> Steps[int]:
     counts it whole too, it is not counted twice, and against the budget it overcounts,
     which keeps a session under it.
     """
-    return sum(size for _, _, size in _held((yield from read_history(harness))))
+    return sum(size for _, _, size in _held((yield from read_file_history(harness))))
 
 
 def dropped_for_space(
@@ -227,7 +227,7 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
         )
         return
     before = (yield from read_listing(harness, ARTIFACTS_SEEN)) or {}
-    records = yield from read_history(harness)
+    records = yield from read_file_history(harness)
     under = folder_for(turn)
     # Once, before any copy: until the deadline the claim has a whole superstep's bound left,
     # which no copy on this host comes near, and past it as little as nothing.
@@ -448,7 +448,7 @@ def forget_in_copies(harness: Any, layout: Layout, entry: MemoryEntry) -> Steps[
     """Take `entry` out of every kept copy of the memory file, so no rewind brings back what a
     caller forgot."""
     memory_file = layout.memory_file_route.lstrip("/")
-    for record in (yield from read_history(harness)):
+    for record in (yield from read_file_history(harness)):
         under = _under(record)
         # A dropped copy too: its removal may have failed, and the shell can read what is left.
         if under is None or memory_file not in _entries(record, KEPT):

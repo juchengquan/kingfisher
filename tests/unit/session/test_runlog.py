@@ -26,7 +26,6 @@ from kingfisher.core.session import running
 from kingfisher.core.session.runlog import (
     LoggedRunEvents,
     RunLogger,
-    usage_of,
 )
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
@@ -38,6 +37,7 @@ from tests.conftest import (
     subagents_dir,
     tools_dir,
 )
+from tests.integration.driver import usage_of
 from tests.unit.agent.middlewares.test_cut_replies import reply
 from tests.unit.agent.test_subagent_helpers import HELPER, REVIEWER, _define
 from tests.unit.scripted import Scripted

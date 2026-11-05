@@ -523,22 +523,20 @@ def events_in(  # noqa: PLR0912, PLR0913 -- a branch per mode, and what the stre
     namespace: Any,
     mode: str,
     chunk: Any,
-    subagent_names: SubagentNames | None = None,
+    subagent_names: SubagentNames,
     *,
-    seen: SeenMessages | None = None,
-    delegations: Delegations | None = None,
+    seen: SeenMessages,
+    delegations: Delegations,
 ) -> Iterator[RunEvent]:
     """Translate one stream chunk into domain events."""
     if mode == "tasks":
-        start = delegations.started(namespace, chunk) if delegations is not None else None
-        if start is not None:
+        if (start := delegations.started(namespace, chunk)) is not None:
             yield start
         return
-    named = subagent_names.name(namespace) if subagent_names is not None else None
-    within = delegations.within(namespace) if delegations is not None else ()
+    named = subagent_names.name(namespace)
+    within = delegations.within(namespace)
     if mode == "values":
-        if seen is not None:
-            seen.held(namespace, chunk)
+        seen.held(namespace, chunk)
         return
     if mode == "custom":
         if not isinstance(chunk, Mapping):
@@ -557,11 +555,9 @@ def events_in(  # noqa: PLR0912, PLR0913 -- a branch per mode, and what the stre
     if mode == "messages":
         if isinstance(chunk, tuple) and len(chunk) == TOKEN_CHUNK_PARTS:
             # Only a `messages` chunk carries metadata, so the maps learn here.
-            if subagent_names is not None:
-                named = subagent_names.name(namespace, chunk[1])
-            if delegations is not None:
-                delegations.dispatched(namespace, chunk[1])
-                within = delegations.within(namespace)
+            named = subagent_names.name(namespace, chunk[1])
+            delegations.dispatched(namespace, chunk[1])
+            within = delegations.within(namespace)
         if (event := _token_event(chunk)) is not None:
             yield replace(event, agent=named, delegations=within)
         return
@@ -569,7 +565,7 @@ def events_in(  # noqa: PLR0912, PLR0913 -- a branch per mode, and what the stre
         return
     for update in (chunk or {}).values():
         for message in messages_in(update):
-            if seen is not None and seen.rewritten(namespace, message):
+            if seen.rewritten(namespace, message):
                 continue
             if (event := _event_for(message)) is not None:
                 yield replace(event, agent=named, delegations=within)
@@ -610,34 +606,26 @@ def as_seen(snapshot: Any) -> list[Any]:
     Every message stays in state with the summary beside it, as private state the next
     turn's graph is never given: kept whole, each turn summarises the conversation again.
     """
-    values = getattr(snapshot, "values", None)
-    if not isinstance(values, Mapping):
-        return []
-    messages = list(values.get("messages") or ())
-    event = values.get(SUMMARY_EVENT)
-    if not isinstance(event, Mapping):
+    messages = held_in(snapshot)
+    if (summary := summary_in(snapshot)) is None:
         return messages
+    message, cut = summary
     # Cut here, before `as_transcript` drops any message: the cut is a position in this list.
-    return [event["summary_message"], *messages[event["cutoff_index"] :]]
+    return [message, *messages[cut:]]
 
 
 def summarised_away(snapshot: Any) -> list[Any]:
     """The messages a summary stands for, which `as_seen` leaves out; none where deepagents
     summarised nothing."""
-    values = getattr(snapshot, "values", None)
-    if not isinstance(values, Mapping):
+    if (summary := summary_in(snapshot)) is None:
         return []
-    event = values.get(SUMMARY_EVENT)
-    if not isinstance(event, Mapping):
-        return []
-    return list(values.get("messages") or ())[: event["cutoff_index"]]
+    return held_in(snapshot)[: summary[1]]
 
 
 def summarised_in(snapshot: Any) -> bool:
     """Whether a turn ended on a conversation deepagents had summarised, even before
     the turn began, as a resume's restored state can be."""
-    values = getattr(snapshot, "values", None)
-    return isinstance(values, Mapping) and values.get(SUMMARY_EVENT) is not None
+    return summary_in(snapshot) is not None
 
 
 def held_in(snapshot: Any) -> list[Any]:

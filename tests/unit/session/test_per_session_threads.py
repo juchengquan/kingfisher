@@ -134,7 +134,7 @@ def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
     """What the conversation carries, and what it deliberately does not.
 
     It holds because the saver is built per turn -- `build_session_checkpointer` in
-    `_checkpointer`, released when the turn ends -- so the next turn's graph starts
+    `_built_turn`, released when the turn ends -- so the next turn's graph starts
     with nothing in its channels. That is structural rather than enforced, which is
     why it is worth a test: a saver kept across turns takes it back, and nothing else
     would say so.

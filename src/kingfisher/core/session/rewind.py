@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.layout import INPUTS_SEEN, MEMORY_WRITER, TRANSCRIPT_FILE
 from kingfisher.core.result import Rewound, TurnRecord
 
-from .file_history import BEFORE_FIRST, NO_RECORD, read_history, restore_files, restore_state
+from .file_history import BEFORE_FIRST, NO_RECORD, read_file_history, restore_files, restore_state
 from .model import START, RewindError, Start
 from .store import (
     MESSAGES,
@@ -100,7 +99,7 @@ def rewound(files: Any, layout: Layout, to: str | Start) -> Steps[Rewound]:
         yield from write_transcript(harness, said)
     else:
         yield from harness.drop(TRANSCRIPT_FILE)
-    records = yield from read_history(harness)
+    records = yield from read_file_history(harness)
     yield from restore_state(harness, records, path, (INPUTS_SEEN, MEMORY_WRITER))
     restored, not_restored = yield from restore_files(files, harness, layout, records, path)
     # Told to the next turn only where its conversation remembers the files: after a rewind
@@ -131,7 +130,7 @@ def _imported_back(harness: Any, turns: Logged, ledger: KeptLedger, to: str) -> 
     in any turn after `to` refuses it, as a count `to` never recorded does. Every refusal
     comes before anything is written.
     """
-    closings = _closings(ledger)
+    closings = ledger.closings
     names = [row["turn"] for row in closings]
     if turns:
         imported = next(
@@ -167,12 +166,6 @@ def _imported_back(harness: Any, turns: Logged, ledger: KeptLedger, to: str) -> 
     return by_turn((yield from read_turn_log(harness)))
 
 
-def _closings(ledger: KeptLedger) -> list[dict[str, Any]]:
-    """The ledger's closing lines, in the order the turns ran."""
-    rows = (json.loads(line) for line in ledger.lines)
-    return [row for row in rows if "id" not in row and isinstance(row.get("turn"), str)]
-
-
 def _off_path(turns: Logged, path: list[str | None], ledger: KeptLedger) -> frozenset[str | None]:
     """Every turn the log holds that is not on `path`; and every turn the ledger closed
     before the log began that the path does not run through: those after the turn from
@@ -190,10 +183,8 @@ def _off_path(turns: Logged, path: list[str | None], ledger: KeptLedger) -> froz
 def _closed_up_to(ledger: KeptLedger, turn: str) -> set[str | None]:
     """The turns the ledger closed up to and including `turn`, which ran before the log."""
     closed: set[str | None] = set()
-    for line in ledger.lines:
-        row = json.loads(line)
-        if "id" not in row and isinstance(row.get("turn"), str):
-            closed.add(row["turn"])
-            if row["turn"] == turn:
-                return closed
+    for row in ledger.closings:
+        closed.add(row["turn"])
+        if row["turn"] == turn:
+            return closed
     return set()

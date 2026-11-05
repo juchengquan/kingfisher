@@ -358,7 +358,8 @@ def test_the_chunk_that_names_a_dispatch_is_filed_under_it():
     stamped = (AIMessageChunk(content="first"), {runtime.DISPATCH: ["e1", "ptc_a"]})
 
     (token,) = runtime.events_in(
-        ("tools:abc",), "messages", stamped, delegations=runtime.Delegations()
+        ("tools:abc",), "messages", stamped, runtime.SubagentNames(),
+        seen=runtime.SeenMessages(), delegations=runtime.Delegations(),
     )
 
     assert token.delegations == ("e1", "ptc_a")
@@ -371,7 +372,10 @@ def test_a_cut_reply_inside_a_delegation_says_which():
     delegations.started((), _started("abc", _task("reviewer", "check", "t1")))
     reported = {runtime.CUT_OFF_MARK: {"input_tokens": 10, "output_tokens": 4}}
 
-    (cut,) = runtime.events_in(("tools:abc",), "custom", reported, delegations=delegations)
+    (cut,) = runtime.events_in(
+        ("tools:abc",), "custom", reported, runtime.SubagentNames(),
+        seen=runtime.SeenMessages(), delegations=delegations,
+    )
 
     assert cut.cut_off
     assert cut.delegations == ("t1",)

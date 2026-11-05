@@ -1,4 +1,5 @@
-"""A session existing: naming one, making its directory, holding it, listing them."""
+"""A session existing: naming one, opening it through its backend, holding its claim,
+listing them, and what each `Session` method does."""
 
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from .model import (
     QuotaExceededError,
     SessionBusyError,
     held_by_a_turn,
-    known,
+    most_recent_first,
     unknown_session,
 )
 from .rewind import rewound, turn_records
@@ -40,13 +41,15 @@ if TYPE_CHECKING:
     from .model import Start
 
 class SessionMethods:
+    """The service's half of `Session`, and the sessions it can name, open and list."""
+
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
     cfg: Config
     _versions: Versions
     #: Where the sessions are: which there are, how big, when each was used.
     _sessions: Any
     #: The backend one session's files are reached through, as a sequence.
-    _files_for: Callable[..., Steps[Any]]
+    _open_files: Callable[..., Steps[Any]]
 
     def _session_for(self, request: Request | Resume) -> Steps[Conversation]:
         """This turn's session: the one it names, or `DEFAULT_SESSION`; its backend makes
@@ -115,7 +118,7 @@ class SessionMethods:
         listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
         if create and session_id not in listing:
             catalogue = yield on_host(self._versions.current)
-            made = yield from self._files_for(session_id, catalogue=catalogue)
+            made = yield from self._open_files(session_id, catalogue=catalogue)
             listing = dict((yield reading(self._sessions, "sessions", self.cfg)))
             return Session(session_id, listing[session_id], self, [made])
         if session_id not in listing:
@@ -124,80 +127,87 @@ class SessionMethods:
 
     def _sessions_steps(self) -> Steps[tuple[Session, ...]]:
         listing = yield reading(self._sessions, "sessions", self.cfg)
-        return tuple(Session(name, last_used, self, []) for name, last_used in known(listing))
+        return tuple(
+            Session(name, last_used, self, []) for name, last_used in most_recent_first(listing)
+        )
 
-    def _files_in(self, session_id: str, opened: list[Any]) -> Steps[Any]:
+    def _existing_files(self, session_id: str, opened: list[Any]) -> Steps[Any]:
         """The backend of a session still there, opened at most once into `opened`;
         `UnknownSessionError` once it is gone, since opening it again would make it."""
         yield from self._refuse_if_absent(session_id)
         if not opened:
             catalogue = yield on_host(self._versions.current)
-            opened.append((yield from self._files_for(session_id, catalogue=catalogue)))
+            opened.append((yield from self._open_files(session_id, catalogue=catalogue)))
         return opened[0]
 
     def _pending_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[Any, ...]]:
-        files = yield from self._files_in(session_id, opened)
+        files = yield from self._existing_files(session_id, opened)
         mark = yield from read_pause_mark(HarnessFiles(files))
         return pending_from_mark(mark or {})
 
     def _artifact_in(self, session_id: str, name: str, opened: list[Any]) -> Steps[bytes]:
-        files = yield from self._files_in(session_id, opened)
+        files = yield from self._existing_files(session_id, opened)
         return (yield from read_artifact(files, name, self.cfg.layout))
 
     def _result_in(self, session_id: str, number: str, opened: list[Any]) -> Steps[str]:
-        files = yield from self._files_in(session_id, opened)
+        files = yield from self._existing_files(session_id, opened)
         return (yield from read_result(files, number))
 
     def _memory_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[Any, ...]]:
-        files = yield from self._files_in(session_id, opened)
+        files = yield from self._existing_files(session_id, opened)
         return (yield from memory_entries(files, self.cfg.layout))
 
-    def _forget_in(self, session_id: str, entry_id: str, opened: list[Any]) -> Steps[None]:
-        files = yield from self._files_in(session_id, opened)
-        # Taken, not asked, as a sweep takes it: a turn claiming between the ask and the
-        # write reads the entry at its start and may write it back.
+    def _claim_or_refuse(self, session_id: str, then: str) -> Steps[Any]:
+        """The session's claim, or `SessionBusyError` ending on `then`, what to do instead."""
         claimed = yield changing(
             self._sessions, "claim", self.cfg, session_id,
             stale_after=self.cfg.claim_stale_after,
         )
         if claimed is None:
-            msg = (
-                f"session {session_id} is {held_by_a_turn(self.cfg.claim_stale_after)}; "
-                f"forget {entry_id} once it is free"
-            )
+            msg = f"session {session_id} is {held_by_a_turn(self.cfg.claim_stale_after)}; {then}"
             raise SessionBusyError(msg)
+        return claimed
+
+    def _under_claim[T](
+        self, session_id: str, then: str, work: Callable[..., Steps[T]], *args: Any
+    ) -> Steps[T]:
+        """`work(*args)` under the session's claim, given back however it ends. Handed
+        uncalled: a sequence called anywhere but under `yield from` reads as one forgotten."""
+        claimed = yield from self._claim_or_refuse(session_id, then)
         try:
-            forgotten = yield from memory_entry(files, self.cfg.layout, entry_id)
-            # Before the file itself: failing after it, the forget could not be asked again,
-            # as the id would be gone from the file.
-            yield from forget_in_copies(HarnessFiles(files), self.cfg.layout, forgotten)
-            yield from forget_entry(files, self.cfg.layout, entry_id)
+            return (yield from work(*args))
         finally:
             yield changing(self._sessions, "release", self.cfg, session_id, claimed)
 
+    def _forget_in(self, session_id: str, entry_id: str, opened: list[Any]) -> Steps[None]:
+        files = yield from self._existing_files(session_id, opened)
+        # Taken, not asked, as a sweep takes it: a turn claiming between the ask and the
+        # write reads the entry at its start and may write it back.
+        yield from self._under_claim(
+            session_id, f"forget {entry_id} once it is free", self._forgotten, files, entry_id
+        )
+
+    def _forgotten(self, files: Any, entry_id: str) -> Steps[None]:
+        forgotten = yield from memory_entry(files, self.cfg.layout, entry_id)
+        # Before the file itself: failing after it, the forget could not be asked again,
+        # as the id would be gone from the file.
+        yield from forget_in_copies(HarnessFiles(files), self.cfg.layout, forgotten)
+        yield from forget_entry(files, self.cfg.layout, entry_id)
+
     def _turns_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[TurnRecord, ...]]:
-        harness = HarnessFiles((yield from self._files_in(session_id, opened)))
+        harness = HarnessFiles((yield from self._existing_files(session_id, opened)))
         lines = yield from read_turn_log(harness)
         return turn_records(lines, (yield from read_off_path(harness)))
 
     def _rewind_in(self, session_id: str, to: str | Start, opened: list[Any]) -> Steps[Rewound]:
-        files = yield from self._files_in(session_id, opened)
+        files = yield from self._existing_files(session_id, opened)
         # Taken, as `forget` takes it: a turn starting halfway would read a conversation
         # from one branch and a ledger from another.
-        claimed = yield changing(
-            self._sessions, "claim", self.cfg, session_id,
-            stale_after=self.cfg.claim_stale_after,
-        )
-        if claimed is None:
-            msg = (
-                f"session {session_id} is {held_by_a_turn(self.cfg.claim_stale_after)}; "
-                "rewind it once it is free"
+        return (
+            yield from self._under_claim(
+                session_id, "rewind it once it is free", rewound, files, self.cfg.layout, to
             )
-            raise SessionBusyError(msg)
-        try:
-            return (yield from rewound(files, self.cfg.layout, to))
-        finally:
-            yield changing(self._sessions, "release", self.cfg, session_id, claimed)
+        )
 
     def _size_in(self, session_id: str) -> Steps[int]:
         yield from self._refuse_if_absent(session_id)

@@ -16,7 +16,7 @@ from kingfisher.core.access.capabilities import UNRESTRICTED, Capabilities
 from kingfisher.core.request import Request
 from kingfisher.core.session.model import (
     SessionBusyError,
-    known,
+    most_recent_first,
 )
 from kingfisher.plugins import LocalSessions
 from tests.conftest import FakeGraph, Through, start
@@ -386,10 +386,10 @@ def test_what_comes_back_names_no_path(cfg):
 
 
 def test_the_ordering_rule_needs_no_filesystem():
-    """The domain half -- `known` takes what `listing` returns and nothing more, so the
-    rule is testable without a workspace.
+    """The domain half -- `most_recent_first` takes what `listing` returns and nothing
+    more, so the rule is testable without a workspace.
     """
-    ordered = known((("old", 1.0), ("newest", 9.0), ("middle", 5.0)))
+    ordered = most_recent_first((("old", 1.0), ("newest", 9.0), ("middle", 5.0)))
 
     assert [name for name, _ in ordered] == ["newest", "middle", "old"]
     assert ordered[0][1] == 9.0

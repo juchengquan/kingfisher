@@ -110,7 +110,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         config_module.enforce_local_only_tracing()
         # Asked for here rather than at the first async turn, so a second size in
         # one process is refused where the service is built.
-        self._pool = thread_pool(self.cfg.thread_pool_size)
+        thread_pool(self.cfg.thread_pool_size)
 
         # Only what sessions share: a session's own path is known once a request names it.
         self.workspace: Path = ensure_layout(self.cfg.workspace)
@@ -335,7 +335,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             raise TypeError(msg)
         return said
 
-    def _files_for(self, session_id: str, *, catalogue: Definitions) -> Steps[Any]:
+    def _open_files(self, session_id: str, *, catalogue: Definitions) -> Steps[Any]:
         """The backend a session's files are reached through, by kingfisher and any agent it builds.
 
         What runs its commands is the sessions' choice: only they know a session's host.
@@ -351,7 +351,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
 
     def _agent_named(
         self, name: str | None, *, held: frozenset[str] | None, catalogue: Definitions
-    ) -> AgentSpec | None:
+    ) -> AgentSpec:
         """The agent this request asked for, out of the catalogue, on every turn of a
         session alike: whoever holds a session's id may run in it any agent they reach.
 

@@ -1,4 +1,5 @@
-"""The shape of one turn: what it carries, and the ways it can end early."""
+"""The shape of one turn: what it carries, the message it opens with and the ledger lines
+in it, and the ways it can end early."""
 
 from __future__ import annotations
 
@@ -256,25 +257,6 @@ def _delta_line(entry: LedgerEntry) -> str:
     if entry.expired_in is not None:
         return f"{line}  expired"
     return f"{line}  not kept" if entry.unkept else line
-
-
-def consume(  # noqa: PLR0913 -- a chunk, the answer so far, and what the stream taught
-    namespace: Any,
-    mode: str,
-    chunk: Any,
-    answer: str,
-    subagent_names: runtime.SubagentNames,
-    *,
-    seen: runtime.SeenMessages | None = None,
-    delegations: runtime.Delegations | None = None,
-) -> tuple[str, tuple[RunEvent, ...]]:
-    """One stream chunk into (answer so far, events to emit)."""
-    if (text := runtime.answer_in(namespace, mode, chunk)) is not None:
-        answer = text
-    events = runtime.events_in(
-        namespace, mode, chunk, subagent_names, seen=seen, delegations=delegations
-    )
-    return answer, tuple(events)
 
 
 def decision_needed(waiting: tuple[PendingDecision, ...]) -> RunEvent:

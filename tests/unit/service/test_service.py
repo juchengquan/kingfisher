@@ -106,7 +106,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     asked = Request("go", agent="only")
 
     built = agent_for(service, asked)
-    files = drive(service._files_for(session_dir.name, catalogue=service.catalogue))
+    files = drive(service._open_files(session_dir.name, catalogue=service.catalogue))
 
     def once():
         return service._graph_for(
