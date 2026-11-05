@@ -410,10 +410,8 @@ def test_doctor_builds_the_model_it_needs_to_answer(cfg, monkeypatch):
     """It builds the default model, and that is deliberate: a `models.yaml` row that
     cannot start a turn is reported on its own row, and nothing but a built model knows.
 
-    This replaces `test_nothing_here_calls_a_model`, which patched `build_model` in a
-    module other than the one calling it -- so it never bit, and the cost it was
-    protecting is already paid: `deepagents` imports both provider packages itself.
-    Spied in `models`, which is where the default is built.
+    Spied in `models`, where the default is built: a spy on the name anywhere else is
+    never called.
     """
     from kingfisher.core.agent import models as agent_module
 

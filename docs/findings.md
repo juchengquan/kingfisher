@@ -385,8 +385,8 @@ for the next reader who reaches for one.*
   every block was text, and one text block ahead of the media blocks otherwise. A
   line appended by a `wrap_tool_call` inside eviction, as the ledger's id is, is the
   stub's last line in both shapes and the offloaded file's too.
-  `test_the_id_outlasts_eviction_of_a_result_made_of_blocks` and
-  `test_an_offloaded_result_is_pointed_at_deepagents_copy` drive it. *(2026-10-12,
+  No test here drives it: kingfisher's `FilesystemMiddleware` leaves
+  `tool_token_limit_before_evict` unset, so this eviction never runs. *(2026-10-12,
   deepagents 0.7.6, langchain-core 1.5.5.)*
 - **Its trigger counts the system prompt and tools; its `keep` does not.** With a
   window small enough that those approach three quarters of it, a profile-based

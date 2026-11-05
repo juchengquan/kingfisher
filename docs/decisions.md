@@ -214,7 +214,7 @@ agent runtime for names that never reach it.
 clamped by. Every test touching the pair had replaced the spec or supplied a registry.
 `general`, then `assistant`, granted all three and ran under both caps, the stricter deciding, until
 the pair was removed (*The shipped middleware is one summarizer*, below);
-`test_general_builds_from_the_workspace_alone` still builds it with no registry.
+`test_assistant_builds_from_the_definitions_alone` still builds it with no registry.
 *(2026-09-07.)*
 
 **The kind is `middlewares`, in the plural its four siblings were already in.** The
@@ -6660,7 +6660,8 @@ Taken:
   - `core/access/source_ids.py` again, its `source_ids.yaml` reader to `policy.py`, the
     module already named for reading it: 1 of 5, none touching the reader alone. Thin
     as well, and taken for what the reader imported: `core.definitions.fields`, which
-    imported the vocabulary back, the one cycle in the tree. *(2026-10-19.)*
+    imported the vocabulary back, the one cycle in the tree. *(2026-10-19.)* `policy.py`
+    went with the file it read, in *Reversed: `source_ids.yaml`*.
 
 Left whole:
 
