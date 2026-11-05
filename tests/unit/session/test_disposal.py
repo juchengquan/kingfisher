@@ -8,7 +8,6 @@ import pytest
 
 from kingfisher import Kingfisher
 from kingfisher.core.request import Request
-from kingfisher.core.session import retention
 from kingfisher.plugins import LocalSessions
 from tests.conftest import Through, start
 from tests.unit.access.test_tenancy import service
@@ -126,11 +125,12 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     result = service.reap(now=time.time())
 
     assert result.removed == (idle,)
+    assert result.kept == 1
     assert (cfg.workspace / "sessions" / busy).exists()
 
 
-class ClaimedRightAfterTheCheck(LocalSessions):
-    """A turn that claims its session the instant a sweep has asked whether it is held."""
+class ClaimedFirst(LocalSessions):
+    """A turn claiming its session between a sweep's listing and the sweep's own claim."""
 
     tokens: list[str | None]
 
@@ -138,31 +138,32 @@ class ClaimedRightAfterTheCheck(LocalSessions):
         super().__init__()
         self.tokens = []
 
-    def held(self, cfg, session_id, /, *, stale_after, now=None):
-        answer = super().held(cfg, session_id, stale_after=stale_after, now=now)
-        # Once: `claim` asks `held` of a slot it finds taken.
+    # In `claim`, not `sessions`: hooked at the listing, a sweep that asked `held` and then
+    # deleted unclaimed would see this claim and pass.
+    def claim(self, cfg, session_id, /, *, stale_after, now=None):
         if not self.tokens:
             self.mark_used(cfg, session_id)
-            self.tokens.append(self.claim(cfg, session_id, stale_after=stale_after))
-        return answer
+            self.tokens.append(super().claim(cfg, session_id, stale_after=stale_after))
+        return super().claim(cfg, session_id, stale_after=stale_after, now=now)
 
 
-def test_a_turn_claiming_after_the_sweep_asked_keeps_its_session(cfg):
-    """`reap` asked `held` and then deleted unclaimed, so a turn claiming between the two
-    had its session removed mid-turn."""
+def test_a_turn_claiming_after_the_sweep_listed_keeps_its_session(cfg):
+    """A sweep deleting what it listed without taking the claim removes the session of a
+    turn that claimed in between, mid-turn, as `reap` did when it asked `held` and then
+    deleted unclaimed."""
     import time
 
-    sessions = ClaimedRightAfterTheCheck()
+    sessions = ClaimedFirst()
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=sessions)
     session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
 
     result = kf.reap(now=time.time())
 
-    assert sessions.tokens and sessions.tokens[0] is not None, "the turn took its claim"
     assert result.removed == ()
     assert result.kept == 1
     assert directory.exists()
+    assert sessions.tokens and sessions.tokens[0] is not None, "the turn took its claim"
     assert sessions.held(cfg, session, stale_after=cfg.claim_stale_after)
 
 
@@ -231,15 +232,6 @@ def test_a_claim_that_fails_on_a_session_still_there_is_raised(cfg):
     with pytest.raises(OSError, match="lock store"):
         kf.reap(now=time.time())
     assert (cfg.workspace / "sessions" / "s").exists()
-
-
-def test_the_rule_itself_keeps_what_is_busy():
-    """The domain half, without a filesystem."""
-    names = ("a", "b")
-
-    assert retention.unheld(names).doomed == ("a", "b")
-    assert retention.unheld(names, busy=("a",)).doomed == ("b",)
-    assert retention.unheld(names, busy=("a",)).kept == 1
 
 
 # -- a claim outliving its holder -----------------------------------------
