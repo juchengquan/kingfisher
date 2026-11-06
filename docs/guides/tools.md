@@ -465,9 +465,10 @@ TOOLS = [first_line]
 `runtime` is not an argument the model sees or sends. langgraph fills it in and
 leaves it out of the schema.
 
-**Write it as a function**, decorated or not. langgraph reads which arguments to
-fill off the tool's schema, so a class that declares its own `args_schema` — the
-reason to write a class at all — is called without `runtime` and fails on
+**Write it as a function**, decorated or not, with an `args_schema` of its own or
+without. langgraph reads which arguments to fill off the tool's schema and its
+function's signature, so a class that declares its own `args_schema` — the reason to
+write a class at all — has neither saying so, is called without `runtime`, and fails on
 `_run() missing 1 required positional argument: 'runtime'`. Naming it in the
 schema is no way out: pydantic cannot build a model holding one, and the file
 stops importing.
