@@ -67,6 +67,10 @@ WHY = "why"
 DROPPED_IN = "dropped_in"
 OUTSIDE_BUDGET = "outside_budget"
 
+#: Said by `_copied` of a file whose contents are the version the last turn left, which it
+#: then neither writes nor records.
+_SAME = "its contents are the version the last turn left"
+
 #: Why a version has no copy, where kingfisher decided it rather than a copy failing.
 LATE = "the turn ended past its deadline, when its claim may have no time left for a copy"
 HELD_BY_STORE = "a MemoryStore keyed the turn, so the memory file was a copy of the user's"
@@ -279,8 +283,10 @@ def _copies_recorded(
     budgeted = cfg.rewind_max_bytes is not None
     kept: dict[str, dict[str, Any]] = {}
     not_kept: dict[str, dict[str, Any]] = {}
-    for path, (mark, size) in sorted(now.items()):
-        # A file whose listing gives no mark is copied every turn: it cannot be told unchanged.
+    # Before the copies, which mark a file the listing did not by what its contents read.
+    _warn_unmarked(turn, now, budgeted=budgeted)
+    for path, (listed, size) in sorted(now.items()):
+        mark = listed
         if mark is not None and before.get(path) == mark:
             continue
         why = LATE if late else _not_to_copy(path, size, prepared, cfg)
@@ -290,9 +296,19 @@ def _copies_recorded(
                 copied, why = yield from _kept_whole(harness, under, path, memory)
             else:
                 destination = f"{HARNESS_ROUTE}{KEPT_FILES}/{under}/{path}"
-                copied, why = yield from _copied(
-                    prepared.files, f"/{path}", destination, size, counted=budgeted
+                # A file the listing gives no mark is told unchanged by its contents, where
+                # the copy reads them; on the other routes it is copied every turn.
+                last = before.get(path) if listed is None else None
+                copied, why, read = yield from _copied(
+                    prepared.files, f"/{path}", destination, size, counted=budgeted, last=last
                 )
+                if listed is None and read is not None:
+                    # Saved as the listing's mark, so the next turn compares its contents with
+                    # these. Only where the listing gave none: beside one, the two would differ.
+                    mark = read
+                    now[path] = (read, size)
+                if why == _SAME:
+                    continue
             if why is None:
                 kept[path] = {MARK: mark, BYTES: copied}
                 if path == memory_file:
@@ -310,7 +326,6 @@ def _copies_recorded(
                     folder=folder,
                 )
         not_kept[path] = {MARK: mark, WHY: why}
-    _warn_unmarked(turn, now, budgeted=budgeted)
     state = yield from _kept_state(harness, records, under)
     records.append(
         _line(
@@ -348,11 +363,14 @@ def _warn_unmarked(turn: str, now: Mapping[str, Seen], *, budgeted: bool) -> Non
     if not folders:
         return
     named = " and ".join(f"/{one}" for one in folders)
-    cost = (
-        "is copied again every turn, or, where the backend copies it itself and gives no size, "
+    instead = (
         "not copied, since KINGFISHER_REWIND_MAX_BYTES could not count it"
         if budgeted
-        else "is copied again every turn"
+        else "copied again"
+    )
+    cost = (
+        "is read back every turn to tell it unchanged, or, where the backend copies files "
+        f"itself, {instead}"
     )
     warn(
         "turn_files_unmarked",
@@ -448,24 +466,32 @@ def _kept_whole(
     return len(content), None
 
 
-def _copied(
-    backend: Any, source: str, destination: str, size: int | None, *, counted: bool = False
-) -> Steps[tuple[int | None, str | None]]:
-    """What the copy of `source` at `destination` came to, or why there is none.
+def _copied(  # noqa: PLR0913 -- the two keywords are a turn's end's alone
+    backend: Any,
+    source: str,
+    destination: str,
+    size: int | None,
+    *,
+    counted: bool = False,
+    last: str | None = None,
+) -> Steps[tuple[int | None, str | None, str | None]]:
+    """What the copy of `source` at `destination` came to, or why there is none, and the
+    mark of the contents where it read them.
 
     On this host where the backend names both ends here; else by the backend's own `copy`;
     else read and written whole, which holds the file in this process's memory. `counted`
     where a budget has to count the copy: the backend's own `copy` reports no size, so one
     whose listing gave none is refused before it is made, or the budget would count it as
-    nothing and bound nothing.
+    nothing and bound nothing. Read whole, contents whose mark is `last` are not written
+    again, and `_SAME` says so.
     """
     whence = yield on_host(_on_this_host, backend, source)
     where = yield on_host(_on_this_host, backend, destination)
     if whence is not None and where is not None:
         try:
-            return (yield on_host(copied_on_host, whence, where)), None
+            return (yield on_host(copied_on_host, whence, where)), None, None
         except OSError as exc:
-            return None, exc.strerror or str(exc)
+            return None, exc.strerror or str(exc), None
     own = getattr(backend, "copy", None)
     if callable(own):
         refused: object = UNCOUNTED
@@ -473,13 +499,24 @@ def _copied(
             try:
                 refused = yield on_host(own, source, destination)
             except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing plugin
-                return None, f"{type(backend).__name__}.copy raised {type(exc).__name__}: {exc}"
-        return (None, str(refused)) if refused else (size, None)
+                failed = f"{type(backend).__name__}.copy raised {type(exc).__name__}: {exc}"
+                return None, failed, None
+        return (None, str(refused), None) if refused else (size, None, None)
+    return (yield from _copied_whole(backend, source, destination, last))
+
+
+def _copied_whole(
+    backend: Any, source: str, destination: str, last: str | None
+) -> Steps[tuple[int | None, str | None, str | None]]:
+    """`_copied`, read and written whole through this process."""
     (got,) = yield reading(backend, "download_files", [source])
     if got.error or got.content is None:
-        return None, got.error or "the backend handed back no content"
+        return None, got.error or "the backend handed back no content", None
+    read = f"{SHA} {hashlib.sha256(got.content).hexdigest()}"
+    if read == last:
+        return None, _SAME, read
     (put,) = yield changing(backend, "upload_files", [(destination, got.content)])
-    return (None, put.error) if put.error else (len(got.content), None)
+    return (None, put.error, read) if put.error else (len(got.content), None, read)
 
 
 def _on_this_host(backend: Any, path: str) -> tuple[Path | None, Path] | None:
@@ -693,7 +730,7 @@ def restore_files(
         if under is None:
             not_restored[where] = why or "its version has no copy"
             continue
-        _, refused = yield from _copied(
+        _, refused, _ = yield from _copied(
             files, f"{HARNESS_ROUTE}{KEPT_FILES}/{under}/{where}", f"/{where}", None
         )
         if refused is None:

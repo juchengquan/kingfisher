@@ -1159,9 +1159,12 @@ place leaves it as it was, and a file that is not there is answered with why, ne
 
 **Your listing decides what gets copied.** A file is told unchanged since the last turn by
 what your `glob` says of it, as an input is: a `checksum`, else `size` and `modified_at`.
-With neither -- deepagents' sandboxes list a path and nothing else -- nothing tells it
-unchanged, so every file in `/outputs` and `/memory` is copied again at every turn, and a
-turn says so once, as `turn_files_unmarked`. With `KINGFISHER_REWIND_MAX_BYTES` set, a
+With neither -- deepagents' sandboxes list a path and nothing else -- the listing cannot
+tell it unchanged. Downloaded to be copied, its contents are compared with the version
+the last turn kept, and it is not uploaded again when they match, so an unchanged file
+costs its download at every turn; your `copy` never hands kingfisher the bytes, so with
+one every such file is copied again at every turn. A turn says so once, as
+`turn_files_unmarked`. With `KINGFISHER_REWIND_MAX_BYTES` set, a
 file your listing gives no `size` for is not copied by your `copy` at all, since `copy`
 answers no size and the budget could not count it: its line says why, and a rewind cannot
 put it back. A listing that gives a `checksum` or a `size` and `modified_at` costs neither.
