@@ -830,10 +830,14 @@ directly, and `filter_tools_for_ptc` called on its own.*
   sees the call. Nor does an `interrupt_on` gate: `HumanInTheLoopMiddleware` is an
   `after_model` hook reading the tool calls on the model's message, and a call from
   code is never on it. The library's own docstrings warn of the gate for both.
-- **The bridge injects `runtime`, state and store as `ToolNode` would**, by reading the
-  tool's own schema with langgraph's `_get_all_injected_args`. A wrapper has to
-  advertise the inner tool's full `args_schema`, injected fields included, or the tool
-  is called without them; `tool_call_schema` drops them.
+- **The bridge injects `runtime`, state and store as `ToolNode` would**, with langgraph's
+  `_get_all_injected_args`, which reads the tool's schema *and* the annotations of its
+  `func` or `coroutine`. A `@tool(args_schema=...)` function names `runtime` only on the
+  function, so a wrapper showing the inner schema and no `func` had it called without
+  one -- in `eval` and a compiled subagent alike -- while the bare tool ran. langchain's
+  `run` drops it too unless the wrapper's `_injected_args_keys` names it.
+  `tool_call_schema` keeps either way out of what the model sees. *(2026-11-06,
+  langgraph 1.2.15, langchain-core 1.6.10.)*
 - **`eval`'s timeout is not counted while a tool from code runs.** Under a 2s timeout, a
   program awaiting one tool that slept 4s returned after 4.1s with the tool's answer, a
   sync tool and an `async` one alike: what is timed is the program's own work. So one

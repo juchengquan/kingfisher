@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import inspect
 from collections.abc import Sequence
 from contextlib import AbstractContextManager, nullcontext
@@ -47,6 +48,22 @@ class GuardedTool(BaseTool):
     #: The deployment's `ScratchRunLimit` on that subagent, as `limit_answer` gives it,
     #: joined with the rule of whoever handed it the work.
     limit: tuple[bool, str | None] = (True, None)
+
+    # langgraph and `eval`'s bridge decide what to inject from the schema *and* from
+    # `func` or `coroutine`, so a tool whose schema leaves `runtime` out -- one declaring
+    # `args_schema` -- is handed it only if these show the inner function's signature.
+    @functools.cached_property
+    def func(self) -> Any:
+        return _uncallable(getattr(self.inner, "func", None))
+
+    @functools.cached_property
+    def coroutine(self) -> Any:
+        return _uncallable(getattr(self.inner, "coroutine", None))
+
+    @functools.cached_property
+    def _injected_args_keys(self) -> frozenset[str]:
+        # Else `run` drops an injected argument the schema does not name before `_run`.
+        return self.inner._injected_args_keys
 
     def _named(self) -> AbstractContextManager[None]:
         return nullcontext() if self.graph is None else naming(self.graph)
@@ -182,6 +199,23 @@ def _guarded(
         return_direct=inner.return_direct,
         handle_tool_error=True,
     )
+
+
+def _uncallable(original: Any) -> Any:
+    """`original`'s signature and annotations, on a function that refuses to run.
+
+    Read for its signature only; handing out the inner function itself would give whatever
+    calls `tool.func` one day the tool with none of its guards.
+    """
+    if original is None:
+        return None
+
+    @functools.wraps(original)
+    def refused(*_: Any, **__: Any) -> Any:
+        msg = f"{original.__name__} runs through its GuardedTool, never on its own"
+        raise TypeError(msg)
+
+    return refused
 
 
 def _as_tool(one: Any) -> BaseTool:

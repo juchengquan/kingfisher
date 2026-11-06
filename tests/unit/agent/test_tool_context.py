@@ -41,6 +41,7 @@ from tests.conftest import (
     subagents_dir,
     tools_dir,
 )
+from tests.unit.agent.test_interpreter import _from_code
 from tests.unit.scripted import Scripted
 
 KEY = "/outputs/private/key.txt"
@@ -506,6 +507,28 @@ class FirstLine(BaseTool):
 TOOLS = [FirstLine()]
 '''
 
+#: The same function behind a schema of its own and a `ToolSpec`, the shape a deployment
+#: converting its own tool definitions writes. Only the function says it takes `runtime`.
+FIRST_LINE_WITH_A_SCHEMA = '''from langchain.tools import ToolRuntime
+from langchain_core.tools import tool
+from pydantic import BaseModel
+
+from kingfisher import ToolContext, ToolSpec
+
+
+class FirstLineInput(BaseModel):
+    file_path: str
+
+
+@tool(args_schema=FirstLineInput)
+def lines(file_path: str, runtime: ToolRuntime[ToolContext]) -> str:
+    """Return the first line of a text file."""
+    return runtime.context.backend.read(file_path).file_data["content"].splitlines()[0]
+
+
+TOOLS = [ToolSpec(lines, name="first_line", description="Return a file's first line.")]
+'''
+
 
 def _a_tool(
     cfg,
@@ -694,12 +717,18 @@ def test_a_subagents_tool_is_handed_the_backend_too(cfg, session_dir):
     assert mine == [(True, "alpha")]
 
 
-def test_the_wrapper_a_compiled_subagents_tools_wear_passes_the_runtime_on(cfg, session_dir):
+@pytest.mark.parametrize(
+    "source", [FIRST_LINE, FIRST_LINE_WITH_A_SCHEMA], ids=["function", "own schema"]
+)
+def test_the_wrapper_a_compiled_subagents_tools_wear_passes_the_runtime_on(
+    cfg, session_dir, source
+):
     """A compiled subagent gets no middleware, so its tools are wrapped instead -- and
     `runtime` is the one argument a model never sends, which a wrapper forwarding
-    only what it was called with would drop.
+    only what it was called with would drop. A tool with its own schema names it only on
+    its function, which a wrapper showing the schema alone hid: called without it.
     """
-    _a_tool(cfg)
+    _a_tool(cfg, source=source)
     _notes(session_dir)
     (loaded,) = LocalToolRepository(tools_dir(cfg)).found
     (wrapped,) = guarded_tools([loaded.tool], paths_in(cfg, session_dir))
@@ -718,6 +747,34 @@ def test_the_wrapper_a_compiled_subagents_tools_wear_passes_the_runtime_on(cfg, 
 
     (result,) = [m for m in out["messages"] if isinstance(m, ToolMessage)]
     assert (result.status, result.content) == ("success", "alpha")
+
+
+def test_the_signature_the_wrapper_shows_is_no_way_round_it(cfg):
+    """langgraph reads `tool.func` and never calls it; whatever one day calls it would run
+    the tool with none of the wrapper's guards, were it the tool's own function."""
+    _a_tool(cfg, source=FIRST_LINE_WITH_A_SCHEMA)
+    (loaded,) = LocalToolRepository(tools_dir(cfg)).found
+    (wrapped,) = guarded_tools([loaded.tool], None)
+
+    with pytest.raises(TypeError, match="runs through its GuardedTool"):
+        wrapped.func(file_path="/inputs/notes.txt", runtime=None)
+
+
+def test_a_tool_with_its_own_schema_called_from_code_is_handed_the_runtime(cfg, session_dir):
+    """`eval`'s bridge decides what to inject apart from langgraph, from the wrapper it
+    holds, so a wrapper hiding the function's `runtime` failed the call there too."""
+    wired = replace(cfg, interpreter_enabled=True)
+    _a_tool(wired, source=FIRST_LINE_WITH_A_SCHEMA)
+    _notes(session_dir)
+
+    answered, _ = _from_code(
+        wired,
+        session_dir,
+        "(async () => await tools.firstLine({file_path: '/inputs/notes.txt'}))()",
+        capabilities=Capabilities(builtin_tools=("eval",), tools=("first_line",)),
+    )
+
+    assert answered == "<result>alpha</result>"
 
 
 # -- the service ---------------------------------------------------------------
