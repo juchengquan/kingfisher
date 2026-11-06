@@ -32,7 +32,6 @@ from kingfisher.core.session.turnlog import (
     ANSWER,
     AT,
     CUT,
-    FROM,
     PARENT,
     PARTS,
     _rewritten,
@@ -211,7 +210,7 @@ def test_the_log_rebuilds_the_conversation_across_summaries_pauses_and_resumes(l
         {"turn": last.turn_id, PARENT: again.turn_id},
     ]
     first, second = _openings(logged)[:2]
-    assert first == {"turn": paused.turn_id, PARENT: None, FROM: 0}
+    assert first == {"turn": paused.turn_id, PARENT: None}
     assert second == {"turn": resumed.turn_id, PARENT: paused.turn_id, "resumed": True}
 
 
@@ -488,7 +487,7 @@ def test_a_conversation_the_log_cannot_say_is_warned_of(caplog):
     """The log can say only that a message's text changed; a turn that ended on more or
     fewer messages than its lines rebuild would have its next turn built on the wrong
     conversation without a word."""
-    lines = [{"turn": "t", PARENT: None, FROM: 0}, {"turn": "t", "role": "user"}]
+    lines = [{"turn": "t", PARENT: None}, {"turn": "t", "role": "user"}]
     ended = (Message(role="user"), Message(role="assistant", content="extra"))
 
     with caplog.at_level(logging.WARNING, logger="kingfisher.warnings"):

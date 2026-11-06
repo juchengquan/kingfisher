@@ -4400,15 +4400,15 @@ of that conversation, and without the log the words it replaced would survive on
 `conversation_history/`, which the agent can write. Rewinding a session to the end of any
 turn, which is how a client regenerates one, needs the conversation each turn ended on.
 Each turn adds an opening line -- the turn; `parent`, the turn the session was on before
-it, the last the log opens that a rewind did not leave behind; `from`, how many of its
-parent's messages it began from -- or, for a resume, `resumed`. Then a line per message it
+it, the last the log opens that a rewind did not leave behind -- and, for a resume,
+`resumed`. Then a line per message it
 added, as `as_record` writes one, the provider's call id on each tool line, except that the
 turn's own message is kept as `parts` (*The turn log says who wrote each piece*, below);
 then the summary it ended on, with its `cut`; then a line with `at` for each message it
 left holding other text than first written (*The transcript is gone*, below); then its
-`answer`. The conversation at the end of a turn is its path replayed from the first: the
-parent's kept to `from`, each message appended, a summary standing for everything before
-its cut, a message at `at` given that text.
+`answer`. The conversation at the end of a turn is its path replayed from the first: each
+message appended to all its parent left, a summary standing for everything before its
+cut, a message at `at` given that text.
 `test_the_log_rebuilds_the_conversation_across_summaries_pauses_and_resumes` and its
 neighbours rebuild from the log and find what the model was handed, across summaries,
 pauses, resumes, a superseded pause, a failed turn, a rewind and a damaged line.
@@ -4435,9 +4435,11 @@ new kind of id was made: a step id waits for a step-level view or a rewind insid
 **Written after the ledger, by #1184's reasoning.** The ledger's closing line counts the
 messages the turn ended on. A turn dying between the ledger and the log leaves the log a
 turn short of that count: the next turn is built on the turn before, rebuilds fewer
-messages than the ledger counts, and reports `history_lost`. `from` still records how much
-of its parent's conversation a turn began from; with the log the only record, that is
-always all of it. A request refused before its turn runs writes nothing.
+messages than the ledger counts, and reports `history_lost`. **The opening line's `from`
+went with the transcript.** It said how many of its parent's messages a turn began from,
+fewer where the transcript was found short. A turn built on the log begins from all of
+them -- a damaged line ends the reading for its parent too -- so it never said otherwise.
+A request refused before its turn runs writes nothing.
 
 **A session older than the log starts with no history, and a rewind stops where its log
 began.** Its conversation was in the transcript, which nothing reads now, so its first
@@ -4499,7 +4501,7 @@ middleware.
 **Character offsets into the sent text were turned down**: a JavaScript reader counts
 UTF-16 units and Python counts code points, so an emoji or a rare CJK character shifts
 every span after it. **So were separate rows per author**: the rebuild would have to merge
-them back, and `from` and a summary's `cut` count records, so every count would have to
+them back, and a summary's `cut` and `at` count records, so every count would have to
 learn to skip them.
 
 **The opening line drops `task`**, which the pieces now hold: `TurnRecord.task` is the
