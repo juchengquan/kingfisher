@@ -26,6 +26,11 @@ The implementation kingfisher uses for an interface when a deployment names none
 have none: a deployment always names them, kingfisher's own included.
 _Avoid_: reference implementation, built-in
 
+**Agent framework**:
+The library that runs an agent's loop beneath the core: deepagents, or Pydantic AI. A
+deployment runs on one, and every session in it runs on that one from start to finish.
+_Avoid_: harness, runtime, engine, backend
+
 ### Sessions and turns
 
 **Session**:
