@@ -1100,7 +1100,7 @@ def _turns(args: argparse.Namespace) -> int:
         print(f"session {args.session} has kept no log of its turns")
         return 0
     for turn in turns:
-        kind = "resumed" if turn.resumed else "imported" if turn.imported else ""
+        kind = "resumed" if turn.resumed else ""
         said = turn.task.strip().splitlines()[0][:60] if turn.task and turn.task.strip() else ""
         mark = "*" if turn.current else " "
         print(f"{mark} {turn.id}  after {turn.parent or '-'}  {kind:<8} {said}")

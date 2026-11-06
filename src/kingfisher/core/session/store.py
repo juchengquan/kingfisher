@@ -291,11 +291,10 @@ class KeptLedger:
     messages: int | None = None
     #: Every turn id a line names, a cut turn's rows included: ids a later turn may not take.
     turns: frozenset[str] = frozenset()
-    #: The turns a rewind left behind, whose lines stay so a rewind can return to them, and
-    #: `None` for a conversation imported under no turn. `exchanges`, `unclosed`,
-    #: `summarised` and `messages` leave them out, being what the conversation the model is
-    #: handed holds.
-    off_path: frozenset[str | None] = frozenset()
+    #: The turns a rewind left behind, whose lines stay so a rewind can return to them.
+    #: `exchanges`, `unclosed`, `summarised` and `messages` leave them out, being what the
+    #: conversation the model is handed holds.
+    off_path: frozenset[str] = frozenset()
     #: `exchanges` and `unclosed` with every branch in, in the order the turns ran, or
     #: `None` where no turn is off the path and the two are the same.
     every_exchange: tuple[tuple[LedgerEntry, ...], ...] | None = None
@@ -337,7 +336,7 @@ def read_ledger(harness: HarnessFiles) -> Steps[KeptLedger]:
     return _kept(held.decode("utf-8", errors="replace"), (yield from read_off_path(harness)))
 
 
-def read_off_path(harness: HarnessFiles) -> Steps[frozenset[str | None]]:
+def read_off_path(harness: HarnessFiles) -> Steps[frozenset[str]]:
     """The turns a rewind left off the session's path, or none where it never rewound.
 
     Unreadable reads as none: the ledger then lists a branch's results beside the path's,
@@ -350,13 +349,12 @@ def read_off_path(harness: HarnessFiles) -> Steps[frozenset[str | None]]:
         return frozenset()
     if not isinstance(listed, list):
         return frozenset()
-    return frozenset(one for one in listed if one is None or isinstance(one, str))
+    return frozenset(one for one in listed if isinstance(one, str))
 
 
-def write_off_path(harness: HarnessFiles, turns: frozenset[str | None]) -> Steps[None]:
+def write_off_path(harness: HarnessFiles, turns: frozenset[str]) -> Steps[None]:
     """Keep `turns` as the ones off the session's path."""
-    listed = sorted(turns, key=lambda one: (one is not None, one or ""))
-    yield from harness.store(OFF_PATH_FILE, json.dumps(listed).encode("utf-8"))
+    yield from harness.store(OFF_PATH_FILE, json.dumps(sorted(turns)).encode("utf-8"))
 
 
 class _Track:
@@ -380,7 +378,7 @@ class _Track:
             self.summarised = bool(row.get(SUMMARISED))
 
 
-def _kept(text: str, off_path: frozenset[str | None] = frozenset()) -> KeptLedger:
+def _kept(text: str, off_path: frozenset[str] = frozenset()) -> KeptLedger:
     lines: list[str] = []
     last = 0
     paths: set[str] = set()
