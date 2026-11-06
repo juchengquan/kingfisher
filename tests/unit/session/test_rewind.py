@@ -450,6 +450,12 @@ def test_the_memory_file_and_what_the_writer_has_not_read_go_back(rewinding):
 
     assert memory.read_text(encoding="utf-8") == "- Prefers tables\n"
     assert read_record_bytes(unread) == kept_unread
+    # Listed after the rewind as the listing marks it, not by its contents, the memory file
+    # read as changed by the next turn, which never touched it.
+    after = _say(kf, "and now?", AIMessage("ok"))
+    (record,) = (one for one in kf.session("s").turns() if one.id == after.turn_id)
+    assert record.files is not None
+    assert "memory/AGENTS.md" not in record.files.changed
 
 
 def test_a_rewind_to_the_start_leaves_the_files_and_tells_nothing(rewinding):

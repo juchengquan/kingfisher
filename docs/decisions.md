@@ -4074,6 +4074,16 @@ reads nothing more; the port's `size` is left alone, and `Session.size()` still 
 what the backend holds. **The cost, taken:** with the history unbounded by default, the
 session cap no longer bounds a session's disk.
 
+**The memory file is outside every budget** *(2026-11-06)*. It shared the budget with
+`/outputs`, so a budget smaller than it never copied it, and a full one dropped its old
+versions to make room for a report: a rewind then brought back the conversation without
+what the agent knew then, and a budget of 1 byte kept less than one of 0 would. It is a
+few kilobytes, so every version is kept and none is dropped for space;
+`KINGFISHER_SESSION_MAX_BYTES` still counts them. It is told unchanged by its contents
+rather than the listing's mark: on a backend whose listing gives none, as deepagents'
+sandboxes give none, it was copied again every turn, and the turn reads it whole into
+the prompt regardless. A `MemoryStore` still keeps it out.
+
 **A memory file a `MemoryStore` keyed is not copied, and `forget` reaches every copy.**
 Keyed, the file is the user's memory, loaded over it at every turn's start, so a copy
 could restore nothing, and it would hold the user's entries where the store's own
