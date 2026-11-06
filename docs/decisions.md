@@ -4069,6 +4069,24 @@ too: history lost, never a leak. **What still reads the copies:** the shell, as 
 fenced against the shell's writes and against both of the file tools', which is what
 keeps a copy as the turn left it. *(2026-11-04.)*
 
+**`forget` reaches the copies no line names, and what the writer has not read**
+*(2026-11-06)*. A turn whose history save failed, on a full disk say, kept its copies with
+no line to name them: counted by no limit, read by no rewind, and missed by `forget`,
+which found copies through the history -- a forgotten entry stayed in `files/t1/`, where
+the shell can read it. So a turn whose save fails deletes its own folder before the error
+goes on, a folder being one turn's alone since an id is never taken twice; and `forget`,
+under the session's claim, lists `.harness/files/` and deletes any folder no line names,
+which only a process killed while copying leaves. **Not a listing every turn:** about
+0.04 ms a folder here and a call a turn on remote storage, for something this rare, so
+such a folder waits for the next `forget` or the session's removal. `forget` also cleans a
+copy its line lists as not kept, since one that fails partway stays where it was being
+written. And it clears what was said since the writer last ran, in `memory_writer.json`
+and in each turn's copy of it, keeping the count of turns: left, the writer's next run was
+shown the line the entry came from. **Every line, not those naming the entry**, which
+need share no word with what was said; telling the writer what was forgotten instead
+would keep the very text the caller asked to be rid of. The cost is that facts said in
+those few turns are not learned unless said again.
+
 **`execute`'s own description states the shell's path rule, and a miss is answered
 with it.** deepagents' description says "Use absolute paths", and the only absolute paths
 a model knows are the file tools', which the shell reads from the host's root. `system.md`

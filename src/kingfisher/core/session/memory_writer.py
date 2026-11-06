@@ -94,6 +94,22 @@ def _not_yet_read(harness: HarnessFiles) -> Steps[_Unread]:
         return _Unread()
 
 
+def unread_dropped(harness: HarnessFiles, name: str) -> Steps[None]:
+    """`name`, the writer's state or a turn's copy of it, without what was said since the
+    writer last ran, and with its count of turns as it was."""
+    held = yield from harness.fetch(name)
+    if held is None:
+        return
+    try:
+        raw = json.loads(held)
+    except ValueError:
+        return
+    # Every line, not those naming what was forgotten: an entry need share no word with
+    # what was said, so a line left could hand the writer the fact back.
+    if isinstance(raw, dict) and raw.get("said"):
+        yield from harness.store(name, json.dumps({**raw, "said": []}).encode("utf-8"))
+
+
 def _said_this_turn(
     messages: list[Any] | None, *, since: int, task: str, answer: str
 ) -> tuple[str, ...]:

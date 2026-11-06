@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.core.layout import MEMORY_WRITER
 from kingfisher.core.request import Request, Resume
 
 from .file_history import forget_in_copies, kept_bytes
@@ -12,6 +13,7 @@ from .files import read_artifact
 from .handle import Session
 from .ledger import read_result
 from .memory import forget_entry, memory_entries, memory_entry
+from .memory_writer import unread_dropped
 from .model import (
     DEFAULT_SESSION,
     Conversation,
@@ -191,7 +193,9 @@ class SessionMethods:
         forgotten = yield from memory_entry(files, self.cfg.layout, entry_id)
         # Before the file itself: failing after it, the forget could not be asked again,
         # as the id would be gone from the file.
-        yield from forget_in_copies(HarnessFiles(files), self.cfg.layout, forgotten)
+        harness = HarnessFiles(files)
+        yield from forget_in_copies(harness, self.cfg.layout, forgotten)
+        yield from unread_dropped(harness, MEMORY_WRITER)
         yield from forget_entry(files, self.cfg.layout, entry_id)
 
     def _turns_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[TurnRecord, ...]]:
