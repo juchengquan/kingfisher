@@ -342,9 +342,7 @@ def _conversation(harness: Path) -> list[dict[str, Any]]:
         at = turns[at][0].get("parent")
     said: list[dict[str, Any]] = []
     for turn in reversed(path):
-        opening, body = turns[turn]
-        if isinstance(opening.get("from"), int):
-            said = said[: opening["from"]]
+        _, body = turns[turn]
         for line in body:
             if "role" in line:
                 message = line

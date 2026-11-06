@@ -3,10 +3,9 @@ each turn with the one it followed. The only record of what was said: each turn 
 on the conversation replayed from it.
 
 The conversation at the end of any turn is its ancestors' and its own lines replayed in
-order, where a turn's opening line keeps the first `from` messages of what its parent left,
-a message is appended, a message carrying a `cut` is a summary standing for everything
-before that position, and a line carrying `at` gives the message there the text the turn
-left it holding.
+order, where a turn goes on from all its parent left, a message is appended, a message
+carrying a `cut` is a summary standing for everything before that position, and a line
+carrying `at` gives the message there the text the turn left it holding.
 """
 
 from __future__ import annotations
@@ -32,11 +31,6 @@ if TYPE_CHECKING:
 #: On a turn's opening line, the turn it followed: `null` for the first, and for the first
 #: after a rewind to the start.
 PARENT = "parent"
-
-#: On an asked turn's opening line, how many of its parent's messages it began from;
-#: replayed whole where it says fewer, the turn would be credited with messages its model
-#: never saw.
-FROM = "from"
 
 #: On a summary, the position in the conversation so far that it stands for everything
 #: before, counted with the turn's own messages appended.
@@ -117,7 +111,7 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     """
     held = runtime.held_in(snapshot)
     if resumed is None:
-        opening: dict[str, Any] = {"turn": turn, PARENT: parent, FROM: history}
+        opening: dict[str, Any] = {"turn": turn, PARENT: parent}
         began, carried = history, None
     else:
         opening = {"turn": turn, PARENT: parent, RESUMED: True}
@@ -396,13 +390,11 @@ def path_to(turns: Logged, target: str) -> tuple[list[str], bool]:
 
 def replayed(turns: Logged, path: Sequence[str]) -> tuple[Message, ...]:
     """The conversation the last turn of `path` ended on, rebuilt from the log alone: each
-    turn's parent's conversation kept to its `from`, its messages appended, a summary
-    standing for everything before its `cut`, and a message given the text an `at` names."""
+    turn's messages appended to its parent's conversation, a summary standing for everything
+    before its `cut`, and a message given the text an `at` names."""
     said: list[Message] = []
     for turn in path:
-        opening, body = turns[turn]
-        if isinstance(opening.get(FROM), int):
-            said = said[: opening[FROM]]
+        _, body = turns[turn]
         for line in body:
             if "role" not in line:
                 at, content = line.get(AT), line.get("content")

@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A turn's opening line in the turn log has no `from`, after #1238
+
+- **`{"turn": ..., "parent": ...}` is the whole opening line of an asked turn.** `from`,
+  how many of its parent's messages a turn began from, always said all of them once each
+  turn was built on the log. A log written before keeps its `from`, which is no longer
+  read.
+
 ## The turn log is the only record of what was said, after #1237
 
 - **No turn writes or reads `.harness/transcript.jsonl`.** Each turn is built on the
