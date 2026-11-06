@@ -16,7 +16,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, MemoryEntry, Request
 from kingfisher.core.layout import ARTIFACTS_SEEN, FILE_HISTORY, HARNESS, KEPT_FILES
-from kingfisher.core.session import file_history
+from kingfisher.core.session import file_history, files
 from kingfisher.core.session.file_history import (
     HELD_BY_STORE,
     LATE,
@@ -127,13 +127,56 @@ def test_the_memory_file_a_store_keyed_is_not_kept(scripted):
     assert not [p for p in copies.rglob("*") if p.is_file() and "Lisbon" in p.read_text()]
 
 
+def test_the_memory_file_is_kept_whatever_the_budget(cfg):
+    """Counted against the budget, a memory file larger than it was never copied, and one
+    that fitted was dropped to make room for a report: a rewind brought back the
+    conversation without what the agent knew then."""
+    session = _session(cfg, start(cfg, "s"))
+    memory, report = session / "memory" / "AGENTS.md", session / "outputs" / "report.txt"
+    kf = Kingfisher(replace(cfg, rewind_max_bytes=5), graph=StubAgent("ok"),
+                    sessions=LocalSessions())
+    memory.write_text("- A\n", encoding="utf-8")
+    report.write_text("a" * 4, encoding="utf-8")
+    _run(kf, "t1")
+    memory.write_text("- A\n- B\n", encoding="utf-8")
+    report.write_text("b" * 4, encoding="utf-8")
+    _run(kf, "t2")
+
+    lines = _history(cfg)
+    for turn in ("t1", "t2"):
+        assert "dropped_in" not in lines[turn]["kept"]["memory/AGENTS.md"]
+    assert _copy(cfg, "t2", "memory/AGENTS.md").read_text(encoding="utf-8") == "- A\n- B\n"
+    # The control: the budget still holds the reports to it.
+    assert lines["t1"]["kept"]["outputs/report.txt"]["dropped_in"] == "t2"
+
+
+def test_an_unchanged_memory_file_is_not_copied_where_the_listing_gives_no_mark(
+    cfg, monkeypatch
+):
+    """Told unchanged only by the listing, a memory file on a backend listing names alone,
+    as deepagents' sandboxes do, was copied again at every turn."""
+    monkeypatch.setattr(files, "_version", lambda entry: None)
+    memory = _session(cfg, start(cfg, "s")) / "memory" / "AGENTS.md"
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+    memory.write_text("- A\n", encoding="utf-8")
+    _run(kf, "t1")
+    _run(kf, "t2")
+    memory.write_text("- A\n- B\n", encoding="utf-8")
+    _run(kf, "t3")
+
+    lines = _history(cfg)
+    assert "memory/AGENTS.md" in lines["t1"]["kept"]
+    assert "kept" not in lines["t2"]
+    assert _copy(cfg, "t3", "memory/AGENTS.md").read_text(encoding="utf-8") == "- A\n- B\n"
+
+
 def test_over_budget_the_copy_restoring_only_the_oldest_turns_goes_first(cfg):
     """By age the notes written once in the first turn would go first though every rewind
     needs them, and a file larger than the whole budget would be copied only to be dropped."""
     outputs = _session(cfg, start(cfg, "s")) / "outputs"
-    # Room for the memory file, the notes and the last two reports, of 10, 11 and 12 bytes:
-    # a size of its own each, so no disk's clock can make two versions look alike.
-    budget = (outputs.parent / "memory" / "AGENTS.md").stat().st_size + 5 + 11 + 12
+    # Room for the notes and the last two reports, of 10, 11 and 12 bytes: a size of its own
+    # each, so no disk's clock can make two versions look alike.
+    budget = 5 + 11 + 12
     kf = Kingfisher(replace(cfg, rewind_max_bytes=budget), graph=StubAgent("ok"),
                     sessions=LocalSessions())
     (outputs / "notes.txt").write_text("n" * 5, encoding="utf-8")
@@ -220,17 +263,17 @@ def test_a_turn_whose_history_was_not_saved_keeps_no_copies(scripted, monkeypatc
     """A full disk while the history was saved left the turn's copies with no line naming
     them: counted by no limit, read by no rewind, and missed by `forget`."""
     kf = _writing(scripted, memory_every=1)
-    copying, copied = file_history._copied, []
+    keeping, copied = file_history._kept_whole, []
 
-    def spied(backend, source, destination, size):
-        copied.append(destination)
-        return (yield from copying(backend, source, destination, size))
+    def spied(harness, under, path, content):
+        copied.append(under)
+        return (yield from keeping(harness, under, path, content))
 
     with monkeypatch.context() as patched:
-        patched.setattr(file_history, "_copied", spied)
+        patched.setattr(file_history, "_kept_whole", spied)
         patched.setattr(HarnessFiles, "store", _failing_history(OSError(errno.ENOSPC, "full")))
         _writer_turn(kf, AIMessage(content="noted"), AIMessage(content="- Likes EUR"), turn_id="t1")
-    assert any(f"/{folder_for('t1')}/" in one for one in copied), "the turn copied nothing"
+    assert folder_for("t1") in copied, "the turn copied nothing"
 
     assert not (_session(scripted) / HARNESS / KEPT_FILES / folder_for("t1")).exists()
     # The control: a turn that saves its history keeps its copies.
@@ -258,14 +301,15 @@ def test_forgetting_reaches_a_copy_that_failed_partway(scripted, monkeypatch):
     """A copy that fails partway stays where it was being written, its line listing it as
     not kept: `forget` cleaned only the copies kept, and the shell could read the rest."""
     kf = _writing(scripted, memory_every=1)
-    copying = file_history.copied_on_host
+    storing = HarnessFiles.store
 
-    def stopped(source, destination):
-        copying(source, destination)
-        raise OSError(errno.ENOSPC, "No space left on device")
+    def stopped(self, name, content):
+        yield from storing(self, name, content)
+        if name.startswith(f"{KEPT_FILES}/") and name.endswith("/memory/AGENTS.md"):
+            raise OSError(errno.ENOSPC, "No space left on device")
 
     with monkeypatch.context() as patched:
-        patched.setattr(file_history, "copied_on_host", stopped)
+        patched.setattr(HarnessFiles, "store", stopped)
         _writer_turn(kf, AIMessage(content="noted"), AIMessage(content="- Likes EUR"), turn_id="t1")
     (line,) = _history(scripted).values()
     assert "memory/AGENTS.md" in line["not_kept"], "the control: the copy did not fail"
@@ -430,8 +474,7 @@ def test_a_backend_naming_no_host_path_keeps_copies_by_its_own_copy_or_whole(cfg
 
     assert _copy(cfg, "t1", "outputs/report.txt").read_text(encoding="utf-8") == "one"
     asked = {source for source, _ in sessions.copied}
-    assert asked == ({"/outputs/report.txt", "/memory/AGENTS.md"} if kind is _RemoteCopying
-                     else set())
+    assert asked == ({"/outputs/report.txt"} if kind is _RemoteCopying else set())
 
 
 def test_a_failed_copy_is_logged_without_the_file_or_the_backends_words(cfg, caplog):
@@ -475,5 +518,5 @@ def test_a_file_the_backend_cannot_copy_is_recorded_with_why(cfg):
     _run(kf, "t1")
 
     line = _history(cfg)["t1"]
-    assert "kept" not in line
+    assert "outputs/report.txt" not in line["kept"]
     assert line["not_kept"]["outputs/report.txt"]["why"] == "the store is down"

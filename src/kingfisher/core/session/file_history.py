@@ -50,7 +50,8 @@ TURN = "turn"
 #: The folder under `KEPT_FILES` holding the turn's copies, as `folder_for` named it.
 UNDER = "under"
 #: Each version the turn copied, by its path in the session: `{MARK, BYTES}`, and
-#: `DROPPED_IN` once a later turn removed the copy for space.
+#: `DROPPED_IN` once a later turn removed the copy for space, or `OUTSIDE_BUDGET` for the
+#: memory file's, which no budget removes.
 KEPT = "kept"
 #: Each version the turn found and has no copy of: `{MARK, WHY}`.
 NOT_KEPT = "not_kept"
@@ -64,11 +65,13 @@ MARK = "mark"
 BYTES = "bytes"
 WHY = "why"
 DROPPED_IN = "dropped_in"
+OUTSIDE_BUDGET = "outside_budget"
 
 #: Why a version has no copy, where kingfisher decided it rather than a copy failing.
 LATE = "the turn ended past its deadline, when its claim may have no time left for a copy"
 HELD_BY_STORE = "a MemoryStore keyed the turn, so the memory file was a copy of the user's"
 OVER_BUDGET = "it alone is larger than KINGFISHER_REWIND_MAX_BYTES"
+UNREAD_MEMORY = "the memory file could not be read"
 
 #: The reasons a later turn would meet again, so it is not asked to try: the rest are asked
 #: again by the next turn, which copies the version if it is still there.
@@ -160,14 +163,15 @@ def _held(records: list[dict[str, Any]]) -> list[tuple[int, str, int]]:
         if _under(record) is None:
             continue
         for path, kept in _entries(record, KEPT).items():
-            if kept.get(DROPPED_IN) is None:
+            if kept.get(DROPPED_IN) is None and not kept.get(OUTSIDE_BUDGET):
                 size = kept.get(BYTES)
                 held.append((at, path, size if isinstance(size, int) else 0))
     return held
 
 
 def kept_bytes(harness: HarnessFiles) -> Steps[int]:
-    """What this session's copies of earlier versions come to, by its own history.
+    """What this session's copies of earlier versions come to, by its own history, the
+    memory file's left out as the budget leaves them out.
 
     A clone counts its whole size although it shares its blocks: subtracted from a size that
     counts it whole too, it is not counted twice, and against the budget it overcounts,
@@ -220,7 +224,7 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
     """Copy each file in the artifact folders that changed since the last turn ended, and add
     this turn's line to the history: what it kept, what it could not and why, what went."""
     turn, harness = prepared.turn.id, prepared.harness
-    now = yield from artifacts_seen(prepared.files, cfg.layout)
+    now, memory = yield from _artifacts_now(prepared.files, cfg.layout)
     if now is None:
         # No line rather than a wrong one: each file the listing missed would read as
         # removed, and a rewind would delete it.
@@ -232,7 +236,9 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
     before = (yield from read_listing(harness, ARTIFACTS_SEEN)) or {}
     under = folder_for(turn)
     try:
-        records, not_kept, dropped = yield from _copies_recorded(prepared, cfg, now, before, under)
+        records, not_kept, dropped = yield from _copies_recorded(
+            prepared, cfg, (now, memory), before, under
+        )
     except Exception:
         # Before the error goes on: no line will name these copies, so no rewind reads them,
         # no limit counts them and `forget` would miss them. The folder is this turn's own,
@@ -256,13 +262,15 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
 def _copies_recorded(
     prepared: Prepared,
     cfg: Config,
-    now: dict[str, Seen],
+    found: tuple[dict[str, Seen], bytes | None],
     before: dict[str, str | None],
     under: str,
 ) -> Steps[tuple[list[dict[str, Any]], dict[str, dict[str, Any]], list[tuple[int, str]]]]:
     """The turn's copies made and its line written: the history as written, what was not
     copied, and the copies dropped for space, which the caller removes."""
     turn, harness = prepared.turn.id, prepared.harness
+    now, memory = found
+    memory_file = cfg.layout.memory_file_route.lstrip("/")
     records = yield from read_file_history(harness)
     # Once, before any copy: until the deadline the claim has a whole superstep's bound left,
     # which no copy on this host comes near, and past it as little as nothing.
@@ -275,11 +283,16 @@ def _copies_recorded(
             continue
         why = LATE if late else _not_to_copy(path, size, prepared, cfg)
         if why is None:
-            copied, why = yield from _copied(
-                prepared.files, f"/{path}", f"{HARNESS_ROUTE}{KEPT_FILES}/{under}/{path}", size
-            )
+            if path == memory_file:
+                # From the bytes its mark was read from, so the copy is the version it names.
+                copied, why = yield from _kept_whole(harness, under, path, memory)
+            else:
+                destination = f"{HARNESS_ROUTE}{KEPT_FILES}/{under}/{path}"
+                copied, why = yield from _copied(prepared.files, f"/{path}", destination, size)
             if why is None:
                 kept[path] = {MARK: mark, BYTES: copied}
+                if path == memory_file:
+                    kept[path][OUTSIDE_BUDGET] = True
                 continue
             # Not the file, which the agent named, nor `why`, which may quote the backend: the
             # history line keeps both, inside the session.
@@ -346,10 +359,12 @@ def _reach(
 
 def _not_to_copy(path: str, size: int | None, prepared: Prepared, cfg: Config) -> str | None:
     """Why this version gets no copy, before one is tried, or `None`."""
-    if prepared.memory_key is not None and path == cfg.layout.memory_file_route.lstrip("/"):
+    if path == cfg.layout.memory_file_route.lstrip("/"):
         # The store loads the user's memory over the file at every turn's start, so a copy
         # could restore nothing, and it would hold the user's memory out of the store's reach.
-        return HELD_BY_STORE
+        # Unkeyed, no budget turns it away: a rewind would bring back the conversation
+        # without what the agent knew then, to make room for a copy of a report.
+        return HELD_BY_STORE if prepared.memory_key is not None else None
     if cfg.rewind_max_bytes is not None and (size or 0) > cfg.rewind_max_bytes:
         return OVER_BUDGET
     return None
@@ -370,6 +385,39 @@ def _line(  # noqa: PLR0913 -- a line's keys, each by name
         if held:
             line[key] = held
     return line
+
+
+def _artifacts_now(
+    files: Any, layout: Layout
+) -> Steps[tuple[dict[str, Seen] | None, bytes | None]]:
+    """The artifact folders as `artifacts_seen` lists them, but the memory file marked by its
+    contents, and those contents; `None` for either that could not be read.
+
+    By its contents because a listing may give no mark, and a memory file without one would
+    be copied every turn; it is small, and every turn reads it whole into the prompt anyway.
+    """
+    now = yield from artifacts_seen(files, layout)
+    memory_file = layout.memory_file_route.lstrip("/")
+    if now is None or memory_file not in now:
+        return now, None
+    (got,) = yield reading(files, "download_files", [layout.memory_file_route])
+    if got.error or got.content is None:
+        return now, None
+    now[memory_file] = (f"{SHA} {hashlib.sha256(got.content).hexdigest()}", len(got.content))
+    return now, got.content
+
+
+def _kept_whole(
+    harness: HarnessFiles, under: str, path: str, content: bytes | None
+) -> Steps[tuple[int | None, str | None]]:
+    """What the copy of `content` as `path`'s in `under` came to, or why there is none."""
+    if content is None:
+        return None, UNREAD_MEMORY
+    try:
+        yield from harness.store(f"{KEPT_FILES}/{under}/{path}", content)
+    except OSError as exc:
+        return None, str(exc)
+    return len(content), None
 
 
 def _copied(
@@ -589,7 +637,7 @@ def restore_files(
     have when no copy holds it as it is now: removed or rewritten, either would be lost to
     every later rewind as well.
     """
-    now = yield from artifacts_seen(files, layout)
+    now, _ = yield from _artifacts_now(files, layout)
     if now is None:
         return (), dict.fromkeys(layout.artifact_dirs, "a listing of it came back cut short")
     held = _held_at(records, path)
@@ -620,7 +668,7 @@ def restore_files(
         else:
             not_restored[where] = refused
     # As the folders are now, so the next turn copies only what it changes after this.
-    after = yield from artifacts_seen(files, layout)
+    after, _ = yield from _artifacts_now(files, layout)
     if after is not None:
         listed = {one: mark for one, (mark, _) in after.items()}
         yield from write_listing(harness, ARTIFACTS_SEEN, listed)

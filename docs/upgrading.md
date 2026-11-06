@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The memory file is kept outside the rewind budget, after #1244
+
+- **`KINGFISHER_REWIND_MAX_BYTES` no longer counts or drops the copies of the memory
+  file**, `/memory/AGENTS.md` under the default layout, and no longer turns one away for
+  being larger than the budget. Its entry in `.harness/files.jsonl` carries
+  `"outside_budget": true`. The session cap, `KINGFISHER_SESSION_MAX_BYTES`, counts these
+  copies, where before it subtracted them with the rest.
+- **It is told unchanged by its contents.** Its mark in `.harness/artifacts.jsonl` is
+  `sha256 <hex>` rather than the listing's, so a session from before copies it once more
+  at its next turn.
+
 ## A rewind removes no file it cannot put back, after #1243
 
 - **A file the turn rewound to did not have is removed only where a copy holds it as it
