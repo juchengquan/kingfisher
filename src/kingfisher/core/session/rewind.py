@@ -21,7 +21,7 @@ from .store import (
     write_off_path,
     write_transcript,
 )
-from .turnlog import PARENT, TASK, by_turn, path_to, read_turn_log, replayed
+from .turnlog import PARENT, by_turn, path_to, read_turn_log, replayed, task_of
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -47,12 +47,12 @@ def turn_records(
         TurnRecord(
             id=turn,
             parent=opening.get(PARENT),
-            task=opening.get(TASK),
+            task=task_of(body),
             resumed=bool(opening.get(RESUMED)),
             current=turn in current,
             files=files.get(turn),
         )
-        for turn, (opening, _) in turns.items()
+        for turn, (opening, body) in turns.items()
     )
 
 

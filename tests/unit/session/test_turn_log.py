@@ -13,7 +13,8 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain.agents.middleware import AgentMiddleware
+from langchain_core.messages import AIMessage, HumanMessage
 
 from assets.middlewares.summarize_by_count import SummarizeByCount
 from kingfisher import Kingfisher, Request
@@ -22,9 +23,17 @@ from kingfisher.core.layout import HARNESS, LEDGER_FILE, TRANSCRIPT_FILE, TURNS_
 from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.core.result import AWAITING
 from kingfisher.core.session.transcript import Message, from_json, from_record
-from kingfisher.core.session.turnlog import CUT, FROM, PARENT, TASK
+from kingfisher.core.session.turnlog import ANSWER, CUT, FROM, PARENT, PARTS
 from kingfisher.plugins import LocalSessions
-from tests.conftest import EVERY_TOOL, an_agent, read_record, start, tools_dir, write_old_record
+from tests.conftest import (
+    EVERY_TOOL,
+    RecordedEvents,
+    an_agent,
+    read_record,
+    start,
+    tools_dir,
+    write_old_record,
+)
 from tests.unit.scripted import Scripted
 from tests.unit.session.test_ledger import _Ordered
 from tests.unit.session.test_subagent_gates import _parent_with
@@ -174,7 +183,7 @@ def test_the_log_rebuilds_the_conversation_across_summaries_pauses_and_resumes(l
         {"turn": last.turn_id, PARENT: again.turn_id},
     ]
     first, second = _openings(logged)[:2]
-    assert first == {"turn": paused.turn_id, PARENT: None, TASK: "dig", FROM: 0}
+    assert first == {"turn": paused.turn_id, PARENT: None, FROM: 0}
     assert second == {"turn": resumed.turn_id, PARENT: paused.turn_id, "resumed": True}
 
 
@@ -307,3 +316,90 @@ def test_the_log_is_written_after_the_ledger_and_before_the_transcript(logged):
     _say(Kingfisher(logged, sessions=backends), "go", AIMessage("done"))
 
     assert backends.at(LEDGER_FILE) < backends.at(TURNS_FILE) < backends.at(TRANSCRIPT_FILE)
+
+
+def _users(cfg) -> list[dict[str, Any]]:
+    return [line for line in _lines(cfg) if line.get("role") == "user"]
+
+
+def test_the_users_line_names_who_wrote_each_piece_of_the_message(logged):
+    """A reader showing the conversation would show kingfisher's lines as the person's, and
+    the deployment's note as theirs; and `turns()` listing more than the `user` pieces
+    names a task the person never typed."""
+    kf = Kingfisher(logged, sessions=LocalSessions())
+
+    asked = _say(kf, "dig", AIMessage("ok"), note="brief")
+
+    (line,) = _users(logged)
+    assert "content" not in line
+    by_whom = [(one["by"], one["text"]) for one in line[PARTS]]
+    assert by_whom[:2] == [("user", "dig"), ("caller", "\n\nbrief")]
+    assert by_whom[2][0] == "kingfisher"
+    assert by_whom[2][1].startswith("\n\n/scratchpad/ is yours to work in")
+    (sent,) = (one for one in Scripted.heard[0] if isinstance(one, HumanMessage))
+    assert "".join(one["text"] for one in line[PARTS]) == sent.content
+    assert _replayed(_lines(logged)) == _transcript(logged)
+    (record,) = kf.session("s").turns()
+    assert (record.id, record.task) == (asked.turn_id, "dig")
+
+
+class _Rewriter(AgentMiddleware):
+    """A deployment's middleware that rewrites the turn's message in the graph's state,
+    which no middleware of kingfisher's does: theirs change a single model call."""
+
+    name = "rewriter"
+
+    def before_agent(self, state: Any, runtime: Any) -> Any:
+        (asked,) = (one for one in state["messages"] if isinstance(one, HumanMessage))
+        return {"messages": [HumanMessage(id=asked.id, content="REWRITTEN")]}
+
+
+def test_a_message_rewritten_in_the_state_is_logged_as_the_model_read_it(logged):
+    """Logged as kingfisher's pieces, the rebuild gives the conversation a message the
+    model never read, and a reader is told who wrote words nobody can vouch for."""
+    an_agent(logged, interrupt_on="[sql_query]", middlewares="[rewriter]", **EVERY_TOOL)
+    sink = RecordedEvents()
+    kf = Kingfisher(
+        logged, sessions=LocalSessions(), middlewares={"rewriter": _Rewriter}, run_events=sink
+    )
+
+    asked = _say(kf, "dig", AIMessage("ok"))
+
+    (sent,) = (one for one in Scripted.heard[0] if isinstance(one, HumanMessage))
+    assert sent.content == "REWRITTEN", "the control: nothing rewrote the message"
+    (line,) = _users(logged)
+    assert line[PARTS] == [{"text": "REWRITTEN"}]
+    assert _replayed(_lines(logged)) == _transcript(logged)
+    (warned,) = sink.named("message_rewritten")
+    assert warned["turn_id"] == asked.turn_id
+    assert asked.turn_id in warned["message"]
+    assert "REWRITTEN" not in json.dumps(warned, default=str), "the message reached the log"
+    assert kf.session("s").turns()[0].task is None
+
+
+def test_each_turn_ends_on_the_answer_its_caller_was_handed(logged):
+    """Logged before the answer is cleaned, the line keeps the `<think>` block the caller
+    never saw; logged off the turn's last words, a failed turn has an answer it never gave;
+    and an empty answer left unwritten leaves a reader guessing from the assistant lines.
+    """
+    kf = Kingfisher(logged, sessions=LocalSessions())
+    answered = _say(kf, "first", AIMessage("<think>mulling</think>\n\n42"))
+    paused = _say(kf, "second", _calls(("sql_query", "q", "g1")))
+    looking = AIMessage(
+        content="Looking.", tool_calls=[{"name": "web_search", "args": {"query": "q"}, "id": "c1"}]
+    )
+    with pytest.raises(RuntimeError, match="the model broke"):
+        _say(kf, "third", looking, RuntimeError("the model broke"))
+    failed = _openings(logged)[-1]["turn"]
+
+    assert answered.answer == "42", "the control: the answer was not cleaned"
+    assert paused.stop_reason == AWAITING, "the control: the turn never stopped at the gate"
+    ends = {}
+    for line in _lines(logged):
+        ends[line["turn"]] = line
+    assert ends == {
+        answered.turn_id: {"turn": answered.turn_id, ANSWER: "42"},
+        paused.turn_id: {"turn": paused.turn_id, ANSWER: ""},
+        failed: {"turn": failed, ANSWER: ""},
+    }
+    assert _replayed(_lines(logged)) == _transcript(logged)

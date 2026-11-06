@@ -4396,13 +4396,14 @@ so a summary replaces its front, and the words it replaced survive only in
 `conversation_history/`, which the agent can write. Rewinding a session to the end of any
 turn, which is how a client regenerates one, needs the conversation each turn ended on.
 Each turn adds an opening line -- the turn; `parent`, the turn the session was on before
-it, the last the log opens that a rewind did not leave behind; the caller's `task` as written, not the message the model was sent,
-to which kingfisher adds its own lines; `from`, how many of its parent's messages it began
-from -- or, for a resume, `resumed` and no task. Then a line per message it added, in the
-transcript's own shape, the provider's call id on each tool line; then the summary it ended
-on, with its `cut`. The conversation at the end of a turn is its path replayed from the
-first: the parent's kept to `from`, each message appended, a summary standing for
-everything before its cut. The transcript is unchanged.
+it, the last the log opens that a rewind did not leave behind; `from`, how many of its
+parent's messages it began from -- or, for a resume, `resumed`. Then a line per message it
+added, in the transcript's own shape, the provider's call id on each tool line, except
+that the turn's own message is kept as `parts` (*The turn log says who wrote each piece*,
+below); then the summary it ended on, with its `cut`; then its `answer`. The conversation
+at the end of a turn is its path replayed from the first: the parent's kept to `from`,
+each message appended, a summary standing for everything before its cut. The transcript
+is unchanged.
 `test_the_log_rebuilds_the_conversation_across_summaries_pauses_and_resumes` and its
 neighbours replay the log along the current path and find the transcript, across
 summaries, pauses, resumes, a failed turn and a short read.
@@ -4455,6 +4456,48 @@ append on the backend is the answer once a session measures slow. **Named for it
 not as a message log, which the
 glossary turns down as a name for `conversation_history/`; a rewind lists turns.
 *(2026-11-04.)*
+
+**The turn log says who wrote each piece of a turn's message, and ends each turn on what
+the caller was answered.** A client showing a conversation from the log would otherwise
+show kingfisher's own lines -- where to work, what arrived, what changed, the ledger -- as
+the person's words. So the turn's message is kept as `parts` in place of `content`, in the
+order sent, each piece's `by` naming who wrote it: `user` for the request's `task`,
+`caller` for its `note`, which the deployment writes and not the person at a UI, and
+`kingfisher` for the rest. Joined with nothing between them they are the text the model
+read, byte for byte, since each piece carries the separator that opens it, and nothing
+assumes the person's piece comes first. `turn_message` returns the pieces, joined once
+where the graph is driven, and the log keeps them as sent, never rendered again at replay:
+a later rewording of `turn_message` must not rewrite past conversations.
+
+**Written from preparation, checked against the state.** The log is read off the graph's
+final state and the pieces come from before the graph ran; the turn's message is the first
+user line past where its history began, which is not always the first line, since
+deepagents answers a superseded pause's calls ahead of it. Where the state's text is not
+the pieces joined -- a deployment's middleware rewrote it, which none of kingfisher's does,
+since theirs change one model call -- the state wins, as one piece with no `by`, and a
+`message_rewritten` warning names the turn: the log is what a rewind rebuilds from, and
+pieces the model never read would rebuild a conversation nobody had.
+`test_a_message_rewritten_in_the_state_is_logged_as_the_model_read_it` drives such a
+middleware.
+
+**Character offsets into the sent text were turned down**: a JavaScript reader counts
+UTF-16 units and Python counts code points, so an emoji or a rare CJK character shifts
+every span after it. **So were separate rows per author**: the rebuild would have to merge
+them back, and `from` and a summary's `cut` count records, so every count would have to
+learn to skip them.
+
+**The opening line drops `task`**, which the pieces now hold: `TurnRecord.task` is the
+turn's `user` pieces joined, and `None` for a resume and for a message rewritten in the
+state, whose author nothing can name.
+
+**Each turn's last line is its answer**, `{"turn": ..., "answer": ...}` with no `role`
+and no `decision`, as `RunResult.answer` returns it, `<think>` blocks stripped, and
+written when empty: a turn paused at a gate, and one that raised, which hands back none.
+A reader working the answer out from the last assistant line would show the block the
+caller never saw, and a failed turn's last words as an answer it never gave. With no
+`role`, the rebuild skips it, as it skips a resume's answers. The transcript stays the
+model's view, holding the joined text, until each turn's history is rebuilt from the log
+instead. *(2026-11-06.)*
 
 **A session is put back where a turn it logged ended, and the turns after it are kept.**
 `Session.rewind(to)` rebuilds the transcript by replaying the turn log along `to`'s
