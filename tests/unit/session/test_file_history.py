@@ -3,6 +3,7 @@ turn left it, and the line a turn that says which."""
 
 from __future__ import annotations
 
+import errno
 import json
 import logging
 from dataclasses import replace
@@ -26,6 +27,7 @@ from kingfisher.core.session.file_history import (
 )
 from kingfisher.core.session.memory import without_any
 from kingfisher.core.session.model import QuotaExceededError
+from kingfisher.core.session.store import HarnessFiles
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from tests.conftest import read_record, start
@@ -196,6 +198,83 @@ def test_forgetting_an_entry_takes_it_out_of_every_copy_of_the_memory_file(scrip
     copy = _copy(scripted, "t1", "memory/AGENTS.md").read_text(encoding="utf-8")
     assert "Likes EUR" not in copy
     assert copy == (_session(scripted) / "memory" / "AGENTS.md").read_text(encoding="utf-8")
+
+
+class _Killed(BaseException):
+    """The process dying, as the steps after it see it: nothing that catches errors runs."""
+
+
+def _failing_history(failure: BaseException):
+    """`HarnessFiles.store`, raising `failure` where the file history is saved."""
+    saving = HarnessFiles.store
+
+    def store(self, name, content):
+        if name == FILE_HISTORY:
+            raise failure
+        return (yield from saving(self, name, content))
+
+    return store
+
+
+def test_a_turn_whose_history_was_not_saved_keeps_no_copies(scripted, monkeypatch):
+    """A full disk while the history was saved left the turn's copies with no line naming
+    them: counted by no limit, read by no rewind, and missed by `forget`."""
+    kf = _writing(scripted, memory_every=1)
+    copying, copied = file_history._copied, []
+
+    def spied(backend, source, destination, size):
+        copied.append(destination)
+        return (yield from copying(backend, source, destination, size))
+
+    with monkeypatch.context() as patched:
+        patched.setattr(file_history, "_copied", spied)
+        patched.setattr(HarnessFiles, "store", _failing_history(OSError(errno.ENOSPC, "full")))
+        _writer_turn(kf, AIMessage(content="noted"), AIMessage(content="- Likes EUR"), turn_id="t1")
+    assert any(f"/{folder_for('t1')}/" in one for one in copied), "the turn copied nothing"
+
+    assert not (_session(scripted) / HARNESS / KEPT_FILES / folder_for("t1")).exists()
+    # The control: a turn that saves its history keeps its copies.
+    _writer_turn(kf, AIMessage(content="ok"), AIMessage(content="- Uses Excel"), turn_id="t2")
+    assert _copy(scripted, "t2", "memory/AGENTS.md").is_file()
+
+
+def test_forgetting_removes_a_folder_no_line_names(scripted, monkeypatch):
+    """A turn that died copying, before its line, left a folder no rewind reads and no limit
+    counts, holding a memory entry `forget` then missed and the shell could read."""
+    kf = _writing(scripted, memory_every=1)
+    with monkeypatch.context() as patched:
+        patched.setattr(HarnessFiles, "store", _failing_history(_Killed()))
+        with pytest.raises(_Killed):
+            _writer_turn(kf, AIMessage(content="noted"), AIMessage(content="- Likes EUR"))
+    (left,) = (_session(scripted) / HARNESS / KEPT_FILES).iterdir()
+    (entry,) = kf.session("s").memory()
+
+    kf.session("s").forget(entry.id)
+
+    assert not left.exists()
+
+
+def test_forgetting_reaches_a_copy_that_failed_partway(scripted, monkeypatch):
+    """A copy that fails partway stays where it was being written, its line listing it as
+    not kept: `forget` cleaned only the copies kept, and the shell could read the rest."""
+    kf = _writing(scripted, memory_every=1)
+    copying = file_history.copied_on_host
+
+    def stopped(source, destination):
+        copying(source, destination)
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(file_history, "copied_on_host", stopped)
+        _writer_turn(kf, AIMessage(content="noted"), AIMessage(content="- Likes EUR"), turn_id="t1")
+    (line,) = _history(scripted).values()
+    assert "memory/AGENTS.md" in line["not_kept"], "the control: the copy did not fail"
+    (entry,) = kf.session("s").memory()
+
+    kf.session("s").forget(entry.id)
+
+    copy = _copy(scripted, "t1", "memory/AGENTS.md").read_text(encoding="utf-8")
+    assert "Likes EUR" not in copy
 
 
 def test_a_copy_loses_an_entry_by_its_id_and_by_what_it_says():

@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `forget` also drops what the memory writer has not read, after #1233
+
+- **`Session.forget` clears what was said since the memory writer last ran**, in
+  `.harness/memory_writer.json` and in each turn's copy of it. A fact said in those turns
+  is not learned unless it is said again; left, the writer could save the forgotten entry
+  back from the line it came from.
+- **`forget` lists `.harness/files/` with `ls` and removes with `delete` the folder of any
+  turn no line of `files.jsonl` names**, which a process killed while copying leaves. A
+  backend of yours answers both under `/.harness`.
+- **A turn whose file history fails to save deletes its own copies** before the error is
+  reported, rather than leaving them with no line to name them.
+
 ## Each file under `.harness` is kept twice, after #1232
 
 - **Beside each file kingfisher keeps about a session is a second copy**, `ledger.jsonl.2`

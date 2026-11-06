@@ -12,6 +12,7 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import MISSING, asdict, dataclass, field, fields
+from pathlib import PurePosixPath
 from typing import Any
 
 from kingfisher.core.layout import (
@@ -111,6 +112,13 @@ class HarnessFiles:
             kept = ", ".join(f"{a.path}: {a.error}" for a in refused)
             msg = f"the session's backend would not keep {kept}"
             raise OSError(msg)
+
+    def folders(self, name: str) -> Steps[tuple[str, ...]]:
+        """The names of the folders directly under `name`; none where it is not there."""
+        listing = yield reading(self._backend, "ls", f"{HARNESS_ROUTE}{name}")
+        return tuple(
+            PurePosixPath(one["path"]).name for one in listing.entries or () if one.get("is_dir")
+        )
 
     def drop(self, *names: str) -> Steps[None]:
         """Drop these. Safe where they were never written."""

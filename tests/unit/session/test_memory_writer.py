@@ -123,6 +123,28 @@ def test_it_runs_on_a_summarised_turn_and_reads_what_the_summary_dropped(scripte
     assert "second reply" in _shown(call)
 
 
+@pytest.mark.parametrize("then", ["next turn", "after a rewind"])
+def test_forgetting_drops_what_the_writer_has_not_read(scripted, then):
+    """Kept, what was said since the writer last ran handed it back what a caller had just
+    forgotten: `I am Bob` reached its next run from the session's state, or from the copy
+    of it a rewind puts back."""
+    kf = _writing(scripted, memory_every=2)
+    memory = scripted.workspace / "sessions" / "s" / "memory" / "AGENTS.md"
+    memory.parent.mkdir(parents=True, exist_ok=True)
+    memory.write_text("- Is Bob\n", encoding="utf-8")
+    first, _ = _turn(kf, AIMessage(content="Hello, Bob."), task="I am Bob, I work in finance")
+    (entry,) = kf.session("s").memory()
+
+    kf.session("s").forget(entry.id)
+    if then == "after a rewind":
+        kf.session("s").rewind(first.turn_id)
+    _turn(kf, AIMessage(content="Here."), AIMessage(content="- Prefers tables"), task="tabulate")
+
+    shown = "\n".join(str(message.content) for message in _writer_calls()[-1])
+    assert "tabulate" in shown, "the control: the writer was shown nothing"
+    assert "I am Bob" not in shown
+
+
 def test_with_memory_off_it_never_runs(scripted):
     """With memory off, a writer still counting turns pays a model call on each due turn
     and keeps what was said in `.harness` for a deployment that chose to remember

@@ -995,7 +995,7 @@ with `upload_files` under `/inputs/`, which each turn that asks something then l
 with `glob`, what a turn left is listed with `glob` under
 `/outputs/` and `/memory/`, and `Session.artifact` fetches one with
 `download_files`. `Session.memory` reads the memory file with `download_files`, and
-`Session.forget` writes it back with `upload_files`, holding the session's claim. Each tool result a turn records is saved with `upload_files` under
+`Session.forget` writes it back with `upload_files`, holding the session's claim, and lists `/.harness/files/` with `ls`, removing with `delete` the folder of any turn no line of the session's file history names. Each tool result a turn records is saved with `upload_files` under
 `/scratchpad/tool_results/`, outside the file tools' permissions, which deny that folder
 to them, though your backend's own refusals still apply; at
 the end of the turn that folder is listed with `ls`, and a result file no row of the

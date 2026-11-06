@@ -13,6 +13,7 @@ import shutil
 import stat
 import sys
 from collections.abc import Mapping
+from contextlib import suppress
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
@@ -27,8 +28,9 @@ from kingfisher.core.layout import (
 )
 from kingfisher.core.logged import raised, warn
 
-from .files import artifacts_seen
+from .files import Seen, artifacts_seen
 from .memory import without_any
+from .memory_writer import unread_dropped
 from .steps import Steps, changing, on_host, reading
 from .store import HarnessFiles, read_listing, read_off_path, write_listing
 from .turnlog import PARENT, read_turn_log
@@ -227,8 +229,40 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
         )
         return
     before = (yield from read_listing(harness, ARTIFACTS_SEEN)) or {}
-    records = yield from read_file_history(harness)
     under = folder_for(turn)
+    try:
+        records, not_kept, dropped = yield from _copies_recorded(prepared, cfg, now, before, under)
+    except Exception:
+        # Before the error goes on: no line will name these copies, so no rewind reads them,
+        # no limit counts them and `forget` would miss them. The folder is this turn's own,
+        # an id never being taken twice.
+        with suppress(OSError):
+            yield from harness.drop(f"{KEPT_FILES}/{under}")
+        raise
+    # Once the history no longer names them: removed first, a crash would leave it promising
+    # a copy that is not there.
+    for at, path in dropped:
+        yield from harness.drop(f"{KEPT_FILES}/{records[at][UNDER]}/{path}")
+    # A version this turn failed to copy is left unmarked, so the next turn tries again.
+    seen = {
+        path: None if path in not_kept and not_kept[path][WHY] not in _FINAL else mark
+        for path, (mark, _) in now.items()
+    }
+    if seen != before:
+        yield from write_listing(harness, ARTIFACTS_SEEN, seen)
+
+
+def _copies_recorded(
+    prepared: Prepared,
+    cfg: Config,
+    now: dict[str, Seen],
+    before: dict[str, str | None],
+    under: str,
+) -> Steps[tuple[list[dict[str, Any]], dict[str, dict[str, Any]], list[tuple[int, str]]]]:
+    """The turn's copies made and its line written: the history as written, what was not
+    copied, and the copies dropped for space, which the caller removes."""
+    turn, harness = prepared.turn.id, prepared.harness
+    records = yield from read_file_history(harness)
     # Once, before any copy: until the deadline the claim has a whole superstep's bound left,
     # which no copy on this host comes near, and past it as little as nothing.
     late = monotonic() > prepared.deadline
@@ -283,17 +317,7 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
     # Patched as parsed, so a key another version wrote survives.
     lines = "".join(f"{json.dumps(one, ensure_ascii=False)}\n" for one in records)
     yield from harness.store(FILE_HISTORY, lines.encode("utf-8"))
-    # Once the history no longer names them: removed first, a crash would leave it promising
-    # a copy that is not there.
-    for at, path in dropped:
-        yield from harness.drop(f"{KEPT_FILES}/{records[at][UNDER]}/{path}")
-    # A version this turn failed to copy is left unmarked, so the next turn tries again.
-    seen = {
-        path: None if path in not_kept and not_kept[path][WHY] not in _FINAL else mark
-        for path, (mark, _) in now.items()
-    }
-    if seen != before:
-        yield from write_listing(harness, ARTIFACTS_SEEN, seen)
+    return records, not_kept, dropped
 
 
 def _reach(
@@ -445,13 +469,27 @@ def _clone(source: int, target: Path) -> None:
 
 
 def forget_in_copies(harness: HarnessFiles, layout: Layout, entry: MemoryEntry) -> Steps[None]:
-    """Take `entry` out of every kept copy of the memory file, so no rewind brings back what a
-    caller forgot."""
+    """Take `entry` out of every copy of the memory file, and what the writer had not read
+    out of every copy of its state, so no rewind brings either back; and remove each turn's
+    folder no line of the history names. Run under the session's claim, so no turn is
+    copying into a folder while it looks."""
     memory_file = layout.memory_file_route.lstrip("/")
-    for record in (yield from read_file_history(harness)):
+    records = yield from read_file_history(harness)
+    named = {under for record in records if (under := _under(record))}
+    for folder in (yield from harness.folders(KEPT_FILES)):
+        # Left by a turn that died copying, before its line: no rewind reads it, no limit
+        # counts it, and the shell can read it.
+        if folder not in named:
+            yield from harness.drop(f"{KEPT_FILES}/{folder}")
+    states = {one[UNDER] for record in records if (one := _state_of(record).get(MEMORY_WRITER))}
+    for under in sorted(states):
+        yield from unread_dropped(harness, f"{KEPT_FILES}/{under}/{STATE_FOLDER}/{MEMORY_WRITER}")
+    for record in records:
         under = _under(record)
-        # A dropped copy too: its removal may have failed, and the shell can read what is left.
-        if under is None or memory_file not in _entries(record, KEPT):
+        # A dropped copy, whose removal may have failed, and one a copy failed partway
+        # through: the shell can read what is left of either.
+        touched = _entries(record, KEPT) | _entries(record, NOT_KEPT)
+        if under is None or memory_file not in touched:
             continue
         name = f"{KEPT_FILES}/{under}/{memory_file}"
         held = yield from harness.fetch(name)
