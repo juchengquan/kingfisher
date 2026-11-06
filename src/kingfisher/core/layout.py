@@ -68,13 +68,12 @@ SKILLS = "skills"
 HARNESS = ".harness"
 
 #: What it holds, named here because `.harness` is a layout decision.
-TRANSCRIPT_FILE = "transcript.jsonl"
 #: The session's tool results, a row each and a closing line a turn. Here, not beside
 #: them, so the agent cannot rewrite what a later turn reads back as true.
 LEDGER_FILE = "ledger.jsonl"
 #: Every turn's messages as first written, each tagged with its turn, and each turn with
-#: the turn it followed: what a rewind rebuilds the conversation from once a summary has
-#: replaced the transcript's front. Here, because the agent can write
+#: the turn it followed: the only record of what was said, which every turn's
+#: conversation is rebuilt from. Here, because the agent can write
 #: `conversation_history/`, and a conversation rebuilt from that is one it wrote itself.
 TURNS_FILE = "turns.jsonl"
 #: The turns a rewind left behind, as a list of ids. Their lines stay in the ledger and the

@@ -19,7 +19,7 @@ from kingfisher.core.layout import (
     HARNESS,
     INPUTS,
     LEDGER_FILE,
-    TRANSCRIPT_FILE,
+    TURNS_FILE,
     Layout,
 )
 from kingfisher.core.result import LedgerEntry
@@ -32,7 +32,7 @@ from kingfisher.core.session.files import (
     read_artifact,
 )
 from kingfisher.core.session.steps import drive
-from kingfisher.core.session.transcript import Message, as_json
+from kingfisher.core.session.transcript import Message, as_record
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import EVERY_TOOL, Through, an_agent, start, supplied
 from tests.unit.scripted import Scripted
@@ -105,10 +105,10 @@ def test_an_artifact_is_fetched_by_the_name_the_turn_reported(cfg):
 @pytest.mark.parametrize(
     "name",
     [
-        ".harness/transcript.jsonl",
+        ".harness/turns.jsonl",
         "inputs/in.csv",
         "scratchpad/tmp.txt",
-        "outputs/../.harness/transcript.jsonl",
+        "outputs/../.harness/turns.jsonl",
         "/outputs/out.txt",
         "outputs",
     ],
@@ -118,14 +118,14 @@ def test_only_what_a_turn_produced_can_be_fetched(cfg, name):
     not thereby entitled to the conversation or someone's inputs.
     """
     kf = _produced(cfg)
-    (cfg.workspace / "sessions" / "s" / HARNESS / "transcript.jsonl").write_text("secret")
+    (cfg.workspace / "sessions" / "s" / HARNESS / "turns.jsonl").write_text("secret")
 
     with pytest.raises(ArtifactError):
         Through(kf).artifact("s", name)
 
 
 @pytest.mark.parametrize(
-    "name", ["outputs/../.harness/transcript.jsonl", "memory/../inputs/in.csv", "outputs"]
+    "name", ["outputs/../.harness/turns.jsonl", "memory/../inputs/in.csv", "outputs"]
 )
 def test_a_refused_name_never_reaches_the_backend(name):
     """Refused here, not left to the backend: the local one happens to reject `..` on
@@ -376,7 +376,8 @@ def test_the_command_prints_a_result_by_its_id_and_refuses_one_it_has_not(
     rows = [json.dumps(asdict(entry)), json.dumps({"turn": "t1"})]
     (harness / LEDGER_FILE).write_text("\n".join(rows) + "\n")
     said = Message(role="tool", content="Ten results\n[A-0001]", call_id="c1", name="web_search")
-    (harness / TRANSCRIPT_FILE).write_text(as_json((said,)))
+    logged = [{"turn": "t1", "parent": None}, {"turn": "t1", **as_record(said)}]
+    (harness / TURNS_FILE).write_text("".join(json.dumps(one) + "\n" for one in logged))
 
     assert main(["result", "--session", "s", "A-0001"]) == 0
     assert capsys.readouterr().out == "Ten results"
@@ -390,7 +391,7 @@ def test_the_command_refuses_a_name_that_is_not_an_artifact(at_the_command_line,
     """
     _produced(at_the_command_line)
 
-    code = main(["artifact", "--session", "s", ".harness/transcript.jsonl"])
+    code = main(["artifact", "--session", "s", ".harness/turns.jsonl"])
 
     assert code == 2
     assert "ArtifactError" in capsys.readouterr().err

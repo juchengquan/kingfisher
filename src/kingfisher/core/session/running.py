@@ -52,7 +52,6 @@ from .store import (
     pending_as_mark,
     write_inputs_seen,
     write_pause_mark,
-    write_transcript,
 )
 from .threads import finished
 from .transcript import joined
@@ -186,7 +185,7 @@ class Running:
     def _settled(self, prepared: Prepared) -> Any:
         """This turn's final graph state, or `None` where there is none.
 
-        Read once for both the transcript and the pause: two reads could come apart.
+        Read once for both the turn log and the pause: two reads could come apart.
         """
         read = getattr(prepared.graph, "get_state", None)
         if read is None:
@@ -246,15 +245,15 @@ class Running:
         messages = runtime.as_seen(snapshot)
         return runtime.as_transcript(messages) if messages else ()
 
-    def _record_transcript(self, prepared: Prepared, snapshot: Any, *, answer: str) -> Steps[None]:
-        """Write what was said this turn, as records this package owns, and in the log the
-        answer the caller is handed."""
-        written = self._transcript_of(snapshot)
-        if written:
-            # After the ledger and before the transcript: a write dying between leaves the
-            # transcript short of the ledger's count, which the next turn reports.
+    def _record_turn(self, prepared: Prepared, snapshot: Any, *, answer: str) -> Steps[None]:
+        """Log what was said this turn, as records this package owns, and the answer the
+        caller is handed."""
+        if self._transcript_of(snapshot):
+            # After the ledger: a write dying between the two leaves the log a turn short of
+            # the ledger's count, which the next turn reports.
             yield from keep_turns(
                 prepared.harness,
+                prepared.log,
                 turn=prepared.turn.id,
                 parts=prepared.message,
                 history=prepared.history,
@@ -263,7 +262,6 @@ class Running:
                 ledger=prepared.ledger.earlier if prepared.ledger is not None else None,
                 answer=answer,
             )
-            yield from write_transcript(prepared.harness, written)
             # Only with the message saying so: kept by a turn the agent never heard from,
             # what changed before it would never be said.
             if prepared.inputs_seen is not None:
@@ -377,7 +375,7 @@ class Running:
             try:
                 # Before anything is let go of: the saver still holds the paused state.
                 snapshot = yield on_host(self._settled, prepared)
-                # Before the pause as well as the transcript: a resume carries on from
+                # Before the pause as well as the turn log: a resume carries on from
                 # that state, and a result in either must already have its row.
                 turn.recorded = yield from self._record_ledger(prepared, snapshot)
                 turn.awaiting = yield from self._settle_pause(prepared, snapshot)
@@ -402,7 +400,7 @@ class Running:
                     stop_reason=stopped,
                 )
             # Normalised by `_turn_outcome` already; a turn that raised hands back none.
-            yield from self._record_transcript(
+            yield from self._record_turn(
                 prepared, snapshot, answer=turn.answer if turn.ok else ""
             )
             try:

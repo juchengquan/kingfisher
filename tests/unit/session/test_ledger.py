@@ -43,7 +43,7 @@ from kingfisher.core.layout import (
     PAUSED_STATE,
     SCRATCH,
     TOOL_RESULTS,
-    TRANSCRIPT_FILE,
+    TURNS_FILE,
     Layout,
 )
 from kingfisher.core.request import Decision, Resume
@@ -51,7 +51,6 @@ from kingfisher.core.result import AWAITING, MAIN, WORKING, LedgerEntry, ResultE
 from kingfisher.core.session.ledger import Ledger, file_left
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.store import KeptLedger, entry_id
-from kingfisher.core.session.transcript import from_json
 from kingfisher.core.session.turn import ledger_delta, ledger_index
 from kingfisher.plugins import LocalSessions, ShellSettings
 from kingfisher.plugins.sessions.backend import backend_at
@@ -61,6 +60,7 @@ from tests.conftest import (
     EVERY_TOOL,
     FakeToolCallingModel,
     an_agent,
+    read_conversation,
     read_record,
     read_record_bytes,
     start,
@@ -500,14 +500,13 @@ def _stream(cfg, *script: AIMessage, kf: Kingfisher | None = None):
 
 
 def test_a_conversation_emptied_on_disk_is_reported_by_the_turn_that_reads_it(ledgered):
-    """A full disk empties the transcript before failing to write it, and an empty file
-    reads as a first turn's: the next turn ran with no history and nothing said so. A
-    damaged line ends the reading as silently. The ledger is written first, so its count
-    is what says the conversation is short.
+    """A full disk emptied the conversation's one copy before failing to write it, and an
+    empty file reads as a first turn's: the next turn ran with no history and nothing said
+    so. The ledger is written first, so its count is what says the conversation is short.
     """
     _run(ledgered, AIMessage(content="first"))
     whole, said = _stream(ledgered, AIMessage(content="second"))
-    write_old_record(_session(ledgered) / HARNESS / TRANSCRIPT_FILE, b"")
+    write_old_record(_session(ledgered) / HARNESS / TURNS_FILE, b"")
 
     short, warned = _stream(ledgered, AIMessage(content="third"))
 
@@ -529,9 +528,10 @@ def test_a_damaged_conversation_is_reported_where_no_ledger_counts_it(cfg):
     kf = Kingfisher(cfg, graph=graph, sessions=LocalSessions())
     kf.run(Request("first", session_id="s"))
     kf.run(Request("second", session_id="s"))
-    transcript = _session(cfg) / HARNESS / TRANSCRIPT_FILE
-    lines = read_record(transcript).splitlines(keepends=True)
-    write_old_record(transcript, "".join([lines[0], '{"role": "assist\n', *lines[2:]]))
+    log = _session(cfg) / HARNESS / TURNS_FILE
+    lines = read_record(log).splitlines(keepends=True)
+    # The first turn's opening and its message, then its reply cut.
+    write_old_record(log, "".join([*lines[:2], '{"role": "assist\n', *lines[3:]]))
 
     damaged = kf.run(Request("third", session_id="s"))
 
@@ -668,7 +668,7 @@ def test_a_result_too_long_to_show_is_recorded_whole(ledgered):
     assert entry.summary.startswith("loud -- row 00000 ")
 
 
-def test_results_are_written_before_the_ledger_and_the_ledger_before_the_transcript(ledgered):
+def test_results_are_written_before_the_ledger_and_the_ledger_before_the_turn_log(ledgered):
     """In that order a row never names a missing file, and a result the conversation
     shows always has a row -- the other way round, a crash between the two leaves the
     next turn reading a result whose id the ledger never gave out, and giving it again.
@@ -682,10 +682,10 @@ def test_results_are_written_before_the_ledger_and_the_ledger_before_the_transcr
     )
 
     assert backends.at("A-0001-loud.txt") < backends.at(LEDGER_FILE)
-    assert backends.at(LEDGER_FILE) < backends.at(TRANSCRIPT_FILE)
+    assert backends.at(LEDGER_FILE) < backends.at(TURNS_FILE)
 
 
-def test_a_result_file_is_swept_only_once_the_transcript_is_written(ledgered):
+def test_a_result_file_is_swept_only_once_the_turn_log_is_written(ledgered):
     """Swept before it, a crash between the two leaves the conversation the next turn is
     rebuilt from naming a file that has gone.
     """
@@ -701,7 +701,7 @@ def test_a_result_file_is_swept_only_once_the_transcript_is_written(ledgered):
     )
 
     assert not stray.exists(), "the stray file was never swept"
-    assert backends.at(TRANSCRIPT_FILE) < backends.at("A-0007-web_search.txt")
+    assert backends.at(TURNS_FILE) < backends.at("A-0007-web_search.txt")
 
 
 def test_a_paused_turn_keeps_its_rows_before_its_state(ledgered):
@@ -1644,9 +1644,9 @@ def _asked(call: int = -1) -> str:
 
 
 def _transcribed(cfg, call_id: str) -> str:
-    """A result as the transcript keeps it, for every later turn to replay."""
-    text = read_record(_session(cfg) / HARNESS / TRANSCRIPT_FILE)
-    return next(one.content for one in from_json(text) if one.call_id == call_id)
+    """A result as the conversation keeps it, for every later turn to replay."""
+    said = read_conversation(_session(cfg) / HARNESS)
+    return next(one.content for one in said if one.call_id == call_id)
 
 
 def test_the_kept_file_and_the_size_are_the_result_without_its_id(ledgered):
@@ -1667,7 +1667,7 @@ def test_the_kept_file_and_the_size_are_the_result_without_its_id(ledgered):
 def test_a_result_made_of_blocks_gains_a_block_holding_its_id(ledgered):
     """A list of blocks has no last line to append to. And a block holding the bare id
     reads as the end of the result's last line wherever blocks are joined with nothing
-    between them, which is how the transcript every later turn replays joins them.
+    between them, which is how the conversation every later turn replays joins them.
     """
     (tools_dir(ledgered) / "blocks.py").write_text(BLOCKS, encoding="utf-8")
 
@@ -2033,8 +2033,8 @@ def test_a_summarised_conversation_is_not_summarised_again_the_next_turn(ledgere
     assert Scripted.summaries == 1, "a conversation already summarised was summarised again"
     history = _session(cfg) / SCRATCH / "conversation_history"
     assert len(list(history.glob("*.md"))) == 1
-    saved = from_json(read_record(_session(cfg) / HARNESS / TRANSCRIPT_FILE))
-    assert saved[0].summary, "the transcript does not open on the summary"
+    saved = read_conversation(_session(cfg) / HARNESS)
+    assert saved[0].summary, "the conversation does not open on the summary"
     assert HALF not in [message.content for message in saved[:1]]
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import platform
 from collections.abc import Callable, Iterator
@@ -270,6 +271,19 @@ def read_record_bytes(path: Path) -> bytes:
 def read_record(path: Path) -> str:
     """`read_record_bytes`, as text."""
     return read_record_bytes(path).decode("utf-8")
+
+
+def read_conversation(harness: Path) -> tuple[Any, ...]:
+    """The conversation the next turn of the session whose `.harness` is `harness` is built
+    on, rebuilt from its turn log as kingfisher rebuilds it; none where it has no log."""
+    from kingfisher.core.layout import OFF_PATH_FILE, TURNS_FILE
+    from kingfisher.core.session.turnlog import parse_log
+
+    if not (harness / TURNS_FILE).exists():
+        return ()
+    off = harness / OFF_PATH_FILE
+    off_path = frozenset(json.loads(read_record(off))) if off.exists() else frozenset()
+    return parse_log(read_record_bytes(harness / TURNS_FILE), off_path).conversation
 
 
 def write_old_record(path: Path, content: str | bytes) -> None:

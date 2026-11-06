@@ -6,7 +6,6 @@ has no record of the agent's own work, so it redoes it and cannot refer to it.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -61,7 +60,7 @@ class Message:
 
 
 def as_record(message: Message) -> dict[str, Any]:
-    """One message as a line of the transcript holds it, every empty field left out."""
+    """One message as a line of the turn log holds it, every empty field left out."""
     return {
         "role": message.role,
         **({"content": message.content} if message.content else {}),
@@ -99,26 +98,3 @@ def from_record(raw: Any) -> Message:
         name=raw.get("name", ""),
         summary=bool(raw.get("summary", False)),
     )
-
-
-def as_json(messages: tuple[Message, ...]) -> str:
-    """The transcript as one JSON object per line."""
-    return "".join(json.dumps(as_record(message), sort_keys=True) + "\n" for message in messages)
-
-
-def from_json(document: str) -> tuple[Message, ...]:
-    """Read back what `as_json` wrote, as far as the first line it did not write.
-
-    Stopped there, not skipped as the ledger skips one: past a damaged line, a tool result
-    can answer a call that was on it, which a provider refuses on every later turn.
-    """
-    read: list[Message] = []
-    for line in document.splitlines():
-        if not line.strip():
-            continue
-        try:
-            message = from_record(json.loads(line))
-        except (ValueError, KeyError, TypeError):
-            break
-        read.append(message)
-    return tuple(read)

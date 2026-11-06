@@ -22,7 +22,6 @@ from .store import (
     names_a_result,
     patched,
     read_ledger,
-    read_transcript,
     write_ledger,
 )
 from .transcript import from_record
@@ -289,7 +288,7 @@ def sweep_results(  # noqa: PLR0913 -- by keyword, so no route is passed for a s
     """Hand `unused_results` every result file a recorder wrote that no row names, and only
     those, once the conversation is written.
 
-    After the transcript, not the ledger: a file the sweep removes may still be named by
+    After the turn log, not the ledger: a file the sweep removes may still be named by
     the conversation the turn is about to write, and a crash between the two leaves that
     conversation naming a file that has gone.
 
@@ -318,9 +317,8 @@ def sweep_results(  # noqa: PLR0913 -- by keyword, so no route is passed for a s
 
 def read_result(files: Any, number: str) -> Steps[str]:
     """Result `number`'s text, as its tool returned it: from its file where its row names
-    one, else from the conversation, which holds it whole until it is filed -- an expired
-    one too, until it leaves -- else from the turn log, which keeps it as first written
-    once a rewind has left its turn behind.
+    one, else from the turn log, which keeps it as first written -- an expired one too,
+    until the conversation no longer holds it whole.
 
     `ResultError` for an id no row has, and for a result kept nowhere.
     """
@@ -334,16 +332,14 @@ def read_result(files: Any, number: str) -> Steps[str]:
             msg = f"{number}: {answer.error or 'no content'} at {row.path}"
             raise ResultError(msg)
         return answer.content.decode("utf-8")
-    said, _ = yield from read_transcript(HarnessFiles(files))
     logged = [
         from_record(line)
         for line in (yield from read_turn_log(HarnessFiles(files)))
-        if line.get("turn") == row.turn and line.get("call_id") == row.call
+        # A resume's answer names the call too, and is no message.
+        if line.get("turn") == row.turn and line.get("call_id") == row.call and "role" in line
     ]
-    for message in (*said, *logged):
-        if message.call_id == row.call and (
-            content := kept_text(message.content, row.id, row.size)
-        ) is not None:
+    for message in logged:
+        if (content := kept_text(message.content, row.id, row.size)) is not None:
             return content.decode("utf-8")
     if row.expired_in is not None:
         why = f"it expired in turn {row.expired_in}"

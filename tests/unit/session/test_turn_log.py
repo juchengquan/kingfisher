@@ -1,14 +1,17 @@
-"""The turn log: every turn's messages as first written, which a rewind rebuilds the
-conversation from once a summary has replaced the transcript's front.
+"""The turn log: every turn's messages as first written, the only record of what was said,
+which every turn's conversation is rebuilt from.
 
 Through real turns -- a scripted model, kingfisher's own build, deepagents' own
 summariser -- because what a turn added is read off the state a real graph leaves, and a
-state built here would only hold what the test thought it would.
+state built here would only hold what the test thought it would. The rebuild is held to
+what the model was handed, never to another file kingfisher wrote: a check against its
+own output would pass with both wrong in the same way.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import replace
 from typing import Any
 
@@ -19,21 +22,34 @@ from langchain_core.messages import AIMessage, HumanMessage
 from assets.middlewares.summarize_by_count import SummarizeByCount
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.middlewares.recorded import expired_handle
-from kingfisher.core.layout import HARNESS, LEDGER_FILE, TRANSCRIPT_FILE, TURNS_FILE
+from kingfisher.core.layout import HARNESS, LEDGER_FILE, TURNS_FILE
 from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.core.result import AWAITING
-from kingfisher.core.session.transcript import Message, from_json, from_record
-from kingfisher.core.session.turnlog import ACTION, ANSWER, CUT, FROM, PARENT, PARTS
+from kingfisher.core.session.runtime import as_transcript
+from kingfisher.core.session.transcript import Message
+from kingfisher.core.session.turnlog import (
+    ACTION,
+    ANSWER,
+    AT,
+    CUT,
+    FROM,
+    PARENT,
+    PARTS,
+    _rewritten,
+)
 from kingfisher.plugins import LocalSessions
 from tests.conftest import (
     EVERY_TOOL,
     RecordedEvents,
     an_agent,
+    read_conversation,
     read_record,
     start,
     tools_dir,
     write_old_record,
 )
+from tests.unit.agent.middlewares.test_clearing import TOOLS as BULKY
+from tests.unit.agent.middlewares.test_clearing import _marked, _one
 from tests.unit.scripted import Scripted
 from tests.unit.session.test_ledger import _Ordered
 from tests.unit.session.test_subagent_gates import _parent_with
@@ -63,6 +79,16 @@ def logged(scripted):
     return scripted
 
 
+@pytest.fixture
+def clearing(scripted):
+    """An agent with a tool returning 16,000 characters, clearing past 12,000 tokens."""
+    tools_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (tools_dir(scripted) / "probe.py").write_text(BULKY, encoding="utf-8")
+    an_agent(scripted, **EVERY_TOOL)
+    start(scripted, "s")
+    return _marked(scripted, clear_results_at=12_000)
+
+
 def _calls(*made: tuple[str, str, str]) -> AIMessage:
     """One reply asking for these `(tool, query, call id)` calls together."""
     return AIMessage(
@@ -89,35 +115,23 @@ def _lines(cfg) -> list[dict[str, Any]]:
     return [json.loads(line) for line in read_record(_harness(cfg, TURNS_FILE)).splitlines()]
 
 
-def _transcript(cfg) -> tuple[Message, ...]:
-    return from_json(read_record(_harness(cfg, TRANSCRIPT_FILE)))
+def _conversation(cfg) -> tuple[Message, ...]:
+    """What the next turn is built on, as kingfisher rebuilds it from the log."""
+    return read_conversation(cfg.workspace / "sessions" / "s" / HARNESS)
 
 
-def _replayed(lines: list[dict[str, Any]]) -> tuple[Message, ...]:
-    """The conversation the log's last turn ended on, rebuilt from its lines alone: each
-    turn on its path from the first, its parent's conversation kept to its `from`, its
-    messages appended, and a summary standing for everything before its `cut`."""
-    turns: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
-    last = ""
-    for line in lines:
-        if PARENT in line:
-            turns[line["turn"]] = (line, [])
-            last = line["turn"]
-        else:
-            turns[line["turn"]][1].append(line)
-    path = [last]
-    while (parent := turns[path[-1]][0][PARENT]) is not None:
-        path.append(parent)
-    said: list[Message] = []
-    for turn in reversed(path):
-        opening, body = turns[turn]
-        said = said[: opening[FROM]] if FROM in opening else said
-        for line in body:
-            if "role" not in line:
-                continue
-            message = from_record(line)
-            said = [message, *said[line[CUT] :]] if CUT in line else [*said, message]
-    return tuple(said)
+def _ended_on(*reply: AIMessage) -> tuple[Message, ...]:
+    """The conversation as the model last saw it: what the last call was handed, and the
+    reply it gave, where it gave one."""
+    handed = [one for one in as_transcript(Scripted.heard[-1]) if one.role != "system"]
+    return (*handed, *as_transcript(reply))
+
+
+def _handed_first(at: int) -> tuple[Message, ...]:
+    """What call `at`, the first of a turn, was handed before the turn's own message."""
+    *before, asked = [one for one in as_transcript(Scripted.heard[at]) if one.role != "system"]
+    assert asked.role == "user", "the turn's own message was not the last thing handed"
+    return tuple(before)
 
 
 def _openings(cfg) -> list[dict[str, Any]]:
@@ -151,32 +165,46 @@ def test_the_log_rebuilds_the_conversation_across_summaries_pauses_and_resumes(l
         logged, sessions=LocalSessions(), middlewares={"summarize-by-count": SummarizeByCount}
     )
 
-    paused = _say(kf, "dig", *_searches("a", 10), _calls(("sql_query", "x", "g1")), note="brief")
+    gate = _calls(("sql_query", "x", "g1"))
+    paused = _say(kf, "dig", *_searches("a", 10), gate, note="brief")
     assert paused.stop_reason == AWAITING, "the turn never stopped at the gate"
     assert Scripted.summaries == 2, "the control: the turn did not summarise twice"
     assert _summaries(logged, paused.turn_id) == 1, "a turn ends on one summary"
-    assert _replayed(_lines(logged)) == _transcript(logged)
+    assert _conversation(logged) == _ended_on(gate)
 
+    ok = AIMessage("ok")
     resumed = _resume(
         kf,
         Decision(call_id=paused.pending[0].call_id, action="approve"),
-        script=(*_searches("b", 2), AIMessage("ok")),
+        script=(*_searches("b", 2), ok),
     )
     assert Scripted.summaries == 3, "the control: the resume did not summarise again"
-    assert _replayed(_lines(logged)) == _transcript(logged)
+    assert _conversation(logged) == _ended_on(ok)
 
-    again = _say(kf, "and then?", *_searches("c", 2), _calls(("sql_query", "y", "g2")))
+    gate = _calls(("sql_query", "y", "g2"))
+    again = _say(kf, "and then?", *_searches("c", 2), gate)
     assert Scripted.summaries == 4, "the control: the second pause did not summarise"
+    assert _conversation(logged) == _ended_on(gate)
+    done = AIMessage("done")
     last = _resume(
         kf,
         Decision(call_id=again.pending[0].call_id, action="approve"),
-        script=(AIMessage("done"),),
+        script=(done,),
     )
 
     assert Scripted.summaries == 4, "the control: the last resume summarised"
     assert _summaries(logged, last.turn_id) == 0
-    assert _replayed(_lines(logged)) == _transcript(logged)
-    assert [{key: one[key] for key in ("turn", PARENT)} for one in _openings(logged)] == [
+    assert _conversation(logged) == _ended_on(done)
+    # Past the count by now, which would summarise the next turn before its first call.
+    an_agent(logged, interrupt_on="[sql_query]", **EVERY_TOOL)
+    rebuilt, at = _conversation(logged), len(Scripted.heard)
+    _say(Kingfisher(logged, sessions=LocalSessions()), "and now?", AIMessage("fin"))
+    assert Scripted.summaries == 4, "the control: the next turn summarised before it was handed it"
+    assert _handed_first(at) == rebuilt
+    # The count the next turn holds its rebuild to, so the two must agree on a whole log.
+    rows = [json.loads(one) for one in read_record(_harness(logged, LEDGER_FILE)).splitlines()]
+    assert [one["messages"] for one in rows if "messages" in one][-1] == len(_conversation(logged))
+    assert [{key: one[key] for key in ("turn", PARENT)} for one in _openings(logged)][:4] == [
         {"turn": paused.turn_id, PARENT: None},
         {"turn": resumed.turn_id, PARENT: paused.turn_id},
         {"turn": again.turn_id, PARENT: resumed.turn_id},
@@ -195,12 +223,13 @@ def test_the_log_rebuilds_the_conversation_a_failed_turn_left(logged):
 
     with pytest.raises(RuntimeError, match="the model broke"):
         _say(kf, "second", _calls(("web_search", "q", "c1")), RuntimeError("the model broke"))
-    assert _replayed(_lines(logged)) == _transcript(logged)
-    assert any(line.get("call_id") == "c1" for line in _lines(logged)), "nothing was logged"
+    assert _conversation(logged) == _ended_on()
+    assert any(one.call_id == "c1" for one in _conversation(logged)), "nothing was logged"
 
+    rebuilt, at = _conversation(logged), len(Scripted.heard)
     _say(kf, "third", AIMessage("three"))
 
-    assert _replayed(_lines(logged)) == _transcript(logged)
+    assert _handed_first(at) == rebuilt
 
 
 def test_the_log_rebuilds_the_conversation_after_a_pause_a_request_superseded(logged):
@@ -210,27 +239,89 @@ def test_the_log_rebuilds_the_conversation_after_a_pause_a_request_superseded(lo
     kf = Kingfisher(logged, sessions=LocalSessions())
     _say(kf, "go", _calls(("web_search", "q", "c1"), ("sql_query", "a", "ga")))
 
-    superseding = _say(kf, "never mind", AIMessage("ok"))
+    ok = AIMessage("ok")
+    superseding = _say(kf, "never mind", ok)
 
     own = [line for line in _lines(logged) if line["turn"] == superseding.turn_id]
     assert [line.get("call_id") for line in own[1:3]] == ["c1", "ga"], "nothing was patched"
-    assert _replayed(_lines(logged)) == _transcript(logged)
+    assert _conversation(logged) == _ended_on(ok)
 
 
-def test_a_turn_that_found_its_conversation_short_is_logged_from_where_it_began(logged):
-    """A turn reads its transcript only as far as it is whole, and logged as following
-    all its parent left, it would be credited with messages its model never saw."""
+def test_the_log_rebuilds_the_conversation_a_rewind_went_back_to(logged):
+    """Rebuilt from the turn the log holds last rather than the one rewound to, the next
+    turn is handed the turns the caller took back."""
+    kf = Kingfisher(logged, sessions=LocalSessions())
+    one = AIMessage("one")
+    first = _say(kf, "first", _calls(("web_search", "q", "c1")), one)
+    ended = _ended_on(one)
+    _say(kf, "second", AIMessage("two"))
+    kf.session("s").rewind(first.turn_id)
+
+    at = len(Scripted.heard)
+    _say(kf, "third", AIMessage("three"))
+
+    assert _handed_first(at) == ended
+
+
+@pytest.mark.parametrize(
+    "damaged",
+    [
+        '{"turn": "t", "role": "assistant", "tool_ca',
+        '["a", "list"]',
+        '{"turn": "t", "role": "assistant", "tool_calls": [1]}',
+    ],
+    ids=["cut mid-line", "not an object", "a message that does not read back"],
+)
+def test_the_reading_stops_at_the_first_damaged_line_and_the_turn_after_says_so(
+    logged, damaged
+):
+    """A damaged line skipped let the result after it answer a call the model never sees
+    made, which a provider refuses on every turn after; and one that raised failed every
+    later turn in the session. A log neither copy's seal matches is one written before
+    seals were, or by something other than kingfisher."""
+    kf = Kingfisher(logged, sessions=LocalSessions())
+    _say(kf, "first", _calls(("web_search", "q", "c1")), AIMessage("one"))
+    log = _harness(logged, TURNS_FILE)
+    opening, asked, called, *rest = read_record(log).splitlines(keepends=True)
+    assert '"c1"' in called, "the control: the line damaged is not the call"
+    write_old_record(log, "".join([opening, asked, damaged + "\n", *rest]))
+
+    at = len(Scripted.heard)
+    short = _say(kf, "second", AIMessage("two"))
+
+    assert short.history_lost is not None
+    (handed,) = _handed_first(at)
+    assert handed.role == "user" and handed.content.startswith("first")
+    assert not any(one.get("call_id") == "c1" for one in _lines(logged)), (
+        "the lines past the damage were written back"
+    )
+
+
+def test_a_turn_whose_log_was_never_written_is_reported_by_the_next(logged, monkeypatch):
+    """Written after the ledger, a turn dying before its log leaves the ledger counting
+    messages the log cannot rebuild, and the next turn is told its conversation is short
+    rather than being handed one with a turn missing in silence."""
+    from kingfisher.core.session import running
+
     kf = Kingfisher(logged, sessions=LocalSessions())
     _say(kf, "first", AIMessage("one"))
-    _say(kf, "second", AIMessage("two"))
-    transcript = _harness(logged, TRANSCRIPT_FILE)
-    write_old_record(transcript, "".join(read_record(transcript).splitlines(keepends=True)[:2]))
+
+    def dies(*args: Any, **kwargs: Any):
+        msg = "the backend went away"
+        raise OSError(msg)
+        yield
+
+    with monkeypatch.context() as patched:
+        patched.setattr(running, "keep_turns", dies)
+        died = _say(kf, "second", AIMessage("two"))
+    assert died.answer == "two", "the control: the turn did not run"
+    rebuilt, at = _conversation(logged), len(Scripted.heard)
 
     short = _say(kf, "third", AIMessage("three"))
 
-    assert short.history_lost is not None, "the control: nothing was found short"
-    assert _openings(logged)[-1][FROM] == 2
-    assert _replayed(_lines(logged)) == _transcript(logged)
+    assert short.history_lost is not None
+    assert "read 2 of the 4 messages" in short.history_lost
+    assert _handed_first(at) == rebuilt
 
 
 def test_each_answer_names_the_call_it_answered_and_not_its_place_in_the_pause(logged):
@@ -250,11 +341,12 @@ def test_each_answer_names_the_call_it_answered_and_not_its_place_in_the_pause(l
         _resume(kf, Decision(call_id="nobody#0", action="approve"))
     assert _harness(logged, TURNS_FILE).read_text() == held, "a refused resume was logged"
 
+    done = AIMessage("done")
     resumed = _resume(
         kf,
         Decision(call_id=second, action="approve"),
         Decision(call_id=first, action="reject", message="not that one"),
-        script=(AIMessage("done"),),
+        script=(done,),
     )
 
     answers = [line for line in _lines(logged) if "decision" in line]
@@ -266,7 +358,7 @@ def test_each_answer_names_the_call_it_answered_and_not_its_place_in_the_pause(l
         {"turn": paused.turn_id, ANSWER: paused.answer},
         {"turn": resumed.turn_id, ANSWER: "done"},
     ]
-    assert _replayed(_lines(logged)) == _transcript(logged)
+    assert _conversation(logged) == _ended_on(done)
 
 
 def test_a_subagents_answer_names_the_subagents_own_call(cfg):
@@ -283,44 +375,135 @@ def test_a_subagents_answer_names_the_subagents_own_call(cfg):
     assert answer["call_id"] == "d1"
 
 
-def test_a_result_older_than_the_rounds_kept_is_a_handle_in_the_log_too(logged):
+def test_a_result_a_later_turn_cleared_is_rebuilt_as_its_handle_and_a_rewind_gets_it_whole(
+    clearing,
+):
+    """Clearing swaps an earlier turn's result for its handle in state, which a log of
+    each turn's own messages never saw: the next turn was handed the whole result again,
+    and the summariser counted it before clearing could take it back out. Logged over the
+    line first written, a rewind to before the clearing would get the handle; logged after
+    the answer, the turn's last line is not its answer."""
+    kf = Kingfisher(clearing, sessions=LocalSessions())
+    first = _say(kf, "first", _one("bulky", 1, n=1), AIMessage("done"))
+    whole = _conversation(clearing)
+    done = AIMessage("done")
+
+    _say(kf, "second", *(_one("bulky", n, n=n) for n in range(2, 8)), done)
+
+    said = {one.call_id: one.content for one in _conversation(clearing)}
+    assert "cleared; full result" in said["c1"], "the control: the first turn's result stayed"
+    assert any(AT in line for line in _lines(clearing)), "the control: no clearing was logged"
+    assert _conversation(clearing) == _ended_on(done)
+    # A reader takes a turn's last line as its answer; one ending on an `at` line has none.
+    assert ANSWER in _lines(clearing)[-1]
+    kf.session("s").rewind(first.turn_id)
+    assert _conversation(clearing) == whole
+    assert next(one for one in whole if one.call_id == "c1").content.startswith("row 1-0000")
+
+
+def test_a_summary_after_a_clearing_cuts_where_the_model_saw_it_cut(clearing):
+    """A line for a cleared result changes a message's text and never the count, so a
+    later summary's cut still lands where deepagents put it; counted with that line as a
+    message, the rebuild keeps the wrong tail."""
+    an_agent(
+        clearing, middlewares="[{name: summarize-by-count, settings: {messages: 26}}]", **EVERY_TOOL
+    )
+    kf = Kingfisher(
+        clearing, sessions=LocalSessions(), middlewares={"summarize-by-count": SummarizeByCount}
+    )
+    _say(kf, "first", _one("bulky", 1, n=1), AIMessage("done"))
+    _say(kf, "second", *(_one("bulky", n, n=n) for n in range(2, 8)), AIMessage("done"))
+    assert Scripted.summaries == 0, "the control: the clearing turn summarised"
+    assert any(AT in line for line in _lines(clearing)), "the control: no clearing was logged"
+    done = AIMessage("done")
+
+    third = _say(kf, "third", *(_one("bulky", n, n=n) for n in range(8, 12)), done)
+
+    assert Scripted.summaries >= 1, "the control: the third turn never summarised"
+    assert _summaries(clearing, third.turn_id) == 1
+    assert _conversation(clearing) == _ended_on(done)
+
+
+def test_an_expired_result_stays_whole_in_the_log_while_the_model_is_handed_it(logged):
+    """Swapped for its handle as soon as it expired, a result the model was still handed
+    whole came back to the next turn as a handle: the wording of what it had read changed
+    under it, and the cached prefix with it from that result on."""
+    kf = Kingfisher(replace(logged, keep_results_rounds=1), sessions=LocalSessions())
+    first = _say(kf, "first", _calls(("web_search", "q", "c1")), AIMessage("one"))
+    _say(kf, "second", AIMessage("two"))
+    (row,) = first.ledger
+
+    rows = [json.loads(one) for one in read_record(_harness(logged, LEDGER_FILE)).splitlines()]
+    assert any(one.get("id") == row.id and one.get("expired_in") for one in rows), (
+        "the control: the result never expired"
+    )
+
+    at = len(Scripted.heard)
+    _say(kf, "third", AIMessage("three"))
+
+    (line,) = (one for one in _lines(logged) if one.get("call_id") == "c1" and "role" in one)
+    assert line["content"].startswith("Ten results for q")
+    (handed,) = (one.content for one in _handed_first(at) if one.call_id == "c1")
+    assert handed != expired_handle(replace(row, expired_in="any"))
+    assert handed.startswith("Ten results for q")
+
+
+def test_an_expired_result_cleared_out_of_view_is_kept_nowhere_whole(clearing):
     """`KINGFISHER_KEEP_RESULTS_ROUNDS` bounds what a session keeps on disk, and a log
     keeping every result whole forever would undo it; a file tool's answer that merely
-    ends in that result's id is the agent's own file, and swapped, it is lost.
-    Beside the control: unset, the log keeps the result as the model first read it.
-    """
-    (logged.workspace / "sessions" / "s" / "outputs" / "note.txt").write_text("[A-0001]\n")
+    ends in that result's id is the agent's own file, and swapped, it is lost."""
+    (clearing.workspace / "sessions" / "s" / "outputs" / "note.txt").write_text("[A-0001]\n")
     read = {"name": "read_file", "args": {"file_path": "/outputs/note.txt"}, "id": "r1"}
-    for rounds, swapped in ((1, True), (None, False)):
-        kf = Kingfisher(replace(logged, keep_results_rounds=rounds), sessions=LocalSessions())
-        first = _say(
-            kf,
-            "first",
-            _calls(("web_search", "q", "c1")),
-            AIMessage(content="", tool_calls=[read]),
-            AIMessage("one"),
-        )
-        _say(kf, "second", AIMessage("two"))
-        (row,) = first.ledger
-        expired = replace(row, expired_in="any")
+    kf = Kingfisher(replace(clearing, keep_results_rounds=1), sessions=LocalSessions())
+    first = _say(
+        kf,
+        "first",
+        _one("bulky", 1, n=1),
+        AIMessage(content="", tool_calls=[read]),
+        AIMessage("done"),
+    )
+    own = _by_call(clearing)["r1"]
+    done = AIMessage("done")
 
-        by_call = {line.get("call_id"): line.get("content") for line in _lines(logged)}
-        assert (by_call["c1"] == expired_handle(expired)) is swapped, rounds
-        assert by_call["c1"].startswith("Ten results for q") is not swapped
-        (own,) = (one.content for one in _transcript(logged) if one.call_id == "r1")
-        assert by_call["r1"] == own, "the agent's own file was swapped"
-        for name in (TURNS_FILE, TRANSCRIPT_FILE, LEDGER_FILE):
-            _harness(logged, name).unlink()
+    _say(kf, "second", *(_one("bulky", n, n=n) for n in range(2, 8)), done)
+
+    (row,) = first.ledger
+    assert _by_call(clearing)["c1"] == expired_handle(replace(row, expired_in="any"))
+    # Past the preview a handle opens with, so only the whole result holds it.
+    assert not any("row 1-0100" in json.dumps(line) for line in _lines(clearing))
+    assert _by_call(clearing)["r1"] == own, "the agent's own file was swapped"
+    assert _conversation(clearing) == _ended_on(done)
 
 
-def test_the_log_is_written_after_the_ledger_and_before_the_transcript(logged):
-    """Written after the transcript, a turn dying between the two leaves a log missing a
-    turn the next one builds on, and nothing says so; before it, the transcript is short
-    of the ledger's count, which the next turn reports."""
+def _by_call(cfg) -> dict[str, str]:
+    """Each message line's text by the call it answers, as first written."""
+    return {
+        line["call_id"]: line.get("content", "")
+        for line in _lines(cfg)
+        if "role" in line and "call_id" in line
+    }
+
+
+def test_a_conversation_the_log_cannot_say_is_warned_of(caplog):
+    """The log can say only that a message's text changed; a turn that ended on more or
+    fewer messages than its lines rebuild would have its next turn built on the wrong
+    conversation without a word."""
+    lines = [{"turn": "t", PARENT: None, FROM: 0}, {"turn": "t", "role": "user"}]
+    ended = (Message(role="user"), Message(role="assistant", content="extra"))
+
+    with caplog.at_level(logging.WARNING, logger="kingfisher.warnings"):
+        assert _rewritten("t", lines, ended) == []
+
+    assert "turn t ended on 2 messages" in caplog.text
+
+
+def test_the_log_is_written_after_the_ledger(logged):
+    """Written before it, a turn dying between the two leaves a log holding a turn the
+    ledger does not count, and nothing tells the next turn its results are missing."""
     backends = _Ordered()
     _say(Kingfisher(logged, sessions=backends), "go", AIMessage("done"))
 
-    assert backends.at(LEDGER_FILE) < backends.at(TURNS_FILE) < backends.at(TRANSCRIPT_FILE)
+    assert backends.at(LEDGER_FILE) < backends.at(TURNS_FILE)
 
 
 def _users(cfg) -> list[dict[str, Any]]:
@@ -343,7 +526,7 @@ def test_the_users_line_names_who_wrote_each_piece_of_the_message(logged):
     assert by_whom[2][1].startswith("\n\n/scratchpad/ is yours to work in")
     (sent,) = (one for one in Scripted.heard[0] if isinstance(one, HumanMessage))
     assert "".join(one["text"] for one in line[PARTS]) == sent.content
-    assert _replayed(_lines(logged)) == _transcript(logged)
+    assert _conversation(logged) == _ended_on(AIMessage("ok"))
     (record,) = kf.session("s").turns()
     assert (record.id, record.task) == (asked.turn_id, "dig")
 
@@ -374,7 +557,7 @@ def test_a_message_rewritten_in_the_state_is_logged_as_the_model_read_it(logged)
     assert sent.content == "REWRITTEN", "the control: nothing rewrote the message"
     (line,) = _users(logged)
     assert line[PARTS] == [{"text": "REWRITTEN"}]
-    assert _replayed(_lines(logged)) == _transcript(logged)
+    assert _conversation(logged) == _ended_on(AIMessage("ok"))
     (warned,) = sink.named("message_rewritten")
     assert warned["turn_id"] == asked.turn_id
     assert asked.turn_id in warned["message"]
@@ -407,4 +590,4 @@ def test_each_turn_ends_on_the_answer_its_caller_was_handed(logged):
         paused.turn_id: {"turn": paused.turn_id, ANSWER: ""},
         failed: {"turn": failed, ANSWER: ""},
     }
-    assert _replayed(_lines(logged)) == _transcript(logged)
+    assert _conversation(logged) == _ended_on()

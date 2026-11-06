@@ -14,6 +14,7 @@ from kingfisher.core.result import LedgerEntry, MemoryEntry, PendingDecision, Ru
 
 from . import runtime
 from .transcript import Part
+from .turnlog import TurnLog
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -62,6 +63,9 @@ class Prepared:
     #: What was said in this session before now: the saver holds one turn only, so
     #: this is where a conversation comes from.
     history: tuple[Message, ...] = ()
+    #: The turn log as this turn read it, `history` rebuilt from it, which the turn's end
+    #: writes back with its own lines rather than reading it again.
+    log: TurnLog = field(default_factory=TurnLog)
     #: Why `history` is shorter than the last turn left it, or `None` where it is whole.
     #: Carried to the end as well as announced, as `discarded` is.
     history_lost: str | None = None
@@ -98,7 +102,7 @@ class Prepared:
     #: Whose memory the turn's ending hands its changes to, as the `MemoryStore` named
     #: them; `None` keeps them in the session.
     memory_key: str | None = None
-    #: The inputs folder as this turn's message described it, kept with the transcript
+    #: The inputs folder as this turn's message described it, kept with the turn log
     #: that carries the message; `None` where there is nothing to keep.
     inputs_seen: Mapping[str, str | None] | None = None
     #: What the last rewind could not put back, which this turn's message tells and its

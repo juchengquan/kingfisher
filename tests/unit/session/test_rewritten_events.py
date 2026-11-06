@@ -15,7 +15,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher import Kingfisher, Request
-from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
+from kingfisher.core.layout import HARNESS, TURNS_FILE
 from kingfisher.core.session import runtime
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start, tools_dir
@@ -97,7 +97,7 @@ TOOLS = [bulky]
 def test_a_turn_with_a_clearing_pass_reports_each_call_and_result_once(scripted):
     """Through a real turn whose conversation passes a small clearing mark: one
     `model_call` per reply the model gave and one `tool_result` per call it made, while
-    the transcript shows that results were cleared."""
+    the turn log shows that results were cleared."""
     tools_dir(scripted).mkdir(parents=True, exist_ok=True)
     (tools_dir(scripted) / "probe.py").write_text(TOOLS, encoding="utf-8")
     an_agent(scripted, **EVERY_TOOL)
@@ -118,7 +118,7 @@ def test_a_turn_with_a_clearing_pass_reports_each_call_and_result_once(scripted)
         )
     )
 
-    transcript = (cfg.workspace / "sessions" / "s" / HARNESS / TRANSCRIPT_FILE).read_text()
-    assert "bytes, cleared;" in transcript, "no pass ran, so nothing here was rewritten"
+    logged = (cfg.workspace / "sessions" / "s" / HARNESS / TURNS_FILE).read_text()
+    assert "bytes, cleared;" in logged, "no pass ran, so nothing here was rewritten"
     assert sum(e.kind == "model_call" for e in events) == len(replies) + 1
     assert sum(e.kind == "tool_result" for e in events) == len(replies)

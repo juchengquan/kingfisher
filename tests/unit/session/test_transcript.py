@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from kingfisher.core.session.runtime import as_transcript, user_payload
-from kingfisher.core.session.transcript import Message, ToolCall, as_json, from_json
+from kingfisher.core.session.transcript import Message, ToolCall, as_record, from_record
 
 
 def a_conversation():
@@ -24,13 +23,11 @@ def a_conversation():
     ]
 
 
-def test_a_conversation_survives_the_round_trip(tmp_path):
-    """Through records, through a file, and back."""
+def test_a_conversation_survives_the_round_trip():
+    """Through records, through JSON, and back."""
     records = as_transcript(a_conversation())
-    written = tmp_path / "transcript.jsonl"
-    written.write_text(as_json(records), encoding="utf-8")
 
-    assert from_json(written.read_text(encoding="utf-8")) == records
+    assert tuple(from_record(json.loads(json.dumps(as_record(one)))) for one in records) == records
 
 
 def test_what_the_agent_did_is_kept_not_only_what_it_said():
@@ -45,9 +42,9 @@ def test_what_the_agent_did_is_kept_not_only_what_it_said():
     assert records[2].content == "40 rows"
 
 
-def test_nothing_stored_belongs_to_a_framework(tmp_path):
-    """The portability claim, made checkable."""
-    document = as_json(as_transcript(a_conversation()))
+def test_nothing_stored_belongs_to_a_framework():
+    """A record that held a framework's object would be read back only by that framework."""
+    document = "\n".join(json.dumps(as_record(one)) for one in as_transcript(a_conversation()))
 
     for line in document.splitlines():
         parsed = json.loads(line)
@@ -96,25 +93,7 @@ def test_a_message_kind_this_vocabulary_has_no_role_for_is_dropped():
 
 def test_a_system_message_has_a_role_even_though_none_is_stored():
     """The prompt is the cached prefix and is rebuilt per turn, so one should not appear
-    here -- but the vocabulary covers it, because a transcript that could not express
-    a system message would be one no other harness could hand back.
+    here -- but the vocabulary covers it, because a record that could not express a
+    system message would drop one a graph handed back.
     """
     assert as_transcript([SystemMessage(content="rules")])[0].role == "system"
-
-
-@pytest.mark.parametrize(
-    "damaged",
-    ['{"role": "assistant", "tool_ca', '{"content": "no role"}', '["a", "list"]'],
-    ids=["cut mid-line", "no role", "not an object"],
-)
-def test_the_reading_stops_at_the_first_damaged_line(damaged):
-    """A damaged line raised, so one cut by a kill failed every later turn in the
-    session; and one skipped would let the result after it answer a call the model never
-    sees made, which a provider refuses on every turn after.
-    """
-    before = as_json((Message(role="user", content="hi"),))
-    after = as_json((Message(role="tool", content="charged", call_id="c1"),))
-
-    assert from_json(before + "\n\n" + damaged + "\n" + after) == (
-        Message(role="user", content="hi"),
-    )

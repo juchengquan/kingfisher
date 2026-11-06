@@ -1,4 +1,4 @@
-"""What kingfisher keeps about a session: its conversation, the ledger of what its tools
+"""What kingfisher keeps about a session beside its turn log: the ledger of what its tools
 returned, and a turn paused for an answer.
 
 This module owns the formats; the session's backend, through `HarnessFiles`, owns
@@ -24,12 +24,10 @@ from kingfisher.core.layout import (
     PAUSED_MARK,
     PAUSED_STATE,
     REWOUND_FILE,
-    TRANSCRIPT_FILE,
 )
 from kingfisher.core.result import LedgerEntry, Listed, PendingDecision
 
 from .steps import Steps, changing, reading
-from .transcript import Message, as_json, from_json
 
 #: Beside each file kingfisher keeps about a session, its second copy: `ledger.jsonl.2`.
 SECOND_COPY = ".2"
@@ -137,22 +135,6 @@ class HarnessFiles:
         if left:
             msg = f"the session's backend kept {', '.join(left)} after deleting it"
             raise OSError(msg)
-
-
-def read_transcript(harness: HarnessFiles) -> Steps[tuple[tuple[Message, ...], bool]]:
-    """What was said in this session before now, or nothing for a first turn; and whether
-    a damaged line ended the reading early."""
-    held = yield from harness.fetch(TRANSCRIPT_FILE)
-    if held is None:
-        return (), False
-    text = held.decode("utf-8")
-    read = from_json(text)
-    return read, len(read) < sum(1 for line in text.splitlines() if line.strip())
-
-
-def write_transcript(harness: HarnessFiles, messages: tuple[Message, ...]) -> Steps[None]:
-    """Replace this session's transcript with what it now holds."""
-    yield from harness.store(TRANSCRIPT_FILE, as_json(messages).encode("utf-8"))
 
 
 def read_inputs_seen(harness: HarnessFiles) -> Steps[dict[str, str | None] | None]:
@@ -395,7 +377,7 @@ def _kept(text: str, off_path: frozenset[str] = frozenset()) -> KeptLedger:
         except ValueError:
             # Dropped, not refused: a backend has no rename, so a crash mid-write can cut
             # the file anywhere, and refusing the rest would refuse every later turn. A
-            # lost row's number may be given again; accepted, as for the transcript.
+            # lost row's number may be given again; accepted.
             continue
         if not isinstance(row, dict):
             continue
