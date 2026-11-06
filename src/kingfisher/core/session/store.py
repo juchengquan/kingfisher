@@ -50,6 +50,10 @@ def unsealed(held: bytes) -> bytes | None:
     return content if seal == {"sha256": hashlib.sha256(content).hexdigest()} else None
 
 
+#: Which copy a read of a file kept twice is answered from.
+_FIRST, _SECOND = "first", "second"
+
+
 def _kept_twice(name: str) -> bool:
     # A copy under `files/` goes back into the session byte for byte on a rewind, where a
     # seal would end up in the user's file.
@@ -65,6 +69,9 @@ class HarnessFiles:
 
     def __init__(self, backend: Any) -> None:
         self._backend = backend
+        # Where this object's last read of each file found it whole, so a save knows which
+        # copy to leave alone until the other is written.
+        self._read_from: dict[str, str] = {}
 
     def fetch(self, name: str) -> Steps[bytes | None]:
         """`name`'s content, or `None` where the session has none."""
@@ -72,13 +79,16 @@ class HarnessFiles:
         if held is None or not _kept_twice(name):
             return held
         if (whole := unsealed(held)) is not None:
+            self._read_from[name] = _FIRST
             return whole
-        # A save writes the second copy whole before it touches the first, so a first copy
-        # that does not match is one a save stopped in, and the second is what it wrote.
+        # A save writes the copy a read is not answered from before the other, so a first
+        # copy that does not match is one a save stopped in, and the second is whole.
         second = yield from self._fetch_one(f"{name}{SECOND_COPY}")
         if second is not None and (whole := unsealed(second)) is not None:
+            self._read_from[name] = _SECOND
             return whole
         # Older than its second copy, and no save since has finished one.
+        self._read_from[name] = _FIRST
         return held
 
     def store(self, name: str, content: bytes) -> Steps[None]:
@@ -87,11 +97,17 @@ class HarnessFiles:
             yield from self._store_one(name, content)
             return
         whole = sealed(content)
-        # The second copy whole before the first is touched, in uploads of their own: a
-        # backend may empty a file and then fill it, and a write that stops partway, the
-        # process killed or the disk full, then leaves one of the two whole.
-        yield from self._store_one(f"{name}{SECOND_COPY}", whole)
-        yield from self._store_one(name, whole)
+        read_from = self._read_from.pop(name, None)
+        if read_from is None:
+            yield from self.fetch(name)
+            read_from = self._read_from.pop(name, _FIRST)
+        # In uploads of their own, the copy a read is answered from last: a backend may
+        # empty a file and then fill it, and a save stopping in the copy reads come from,
+        # after one stopped in the other, would leave neither whole.
+        second = f"{name}{SECOND_COPY}"
+        for one in (name, second) if read_from == _SECOND else (second, name):
+            yield from self._store_one(one, whole)
+        self._read_from[name] = _FIRST
 
     def _fetch_one(self, name: str) -> Steps[bytes | None]:
         (answer,) = yield reading(self._backend, "download_files", [f"{HARNESS_ROUTE}{name}"])
@@ -120,6 +136,8 @@ class HarnessFiles:
 
     def drop(self, *names: str) -> Steps[None]:
         """Drop these. Safe where they were never written."""
+        for name in names:
+            self._read_from.pop(name, None)
         paths = [
             f"{HARNESS_ROUTE}{one}"
             for name in names

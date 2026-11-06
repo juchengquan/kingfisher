@@ -3921,9 +3921,9 @@ turns by one id cannot say which conversation either ended on.
 
 **Each file kept about a session is kept twice** *(2026-11-06)*: `ledger.jsonl` beside
 `ledger.jsonl.2`, and so for every file under `.harness` but the copies, each ending in a
-line with its SHA-256. A save writes the second copy whole before it touches the first;
-a read takes the first if its line matches, else the second, else the first as a version
-before this wrote it, since a save that stopped in the first left the second whole. Built
+line with its SHA-256. A save writes one copy whole before it touches the other; a read
+takes the first if its line matches, else the second, else the first as a version before
+this wrote it, since a save that stopped in the first left the second whole. Built
 from `upload_files` and `download_files` alone, because a backend may empty a file before
 filling it, and a deployment's is asked for nothing more: writing beside a file and
 renaming it over needs a rename, which deepagents' backends do not have, and held on
@@ -3933,6 +3933,20 @@ replaced. The copies under `files/` are kept once, since a rewind puts them back
 byte. The files are named `.jsonl`, `inputs.jsonl` rather than `inputs.json`: that last
 line makes each one two JSON values on two lines, which a JSON reader refuses and a JSON
 lines reader takes. **The cost, taken:** those files take twice the disk, and a save two uploads.
+
+**A save writes last the copy a read is answered from** *(2026-11-06)*. Writing the second
+copy first every time, a save after one that stopped in the first copy began by
+overwriting the only whole one, and stopped there too it left neither: driven through the
+real backend, the read handed back the cut first copy, its seal half written. So
+`HarnessFiles` remembers which copy its last read of each file was answered from, a save
+writes the other copy first, and a save of a file the same object has not read reads it
+before writing. Measured over an ordinary turn, the reads are the same eleven either way,
+since every save in a turn follows a read by the same object. **Kept rather than deleted
+once a save finishes:** the second copy is a full twin, and is also what a read falls back
+on where the first is damaged by anything but a save; deleting it would cost a call a file
+a save and save no upload. **Left:** a file's first save stopping between its two uploads
+leaves no first copy, and a read answers that there is none rather than look for a second,
+which would cost a read for every file a turn finds absent.
 
 **A request's files go to `/inputs` with the session's.** Once a turn had nowhere of its
 own, a per-turn field and a per-session one were two fields for one operation, and they
