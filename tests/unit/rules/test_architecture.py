@@ -2077,9 +2077,11 @@ WITNESSES: dict[str, dict[str, str]] = {
         # a gate at all, and one that cannot catch `DecisionError` cannot tell a bad
         # answer from a broken session.
         "PendingDecision": "embedder",
-        # What `Session.turns` and `Session.rewind` answer, and the turn a rewind to
-        # before the first is asked with: a caller naming a turn to go back to holds these.
+        # What `Session.turns` and `Session.rewind` answer, a turn's files among it, and the
+        # turn a rewind to before the first is asked with: a caller naming a turn to go back
+        # to holds these.
         "TurnRecord": "embedder",
+        "TurnFiles": "embedder",
         "Rewound": "embedder",
         "START": "embedder",
         # What `RunResult.ledger` holds, one per recorded result. A caller keeping or

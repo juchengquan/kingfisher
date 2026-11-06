@@ -27,6 +27,7 @@ from kingfisher.core.layout import (
     MEMORY_WRITER,
 )
 from kingfisher.core.logged import raised, warn
+from kingfisher.core.result import TurnFiles
 
 from .files import Seen, artifacts_seen
 from .memory import without_any
@@ -632,17 +633,44 @@ def _held_at(
     held: dict[str, tuple[str | None, str | None, str | None]] = {}
     for turn in path[first:]:
         record = by_turn[turn]
-        removed = record.get(REMOVED)
-        for gone in removed if isinstance(removed, list) else ():
+        for gone in _removed(record):
             held.pop(gone, None)
-        under = _under(record)
-        for where, kept in _entries(record, KEPT).items():
-            dropped = kept.get(DROPPED_IN)
-            if dropped is not None:
-                why = f"its copy was dropped for space in turn {dropped}"
-                held[where] = (None, kept.get(MARK), why)
-            else:
-                held[where] = (under, kept.get(MARK), None if under else "its copy has no folder")
-        for where, missing in _entries(record, NOT_KEPT).items():
-            held[where] = (None, missing.get(MARK), str(missing.get(WHY) or "it has no copy"))
+        held.update(_versions(record))
     return held
+
+
+def _removed(record: dict[str, Any]) -> list[str]:
+    removed = record.get(REMOVED)
+    return [one for one in removed if isinstance(one, str)] if isinstance(removed, list) else []
+
+
+def _versions(record: dict[str, Any]) -> dict[str, tuple[str | None, str | None, str | None]]:
+    """Each file the record's turn changed, as the folder of its copy or `None`, its mark,
+    and why there is no copy."""
+    under = _under(record)
+    versions: dict[str, tuple[str | None, str | None, str | None]] = {}
+    for where, kept in _entries(record, KEPT).items():
+        dropped = kept.get(DROPPED_IN)
+        if dropped is not None:
+            why = f"its copy was dropped for space in turn {dropped}"
+            versions[where] = (None, kept.get(MARK), why)
+        else:
+            versions[where] = (under, kept.get(MARK), None if under else "its copy has no folder")
+    for where, missing in _entries(record, NOT_KEPT).items():
+        versions[where] = (None, missing.get(MARK), str(missing.get(WHY) or "it has no copy"))
+    return versions
+
+
+def turn_files(records: list[dict[str, Any]]) -> dict[str, TurnFiles]:
+    """What each turn with a line in the history did to the files, by its id."""
+    found: dict[str, TurnFiles] = {}
+    for record in records:
+        if not isinstance(turn := record.get(TURN), str):
+            continue
+        versions = _versions(record)
+        found[turn] = TurnFiles(
+            changed=tuple(sorted(versions)),
+            removed=tuple(sorted(_removed(record))),
+            without_copy={where: why for where, (_, _, why) in versions.items() if why},
+        )
+    return found

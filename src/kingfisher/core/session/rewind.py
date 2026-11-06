@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.layout import INPUTS_SEEN, MEMORY_WRITER, TRANSCRIPT_FILE
-from kingfisher.core.result import Rewound, TurnRecord
+from kingfisher.core.result import Rewound, TurnFiles, TurnRecord
 
 from .file_history import BEFORE_FIRST, NO_RECORD, read_file_history, restore_files, restore_state
 from .model import START, RewindError, Start
@@ -39,15 +39,20 @@ from .turnlog import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from kingfisher.core.layout import Layout
 
     from .steps import Steps
 
 
 def turn_records(
-    lines: list[dict[str, Any]], off_path: frozenset[str | None]
+    lines: list[dict[str, Any]],
+    off_path: frozenset[str | None],
+    files: Mapping[str, TurnFiles],
 ) -> tuple[TurnRecord, ...]:
-    """Every turn the log holds, oldest first, each marked if it is on the session's path."""
+    """Every turn the log holds, oldest first, each marked if it is on the session's path
+    and with what it did to its files where the file history has its line."""
     turns = by_turn(lines)
     # The turns ran in the order the log holds them, so the last one a rewind did not leave
     # behind is where the session is.
@@ -61,6 +66,7 @@ def turn_records(
             resumed=bool(opening.get(RESUMED)),
             imported=bool(opening.get(IMPORTED)),
             current=turn in current,
+            files=files.get(turn),
         )
         # A conversation imported under no turn has no id to be named by.
         for turn, (opening, _) in turns.items()

@@ -1104,6 +1104,15 @@ def _turns(args: argparse.Namespace) -> int:
         said = turn.task.strip().splitlines()[0][:60] if turn.task and turn.task.strip() else ""
         mark = "*" if turn.current else " "
         print(f"{mark} {turn.id}  after {turn.parent or '-'}  {kind:<8} {said}")
+        if turn.files is None:
+            print("    files not recorded")
+            continue
+        for name in turn.files.changed:
+            print(f"    changed {name}")
+        for name in turn.files.removed:
+            print(f"    removed {name}")
+        for name, why in turn.files.without_copy.items():
+            print(f"    no copy of {name}: {why}")
     return 0
 
 

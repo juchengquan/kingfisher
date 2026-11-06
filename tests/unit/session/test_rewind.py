@@ -18,7 +18,15 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from assets.middlewares.summarize_by_count import SummarizeByCount
-from kingfisher import START, Kingfisher, Request, RewindError, SessionBusyError, TurnIdError
+from kingfisher import (
+    START,
+    Kingfisher,
+    Request,
+    RewindError,
+    SessionBusyError,
+    TurnFiles,
+    TurnIdError,
+)
 from kingfisher.cli.__main__ import main
 from kingfisher.core.layout import (
     ARTIFACTS_SEEN,
@@ -35,7 +43,7 @@ from kingfisher.core.layout import (
 from kingfisher.core.request import Decision, DecisionError
 from kingfisher.core.result import AWAITING
 from kingfisher.core.session import preparation
-from kingfisher.core.session.file_history import dropped_for_space
+from kingfisher.core.session.file_history import OVER_BUDGET, dropped_for_space
 from kingfisher.plugins import LocalSessions
 from tests.conftest import (
     EVERY_TOOL,
@@ -307,6 +315,49 @@ def test_the_command_lists_turns_and_rewinds(rewinding, at_the_command_line, cap
 
 def _outputs(cfg):
     return cfg.workspace / "sessions" / "s" / "outputs"
+
+
+def test_each_turn_lists_what_it_did_to_its_files(rewinding, at_the_command_line, capsys):
+    """Listed without its files, a turn told a caller choosing where to go back only its
+    task: what came back, and what could not, was known only once the rewind was done. A
+    turn nothing recorded reads as unknown, never as one that changed nothing."""
+    cfg = replace(rewinding, rewind_max_bytes=25)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    (_outputs(cfg) / "report.md").write_text("A" * 10, encoding="utf-8")
+    (_outputs(cfg) / "draft.md").write_text("D", encoding="utf-8")
+    _say(kf, "write them", AIMessage("ok"), turn_id="t1")
+    (_outputs(cfg) / "report.md").write_text("B" * 10, encoding="utf-8")
+    (_outputs(cfg) / "draft.md").unlink()
+    (_outputs(cfg) / "big.csv").write_text("x" * 30, encoding="utf-8")
+    _say(kf, "rework them", AIMessage("ok"), turn_id="t2")
+    (_outputs(cfg) / "report.md").write_text("C" * 10, encoding="utf-8")
+    # Over the budget: the copy restoring only t1 goes first.
+    _say(kf, "once more", AIMessage("ok"), turn_id="t3")
+
+    files = {turn.id: turn.files for turn in kf.session("s").turns()}
+    assert files["t1"] is not None
+    assert {"outputs/draft.md", "outputs/report.md"} <= set(files["t1"].changed)
+    assert files["t1"].without_copy["outputs/report.md"] == (
+        "its copy was dropped for space in turn t3"
+    )
+    assert files["t2"] == TurnFiles(
+        changed=("outputs/big.csv", "outputs/report.md"),
+        removed=("outputs/draft.md",),
+        without_copy={"outputs/big.csv": OVER_BUDGET},
+    )
+    assert files["t3"] == TurnFiles(changed=("outputs/report.md",))
+
+    # As a turn that died before its line leaves the history.
+    history = cfg.workspace / "sessions" / "s" / HARNESS / FILE_HISTORY
+    kept = [one for one in read_record(history).splitlines() if '"turn": "t2"' not in one]
+    write_old_record(history, "".join(f"{one}\n" for one in kept))
+    assert {turn.id: turn.files for turn in kf.session("s").turns()}["t2"] is None
+
+    assert main(["turns", "--session", "s"]) == 0
+    printed = capsys.readouterr().out
+    assert "    changed outputs/draft.md" in printed
+    assert "    no copy of outputs/report.md: its copy was dropped for space in turn t3" in printed
+    assert "    files not recorded" in printed
 
 
 def test_a_rewind_puts_back_the_files_the_turn_left(rewinding):

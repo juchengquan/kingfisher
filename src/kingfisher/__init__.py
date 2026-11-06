@@ -73,6 +73,7 @@ _EXPORTS = {
     "RunEvent": "kingfisher.core.result",
     "RunResult": "kingfisher.core.result",
     "Rewound": "kingfisher.core.result",
+    "TurnFiles": "kingfisher.core.result",
     "TurnRecord": "kingfisher.core.result",
     # What `Kingfisher.sent` answers: the first model call of a turn, as it would be sent.
     "Sent": "kingfisher.core.result",
@@ -159,6 +160,7 @@ __all__ = [
     "SubagentError",
     "ToolContext",
     "ToolSpec",
+    "TurnFiles",
     "TurnIdError",
     "TurnRecord",
     "UnknownSessionError",
@@ -235,6 +237,7 @@ if TYPE_CHECKING:
     from kingfisher.core.result import Sent as Sent
     from kingfisher.core.result import SentBlock as SentBlock
     from kingfisher.core.result import SentTool as SentTool
+    from kingfisher.core.result import TurnFiles as TurnFiles
     from kingfisher.core.result import TurnRecord as TurnRecord
     from kingfisher.core.run import run as run
     from kingfisher.core.run import stream as stream
