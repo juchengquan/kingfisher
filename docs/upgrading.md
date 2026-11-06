@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A rewind budget of 0 copies nothing the agent makes, after #1247
+
+- **At `KINGFISHER_REWIND_MAX_BYTES=0` a turn neither lists nor copies `/outputs` or the
+  rest of `/memory`**; only the memory file is still kept. Before, 0 still listed every
+  file, and on a backend whose listing gives no size read each back at every turn. A
+  session's copies kept before 0 are dropped at its first turn at 0.
+- **A rewind across a turn at 0 leaves those files as they are.** `Rewound.not_restored`
+  names the folder, `{"outputs": "..."}`, not each file, and the next turn is told
+  `May have changed since your last turn: /outputs.` `TurnFiles.unrecorded` names the
+  folders such a turn did not record, and `kingfisher turns` prints `outputs not recorded`.
+
 ## An unchanged file read back whole is not copied again, after #1246
 
 - **On a backend with no `host_path` and no `copy`, a file your listing gives no

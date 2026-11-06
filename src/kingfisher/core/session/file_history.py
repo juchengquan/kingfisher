@@ -57,6 +57,9 @@ KEPT = "kept"
 NOT_KEPT = "not_kept"
 #: The paths there when the last turn ended and gone when this one did.
 REMOVED = "removed"
+#: The artifact folders the turn did not list, `KINGFISHER_REWIND_MAX_BYTES` being 0: of
+#: their files only the memory file is named, and the rest are unknown at this turn.
+UNLISTED = "unlisted"
 #: Each of `STATE_KEPT` as the turn left it, by name: `{UNDER, SHA}`, `UNDER` the folder
 #: holding its copy, an earlier turn's where it was the same.
 STATE = "state"
@@ -229,7 +232,10 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
     """Copy each file in the artifact folders that changed since the last turn ended, and add
     this turn's line to the history: what it kept, what it could not and why, what went."""
     turn, harness = prepared.turn.id, prepared.harness
-    now, memory = yield from _artifacts_now(prepared.files, cfg.layout)
+    # At 0 nothing the agent made is copied, so the folders are not even listed: on a backend
+    # listing no marks, each file would otherwise be read back to be told unchanged.
+    off = cfg.rewind_max_bytes == 0
+    now, memory = yield from _artifacts_now(prepared.files, cfg.layout, listed=not off)
     if now is None:
         # No line rather than a wrong one: each file the listing missed would read as
         # removed, and a rewind would delete it.
@@ -238,11 +244,14 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
             f"the files turn {turn} left were not kept: a listing came back cut short",
         )
         return
-    before = (yield from read_listing(harness, ARTIFACTS_SEEN)) or {}
+    stored = (yield from read_listing(harness, ARTIFACTS_SEEN)) or {}
+    # Unlisted, every other file would read as removed.
+    before = {path: mark for path, mark in stored.items() if not off or path in now}
+    unlisted = sorted(cfg.layout.artifact_dirs) if off else []
     under = folder_for(turn)
     try:
         records, not_kept, dropped = yield from _copies_recorded(
-            prepared, cfg, (now, memory), before, under
+            prepared, cfg, (now, memory), (before, unlisted), under
         )
     except Exception:
         # Before the error goes on: no line will name these copies, so no rewind reads them,
@@ -260,7 +269,9 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
         path: None if path in not_kept and not_kept[path][WHY] not in _FINAL else mark
         for path, (mark, _) in now.items()
     }
-    if seen != before:
+    # Against what was stored, so a turn at 0 forgets the folders' other files: when copies
+    # resume, the first turn copies every file, the copies kept before 0 having been dropped.
+    if seen != stored:
         yield from write_listing(harness, ARTIFACTS_SEEN, seen)
 
 
@@ -268,13 +279,14 @@ def _copies_recorded(
     prepared: Prepared,
     cfg: Config,
     found: tuple[dict[str, Seen], bytes | None],
-    before: dict[str, str | None],
+    listing: tuple[dict[str, str | None], list[str]],
     under: str,
 ) -> Steps[tuple[list[dict[str, Any]], dict[str, dict[str, Any]], list[tuple[int, str]]]]:
     """The turn's copies made and its line written: the history as written, what was not
     copied, and the copies dropped for space, which the caller removes."""
     turn, harness = prepared.turn.id, prepared.harness
     now, memory = found
+    before, unlisted = listing
     memory_file = cfg.layout.memory_file_route.lstrip("/")
     records = yield from read_file_history(harness)
     # Once, before any copy: until the deadline the claim has a whole superstep's bound left,
@@ -335,6 +347,7 @@ def _copies_recorded(
             not_kept=not_kept,
             removed=sorted(before.keys() - now.keys()),
             state=state,
+            unlisted=unlisted,
         )
     )
     # The tree only where a rewind made one: until then the order the turns ran is it.
@@ -424,29 +437,34 @@ def _line(  # noqa: PLR0913 -- a line's keys, each by name
     not_kept: dict[str, dict[str, Any]],
     removed: list[str],
     state: dict[str, dict[str, str]],
+    unlisted: list[str],
 ) -> dict[str, Any]:
     """A turn's line in the history, each key only where it holds something."""
     line: dict[str, Any] = {TURN: turn, UNDER: under}
-    for key, held in ((KEPT, kept), (NOT_KEPT, not_kept), (REMOVED, removed), (STATE, state)):
+    keys = ((KEPT, kept), (NOT_KEPT, not_kept), (REMOVED, removed), (STATE, state))
+    for key, held in (*keys, (UNLISTED, unlisted)):
         if held:
             line[key] = held
     return line
 
 
 def _artifacts_now(
-    files: Any, layout: Layout
+    files: Any, layout: Layout, *, listed: bool = True
 ) -> Steps[tuple[dict[str, Seen] | None, bytes | None]]:
     """The artifact folders as `artifacts_seen` lists them, but the memory file marked by its
-    contents, and those contents; `None` for either that could not be read.
+    contents, and those contents; `None` for either that could not be read. Not `listed`,
+    the memory file alone, where it is there.
 
     By its contents because a listing may give no mark, and a memory file without one would
     be copied every turn; it is small, and every turn reads it whole into the prompt anyway.
     """
-    now = yield from artifacts_seen(files, layout)
     memory_file = layout.memory_file_route.lstrip("/")
+    now = (yield from artifacts_seen(files, layout)) if listed else {memory_file: (None, None)}
     if now is None or memory_file not in now:
         return now, None
     (got,) = yield reading(files, "download_files", [layout.memory_file_route])
+    if not listed and got.error == "file_not_found":
+        return {}, None
     if got.error or got.content is None:
         return now, None
     now[memory_file] = (f"{SHA} {hashlib.sha256(got.content).hexdigest()}", len(got.content))
@@ -690,6 +708,7 @@ BEFORE_FIRST = "nothing records what the folders held before the first turn"
 NOT_THEN_NO_COPY = (
     "that turn did not have it, and with no copy of it as it is now, removing it would lose it"
 )
+COPIES_OFF = "a turn on the way kept no record of it, KINGFISHER_REWIND_MAX_BYTES being 0"
 
 
 def restore_files(
@@ -710,39 +729,59 @@ def restore_files(
     now, _ = yield from _artifacts_now(files, layout)
     if now is None:
         return (), dict.fromkeys(layout.artifact_dirs, "a listing of it came back cut short")
-    held = _held_at(records, path)
-    if held is None:
+    memory_file = layout.memory_file_route.lstrip("/")
+    found = _held_at(records, path, memory_file)
+    if found is None:
         return (), dict.fromkeys(sorted(now), NO_RECORD if path else BEFORE_FIRST)
+    held, unknown = found
     copied = _copied_versions(records)
     restored: list[str] = []
     not_restored: dict[str, str] = {}
+    # Named by its folder, not file by file: a folder of hundreds would fill the next turn's
+    # message.
+    for folder in sorted(unknown):
+        if any(_unknown_in(one, {folder}, memory_file) for one in now):
+            not_restored[folder] = COPIES_OFF
     for where in sorted({*held, *now}):
-        if where not in held:
-            if (where, now[where][0]) in copied:
-                yield changing(files, "delete", f"/{where}")
-                restored.append(where)
-            else:
-                not_restored[where] = NOT_THEN_NO_COPY
+        if _unknown_in(where, unknown, memory_file):
             continue
-        under, mark, why = held[where]
-        if where in now and mark is not None and now[where][0] == mark:
-            continue
-        if under is None:
-            not_restored[where] = why or "its version has no copy"
-            continue
-        _, refused, _ = yield from _copied(
-            files, f"{HARNESS_ROUTE}{KEPT_FILES}/{under}/{where}", f"/{where}", None
-        )
-        if refused is None:
+        version, seen = held.get(where), now.get(where)
+        done, why = yield from _put_back(files, where, version, seen[0] if seen else None, copied)
+        if done:
             restored.append(where)
-        else:
-            not_restored[where] = refused
+        elif why is not None:
+            not_restored[where] = why
     # As the folders are now, so the next turn copies only what it changes after this.
     after, _ = yield from _artifacts_now(files, layout)
     if after is not None:
         listed = {one: mark for one, (mark, _) in after.items()}
         yield from write_listing(harness, ARTIFACTS_SEEN, listed)
     return tuple(restored), not_restored
+
+
+def _put_back(
+    files: Any,
+    where: str,
+    version: tuple[str | None, str | None, str | None] | None,
+    mark_now: str | None,
+    copied: set[tuple[str, str]],
+) -> Steps[tuple[bool, str | None]]:
+    """Put `where` back as `version`, `None` for a turn that did not have it: whether it
+    changed, and why not where it could not."""
+    if version is None:
+        if (where, mark_now) in copied:
+            yield changing(files, "delete", f"/{where}")
+            return True, None
+        return False, NOT_THEN_NO_COPY
+    under, mark, why = version
+    if mark is not None and mark_now == mark:
+        return False, None
+    if under is None:
+        return False, why or "its version has no copy"
+    _, refused, _ = yield from _copied(
+        files, f"{HARNESS_ROUTE}{KEPT_FILES}/{under}/{where}", f"/{where}", None
+    )
+    return (True, None) if refused is None else (False, refused)
 
 
 def _copied_versions(records: list[dict[str, Any]]) -> set[tuple[str, str]]:
@@ -757,23 +796,45 @@ def _copied_versions(records: list[dict[str, Any]]) -> set[tuple[str, str]]:
 
 
 def _held_at(
-    records: list[dict[str, Any]], path: list[str]
-) -> dict[str, tuple[str | None, str | None, str | None]] | None:
+    records: list[dict[str, Any]], path: list[str], memory_file: str
+) -> tuple[dict[str, tuple[str | None, str | None, str | None]], set[str]] | None:
     """Each file the artifact folders held when the last turn of `path` ended, as the
-    folder of its copy or `None`, its mark, and why there is no copy; `None` where that is
-    unknown, because that turn or one before it since the first to keep a record has none.
+    folder of its copy or `None`, its mark, and why there is no copy, and the folders whose
+    files besides the memory file are unknown there; `None` where every file is unknown,
+    because that turn or one before it since the first to keep a record has none.
     """
     by_turn = {record[TURN]: record for record in records}
     first = next((at for at, turn in enumerate(path) if turn in by_turn), None)
     if first is None or any(turn not in by_turn for turn in path[first:]):
         return None
     held: dict[str, tuple[str | None, str | None, str | None]] = {}
+    unknown: set[str] = set()
     for turn in path[first:]:
         record = by_turn[turn]
+        if unlisted := _unlisted(record):
+            unknown |= unlisted
+            held = {where: one for where, one in held.items()
+                    if not _unknown_in(where, unlisted, memory_file)}
+        else:
+            # A turn listing the folders after one that did not names every file in them,
+            # what it compared against holding the memory file alone.
+            unknown = set()
         for gone in _removed(record):
             held.pop(gone, None)
         held.update(_versions(record))
-    return held
+    return held, unknown
+
+
+def _unlisted(record: dict[str, Any]) -> set[str]:
+    unlisted = record.get(UNLISTED)
+    if not isinstance(unlisted, list):
+        return set()
+    return {one for one in unlisted if isinstance(one, str)}
+
+
+def _unknown_in(where: str, folders: set[str], memory_file: str) -> bool:
+    """Whether `where` is one of the files a turn at 0 did not list in `folders`."""
+    return where != memory_file and where.partition("/")[0] in folders
 
 
 def _removed(record: dict[str, Any]) -> list[str]:
@@ -809,5 +870,6 @@ def turn_files(records: list[dict[str, Any]]) -> dict[str, TurnFiles]:
             changed=tuple(sorted(versions)),
             removed=tuple(sorted(_removed(record))),
             without_copy={where: why for where, (_, _, why) in versions.items() if why},
+            unrecorded=tuple(sorted(_unlisted(record))),
         )
     return found

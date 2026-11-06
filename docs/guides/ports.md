@@ -1153,6 +1153,10 @@ Without it, kingfisher downloads the file and uploads it again, which holds the 
 in kingfisher's memory, so a backend with large files elsewhere wants one. It is read on
 the object your `open` returns, never on a composite's routes, because the two paths may
 be routed to different backends, and an async turn calls it on kingfisher's thread pool.
+**At `KINGFISHER_REWIND_MAX_BYTES=0` none of this happens:** the folders are not even
+listed, nothing in them is copied but the memory file, which kingfisher reads whole, and
+your `copy` is never asked.
+
 **`own_copies`**, in `tests/checks/backend.py`, holds one you declare to three promises:
 the copy lands whole, it is a copy and not the same file, so rewriting the original in
 place leaves it as it was, and a file that is not there is answered with why, never `None`.

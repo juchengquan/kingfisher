@@ -98,6 +98,9 @@ class TurnFiles:
     #: Each changed file a rewind to this turn cannot put back as the turn left it, with
     #: why: it was never copied, or its copy was dropped for space since.
     without_copy: Mapping[str, str] = field(default_factory=dict)
+    #: Each folder the turn kept no record of, `KINGFISHER_REWIND_MAX_BYTES` being 0: of its
+    #: files only the memory file is in `changed` or `removed`.
+    unrecorded: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
