@@ -4067,8 +4067,7 @@ line that made the copy with `dropped_in`, as an expired ledger row gains `expir
 and is written before the copy is removed, so the history never promises a copy that is
 gone; a file larger than the whole budget is never copied at all. A clone counts at its
 full size: it overcounts on a disk that clones, which keeps a session under its budget.
-A size the listing does not give counts as nothing, which only a backend's own `copy` on a
-backend listing no sizes meets. `KINGFISHER_SESSION_MAX_BYTES` subtracts the sizes the
+`KINGFISHER_SESSION_MAX_BYTES` subtracts the sizes the
 history records, and only once the backend's count is over the cap, so a session under it
 reads nothing more; the port's `size` is left alone, and `Session.size()` still answers
 what the backend holds. **The cost, taken:** with the history unbounded by default, the
@@ -4083,6 +4082,13 @@ few kilobytes, so every version is kept and none is dropped for space;
 rather than the listing's mark: on a backend whose listing gives none, as deepagents'
 sandboxes give none, it was copied again every turn, and the turn reads it whole into
 the prompt regardless. A `MemoryStore` still keeps it out.
+
+**A copy nothing can size is not made under a budget** *(2026-11-06)*. A backend's own
+`copy` answers no size, so on a backend listing none its copies counted as nothing, and a
+budget of 100 bytes kept 3 MB of them after three turns: it bounded nothing. With a
+budget set, such a file is refused before the copy is asked for, and its line says why.
+`copy` was not made to answer a size: whoever can change it can make the listing give
+one, which is also what stops every file being copied every turn.
 
 **A memory file a `MemoryStore` keyed is not copied, and `forget` reaches every copy.**
 Keyed, the file is the user's memory, loaded over it at every turn's start, so a copy
