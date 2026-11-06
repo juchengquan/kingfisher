@@ -4400,14 +4400,19 @@ here: past a damaged line a tool result can answer a call that was on it, and a 
 refuses an answer to no call -- inferred, since no provider was called. So the turn log's
 reading stops there, and the next write keeps only what was read. Since each `.harness`
 file is kept twice under a seal, a damaged line comes only from a log neither copy's seal
-matches: one written before seals were, or by something other than kingfisher. A cut read
-that way is silent, though, and a file emptied reads as a first turn's, so the ledger,
-written before the log, says on each closing line how many messages the turn ended on. A
-turn rebuilding fewer, or stopping at a damaged line, emits `history_lost` and sets
-`RunResult.history_lost`. The agent is not told: what it
-lost is gone, and whether to go on is the caller's. The ledger's own reader decodes
-leniently now, since its rows keep any language and a cut inside a character raised on
-every later turn: 34 of 312 cut positions on a ledger with one Chinese row. *(2026-11-02.)*
+matches: one written before seals were, by something other than kingfisher, or on a local
+disk by a power cut soon after a save. Nothing flushes either copy to the drive, and
+kingfisher's own backend writes each in place, so two copies written moments apart can be
+lost together. A cut read that way is silent, though, and a file emptied reads as a first
+turn's, so the ledger, written before the log, says on each closing line how many
+messages the turn ended on. A turn rebuilding fewer, or stopping at a damaged line, emits
+`history_lost` and sets `RunResult.history_lost`. The ledger is flushed no more than the
+log, so a power cut that empties both, or leaves both at an earlier save, goes
+unreported. Flushing each copy would close that, and is not built: what it costs a turn
+has not been measured. The agent is not told: what it lost is gone, and whether to go on
+is the caller's. The ledger's own reader decodes leniently now, since its rows keep any
+language and a cut inside a character raised on every later turn: 34 of 312 cut positions
+on a ledger with one Chinese row. *(2026-11-02.)*
 
 **Every turn's messages are kept as first written, each tagged with its turn, in
 `.harness/turns.jsonl`.** It is the only record of what was said: each turn is built on
