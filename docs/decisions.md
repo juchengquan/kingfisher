@@ -3909,10 +3909,28 @@ answered with the first run's result. The ids held are the ones the ledger names
 for a graph a deployment supplies, which keeps no ledger, the ones its turn log opens:
 unchecked, a second turn under one id was logged as its own parent, and `turns` and
 `rewind` walked that loop forever. A graph built here reads only the ledger, which is
-written before the log and so names every turn the log does. A session logged before
+written before the log and so names every turn the log does -- while no write can cut
+it. Rewritten whole each turn, a write that stopped partway kept the ledger's front and
+lost older turns' rows with the newest: three turns, the ledger cut to its first third,
+and `req-2` was taken again. So each such file is now kept twice, below. Reading the log
+too would cover only the ids, and every other file written whole each turn would still be
+cut. A session logged before
 the check keeps its loop: the walk back stops where it comes round, so `turns` still
 lists it, and a rewind to a turn behind the loop is refused, since a log naming two
 turns by one id cannot say which conversation either ended on.
+
+**Each file kept about a session is kept twice** *(2026-11-06)*: `ledger.jsonl` beside
+`ledger.jsonl.2`, and so for every file under `.harness` but the copies, each ending in a
+line with its SHA-256. A save writes the second copy whole before it touches the first;
+a read takes the first if its line matches, else the second, else the first as a version
+before this wrote it, since a save that stopped in the first left the second whole. Built
+from `upload_files` and `download_files` alone, because a backend may empty a file before
+filling it, and a deployment's is asked for nothing more: writing beside a file and
+renaming it over needs a rename, which deepagents' backends do not have, and held on
+kingfisher's own backend alone. Writing the copies by turns, the newer told by a save
+number, was set aside: every read fetched both, and the older kept what the newer had
+replaced. The copies under `files/` are kept once, since a rewind puts them back byte for
+byte. **The cost, taken:** those files take twice the disk, and a save two uploads.
 
 **A request's files go to `/inputs` with the session's.** Once a turn had nowhere of its
 own, a per-turn field and a per-session one were two fields for one operation, and they
@@ -4411,8 +4429,9 @@ counts against `KINGFISHER_SESSION_MAX_BYTES` as anything in the session does.
 
 **The cost, taken:** read and written whole every turn, as the ledger and the transcript
 are, since `HarnessFiles` has no append; and the log keeps every word said, so it outgrows
-both, and a remote backend moves it twice a turn. An append on the backend is the answer
-once a session measures slow. **Named for its turns**, not as a message log, which the
+both, and a remote backend moves it three times a turn, read once and written twice. An
+append on the backend is the answer once a session measures slow. **Named for its turns**,
+not as a message log, which the
 glossary turns down as a name for `conversation_history/`; a rewind lists turns.
 *(2026-11-04.)*
 
@@ -4423,6 +4442,15 @@ Kept rather than deleted, so a rewind made by mistake is undone by another, and 
 can step between versions of a reply. The next turn follows the turn rewound to, from the
 conversation it left. `START` is a value of its own, never `None`: an unset variable
 passed as the turn must not empty a session.
+
+**The tree only grows, and no turn outlives its parent** *(2026-11-06)*. Nothing removes a
+turn today. Whatever comes to -- a client deleting a reply, say -- removes every turn after
+it on its branch too: left, a turn whose parent is gone is rebuilt from itself, without the
+conversation before it, and once a later turn takes the gone one's id, the orphan hangs
+under that turn and is rebuilt on a conversation it never had. Supplied-graph sessions
+logged on 2026-11-04, between rewind and the check on their turn log, may already hold one
+-- a turn under a reused id hiding the first and taking its children -- and are left as
+they are: a log naming two turns by one id cannot say which one each child followed.
 
 **The ledger keeps every branch, and `.harness/off_path.json` names the turns left
 behind.** The plan moved a branch's rows out of the ledger and back; only a rewind writes

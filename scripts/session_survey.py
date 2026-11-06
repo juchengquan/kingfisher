@@ -33,6 +33,7 @@ out on which turns the memory writer ran.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import statistics
@@ -40,6 +41,7 @@ import sys
 import time
 from collections import Counter, defaultdict
 from collections.abc import Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
@@ -84,6 +86,9 @@ TRANSCRIPT = "transcript.jsonl"
 #: `.harness` files with a part of their own: `agent.yaml` is the pin a session kept before
 #: every call named its agent, read for the name it held.
 HARNESS_PARTS = {TRANSCRIPT: "transcript", "ledger.jsonl": "ledger", "agent.yaml": "pinned agent"}
+#: Beside each file kingfisher keeps about a session, its second copy: `ledger.jsonl.2`.
+#: Each copy ends in a seal, `{"sha256": ...}` of everything before the newline ahead of it.
+SECOND_COPY = ".2"
 
 #: What a session's bytes are counted under, in the order they are shown.
 PARTS = (
@@ -167,11 +172,38 @@ class Session:
         return self.agent_model or "(the deployment's default)"
 
 
-def _json_lines(path: Path) -> list[dict[str, Any]]:
+def _text(path: Path) -> str:
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        return path.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return []
+        return ""
+
+
+def _unsealed(held: bytes) -> bytes | None:
+    content, _, last = held.removesuffix(b"\n").rpartition(b"\n")
+    try:
+        seal = json.loads(last)
+    except ValueError:
+        return None
+    return content if seal == {"sha256": hashlib.sha256(content).hexdigest()} else None
+
+
+def _record(path: Path) -> str:
+    """A file kingfisher keeps under `.harness`, read as kingfisher reads it: the first copy
+    where its seal matches, else the second where that one's does, else the first as a
+    version before seals wrote it; empty where there is none."""
+    try:
+        held = path.read_bytes()
+    except OSError:
+        return ""
+    whole = _unsealed(held)
+    if whole is None:
+        with suppress(OSError):
+            whole = _unsealed(path.with_name(f"{path.name}{SECOND_COPY}").read_bytes())
+    return (held if whole is None else whole).decode("utf-8", errors="replace")
+
+
+def _json_lines(text: str) -> list[dict[str, Any]]:
     found = []
     for line in text.splitlines():
         start = line.find("{")
@@ -194,7 +226,7 @@ def _yaml_scalar(text: str, key: str) -> str | None:
 def _part(relative: tuple[str, ...], names: dict[str, str]) -> str:
     top, rest = relative[0], relative[1:]
     if top == HARNESS:
-        named = HARNESS_PARTS.get(rest[0]) if len(rest) == 1 else None
+        named = HARNESS_PARTS.get(rest[0].removesuffix(SECOND_COPY)) if len(rest) == 1 else None
         return named or "rest of .harness"
     if top == names["scratchpad"] and rest:
         if rest[0] == names["tool_results"]:
@@ -242,7 +274,7 @@ def read_session(folder: Path, names: dict[str, str] = FOLDERS) -> Session:
 def _read_ledger(harness: Path, s: Session) -> list[tuple[str, str]]:
     """The turns and recorded results; `(call id, path)` of each result still kept."""
     kept: list[tuple[str, str]] = []
-    for row in _json_lines(harness / "ledger.jsonl"):
+    for row in _json_lines(_record(harness / "ledger.jsonl")):
         if "id" in row:
             s.recorded_results += 1
             if row.get("expired_in") is not None:
@@ -263,7 +295,7 @@ def _read_ledger(harness: Path, s: Session) -> list[tuple[str, str]]:
 def _read_transcript(harness: Path, s: Session) -> dict[str, int]:
     """What the kept conversation is made of; each result it still holds whole, in bytes."""
     shown: dict[str, int] = {}
-    for message in _json_lines(harness / TRANSCRIPT):
+    for message in _json_lines(_record(harness / TRANSCRIPT)):
         role = message.get("role", "?")
         s.messages[role] += 1
         content = message.get("content") or ""
@@ -324,7 +356,7 @@ def _read_memory(memory: Path, harness: Path, s: Session) -> None:
         s.memory_entries = sum(1 for line in lines if line.startswith("- "))
     if writer.is_file():
         try:
-            s.unread_turns = int(json.loads(writer.read_text(encoding="utf-8")).get("turns", 0))
+            s.unread_turns = int(json.loads(_record(writer)).get("turns", 0))
         except (ValueError, TypeError, AttributeError, OSError):
             s.unread_turns = None
 
@@ -335,7 +367,7 @@ def read_logs(paths: list[Path], sessions: dict[str, Session]) -> int:
     ended: dict[str, bool] = {}
     by_turn: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for path in paths:
-        for event in _json_lines(path):
+        for event in _json_lines(_text(path)):
             name, sid = event.get("event"), event.get("session_id")
             # A warning is no step of the turn: taken for the one before a call, it would
             # shorten that call's time. A log from before `level` holds run events alone.

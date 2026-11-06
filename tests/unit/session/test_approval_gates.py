@@ -35,6 +35,7 @@ from tests.conftest import (
     an_agent,
     harness_of,
     middlewares_dir,
+    read_record,
     start,
     subagents_dir,
     tools_dir,
@@ -1060,7 +1061,7 @@ def test_an_input_replaced_while_a_turn_waits_is_named_after_its_resume(cfg, ses
 
     kf.run(Request("again", session_id=session_dir.name))
 
-    transcript = (session_dir / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8")
+    transcript = read_record(session_dir / HARNESS / TRANSCRIPT_FILE)
     asked = [json.loads(line) for line in transcript.splitlines()]
     *_, last = (one["content"] for one in asked if one["role"] == "user")
     assert "Replaced in /inputs/: report.txt." in last

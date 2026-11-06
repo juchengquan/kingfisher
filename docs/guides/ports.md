@@ -1057,6 +1057,15 @@ right: **`shell_denied`**, in `tests/checks/backend.py`, drives `execute` at `/.
 `KINGFISHER_SESSIONS` names sessions of yours, because it
 cannot look inside them.
 
+**Each of those files is kept twice, so yours may write a file in place.** The ledger,
+the turn log and the history of files are read, added to and written back whole every turn
+with `upload_files`, and an upload cut partway, the process killed or the disk full, keeps
+a file's front and loses the rest: older turns' lines with the newest. So each sits beside
+a second copy, `ledger.jsonl.2` beside `ledger.jsonl`, which kingfisher writes whole before
+it touches the first, and each ends in a line with its SHA-256 that tells a whole copy from
+a cut one. Nothing more than `upload_files` and `download_files` is asked of your backend,
+and the second copies count towards a session's size.
+
 Nothing else is read from a directory on this host. A backend that keeps its
 sessions somewhere else keeps all of them there.
 

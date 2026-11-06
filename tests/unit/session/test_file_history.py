@@ -28,7 +28,7 @@ from kingfisher.core.session.memory import without_any
 from kingfisher.core.session.model import QuotaExceededError
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
-from tests.conftest import start
+from tests.conftest import read_record, start
 from tests.unit.session.test_memory_store import Shelf
 from tests.unit.session.test_memory_store import _kingfisher as _with_store
 from tests.unit.session.test_memory_store import _turn as _store_turn
@@ -44,7 +44,7 @@ def _session(cfg, session_id: str = "s") -> Path:
 def _history(cfg, session_id: str = "s") -> dict[str, dict[str, Any]]:
     """Each turn's line, by its turn."""
     held = _session(cfg, session_id) / HARNESS / FILE_HISTORY
-    lines = [json.loads(line) for line in held.read_text(encoding="utf-8").splitlines()]
+    lines = [json.loads(line) for line in read_record(held).splitlines()]
     return {line["turn"]: line for line in lines}
 
 
@@ -185,16 +185,17 @@ def test_the_session_cap_does_not_count_the_copies(cfg):
 
 
 def test_forgetting_an_entry_takes_it_out_of_every_copy_of_the_memory_file(scripted):
-    """Left in a copy, the next rewind brings back what the caller asked to be forgotten."""
+    """Left in a copy, the next rewind brings back what the caller asked to be forgotten; and
+    a rewind puts a copy back byte for byte, so the entry is all that may leave it."""
     kf = _writing(scripted, memory_every=1)
     _writer_turn(kf, AIMessage(content="noted"), AIMessage(content="- Likes EUR"), turn_id="t1")
     (entry,) = kf.session("s").memory()
 
     kf.session("s").forget(entry.id)
 
-    assert "Likes EUR" not in _copy(scripted, "t1", "memory/AGENTS.md").read_text(
-        encoding="utf-8"
-    )
+    copy = _copy(scripted, "t1", "memory/AGENTS.md").read_text(encoding="utf-8")
+    assert "Likes EUR" not in copy
+    assert copy == (_session(scripted) / "memory" / "AGENTS.md").read_text(encoding="utf-8")
 
 
 def test_a_copy_loses_an_entry_by_its_id_and_by_what_it_says():
