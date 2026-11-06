@@ -4045,6 +4045,16 @@ file in memory, which is what a remote backend's `copy` avoids. A failed copy is
 with its reason and left unmarked in `artifacts.jsonl`, so the next turn copies the version
 if it is still there.
 
+**Read whole, a file the listing gives no mark is told unchanged by its contents**
+*(2026-11-06)*. On a backend listing names alone, as deepagents' sandboxes do, nothing
+told a file unchanged, so each was downloaded and uploaded again at every turn: a 1 MB
+report untouched after the first turn cost 1 MB each way a turn, and a copy a turn in the
+history. Downloaded for the copy anyway, its SHA-256 becomes its mark in `artifacts.jsonl`,
+and contents with the last turn's mark are not uploaded. That halves what an unchanged
+file moves and stops the history growing; only a listing with a mark moves nothing. The
+backend's own `copy` never hands kingfisher the bytes, so it still copies every turn. A
+file the listing marks keeps the listing's mark, since the two would never match.
+
 **A turn past its deadline when its copies begin makes none.** The claim expires at the
 deadline plus the longest superstep bound and the memory writer's (*The grace period has
 to cover a shell command*), so until the deadline at least that bound is left -- 120 s at

@@ -478,7 +478,7 @@ def test_a_backend_naming_no_host_path_keeps_copies_by_its_own_copy_or_whole(cfg
     assert asked == ({"/outputs/report.txt"} if kind is _RemoteCopying else set())
 
 
-class _NamesOnly(_RemoteCopying):
+class _NamesOnly(_Remote):
     """And lists files by name alone, as deepagents' sandboxes do: no checksum, size or
     time."""
 
@@ -491,10 +491,40 @@ class _NamesOnly(_RemoteCopying):
         return GlobResult(matches=bare, truncated=found.truncated)
 
 
+class _NamesOnlyCopying(_NamesOnly):
+    """And copies a file itself."""
+
+    copy = _RemoteCopying.copy
+
+
+@pytest.mark.parametrize("kind", [_NamesOnly, _Remote], ids=["names only", "with marks"])
+def test_an_unchanged_file_read_back_whole_is_not_copied_again(cfg, kind):
+    """On a backend listing names alone, an unchanged file was downloaded and uploaded again
+    at every turn, a copy each; and marked by its contents beside a listing that gives
+    marks, a file would read as changed at every turn after."""
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=_RemoteSessions(kind))
+    report = _session(cfg, start(cfg, "s")) / "outputs" / "report.bin"
+    report.write_bytes(b"a" * 1000)
+    _run(kf, "t1")
+    _run(kf, "t2")
+    # A size of its own, so no disk's clock can make the two versions look alike.
+    report.write_bytes(b"b" * 999)
+    _run(kf, "t3")
+
+    lines = _history(cfg)
+    assert "outputs/report.bin" in lines["t1"]["kept"]
+    assert "outputs/report.bin" not in lines["t2"].get("kept", {})
+    assert not _copy(cfg, "t2", "outputs/report.bin").exists()
+    assert _copy(cfg, "t3", "outputs/report.bin").read_bytes() == b"b" * 999
+    # Back to the turn that left it unchanged: put back from the copy the turn before kept.
+    kf.session("s").rewind("t2")
+    assert report.read_bytes() == b"a" * 1000
+
+
 def test_under_a_budget_no_copy_is_made_that_nothing_can_size(cfg, caplog):
     """Counted as nothing, the copies a backend made itself of files its listing gave no
     size for were never dropped: a session kept every one, whatever the budget said."""
-    budgeted, unbounded = _RemoteSessions(_NamesOnly), _RemoteSessions(_NamesOnly)
+    budgeted, unbounded = _RemoteSessions(_NamesOnlyCopying), _RemoteSessions(_NamesOnlyCopying)
     for session_id, sessions, budget in (("s", budgeted, 10_000), ("u", unbounded, None)):
         outputs = _session(cfg, start(cfg, session_id)) / "outputs"
         (outputs / "report.bin").write_bytes(b"r" * 100)
@@ -529,7 +559,7 @@ def test_a_listing_with_no_marks_is_warned_of_once_a_turn(cfg, caplog):
 
     (warned,) = [one.getMessage() for one in caplog.records if "no checksum" in one.getMessage()]
     # Not /memory: the memory file is told unchanged by its contents.
-    assert "files under /outputs, so each is copied again every turn" in warned
+    assert "files under /outputs, so each is read back every turn" in warned
     assert "jane-doe" not in caplog.text, "a file's name reached the log"
 
 

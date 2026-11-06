@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## An unchanged file read back whole is not copied again, after #1246
+
+- **On a backend with no `host_path` and no `copy`, a file your listing gives no
+  `checksum`, `size` or `modified_at` for is downloaded at every turn's end and uploaded
+  only when its contents changed.** Its mark in `.harness/artifacts.jsonl` is
+  `sha256 <hex>`. Before, it was uploaded again at every turn, and `.harness/files/` held a
+  copy of it a turn. A listing that gives a mark is not affected.
+
 ## A listing without marks is warned of, after #1245
 
 - **A turn warns `turn_files_unmarked`, once, where your backend's `glob` gave no
