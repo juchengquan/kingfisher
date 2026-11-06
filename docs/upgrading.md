@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A rewind removes no file it cannot put back, after #1243
+
+- **A file the turn rewound to did not have is removed only where a copy holds it as it
+  is now.** One with no copy -- larger than `KINGFISHER_REWIND_MAX_BYTES`, skipped past a
+  deadline, or on a backend whose listing gives no checksum, size or time -- stays, and is
+  named in `Rewound.not_restored` rather than `Rewound.restored`. A caller that took
+  `restored` to list every file a rewind removed reads `not_restored` as well.
+
 ## A save never begins on the only whole copy, after #1240
 
 - **The `.2` beside each `.harness` file is a full twin, and stays.** After a finished save

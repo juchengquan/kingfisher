@@ -4622,6 +4622,13 @@ kept no record: rewritten or removed on a guess, a file would be lost to every l
 rewind too. **Before the first turn nothing records the folders**, so a rewind to `START`
 leaves them all, and says so.
 
+**A file the turn did not have is removed only where a copy holds it as it is now**
+*(2026-11-06)*. A rewind deleted one with none -- too large for the budget, say -- and
+called it restored, so going forward again to the turn that made it found nothing to put
+back: it was gone from every branch. It is left and named in `Rewound.not_restored`, and
+the next turn is told it changed. "As it is now" is the mark the listing gives; a backend
+whose listing gives none keeps every such file.
+
 **The next turn is told which files are not as its conversation left them**, in its
 message, as `Changed since your last turn: /outputs/report.md.`, and as `May have
 changed` where nothing says. Its conversation remembers each file as the turn rewound to

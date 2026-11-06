@@ -403,6 +403,35 @@ def test_a_version_with_no_copy_is_left_and_the_next_turn_is_told_once(rewinding
     assert "Changed since your last turn" not in _asked()
 
 
+def test_a_file_the_turn_did_not_have_stays_when_no_copy_holds_it(rewinding):
+    """Removed with no copy of it kept -- never made, or dropped for space -- a file a later
+    turn made was lost on every branch: a rewind forward to that turn found nothing to put
+    back."""
+    cfg = replace(rewinding, rewind_max_bytes=100)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    outputs = _outputs(cfg)
+    (outputs / "notes.md").write_text("notes", encoding="utf-8")
+    first = _say(kf, "write notes", AIMessage("ok"))
+    (outputs / "video.bin").write_bytes(b"v" * 1000)
+    (outputs / "clip.bin").write_bytes(b"c" * 60)
+    _say(kf, "render them", AIMessage("ok"))
+    (outputs / "table.bin").write_bytes(b"t" * 90)
+    third = _say(kf, "tabulate", AIMessage("ok"))
+
+    back = kf.session("s").rewind(first.turn_id)
+
+    assert sorted(one.name for one in outputs.iterdir()) == ["clip.bin", "notes.md", "video.bin"]
+    for kept_by_nothing in ("outputs/video.bin", "outputs/clip.bin"):
+        assert "no copy of it as it is now" in back.not_restored[kept_by_nothing]
+    # The control: a file with a copy still goes.
+    assert "outputs/table.bin" in back.restored
+    forward = kf.session("s").rewind(third.turn_id)
+    assert (outputs / "video.bin").read_bytes() == b"v" * 1000
+    assert (outputs / "clip.bin").read_bytes() == b"c" * 60
+    assert (outputs / "table.bin").read_bytes() == b"t" * 90
+    assert "outputs/table.bin" in forward.restored
+
+
 def test_the_memory_file_and_what_the_writer_has_not_read_go_back(rewinding):
     """Left, the memory would keep what the caller rewound past, and the writer would
     save facts from turns no longer on the path."""
