@@ -3,12 +3,14 @@ here."""
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import shutil
 import sys
 import threading
 import uuid
+from contextlib import suppress
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -193,6 +195,27 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
         return self.runner is None or self.runner.local
 
     def execute(self, command: str, *, timeout: int | None = None) -> Any:
+        return self._execute(command, timeout=timeout)
+
+    async def aexecute(self, command: str, *, timeout: int | None = None) -> Any:
+        # No cancel stops the thread, but the command it runs can be ended: a stopped turn
+        # waits the milliseconds that takes rather than the whole command.
+        stop = threading.Event()
+        running = asyncio.ensure_future(
+            asyncio.to_thread(self._execute, command, timeout=timeout, stop=stop)
+        )
+        try:
+            return await asyncio.shield(running)
+        except asyncio.CancelledError:
+            stop.set()
+            while not running.done():
+                with suppress(asyncio.CancelledError):
+                    await asyncio.wait({running})
+            raise
+
+    def _execute(
+        self, command: str, *, timeout: int | None = None, stop: threading.Event | None = None
+    ) -> Any:
         if not command or not isinstance(command, str):
             return ExecuteResponse(
                 output="Error: Command must be a non-empty string.", exit_code=1, truncated=False
@@ -209,7 +232,10 @@ class ConfinedLocalShellBackend(UnlinkedBackend, LocalShellBackend):
                 timeout=bounded,
                 cwd=str(self.cwd),
                 max_output_bytes=self._max_output_bytes,
+                stop=stop,
             )
+        elif self.fence is not None and self.runner is self.fence:
+            outcome = self.fence.run(self.confinement.wrap(command), timeout=bounded, stop=stop)
         else:
             # A confinement is a prefix naming paths on *this* host: shipped elsewhere, it
             # fails looking like a broken remote shell rather than a wrong prefix.

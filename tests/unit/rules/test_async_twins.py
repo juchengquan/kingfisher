@@ -49,6 +49,12 @@ DIFFERS = {
     "core/agent/tool_guards.py:GuardedTool._arun": (
         "a wrapped tool with no async run of its own is run through its sync one"
     ),
+    "core/agent/middlewares/stopping.py:StoppingMiddleware.awrap_tool_call": (
+        "a cancel lets go of a call on a thread at once, which closing a sync stream does not"
+    ),
+    "plugins/sessions/shell.py:ConfinedLocalShellBackend.aexecute": (
+        "a cancel ends the command its thread runs, and nothing cancels a sync call"
+    ),
 }
 
 
