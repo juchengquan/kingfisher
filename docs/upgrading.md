@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A save never begins on the only whole copy, after #1240
+
+- **The `.2` beside each `.harness` file is a full twin, and stays.** After a finished save
+  both copies hold the same bytes; a read takes the first whose last line, its SHA-256,
+  matches. Nothing to clean up, and nothing to migrate.
+- **A save writes last the copy a read is answered from**, where it always wrote `.2`
+  first. Only a session whose previous save stopped partway sees a difference: its next
+  save no longer risks the one copy left whole.
+
 ## Six files under `.harness` are named `.jsonl`, after #1239
 
 - **`off_path.json`, `rewound.json`, `paused.json`, `memory_writer.json`, `inputs.json`
