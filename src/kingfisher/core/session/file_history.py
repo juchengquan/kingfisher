@@ -569,6 +569,9 @@ def restore_state(
 #: Why a file has no version to go back to, where no copy failed but a record is missing.
 NO_RECORD = "no record says what the folders held when that turn ended"
 BEFORE_FIRST = "nothing records what the folders held before the first turn"
+NOT_THEN_NO_COPY = (
+    "that turn did not have it, and with no copy of it as it is now, removing it would lose it"
+)
 
 
 def restore_files(
@@ -582,8 +585,9 @@ def restore_files(
     paths put back, a file that turn did not have removed among them, and each path that
     could not be, with why.
 
-    A file whose version there is unknown is left as it is: removed or rewritten on a
-    guess, it would be lost to every later rewind as well.
+    A file whose version there is unknown is left as it is, and so is one that turn did not
+    have when no copy holds it as it is now: removed or rewritten, either would be lost to
+    every later rewind as well.
     """
     now = yield from artifacts_seen(files, layout)
     if now is None:
@@ -591,12 +595,16 @@ def restore_files(
     held = _held_at(records, path)
     if held is None:
         return (), dict.fromkeys(sorted(now), NO_RECORD if path else BEFORE_FIRST)
+    copied = _copied_versions(records)
     restored: list[str] = []
     not_restored: dict[str, str] = {}
     for where in sorted({*held, *now}):
         if where not in held:
-            yield changing(files, "delete", f"/{where}")
-            restored.append(where)
+            if (where, now[where][0]) in copied:
+                yield changing(files, "delete", f"/{where}")
+                restored.append(where)
+            else:
+                not_restored[where] = NOT_THEN_NO_COPY
             continue
         under, mark, why = held[where]
         if where in now and mark is not None and now[where][0] == mark:
@@ -617,6 +625,17 @@ def restore_files(
         listed = {one: mark for one, (mark, _) in after.items()}
         yield from write_listing(harness, ARTIFACTS_SEEN, listed)
     return tuple(restored), not_restored
+
+
+def _copied_versions(records: list[dict[str, Any]]) -> set[tuple[str, str]]:
+    """Each `(path, mark)` a copy still holds, which some rewind can put back."""
+    return {
+        (path, mark)
+        for record in records
+        if _under(record) is not None
+        for path, kept in _entries(record, KEPT).items()
+        if kept.get(DROPPED_IN) is None and isinstance(mark := kept.get(MARK), str)
+    }
 
 
 def _held_at(
