@@ -21,6 +21,7 @@ from kingfisher.core.request import Request
 from kingfisher.core.session.files import InputsChanged
 from kingfisher.core.session.provider_errors import refused_credentials, refused_request
 from kingfisher.core.session.steps import drive
+from kingfisher.core.session.transcript import joined
 from kingfisher.core.session.turn import turn_message
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
@@ -288,7 +289,7 @@ def test_a_bare_task_is_told_only_where_to_work():
     """A task with nothing new in its inputs would reach the model with lines about
     files that did not change, or without the line saying where it may work.
     """
-    message = turn_message("do a thing", InputsChanged(), layout=DEFAULT_LAYOUT)
+    message = joined(turn_message("do a thing", InputsChanged(), layout=DEFAULT_LAYOUT))
 
     assert message == (
         "do a thing\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
@@ -297,29 +298,41 @@ def test_a_bare_task_is_told_only_where_to_work():
 
 def test_a_note_follows_the_task_and_comes_before_kingfishers_own_lines():
     """A note after the scratch line or the new files reads as more about where to work,
-    and one ahead of the task puts the caller's aside before what was asked.
+    and one ahead of the task puts the caller's aside before what was asked; and a piece
+    credited to the wrong author shows a reader of the log kingfisher's lines, or the
+    deployment's note, as what the person typed.
     """
-    message = turn_message(
+    parts = turn_message(
         "analyse",
         InputsChanged(new=("fresh.csv",)),
         layout=DEFAULT_LAYOUT,
         note="Figures are in euros.",
     )
 
-    assert message == (
+    assert joined(parts) == (
         "analyse\n\nFigures are in euros.\n\n"
         "/scratchpad/ is yours to work in (from the shell, scratchpad)."
         " New files in /inputs/: fresh.csv."
     )
+    assert [(part.by, part.text) for part in parts] == [
+        ("user", "analyse"),
+        ("caller", "\n\nFigures are in euros."),
+        (
+            "kingfisher",
+            "\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
+            " New files in /inputs/: fresh.csv.",
+        ),
+    ]
 
 
 def test_an_empty_note_leaves_the_message_as_it_was():
     """The control: a turn without a note that gained so much as a blank line would send
     a different message from every turn before it.
     """
-    message = turn_message("do a thing", InputsChanged(), layout=DEFAULT_LAYOUT, note="")
+    parts = turn_message("do a thing", InputsChanged(), layout=DEFAULT_LAYOUT, note="")
 
-    assert message == (
+    assert [part.by for part in parts] == ["user", "kingfisher"]
+    assert joined(parts) == (
         "do a thing\n\n/scratchpad/ is yours to work in (from the shell, scratchpad)."
     )
 

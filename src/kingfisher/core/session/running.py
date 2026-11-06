@@ -55,6 +55,7 @@ from .store import (
     write_transcript,
 )
 from .threads import finished
+from .transcript import joined
 from .turn import (
     Prepared,
     decision_needed,
@@ -245,8 +246,9 @@ class Running:
         messages = runtime.as_seen(snapshot)
         return runtime.as_transcript(messages) if messages else ()
 
-    def _record_transcript(self, prepared: Prepared, snapshot: Any) -> Steps[None]:
-        """Write what was said this turn, as records this package owns."""
+    def _record_transcript(self, prepared: Prepared, snapshot: Any, *, answer: str) -> Steps[None]:
+        """Write what was said this turn, as records this package owns, and in the log the
+        answer the caller is handed."""
         written = self._transcript_of(snapshot)
         if written:
             # After the ledger and before the transcript: a write dying between leaves the
@@ -254,11 +256,12 @@ class Running:
             yield from keep_turns(
                 prepared.harness,
                 turn=prepared.turn.id,
-                task=prepared.task,
+                parts=prepared.message,
                 history=prepared.history,
                 resumed=prepared.resuming,
                 snapshot=snapshot,
                 ledger=prepared.ledger.earlier if prepared.ledger is not None else None,
+                answer=answer,
             )
             yield from write_transcript(prepared.harness, written)
             # Only with the message saying so: kept by a turn the agent never heard from,
@@ -398,7 +401,10 @@ class Running:
                     answer_chars=len(turn.answer),
                     stop_reason=stopped,
                 )
-            yield from self._record_transcript(prepared, snapshot)
+            # Normalised by `_turn_outcome` already; a turn that raised hands back none.
+            yield from self._record_transcript(
+                prepared, snapshot, answer=turn.answer if turn.ok else ""
+            )
             try:
                 yield from self._keep_memory(turn, snapshot)
             finally:
@@ -444,7 +450,7 @@ class Running:
         the stopped node with, rather than asking the same question again."""
         if turn.prepared.resume is not None:
             return turn.prepared.resume
-        return runtime.user_payload(turn.prepared.message, turn.prepared.history)
+        return runtime.user_payload(joined(turn.prepared.message), turn.prepared.history)
 
     def _driving(self, turn: _Turn) -> dict[str, Any]:
         """The keywords both graph streams are driven with, shared so neither loses

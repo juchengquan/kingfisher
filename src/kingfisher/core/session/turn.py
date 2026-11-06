@@ -13,6 +13,7 @@ from kingfisher.core.layout import Layout
 from kingfisher.core.result import LedgerEntry, MemoryEntry, PendingDecision, RunEvent
 
 from . import runtime
+from .transcript import Part
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -34,7 +35,9 @@ class Prepared:
     """Everything a turn needs before the model is reached, once nothing can refuse it."""
 
     graph: Any
-    message: str
+    #: The turn's message as the model is sent it once joined, each piece naming who wrote
+    #: it; none for a resume.
+    message: tuple[Part, ...]
     session: Conversation
     turn: Turn
     logger: RunLogger
@@ -115,15 +118,16 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
     note: str = "",
     unavailable: tuple[str, ...] = (),
     drift: Drift | None = None,
-) -> str:
-    """The task and the caller's note, plus this turn's facts and nothing more.
+) -> tuple[Part, ...]:
+    """The task and the caller's note, plus this turn's facts and nothing more, each
+    piece naming who wrote it.
 
     `earlier` is the ledger as the turn found it, or `None` for a graph the deployment
     supplied, which records nothing.
     """
     # Beside the task, as the caller wrote it: it is the caller's, and kingfisher's lines
     # after it are about where the work is done.
-    noted = f"{note}\n\n" if note else ""
+    noted = (Part(f"\n\n{note}", "caller"),) if note else ()
     arrived = _inputs_changed(changed, layout.inputs_route)
     # Each call the conversation shows invites another; refused, it costs a model call,
     # and on MiniMax-M3 one agent said it had re-read a file it no longer could.
@@ -139,13 +143,13 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
     # agent passed the virtual path to `execute` in 4 runs of 10, each failure costing
     # about three times the whole task.
     return (
-        f"{task}\n\n"
-        f"{noted}"
-        f"{layout.scratch_route} is yours to work in (from the shell, {layout.scratchpad})."
-        f"{arrived}"
-        f"{drifted}"
-        f"{lacking}"
-        f"{ledger}"
+        Part(task, "user"),
+        *noted,
+        Part(
+            f"\n\n{layout.scratch_route} is yours to work in (from the shell, "
+            f"{layout.scratchpad}).{arrived}{drifted}{lacking}{ledger}",
+            "kingfisher",
+        ),
     )
 
 

@@ -7,12 +7,31 @@ has no record of the agent's own work, so it redoes it and cannot refer to it.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 #: Who said it: only the roles a provider's wire format has, so nothing reading these
 #: has to translate one.
 Role = Literal["system", "user", "assistant", "tool"]
+
+#: Who wrote a piece of a turn's message: the person asking, in the request's `task`; the
+#: deployment, in its `note`; or kingfisher, in everything it adds.
+Author = Literal["user", "caller", "kingfisher"]
+
+
+@dataclass(frozen=True)
+class Part:
+    """One piece of a turn's message and who wrote it, `None` where nothing can say."""
+
+    text: str
+    by: Author | None = None
+
+
+def joined(parts: Sequence[Part]) -> str:
+    """The message the pieces make: each carries the separator that opens it, so nothing
+    goes between them."""
+    return "".join(part.text for part in parts)
 
 
 @dataclass(frozen=True)
@@ -63,10 +82,15 @@ def as_record(message: Message) -> dict[str, Any]:
 
 
 def from_record(raw: Any) -> Message:
-    """What `as_record` wrote, read back. `KeyError` or `TypeError` where it is not one."""
+    """What `as_record` wrote, or a turn log's message kept as `parts`, read back.
+    `KeyError` or `TypeError` where it is neither."""
+    role = raw["role"]
+    parts = raw.get("parts")
     return Message(
-        role=raw["role"],
-        content=raw.get("content", ""),
+        role=role,
+        content="".join(part["text"] for part in parts)
+        if parts is not None
+        else raw.get("content", ""),
         tool_calls=tuple(
             ToolCall(name=call["name"], args=call.get("args", {}), id=call.get("id", ""))
             for call in raw.get("tool_calls", ())

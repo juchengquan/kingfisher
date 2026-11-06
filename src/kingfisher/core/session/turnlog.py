@@ -17,11 +17,12 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.agent.middlewares.recorded import expired_handle, stamped_id
 from kingfisher.core.layout import TURNS_FILE
+from kingfisher.core.logged import warn
 
 from . import runtime
 from .steps import Steps
 from .store import RESUMED, HarnessFiles, KeptLedger, read_off_path
-from .transcript import Message, as_record, from_record
+from .transcript import Message, Part, as_record, from_record, joined
 
 if TYPE_CHECKING:
     from kingfisher.core.request import Decision
@@ -30,10 +31,6 @@ if TYPE_CHECKING:
 #: On a turn's opening line, the turn it followed: `null` for the first, and for the first
 #: after a rewind to the start.
 PARENT = "parent"
-
-#: On an asked turn's opening line, the task as the caller wrote it: the message the model
-#: was sent also carries what kingfisher told it, which sending the task again adds anew.
-TASK = "task"
 
 #: On an asked turn's opening line, how many of its parent's messages it began from. Fewer
 #: than its parent left where the transcript was found short; replayed whole, the turn
@@ -47,6 +44,18 @@ CUT = "cut"
 #: On a resume's line for one answer: the decision as the pause named it, a position in the
 #: pause and not a call; `call_id` beside it is the call it answered.
 DECISION = "decision"
+
+#: Beside `decision`: what the person answered, as `Decision.action` names it. Not
+#: `answer`, which on a line of its own is what the caller was handed.
+ACTION = "action"
+
+#: On an asked turn's message, in place of its `content`: the pieces it was sent as, each
+#: with `by` naming who wrote it, which joined in order are what the model read.
+PARTS = "parts"
+
+#: On a turn's last line, which has no `role`: the answer the caller was handed, written
+#: even when empty, so a reader never takes it from the last assistant line.
+ANSWER = "answer"
 
 
 @dataclass(frozen=True)
@@ -74,7 +83,7 @@ def resuming(graph: Any, config: Any, saver: Any, decisions: Sequence[Decision])
         held=len(runtime.held_in(paused)),
         carried=_identity(runtime.summary_in(paused)),
         answered=tuple(
-            {DECISION: one.call_id, "call_id": calls.get(one.call_id), "answer": one.action}
+            {DECISION: one.call_id, "call_id": calls.get(one.call_id), ACTION: one.action}
             for one in decisions
         ),
     )
@@ -89,26 +98,30 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     turn: str,
     parent: str | None,
     *,
-    task: str,
+    parts: Sequence[Part],
     history: int,
     resumed: Resuming | None,
     snapshot: Any,
+    answer: str,
 ) -> list[dict[str, Any]]:
-    """This turn's lines: its opening, a resume's answers, the messages it added and the
-    summary it ended on. `history` is how many messages its transcript held as it began,
-    `resumed` set for a resume.
+    """This turn's lines: its opening, a resume's answers, the messages it added, the
+    summary it ended on and its answer. `history` is how many messages its transcript held
+    as it began, `resumed` set for a resume.
     """
     held = runtime.held_in(snapshot)
     if resumed is None:
-        opening: dict[str, Any] = {"turn": turn, PARENT: parent, TASK: task, FROM: history}
+        opening: dict[str, Any] = {"turn": turn, PARENT: parent, FROM: history}
         began, carried = history, None
     else:
         opening = {"turn": turn, PARENT: parent, RESUMED: True}
         began, carried = resumed.held, resumed.carried
+    added = [as_record(one) for one in runtime.as_transcript(held[began:])]
+    if resumed is None:
+        _with_parts(added, parts, turn)
     lines = [
         opening,
         *({"turn": turn, **answer} for answer in (resumed.answered if resumed else ())),
-        *({"turn": turn, **as_record(one)} for one in runtime.as_transcript(held[began:])),
+        *({"turn": turn, **one} for one in added),
     ]
     summary = runtime.summary_in(snapshot)
     if summary is not None and _identity(summary) != carried:
@@ -122,7 +135,33 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
             else len(runtime.as_transcript(held[:cut]))
         )
         lines.append({"turn": turn, **as_record(said), CUT: at})
+    lines.append({"turn": turn, ANSWER: answer})
     return lines
+
+
+def _with_parts(added: list[dict[str, Any]], parts: Sequence[Part], turn: str) -> None:
+    """Keep the turn's message, the first user line in `added`, as the pieces it was sent
+    as. Not always first: deepagents answers a superseded pause's calls ahead of it."""
+    at = next((n for n, one in enumerate(added) if one["role"] == "user"), None)
+    if at is None:
+        return
+    said = added[at].get("content", "")
+    if said != joined(parts):
+        # The state is what the model read: pieces it no longer matches would rebuild a
+        # conversation nobody had.
+        warn(
+            "message_rewritten",
+            f"turn {turn}'s message was changed after kingfisher wrote it, so its log "
+            "line names no author",
+        )
+        parts = (Part(said),)
+    added[at] = {
+        "role": "user",
+        PARTS: [
+            {"by": part.by, "text": part.text} if part.by is not None else {"text": part.text}
+            for part in parts
+        ],
+    }
 
 
 def _without_expired(
@@ -161,11 +200,12 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
     harness: HarnessFiles,
     *,
     turn: str,
-    task: str,
+    parts: Sequence[Part],
     history: Sequence[Message],
     resumed: Resuming | None,
     snapshot: Any,
     ledger: KeptLedger | None,
+    answer: str,
 ) -> Steps[None]:
     """Add this turn to the log. `ledger` is the ledger as this turn writes it back, or
     `None` where it keeps none.
@@ -191,7 +231,13 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
         None,
     )
     added = _turn_lines(
-        turn, parent, task=task, history=len(history), resumed=resumed, snapshot=snapshot
+        turn,
+        parent,
+        parts=parts,
+        history=len(history),
+        resumed=resumed,
+        snapshot=snapshot,
+        answer=answer,
     )
     written = [raw for raw, _ in lines] + [json.dumps(one, ensure_ascii=False) for one in added]
     yield from harness.store(TURNS_FILE, ("\n".join(written) + "\n").encode("utf-8"))
@@ -222,6 +268,17 @@ def by_turn(lines: Sequence[dict[str, Any]]) -> Logged:
         elif line.get("turn") in turns:
             turns[line["turn"]][1].append(line)
     return turns
+
+
+def task_of(body: Sequence[dict[str, Any]]) -> str | None:
+    """What the person asked in a turn: its message's `user` pieces joined, or `None` where
+    it has none -- a resume, a conversation an older version imported, a message rewritten
+    after it was sent."""
+    message = next((line for line in body if PARTS in line), None)
+    asked = [
+        part["text"] for part in (message or {}).get(PARTS, ()) if part.get("by") == "user"
+    ]
+    return "".join(asked) if asked else None
 
 
 def path_to(turns: Logged, target: str) -> tuple[list[str], bool]:

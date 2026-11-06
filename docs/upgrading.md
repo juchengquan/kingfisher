@@ -18,6 +18,27 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The turn log says who wrote each piece of the message, after #1236
+
+- **A turn's message is kept in `.harness/turns.jsonl` as `parts`, not `content`**:
+  `{"turn": "t1", "role": "user", "parts": [{"by": "user", "text": "..."}, ...]}`, in the
+  order sent. `by` is `user` for the request's `task`, `caller` for its `note` and
+  `kingfisher` for the lines kingfisher adds. Joined with nothing between them, the texts
+  are what the model was sent: each carries the separator that opens it. A piece with no
+  `by` is a message something rewrote in the graph's state after kingfisher wrote it,
+  which also raises a `message_rewritten` warning. Every other line keeps `content`.
+- **Each turn's last line is `{"turn": "t1", "answer": "..."}`**, with no `role`: the
+  `RunResult.answer` the caller was handed, empty for a turn paused at a gate or one that
+  raised. It is the only line with an `answer`.
+- **A resume's line for each decision names what was answered `action`, not `answer`**:
+  `{"turn": "t2", "decision": "...", "call_id": "...", "action": "approve"}`, as
+  `Decision.action` names it.
+- **The opening line no longer has `task`.** `TurnRecord.task` is now the turn's `user`
+  pieces joined, so it never includes the note, and is `None` for a resume and for a
+  rewritten message.
+- **Logs written before keep their lines as they are** and rebuild as before, but
+  `TurnRecord.task` is `None` for their turns, whose opening `task` is no longer read.
+
 ## `TurnRecord.imported` is gone, and a rewind stops where the turn log began, after #1235
 
 - **`TurnRecord` has no `imported`**, and `kingfisher turns` labels no turn `imported`.

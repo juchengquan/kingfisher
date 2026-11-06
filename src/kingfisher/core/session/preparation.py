@@ -553,7 +553,7 @@ class Preparation:
             history=history,
             ledger=ledger,
             # Written once the inputs are placed, which this must not wait for.
-            message="",
+            message=(),
             session=session,
             turn=turn,
             logger=logger,
