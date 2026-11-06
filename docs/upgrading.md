@@ -18,6 +18,25 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Six files under `.harness` are named `.jsonl`, after #1239
+
+- **`off_path.json`, `rewound.json`, `paused.json`, `memory_writer.json`, `inputs.json`
+  and `artifacts.json` are `off_path.jsonl`, `rewound.jsonl`, `paused.jsonl`,
+  `memory_writer.jsonl`, `inputs.jsonl` and `artifacts.jsonl`**, with their second
+  copies beside them as `inputs.jsonl.2`, and so for each turn's copies under
+  `.harness/files/<turn>/.state/`. Since #1232 each ends in a `{"sha256": "..."}` line
+  after the value it holds, which `json.load` and `jq` refuse; a reader of yours takes
+  every line but the last. `paused.state` keeps its name.
+- **A session from before is not read under the old names, and nothing renames them.**
+  Its next turn finds no listing of `/inputs` or of the artifact folders, so it names
+  every input as new and copies every artifact again; its memory writer has nothing
+  unread; a turn paused at an approval is not waiting, so it cannot be resumed; and a
+  rewind's leftovers are forgotten, so the abandoned branch's results are listed beside
+  the path's, and a session rewound with no turn since continues from the last turn it
+  ran rather than the one it was put back to. A rewind to a turn from before puts back
+  neither listing nor the writer's state, since `files.jsonl` names those copies by the
+  old names. The old files are never read again, and you may delete them.
+
 ## A turn's opening line in the turn log has no `from`, after #1238
 
 - **`{"turn": ..., "parent": ...}` is the whole opening line of an asked turn.** `from`,

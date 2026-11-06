@@ -79,22 +79,22 @@ TURNS_FILE = "turns.jsonl"
 #: The turns a rewind left behind, as a list of ids. Their lines stay in the ledger and the
 #: turn log so a rewind can return to them; written by a rewind alone, so a session that
 #: never rewound has none.
-OFF_PATH_FILE = "off_path.json"
+OFF_PATH_FILE = "off_path.jsonl"
 #: Which files a rewind could not put back, until the next turn that tells the agent has
 #: written its conversation: what the agent remembers of them is no longer what is there.
-REWOUND_FILE = "rewound.json"
+REWOUND_FILE = "rewound.jsonl"
 #: Written only by a turn stopped at an approval gate, deleted once answered or superseded.
 PAUSED_STATE = "paused.state"
 #: What the paused checkpoint was built against and is waiting on, and its presence is what
 #: says a session is waiting, so it is written after the state. Apart from it so it is
 #: readable when a checkpoint written by libraries that have since moved is not.
-PAUSED_MARK = "paused.json"
+PAUSED_MARK = "paused.jsonl"
 #: What the memory writer has not yet read, and how many turns since it last ran. Here,
 #: not under `/memory`, so the agent cannot put words in the user's mouth for it.
-MEMORY_WRITER = "memory_writer.json"
+MEMORY_WRITER = "memory_writer.jsonl"
 #: Each file in the inputs folder as the last turn the agent heard from found it. Here,
 #: because a caller may write the inputs folder directly, and nothing else knows its past.
-INPUTS_SEEN = "inputs.json"
+INPUTS_SEEN = "inputs.jsonl"
 #: A copy of each version of a file in the artifact folders that a turn left, as
 #: `files/<turn's folder>/<path in the session>`. Here, so the agent cannot rewrite the
 #: past a session is put back to.
@@ -104,7 +104,7 @@ KEPT_FILES = "files"
 FILE_HISTORY = "files.jsonl"
 #: Each file in the artifact folders as the last turn left it, so the next copies only what
 #: changed.
-ARTIFACTS_SEEN = "artifacts.json"
+ARTIFACTS_SEEN = "artifacts.jsonl"
 
 #: The folder name a catalogue may not use for its own skills, because a
 #: subagent's bundled skills already mean something under this root.

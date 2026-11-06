@@ -84,7 +84,7 @@ FOLDERS = {
 HISTORY = "conversation_history"
 HARNESS = ".harness"
 TURNS = "turns.jsonl"
-OFF_PATH = "off_path.json"
+OFF_PATH = "off_path.jsonl"
 #: `.harness` files with a part of their own: `agent.yaml` is the pin a session kept before
 #: every call named its agent, read for the name it held.
 HARNESS_PARTS = {TURNS: "turn log", "ledger.jsonl": "ledger", "agent.yaml": "pinned agent"}
@@ -413,7 +413,7 @@ def _read_pin(harness: Path, s: Session) -> None:
 
 
 def _read_memory(memory: Path, harness: Path, s: Session) -> None:
-    writer = harness / "memory_writer.json"
+    writer = harness / "memory_writer.jsonl"
     memory_file = memory / "AGENTS.md"
     # The writer's file, not the memory file: every session is made with one of those.
     s.memory_on = writer.is_file()
