@@ -29,7 +29,10 @@ replaced the four layers began.
   which also raises a `message_rewritten` warning. Every other line keeps `content`.
 - **Each turn's last line is `{"turn": "t1", "answer": "..."}`**, with no `role`: the
   `RunResult.answer` the caller was handed, empty for a turn paused at a gate or one that
-  raised. A resume's lines for its decisions also carry `answer`, beside `decision`.
+  raised. It is the only line with an `answer`.
+- **A resume's line for each decision names what was answered `action`, not `answer`**:
+  `{"turn": "t2", "decision": "...", "call_id": "...", "action": "approve"}`, as
+  `Decision.action` names it.
 - **The opening line no longer has `task`.** `TurnRecord.task` is now the turn's `user`
   pieces joined, so it never includes the note, and is `None` for a resume and for a
   rewritten message.

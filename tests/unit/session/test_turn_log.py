@@ -23,7 +23,7 @@ from kingfisher.core.layout import HARNESS, LEDGER_FILE, TRANSCRIPT_FILE, TURNS_
 from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.core.result import AWAITING
 from kingfisher.core.session.transcript import Message, from_json, from_record
-from kingfisher.core.session.turnlog import ANSWER, CUT, FROM, PARENT, PARTS
+from kingfisher.core.session.turnlog import ACTION, ANSWER, CUT, FROM, PARENT, PARTS
 from kingfisher.plugins import LocalSessions
 from tests.conftest import (
     EVERY_TOOL,
@@ -236,7 +236,8 @@ def test_a_turn_that_found_its_conversation_short_is_logged_from_where_it_began(
 def test_each_answer_names_the_call_it_answered_and_not_its_place_in_the_pause(logged):
     """A decision's id is a position among the gated calls, which the ungated call ahead
     of them shifts away from the reply's own order; an answer logged against the wrong
-    call says a person approved what they refused."""
+    call says a person approved what they refused. Keyed `answer`, a decision reads to a
+    reader of the log as an answer the turn handed back."""
     kf = Kingfisher(logged, sessions=LocalSessions())
     paused = _say(
         kf,
@@ -258,8 +259,12 @@ def test_each_answer_names_the_call_it_answered_and_not_its_place_in_the_pause(l
 
     answers = [line for line in _lines(logged) if "decision" in line]
     assert answers == [
-        {"turn": resumed.turn_id, "decision": second, "call_id": "gb", "answer": "approve"},
-        {"turn": resumed.turn_id, "decision": first, "call_id": "ga", "answer": "reject"},
+        {"turn": resumed.turn_id, "decision": second, "call_id": "gb", ACTION: "approve"},
+        {"turn": resumed.turn_id, "decision": first, "call_id": "ga", ACTION: "reject"},
+    ]
+    assert [line for line in _lines(logged) if ANSWER in line] == [
+        {"turn": paused.turn_id, ANSWER: paused.answer},
+        {"turn": resumed.turn_id, ANSWER: "done"},
     ]
     assert _replayed(_lines(logged)) == _transcript(logged)
 

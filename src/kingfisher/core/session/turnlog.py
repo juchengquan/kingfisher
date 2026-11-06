@@ -45,6 +45,10 @@ CUT = "cut"
 #: pause and not a call; `call_id` beside it is the call it answered.
 DECISION = "decision"
 
+#: Beside `decision`: what the person answered, as `Decision.action` names it. Not
+#: `answer`, which on a line of its own is what the caller was handed.
+ACTION = "action"
+
 #: On an asked turn's message, in place of its `content`: the pieces it was sent as, each
 #: with `by` naming who wrote it, which joined in order are what the model read.
 PARTS = "parts"
@@ -79,7 +83,7 @@ def resuming(graph: Any, config: Any, saver: Any, decisions: Sequence[Decision])
         held=len(runtime.held_in(paused)),
         carried=_identity(runtime.summary_in(paused)),
         answered=tuple(
-            {DECISION: one.call_id, "call_id": calls.get(one.call_id), "answer": one.action}
+            {DECISION: one.call_id, "call_id": calls.get(one.call_id), ACTION: one.action}
             for one in decisions
         ),
     )

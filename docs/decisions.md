@@ -4417,7 +4417,9 @@ cut is recounted into what the log replays -- records rather than messages, sinc
 transcript drops a role it does not know, and from the summary a resume carried -- and a
 resume ending on the summary it carried logs none, since the paused turn did.
 
-**A resume's line for each answer names the call it answered.** A decision's id is
+**A resume's line for each answer names the call it answered**, as `{"turn": ...,
+"decision": ..., "call_id": ..., "action": ...}`, `action` as `Decision.action` names it,
+so that `answer` is only ever a turn's answer. A decision's id is
 `<interrupt>#n`, a position among the calls one pause gated, and the gate names no call by
 id; so each is matched to the next call of its name and arguments in the reply it stopped,
 which for a subagent is read from the subagent's own checkpoint. With the turn on every
@@ -4490,8 +4492,8 @@ learn to skip them.
 turn's `user` pieces joined, and `None` for a resume and for a message rewritten in the
 state, whose author nothing can name.
 
-**Each turn's last line is its answer**, `{"turn": ..., "answer": ...}` with no `role`
-and no `decision`, as `RunResult.answer` returns it, `<think>` blocks stripped, and
+**Each turn's last line is its answer**, `{"turn": ..., "answer": ...}` with no `role`,
+the only line with an `answer`, as `RunResult.answer` returns it, `<think>` blocks stripped, and
 written when empty: a turn paused at a gate, and one that raised, which hands back none.
 A reader working the answer out from the last assistant line would show the block the
 caller never saw, and a failed turn's last words as an answer it never gave. With no
