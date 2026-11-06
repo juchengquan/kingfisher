@@ -1113,6 +1113,8 @@ def _turns(args: argparse.Namespace) -> int:
             print(f"    removed {name}")
         for name, why in turn.files.without_copy.items():
             print(f"    no copy of {name}: {why}")
+        for folder in turn.files.unrecorded:
+            print(f"    {folder} not recorded")
     return 0
 
 

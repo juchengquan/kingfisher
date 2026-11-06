@@ -39,7 +39,7 @@ from kingfisher.core.layout import (
 from kingfisher.core.request import Decision, DecisionError
 from kingfisher.core.result import AWAITING
 from kingfisher.core.session import preparation
-from kingfisher.core.session.file_history import OVER_BUDGET, dropped_for_space
+from kingfisher.core.session.file_history import COPIES_OFF, OVER_BUDGET, dropped_for_space
 from kingfisher.plugins import LocalSessions
 from tests.conftest import (
     EVERY_TOOL,
@@ -430,6 +430,55 @@ def test_a_file_the_turn_did_not_have_stays_when_no_copy_holds_it(rewinding):
     assert (outputs / "clip.bin").read_bytes() == b"c" * 60
     assert (outputs / "table.bin").read_bytes() == b"t" * 90
     assert "outputs/table.bin" in forward.restored
+
+
+def test_at_a_budget_of_0_a_rewind_leaves_the_folder_and_says_it_may_have_changed(rewinding):
+    """At 0 nothing records the files in /outputs: put back by a guess they would be lost,
+    and named file by file the next turn's message grows with the folder. The memory
+    file, still kept, has to come back."""
+    cfg = replace(rewinding, rewind_max_bytes=0)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    outputs = _outputs(cfg)
+    memory = outputs.parent / "memory" / "AGENTS.md"
+    memory.write_text("- Prefers tables\n", encoding="utf-8")
+    (outputs / "plan.md").write_text("v1", encoding="utf-8")
+    first = _say(kf, "plan it", AIMessage("ok"))
+    memory.write_text("- Prefers tables\n- Is Bob\n", encoding="utf-8")
+    (outputs / "plan.md").write_text("v2", encoding="utf-8")
+    (outputs / "chart.png").write_bytes(b"png")
+    _say(kf, "chart it", AIMessage("ok"))
+
+    done = kf.session("s").rewind(first.turn_id)
+
+    assert (outputs / "plan.md").read_text(encoding="utf-8") == "v2"
+    assert (outputs / "chart.png").read_bytes() == b"png"
+    assert memory.read_text(encoding="utf-8") == "- Prefers tables\n"
+    assert dict(done.not_restored) == {"outputs": COPIES_OFF}
+    (record,) = (one for one in kf.session("s").turns() if one.id == first.turn_id)
+    assert record.files is not None
+    assert record.files.unrecorded == ("memory", "outputs")
+    Scripted.heard.clear()
+    _say(kf, "and now?", AIMessage("ok"))
+    assert "May have changed since your last turn: /outputs." in _asked()
+
+
+def test_once_copies_resume_a_rewind_puts_the_files_back_again(rewinding):
+    """A turn at 0 left the folders unknown to every rewind after it, though the turn that
+    resumed copying named every file in them."""
+    kf_off = Kingfisher(replace(rewinding, rewind_max_bytes=0), sessions=LocalSessions())
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    report = _outputs(rewinding) / "report.md"
+    report.write_text("v1", encoding="utf-8")
+    _say(kf_off, "write it", AIMessage("ok"))
+    report.write_text("v2", encoding="utf-8")
+    resumed = _say(kf, "rewrite it", AIMessage("ok"))
+    report.write_text("v3", encoding="utf-8")
+    _say(kf, "and again", AIMessage("ok"))
+
+    done = kf.session("s").rewind(resumed.turn_id)
+
+    assert report.read_text(encoding="utf-8") == "v2"
+    assert "outputs/report.md" in done.restored
 
 
 def test_the_memory_file_and_what_the_writer_has_not_read_go_back(rewinding):

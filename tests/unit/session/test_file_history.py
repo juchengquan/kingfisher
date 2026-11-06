@@ -171,6 +171,44 @@ def test_an_unchanged_memory_file_is_not_copied_where_the_listing_gives_no_mark(
     assert _copy(cfg, "t3", "memory/AGENTS.md").read_text(encoding="utf-8") == "- A\n- B\n"
 
 
+def test_at_a_budget_of_0_nothing_the_agent_made_is_listed_or_copied(cfg, monkeypatch):
+    """At 0 a deployment that never rewinds still had every file in /outputs listed, and on a
+    backend listing no sizes read back and written again, at every turn; the copies kept
+    before it went to 0 stayed; and once copies resumed, a file unchanged since was never
+    copied again, though its only copy had gone."""
+    listing, listed = file_history.artifacts_seen, []
+
+    def counted(*args):
+        listed.append(args)
+        return (yield from listing(*args))
+
+    monkeypatch.setattr(file_history, "artifacts_seen", counted)
+    session = _session(cfg, start(cfg, "s"))
+    memory, report = session / "memory" / "AGENTS.md", session / "outputs" / "report.txt"
+    on = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+    off = Kingfisher(replace(cfg, rewind_max_bytes=0), graph=StubAgent("ok"),
+                     sessions=LocalSessions())
+    memory.write_text("- A\n", encoding="utf-8")
+    report.write_text("one", encoding="utf-8")
+    _run(on, "t1")
+    listed.clear()
+    _run(off, "t2")
+    assert listed == [], "a turn at 0 listed the folders"
+    _run(on, "t3")
+    memory.write_text("- A\n- B\n", encoding="utf-8")
+    _run(off, "t4")
+
+    lines = _history(cfg)
+    assert lines["t2"]["unlisted"] == ["memory", "outputs"]
+    assert "kept" not in lines["t2"] and "removed" not in lines["t2"]
+    assert lines["t1"]["kept"]["outputs/report.txt"]["dropped_in"] == "t2"
+    assert not _copy(cfg, "t1", "outputs/report.txt").exists()
+    assert set(lines["t3"]["kept"]) == {"outputs/report.txt"}
+    # The memory file is still kept at 0.
+    assert set(lines["t4"]["kept"]) == {"memory/AGENTS.md"}
+    assert _copy(cfg, "t4", "memory/AGENTS.md").read_text(encoding="utf-8") == "- A\n- B\n"
+
+
 def test_over_budget_the_copy_restoring_only_the_oldest_turns_goes_first(cfg):
     """By age the notes written once in the first turn would go first though every rewind
     needs them, and a file larger than the whole budget would be copied only to be dropped."""

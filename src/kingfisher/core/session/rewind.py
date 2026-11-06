@@ -7,7 +7,14 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.core.layout import INPUTS_SEEN, MEMORY_WRITER
 from kingfisher.core.result import Rewound, TurnFiles, TurnRecord
 
-from .file_history import BEFORE_FIRST, NO_RECORD, read_file_history, restore_files, restore_state
+from .file_history import (
+    BEFORE_FIRST,
+    COPIES_OFF,
+    NO_RECORD,
+    read_file_history,
+    restore_files,
+    restore_state,
+)
 from .model import START, RewindError, Start
 from .store import (
     RESUMED,
@@ -95,7 +102,7 @@ def rewound(files: Any, layout: Layout, to: str | Start) -> Steps[Rewound]:
     restored, not_restored = yield from restore_files(files, harness, layout, records, path)
     # Told to the next turn only where its conversation remembers the files: after a rewind
     # to the start it remembers none, and finds them as they are.
-    unsure = {NO_RECORD, BEFORE_FIRST}
+    unsure = {NO_RECORD, BEFORE_FIRST, COPIES_OFF}
     yield from write_drift(
         harness,
         Drift(

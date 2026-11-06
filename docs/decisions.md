@@ -4083,6 +4083,21 @@ reads nothing more; the port's `size` is left alone, and `Session.size()` still 
 what the backend holds. **The cost, taken:** with the history unbounded by default, the
 session cap no longer bounds a session's disk.
 
+**A budget of 0 copies nothing the agent makes** *(2026-11-06)*. Asked for by a
+deployment that never rewinds: on its sandbox, which lists names alone, 0 still read back
+and wrote every file in `/outputs` at every turn, deleting each copy as it was made. A
+turn at 0 lists neither folder and copies only the memory file, read whole, and its line
+says `unlisted`; the copies kept before 0 are dropped at its first turn, as a lower budget
+drops what no longer fits. A rewind takes "back to the state that turn left" as far as
+anything records it: the conversation, the memory file and the two notes come back, and
+the other files are left as they are, since a guess could lose them, with
+`Rewound.not_restored` and the next turn's message naming the folder rather than each of
+its files. **Not chosen:** keeping the line of what changed without copies, under which a
+rewind deletes files a later turn made, which no branch can then bring back, and leaves
+edited ones at their later version: a state no turn had. A turn at 0 forgets the other
+files' marks, so the first turn after copies resume copies every file, and a rewind
+reaches it whole.
+
 **The memory file is outside every budget** *(2026-11-06)*. It shared the budget with
 `/outputs`, so a budget smaller than it never copied it, and a full one dropped its old
 versions to make room for a report: a rewind then brought back the conversation without
