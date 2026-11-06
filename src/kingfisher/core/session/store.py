@@ -7,6 +7,7 @@ where they live.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Mapping, Sequence
@@ -16,6 +17,7 @@ from typing import Any
 from kingfisher.core.layout import (
     HARNESS_ROUTE,
     INPUTS_SEEN,
+    KEPT_FILES,
     LEDGER_FILE,
     OFF_PATH_FILE,
     PAUSED_MARK,
@@ -27,6 +29,32 @@ from kingfisher.core.result import LedgerEntry, Listed, PendingDecision
 
 from .steps import Steps, changing, reading
 from .transcript import Message, as_json, from_json
+
+#: Beside each file kingfisher keeps about a session, its second copy: `ledger.jsonl.2`.
+SECOND_COPY = ".2"
+
+
+def sealed(content: bytes) -> bytes:
+    """`content` with a last line giving its SHA-256."""
+    seal = json.dumps({"sha256": hashlib.sha256(content).hexdigest()})
+    return content + b"\n" + seal.encode("ascii") + b"\n"
+
+
+def unsealed(held: bytes) -> bytes | None:
+    """What `sealed` was handed, or `None` where `held` does not end in a seal matching what
+    comes before it: a write that stopped partway, or a file written before seals were."""
+    content, _, last = held.removesuffix(b"\n").rpartition(b"\n")
+    try:
+        seal = json.loads(last)
+    except ValueError:
+        return None
+    return content if seal == {"sha256": hashlib.sha256(content).hexdigest()} else None
+
+
+def _kept_twice(name: str) -> bool:
+    # A copy under `files/` goes back into the session byte for byte on a rewind, where a
+    # seal would end up in the user's file.
+    return not name.startswith(f"{KEPT_FILES}/")
 
 
 class HarnessFiles:
@@ -41,6 +69,32 @@ class HarnessFiles:
 
     def fetch(self, name: str) -> Steps[bytes | None]:
         """`name`'s content, or `None` where the session has none."""
+        held = yield from self._fetch_one(name)
+        if held is None or not _kept_twice(name):
+            return held
+        if (whole := unsealed(held)) is not None:
+            return whole
+        # A save writes the second copy whole before it touches the first, so a first copy
+        # that does not match is one a save stopped in, and the second is what it wrote.
+        second = yield from self._fetch_one(f"{name}{SECOND_COPY}")
+        if second is not None and (whole := unsealed(second)) is not None:
+            return whole
+        # Older than its second copy, and no save since has finished one.
+        return held
+
+    def store(self, name: str, content: bytes) -> Steps[None]:
+        """Replace `name`."""
+        if not _kept_twice(name):
+            yield from self._store_one(name, content)
+            return
+        whole = sealed(content)
+        # The second copy whole before the first is touched, in uploads of their own: a
+        # backend may empty a file and then fill it, and a write that stops partway, the
+        # process killed or the disk full, then leaves one of the two whole.
+        yield from self._store_one(f"{name}{SECOND_COPY}", whole)
+        yield from self._store_one(name, whole)
+
+    def _fetch_one(self, name: str) -> Steps[bytes | None]:
         (answer,) = yield reading(self._backend, "download_files", [f"{HARNESS_ROUTE}{name}"])
         if answer.error == "file_not_found":
             return None
@@ -49,8 +103,7 @@ class HarnessFiles:
             raise OSError(msg)
         return answer.content
 
-    def store(self, name: str, content: bytes) -> Steps[None]:
-        """Replace `name`."""
+    def _store_one(self, name: str, content: bytes) -> Steps[None]:
         files = [(f"{HARNESS_ROUTE}{name}", content)]
         answers = yield changing(self._backend, "upload_files", files)
         refused = [a for a in answers if a.error]
@@ -61,7 +114,12 @@ class HarnessFiles:
 
     def drop(self, *names: str) -> Steps[None]:
         """Drop these. Safe where they were never written."""
-        paths = [f"{HARNESS_ROUTE}{name}" for name in names]
+        paths = [
+            f"{HARNESS_ROUTE}{one}"
+            for name in names
+            # The first copy first: a read that finds none answers that there is none.
+            for one in ((name, f"{name}{SECOND_COPY}") if _kept_twice(name) else (name,))
+        ]
         for path in paths:
             yield changing(self._backend, "delete", path)
         # Asked again rather than trusting each answer: a backend reports a never-written file

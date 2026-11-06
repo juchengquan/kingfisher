@@ -24,7 +24,7 @@ from kingfisher.core.result import AWAITING
 from kingfisher.core.session.transcript import Message, from_json, from_record
 from kingfisher.core.session.turnlog import CUT, FROM, IMPORTED, PARENT, TASK
 from kingfisher.plugins import LocalSessions
-from tests.conftest import EVERY_TOOL, an_agent, start, tools_dir
+from tests.conftest import EVERY_TOOL, an_agent, read_record, start, tools_dir, write_old_record
 from tests.unit.scripted import Scripted
 from tests.unit.session.test_ledger import _Ordered
 from tests.unit.session.test_subagent_gates import _parent_with
@@ -77,11 +77,11 @@ def _harness(cfg, name: str):
 
 
 def _lines(cfg) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in _harness(cfg, TURNS_FILE).read_text().splitlines()]
+    return [json.loads(line) for line in read_record(_harness(cfg, TURNS_FILE)).splitlines()]
 
 
 def _transcript(cfg) -> tuple[Message, ...]:
-    return from_json(_harness(cfg, TRANSCRIPT_FILE).read_text(encoding="utf-8"))
+    return from_json(read_record(_harness(cfg, TRANSCRIPT_FILE)))
 
 
 def _replayed(lines: list[dict[str, Any]]) -> tuple[Message, ...]:
@@ -246,7 +246,7 @@ def test_a_turn_that_found_its_conversation_short_is_logged_from_where_it_began(
     _say(kf, "first", AIMessage("one"))
     _say(kf, "second", AIMessage("two"))
     transcript = _harness(logged, TRANSCRIPT_FILE)
-    transcript.write_text("".join(transcript.read_text().splitlines(keepends=True)[:2]))
+    write_old_record(transcript, "".join(read_record(transcript).splitlines(keepends=True)[:2]))
 
     short = _say(kf, "third", AIMessage("three"))
 

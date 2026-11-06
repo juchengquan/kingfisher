@@ -258,6 +258,29 @@ def start(cfg, session_id: str) -> str:
     return session_id
 
 
+def read_record_bytes(path: Path) -> bytes:
+    """A file kingfisher keeps about a session under `.harness`, as it reads it back."""
+    from kingfisher.core.session.store import unsealed
+
+    content = unsealed(path.read_bytes())
+    assert content is not None, f"{path} does not end in a seal that matches it"
+    return content
+
+
+def read_record(path: Path) -> str:
+    """`read_record_bytes`, as text."""
+    return read_record_bytes(path).decode("utf-8")
+
+
+def write_old_record(path: Path, content: str | bytes) -> None:
+    """Write a file kingfisher keeps under `.harness` as a session from before each was kept
+    twice holds it, one copy and no seal, which is read back as it is."""
+    from kingfisher.core.session.store import SECOND_COPY
+
+    path.write_bytes(content.encode("utf-8") if isinstance(content, str) else content)
+    path.with_name(f"{path.name}{SECOND_COPY}").unlink(missing_ok=True)
+
+
 @pytest.fixture(params=["sync", "async"])
 def way(request) -> str:
     """Both halves, for a test about a method `DIFFERS` in `test_async_twins.py` excuses

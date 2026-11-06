@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Each file under `.harness` is kept twice, after #1232
+
+- **Beside each file kingfisher keeps about a session is a second copy**, `ledger.jsonl.2`
+  beside `ledger.jsonl`, and each copy's last line is `{"sha256": "..."}`, the SHA-256 of
+  everything before the newline ahead of it. A reader of those files outside kingfisher
+  drops that line, and reads the second copy where the first's line does not match.
+- **A session from before reads as it is.** Its files have no such line and no second
+  copy, and the next save writes both.
+- **The second copies count towards `KINGFISHER_SESSION_MAX_BYTES`**, so those files take
+  twice the disk they did.
+- **The copies under `.harness/files/` are unchanged**: kept once, with no line added.
+
 ## A resume is refused once a file in a subagent's package changed, after #1229
 
 - **A paused turn records every file of the package a subagent is defined in**, whatever

@@ -61,9 +61,12 @@ from tests.conftest import (
     EVERY_TOOL,
     FakeToolCallingModel,
     an_agent,
+    read_record,
+    read_record_bytes,
     start,
     subagents_dir,
     tools_dir,
+    write_old_record,
 )
 from tests.unit.scripted import Scripted
 
@@ -168,7 +171,7 @@ def _session(cfg):
 
 def _rows(cfg) -> list[dict[str, Any]]:
     """The ledger as the session keeps it, one decoded line each."""
-    text = (_session(cfg) / HARNESS / LEDGER_FILE).read_text(encoding="utf-8")
+    text = read_record(_session(cfg) / HARNESS / LEDGER_FILE)
     return [json.loads(line) for line in text.splitlines()]
 
 
@@ -333,7 +336,7 @@ def test_numbering_goes_on_past_four_digits(ledgered):
     reuse ids at the 10,000th result, and the new file would replace an old one's."""
     _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
     ledger = _session(ledgered) / HARNESS / LEDGER_FILE
-    ledger.write_text(ledger.read_text().replace('"A-0001"', '"A-9999"', 1))
+    write_old_record(ledger, read_record(ledger).replace('"A-0001"', '"A-9999"', 1))
 
     second = _run(ledgered, _calls(("loud", {}, "c2")), AIMessage(content="done"))
     third = _run(ledgered, _calls(("loud", {}, "c3")), AIMessage(content="done"))
@@ -461,7 +464,7 @@ def test_a_ledger_cut_short_by_a_crash_does_not_stop_the_session(ledgered):
         ledgered, _calls(("web_search", {"query": "one"}, "c1")), AIMessage(content="done")
     )
     ledger = _session(ledgered) / HARNESS / LEDGER_FILE
-    ledger.write_text(ledger.read_text() + '{"id": "A-0002", "turn": "t-died", "ca')
+    write_old_record(ledger, read_record(ledger) + '{"id": "A-0002", "turn": "t-died", "ca')
 
     second = _run(
         ledgered, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done")
@@ -478,8 +481,8 @@ def test_a_ledger_cut_inside_a_character_does_not_stop_the_session(ledgered):
     language, so a cut inside a character raised on every later turn in the session."""
     _run(ledgered, _calls(("web_search", {"query": "电动车价格战"}, "c1")), AIMessage("done"))
     ledger = _session(ledgered) / HARNESS / LEDGER_FILE
-    held = ledger.read_bytes()
-    ledger.write_bytes(held[: held.index("电".encode()) + 1])
+    held = read_record_bytes(ledger)
+    write_old_record(ledger, held[: held.index("电".encode()) + 1])
 
     second = _run(
         ledgered, _calls(("web_search", {"query": "two"}, "c2")), AIMessage(content="done")
@@ -504,7 +507,7 @@ def test_a_conversation_emptied_on_disk_is_reported_by_the_turn_that_reads_it(le
     """
     _run(ledgered, AIMessage(content="first"))
     whole, said = _stream(ledgered, AIMessage(content="second"))
-    (_session(ledgered) / HARNESS / TRANSCRIPT_FILE).write_bytes(b"")
+    write_old_record(_session(ledgered) / HARNESS / TRANSCRIPT_FILE, b"")
 
     short, warned = _stream(ledgered, AIMessage(content="third"))
 
@@ -527,8 +530,8 @@ def test_a_damaged_conversation_is_reported_where_no_ledger_counts_it(cfg):
     kf.run(Request("first", session_id="s"))
     kf.run(Request("second", session_id="s"))
     transcript = _session(cfg) / HARNESS / TRANSCRIPT_FILE
-    lines = transcript.read_text(encoding="utf-8").splitlines(keepends=True)
-    transcript.write_text("".join([lines[0], '{"role": "assist\n', *lines[2:]]), encoding="utf-8")
+    lines = read_record(transcript).splitlines(keepends=True)
+    write_old_record(transcript, "".join([lines[0], '{"role": "assist\n', *lines[2:]]))
 
     damaged = kf.run(Request("third", session_id="s"))
 
@@ -1642,7 +1645,7 @@ def _asked(call: int = -1) -> str:
 
 def _transcribed(cfg, call_id: str) -> str:
     """A result as the transcript keeps it, for every later turn to replay."""
-    text = (_session(cfg) / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8")
+    text = read_record(_session(cfg) / HARNESS / TRANSCRIPT_FILE)
     return next(one.content for one in from_json(text) if one.call_id == call_id)
 
 
@@ -2030,7 +2033,7 @@ def test_a_summarised_conversation_is_not_summarised_again_the_next_turn(ledgere
     assert Scripted.summaries == 1, "a conversation already summarised was summarised again"
     history = _session(cfg) / SCRATCH / "conversation_history"
     assert len(list(history.glob("*.md"))) == 1
-    saved = from_json((_session(cfg) / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8"))
+    saved = from_json(read_record(_session(cfg) / HARNESS / TRANSCRIPT_FILE))
     assert saved[0].summary, "the transcript does not open on the summary"
     assert HALF not in [message.content for message in saved[:1]]
 
@@ -2060,7 +2063,7 @@ def _hand_written(cfg, *turns: tuple[str, tuple[str, ...]]) -> None:
         rows.append(json.dumps({"turn": turn, **dict.fromkeys(marks, True)}))
     ledger = _session(cfg) / HARNESS / LEDGER_FILE
     ledger.parent.mkdir(parents=True, exist_ok=True)
-    ledger.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    write_old_record(ledger, "\n".join(rows) + "\n")
 
 
 #: Each block, and the one a message carries in its place.
@@ -2198,7 +2201,7 @@ def _closed(*rows: dict[str, Any]) -> list[str]:
 def _written(cfg, lines: list[str]) -> None:
     ledger = _session(cfg) / HARNESS / LEDGER_FILE
     ledger.parent.mkdir(parents=True, exist_ok=True)
-    ledger.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_old_record(ledger, "\n".join(lines) + "\n")
 
 
 def test_a_result_older_than_the_rounds_kept_loses_its_file_and_keeps_its_row(ledgered):
@@ -2226,7 +2229,7 @@ def test_a_result_a_crash_left_unclosed_expires_with_the_turn_after_it(ledgered)
     cfg = _rounds(ledgered, 2)
     _searched(cfg, "c1")
     ledger = _session(cfg) / HARNESS / LEDGER_FILE
-    ledger.write_text("\n".join(ledger.read_text().splitlines()[:-1]) + "\n")
+    write_old_record(ledger, "\n".join(read_record(ledger).splitlines()[:-1]) + "\n")
     _searched(cfg, "c2")
 
     _run(cfg, AIMessage(content="nothing this time"))

@@ -15,7 +15,7 @@ from kingfisher.core.layout import HARNESS, PAUSED_STATE, TRANSCRIPT_FILE
 from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from tests.checks.backend import shell_denied
-from tests.conftest import an_agent, start
+from tests.conftest import an_agent, read_record_bytes, start, write_old_record
 from tests.unit.scripted import Scripted
 from tests.unit.session.test_approval_gates import _gated, _write
 from tests.unit.stand_ins import ElsewhereRunner, StubAgent
@@ -75,7 +75,8 @@ def test_a_paused_turn_cut_short_is_refused_with_a_reason(cfg):
     )
     paused = kf.run(Request("write it"))
     state = _harness_file(cfg, paused.session_id, PAUSED_STATE)
-    state.write_bytes(state.read_bytes()[: len(state.read_bytes()) // 2])
+    held = read_record_bytes(state)
+    write_old_record(state, held[: len(held) // 2])
 
     with pytest.raises(DecisionError, match=f"session {paused.session_id}.*cannot be read"):
         kf.run(

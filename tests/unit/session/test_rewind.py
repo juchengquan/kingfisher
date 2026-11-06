@@ -37,7 +37,15 @@ from kingfisher.core.result import AWAITING
 from kingfisher.core.session import preparation
 from kingfisher.core.session.file_history import dropped_for_space
 from kingfisher.plugins import LocalSessions
-from tests.conftest import EVERY_TOOL, an_agent, start, tools_dir
+from tests.conftest import (
+    EVERY_TOOL,
+    an_agent,
+    read_record,
+    read_record_bytes,
+    start,
+    tools_dir,
+    write_old_record,
+)
 from tests.unit.scripted import Scripted
 from tests.unit.session.test_turn_log import TOOLS, _calls, _resume, _say, _searches, _transcript
 from tests.unit.stand_ins import StubAgent
@@ -257,7 +265,7 @@ def test_a_result_left_on_a_branch_still_ages(rewinding):
     later = _say(kf, "something else", AIMessage("ok"))
 
     ledger = cfg.workspace / "sessions" / "s" / HARNESS / LEDGER_FILE
-    (row,) = [one for one in map(json.loads, ledger.read_text().splitlines()) if one.get("id")]
+    (row,) = [one for one in map(json.loads, read_record(ledger).splitlines()) if one.get("id")]
     assert row["expired_in"] == later.turn_id
 
 
@@ -351,17 +359,17 @@ def test_the_memory_file_and_what_the_writer_has_not_read_go_back(rewinding):
     folder = rewinding.workspace / "sessions" / "s"
     memory, unread = folder / "memory" / "AGENTS.md", folder / HARNESS / MEMORY_WRITER
     memory.write_text("- Prefers tables\n", encoding="utf-8")
-    unread.write_text(json.dumps({"turns": 1, "said": ["User: hello"]}), encoding="utf-8")
+    write_old_record(unread, json.dumps({"turns": 1, "said": ["User: hello"]}))
     first = _say(kf, "hello", AIMessage("hi"))
     kept_unread = unread.read_bytes()
     memory.write_text("- Prefers tables\n- Is Bob\n", encoding="utf-8")
-    unread.write_text(json.dumps({"turns": 2, "said": ["User: I am Bob"]}), encoding="utf-8")
+    write_old_record(unread, json.dumps({"turns": 2, "said": ["User: I am Bob"]}))
     _say(kf, "I am Bob", AIMessage("noted"))
 
     kf.session("s").rewind(first.turn_id)
 
     assert memory.read_text(encoding="utf-8") == "- Prefers tables\n"
-    assert unread.read_bytes() == kept_unread
+    assert read_record_bytes(unread) == kept_unread
 
 
 def test_a_rewind_to_the_start_leaves_the_files_and_tells_nothing(rewinding):
@@ -412,7 +420,7 @@ def test_after_a_rewind_a_turn_keeps_the_copy_its_path_still_needs(rewinding):
     _say(kf, "add a note", AIMessage("ok"))
 
     history = cfg.workspace / "sessions" / "s" / HARNESS / FILE_HISTORY
-    lines = {one["turn"]: one for one in map(json.loads, history.read_text().splitlines())}
+    lines = {one["turn"]: one for one in map(json.loads, read_record(history).splitlines())}
     assert "dropped_in" not in lines[first.turn_id]["kept"]["outputs/r.md"]
     assert "dropped_in" in lines[second.turn_id]["kept"]["outputs/r.md"]
 
@@ -489,11 +497,11 @@ def test_a_turn_from_before_the_log_that_cannot_be_cut_is_refused(rewinding):
     later = _say(kf, "TASK-TWO", AIMessage("ANSWER-TWO"))
     _as_before_the_log(rewinding)
     ledger = rewinding.workspace / "sessions" / "s" / HARNESS / LEDGER_FILE
-    written = ledger.read_text()
+    written = read_record(ledger)
 
     def closing(edit) -> None:
         rows = [json.loads(line) for line in written.splitlines()]
-        ledger.write_text("".join(json.dumps(edit(row)) + "\n" for row in rows))
+        write_old_record(ledger, "".join(json.dumps(edit(row)) + "\n" for row in rows))
 
     closing(
         lambda row: {k: v for k, v in row.items() if k != "messages"}
