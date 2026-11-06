@@ -17,7 +17,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.interfaces import UnusedResults
-from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH, TOOL_RESULTS, TRANSCRIPT_FILE
+from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH, TOOL_RESULTS, TURNS_FILE
 from kingfisher.plugins import (
     DeleteUnusedResults,
     LocalSessions,
@@ -188,7 +188,7 @@ class Reaching(UnusedResults):
     def settle(self, found: UnusedFiles) -> None:
         (one,) = found
         self.offered = (_public(found), _public(one))
-        elsewhere = f"/.harness/{TRANSCRIPT_FILE}"
+        elsewhere = f"/.harness/{TURNS_FILE}"
         for attempt in (
             lambda: replace(one, path=elsewhere).remove(),
             lambda: replace(one, path=elsewhere).read(),
@@ -206,7 +206,7 @@ def _public(thing: Any) -> set[str]:
 
 def test_the_files_handed_over_reach_no_other_path(workspace):
     """A helper that took any path would hand a plugin the whole session, its ledger and
-    transcript included, to remove."""
+    turn log included, to remove."""
     reaching = Reaching()
     kf = Kingfisher(workspace, sessions=LocalSessions(), unused_results=reaching)
 
@@ -214,7 +214,7 @@ def test_the_files_handed_over_reach_no_other_path(workspace):
 
     assert len(reaching.refused) == 3, reaching.refused
     assert all("is not one of the unused results" in said for said in reaching.refused)
-    assert (workspace.workspace / "sessions" / "s" / ".harness" / TRANSCRIPT_FILE).exists()
+    assert (workspace.workspace / "sessions" / "s" / ".harness" / TURNS_FILE).exists()
     assert reaching.offered == ({"session_id"}, {"path", "size", "read", "remove"})
 
 

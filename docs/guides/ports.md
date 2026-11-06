@@ -315,6 +315,7 @@ and its sentence says them again:
 | `event` | When | Its fields |
 |---|---|---|
 | `artifacts_incomplete` | listing a folder of artifacts at a turn's end failed or was cut short | `folder`, `reason` |
+| `conversation_not_logged` | a turn ended on a conversation its turn log cannot rebuild, beyond the text of a message; the next turn is built on what the log rebuilds | `ended`, `rebuilt` |
 | `definitions_refused` | the definitions changed and the change failed its checks; the sentence keeps the error's message, since you wrote them | `error_type` |
 | `host_path_failed` | a backend's `host_path` raised | `plugin`, `method`, `error_type`, `error_at` |
 | `memory_store_failed` | a `MemoryStore` call raised | `plugin`, `method`, `error_type`, `error_at` |
@@ -820,9 +821,9 @@ Things to know:
 ## The rest
 
 **The conversation is not for replacing either.** Kingfisher keeps it in the session,
-as the transcript each turn is handed, and runs every turn on a store of its own that
-holds nothing once the turn ends; a turn that stops for approval is written into the
-session and read back by the answer. There is no `threads=` to pass a langgraph saver
+as the turn log each turn's conversation is rebuilt from, and runs every turn on a store
+of its own that holds nothing once the turn ends; a turn that stops for approval is
+written into the session and read back by the answer. There is no `threads=` to pass a langgraph saver
 of your own: one that remembered earlier turns showed the model each of them twice.
 
 Definitions are not covered here, because how they are read is not for replacing:
@@ -979,7 +980,7 @@ the sessions you pass — so a graph is refused without them, and one built on
 kingfisher's own passes `sessions=LocalSessions()`. Pass the ones that reach the
 sessions your graph's backend keeps: nothing can check that from outside a compiled
 graph. Whatever saver it was compiled with, each turn runs a copy of it on kingfisher's
-own, empty one: the conversation comes from the transcript, as it does for every agent. `run()` and `stream()` take `sessions=` too, and refuse to run without it,
+own, empty one: the conversation comes from the turn log, as it does for every agent. `run()` and `stream()` take `sessions=` too, and refuse to run without it,
 with a graph or without.
 
 **What you return is also what an offered tool is handed.** A tool that asks for

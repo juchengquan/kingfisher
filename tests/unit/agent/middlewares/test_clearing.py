@@ -37,17 +37,17 @@ from kingfisher.core.agent.middlewares.recorded import arguments, stamp, summary
 from kingfisher.core.agent.middlewares.recorder import UNRECORDED
 from kingfisher.core.agent.models import SummarizerCount, summarizer_count, summarizer_trigger
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, LEDGER_FILE, TRANSCRIPT_FILE
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, LEDGER_FILE
 from kingfisher.core.result import MAIN, LedgerEntry
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
-from kingfisher.core.session.transcript import from_json
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import (
     EVERY_TOOL,
     FakeToolCallingModel,
     an_agent,
+    read_conversation,
     start,
     subagents_dir,
     tools_dir,
@@ -1116,8 +1116,7 @@ def _one(name: str, at: int, **args: Any) -> AIMessage:
 
 
 def _transcript(cfg: Any) -> list[Any]:
-    session = cfg.workspace / "sessions" / "s"
-    return list(from_json((session / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8")))
+    return list(read_conversation(cfg.workspace / "sessions" / "s" / HARNESS))
 
 
 def test_a_turn_refused_for_length_goes_on_without_a_summary(bulky):

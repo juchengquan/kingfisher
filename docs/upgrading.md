@@ -18,6 +18,30 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The turn log is the only record of what was said, after #1237
+
+- **No turn writes or reads `.harness/transcript.jsonl`.** Each turn is built on the
+  conversation `.harness/turns.jsonl` rebuilds along the session's path. Anything reading
+  the transcript finds none in a new session and a stale one in an old session, which
+  nothing reads and you may delete. The first item of *A summarised conversation is kept
+  summarised, after #1017*, below, says the transcript is the conversation as the model
+  last saw it: that no longer holds.
+- **A session from before the turn log starts with no history.** Its conversation was in
+  the transcript alone, so its next turn is handed none of it and reports `history_lost`,
+  with `RunResult.history_lost` set. The second item of the section after #1235, below,
+  says such a session keeps its conversation: that no longer holds either. Its results
+  are still in the ledger, and a rewind still reaches only the turns logged since.
+- **A damaged line in the turn log ends the reading**, where it was skipped, and the turn
+  reports `history_lost`; its write keeps only the lines before it. Only a log neither
+  copy's seal matches can hold one, so a session from before #1232 or a file something
+  else wrote.
+- **A new warning, `conversation_not_logged`**, says a turn ended on a conversation its log
+  cannot rebuild; `docs/guides/ports.md` lists it with the others.
+- **`turns.jsonl` is not a documented format yet.** A client reading it directly, as a
+  frontend reading remote storage might, depends on lines that may change.
+- **`scripts/session_survey.py` reads the turn log**: its `transcript_share` is
+  `conversation_share`, and the disk part `transcript` is `turn log`.
+
 ## The turn log says who wrote each piece of the message, after #1236
 
 - **A turn's message is kept in `.harness/turns.jsonl` as `parts`, not `content`**:

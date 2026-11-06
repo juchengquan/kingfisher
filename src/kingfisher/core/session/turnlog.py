@@ -1,18 +1,19 @@
 """Every turn a session ran, as first written: its messages, each tagged with the turn, and
-each turn with the one it followed.
+each turn with the one it followed. The only record of what was said: each turn is built
+on the conversation replayed from it.
 
-The transcript is the conversation the next turn is built from, so a summary replaces its
-front. This keeps what it replaced: the conversation at the end of any turn is its
-ancestors' and its own lines replayed in order, where a turn's opening line keeps the first
-`from` messages of what its parent left, a message is appended, and a message carrying a
-`cut` is a summary standing for everything before that position.
+The conversation at the end of any turn is its ancestors' and its own lines replayed in
+order, where a turn's opening line keeps the first `from` messages of what its parent left,
+a message is appended, a message carrying a `cut` is a summary standing for everything
+before that position, and a line carrying `at` gives the message there the text the turn
+left it holding.
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.agent.middlewares.recorded import expired_handle, stamped_id
@@ -32,14 +33,20 @@ if TYPE_CHECKING:
 #: after a rewind to the start.
 PARENT = "parent"
 
-#: On an asked turn's opening line, how many of its parent's messages it began from. Fewer
-#: than its parent left where the transcript was found short; replayed whole, the turn
-#: would be credited with messages its model never saw.
+#: On an asked turn's opening line, how many of its parent's messages it began from;
+#: replayed whole where it says fewer, the turn would be credited with messages its model
+#: never saw.
 FROM = "from"
 
 #: On a summary, the position in the conversation so far that it stands for everything
 #: before, counted with the turn's own messages appended.
 CUT = "cut"
+
+#: On a line with no role, a position in the conversation its turn ended on, beside the
+#: text the message there was left holding: a result an earlier turn wrote, which clearing
+#: swapped for its handle in state. Beside the line first written rather than over it, so a
+#: rewind to before the swap gets the result back whole.
+AT = "at"
 
 #: On a resume's line for one answer: the decision as the pause named it, a position in the
 #: pause and not a call; `call_id` beside it is the call it answered.
@@ -73,7 +80,7 @@ class Resuming:
 
 def resuming(graph: Any, config: Any, saver: Any, decisions: Sequence[Decision]) -> Resuming | None:
     """What the pause in `saver` holds, or `None` for a graph that keeps no state, which
-    writes no transcript either."""
+    logs no messages either."""
     read = getattr(graph, "get_state", None)
     if read is None:
         return None
@@ -165,15 +172,29 @@ def _with_parts(added: list[dict[str, Any]], parts: Sequence[Part], turn: str) -
 
 
 def _without_expired(
-    lines: Sequence[tuple[str, dict[str, Any]]], rows: Mapping[str, LedgerEntry]
+    lines: Sequence[tuple[str, dict[str, Any]]],
+    rows: Mapping[str, LedgerEntry],
+    seen: Sequence[Message],
 ) -> list[tuple[str, dict[str, Any]]]:
-    """`lines` with each result `rows` names, by id, swapped for its expired handle, so
+    """`lines` with each result `rows` names, by id, swapped for its expired handle once
+    `seen`, the conversation the next turn is rebuilt into, no longer holds it whole, so
     `KINGFISHER_KEEP_RESULTS_ROUNDS` bounds what this file keeps as well."""
+    # Not sooner: the model is handed an expired result whole until clearing or a summary
+    # takes it out of view, and swapped while in view, the rebuild hands it a handle in
+    # place of text it had, the rewrite the result-expiry entry in `decisions.md` rejects.
+    in_view = {(one.call_id, one.content) for one in seen if one.call_id}
     kept: list[tuple[str, dict[str, Any]]] = []
     for raw, line in lines:
         content = line.get("content")
+        # A line carrying `at` names no call and is never swapped: it holds the handle
+        # clearing made, which the conversation kept after its result expired too.
         row = rows.get(stamped_id(content) or "") if isinstance(content, str) else None
-        if row is None or line.get("call_id") != row.call or content == expired_handle(row):
+        if (
+            row is None
+            or line.get("call_id") != row.call
+            or content == expired_handle(row)
+            or (row.call, content) in in_view
+        ):
             kept.append((raw, line))
             continue
         # Patched as parsed, so a key another version wrote survives.
@@ -182,22 +203,79 @@ def _without_expired(
     return kept
 
 
-def _read(held: bytes) -> list[tuple[str, dict[str, Any]]]:
-    """Each line as written beside what it holds. A line that does not parse is dropped,
-    as the ledger drops one: a backend has no rename, so a cut write can end anywhere."""
+def _read(held: bytes) -> tuple[list[tuple[str, dict[str, Any]]], bool]:
+    """Each line as written beside what it holds, as far as the first this module did not
+    write; and whether one ended the reading there.
+
+    Stopped, not skipped: past a damaged line, a tool result can answer a call that was on
+    it, which a provider refuses on every later turn. `fetch` hands back a save whole where
+    one copy is, so a damaged line comes only from a file neither copy's seal matches: one
+    written before seals were, or by something other than kingfisher.
+    """
     lines = []
     for raw in held.decode("utf-8", errors="replace").splitlines():
+        if not raw.strip():
+            continue
         try:
             line = json.loads(raw)
-        except ValueError:
-            continue
-        if isinstance(line, dict):
-            lines.append((raw, line))
-    return lines
+            if isinstance(line, dict) and "role" in line:
+                from_record(line)
+        except (ValueError, KeyError, TypeError):
+            return lines, True
+        if not isinstance(line, dict):
+            return lines, True
+        lines.append((raw, line))
+    return lines, False
+
+
+@dataclass(frozen=True)
+class TurnLog:
+    """The log as a turn read it before it ran, which its end writes back with its own."""
+
+    lines: tuple[tuple[str, dict[str, Any]], ...] = ()
+    #: Whether a damaged line ended the reading before the file did.
+    damaged: bool = False
+    #: The turn the session is at: the last a rewind did not leave behind, or `None` where
+    #: none ran or the session was rewound to the start.
+    current: str | None = None
+    #: The conversation `current` ended on, which the turn is built on.
+    conversation: tuple[Message, ...] = ()
+
+
+def read_log(harness: HarnessFiles) -> Steps[TurnLog]:
+    """The log, and the conversation the session is at; empty where no turn wrote one."""
+    held = yield from harness.fetch(TURNS_FILE)
+    if held is None:
+        return TurnLog()
+    return parse_log(held, (yield from read_off_path(harness)))
+
+
+def parse_log(held: bytes, off_path: frozenset[str]) -> TurnLog:
+    """The log `held`, read with `off_path` as the turns a rewind left behind."""
+    lines, damaged = _read(held)
+    parsed = [line for _, line in lines]
+    # The turns ran in the order the log holds them: after a rewind, the turn rewound to.
+    current = next(
+        (
+            line["turn"]
+            for line in reversed(parsed)
+            if PARENT in line and isinstance(line.get("turn"), str)
+            and line["turn"] not in off_path
+        ),
+        None,
+    )
+    turns = by_turn(parsed)
+    return TurnLog(
+        lines=tuple(lines),
+        damaged=damaged,
+        current=current,
+        conversation=replayed(turns, path_to(turns, current)[0]) if current else (),
+    )
 
 
 def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it ended on
     harness: HarnessFiles,
+    log: TurnLog,
     *,
     turn: str,
     parts: Sequence[Part],
@@ -207,11 +285,11 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
     ledger: KeptLedger | None,
     answer: str,
 ) -> Steps[None]:
-    """Add this turn to the log. `ledger` is the ledger as this turn writes it back, or
-    `None` where it keeps none.
+    """Add this turn to `log`, as the turn read it. `ledger` is the ledger as this turn
+    writes it back, or `None` where it keeps none.
     """
-    held = yield from harness.fetch(TURNS_FILE)
-    lines = [] if held is None else _read(held)
+    seen = runtime.as_transcript(runtime.as_seen(snapshot))
+    lines = list(log.lines)
     if ledger is not None:
         expired = {
             entry.id: entry
@@ -219,40 +297,60 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
             for entry in group
             if entry.expired_in is not None
         }
-        lines = _without_expired(lines, expired)
-    off_path = ledger.off_path if ledger is not None else (yield from read_off_path(harness))
-    # The last turn a rewind did not leave behind: after one, the turn rewound to.
-    parent = next(
-        (
-            line["turn"]
-            for _, line in reversed(lines)
-            if PARENT in line and line["turn"] not in off_path
-        ),
-        None,
-    )
+        lines = _without_expired(lines, expired, seen)
     added = _turn_lines(
         turn,
-        parent,
+        log.current,
         parts=parts,
         history=len(history),
         resumed=resumed,
         snapshot=snapshot,
         answer=answer,
     )
+    # Before the answer, which stays the turn's last line; the rebuild skips the answer, so
+    # the `at` lines still apply after the turn's own messages.
+    added[-1:-1] = _rewritten(turn, [*(line for _, line in lines), *added], seen)
     written = [raw for raw, _ in lines] + [json.dumps(one, ensure_ascii=False) for one in added]
     yield from harness.store(TURNS_FILE, ("\n".join(written) + "\n").encode("utf-8"))
 
 
+def _rewritten(
+    turn: str, lines: Sequence[dict[str, Any]], seen: Sequence[Message]
+) -> list[dict[str, Any]]:
+    """A line for each message `turn` left holding other text than its lines replay to, so
+    the log rebuilds `seen`, the conversation the turn ended on."""
+    turns = by_turn(lines)
+    rebuilt = replayed(turns, path_to(turns, turn)[0])
+    if len(rebuilt) != len(seen) or any(
+        replace(was, content="") != replace(now, content="")
+        for was, now in zip(rebuilt, seen, strict=True)
+    ):
+        # Only a message's text has a line to say it changed. Said, since the next turn is
+        # built from the log and would otherwise be handed something else without a word.
+        warn(
+            "conversation_not_logged",
+            f"turn {turn} ended on {len(seen)} messages the log cannot rebuild as they "
+            f"were; the next turn is built from the {len(rebuilt)} it rebuilds",
+            ended=len(seen),
+            rebuilt=len(rebuilt),
+        )
+        return []
+    return [
+        {"turn": turn, AT: at, "content": now.content}
+        for at, (was, now) in enumerate(zip(rebuilt, seen, strict=True))
+        if was.content != now.content
+    ]
+
+
 def read_turn_log(harness: HarnessFiles) -> Steps[list[dict[str, Any]]]:
-    """Every line of the log, as written; none where no turn wrote one."""
+    """Every line of the log as far as it is whole; none where no turn wrote one."""
     held = yield from harness.fetch(TURNS_FILE)
-    return [] if held is None else [line for _, line in _read(held)]
+    return [] if held is None else [line for _, line in _read(held)[0]]
 
 
-def logged_turns(harness: HarnessFiles) -> Steps[frozenset[str]]:
+def logged_turns(log: TurnLog) -> frozenset[str]:
     """Every turn id the log names, on every branch."""
-    lines = yield from read_turn_log(harness)
-    return frozenset(line["turn"] for line in lines if isinstance(line.get("turn"), str))
+    return frozenset(line["turn"] for _, line in log.lines if isinstance(line.get("turn"), str))
 
 
 #: Each turn's opening line and the lines after it, by its id.
@@ -298,8 +396,8 @@ def path_to(turns: Logged, target: str) -> tuple[list[str], bool]:
 
 def replayed(turns: Logged, path: Sequence[str]) -> tuple[Message, ...]:
     """The conversation the last turn of `path` ended on, rebuilt from the log alone: each
-    turn's parent's conversation kept to its `from`, its messages appended, and a summary
-    standing for everything before its `cut`."""
+    turn's parent's conversation kept to its `from`, its messages appended, a summary
+    standing for everything before its `cut`, and a message given the text an `at` names."""
     said: list[Message] = []
     for turn in path:
         opening, body = turns[turn]
@@ -307,6 +405,9 @@ def replayed(turns: Logged, path: Sequence[str]) -> tuple[Message, ...]:
             said = said[: opening[FROM]]
         for line in body:
             if "role" not in line:
+                at, content = line.get(AT), line.get("content")
+                if isinstance(at, int) and 0 <= at < len(said) and isinstance(content, str):
+                    said[at] = replace(said[at], content=content)
                 continue
             message = from_record(line)
             cut = line.get(CUT)

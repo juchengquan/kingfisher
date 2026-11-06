@@ -293,7 +293,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
                 msg = "cannot honour request.capabilities against a pre-built graph"
                 raise ValueError(msg)
             # On this turn's saver, never its own: its own would replay every earlier turn
-            # beside the transcript, or keep no state to write one, or lose a pause.
+            # beside the conversation the log rebuilds, or keep no state to log, or lose a pause.
             return self._graph.copy(update={"checkpointer": checkpointer})
 
         caller = caller or caller_of(request, held, datetime.now(UTC))

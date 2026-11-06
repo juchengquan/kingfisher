@@ -13,6 +13,13 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 
 ## Waiting on a decision
 
+- **Whether a client may read `turns.jsonl`.** With the transcript gone, the turn log is
+  the only record of what was said, and a client -- a frontend reading the sessions'
+  remote storage, say -- could rebuild a conversation from it without asking kingfisher.
+  Whether its lines become a documented, read-only contract waits on a design the owner
+  has in progress. Such a contract would have to cover more than the lines: the `.2`
+  second copy and the seal line ending each copy, which #1232 added, and the `at` lines
+  a later turn's clearing writes. *(2026-11-06.)*
 - **Keeping the cache through a memory change on MiniMax.** The breakpoint ahead of the
   memory block saves little there, so each change the writer makes costs the next turn
   most of its cache; `KINGFISHER_MEMORY_EVERY` went to 4 to pay it half as often. Moving

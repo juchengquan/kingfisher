@@ -21,7 +21,8 @@ drops them shows every session as just used.
 event, with or without a prefix in front of the JSON. With it the survey reports what
 the model was really sent (tokens, and how much of it came from the cache) and how long
 each call took by how much it was sent; without it,
-sizes are estimated from what the transcript holds now, after clearing and summaries.
+sizes are estimated from the conversation the turn log rebuilds, after clearing and
+summaries.
 
 --every is the deployment's KINGFISHER_MEMORY_EVERY (4 unless it set one), used to work
 out on which turns the memory writer ran.
@@ -82,10 +83,11 @@ FOLDERS = {
 #: deepagents' names, which move with the scratchpad but cannot be renamed.
 HISTORY = "conversation_history"
 HARNESS = ".harness"
-TRANSCRIPT = "transcript.jsonl"
+TURNS = "turns.jsonl"
+OFF_PATH = "off_path.json"
 #: `.harness` files with a part of their own: `agent.yaml` is the pin a session kept before
 #: every call named its agent, read for the name it held.
-HARNESS_PARTS = {TRANSCRIPT: "transcript", "ledger.jsonl": "ledger", "agent.yaml": "pinned agent"}
+HARNESS_PARTS = {TURNS: "turn log", "ledger.jsonl": "ledger", "agent.yaml": "pinned agent"}
 #: Beside each file kingfisher keeps about a session, its second copy: `ledger.jsonl.2`.
 #: Each copy ends in a seal, `{"sha256": ...}` of everything before the newline ahead of it.
 SECOND_COPY = ".2"
@@ -93,7 +95,7 @@ SECOND_COPY = ".2"
 #: What a session's bytes are counted under, in the order they are shown.
 PARTS = (
     "result files",
-    "transcript",
+    "turn log",
     "ledger",
     "pinned agent",
     "summary history",
@@ -132,7 +134,7 @@ class Turn:
 class Session:
     turns: list[Turn] = field(default_factory=list)
     recorded_results: int = 0
-    #: Transcript characters by what they are.
+    #: The conversation's characters by what they are.
     chars: Counter = field(default_factory=Counter)
     messages: Counter = field(default_factory=Counter)
     agent: str | None = None
@@ -141,7 +143,7 @@ class Session:
     memory_entries: int = 0
     unread_turns: int | None = None
     history_bytes: int | None = None
-    #: Results and file texts the transcript holds as clearing's handles.
+    #: Results and file texts the conversation holds as clearing's handles.
     cleared: int = 0
     #: From the run log: the main agent's model calls, in order, each with `seconds` where
     #: an earlier event of its turn says when it could have started.
@@ -149,7 +151,7 @@ class Session:
     #: Bytes and files by `PARTS`.
     disk: Counter = field(default_factory=Counter)
     files: Counter = field(default_factory=Counter)
-    #: Bytes of result files the transcript also holds whole, not yet cleared.
+    #: Bytes of result files the conversation also holds whole, not yet cleared.
     repeated: int = 0
     #: Result records whose file was expired by KINGFISHER_KEEP_RESULTS_ROUNDS.
     expired_results: int = 0
@@ -258,7 +260,7 @@ def read_session(folder: Path, names: dict[str, str] = FOLDERS) -> Session:
     s.modified = folder.stat().st_mtime
     _measure(folder, s, names)
     kept = _read_ledger(harness, s)
-    shown = _read_transcript(harness, s)
+    shown = _read_conversation(harness, s)
     _count_repeated(folder, s, kept, shown)
     _read_pin(harness, s)
     _read_memory(folder / names["memory"], harness, s)
@@ -292,10 +294,76 @@ def _read_ledger(harness: Path, s: Session) -> list[tuple[str, str]]:
     return kept
 
 
-def _read_transcript(harness: Path, s: Session) -> dict[str, int]:
+def _log_lines(harness: Path) -> list[dict[str, Any]]:
+    """The turn log's lines, read as kingfisher reads them: as far as the first that is not
+    one."""
+    lines: list[dict[str, Any]] = []
+    for raw in _record(harness / TURNS).splitlines():
+        if not raw.strip():
+            continue
+        try:
+            line = json.loads(raw)
+        except ValueError:
+            break
+        if not isinstance(line, dict):
+            break
+        lines.append(line)
+    return lines
+
+
+def _conversation(harness: Path) -> list[dict[str, Any]]:
+    """The conversation the session's next turn is built on, rebuilt from its turn log as
+    `core/session/turnlog.py` rebuilds it, along the path to the last turn a rewind did not
+    leave behind."""
+    lines = _log_lines(harness)
+    try:
+        listed = json.loads(_record(harness / OFF_PATH) or "[]")
+    except ValueError:
+        listed = []
+    off_path = {one for one in listed if isinstance(one, str)} if isinstance(listed, list) else ()
+    turns: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
+    for line in lines:
+        if "parent" in line and isinstance(line.get("turn"), str):
+            turns[line["turn"]] = (line, [])
+        elif line.get("turn") in turns:
+            turns[line["turn"]][1].append(line)
+    at: Any = next(
+        (
+            line["turn"]
+            for line in reversed(lines)
+            if "parent" in line and isinstance(line.get("turn"), str)
+            and line["turn"] not in off_path
+        ),
+        None,
+    )
+    path: list[str] = []
+    while isinstance(at, str) and at in turns and at not in path:
+        path.append(at)
+        at = turns[at][0].get("parent")
+    said: list[dict[str, Any]] = []
+    for turn in reversed(path):
+        opening, body = turns[turn]
+        if isinstance(opening.get("from"), int):
+            said = said[: opening["from"]]
+        for line in body:
+            if "role" in line:
+                message = line
+                if isinstance(line.get("parts"), list):
+                    # The turn's message, kept as who wrote each piece: the model read the join.
+                    text = "".join(str(part.get("text", "")) for part in line["parts"])
+                    message = {**line, "content": text}
+                cut = line.get("cut")
+                said = [message, *said[cut:]] if isinstance(cut, int) else [*said, message]
+            # A message given the text the turn left it holding: a result clearing swapped.
+            elif isinstance(i := line.get("at"), int) and 0 <= i < len(said):
+                said[i] = {**said[i], "content": line.get("content", "")}
+    return said
+
+
+def _read_conversation(harness: Path, s: Session) -> dict[str, int]:
     """What the kept conversation is made of; each result it still holds whole, in bytes."""
     shown: dict[str, int] = {}
-    for message in _json_lines(_record(harness / TRANSCRIPT)):
+    for message in _conversation(harness):
         role = message.get("role", "?")
         s.messages[role] += 1
         content = message.get("content") or ""
@@ -327,7 +395,7 @@ def _count_repeated(
     folder: Path, s: Session, kept: list[tuple[str, str]], shown: dict[str, int]
 ) -> None:
     # The smaller of the two, since the message carries the result's id as well. A call
-    # no longer in the transcript was cut by a summary, and its file is the only copy.
+    # no longer in the conversation was cut by a summary, and its file is the only copy.
     for call, path in kept:
         relative = Path(path.lstrip("/"))
         if call not in shown or ".." in relative.parts:
@@ -541,7 +609,7 @@ def survey(
             peak_source = "largest single model call, from the run log"
         else:
             peak = [sum(s.chars.values()) / CHARS_PER_TOKEN for s in group]
-            peak_source = "estimated from the transcript as left, after clearing and summaries"
+            peak_source = "estimated from the conversation as left, after clearing and summaries"
         models[model] = {
             "sessions": len(group),
             "turns_per_session": _spread(lengths),
@@ -561,7 +629,7 @@ def survey(
     for s in used.values():
         chars.update(s.chars)
     total = sum(chars.values())
-    report["transcript_share"] = {
+    report["conversation_share"] = {
         kind: round(n / total, 4) for kind, n in chars.most_common()
     } if total else {}
     report["recorded_results_per_session"] = _spread([s.recorded_results for s in used.values()])
@@ -651,10 +719,10 @@ def _render_disk(d: dict[str, Any]) -> list[str]:
             f"files median {files['median']:,.0f}, 90th percentile {files['p90']:,.0f}, "
             f"max {files['max']:,.0f}"
         )
-    transcript = d["by_part"]["transcript"]["bytes"]
+    logged = d["by_part"]["turn log"]["bytes"]
     out += [
-        f"result files the transcript also holds whole: {_size(d['repeated_bytes'])}"
-        + (f" ({_share(d['repeated_bytes'] / transcript)} of the transcript)" if transcript else "")
+        f"result files the conversation also holds whole: {_size(d['repeated_bytes'])}"
+        + (f" ({_share(d['repeated_bytes'] / logged)} of the turn log)" if logged else "")
         + f", in {d['sessions_repeating']} sessions",
         f"result records whose file expired: {d['expired_results']}, "
         f"in {d['sessions_with_expired_results']} sessions"
@@ -690,7 +758,7 @@ def render(report: dict[str, Any]) -> str:
             f"  {buckets}",
             f"sessions with a resumed (approved) turn: {m['sessions_with_resumes']}",
             f"reached the clearing mark: {m['cleared_sessions']} ({m['cleared_sessions'] / n:.0%})"
-            "  (clearing's handles found in the transcript; a summary may have cut them away)",
+            "  (clearing's handles found in the conversation; a summary may have cut them away)",
             f"summarised at least once: {m['summarised_sessions']} "
             f"({m['summarised_sessions'] / n:.0%})"
             + (
@@ -719,7 +787,7 @@ def render(report: dict[str, Any]) -> str:
                     + f"; {t['cached_share']:.0%} of input from cache"
                 )
         out.append("")
-    share = report["transcript_share"]
+    share = report["conversation_share"]
     out += [
         "what the kept conversations are made of, by characters:",
         "  " + ("   ".join(f"{k} {_share(v)}" for k, v in share.items()) or "nothing"),

@@ -11,7 +11,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
-from kingfisher.core.layout import HARNESS, PAUSED_STATE, TRANSCRIPT_FILE
+from kingfisher.core.layout import HARNESS, PAUSED_STATE, TURNS_FILE
 from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from tests.checks.backend import shell_denied
@@ -36,7 +36,7 @@ def test_what_a_session_keeps_is_written_as_it_is(scripted):
     Kingfisher(scripted, sessions=LocalSessions()).run(Request("go", agent="only", session_id="s"))
 
     held = sorted(p.name for p in (scripted.workspace / "sessions" / "s" / HARNESS).iterdir())
-    assert TRANSCRIPT_FILE in held, "nothing was kept, so there was nothing to leave unsigned"
+    assert TURNS_FILE in held, "nothing was kept, so there was nothing to leave unsigned"
     assert not [name for name in held if name.endswith(".sig")], held
 
 

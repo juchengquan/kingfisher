@@ -19,7 +19,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher
 from kingfisher.core.config import Config
-from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
+from kingfisher.core.layout import HARNESS, TURNS_FILE
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_bytes
@@ -27,7 +27,7 @@ from tests.conftest import FakeToolCallingModel, Through, an_agent
 from tests.unit.scripted import Scripted
 from tests.unit.stand_ins import StubAgent
 
-TRANSCRIPT = f"{HARNESS}/{TRANSCRIPT_FILE}"
+LOG = f"{HARNESS}/{TURNS_FILE}"
 
 
 def _session_dir(cfg: Config, session_id: str):
@@ -46,7 +46,7 @@ def test_the_conversation_is_a_file_inside_the_session(cfg):
 
     result = kf.run(Request("go"))
 
-    assert (_session_dir(cfg, result.session_id) / TRANSCRIPT).is_file()
+    assert (_session_dir(cfg, result.session_id) / LOG).is_file()
 
 
 def test_the_conversation_counts_against_the_session_quota(cfg):
@@ -60,7 +60,7 @@ def test_the_conversation_counts_against_the_session_quota(cfg):
     directory = _session_dir(cfg, result.session_id)
     counted = session_bytes(directory)
 
-    assert counted >= (directory / TRANSCRIPT).stat().st_size > 0
+    assert counted >= (directory / LOG).stat().st_size > 0
 
 
 # -- what it has to keep doing -------------------------------------------
@@ -90,12 +90,12 @@ def test_a_real_graph_carries_the_conversation_within_a_saver(cfg, session_dir):
     assert len(second["messages"]) > 2, "the conversation did not carry"
 
     # Within one turn the saver is what carries the conversation between
-    # supersteps, and that is all it now has to do -- across turns the transcript
+    # supersteps, and that is all it now has to do -- across turns the turn log
     # carries it, and nothing here outlives the turn that made it.
 
 
 def test_two_sessions_keep_separate_conversations(scripted):
-    """A transcript shared across sessions would replay one caller's exchange to another."""
+    """A conversation shared across sessions would replay one caller's exchange to another."""
     an_agent(scripted, "plain")
     kf = Kingfisher(scripted, sessions=LocalSessions())
     Scripted.script.extend([AIMessage(content="answer one"), AIMessage(content="answer two")])
@@ -103,8 +103,8 @@ def test_two_sessions_keep_separate_conversations(scripted):
     kf.run(Request("question one", agent="plain", session_id="one"))
     kf.run(Request("question two", agent="plain", session_id="two"))
 
-    one = (_session_dir(scripted, "one") / TRANSCRIPT).read_text(encoding="utf-8")
-    two = (_session_dir(scripted, "two") / TRANSCRIPT).read_text(encoding="utf-8")
+    one = (_session_dir(scripted, "one") / LOG).read_text(encoding="utf-8")
+    two = (_session_dir(scripted, "two") / LOG).read_text(encoding="utf-8")
     assert "question one" in one and "question two" not in one, one
     assert "question two" in two and "question one" not in two, two
 
@@ -114,7 +114,7 @@ def test_deleting_a_session_takes_its_conversation_with_it(cfg):
     kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
     result = kf.run(Request("go"))
     directory = _session_dir(cfg, result.session_id)
-    assert (directory / TRANSCRIPT).is_file()
+    assert (directory / LOG).is_file()
 
     assert Through(kf).delete(result.session_id) is None
 

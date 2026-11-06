@@ -8,7 +8,6 @@ the feature is.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from typing import Any
@@ -21,7 +20,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher
 from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.core.layout import HARNESS, PAUSED_MARK, PAUSED_STATE, TRANSCRIPT_FILE
+from kingfisher.core.layout import HARNESS, PAUSED_MARK, PAUSED_STATE
 from kingfisher.core.request import Decision, DecisionError, Request, Resume
 from kingfisher.core.result import AWAITING, DECISIONS, END_TURN
 from kingfisher.core.session.steps import drive
@@ -35,7 +34,7 @@ from tests.conftest import (
     an_agent,
     harness_of,
     middlewares_dir,
-    read_record,
+    read_conversation,
     start,
     subagents_dir,
     tools_dir,
@@ -1061,9 +1060,8 @@ def test_an_input_replaced_while_a_turn_waits_is_named_after_its_resume(cfg, ses
 
     kf.run(Request("again", session_id=session_dir.name))
 
-    transcript = read_record(session_dir / HARNESS / TRANSCRIPT_FILE)
-    asked = [json.loads(line) for line in transcript.splitlines()]
-    *_, last = (one["content"] for one in asked if one["role"] == "user")
+    asked = read_conversation(session_dir / HARNESS)
+    *_, last = (one.content for one in asked if one.role == "user")
     assert "Replaced in /inputs/: report.txt." in last
 
 

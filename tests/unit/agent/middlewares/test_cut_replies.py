@@ -21,12 +21,18 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware, cut_call
 from kingfisher.core.agent.middlewares.step_budget import warning
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
-from kingfisher.core.layout import HARNESS, TRANSCRIPT_FILE
+from kingfisher.core.layout import HARNESS
 from kingfisher.core.session.runtime import cut_off, with_call_args
-from kingfisher.core.session.transcript import from_json
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import EVERY_TOOL, RecordedEvents, an_agent, start, subagents_dir
+from tests.conftest import (
+    EVERY_TOOL,
+    RecordedEvents,
+    an_agent,
+    read_conversation,
+    start,
+    subagents_dir,
+)
 from tests.unit.scripted import Scripted
 from tests.unit.stand_ins import Sent
 
@@ -178,13 +184,13 @@ def _written(cfg: Any) -> set[str]:
 
 
 def _kept(cfg: Any) -> list[Any]:
-    """What the turn's transcript keeps, which is what every later turn sends again."""
-    session = cfg.workspace / "sessions" / "s"
-    return list(from_json((session / HARNESS / TRANSCRIPT_FILE).read_text(encoding="utf-8")))
+    """What the turn left the conversation holding, which is what every later turn sends
+    again."""
+    return list(read_conversation(cfg.workspace / "sessions" / "s" / HARNESS))
 
 
 def _said(cfg: Any) -> dict[str, str]:
-    """Each tool result the turn's transcript keeps, by call id."""
+    """Each tool result the turn left the conversation holding, by call id."""
     return {one.call_id: one.content for one in _kept(cfg) if one.role == "tool"}
 
 
@@ -258,7 +264,7 @@ def test_three_cut_replies_in_a_row_stop_the_turn_and_run_nothing_of_the_third(w
     assert not result.completed
     assert result.answer == "Writing it now.", "the agent's own answer carries no subagent's line"
     assert _written(writing) == set(), "the third reply's whole call ran too"
-    assert set(_said(writing)) == {"c1", "c2"}, "the third reply's calls stayed in the transcript"
+    assert set(_said(writing)) == {"c1", "c2"}, "the third reply's calls stayed in the conversation"
 
 
 def test_a_reply_that_was_not_cut_starts_the_count_again(writing):

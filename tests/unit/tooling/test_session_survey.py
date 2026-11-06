@@ -13,14 +13,17 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.layout import HARNESS, LEDGER_FILE, MEMORY_WRITER
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.store import SECOND_COPY, HarnessFiles
+from kingfisher.core.session.transcript import as_record
 from kingfisher.plugins import LocalSessions
-from tests.conftest import EVERY_TOOL, an_agent, start, tools_dir
+from tests.conftest import EVERY_TOOL, an_agent, read_conversation, start, tools_dir
+from tests.unit.agent.middlewares.test_clearing import TOOLS as BULKY
+from tests.unit.agent.middlewares.test_clearing import _marked, _one
 from tests.unit.scripted import Scripted
 
 SURVEY = Path(__file__).resolve().parents[3] / "scripts" / "session_survey.py"
 
 #: Long enough to be filed as it arrives, so the turn leaves a result file beside the
-#: transcript's preview of it: a short result has none until it leaves the conversation.
+#: conversation's preview of it: a short result has none until it leaves the conversation.
 TOOL = '''
 def web_search(query: str) -> str:
     """Search the web."""
@@ -69,8 +72,8 @@ def test_the_survey_reads_what_a_turn_leaves_behind(scripted):
     assert len(found.turns) == 1
     assert found.recorded_results == 1
     assert found.chars["user"] and found.chars["tool results"]
-    assert found.repeated > 0, "the result's file and the transcript both hold it"
-    for part in ("result files", "transcript", "ledger"):
+    assert found.repeated > 0, "the result's file and the conversation both hold it"
+    for part in ("result files", "turn log", "ledger"):
         assert found.disk[part], part
     assert found.disk["other"] == 0, "a file the survey has no part for"
     assert "?" not in found.messages, "a seal read as a message"
@@ -78,3 +81,34 @@ def test_the_survey_reads_what_a_turn_leaves_behind(scripted):
     harness = scripted.workspace / "sessions" / "s" / HARNESS
     copies = (harness / LEDGER_FILE, harness / f"{LEDGER_FILE}{SECOND_COPY}")
     assert found.disk["ledger"] == sum(copy.stat().st_size for copy in copies)
+
+
+def test_the_survey_rebuilds_the_conversation_as_kingfisher_does(scripted):
+    """The survey estimates a session's size from the conversation it rebuilds out of the
+    turn log; ignoring a cleared result's line, it counted the whole result again, and
+    ignoring a rewind, the turns the caller took back."""
+    tools_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (tools_dir(scripted) / "probe.py").write_text(BULKY, encoding="utf-8")
+    an_agent(scripted, **EVERY_TOOL)
+    start(scripted, "s")
+    cfg = _marked(scripted, clear_results_at=12_000)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    harness = cfg.workspace / "sessions" / "s" / HARNESS
+    Scripted.script.extend([_one("bulky", 1, n=1), AIMessage(content="done")])
+    first = kf.run(Request("first", agent="only", session_id="s"))
+    Scripted.script.extend([*(_one("bulky", n, n=n) for n in range(2, 8)), AIMessage("done")])
+    kf.run(Request("second", agent="only", session_id="s"))
+    survey = _survey()
+
+    def held(said) -> list[tuple[str, str, str]]:
+        return [(one["role"], one.get("content", ""), one.get("call_id", "")) for one in said]
+
+    cleared = [as_record(one) for one in read_conversation(harness)]
+    assert any("cleared;" in one for _, one, _ in held(cleared)), "the control: nothing cleared"
+    assert held(survey._conversation(harness)) == held(cleared)
+
+    kf.session("s").rewind(first.turn_id)
+
+    rewound = [as_record(one) for one in read_conversation(harness)]
+    assert len(rewound) < len(cleared), "the control: the rewind took nothing back"
+    assert held(survey._conversation(harness)) == held(rewound)

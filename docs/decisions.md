@@ -2764,7 +2764,7 @@ identical `loud` results, so it could not fail; it is driven with results that d
 content and not length now, beside a rule that a differing length still repoints.
 *(2026-10-15, from an architecture review.)*
 
-**Result files, then the ledger, then the transcript, then a sweep.** So a row never
+**Result files, then the ledger, then the turn log, then a sweep.** So a row never
 names a missing file and a result the conversation shows always has a row; the other way
 round, a crash leaves the next turn reading an id the ledger never gave out, and giving
 it again. A paused turn writes its rows before its state. The ledger is
@@ -2787,7 +2787,7 @@ claim, waited for by a cancel, and on the pool for an async turn, as other host 
 is; not asked when there is nothing. A raise is logged and the turn finishes.
 **Not taken:** session deletion through it, which is the sessions plugin's `delete`
 and removes everything at once; handing the whole backend, which reaches the ledger
-and the transcript; renaming or moving, a second write path into a folder whose names
+and the turn log; renaming or moving, a second write path into a folder whose names
 mean something; running it after the claim is let go, since a crash can reuse an id,
 so a late `settle` could remove a file a new turn has just written under it; failing
 the turn on a raise, which loses an answer over files the next turn offers again;
@@ -3051,7 +3051,7 @@ each version of a file a turn left**, for a rewind (*A session keeps a copy of e
 of a file a turn left*); a handle still points at the file as it is now.
 
 **Inside the model call, replacing in place, writing nothing.** A pass clears the request
-and returns the handles as a state update, so every later call and the transcript are
+and returns the handles as a state update, so every later call and the turn log are
 built from the cleared conversation. **Reversed: a `before_model` hook.** It is a graph
 step, and the acceptance run measured it: the recursion limit's 150 steps bought 37 model
 calls instead of 50, and a writing turn stopped there. Inside the call the summariser
@@ -3172,7 +3172,7 @@ state, which no turn's graph is given. Kept whole, each turn started past the tr
 again and summarised the whole conversation once more: measured, three summaries over
 three turns where one was due, each a model call over nearly everything, a new history
 file repeating the early messages, and a summary rewritten at the front of what the
-model sees, so nothing of the prompt was cached. The transcript stops being every word
+model sees, so nothing of the prompt was cached. The conversation stops being every word
 said; the words summarised away are in `conversation_history/`, which the summary names.
 The summary keeps the `lc_source` mark deepagents knows it by, as `Message.summary`:
 read back unmarked, the next summary copies it into its history file as if the user had
@@ -3955,7 +3955,7 @@ a grilled plan.)*
 **Kept in the session, compared at the next turn.** Kingfisher keeps nothing between
 turns, so each turn that asks something lists `/inputs` once its request's files are
 placed, compares that with `/.harness/inputs.json`, and leaves its own listing there.
-Written with the transcript, by a turn whose message reached the model: kept by a turn
+Written with the turn log, by a turn whose message reached the model: kept by a turn
 that failed first, a change would be named on no turn. A resume adds no message and keeps
 nothing. A first turn names everything there as new; a session from before the record
 names what its request placed until a turn keeps one; and without a conversation no
@@ -4012,7 +4012,7 @@ past a turn's stop, measured at under a second (*The tail past the stop needs no
 its own*), now includes the listing and the copies, which is what the lock rule is for.
 
 **Not on the ledger's closing line, where the plan put it.** The closing line is the first
-thing a turn's ending writes, ahead of the transcript and the pause so that a result in
+thing a turn's ending writes, ahead of the turn log and the pause so that a result in
 either already has its row, and the memory writer rewrites the memory file after both.
 Carrying the files there would write the ledger twice a turn. A line of its own, keyed by
 its turn, is found from whatever branch the turn ends up on, so abandoning a branch moves
@@ -4065,7 +4065,7 @@ forgetting never reaches. `Session.forget` takes the entry out of each copy befo
 file itself, so a forget that fails part way can be asked again, by its id and by its
 text, numbering nothing: numbered now, a copy's entries would take ids the caller was
 never shown, and an id the file once gave another entry takes that one out of an old copy
-too: history lost, never a leak. **What still reads the copies:** the shell, as it reads the transcript. `.harness` is
+too: history lost, never a leak. **What still reads the copies:** the shell, as it reads the turn log. `.harness` is
 fenced against the shell's writes and against both of the file tools', which is what
 keeps a copy as the turn left it. *(2026-11-04.)*
 
@@ -4366,10 +4366,10 @@ with everything green. *(2026-09-24.)*
 **A session's history is kingfisher's own records, not a framework's.**
 `core/session/transcript.py` keeps what the agent *did* as well as what it said -- tool
 calls and results, not only human and assistant text -- since an agent that cannot see
-what it already did will do it again. Portable on purpose: the next turn may not be run by
-this harness.
+what it already did will do it again. The records are the turn log's lines, and the
+promise is that the conversation any turn ended on can be rebuilt from the log alone.
 
-**The checkpointer is in-memory, and the transcript is what survives.** So a turn's
+**The checkpointer is in-memory, and the turn log is what survives.** So a turn's
 *working* state does not cross a turn boundary though its conversation does: an agent
 resuming a session does not find a half-finished `TodoListMiddleware` checklist it has no
 memory of writing, for a task the caller may have dropped. That is structural rather than
@@ -4381,40 +4381,46 @@ supersteps.
 short.** The reader raised on a line it could not parse, so one cut by a kill failed
 every later turn in the session. Skipping the line, as the ledger's reader does, is wrong
 here: past a damaged line a tool result can answer a call that was on it, and a provider
-refuses an answer to no call -- inferred, since no provider was called. So the reading
-stops there. A cut read that way is silent, though, and a file a full disk emptied reads
-as a first turn's, so the ledger, written before the transcript, says on each closing line
-how many messages the turn wrote. A turn reading fewer, or stopping at a damaged line,
-emits `history_lost` and sets `RunResult.history_lost`. The agent is not told: what it
+refuses an answer to no call -- inferred, since no provider was called. So the turn log's
+reading stops there, and the next write keeps only what was read. Since each `.harness`
+file is kept twice under a seal, a damaged line comes only from a log neither copy's seal
+matches: one written before seals were, or by something other than kingfisher. A cut read
+that way is silent, though, and a file emptied reads as a first turn's, so the ledger,
+written before the log, says on each closing line how many messages the turn ended on. A
+turn rebuilding fewer, or stopping at a damaged line, emits `history_lost` and sets
+`RunResult.history_lost`. The agent is not told: what it
 lost is gone, and whether to go on is the caller's. The ledger's own reader decodes
 leniently now, since its rows keep any language and a cut inside a character raised on
 every later turn: 34 of 312 cut positions on a ledger with one Chinese row. *(2026-11-02.)*
 
 **Every turn's messages are kept as first written, each tagged with its turn, in
-`.harness/turns.jsonl`.** The transcript is the conversation the next turn is built from,
-so a summary replaces its front, and the words it replaced survive only in
+`.harness/turns.jsonl`.** It is the only record of what was said: each turn is built on
+the conversation the log rebuilds along the session's path. A summary replaces the front
+of that conversation, and without the log the words it replaced would survive only in
 `conversation_history/`, which the agent can write. Rewinding a session to the end of any
 turn, which is how a client regenerates one, needs the conversation each turn ended on.
 Each turn adds an opening line -- the turn; `parent`, the turn the session was on before
 it, the last the log opens that a rewind did not leave behind; `from`, how many of its
 parent's messages it began from -- or, for a resume, `resumed`. Then a line per message it
-added, in the transcript's own shape, the provider's call id on each tool line, except
-that the turn's own message is kept as `parts` (*The turn log says who wrote each piece*,
-below); then the summary it ended on, with its `cut`; then its `answer`. The conversation
-at the end of a turn is its path replayed from the first: the parent's kept to `from`,
-each message appended, a summary standing for everything before its cut. The transcript
-is unchanged.
+added, as `as_record` writes one, the provider's call id on each tool line, except that the
+turn's own message is kept as `parts` (*The turn log says who wrote each piece*, below);
+then the summary it ended on, with its `cut`; then a line with `at` for each message it
+left holding other text than first written (*The transcript is gone*, below); then its
+`answer`. The conversation at the end of a turn is its path replayed from the first: the
+parent's kept to `from`, each message appended, a summary standing for everything before
+its cut, a message at `at` given that text.
 `test_the_log_rebuilds_the_conversation_across_summaries_pauses_and_resumes` and its
-neighbours replay the log along the current path and find the transcript, across
-summaries, pauses, resumes, a failed turn and a short read.
+neighbours rebuild from the log and find what the model was handed, across summaries,
+pauses, resumes, a superseded pause, a failed turn, a rewind and a damaged line.
 
-**Read off the state, not the transcript.** A summary takes messages out of view in the
-turn that said them, so no transcript holds them; the state keeps every message. A turn's
+**Read off the state, not the conversation.** A summary takes messages out of view in the
+turn that said them, so the conversation the model sees no longer holds them; the state
+keeps every message. A turn's
 are those past where its state began: its history for an asked turn, and for a resume the
 paused state's length, read before the resume runs. deepagents keeps only the last summary,
 its cut counted into every message held (`findings.md`), so a turn logs one at most. The
 cut is recounted into what the log replays -- records rather than messages, since the
-transcript drops a role it does not know, and from the summary a resume carried -- and a
+records drop a role they do not know, and from the summary a resume carried -- and a
 resume ending on the summary it carried logs none, since the paused turn did.
 
 **A resume's line for each answer names the call it answered**, as `{"turn": ...,
@@ -4426,35 +4432,43 @@ which for a subagent is read from the subagent's own checkpoint. With the turn o
 line and the call id on every tool line, a turn and a call id name every action, and no
 new kind of id was made: a step id waits for a step-level view or a rewind inside a turn.
 
-**Written after the ledger and before the transcript, by #1184's reasoning.** The ledger's
-closing line counts the messages the transcript is about to hold. A turn dying between the
-log and the transcript leaves the transcript short of that count, which the next turn
-reports, and that turn's `from` records how much it read, so the log follows what its
-model was really given; written after the transcript, a turn dying between leaves the log
-a turn behind, and nothing says so. The window that stays: a turn that summarised and died
-between the two, whose older transcript is no prefix of what it logged. A request refused
-before its turn runs writes nothing.
+**Written after the ledger, by #1184's reasoning.** The ledger's closing line counts the
+messages the turn ended on. A turn dying between the ledger and the log leaves the log a
+turn short of that count: the next turn is built on the turn before, rebuilds fewer
+messages than the ledger counts, and reports `history_lost`. `from` still records how much
+of its parent's conversation a turn began from; with the log the only record, that is
+always all of it. A request refused before its turn runs writes nothing.
 
-**A session older than the log keeps its conversation, and a rewind stops where its log
-began.** Its first turn on this version reads the transcript as before and starts the log
-with its own messages. The log has no record of the turns before it, so a rewind to one is
-refused, as a turn that died between writing the ledger and the log is, and a rewind to the
-first turn logged rebuilds that turn's messages without what came before. Its
-conversation was once imported into the log at that first turn, and a rewind could cut the
-import back to an earlier turn by the ledger's count; both were dropped where nothing keeps
-backward compatibility, since the next step rebuilds the conversation from the log and
-drops the transcript the import read. *(2026-11-06.)*
+**A session older than the log starts with no history, and a rewind stops where its log
+began.** Its conversation was in the transcript, which nothing reads now, so its first
+turn on this version starts the log with its own messages, reports `history_lost` against
+the ledger's count, and builds on nothing before. The log has no record of the turns
+before it, so a rewind to one is refused, as a turn that died between writing the ledger
+and the log is, and a rewind to the first turn logged rebuilds that turn's messages
+without what came before. A rewind to `START` names only logged turns off the path, so
+the results of the turns before the log stay on it: the ledger's delta and index still
+tell the next turn of them. Its conversation was once imported into the log at that first
+turn, and a rewind could cut the import back to an earlier turn by the ledger's count;
+both were dropped where nothing keeps backward compatibility, since the conversation is
+rebuilt from the log alone. *(2026-11-06.)*
 
-**Expiry reaches it.** A result `KINGFISHER_KEEP_RESULTS_ROUNDS` expires is swapped in the
-log for the handle the agent is shown for an expired result, written in one place for both,
-so the setting still bounds the disk a session holds. Matched by the id it ends in and its
-call: a file tool's answer that merely ends in an id is the agent's own file. The log
-counts against `KINGFISHER_SESSION_MAX_BYTES` as anything in the session does.
+**Expiry reaches it once the result is out of view.** A result
+`KINGFISHER_KEEP_RESULTS_ROUNDS` expires is swapped in the log for the handle the agent is
+shown for an expired result, written in one place for both, so the setting still bounds the
+disk a session holds -- but only once the conversation the turn ended on no longer holds it
+whole, cleared or summarised away. Until then the model is handed it whole, and swapped
+sooner the rebuild would hand it the handle in its place, the rewrite the result-expiry
+entry rejects; a line on a branch a rewind left behind is never in view, and is swapped
+as soon as its result expires. A line carrying `at` is never swapped: it holds the handle
+clearing wrote. Matched by the id it ends in and its call: a file tool's answer that merely
+ends in an id is the agent's own file. The log counts against
+`KINGFISHER_SESSION_MAX_BYTES` as anything in the session does.
 
-**The cost, taken:** read and written whole every turn, as the ledger and the transcript
-are, since `HarnessFiles` has no append; and the log keeps every word said, so it outgrows
-both, and a remote backend moves it three times a turn, read once and written twice. An
-append on the backend is the answer once a session measures slow. **Named for its turns**,
+**The cost, taken:** read and written whole every turn, as the ledger is, since
+`HarnessFiles` has no append; and the log keeps every word said, so it outgrows the
+ledger, and a remote backend moves it three times a turn, read once as the turn begins and
+written as its two copies as it ends. An append on the backend is the answer once a
+session measures slow. **Named for its turns**,
 not as a message log, which the
 glossary turns down as a name for `conversation_history/`; a rewind lists turns.
 *(2026-11-04.)*
@@ -4497,13 +4511,34 @@ the only line with an `answer`, as `RunResult.answer` returns it, `<think>` bloc
 written when empty: a turn paused at a gate, and one that raised, which hands back none.
 A reader working the answer out from the last assistant line would show the block the
 caller never saw, and a failed turn's last words as an answer it never gave. With no
-`role`, the rebuild skips it, as it skips a resume's answers. The transcript stays the
-model's view, holding the joined text, until each turn's history is rebuilt from the log
-instead. *(2026-11-06.)*
+`role`, the rebuild skips it, as it skips a resume's answers. *(2026-11-06.)*
+
+**The transcript is gone: the turn log is the only record of what was said.**
+`.harness/transcript.jsonl` held the conversation the next turn was built from, and the
+log held every message as first written, from which a rewind already rebuilt any turn's
+conversation. The transcript copied what the log held, cost two more uploads a turn once
+every `.harness` file was kept twice under a seal, and its write order -- ledger, log,
+transcript -- existed only so the next turn could tell when the two disagreed. Each turn
+is now built on the conversation the log rebuilds along the session's path, read once as
+the turn begins and handed to its end, which writes it back with the turn's own lines.
+**The two did not hold the same lines until a summary**, as the plan supposed. Clearing
+swaps an earlier turn's result for its handle in state, which the transcript carried and a
+log of each turn's own messages never saw: rebuilt from it, every later turn was handed
+the whole result again, and the summariser counted it before clearing took it back out.
+So a turn's end replays the log through its own lines, compares that with the conversation
+it ended on, and adds a line with `at` and the text for each message whose text differs,
+beside the line first written rather than over it: a rewind to before the clearing gets
+the whole result back. A difference the log cannot say -- a message more or fewer, a role
+or call changed -- is warned of as `conversation_not_logged` and nothing is written for
+it. Expiry swaps a line only once its result is out of view (*Expiry reaches it once the
+result is out of view*, above), so the rebuild hands the model what the transcript did.
+**Left open:** whether `turns.jsonl` becomes a documented, read-only file a client
+reads, which is parked in `ONGOING.md`. *(2026-11-06.)*
 
 **A session is put back where a turn it logged ended, and the turns after it are kept.**
-`Session.rewind(to)` rebuilds the transcript by replaying the turn log along `to`'s
-parents, so a turn behind a summary comes back whole; `Session.turns()` lists the tree.
+`Session.rewind(to)` puts the session on `to`'s path, along which the next turn's
+conversation is rebuilt from the turn log, so a turn behind a summary comes back whole;
+`Session.turns()` lists the tree.
 Kept rather than deleted, so a rewind made by mistake is undone by another, and a client
 can step between versions of a reply. The next turn follows the turn rewound to, from the
 conversation it left. `START` is a value of its own, never `None`: an unset variable
@@ -4547,11 +4582,12 @@ copy its path kept and drops the file where none did: the agent is then told onl
 the next request places, rather than a history from another branch. The memory writer's
 file goes back with the memory file it writes.
 
-**Written pause, path, conversation, inputs, in that order.** A rewind dying after the
-path and before the conversation leaves a turn that follows the turn rewound to reading
-the old transcript, whose length the ledger's count for that turn then disagrees with,
-which the turn reports; the other order would leave it following the old turns from a
-conversation they never had. *(2026-11-04.)*
+**Written pause, path, inputs, in that order.** A rewind writes no conversation: the path
+is what the next turn's is rebuilt along, and the ledger counts only the turns on it. A
+rewind dying after the path leaves the session at the turn rewound to, holding the files
+and the record of the inputs the turns after it left, as a rewind that restored none
+would; the path before the pause would leave a pause answerable on a conversation the
+session is no longer at. *(2026-11-04.)*
 
 **A rewind puts the files in `/outputs` and `/memory` back as the turn left them.** It
 replays the file history along the path to that turn: a version kept is copied back by
@@ -4626,7 +4662,7 @@ ended on any saver but `InMemorySaver`, whose own mappings writing the pause rea
 shared `InMemorySaver`, one session's pause carried every session's checkpoints; and a
 resume ran on a copy read from that file, so the deployment's saver never saw the turn it
 finished. A turn needs a saver only for its own length -- its end reads the final state
-once, to write the transcript -- so a deployment's saver bought nothing, and the pause
+once, to write the turn log -- so a deployment's saver bought nothing, and the pause
 file already keeps a paused turn in the session. Removed with `checkpointer=` on `run` and
 `stream`, `threads` on the command's plugin record, `SharedThreads` and `reap`'s sweep of threads no session
 owned; `test_a_follow_up_turn_hands_the_model_the_earlier_exchange_once` holds the
@@ -4676,7 +4712,7 @@ What the old per-session sqlite bought survives by another route, measured rathe
 assumed: a conversation deleted with its session (one workspace held 132 orphaned threads
 after every session was reaped), a conversation the quota can see, and no cross-session
 contention (at 32 concurrent writers the slowest went from 363ms on a shared file to 80ms
-on its own). The transcript is a file in the session, and nothing is shared. What went is
+on its own). The conversation is a file in the session, and nothing is shared. What went is
 ~20KB of empty database per session, which was the cost.
 
 **Sqlite is gone entirely, and so are the two dependencies that carried it.**
@@ -4799,9 +4835,10 @@ states only the fact. *(2026-11-03.)*
 **A turn tells a session another turn used by its conversation.** A refusal after the
 claim deletes a session this request made, and a listing that missed a session makes
 one already used look made; any pin found under the claim said otherwise (#1122). With
-the agent's pin gone the transcript says it, beside the datazone pin: only a turn holding
+the agent's pin gone the turn log says it, beside the datazone pin: only a turn holding
 the claim writes it, and the turn reads it under the claim anyway, so it costs no read.
-A session whose only turns ended before their first step left no transcript and is
+Any line says it, not a conversation: a session rewound to `START` holds turns and an
+empty one. A session whose only turns ended before their first step left no log and is
 still taken for one made; it holds no more than their inputs, which a caller can send
 again. *(2026-11-03.)*
 
@@ -4817,7 +4854,7 @@ and a turn's datazone decides the tools it is handed and nothing about the sessi
 check *A turn checks who is calling before it touches the session* describes is now the
 one on the agent the request names. `kingfisher artifact` and `result` take no `--as`,
 and `decide` with nothing to answer refuses one, as it refuses an `--agent` it would not
-use. The transcript alone now says another turn used a session the listing missed.
+use. The turn log alone now says another turn used a session the listing missed.
 **The cost, taken:** what a finance turn's tools returned is read, and the session
 carried on, by whoever holds its id, from any datazone; keeping an id from callers who
 should not have it is the deployment's. *(2026-11-04.)*
@@ -4853,7 +4890,7 @@ the rule builds a config per case and keeps the other bound beside it as the con
 
 **The tail past the stop needs no term of its own, and that is now measured rather than
 assumed.** What a turn does once its graph loop ends -- emit the result, write the
-transcript and the ledger, walk the session for artifacts, let the claim go -- was
+ledger and the turn log, walk the session for artifacts, let the claim go -- was
 accepted in the docstring as milliseconds against a bound in minutes, with nothing
 driving it. Measured on 2026-10-20: 0.6ms for a turn that left nothing, 764ms for one
 that left 5,000 artifacts and said 20,000 things, and between 0.2ms and 76ms of setup
@@ -5897,7 +5934,7 @@ since deepagents lands a new one ahead of its caching and memory, which would no
 finished the request; and not by wrapping the model, since deepagents picks a model's
 profile from the instance it is handed. The stop is a `BaseException`, so a fallback
 answering for a failed call does not carry the turn on and run the tools it calls. No
-claim, transcript or last-used time is written, and a session made in order to look is
+claim, turn log or last-used time is written, and a session made in order to look is
 removed. The code interpreter's runtime, which the caught call starts where a grant
 lists its tools, is closed as a turn's teardown closes it: left open, `kingfisher
 prompt` printed its listing and never exited. Each block is named by matching what
@@ -6264,7 +6301,7 @@ awaited.
 yields each call and is sent the answer; `drive` makes the sync call and `adrive`
 awaits its `a` twin, so every check between the calls, and their order, exists once.
 Two hand-written copies of each read was the alternative, which is what the second copy
-of the turn was. Every session I/O helper is one -- `HarnessFiles`, the transcript and
+of the turn was. Every session I/O helper is one -- `HarnessFiles`, the ledger and
 pause formats, the pinned agent, placing data, what a turn left -- kept together in
 `core.session.store`. *(2026-10-02.)*
 
@@ -6298,7 +6335,7 @@ is a default on the interface, and the kit checks it. *(2026-10-05.)*
 
 **Setup is one sequence for both loops.** `_prepare_steps` is the lookup, the open,
 the pin, `mark_used`, the claim, the quota, the data, the pause, the agent and the
-transcript; only `_built_turn` is host work -- inline for `stream`, on the pool for
+turn log; only `_built_turn` is host work -- inline for `stream`, on the pool for
 `astream`. A refused request leaves no turn behind because `allocate_turn` makes
 nothing and the sequence's order keeps that promise;
 `test_a_refused_request_starts_no_turn_and_keeps_no_claim` says so.
@@ -6340,7 +6377,7 @@ when work arrives with none idle: after five turns in a row it held one.
 
 **A turn's ending is awaited too, run as a task no cancel reaches.** It had been a
 plain function on the pool for `astream`, because on the loop its round trips -- the
-pause, the transcript, the artifacts, the claim -- held up every other turn. Still, at
+pause, the turn log, the artifacts, the claim -- held up every other turn. Still, at
 a pool of 16, two hundred turns took 3173ms against one turn's 522ms. The ending is now
 a sequence like setup, its host work on the pool, which `stream` drives with no await
 and `astream` runs through `finished`, as a task the caller's cancel never reaches,

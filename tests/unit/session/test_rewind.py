@@ -34,7 +34,6 @@ from kingfisher.core.layout import (
     LEDGER_FILE,
     MEMORY_WRITER,
     PAUSED_MARK,
-    TRANSCRIPT_FILE,
     TURNS_FILE,
 )
 from kingfisher.core.request import Decision, DecisionError
@@ -45,6 +44,7 @@ from kingfisher.plugins import LocalSessions
 from tests.conftest import (
     EVERY_TOOL,
     an_agent,
+    read_conversation,
     read_record,
     read_record_bytes,
     start,
@@ -52,8 +52,12 @@ from tests.conftest import (
     write_old_record,
 )
 from tests.unit.scripted import Scripted
-from tests.unit.session.test_turn_log import TOOLS, _calls, _resume, _say, _searches, _transcript
+from tests.unit.session.test_turn_log import TOOLS, _calls, _resume, _say, _searches
 from tests.unit.stand_ins import StubAgent
+
+
+def _conversation(cfg) -> tuple:
+    return read_conversation(cfg.workspace / "sessions" / "s" / HARNESS)
 
 
 @pytest.fixture
@@ -82,13 +86,13 @@ def _harness_files(cfg) -> dict:
 
 
 def test_a_rewind_puts_the_conversation_back_and_the_next_turn_carries_on_from_it(rewinding):
-    """Left at the transcript as it was, the next turn answers from turns the caller took
+    """Left at the conversation as it was, the next turn answers from turns the caller took
     back; following the last turn the log holds, its record hangs off a turn its model
     never saw; told of an abandoned turn's results, the model cites them; and a result
     number given again would name two results."""
     kf = Kingfisher(rewinding, sessions=LocalSessions())
     first = _say(kf, "TASK-FIRST", AIMessage("ANSWER-FIRST"))
-    after_first = _transcript(rewinding)
+    after_first = _conversation(rewinding)
     _say(kf, "TASK-SECOND", AIMessage("ANSWER-SECOND"))
     # Last, so its results are what the next turn would be told of were it still followed.
     third = _say(kf, "TASK-THIRD", _calls(("web_search", "q", "c1")), AIMessage("ANSWER-THIRD"))
@@ -97,7 +101,7 @@ def test_a_rewind_puts_the_conversation_back_and_the_next_turn_carries_on_from_i
     done = kf.session("s").rewind(first.turn_id)
 
     assert done.to == first.turn_id
-    assert _transcript(rewinding) == after_first
+    assert _conversation(rewinding) == after_first
     Scripted.heard.clear()
     fourth = _say(kf, "TASK-FOURTH", _calls(("web_search", "r", "c2")), AIMessage("ok"))
     sent = _sent()
@@ -113,7 +117,7 @@ def test_a_rewind_puts_the_conversation_back_and_the_next_turn_carries_on_from_i
 
 
 def test_a_rewind_to_before_a_summary_brings_back_what_the_summary_replaced(rewinding):
-    """Rebuilt from the transcript, a turn before the last summary has nothing left to
+    """Rebuilt from what the model last saw, a turn before the last summary has nothing left to
     rebuild: its words are behind the summary, in a file the agent can write."""
     an_agent(
         rewinding,
@@ -125,14 +129,14 @@ def test_a_rewind_to_before_a_summary_brings_back_what_the_summary_replaced(rewi
         rewinding, sessions=LocalSessions(), middlewares={"summarize-by-count": SummarizeByCount}
     )
     first = _say(kf, "TASK-EARLY", *_searches("a", 3), AIMessage("ANSWER-EARLY"))
-    after_first = _transcript(rewinding)
+    after_first = _conversation(rewinding)
     _say(kf, "TASK-LATER", *_searches("b", 4), AIMessage("ANSWER-LATER"))
     assert Scripted.summaries >= 1, "the control: the second turn never summarised"
-    assert _transcript(rewinding)[0].summary, "the control: the summary replaced nothing"
+    assert _conversation(rewinding)[0].summary, "the control: the summary replaced nothing"
 
     kf.session("s").rewind(first.turn_id)
 
-    assert _transcript(rewinding) == after_first
+    assert _conversation(rewinding) == after_first
 
 
 def test_a_rewind_returns_to_a_turn_it_left_behind(rewinding):
@@ -142,13 +146,13 @@ def test_a_rewind_returns_to_a_turn_it_left_behind(rewinding):
     first = _say(kf, "TASK-FIRST", AIMessage("ANSWER-FIRST"))
     second = _say(kf, "TASK-SECOND", AIMessage("ANSWER-SECOND"))
     third = _say(kf, "TASK-THIRD", AIMessage("ANSWER-THIRD"))
-    after_third = _transcript(rewinding)
+    after_third = _conversation(rewinding)
     kf.session("s").rewind(first.turn_id)
     _say(kf, "TASK-OTHER", AIMessage("ANSWER-OTHER"))
 
     kf.session("s").rewind(third.turn_id)
 
-    assert _transcript(rewinding) == after_third
+    assert _conversation(rewinding) == after_third
     assert [turn.id for turn in kf.session("s").turns() if turn.current] == [
         first.turn_id,
         second.turn_id,
@@ -161,15 +165,15 @@ def test_a_rewind_returns_to_a_turn_it_left_behind(rewinding):
 
 
 def test_a_rewind_to_the_start_leaves_no_conversation(rewinding):
-    """A turn after it that still found the old transcript, or followed the old turns,
-    would be answered from a conversation the caller emptied."""
+    """A turn after it that still followed the old turns would be answered from a
+    conversation the caller emptied."""
     kf = Kingfisher(rewinding, sessions=LocalSessions())
     _say(kf, "TASK-FIRST", AIMessage("ANSWER-FIRST"))
 
     done = kf.session("s").rewind(START)
 
     assert done.to is None
-    assert not (rewinding.workspace / "sessions" / "s" / HARNESS / TRANSCRIPT_FILE).exists()
+    assert _conversation(rewinding) == ()
     assert not any(turn.current for turn in kf.session("s").turns())
     Scripted.heard.clear()
     fresh = _say(kf, "TASK-FRESH", AIMessage("ok"))
@@ -221,9 +225,8 @@ def test_turns_logged_under_one_id_are_listed_and_a_rewind_behind_them_is_refuse
     for turn_id in ("req-76", "req-77", "req-78"):
         kf.run(Request(turn_id, agent="only", session_id="s", turn_id=turn_id))
 
-    def no_id_held(harness):
-        # The check as it was before #1208, which read no log; a step, like the one it replaces.
-        yield from ()
+    def no_id_held(log):
+        # The check as it was before #1208, which read no log.
         return frozenset()
 
     with monkeypatch.context() as patched:

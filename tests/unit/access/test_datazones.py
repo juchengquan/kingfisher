@@ -27,9 +27,9 @@ from kingfisher.core.definitions.subagents.spec import SubagentError, declared
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError, found_in
 from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.core.inventory import inventory
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TRANSCRIPT_FILE
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TURNS_FILE
 from kingfisher.core.service import Kingfisher
-from kingfisher.core.session.model import QuotaExceededError
+from kingfisher.core.session.model import START, QuotaExceededError
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import Through, agent_named, start, subagents_dir, tools_dir
@@ -1060,7 +1060,20 @@ def test_a_used_session_the_listing_missed_outlives_a_refused_turn(turns, door):
 
     _refused_over_budget(turns, sessions, door, "s")
 
-    assert (turns.sessions_root / "s" / HARNESS / TRANSCRIPT_FILE).is_file()
+    assert (turns.sessions_root / "s" / HARNESS / TURNS_FILE).is_file()
+
+
+def test_a_session_rewound_to_the_start_outlives_a_refused_turn(turns):
+    """Judged by its conversation, which a rewind to the start empties, a session the
+    listing missed read as one the turn had made, and a refusal deleted it with every turn
+    a rewind could have gone back to."""
+    sessions = _Unlisted()
+    _turn(Kingfisher(turns, sessions=sessions), "s", None)
+    Kingfisher(turns, sessions=sessions).session("s").rewind(START)
+
+    _refused_over_budget(turns, sessions, "run", "s")
+
+    assert (turns.sessions_root / "s" / HARNESS / TURNS_FILE).is_file()
 
 
 @pytest.mark.parametrize("door", ["run", "arun"])

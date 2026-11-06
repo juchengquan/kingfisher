@@ -684,7 +684,7 @@ def test_an_ending_whose_record_fails_still_lets_go_of_the_interpreter(cfg, monk
     process at exit.
     """
     released = _released(monkeypatch)
-    monkeypatch.setattr(running.Running, "_record_transcript", _refused)
+    monkeypatch.setattr(running.Running, "_record_turn", _refused)
     session = start(cfg, "s")
 
     _drive(service(cfg), Request("go", session_id=session), how)
@@ -703,7 +703,7 @@ def _refused(self, prepared, snapshot, *, answer):
 def test_a_turn_whose_record_fails_still_hands_back_its_answer(cfg, monkeypatch, how):
     """A full disk at the ending raised out of the turn, so the caller lost an answer the
     model had been paid for, which nothing streams before `finished`."""
-    monkeypatch.setattr(running.Running, "_record_transcript", _refused)
+    monkeypatch.setattr(running.Running, "_record_turn", _refused)
 
     result = _drive(service(cfg), Request("go", session_id=start(cfg, "s")), how)
 

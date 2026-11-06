@@ -14,7 +14,7 @@ from kingfisher.core.agent.host_paths import HOST_ROOTS
 from kingfisher.core.agent.middlewares.guarded_calls import GuardedCallsMiddleware
 from kingfisher.core.agent.session_paths import NOT_FOR_TOOLS
 from kingfisher.core.agent.tool_guards import guarded_tools
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TRANSCRIPT_FILE
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TURNS_FILE
 from kingfisher.plugins import backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.conftest import macos, paths_in
@@ -434,7 +434,7 @@ def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
 #: A link the shell can plant, by where it sits and what it points at, both inside the
 #: session: each target is a file an offered tool writing to its `path` must not reach.
 PLANTED = {
-    "the conversation": ("scratchpad/link", f"{HARNESS}/{TRANSCRIPT_FILE}"),
+    "the conversation": ("scratchpad/link", f"{HARNESS}/{TURNS_FILE}"),
     "a saved result": ("outputs/link", "scratchpad/tool_results/r1.txt"),
     "through a linked folder": ("scratchpad/dir", HARNESS),
     "inside a route": ("memory/link", "memory/AGENTS.md"),
@@ -442,7 +442,7 @@ PLANTED = {
 
 
 def _through(at: str) -> str:
-    return f"/{at}/{TRANSCRIPT_FILE}" if at.endswith("dir") else f"/{at}"
+    return f"/{at}/{TURNS_FILE}" if at.endswith("dir") else f"/{at}"
 
 
 @pytest.mark.parametrize("planted", PLANTED)
@@ -475,7 +475,7 @@ def test_a_link_the_shell_plants_is_refused_to_an_offered_tool(cfg, session, bri
     """Measured: `ln -s ../.harness/agent.yaml scratchpad/link` run by the confined shell
     handed a tool the real pin, which it runs outside every fence to write."""
     planted = backend_at(cfg, session).execute(
-        f"ln -s ../{HARNESS}/{TRANSCRIPT_FILE} scratchpad/link && ls -l scratchpad/link"
+        f"ln -s ../{HARNESS}/{TURNS_FILE} scratchpad/link && ls -l scratchpad/link"
     )
     assert (session / "scratchpad" / "link").is_symlink(), planted.output
 

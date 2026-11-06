@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.layout import INPUTS_SEEN, MEMORY_WRITER, TRANSCRIPT_FILE
+from kingfisher.core.layout import INPUTS_SEEN, MEMORY_WRITER
 from kingfisher.core.result import Rewound, TurnFiles, TurnRecord
 
 from .file_history import BEFORE_FIRST, NO_RECORD, read_file_history, restore_files, restore_state
@@ -19,9 +19,8 @@ from .store import (
     read_pause_mark,
     write_drift,
     write_off_path,
-    write_transcript,
 )
-from .turnlog import PARENT, by_turn, path_to, read_turn_log, replayed, task_of
+from .turnlog import PARENT, by_turn, path_to, read_turn_log, task_of
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -86,15 +85,11 @@ def rewound(files: Any, layout: Layout, to: str | Start) -> Steps[Rewound]:
     # session is no longer at, and a resume answering it would run calls from another one.
     if mark is not None:
         yield from clear_pause(harness)
-    # The path before the conversation: a turn arriving after a write that died between the
-    # two follows the turn rewound to, and finds the ledger's count of the conversation and
-    # the conversation it reads apart, which it reports.
+    # After the pause and before the files: the next turn's conversation is rebuilt along
+    # the path and the ledger counts only the turns on it, so a rewind dying after this
+    # leaves the session at the turn rewound to, holding the files and the record of the
+    # inputs the turns after it left, as a rewind that restored none would.
     yield from write_off_path(harness, frozenset(turns.keys() - set(path)))
-    said = replayed(turns, path) if path else ()
-    if said:
-        yield from write_transcript(harness, said)
-    else:
-        yield from harness.drop(TRANSCRIPT_FILE)
     records = yield from read_file_history(harness)
     yield from restore_state(harness, records, path, (INPUTS_SEEN, MEMORY_WRITER))
     restored, not_restored = yield from restore_files(files, harness, layout, records, path)

@@ -63,7 +63,6 @@ from .store import (
     read_inputs_seen,
     read_ledger,
     read_pause_mark,
-    read_transcript,
     take_pause,
 )
 from .turn import (
@@ -73,7 +72,7 @@ from .turn import (
     not_offered,
     turn_message,
 )
-from .turnlog import logged_turns, resuming
+from .turnlog import TurnLog, logged_turns, read_log, resuming
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -151,11 +150,11 @@ class Preparation:
         # through would be reading it as it moved.
         claimed = yield from self._claim_or_refuse(session.id, "wait, or start another session")
         try:
-            history, cut = yield from read_transcript(harness)
-            if history or cut:
+            log = yield from read_log(harness)
+            if log.lines or log.damaged:
                 # Written only by a turn holding the claim, so another turn ran here,
                 # whatever the listing said: not a session this request made, nor its to
-                # delete.
+                # delete. Any line, not a conversation: one rewound to the start has none.
                 made = False
             prepared = yield from self._claimed(
                 request,
@@ -165,8 +164,7 @@ class Preparation:
                 held=held,
                 catalogue=catalogue,
                 agent=agent,
-                history=history,
-                cut=cut,
+                log=log,
             )
         except BaseException:
             # Each a call that changes something, so a cancel arriving during it waits for
@@ -188,10 +186,10 @@ class Preparation:
         held: frozenset[str] | None,
         catalogue: Definitions,
         agent: AgentSpec | None,
-        history: tuple[Any, ...],
-        cut: bool,
+        log: TurnLog,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
+        history = log.conversation
         # Optional on a backend, like `host_path`; reported rather than raised.
         unprotected = tuple(getattr(files, "unprotected", ()))
 
@@ -229,7 +227,7 @@ class Preparation:
         earlier = (yield from read_ledger(harness)) if self._graph is None else None
         # The ledger, written before the log, names every turn the log opens; a supplied
         # graph keeps none, and the log is all that names its turns.
-        taken = earlier.turns if earlier is not None else (yield from logged_turns(harness))
+        taken = earlier.turns if earlier is not None else logged_turns(log)
         if request.turn_id in taken:
             # The ledger and the log name a turn only by its id: a second turn under one
             # would take the first one's place in the log, and its copies of files.
@@ -247,7 +245,9 @@ class Preparation:
             turn_agent=agent.name if agent is not None else None,
         )
         lost = history_lost(
-            len(history), cut=cut, written=earlier.messages if earlier is not None else None
+            len(history),
+            cut=log.damaged,
+            written=earlier.messages if earlier is not None else None,
         )
         # One for the turn, so the store is asked about the caller its tools are handed.
         caller = caller_of(request, held, datetime.now(UTC))
@@ -275,7 +275,7 @@ class Preparation:
             discarded=discarded,
             unprotected=unprotected,
             placement=placement,
-            history=history,
+            log=log,
             earlier=earlier,
             caller=caller,
             users_memory=users.key is not None,
@@ -438,7 +438,7 @@ class Preparation:
         discarded: tuple[str, ...],
         unprotected: tuple[str, ...],
         placement: Any,
-        history: tuple[Any, ...],
+        log: TurnLog,
         catalogue: Definitions,
         earlier: KeptLedger | None = None,
         caller: Caller | None = None,
@@ -451,7 +451,7 @@ class Preparation:
         cfg = self.cfg
         graph = None
         try:
-            # New for every turn but a resume: the transcript carries the conversation, so
+            # New for every turn but a resume: the turn log carries the conversation, so
             # a saver that remembered earlier turns would hand the model each of them twice.
             saver = (
                 build_session_checkpointer() if paused is None else self._restored(session, paused)
@@ -550,7 +550,8 @@ class Preparation:
             built_from=built_from(catalogue, agent)
             if agent is not None and isinstance(built, Assembled)
             else None,
-            history=history,
+            history=log.conversation,
+            log=log,
             ledger=ledger,
             # Written once the inputs are placed, which this must not wait for.
             message=(),
