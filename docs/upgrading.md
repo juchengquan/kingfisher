@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A listing without marks is warned of, after #1245
+
+- **A turn warns `turn_files_unmarked`, once, where your backend's `glob` gave no
+  `checksum`, `size` or `modified_at` for files in `/outputs` or `/memory`.** Nothing told
+  such a file unchanged, so each was copied again at every turn. Give your listing a
+  `checksum` or a `size` and `modified_at` and the copies stop, along with the warning.
+- **With `KINGFISHER_REWIND_MAX_BYTES` set, a file your listing gives no `size` for is not
+  copied by your backend's `copy`.** Its line in `.harness/files.jsonl` says the budget
+  could not count it, and a rewind leaves it as it is. Without a budget nothing changes.
+
 ## The memory file is kept outside the rewind budget, after #1244
 
 - **`KINGFISHER_REWIND_MAX_BYTES` no longer counts or drops the copies of the memory

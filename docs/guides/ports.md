@@ -329,6 +329,7 @@ and its sentence says them again:
 | `scratch_run_limit_not_a_bool` | your `ScratchRunLimit` answered neither `True` nor `False` | `kind`, `graph`, `answered` |
 | `turn_file_not_copied` | a file a turn left could not be copied; `files.jsonl` says which and why | `folder` |
 | `turn_files_not_kept` | no file a turn left was copied, a listing having come back cut short | none |
+| `turn_files_unmarked` | the listing gave no checksum, size or time for files a turn left, so none could be told unchanged; once a turn | `folders` |
 | `unused_results_failed` | your `UnusedResults` raised | `error_type`, `error_at`, `left`, `files` |
 
 `plugin` is the class that raised and `method` what it was asked; `reason` is a fixed
@@ -1155,6 +1156,15 @@ be routed to different backends, and an async turn calls it on kingfisher's thre
 **`own_copies`**, in `tests/checks/backend.py`, holds one you declare to three promises:
 the copy lands whole, it is a copy and not the same file, so rewriting the original in
 place leaves it as it was, and a file that is not there is answered with why, never `None`.
+
+**Your listing decides what gets copied.** A file is told unchanged since the last turn by
+what your `glob` says of it, as an input is: a `checksum`, else `size` and `modified_at`.
+With neither -- deepagents' sandboxes list a path and nothing else -- nothing tells it
+unchanged, so every file in `/outputs` and `/memory` is copied again at every turn, and a
+turn says so once, as `turn_files_unmarked`. With `KINGFISHER_REWIND_MAX_BYTES` set, a
+file your listing gives no `size` for is not copied by your `copy` at all, since `copy`
+answers no size and the budget could not count it: its line says why, and a rewind cannot
+put it back. A listing that gives a `checksum` or a `size` and `modified_at` costs neither.
 
 **Three more extras are read where you declare them.** `unprotected` on the backend,
 a tuple of what it could not make read-only, which a turn reports to its caller as

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from deepagents.backends.protocol import GlobResult
+from deepagents.backends.protocol import FileInfo, GlobResult
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, MemoryEntry, Request
@@ -21,6 +21,7 @@ from kingfisher.core.session.file_history import (
     HELD_BY_STORE,
     LATE,
     OVER_BUDGET,
+    UNCOUNTED,
     copied_on_host,
     dropped_for_space,
     folder_for,
@@ -475,6 +476,61 @@ def test_a_backend_naming_no_host_path_keeps_copies_by_its_own_copy_or_whole(cfg
     assert _copy(cfg, "t1", "outputs/report.txt").read_text(encoding="utf-8") == "one"
     asked = {source for source, _ in sessions.copied}
     assert asked == ({"/outputs/report.txt"} if kind is _RemoteCopying else set())
+
+
+class _NamesOnly(_RemoteCopying):
+    """And lists files by name alone, as deepagents' sandboxes do: no checksum, size or
+    time."""
+
+    def glob(self, pattern: str, path: str | None = None) -> GlobResult:
+        found = super().glob(pattern, path)
+        if found.matches is None:
+            return found
+        bare = [FileInfo(path=one["path"], is_dir=one.get("is_dir", False))
+                for one in found.matches]
+        return GlobResult(matches=bare, truncated=found.truncated)
+
+
+def test_under_a_budget_no_copy_is_made_that_nothing_can_size(cfg, caplog):
+    """Counted as nothing, the copies a backend made itself of files its listing gave no
+    size for were never dropped: a session kept every one, whatever the budget said."""
+    budgeted, unbounded = _RemoteSessions(_NamesOnly), _RemoteSessions(_NamesOnly)
+    for session_id, sessions, budget in (("s", budgeted, 10_000), ("u", unbounded, None)):
+        outputs = _session(cfg, start(cfg, session_id)) / "outputs"
+        (outputs / "report.bin").write_bytes(b"r" * 100)
+        kf = Kingfisher(replace(cfg, rewind_max_bytes=budget), graph=StubAgent("ok"),
+                        sessions=sessions)
+        with caplog.at_level(logging.WARNING, logger="kingfisher"):
+            _run(kf, "t1", session_id)
+            _run(kf, "t2", session_id)
+
+    assert "/outputs/report.bin" not in {source for source, _ in budgeted.copied}
+    # Said once a turn by `turn_files_unmarked`: a warning a file is one a turn per file.
+    assert "kept no copy of a file" not in caplog.text
+    assert _history(cfg)["t2"]["not_kept"]["outputs/report.bin"]["why"] == UNCOUNTED
+    # The control: with no budget to count against, the backend still copies it.
+    assert [s for s, _ in unbounded.copied].count("/outputs/report.bin") == 2
+
+
+def test_a_listing_with_no_marks_is_warned_of_once_a_turn(cfg, caplog):
+    """A listing giving no checksum, size or time cost a copy of every file at every turn,
+    and nothing told the deployment, which found out from its storage bill."""
+    names_only = Kingfisher(cfg, graph=StubAgent("ok"), sessions=_RemoteSessions(_NamesOnly))
+    marked = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+    for session_id in ("s", "m"):
+        outputs = _session(cfg, start(cfg, session_id)) / "outputs"
+        (outputs / "jane-doe-4471.txt").write_text("one", encoding="utf-8")
+        (outputs / "notes.txt").write_text("two", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="kingfisher"):
+        _run(names_only, "t1")
+        # The control: a listing with marks is not warned of.
+        _run(marked, "t1", "m")
+
+    (warned,) = [one.getMessage() for one in caplog.records if "no checksum" in one.getMessage()]
+    # Not /memory: the memory file is told unchanged by its contents.
+    assert "files under /outputs, so each is copied again every turn" in warned
+    assert "jane-doe" not in caplog.text, "a file's name reached the log"
 
 
 def test_a_failed_copy_is_logged_without_the_file_or_the_backends_words(cfg, caplog):

@@ -72,6 +72,7 @@ LATE = "the turn ended past its deadline, when its claim may have no time left f
 HELD_BY_STORE = "a MemoryStore keyed the turn, so the memory file was a copy of the user's"
 OVER_BUDGET = "it alone is larger than KINGFISHER_REWIND_MAX_BYTES"
 UNREAD_MEMORY = "the memory file could not be read"
+UNCOUNTED = "its size is unknown, so KINGFISHER_REWIND_MAX_BYTES could not count its copy"
 
 #: The reasons a later turn would meet again, so it is not asked to try: the rest are asked
 #: again by the next turn, which copies the version if it is still there.
@@ -275,6 +276,7 @@ def _copies_recorded(
     # Once, before any copy: until the deadline the claim has a whole superstep's bound left,
     # which no copy on this host comes near, and past it as little as nothing.
     late = monotonic() > prepared.deadline
+    budgeted = cfg.rewind_max_bytes is not None
     kept: dict[str, dict[str, Any]] = {}
     not_kept: dict[str, dict[str, Any]] = {}
     for path, (mark, size) in sorted(now.items()):
@@ -288,22 +290,27 @@ def _copies_recorded(
                 copied, why = yield from _kept_whole(harness, under, path, memory)
             else:
                 destination = f"{HARNESS_ROUTE}{KEPT_FILES}/{under}/{path}"
-                copied, why = yield from _copied(prepared.files, f"/{path}", destination, size)
+                copied, why = yield from _copied(
+                    prepared.files, f"/{path}", destination, size, counted=budgeted
+                )
             if why is None:
                 kept[path] = {MARK: mark, BYTES: copied}
                 if path == memory_file:
                     kept[path][OUTSIDE_BUDGET] = True
                 continue
-            # Not the file, which the agent named, nor `why`, which may quote the backend: the
-            # history line keeps both, inside the session.
-            folder = path.partition("/")[0]
-            warn(
-                "turn_file_not_copied",
-                f"turn {turn} kept no copy of a file under /{folder}; its line in "
-                f"{FILE_HISTORY} says why",
-                folder=folder,
-            )
+            # `turn_files_unmarked` says it once for the turn, where this would say it a file.
+            if why != UNCOUNTED:
+                # Not the file, which the agent named, nor `why`, which may quote the backend:
+                # the history line keeps both, inside the session.
+                folder = path.partition("/")[0]
+                warn(
+                    "turn_file_not_copied",
+                    f"turn {turn} kept no copy of a file under /{folder}; its line in "
+                    f"{FILE_HISTORY} says why",
+                    folder=folder,
+                )
         not_kept[path] = {MARK: mark, WHY: why}
+    _warn_unmarked(turn, now, budgeted=budgeted)
     state = yield from _kept_state(harness, records, under)
     records.append(
         _line(
@@ -332,6 +339,27 @@ def _copies_recorded(
     lines = "".join(f"{json.dumps(one, ensure_ascii=False)}\n" for one in records)
     yield from harness.store(FILE_HISTORY, lines.encode("utf-8"))
     return records, not_kept, dropped
+
+
+def _warn_unmarked(turn: str, now: Mapping[str, Seen], *, budgeted: bool) -> None:
+    """Say once for the turn which folders the listing gave no mark for, where that costs a
+    deployment a copy of every such file every turn, which nothing else would tell it."""
+    folders = sorted({path.partition("/")[0] for path, (mark, _) in now.items() if mark is None})
+    if not folders:
+        return
+    named = " and ".join(f"/{one}" for one in folders)
+    cost = (
+        "is copied again every turn, or, where the backend copies it itself and gives no size, "
+        "not copied, since KINGFISHER_REWIND_MAX_BYTES could not count it"
+        if budgeted
+        else "is copied again every turn"
+    )
+    warn(
+        "turn_files_unmarked",
+        f"turn {turn}: the listing gave no checksum, size or time for files under {named}, "
+        f"so each {cost}",
+        folders=folders,
+    )
 
 
 def _reach(
@@ -421,12 +449,15 @@ def _kept_whole(
 
 
 def _copied(
-    backend: Any, source: str, destination: str, size: int | None
+    backend: Any, source: str, destination: str, size: int | None, *, counted: bool = False
 ) -> Steps[tuple[int | None, str | None]]:
     """What the copy of `source` at `destination` came to, or why there is none.
 
     On this host where the backend names both ends here; else by the backend's own `copy`;
-    else read and written whole, which holds the file in this process's memory.
+    else read and written whole, which holds the file in this process's memory. `counted`
+    where a budget has to count the copy: the backend's own `copy` reports no size, so one
+    whose listing gave none is refused before it is made, or the budget would count it as
+    nothing and bound nothing.
     """
     whence = yield on_host(_on_this_host, backend, source)
     where = yield on_host(_on_this_host, backend, destination)
@@ -437,10 +468,12 @@ def _copied(
             return None, exc.strerror or str(exc)
     own = getattr(backend, "copy", None)
     if callable(own):
-        try:
-            refused = yield on_host(own, source, destination)
-        except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing plugin
-            return None, f"{type(backend).__name__}.copy raised {type(exc).__name__}: {exc}"
+        refused: object = UNCOUNTED
+        if size is not None or not counted:
+            try:
+                refused = yield on_host(own, source, destination)
+            except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing plugin
+                return None, f"{type(backend).__name__}.copy raised {type(exc).__name__}: {exc}"
         return (None, str(refused)) if refused else (size, None)
     (got,) = yield reading(backend, "download_files", [source])
     if got.error or got.content is None:
