@@ -538,7 +538,7 @@ def _state_of(record: dict[str, Any]) -> dict[str, dict[str, str]]:
 def restore_state(
     harness: HarnessFiles,
     records: list[dict[str, Any]],
-    path: list[str | None],
+    path: list[str],
     names: tuple[str, ...],
 ) -> Steps[tuple[str, ...]]:
     """Put back each of `names` as the last turn of `path` to keep it left it, and drop one
@@ -576,7 +576,7 @@ def restore_files(
     harness: HarnessFiles,
     layout: Layout,
     records: list[dict[str, Any]],
-    path: list[str | None],
+    path: list[str],
 ) -> Steps[tuple[tuple[str, ...], dict[str, str]]]:
     """Put each file in the artifact folders back as the last turn of `path` left it: the
     paths put back, a file that turn did not have removed among them, and each path that
@@ -620,7 +620,7 @@ def restore_files(
 
 
 def _held_at(
-    records: list[dict[str, Any]], path: list[str | None]
+    records: list[dict[str, Any]], path: list[str]
 ) -> dict[str, tuple[str | None, str | None, str | None]] | None:
     """Each file the artifact folders held when the last turn of `path` ended, as the
     folder of its copy or `None`, its mark, and why there is no copy; `None` where that is

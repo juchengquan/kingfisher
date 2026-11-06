@@ -112,9 +112,6 @@ class TurnRecord:
     #: a resume, which sends none.
     task: str | None
     resumed: bool
-    #: Whether this stands for the conversation the session held before it kept a log of
-    #: its turns, under the last turn its ledger closed then.
-    imported: bool
     #: Whether this turn is on the path to the one the session is at now.
     current: bool
     #: What it did to its files; `None` where nothing recorded that, which is not the same

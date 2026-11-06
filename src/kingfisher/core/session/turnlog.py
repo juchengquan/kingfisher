@@ -20,15 +20,15 @@ from kingfisher.core.layout import TURNS_FILE
 
 from . import runtime
 from .steps import Steps
-from .store import RESUMED, HarnessFiles, KeptLedger, read_ledger, read_off_path
+from .store import RESUMED, HarnessFiles, KeptLedger, read_off_path
 from .transcript import Message, as_record, from_record
 
 if TYPE_CHECKING:
     from kingfisher.core.request import Decision
     from kingfisher.core.result import LedgerEntry
 
-#: On a turn's opening line, the turn it followed: `null` for the first, and for the
-#: conversation imported from before the log began, which a turn naming `null` follows.
+#: On a turn's opening line, the turn it followed: `null` for the first, and for the first
+#: after a rewind to the start.
 PARENT = "parent"
 
 #: On an asked turn's opening line, the task as the caller wrote it: the message the model
@@ -39,9 +39,6 @@ TASK = "task"
 #: than its parent left where the transcript was found short; replayed whole, the turn
 #: would be credited with messages its model never saw.
 FROM = "from"
-
-#: On the opening line of the conversation a session held before its log began.
-IMPORTED = "imported"
 
 #: On a summary, the position in the conversation so far that it stands for everything
 #: before, counted with the turn's own messages appended.
@@ -128,22 +125,6 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     return lines
 
 
-def _imported(history: Sequence[Message], turn: str | None) -> list[dict[str, Any]]:
-    """The conversation a session held before its log began, as the log keeps it: under
-    `turn`, the last turn its ledger closes, and following none."""
-    return [
-        {"turn": turn, PARENT: None, IMPORTED: True},
-        *({"turn": turn, **as_record(one)} for one in history),
-    ]
-
-
-def _last_closed(ledger: KeptLedger, *, besides: str) -> str | None:
-    """The last turn the ledger closes, never `besides`, the turn now ending, whose own
-    closing line is written before this file."""
-    closed = [row["turn"] for row in ledger.closings if row["turn"] != besides]
-    return closed[-1] if closed else None
-
-
 def _without_expired(
     lines: Sequence[tuple[str, dict[str, Any]]], rows: Mapping[str, LedgerEntry]
 ) -> list[tuple[str, dict[str, Any]]]:
@@ -186,14 +167,11 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
     snapshot: Any,
     ledger: KeptLedger | None,
 ) -> Steps[None]:
-    """Add this turn to the log, importing first the conversation of a session older than
-    it. `ledger` is the ledger as this turn writes it back, or `None` where it keeps none.
+    """Add this turn to the log. `ledger` is the ledger as this turn writes it back, or
+    `None` where it keeps none.
     """
     held = yield from harness.fetch(TURNS_FILE)
     lines = [] if held is None else _read(held)
-    if held is None and history:
-        before = _last_closed((yield from read_ledger(harness)), besides=turn)
-        lines = [(json.dumps(one, ensure_ascii=False), one) for one in _imported(history, before)]
     if ledger is not None:
         expired = {
             entry.id: entry
@@ -232,32 +210,26 @@ def logged_turns(harness: HarnessFiles) -> Steps[frozenset[str]]:
 
 
 #: Each turn's opening line and the lines after it, by its id.
-Logged = Mapping[str | None, tuple[dict[str, Any], list[dict[str, Any]]]]
+Logged = Mapping[str, tuple[dict[str, Any], list[dict[str, Any]]]]
 
 
 def by_turn(lines: Sequence[dict[str, Any]]) -> Logged:
-    """Each turn's opening line and the lines after it, by its id; the conversation imported
-    from before the log under the turn it is tagged with, `None` where it has none."""
-    turns: dict[str | None, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
+    """Each turn's opening line and the lines after it, by its id."""
+    turns: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
     for line in lines:
-        if PARENT in line:
-            turns[line.get("turn")] = (line, [])
+        if PARENT in line and isinstance(line.get("turn"), str):
+            turns[line["turn"]] = (line, [])
         elif line.get("turn") in turns:
             turns[line["turn"]][1].append(line)
     return turns
 
 
-def path_to(turns: Logged, target: str | None) -> tuple[list[str | None], bool]:
+def path_to(turns: Logged, target: str) -> tuple[list[str], bool]:
     """The turns from the first to `target`, each the parent of the next, and whether the
     walk back came round to a turn already on it; the path then starts where it did."""
     path = [target]
     seen = {target}
-    while not turns[path[-1]][0].get(IMPORTED):
-        parent = turns[path[-1]][0].get(PARENT)
-        # `null` names the imported conversation where the log holds one under no turn,
-        # and otherwise nothing: a first turn, or the first after a rewind to the start.
-        if parent not in turns:
-            break
+    while isinstance(parent := turns[path[-1]][0].get(PARENT), str) and parent in turns:
         # Two turns under one id, which a session could log before such ids were refused:
         # the second's line takes the first's place, and the walk back comes round to it.
         if parent in seen:
@@ -267,7 +239,7 @@ def path_to(turns: Logged, target: str | None) -> tuple[list[str | None], bool]:
     return list(reversed(path)), False
 
 
-def replayed(turns: Logged, path: Sequence[str | None]) -> tuple[Message, ...]:
+def replayed(turns: Logged, path: Sequence[str]) -> tuple[Message, ...]:
     """The conversation the last turn of `path` ended on, rebuilt from the log alone: each
     turn's parent's conversation kept to its `from`, its messages appended, and a summary
     standing for everything before its `cut`."""
@@ -283,13 +255,3 @@ def replayed(turns: Logged, path: Sequence[str | None]) -> tuple[Message, ...]:
             cut = line.get(CUT)
             said = [message, *said[cut:]] if isinstance(cut, int) else [*said, message]
     return tuple(said)
-
-
-def add_imported(
-    harness: HarnessFiles, turn: str | None, messages: Sequence[Message]
-) -> Steps[None]:
-    """Add `messages` to the log as the conversation `turn`, which ran before it, ended on."""
-    held = yield from harness.fetch(TURNS_FILE)
-    lines = [raw for raw, _ in _read(held)] if held is not None else []
-    lines += [json.dumps(one, ensure_ascii=False) for one in _imported(messages, turn)]
-    yield from harness.store(TURNS_FILE, ("\n".join(lines) + "\n").encode("utf-8"))

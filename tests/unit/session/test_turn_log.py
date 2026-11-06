@@ -22,7 +22,7 @@ from kingfisher.core.layout import HARNESS, LEDGER_FILE, TRANSCRIPT_FILE, TURNS_
 from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.core.result import AWAITING
 from kingfisher.core.session.transcript import Message, from_json, from_record
-from kingfisher.core.session.turnlog import CUT, FROM, IMPORTED, PARENT, TASK
+from kingfisher.core.session.turnlog import CUT, FROM, PARENT, TASK
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, read_record, start, tools_dir, write_old_record
 from tests.unit.scripted import Scripted
@@ -88,8 +88,8 @@ def _replayed(lines: list[dict[str, Any]]) -> tuple[Message, ...]:
     """The conversation the log's last turn ended on, rebuilt from its lines alone: each
     turn on its path from the first, its parent's conversation kept to its `from`, its
     messages appended, and a summary standing for everything before its `cut`."""
-    turns: dict[str | None, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
-    last = None
+    turns: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
+    last = ""
     for line in lines:
         if PARENT in line:
             turns[line["turn"]] = (line, [])
@@ -97,11 +97,7 @@ def _replayed(lines: list[dict[str, Any]]) -> tuple[Message, ...]:
         else:
             turns[line["turn"]][1].append(line)
     path = [last]
-    while not turns[path[-1]][0].get(IMPORTED):
-        parent = turns[path[-1]][0][PARENT]
-        # `null` names the imported conversation where the log holds one, else nothing.
-        if parent is None and None not in turns:
-            break
+    while (parent := turns[path[-1]][0][PARENT]) is not None:
         path.append(parent)
     said: list[Message] = []
     for turn in reversed(path):
@@ -210,33 +206,6 @@ def test_the_log_rebuilds_the_conversation_after_a_pause_a_request_superseded(lo
     own = [line for line in _lines(logged) if line["turn"] == superseding.turn_id]
     assert [line.get("call_id") for line in own[1:3]] == ["c1", "ga"], "nothing was patched"
     assert _replayed(_lines(logged)) == _transcript(logged)
-
-
-@pytest.mark.parametrize("ledger", [True, False], ids=["ledger", "no-ledger"])
-def test_a_session_older_than_the_log_imports_its_conversation_first(logged, ledger):
-    """A session from before the log has messages no turn line holds: replayed without
-    them, every turn after rebuilds a conversation missing its start. Its ledger names
-    the turn that wrote them, where it has one, and a turn following none follows them.
-    """
-    kf = Kingfisher(logged, sessions=LocalSessions())
-    _say(kf, "first", _calls(("web_search", "q", "c1")), AIMessage("one"))
-    older = _say(kf, "second", AIMessage("two"))
-    _harness(logged, TURNS_FILE).unlink()
-    if not ledger:
-        _harness(logged, LEDGER_FILE).unlink()
-    found = _transcript(logged)
-
-    third = _say(kf, "third", AIMessage("three"))
-
-    tag = older.turn_id if ledger else None
-    lines = _lines(logged)
-    assert lines[0] == {"turn": tag, PARENT: None, IMPORTED: True}
-    assert tuple(from_record(line) for line in lines[1 : 1 + len(found)]) == found
-    assert {line["turn"] for line in lines[: 1 + len(found)]} == {tag}
-    assert _openings(logged)[1] == {
-        "turn": third.turn_id, PARENT: tag, TASK: "third", FROM: len(found),
-    }
-    assert _replayed(lines) == _transcript(logged)
 
 
 def test_a_turn_that_found_its_conversation_short_is_logged_from_where_it_began(logged):

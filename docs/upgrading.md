@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `TurnRecord.imported` is gone, and a rewind stops where the turn log began, after #1235
+
+- **`TurnRecord` has no `imported`**, and `kingfisher turns` labels no turn `imported`.
+  Code reading `turn.imported` fails with `AttributeError`.
+- **A session from before the turn log keeps its conversation**, and its next turn starts
+  the log, but no longer copies that conversation into it first. A rewind reaches only the
+  turns logged since: one to a turn from before raises `RewindError`, and one to the first
+  turn logged rebuilds that turn's messages without the conversation before it.
+- **A log that already holds the copied conversation keeps it**: the turn it was filed
+  under is listed by `turns()` as a turn with no task, and a rewind returns to it as before.
+  One filed under no turn, as for a graph you supplied, is skipped: a rewind rebuilds the
+  turns after it without it.
+
 ## `TurnRecord` says what each turn did to its files, after #1234
 
 - **`TurnRecord.files`**, a `TurnFiles` from `kingfisher`, lists the files in `/outputs`

@@ -4405,7 +4405,7 @@ first: the parent's kept to `from`, each message appended, a summary standing fo
 everything before its cut. The transcript is unchanged.
 `test_the_log_rebuilds_the_conversation_across_summaries_pauses_and_resumes` and its
 neighbours replay the log along the current path and find the transcript, across
-summaries, pauses, resumes, a failed turn, a short read and an import.
+summaries, pauses, resumes, a failed turn and a short read.
 
 **Read off the state, not the transcript.** A summary takes messages out of view in the
 turn that said them, so no transcript holds them; the state keeps every message. A turn's
@@ -4432,12 +4432,15 @@ a turn behind, and nothing says so. The window that stays: a turn that summarise
 between the two, whose older transcript is no prefix of what it logged. A request refused
 before its turn runs writes nothing.
 
-**A session older than the log imports its conversation first.** The first turn finding a
-transcript and no log writes the transcript's messages under the last turn the ledger
-closes, `null` where it closes none, as for a graph the deployment supplied; marked
-`imported`, following none. A turn whose parent is `null` follows that import where the log
-holds one. Its turns are told apart only once a rewind reaches one (*A turn from before
-the log comes back cut*, below).
+**A session older than the log keeps its conversation, and a rewind stops where its log
+began.** Its first turn on this version reads the transcript as before and starts the log
+with its own messages. The log has no record of the turns before it, so a rewind to one is
+refused, as a turn that died between writing the ledger and the log is, and a rewind to the
+first turn logged rebuilds that turn's messages without what came before. Its
+conversation was once imported into the log at that first turn, and a rewind could cut the
+import back to an earlier turn by the ledger's count; both were dropped where nothing keeps
+backward compatibility, since the next step rebuilds the conversation from the log and
+drops the transcript the import read. *(2026-11-06.)*
 
 **Expiry reaches it.** A result `KINGFISHER_KEEP_RESULTS_ROUNDS` expires is swapped in the
 log for the handle the agent is shown for an expired result, written in one place for both,
@@ -4535,18 +4538,6 @@ once. None after a rewind to the start, whose conversation remembers no file.
 ran, a copy whose file changed on a branch left behind looked superseded, though it is
 the version the path still holds. The parents are read from the turn log only where the
 session has rewound and a budget is set. *(2026-11-04.)*
-
-**A turn from before the log comes back cut from the conversation the session imported.**
-A session older than the turn log imports its transcript at its first turn on this
-version, under the last turn its ledger closed; every ledger closing line since #1184
-says how many messages that turn left. A rewind to an earlier turn keeps that many of
-the imported messages and logs them as that turn's own import, so it is then a turn like
-any other: the next one follows it, `turns()` lists it, a rewind returns to it. A session
-no turn has logged yet imports first, as its next turn would. **Refused where the cut
-would not stand**: a turn whose line carries no count, from before #1184, and a turn with
-a summary after it, which rewrote the front the count indexes into. Every refusal comes
-before anything is written. **Its files are not known**: nothing recorded them, so they
-are left, and the next turn hears they may have changed. *(2026-11-04.)*
 
 **Narrowed once, for approval gates.** A turn stopped at an `interrupt_on` gate writes what
 its saver holds into `.harness/paused.state`, and a `Resume` reads it back and continues
