@@ -4470,6 +4470,16 @@ logged on 2026-11-04, between rewind and the check on their turn log, may alread
 -- a turn under a reused id hiding the first and taking its children -- and are left as
 they are: a log naming two turns by one id cannot say which one each child followed.
 
+**`turns()` says what each turn did to its files** *(2026-11-06)*: the files it changed,
+those it removed, and each it left no copy of with why, read from its line in the file
+history -- planned in decision 11 and left out when built, so a caller picking where to go
+back saw only tasks until after the rewind. `None` where the history has no line, a turn
+from before files were recorded or one that ended before its line was written, which is
+not the same as a turn that changed nothing. **What the turn did, not a preview** of
+what a rewind to it would do now: that depends on what the folders hold today, shifts
+whenever a file changes, and would be worked out for every turn listed on every call. A
+preview of one rewind is a call of its own, if a caller asks for one.
+
 **The ledger keeps every branch, and `.harness/off_path.json` names the turns left
 behind.** The plan moved a branch's rows out of the ledger and back; only a rewind writes
 this file, and the ledger's readers leave its turns out of what the model is told of --

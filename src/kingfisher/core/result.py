@@ -86,6 +86,21 @@ WORKING = "working"
 
 
 @dataclass(frozen=True)
+class TurnFiles:
+    """What one turn did to the files in `/outputs` and `/memory`, by their names in the
+    session as `RunResult.artifacts` gives them. What the turn did, not what a rewind to it
+    would do now: a file it left alone is put back too, as it stood then."""
+
+    #: Each file new or changed when the turn ended.
+    changed: tuple[str, ...] = ()
+    #: Each file there when the turn before it ended and gone when this one did.
+    removed: tuple[str, ...] = ()
+    #: Each changed file a rewind to this turn cannot put back as the turn left it, with
+    #: why: it was never copied, or its copy was dropped for space since.
+    without_copy: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class TurnRecord:
     """One turn a session ran, as `Session.turns` lists it."""
 
@@ -102,6 +117,10 @@ class TurnRecord:
     imported: bool
     #: Whether this turn is on the path to the one the session is at now.
     current: bool
+    #: What it did to its files; `None` where nothing recorded that, which is not the same
+    #: as nothing changing: a turn from before files were recorded, or one that ended
+    #: before its record was written.
+    files: TurnFiles | None = None
 
 
 @dataclass(frozen=True)

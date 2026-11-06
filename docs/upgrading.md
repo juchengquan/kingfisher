@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `TurnRecord` says what each turn did to its files, after #1234
+
+- **`TurnRecord.files`**, a `TurnFiles` from `kingfisher`, lists the files in `/outputs`
+  and `/memory` the turn changed and removed, and in `without_copy` each one a rewind to it
+  cannot put back, with why. It is `None` where nothing recorded the turn's files, which
+  is not the same as an empty `TurnFiles`. A caller building a `TurnRecord` itself keeps
+  working, the field defaulting to `None`.
+- **`kingfisher turns` prints them** under each turn, `files not recorded` where they are
+  `None`.
+
 ## `forget` also drops what the memory writer has not read, after #1233
 
 - **`Session.forget` clears what was said since the memory writer last ran**, in

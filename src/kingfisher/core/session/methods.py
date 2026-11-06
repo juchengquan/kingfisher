@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.core.layout import MEMORY_WRITER
 from kingfisher.core.request import Request, Resume
 
-from .file_history import forget_in_copies, kept_bytes
+from .file_history import forget_in_copies, kept_bytes, read_file_history, turn_files
 from .files import read_artifact
 from .handle import Session
 from .ledger import read_result
@@ -201,7 +201,8 @@ class SessionMethods:
     def _turns_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[TurnRecord, ...]]:
         harness = HarnessFiles((yield from self._existing_files(session_id, opened)))
         lines = yield from read_turn_log(harness)
-        return turn_records(lines, (yield from read_off_path(harness)))
+        files = turn_files((yield from read_file_history(harness)))
+        return turn_records(lines, (yield from read_off_path(harness)), files)
 
     def _rewind_in(self, session_id: str, to: str | Start, opened: list[Any]) -> Steps[Rewound]:
         files = yield from self._existing_files(session_id, opened)
