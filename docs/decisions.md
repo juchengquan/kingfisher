@@ -3930,7 +3930,9 @@ renaming it over needs a rename, which deepagents' backends do not have, and hel
 kingfisher's own backend alone. Writing the copies by turns, the newer told by a save
 number, was set aside: every read fetched both, and the older kept what the newer had
 replaced. The copies under `files/` are kept once, since a rewind puts them back byte for
-byte. **The cost, taken:** those files take twice the disk, and a save two uploads.
+byte. The files are named `.jsonl`, `inputs.jsonl` rather than `inputs.json`: that last
+line makes each one two JSON values on two lines, which a JSON reader refuses and a JSON
+lines reader takes. **The cost, taken:** those files take twice the disk, and a save two uploads.
 
 **A request's files go to `/inputs` with the session's.** Once a turn had nowhere of its
 own, a per-turn field and a per-session one were two fields for one operation, and they
@@ -3954,7 +3956,7 @@ a grilled plan.)*
 
 **Kept in the session, compared at the next turn.** Kingfisher keeps nothing between
 turns, so each turn that asks something lists `/inputs` once its request's files are
-placed, compares that with `/.harness/inputs.json`, and leaves its own listing there.
+placed, compares that with `/.harness/inputs.jsonl`, and leaves its own listing there.
 Written with the turn log, by a turn whose message reached the model: kept by a turn
 that failed first, a change would be named on no turn. A resume adds no message and keeps
 nothing. A first turn names everything there as new; a session from before the record
@@ -3991,7 +3993,7 @@ are renamed rather than given prettier virtual names. *(2026-09-21.)*
 `/memory`.** Putting a session back where any earlier turn left it, the rewind the owner
 asked for, needs the files as each turn left them, and nothing held them: each turn
 overwrote the last. At a turn's end, after the memory writer and the store, both folders
-are listed with the marks `inputs.json` uses, compared with `.harness/artifacts.json`, and
+are listed with the marks `inputs.jsonl` uses, compared with `.harness/artifacts.jsonl`, and
 each new or changed file is copied to `.harness/files/<turn>/<path in the session>`. A
 line a turn in `.harness/files.jsonl` says what it kept, with each mark and size, what it
 could not and why, and what went. Every turn writes one, so a turn with no line is one
@@ -4026,7 +4028,7 @@ and refused where its path runs through one, because the copy is read outside ev
 and a rewind hands it back to the agent. The backend's `copy` is read on the backend alone,
 since a composite may route the two paths to different backends; reading whole holds the
 file in memory, which is what a remote backend's `copy` avoids. A failed copy is recorded
-with its reason and left unmarked in `artifacts.json`, so the next turn copies the version
+with its reason and left unmarked in `artifacts.jsonl`, so the next turn copies the version
 if it is still there.
 
 **A turn past its deadline when its copies begin makes none.** The claim expires at the
@@ -4080,7 +4082,7 @@ which only a process killed while copying leaves. **Not a listing every turn:** 
 0.04 ms a folder here and a call a turn on remote storage, for something this rare, so
 such a folder waits for the next `forget` or the session's removal. `forget` also cleans a
 copy its line lists as not kept, since one that fails partway stays where it was being
-written. And it clears what was said since the writer last ran, in `memory_writer.json`
+written. And it clears what was said since the writer last ran, in `memory_writer.jsonl`
 and in each turn's copy of it, keeping the count of turns: left, the writer's next run was
 shown the line the entry came from. **Every line, not those naming the entry**, which
 need share no word with what was said; telling the writer what was forgotten instead
@@ -4565,7 +4567,7 @@ what a rewind to it would do now: that depends on what the folders hold today, s
 whenever a file changes, and would be worked out for every turn listed on every call. A
 preview of one rewind is a call of its own, if a caller asks for one.
 
-**The ledger keeps every branch, and `.harness/off_path.json` names the turns left
+**The ledger keeps every branch, and `.harness/off_path.jsonl` names the turns left
 behind.** The plan moved a branch's rows out of the ledger and back; only a rewind writes
 this file, and the ledger's readers leave its turns out of what the model is told of --
 the delta, the index, clearing -- while expiry counts every branch in the order the turns
@@ -4578,7 +4580,7 @@ is read back from the turn log, which keeps it as first written.
 it would run calls asked for in a conversation the session is no longer at.
 
 **What the agent heard of its inputs folder goes back with the conversation.** Each turn
-keeps `inputs.json` and `memory_writer.json` beside its copies of files, once per change,
+keeps `inputs.jsonl` and `memory_writer.jsonl` beside its copies of files, once per change,
 since nothing else records them a turn at a time. A rewind puts back the last
 copy its path kept and drops the file where none did: the agent is then told only what
 the next request places, rather than a history from another branch. The memory writer's
@@ -4614,7 +4616,7 @@ added a vegetable; untold, five first edited the `- cherry` they remembered and 
 when the edit failed, one stopped to ask, and one read the vegetables and wrote its fruit
 list over them. Asked instead what the file lists "right now", which sends the agent back
 to it unprompted, five sessions an arm differed by one. Kept in
-`.harness/rewound.json` until a turn that tells it writes its conversation, so it is said
+`.harness/rewound.jsonl` until a turn that tells it writes its conversation, so it is said
 once. None after a rewind to the start, whose conversation remembers no file.
 
 **Copies are dropped down the tree once a rewind has made one.** By the order the turns
@@ -4810,7 +4812,7 @@ whichever agents made it. The agent is looked up at the top of the turn, before 
 session is marked, claimed or written to, so a caller refused it leaves nothing there,
 as *A turn checks who is calling before it touches the session* asks; the check that
 entry describes is now on the agent the request names. A resume naming none is the one
-refused later, under the claim, by its pause: `paused.json` records the agent whose graph
+refused later, under the claim, by its pause: `paused.jsonl` records the agent whose graph
 the checkpoint fits, and the refusal names it. Nothing writes `.harness/agent.yaml` or
 reads it, so an older session's copy decides nothing, and a scoped `sessions()` narrows by
 datazone alone. **The cost, taken:** a second agent is handed a history made under
@@ -5040,7 +5042,7 @@ failed; and before the start-and-end comparison, so its changes are reported as
 the names of the tools it called, and nothing else: no tool result, no system message, no
 turn text, and not the note or kingfisher's lines after the task, since what a turn tells
 the agent is where who the user is comes from. What was said is collected from each
-turn's own state into `/.harness/memory_writer.json` as the turn ends, so the messages a
+turn's own state into `/.harness/memory_writer.jsonl` as the turn ends, so the messages a
 summary drops reach the writer from the state that still holds them rather than parsed
 back out of deepagents' history file. A run reads that collection once, kept or not: kept
 on failure it would grow until the call itself could not be made.

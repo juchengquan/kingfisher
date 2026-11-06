@@ -29,7 +29,7 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   the trial behind `KINGFISHER_MEMORY_EVERY=4`, the agent never saved what the user asked
   it to remember; the writer did, at its next run. The agent is told how to save but not
   when. A store session that ends before that run leaves the request in its own
-  `/.harness/memory_writer.json`, and the user's other sessions never see it. Session
+  `/.harness/memory_writer.jsonl`, and the user's other sessions never see it. Session
   memory loses nothing: the conversation carries the request until the writer reads it,
   four turns on or on a summarised turn. Agreed for when per-user memory is planned:
   where memory is the user's and the agent holds a tool to save with, one sentence ahead
