@@ -403,10 +403,10 @@ def test_a_version_with_no_copy_is_left_and_the_next_turn_is_told_once(rewinding
     assert "Changed since your last turn" not in _asked()
 
 
-def test_a_file_the_turn_did_not_have_stays_when_no_copy_holds_it(rewinding):
-    """Removed with no copy of it kept -- never made, or dropped for space -- a file a later
-    turn made was lost on every branch: a rewind forward to that turn found nothing to put
-    back."""
+def test_a_file_the_turn_did_not_have_goes_though_no_copy_holds_it(rewinding):
+    """Left because no copy held it -- too large for the budget, or dropped for space -- a
+    file a later turn made stayed beside files put back as the earlier turn left them, a
+    folder no turn ever had."""
     cfg = replace(rewinding, rewind_max_bytes=100)
     kf = Kingfisher(cfg, sessions=LocalSessions())
     outputs = _outputs(cfg)
@@ -420,16 +420,14 @@ def test_a_file_the_turn_did_not_have_stays_when_no_copy_holds_it(rewinding):
 
     back = kf.session("s").rewind(first.turn_id)
 
-    assert sorted(one.name for one in outputs.iterdir()) == ["clip.bin", "notes.md", "video.bin"]
-    for kept_by_nothing in ("outputs/video.bin", "outputs/clip.bin"):
-        assert "no copy of it as it is now" in back.not_restored[kept_by_nothing]
-    # The control: a file with a copy still goes.
-    assert "outputs/table.bin" in back.restored
+    assert sorted(one.name for one in outputs.iterdir()) == ["notes.md"]
+    assert {"outputs/video.bin", "outputs/clip.bin", "outputs/table.bin"} <= set(back.restored)
+    assert dict(back.not_restored) == {}
+    # The price: forward again, only the version a copy holds comes back.
     forward = kf.session("s").rewind(third.turn_id)
-    assert (outputs / "video.bin").read_bytes() == b"v" * 1000
-    assert (outputs / "clip.bin").read_bytes() == b"c" * 60
-    assert (outputs / "table.bin").read_bytes() == b"t" * 90
+    assert sorted(one.name for one in outputs.iterdir()) == ["notes.md", "table.bin"]
     assert "outputs/table.bin" in forward.restored
+    assert {"outputs/video.bin", "outputs/clip.bin"} <= set(forward.not_restored)
 
 
 def test_at_a_budget_of_0_a_rewind_leaves_the_folder_and_says_it_may_have_changed(rewinding):
