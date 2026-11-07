@@ -1017,8 +1017,9 @@ directly -- because each turn keeps what that listing found under `/.harness`. A
 is told apart from its last version by a `checksum` your `glob` adds to its entry, any
 text that changes whenever the contents do, such as an object store's ETag; failing
 that, by `size` and `modified_at`, which deepagents' own backends give. With neither, a
-replaced file goes unnoticed, though an added or removed one does not. Nothing is
-downloaded to compare: a backend hands a file back only whole, every turn.
+replaced file goes unnoticed, though an added or removed one does not; a deepagents
+sandbox gets a checksum from `GlobWithChecksums`, described after `copy` below. Nothing
+is downloaded to compare: a backend hands a file back only whole, every turn.
 
 **Those are the default names.** A `Config` may rename a session's folders, and what
 yours has to serve is what the `Config` it is handed says: `cfg.layout`, a `Layout`
@@ -1172,6 +1173,30 @@ one every such file is copied again at every turn. A turn says so once, as
 file your listing gives no `size` for is not copied by your `copy` at all, since `copy`
 answers no size and the budget could not count it: its line says why, and a rewind cannot
 put it back. A listing that gives a `checksum` or a `size` and `modified_at` costs neither.
+
+**A deepagents sandbox can say what each file holds: `GlobWithChecksums`.** Put it before
+your sandbox's own class:
+
+```python
+from kingfisher.plugins import GlobWithChecksums
+
+
+class MySandbox(GlobWithChecksums, TheirSandbox):
+    ...
+```
+
+Its `glob` lists as `BaseSandbox` does, then runs one more command through your `execute`
+that hashes each file it named, inside the sandbox, and adds a `checksum` to each entry.
+Nothing crosses the network, and a replaced input is noticed as well. A file that command
+does not answer -- no `python3` in the sandbox, a command that fails, raises or is cut
+short, a file gone since the listing -- is listed by name, as it was without the class,
+and costs what it cost. Only a `glob` under `/inputs`, `/outputs` and `/memory` is hashed,
+since the agent's own glob tool calls the same method and deepagents gives it ten seconds;
+under a renamed `Layout`, set `checksummed` to those three of `cfg.layout`'s routes. It
+hashes the paths your `glob` hands back, so they must be paths your `execute` can open:
+where your class translates them, every file falls back to its name, and
+`turn_files_unmarked` says so. The price is a read of every file in those folders, inside
+the sandbox, at every turn.
 
 **Three more extras are read where you declare them.** `unprotected` on the backend,
 a tuple of what it could not make read-only, which a turn reports to its caller as
