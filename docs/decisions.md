@@ -4608,6 +4608,21 @@ can step between versions of a reply. The next turn follows the turn rewound to,
 conversation it left. `START` is a value of its own, never `None`: an unset variable
 passed as the turn must not empty a session.
 
+**Not taken: a summary at a point the caller picks** *(2026-11-07)*, as Claude Code's
+rewind offers "summarize from here" and "summarize up to here". Summaries stay the
+summariser's, made where it chooses once the window fills. One up to a chosen turn would
+fit the log's own summary and cut, but it is a model call outside any turn: billed, under
+the session's claim, on the model of an agent someone must name. One from a chosen turn
+needs a summary standing for a stretch in the middle, which the rebuild, rewind, the index
+shown after a summary and clearing would each have to learn. Nobody had asked for either.
+
+**Not taken: a rewind to before a turn that hands its message back to edit**
+*(2026-11-07)*, as Claude Code puts the prompt back in its input box. Before a turn is
+where its parent ended, `TurnRecord.parent` or `START`, and its words are
+`TurnRecord.task`; how a client offers them again is the client's. `TurnRecord` carries
+no note and no agent: a note holds the moment's facts, which a resend wants as they are
+then, and a caller names the agent on every call.
+
 **The tree only grows, and no turn outlives its parent** *(2026-11-06)*. Nothing removes a
 turn today. Whatever comes to -- a client deleting a reply, say -- removes every turn after
 it on its branch too: left, a turn whose parent is gone is rebuilt from itself, without the
