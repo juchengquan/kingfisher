@@ -7,7 +7,7 @@ from collections.abc import Collection, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 from weakref import WeakKeyDictionary
 
@@ -32,6 +32,9 @@ class Start(Enum):
 
 
 START = Start.START
+
+#: The part of a session a rewind takes back alone; with neither named, it takes back both.
+RewindPart = Literal["files", "conversation"]
 
 
 class SessionBusyError(ValueError):

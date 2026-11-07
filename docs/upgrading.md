@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A rewind can take back the files or the conversation alone, after #1252
+
+- **`Session.rewind(to, only="files")` takes back the files in `/outputs` and `/memory`
+  alone, and `only="conversation"` the rest**, as `kingfisher rewind --only` does. Without
+  it a rewind takes back what it did. For the files alone, `Rewound.to` is the turn whose
+  files the session now holds, its conversation staying where it was.
+- **The turn after any rewind records as its own change every file not as its
+  conversation's turn left it**, and copies it: after a rewind to `START`, every file in
+  `/outputs` and `/memory`, and otherwise each one the rewind could not put back.
+  `turns()` lists them under that turn. Before, a rewind back to a turn run after a rewind
+  to `START` removed every file that turn found and did not change, the memory file among
+  them, and one a rewind could not put back came back as another branch left it.
+
 ## A deepagents sandbox can list checksums, after #1251
 
 - **Nothing changes unless your sandbox's class inherits `GlobWithChecksums`** from

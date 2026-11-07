@@ -404,26 +404,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     listing_turns.add_argument("--session", metavar="ID", required=True, help="the session")
-    rewinding = sub.add_parser(
-        "rewind",
-        help="put a session back where an earlier turn left it",
-        description=(
-            "The session's conversation, which tool results its next turn is told\n"
-            "of, what it heard of its inputs folder, and the files in /outputs and\n"
-            "/memory go back to where the turn ended. The turns after it are kept, so\n"
-            "rewinding to one of them returns. A file with no copy of that version is\n"
-            "left as it is, and the next turn is told. A pause waiting on a decision\n"
-            "is discarded."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    rewinding.add_argument("--session", metavar="ID", required=True, help="the session")
-    where = rewinding.add_mutually_exclusive_group(required=True)
-    where.add_argument("--to", metavar="TURN", help="the turn to go back to the end of")
-    # A flag of its own, not a turn named `start`: a caller's own turn ids may be anything.
-    where.add_argument(
-        "--to-start", action="store_true", help="go back to before the first turn"
-    )
+    _add_rewinding(sub)
     sweeping = sub.add_parser(
         "reap",
         help="delete sessions this workspace is finished with",
@@ -464,6 +445,35 @@ _TURN_CALLER = (
     "who is calling: comma-separated source ids, or UNSCOPED to run "
     "with no caller. Required where a definition carries a lock"
 )
+
+
+def _add_rewinding(sub: Any) -> None:
+    """`rewind`, which puts a session or one part of it back where a turn left it."""
+    rewinding = sub.add_parser(
+        "rewind",
+        help="put a session back where an earlier turn left it",
+        description=(
+            "The session's conversation, which tool results its next turn is told\n"
+            "of, what it heard of its inputs folder, and the files in /outputs and\n"
+            "/memory go back to where the turn ended. The turns after it are kept, so\n"
+            "rewinding to one of them returns. A file with no copy of that version is\n"
+            "left as it is, and the next turn is told. --only takes back the files or\n"
+            "the conversation alone. A pause waiting on a decision is discarded."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    rewinding.add_argument("--session", metavar="ID", required=True, help="the session")
+    where = rewinding.add_mutually_exclusive_group(required=True)
+    where.add_argument("--to", metavar="TURN", help="the turn to go back to the end of")
+    # A flag of its own, not a turn named `start`: a caller's own turn ids may be anything.
+    where.add_argument(
+        "--to-start", action="store_true", help="go back to before the first turn"
+    )
+    rewinding.add_argument(
+        "--only",
+        choices=("files", "conversation"),
+        help="take back the files in /outputs and /memory, or the rest, alone",
+    )
 
 
 def _add_caller(parser: argparse.ArgumentParser, help_text: str) -> None:
@@ -1121,9 +1131,11 @@ def _turns(args: argparse.Namespace) -> int:
 def _rewind(args: argparse.Namespace) -> int:
     """Put a session back where a turn left it, and say what that discarded."""
     session = _opened(_configured(config_from_env()), args.session)
-    done = session.rewind(START if args.to_start else args.to)
+    done = session.rewind(START if args.to_start else args.to, only=args.only)
     where = f"where turn {done.to} ended" if done.to is not None else "at its start"
-    print(f"session {args.session} is now {where}")
+    part = {"files": "the files of ", "conversation": "the conversation of "}.get(args.only, "")
+    verb = "are" if args.only == "files" else "is"
+    print(f"{part}session {args.session} {verb} now {where}")
     for name in done.restored:
         print(f"  put back {name}")
     for name, why in done.not_restored.items():

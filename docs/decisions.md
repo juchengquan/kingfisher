@@ -4681,15 +4681,16 @@ is what the next turn's is rebuilt along, and the ledger counts only the turns o
 rewind dying after the path leaves the session at the turn rewound to, holding the files
 and the record of the inputs the turns after it left, as a rewind that restored none
 would; the path before the pause would leave a pause answerable on a conversation the
-session is no longer at. *(2026-11-04.)*
+session is no longer at. *(2026-11-04.)* The listing of the folders the next turn compares
+with is dropped before the path, so a rewind dying after it leaves that turn copying every
+file, never comparing them with another turn's listing. *(2026-11-07.)*
 
 **A rewind puts the files in `/outputs` and `/memory` back as the turn left them.** It
 replays the file history along the path to that turn: a version kept is copied back by
-the routes a turn copies by, a file the turn did not have is removed, and the folders
-are listed again so the next turn copies only what it changes after. A version with no
-copy -- dropped for space, skipped past a deadline, held by a `MemoryStore` -- is left as
-it is and named in `Rewound.not_restored`, and so is every file where a turn on the way
-kept no record: rewritten or removed on a guess, a file would be lost to every later
+the routes a turn copies by, and a file the turn did not have is removed. A version with
+no copy -- dropped for space, skipped past a deadline, held by a `MemoryStore` -- is left
+as it is and named in `Rewound.not_restored`, and so is every file where a turn on the
+way kept no record: rewritten or removed on a guess, a file would be lost to every later
 rewind too. **Before the first turn nothing records the folders**, so a rewind to `START`
 leaves them all, and says so.
 
@@ -4720,6 +4721,28 @@ list over them. Asked instead what the file lists "right now", which sends the a
 to it unprompted, five sessions an arm differed by one. Kept in
 `.harness/rewound.jsonl` until a turn that tells it writes its conversation, so it is said
 once. None after a rewind to the start, whose conversation remembers no file.
+
+**A rewind may take back the files alone, or the conversation alone** *(2026-11-07)*, as
+Claude Code's rewind offers the code or the conversation alone. `Session.rewind(to,
+only="files")` keeps the conversation where it is; `only="conversation"` keeps the files;
+the default takes back both. What the agent heard of its inputs folder goes with the
+conversation, and the memory writer's file with the memory file it writes. A pause is
+discarded either way: a resume carries no message to say the files changed under it.
+
+**The turn after a rewind compares the folders with what its conversation's turn left**
+*(2026-11-07)*, and records every file otherwise as its own change, copying it. Compared
+with the folders as the rewind left them, it recorded none of those, and a rewind back to
+it rebuilt them as another turn had them. Measured on `main` before this: a turn run
+after a rewind to `START`, which found a file from the abandoned turn, lost it and the
+memory file when rewound to, since nothing recorded the folders before it; and a file a
+rewind could not put back came back from another branch, with the budget blamed. A rewind
+of one part alone leaves that gap wherever the two turns' files differ. Where nothing
+records what that turn left -- after a rewind to the start, or across a turn with no line
+-- there is no listing, and the next turn copies every file it finds. A file found as
+that turn left it is listed as it is now: a copy back on a disk that makes no clones
+changes its time, and by the time recorded it would read as the next turn's change. The
+next turn's message names every file not as its conversation remembers it, and as `May
+have changed` one a listing gives no mark for, rather than reading each back.
 
 **Copies are dropped down the tree once a rewind has made one.** By the order the turns
 ran, a copy whose file changed on a branch left behind looked superseded, though it is

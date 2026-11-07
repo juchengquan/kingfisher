@@ -105,8 +105,8 @@ class Prepared:
     #: The inputs folder as this turn's message described it, kept with the turn log
     #: that carries the message; `None` where there is nothing to keep.
     inputs_seen: Mapping[str, str | None] | None = None
-    #: What the last rewind could not put back, which this turn's message tells and its
-    #: ending clears; `None` where no rewind left a notice.
+    #: The files the last rewind left otherwise than this turn's conversation remembers them,
+    #: which its message tells and its ending clears; `None` where no rewind left a notice.
     drift: Drift | None = None
     #: The tool names this turn's graph offers, as `Assembled.granted`; `None` where
     #: nothing narrows them or the caller built the graph.
@@ -136,8 +136,8 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
     # Each call the conversation shows invites another; refused, it costs a model call,
     # and on MiniMax-M3 one agent said it had re-read a file it no longer could.
     lacking = f" Not available on this turn: {', '.join(unavailable)}." if unavailable else ""
-    # After a rewind, the conversation remembers each file as the turn rewound to left it,
-    # and a version with no copy to put back is still the later one.
+    # After a rewind, the conversation remembers each file as its last turn left it, and the
+    # file may be otherwise: a version with no copy to put back, or one part taken back alone.
     drifted = _drifted(drift) if drift is not None else ""
     # Here, never in the system prompt: a line changing every turn in the cached prefix
     # would miss the cache on every call.

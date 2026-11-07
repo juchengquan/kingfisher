@@ -228,16 +228,18 @@ MESSAGES = "messages"
 
 @dataclass(frozen=True)
 class Drift:
-    """The files a rewind left otherwise than the turn it rewound to left them."""
+    """The files a rewind left otherwise than the turn the next one follows left them."""
 
-    #: Known to differ: their version there had no copy to put back.
+    #: Known to differ.
     changed: tuple[str, ...] = ()
-    #: Not known either way: nothing recorded them when that turn ended.
+    #: Not known either way: nothing recorded them when that turn ended, or the listing
+    #: gives them no mark.
     unsure: tuple[str, ...] = ()
 
 
 def read_drift(harness: HarnessFiles) -> Steps[Drift | None]:
-    """What the last rewind could not put back, or `None` where no rewind left a notice."""
+    """The files the last rewind left otherwise than the conversation remembers them, or
+    `None` where no rewind left a notice."""
     held = yield from harness.fetch(REWOUND_FILE)
     try:
         noted = json.loads(held) if held is not None else None

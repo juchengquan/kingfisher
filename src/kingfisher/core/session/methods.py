@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from kingfisher.core.result import Rewound, TurnRecord
     from kingfisher.core.versions import Versions
 
-    from .model import Start
+    from .model import RewindPart, Start
 
 class SessionMethods:
     """The service's half of `Session`, and the sessions it can name, open and list."""
@@ -204,13 +204,15 @@ class SessionMethods:
         files = turn_files((yield from read_file_history(harness)))
         return turn_records(lines, (yield from read_off_path(harness)), files)
 
-    def _rewind_in(self, session_id: str, to: str | Start, opened: list[Any]) -> Steps[Rewound]:
+    def _rewind_in(
+        self, session_id: str, to: str | Start, only: RewindPart | None, opened: list[Any]
+    ) -> Steps[Rewound]:
         files = yield from self._existing_files(session_id, opened)
         # Taken, as `forget` takes it: a turn starting halfway would read a conversation
         # from one branch and a ledger from another.
         return (
             yield from self._under_claim(
-                session_id, "rewind it once it is free", rewound, files, self.cfg.layout, to
+                session_id, "rewind it once it is free", rewound, files, self.cfg.layout, to, only
             )
         )
 
