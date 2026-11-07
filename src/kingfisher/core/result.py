@@ -111,8 +111,8 @@ class TurnRecord:
     #: The turn it followed, or `None` for a first turn and the first after a rewind to the
     #: start.
     parent: str | None
-    #: The task as the caller sent it, which sending again regenerates the turn; `None` for
-    #: a resume, which sends none.
+    #: The task as the caller sent it, without its note: sent again, with the note and agent
+    #: the caller names then, it regenerates the turn. `None` for a resume, which sends none.
     task: str | None
     resumed: bool
     #: Whether this turn is on the path to the one the session is at now.
