@@ -48,6 +48,7 @@ _EXPORTS = {
     "DeleteUnusedResults": "kingfisher.core.session.unused",
     "UnusedFiles": "kingfisher.core.session.unused",
     "UnusedFile": "kingfisher.core.session.unused",
+    "GlobWithChecksums": "kingfisher.core.agent.checksums",
     "WIRE_FORMATS": "kingfisher.core.agent.models",
 }
 
@@ -59,6 +60,7 @@ __all__ = [
     "CommandRunner",
     "Definitions",
     "DeleteUnusedResults",
+    "GlobWithChecksums",
     "HostPathError",
     "Instructions",
     "InstructionsFile",
@@ -94,6 +96,7 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
+    from kingfisher.core.agent.checksums import GlobWithChecksums as GlobWithChecksums
     from kingfisher.core.agent.host_paths import HostPathError as HostPathError
     from kingfisher.core.agent.host_paths import reject_host_path as reject_host_path
     from kingfisher.core.agent.models import WIRE_FORMATS as WIRE_FORMATS

@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A deepagents sandbox can list checksums, after #1251
+
+- **Nothing changes unless your sandbox's class inherits `GlobWithChecksums`** from
+  `kingfisher.plugins`, as `ports.md` shows. Then each file under `/inputs`, `/outputs`
+  and `/memory` is listed with a `checksum` hashed inside the sandbox, an unchanged one is
+  no longer read back at every turn's end, and the `turn_files_unmarked` warning stops.
+- **The first turn after you add it may copy each file once more**, since a file's mark in
+  `.harness/artifacts.jsonl` changes from `sha256 <hex>` to `checksum sha256:<hex>`. The
+  agent is not told its inputs changed.
+
 ## A rewind removes every file its turn did not have, after #1249
 
 - **A file the turn rewound to did not have is removed whether or not a copy holds it**,

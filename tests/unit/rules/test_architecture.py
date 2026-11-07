@@ -2213,6 +2213,9 @@ WITNESSES: dict[str, dict[str, str]] = {
         # in every snippet that builds a service.
         "LocalSessions": "document",
         "backend_at": "document",
+        # `ports.md` puts it before a deepagents sandbox's own class, for a listing that
+        # says what each file holds.
+        "GlobWithChecksums": "document",
         # `ports.md` writes `LocalSessions(shell=ShellSettings(...))` for a fence decided in
         # code rather than read from the environment, and `configuration.md` sends a
         # reader of the two shell settings there.
@@ -2834,11 +2837,12 @@ AGENT_RUNTIME = (
 #: The modules a deployment imports by name.
 PUBLIC = ("kingfisher", "kingfisher.plugins")
 
-#: The public names whose job is building or running an agent, or checking an object
-#: deepagents has to accept -- the only ones that may load the runtime to be reached.
+#: The public names whose job is building or running an agent or a backend it runs on,
+#: or checking an object deepagents has to accept -- the only ones that may load the
+#: runtime to be reached.
 RUNS_AN_AGENT = frozenset({
     "Kingfisher", "run", "stream",
-    "LocalSessions", "backend_at",
+    "LocalSessions", "backend_at", "GlobWithChecksums",
     "why_no_shell", "unrouted_denials", "host_path", "scratch_runs_of",
 })
 

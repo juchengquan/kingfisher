@@ -4055,6 +4055,21 @@ file moves and stops the history growing; only a listing with a mark moves nothi
 backend's own `copy` never hands kingfisher the bytes, so it still copies every turn. A
 file the listing marks keeps the listing's mark, since the two would never match.
 
+**A deepagents sandbox may list a checksum worked out where the file is** *(2026-11-07)*.
+`GlobWithChecksums`, put before a sandbox's own class, runs one more command after
+deepagents' listing that hashes each file it named, so an unchanged file is told unchanged
+with nothing downloaded and even a backend's own `copy` stops copying it. **A checksum, not
+size and time**, which cost nothing to work out and miss a file rewritten to the same
+length with its old time put back, as `cp -p`, `rsync -a` and `tar` leave one: that turn
+keeps no copy, and a rewind to it quietly puts back the version before. A file the command
+does not answer -- no `python3`, a command that fails, raises or is cut short, a file gone
+or swapped for a pipe since the listing -- is listed by name, as deepagents lists it, so
+the worst it costs is the read-back it would have had. **Only under the folders kingfisher
+lists**: the agent's own glob tool calls the same method, and deepagents gives it ten
+seconds. Opt-in, since it reads every file in those folders at every turn. **Not taken:
+Claude Code's way**, a record of the files its own edit tools wrote, which misses whatever
+the shell writes.
+
 **A turn past its deadline when its copies begin makes none.** The claim expires at the
 deadline plus the longest superstep bound and the memory writer's (*The grace period has
 to cover a shell command*), so until the deadline at least that bound is left -- 120 s at
