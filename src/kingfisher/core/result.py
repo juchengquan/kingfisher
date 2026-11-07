@@ -127,7 +127,8 @@ class TurnRecord:
 class Rewound:
     """What `Session.rewind` did."""
 
-    #: The turn the session now ends where, or `None` for its start.
+    #: The turn rewound to, or `None` for the session's start: where the session now ends,
+    #: or for its files alone, the turn whose files it holds.
     to: str | None
     #: What a pause was waiting on, which the rewind discarded.
     discarded: tuple[PendingDecision, ...] = ()

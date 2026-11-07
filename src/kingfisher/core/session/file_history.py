@@ -33,7 +33,7 @@ from .files import Seen, artifacts_seen
 from .memory import without_any
 from .memory_writer import unread_dropped
 from .steps import Steps, changing, on_host, reading
-from .store import HarnessFiles, read_listing, read_off_path, write_listing
+from .store import Drift, HarnessFiles, read_listing, read_off_path, write_listing
 from .turnlog import PARENT, read_turn_log
 
 if TYPE_CHECKING:
@@ -708,50 +708,120 @@ BEFORE_FIRST = "nothing records what the folders held before the first turn"
 COPIES_OFF = "a turn on the way kept no record of it, KINGFISHER_REWIND_MAX_BYTES being 0"
 
 
-def restore_files(
+def rewind_files(  # noqa: PLR0913 -- the folders, both turns, and what records them
     files: Any,
     harness: HarnessFiles,
     layout: Layout,
     records: list[dict[str, Any]],
+    *,
+    path: list[str] | None,
+    remembered: list[str],
+) -> Steps[tuple[tuple[str, ...], dict[str, str], Drift]]:
+    """Put the artifact folders back as the last turn of `path` left them, or leave them for
+    `None`, and say which files are not as the last turn of `remembered`, whose conversation
+    the next turn follows, left them: the paths put back, each that could not be with why,
+    and those.
+
+    The last listing becomes the folders as that turn left them, which the next turn compares
+    with to find what it changed: compared with them as they are, it would record no file it
+    did not touch, and a rewind back to it would rebuild such a file as another turn left it.
+    A file found as that turn left it is listed as it is now, or a size and time a copy back
+    changed would read as the next turn's change.
+    """
+    now, _ = yield from _artifacts_now(files, layout)
+    if now is None:
+        cut = dict.fromkeys(layout.artifact_dirs, "a listing of it came back cut short")
+        folders = tuple(sorted(layout.artifact_dirs)) if remembered else ()
+        # The listing left dropped, the next turn copies every file it finds.
+        return (), cut if path is not None else {}, Drift(unsure=folders)
+    marks = {where: mark for where, (mark, _) in now.items()}
+    restored: tuple[str, ...] = ()
+    not_restored: dict[str, str] = {}
+    if path is not None:
+        restored, not_restored, marks = yield from restore_files(
+            files, layout, records, path, marks
+        )
+    memory_file = layout.memory_file_route.lstrip("/")
+    then = _held_at(records, remembered, memory_file)
+    if then is None:
+        # The listing left dropped, the next turn copies every file it finds. After a rewind to
+        # the start the conversation remembers no file, and finds them as they are; else
+        # nothing says what it remembers.
+        return restored, not_restored, Drift(unsure=tuple(sorted(marks)) if remembered else ())
+    held, unknown = then
+    listing = {where: mark for where, (_, mark, _) in held.items()}
+    changed: list[str] = []
+    # Named by its folder, not file by file: a folder of hundreds would fill the next turn's
+    # message.
+    unsure = [
+        folder
+        for folder in sorted(unknown)
+        if any(_unknown_in(one, {folder}, memory_file) for one in marks)
+    ]
+    relisted: dict[str, str | None] | None = None
+    for where in sorted({*marks, *listing}):
+        if _unknown_in(where, unknown, memory_file):
+            continue
+        if where not in marks or where not in listing:
+            changed.append(where)
+            continue
+        # A listing of names marks no file, and reading each back would cost a rewind what
+        # every turn's end costs such a backend: told it may have changed, the agent reads it.
+        if marks[where] is None or listing[where] is None:
+            unsure.append(where)
+        elif marks[where] != listing[where]:
+            changed.append(where)
+        elif where in restored:
+            if relisted is None:
+                again, _ = yield from _artifacts_now(files, layout)
+                relisted = {one: mark for one, (mark, _) in (again or {}).items()}
+            listing[where] = relisted.get(where) or listing[where]
+    yield from write_listing(harness, ARTIFACTS_SEEN, listing)
+    return restored, not_restored, Drift(changed=tuple(changed), unsure=tuple(unsure))
+
+
+def restore_files(
+    files: Any,
+    layout: Layout,
+    records: list[dict[str, Any]],
     path: list[str],
-) -> Steps[tuple[tuple[str, ...], dict[str, str]]]:
-    """Put each file in the artifact folders back as the last turn of `path` left it: the
-    paths put back, a file that turn did not have removed among them, and each path that
-    could not be, with why.
+    marks: dict[str, str | None],
+) -> Steps[tuple[tuple[str, ...], dict[str, str], dict[str, str | None]]]:
+    """Put each file in the artifact folders, listed with `marks`, back as the last turn of
+    `path` left it: the paths put back, a file that turn did not have removed among them,
+    each path that could not be, with why, and the files there after, each put back marked
+    as that turn recorded it.
 
     A file whose version there is unknown is left as it is: rewritten by a guess, it would
     be lost to every later rewind as well.
     """
-    now, _ = yield from _artifacts_now(files, layout)
-    if now is None:
-        return (), dict.fromkeys(layout.artifact_dirs, "a listing of it came back cut short")
     memory_file = layout.memory_file_route.lstrip("/")
     found = _held_at(records, path, memory_file)
     if found is None:
-        return (), dict.fromkeys(sorted(now), NO_RECORD if path else BEFORE_FIRST)
+        return (), dict.fromkeys(sorted(marks), NO_RECORD if path else BEFORE_FIRST), marks
     held, unknown = found
+    after = dict(marks)
     restored: list[str] = []
     not_restored: dict[str, str] = {}
     # Named by its folder, not file by file: a folder of hundreds would fill the next turn's
     # message.
     for folder in sorted(unknown):
-        if any(_unknown_in(one, {folder}, memory_file) for one in now):
+        if any(_unknown_in(one, {folder}, memory_file) for one in marks):
             not_restored[folder] = COPIES_OFF
-    for where in sorted({*held, *now}):
+    for where in sorted({*held, *marks}):
         if _unknown_in(where, unknown, memory_file):
             continue
-        version, seen = held.get(where), now.get(where)
-        done, why = yield from _put_back(files, where, version, seen[0] if seen else None)
+        version = held.get(where)
+        done, why = yield from _put_back(files, where, version, marks.get(where))
         if done:
             restored.append(where)
+            if version is None:
+                del after[where]
+            else:
+                after[where] = version[1]
         elif why is not None:
             not_restored[where] = why
-    # As the folders are now, so the next turn copies only what it changes after this.
-    after, _ = yield from _artifacts_now(files, layout)
-    if after is not None:
-        listed = {one: mark for one, (mark, _) in after.items()}
-        yield from write_listing(harness, ARTIFACTS_SEEN, listed)
-    return tuple(restored), not_restored
+    return tuple(restored), not_restored, after
 
 
 def _put_back(

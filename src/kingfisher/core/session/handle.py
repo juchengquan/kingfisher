@@ -11,7 +11,7 @@ from .steps import adrive, drive
 if TYPE_CHECKING:
     from kingfisher.core.result import MemoryEntry, PendingDecision, Rewound, TurnRecord
 
-    from .model import Start
+    from .model import RewindPart, Start
 
 
 @dataclass(frozen=True)
@@ -97,25 +97,29 @@ class Session:
         """`turns`, for a caller on an event loop."""
         return await adrive(self._service._turns_in(self.id, self._opened))
 
-    def rewind(self, to: str | Start) -> Rewound:
+    def rewind(self, to: str | Start, only: RewindPart | None = None) -> Rewound:
         """Put this session back where turn `to` ended, or before its first turn for
         `START`: its conversation, which tool results the next turn is told of, what it
         heard of its inputs folder, and its files in `/outputs` and `/memory`. The turns
         after it are kept, so a rewind to one of them returns. A file whose version there
-        has no copy is left as it is, named in `Rewound.not_restored`, and the next turn
-        tells the agent; before the first turn nothing records the files, so a rewind to
-        `START` leaves them all.
+        has no copy is left as it is, named in `Rewound.not_restored`; before the first
+        turn nothing records the files, so a rewind to `START` leaves them all.
+
+        `only="files"` takes back the files alone, and the memory writer's notes with the
+        memory file, the conversation staying where it is; `only="conversation"` takes back
+        the rest and leaves the files. Either way the next turn tells the agent each file
+        that is not as its conversation left it, and records it as its own change.
 
         A pause waiting on a decision is discarded, as a new request discards it.
         `SessionBusyError` while a turn holds the session, and `RewindError` for a turn
         it cannot rebuild: one it never ran, or one from before its turn log that recorded
         no length or that a summary has since rewritten.
         """
-        return drive(self._service._rewind_in(self.id, to, self._opened))
+        return drive(self._service._rewind_in(self.id, to, only, self._opened))
 
-    async def arewind(self, to: str | Start) -> Rewound:
+    async def arewind(self, to: str | Start, only: RewindPart | None = None) -> Rewound:
         """`rewind`, for a caller on an event loop."""
-        return await adrive(self._service._rewind_in(self.id, to, self._opened))
+        return await adrive(self._service._rewind_in(self.id, to, only, self._opened))
 
     def files(self) -> Any:
         """The backend a turn here is given, built the way a turn builds it.

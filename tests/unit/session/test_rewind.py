@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import replace
+from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -38,7 +39,7 @@ from kingfisher.core.layout import (
 )
 from kingfisher.core.request import Decision, DecisionError
 from kingfisher.core.result import AWAITING
-from kingfisher.core.session import preparation
+from kingfisher.core.session import file_history, preparation, rewind
 from kingfisher.core.session.file_history import COPIES_OFF, OVER_BUDGET, dropped_for_space
 from kingfisher.plugins import LocalSessions
 from tests.conftest import (
@@ -215,6 +216,24 @@ def test_a_refused_rewind_changes_nothing(rewinding):
     assert _harness_files(rewinding) == kept
 
 
+def test_a_misspelt_part_takes_back_nothing(rewinding):
+    """Taken for neither part, `only="file"` took back both, and the files the caller meant
+    to keep were overwritten."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    (_outputs(rewinding) / "report.md").write_text("LONG", encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("written"))
+    (_outputs(rewinding) / "report.md").write_text("SHORT", encoding="utf-8")
+    _say(kf, "shorten it", AIMessage("shortened"))
+    kept = _harness_files(rewinding)
+    misspelt: Any = "file"
+
+    with pytest.raises(ValueError, match="'file'"):
+        kf.session("s").rewind(first.turn_id, only=misspelt)
+
+    assert (_outputs(rewinding) / "report.md").read_text(encoding="utf-8") == "SHORT"
+    assert _harness_files(rewinding) == kept
+
+
 def test_turns_logged_under_one_id_are_listed_and_a_rewind_behind_them_is_refused(cfg, monkeypatch):
     """A supplied graph's session that ran two turns under one id, before #1208 refused it,
     logged the second's line in place of the first's: the walk back came round forever, so
@@ -313,6 +332,23 @@ def test_the_command_lists_turns_and_rewinds(rewinding, at_the_command_line, cap
     assert first.turn_id in marked[0]
 
 
+def test_the_command_takes_back_one_part(rewinding, at_the_command_line, capsys):
+    """Dropped on its way to the library, `--only conversation` took back the files too,
+    overwriting what the person meant to keep."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    (_outputs(rewinding) / "report.md").write_text("LONG", encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("written"))
+    (_outputs(rewinding) / "report.md").write_text("SHORT", encoding="utf-8")
+    _say(kf, "shorten it", AIMessage("shortened"))
+
+    rewound = ["rewind", "--session", "s", "--to", first.turn_id, "--only", "conversation"]
+    assert main(rewound) == 0
+
+    assert (_outputs(rewinding) / "report.md").read_text(encoding="utf-8") == "SHORT"
+    said = f"the conversation of session s is now where turn {first.turn_id} ended"
+    assert said in capsys.readouterr().out
+
+
 def _outputs(cfg):
     return cfg.workspace / "sessions" / "s" / "outputs"
 
@@ -379,6 +415,34 @@ def test_a_rewind_puts_back_the_files_the_turn_left(rewinding):
     Scripted.heard.clear()
     _say(kf, "and now?", AIMessage("ok"))
     assert "Changed since your last turn" not in _sent()
+
+
+def test_on_a_disk_that_makes_no_clones_a_file_put_back_is_not_the_next_turns_change(
+    rewinding, monkeypatch
+):
+    """Copied back without a clone, a file takes a new time; listed by the time its turn
+    recorded, it read as changed to the next turn, which copied it again and listed it among
+    its own changes."""
+
+    def refuse(_: int, target: Any) -> None:
+        # As Linux's refusal does, which has made the file before the kernel refuses.
+        target.touch()
+        raise OSError(95, "Operation not supported", str(target))
+
+    monkeypatch.setattr(file_history, "_clone", refuse)
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    report = _outputs(rewinding) / "report.md"
+    report.write_text("LONG", encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("written"))
+    report.write_text("SHORT", encoding="utf-8")
+    _say(kf, "shorten it", AIMessage("shortened"))
+    kf.session("s").rewind(first.turn_id)
+
+    after = _say(kf, "and now?", AIMessage("ok"))
+
+    (record,) = (one for one in kf.session("s").turns() if one.id == after.turn_id)
+    assert record.files is not None
+    assert record.files.changed == ()
 
 
 def test_a_version_with_no_copy_is_left_and_the_next_turn_is_told_once(rewinding):
@@ -520,6 +584,171 @@ def test_a_rewind_to_the_start_leaves_the_files_and_tells_nothing(rewinding):
     Scripted.heard.clear()
     _say(kf, "start over", AIMessage("ok"))
     assert "changed since your last turn" not in _sent().lower()
+
+
+def test_the_files_alone_go_back_and_the_conversation_stays(rewinding):
+    """Taken back with the files, a conversation the caller meant to keep is lost; and with
+    the files compared at the next turn's end as the rewind left them, that turn recorded
+    nothing, so a rewind back to it rebuilt the later files."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    outputs = _outputs(rewinding)
+    (outputs / "report.md").write_text("LONG", encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("written"))
+    (outputs / "report.md").write_text("SHORT", encoding="utf-8")
+    (outputs / "extra.md").write_text("more", encoding="utf-8")
+    second = _say(kf, "shorten it", AIMessage("shortened"))
+    kept = _conversation(rewinding)
+
+    done = kf.session("s").rewind(first.turn_id, only="files")
+
+    assert (outputs / "report.md").read_text(encoding="utf-8") == "LONG"
+    assert not (outputs / "extra.md").exists()
+    assert set(done.restored) == {"outputs/report.md", "outputs/extra.md"}
+    assert _conversation(rewinding) == kept
+    Scripted.heard.clear()
+    third = _say(kf, "and now?", AIMessage("ok"))
+    assert "Changed since your last turn: /outputs/extra.md, /outputs/report.md." in _asked()
+    assert {one.id: one.parent for one in kf.session("s").turns()}[third.turn_id] == second.turn_id
+    (outputs / "report.md").write_text("LATER", encoding="utf-8")
+    _say(kf, "rewrite it", AIMessage("rewritten"))
+    kf.session("s").rewind(third.turn_id)
+    assert (outputs / "report.md").read_text(encoding="utf-8") == "LONG"
+    assert not (outputs / "extra.md").exists()
+
+
+def test_the_conversation_alone_goes_back_and_the_files_stay(rewinding):
+    """Taken back with the conversation, files the caller meant to keep are lost; and with
+    the files compared at the next turn's end as the rewind found them, that turn recorded
+    nothing, so a rewind back to it rebuilt the files as the earlier turn had them."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    outputs = _outputs(rewinding)
+    (outputs / "report.md").write_text("LONG", encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("written"))
+    after_first = _conversation(rewinding)
+    (outputs / "report.md").write_text("SHORT", encoding="utf-8")
+    (outputs / "extra.md").write_text("more", encoding="utf-8")
+    _say(kf, "shorten it", AIMessage("shortened"))
+
+    done = kf.session("s").rewind(first.turn_id, only="conversation")
+
+    assert (outputs / "report.md").read_text(encoding="utf-8") == "SHORT"
+    assert (outputs / "extra.md").exists()
+    assert (done.restored, dict(done.not_restored)) == ((), {})
+    assert _conversation(rewinding) == after_first
+    Scripted.heard.clear()
+    third = _say(kf, "and now?", AIMessage("ok"))
+    assert "Changed since your last turn: /outputs/extra.md, /outputs/report.md." in _asked()
+    (outputs / "report.md").write_text("LATER", encoding="utf-8")
+    _say(kf, "rewrite it", AIMessage("rewritten"))
+    kf.session("s").rewind(third.turn_id)
+    assert (outputs / "report.md").read_text(encoding="utf-8") == "SHORT"
+    assert (outputs / "extra.md").exists()
+
+
+@pytest.mark.parametrize("only", ["files", "conversation"])
+def test_what_was_heard_goes_with_the_conversation_and_the_writers_notes_with_the_memory(
+    rewinding, tmp_path, only
+):
+    """With the wrong part, the agent is told of inputs against a conversation that never
+    heard of them, or the memory writer saves into its file facts the file already holds,
+    or ones said in turns the file was taken back from."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    harness = rewinding.workspace / "sessions" / "s" / HARNESS
+    heard_file, unread = harness / INPUTS_SEEN, harness / MEMORY_WRITER
+    (tmp_path / "a.csv").write_text("a", encoding="utf-8")
+    (tmp_path / "b.csv").write_text("b", encoding="utf-8")
+    write_old_record(unread, json.dumps({"turns": 1, "said": ["User: hello"]}))
+    first = _say(kf, "read a", AIMessage("ok"), inputs=(tmp_path / "a.csv",))
+    heard, kept_unread = heard_file.read_bytes(), unread.read_bytes()
+    write_old_record(unread, json.dumps({"turns": 2, "said": ["User: I am Bob"]}))
+    _say(kf, "read b", AIMessage("ok"), inputs=(tmp_path / "b.csv",))
+    heard_later, unread_later = heard_file.read_bytes(), unread.read_bytes()
+    assert (heard, kept_unread) != (heard_later, unread_later), "the control: nothing to take"
+
+    kf.session("s").rewind(first.turn_id, only=only)
+
+    if only == "files":
+        assert heard_file.read_bytes() == heard_later
+        assert read_record_bytes(unread) == kept_unread
+    else:
+        assert heard_file.read_bytes() == heard
+        assert unread.read_bytes() == unread_later
+
+
+def test_a_turn_after_a_rewind_to_the_start_is_rebuilt_with_every_file_it_found(rewinding):
+    """Compared at its end with the folders as the rewind left them, the turn recorded only
+    what it changed, and a rewind back to it removed every other file, the memory file
+    too."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    outputs = _outputs(rewinding)
+    memory = rewinding.workspace / "sessions" / "s" / "memory" / "AGENTS.md"
+    (outputs / "a.md").write_text("a", encoding="utf-8")
+    _say(kf, "one", AIMessage("ok"))
+    kf.session("s").rewind(START)
+    (outputs / "b.md").write_text("b", encoding="utf-8")
+    again = _say(kf, "two", AIMessage("ok"))
+    (outputs / "c.md").write_text("c", encoding="utf-8")
+    _say(kf, "three", AIMessage("ok"))
+    assert memory.exists(), "the control: no memory file to lose"
+
+    kf.session("s").rewind(again.turn_id)
+
+    assert sorted(one.name for one in outputs.iterdir()) == ["a.md", "b.md"]
+    assert memory.exists()
+
+
+def test_a_file_a_rewind_left_is_rebuilt_as_the_next_turn_found_it(rewinding):
+    """Compared at its end with the folders as the rewind left them, the next turn did not
+    record a file the rewind could not put back, so a rewind back to it found the earlier
+    version's lack of a copy, blamed the budget, and left a version from another branch."""
+    cfg = replace(rewinding, rewind_max_bytes=100)
+    kf = Kingfisher(cfg, sessions=LocalSessions())
+    data = _outputs(cfg) / "data.bin"
+    data.write_bytes(b"1" * 1000)
+    first = _say(kf, "one", AIMessage("ok"))
+    data.write_bytes(b"2" * 50)
+    _say(kf, "two", AIMessage("ok"))
+    kf.session("s").rewind(first.turn_id)
+    assert data.read_bytes() == b"2" * 50, "the control: the rewind put it back"
+    third = _say(kf, "three", AIMessage("ok"))
+    data.write_bytes(b"4" * 50)
+    _say(kf, "four", AIMessage("ok"))
+
+    back = kf.session("s").rewind(third.turn_id)
+
+    assert data.read_bytes() == b"2" * 50
+    assert "outputs/data.bin" not in back.not_restored
+
+
+def test_a_rewind_dying_after_the_path_leaves_the_next_turn_recording_what_it_found(
+    rewinding, monkeypatch
+):
+    """With the listing saved only after the files, a rewind dying between left the next turn
+    comparing the files with the later turn's, so a rewind back to it rebuilt them as the
+    earlier turn had them."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    report = _outputs(rewinding) / "report.md"
+    report.write_text("LONG", encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("written"))
+    report.write_text("SHORT", encoding="utf-8")
+    _say(kf, "shorten it", AIMessage("shortened"))
+
+    def died(*_: Any) -> Any:
+        msg = "the machine went away"
+        raise OSError(msg)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(rewind, "restore_state", died)
+        with pytest.raises(OSError, match="went away"):
+            kf.session("s").rewind(first.turn_id)
+    assert report.read_text(encoding="utf-8") == "SHORT", "the control: the files went back"
+    third = _say(kf, "and now?", AIMessage("ok"))
+    report.write_text("LATER", encoding="utf-8")
+    _say(kf, "rewrite it", AIMessage("rewritten"))
+
+    kf.session("s").rewind(third.turn_id)
+
+    assert report.read_text(encoding="utf-8") == "SHORT"
 
 
 def test_a_copy_still_current_on_the_path_outlives_one_left_on_a_branch():
