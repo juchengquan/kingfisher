@@ -705,9 +705,6 @@ def restore_state(
 #: Why a file has no version to go back to, where no copy failed but a record is missing.
 NO_RECORD = "no record says what the folders held when that turn ended"
 BEFORE_FIRST = "nothing records what the folders held before the first turn"
-NOT_THEN_NO_COPY = (
-    "that turn did not have it, and with no copy of it as it is now, removing it would lose it"
-)
 COPIES_OFF = "a turn on the way kept no record of it, KINGFISHER_REWIND_MAX_BYTES being 0"
 
 
@@ -722,9 +719,8 @@ def restore_files(
     paths put back, a file that turn did not have removed among them, and each path that
     could not be, with why.
 
-    A file whose version there is unknown is left as it is, and so is one that turn did not
-    have when no copy holds it as it is now: removed or rewritten, either would be lost to
-    every later rewind as well.
+    A file whose version there is unknown is left as it is: rewritten by a guess, it would
+    be lost to every later rewind as well.
     """
     now, _ = yield from _artifacts_now(files, layout)
     if now is None:
@@ -734,7 +730,6 @@ def restore_files(
     if found is None:
         return (), dict.fromkeys(sorted(now), NO_RECORD if path else BEFORE_FIRST)
     held, unknown = found
-    copied = _copied_versions(records)
     restored: list[str] = []
     not_restored: dict[str, str] = {}
     # Named by its folder, not file by file: a folder of hundreds would fill the next turn's
@@ -746,7 +741,7 @@ def restore_files(
         if _unknown_in(where, unknown, memory_file):
             continue
         version, seen = held.get(where), now.get(where)
-        done, why = yield from _put_back(files, where, version, seen[0] if seen else None, copied)
+        done, why = yield from _put_back(files, where, version, seen[0] if seen else None)
         if done:
             restored.append(where)
         elif why is not None:
@@ -764,15 +759,14 @@ def _put_back(
     where: str,
     version: tuple[str | None, str | None, str | None] | None,
     mark_now: str | None,
-    copied: set[tuple[str, str]],
 ) -> Steps[tuple[bool, str | None]]:
     """Put `where` back as `version`, `None` for a turn that did not have it: whether it
     changed, and why not where it could not."""
     if version is None:
-        if (where, mark_now) in copied:
-            yield changing(files, "delete", f"/{where}")
-            return True, None
-        return False, NOT_THEN_NO_COPY
+        # Whether or not a copy holds it, as a file rewritten is: the folders are put back as
+        # the turn left them, and a version too large to copy is the deployment's to keep.
+        yield changing(files, "delete", f"/{where}")
+        return True, None
     under, mark, why = version
     if mark is not None and mark_now == mark:
         return False, None
@@ -782,17 +776,6 @@ def _put_back(
         files, f"{HARNESS_ROUTE}{KEPT_FILES}/{under}/{where}", f"/{where}", None
     )
     return (True, None) if refused is None else (False, refused)
-
-
-def _copied_versions(records: list[dict[str, Any]]) -> set[tuple[str, str]]:
-    """Each `(path, mark)` a copy still holds, which some rewind can put back."""
-    return {
-        (path, mark)
-        for record in records
-        if _under(record) is not None
-        for path, kept in _entries(record, KEPT).items()
-        if kept.get(DROPPED_IN) is None and isinstance(mark := kept.get(MARK), str)
-    }
 
 
 def _held_at(

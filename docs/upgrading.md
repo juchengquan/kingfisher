@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A rewind removes every file its turn did not have, after #1249
+
+- **A file the turn rewound to did not have is removed whether or not a copy holds it**,
+  reversing #1243, and listed in `Rewound.restored`. One with no copy -- larger than
+  `KINGFISHER_REWIND_MAX_BYTES`, or dropped for space -- is then gone from every branch: a
+  rewind forward to the turn that made it names it in `Rewound.not_restored`. Download what
+  you mean to keep before rewinding past it.
+- **On a backend whose listing gives no checksum, size or time, such a file is removed
+  too.** Before, every one stayed, with a copy or without, and was named in
+  `not_restored` as having none.
+
 ## A rewind budget of 0 copies nothing the agent makes, after #1247
 
 - **At `KINGFISHER_REWIND_MAX_BYTES=0` a turn neither lists nor copies `/outputs` or the

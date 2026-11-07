@@ -559,6 +559,24 @@ def test_an_unchanged_file_read_back_whole_is_not_copied_again(cfg, kind):
     assert report.read_bytes() == b"a" * 1000
 
 
+def test_on_a_listing_of_names_a_rewind_removes_a_file_the_turn_did_not_have(cfg):
+    """Removed only where a copy matched the listing's mark, a file a later turn made was
+    never removed on a backend listing names alone, and was reported as having no copy
+    though one held it."""
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=_RemoteSessions(_NamesOnly))
+    outputs = _session(cfg, start(cfg, "s")) / "outputs"
+    (outputs / "notes.md").write_text("notes", encoding="utf-8")
+    _run(kf, "t1")
+    (outputs / "extra.md").write_text("extra", encoding="utf-8")
+    _run(kf, "t2")
+
+    back = kf.session("s").rewind("t1")
+
+    assert not (outputs / "extra.md").exists()
+    assert "outputs/extra.md" in back.restored
+    assert dict(back.not_restored) == {}
+
+
 def test_under_a_budget_no_copy_is_made_that_nothing_can_size(cfg, caplog):
     """Counted as nothing, the copies a backend made itself of files its listing gave no
     size for were never dropped: a session kept every one, whatever the budget said."""

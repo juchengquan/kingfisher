@@ -132,8 +132,7 @@ class Rewound:
     #: What a pause was waiting on, which the rewind discarded.
     discarded: tuple[PendingDecision, ...] = ()
     #: Files in `/outputs` and `/memory` put back as that turn left them, by their names
-    #: in the session as `RunResult.artifacts` gives them; one it did not have, removed
-    #: where a copy holds it as it is now.
+    #: in the session as `RunResult.artifacts` gives them; one it did not have, removed.
     restored: tuple[str, ...] = ()
     #: Each file left as it is, with why: its version there has no copy, or nothing says
     #: what it was. The next turn tells the agent which.
