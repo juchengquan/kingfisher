@@ -178,7 +178,9 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   calls though the turn was reported cut short, and with #1188 merged in its tool calls
   stopped but 4 of its 7 model calls still came after the limit. A refusal in
   `GuardedTool` stopped the offered tools and not `write_file` from the same program.
-  The survey reads the run log and prints counts only -- nothing anyone said, no ids, no
+  Since 2026-11-08 an `execute` from a program is refused a `timeout` past
+  `KINGFISHER_EXECUTION_TIMEOUT_S`, as a direct one is; that it can still start after the
+  limit is unchanged. The survey reads the run log and prints counts only -- nothing anyone said, no ids, no
   offered tool's name -- so its output can be sent back as it is. *(2026-11-04.)*
 - **What slots cost, on a real deployment.** A slot keyed on a name no tool lock uses
   gives two grants with one tool list two system prompts and a cache entry each; a

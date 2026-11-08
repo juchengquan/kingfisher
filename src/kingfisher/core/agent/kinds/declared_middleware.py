@@ -252,9 +252,10 @@ def _instantiate(
 #: job whatever replaces one has to do as well.
 REQUIRED_BY_DEEPAGENTS = {
     "FilesystemMiddleware": (
-        "it backs every built-in file tool, enforces the `permissions` rules, and leaves "
-        "tool-result offloading off -- kingfisher files a long result itself, in the one "
-        "folder a ledger row names"
+        "it backs every built-in file tool, enforces the `permissions` rules, refuses an "
+        "`execute` from `eval`'s code asking for longer than KINGFISHER_EXECUTION_TIMEOUT_S, "
+        "and leaves tool-result offloading off -- kingfisher files a long result itself, in "
+        "the one folder a ledger row names"
     ),
     "SubAgentMiddleware": (
         "it backs the `task` tool, through which the agent hands work to a subagent"

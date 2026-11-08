@@ -186,11 +186,14 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         )
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.
     standing.append(AttachmentsMiddleware(trigger, count, pdf_attachments))
+    longest = longest_command(execution_timeout_s)
     # deepagents merges by name, so this *replaces* the `FilesystemMiddleware` it would
     # build itself -- in this graph's stack and, through the spec, in each subagent's.
-    # Only to turn its offloading off: a result too long to show whole is kingfisher's to
-    # save, in the one folder a ledger row names, and a second copy under a name only
-    # deepagents knows cost a reconciliation at every turn's end to tell the two apart.
+    # Its offloading is off: a result too long to show whole is kingfisher's to save, in
+    # the one folder a ledger row names, and a second copy under a name only deepagents
+    # knows cost a reconciliation at every turn's end to tell the two apart. Its longest
+    # command is the setting: an `execute` from `eval`'s code meets no `wrap_tool_call`,
+    # so this is the one check between it and a sandbox that honours any `timeout`.
     # `_permissions` is deepagents' own keyword, private and passed as it asks.
     # Not beside one `inner` names: deepagents' merge keeps the later of the two, and a
     # helper's stack, which meets no merge, refused to build holding both.
@@ -199,6 +202,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             FilesystemMiddleware(
                 backend=backend,
                 tool_token_limit_before_evict=None,
+                max_execute_timeout=longest,
                 _permissions=permissions,
             )
         )
@@ -208,7 +212,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             layout,
             shell,
             root=session_root_of(backend),
-            longest=longest_command(execution_timeout_s),
+            longest=longest,
             here=shell_runs_here(backend),
             expires_after=keep_results_rounds,
             ledger=ledger,

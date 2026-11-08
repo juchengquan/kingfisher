@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A command from `eval`'s code keeps the execution timeout, after #1257
+
+- **`execute` called from `eval`'s code is refused a `timeout` past
+  `KINGFISHER_EXECUTION_TIMEOUT_S`**, as a direct call already was, in the same words.
+  Before, your backend was handed what the code asked for, up to deepagents' hour, so a
+  sandbox that honours it could run one command past the session's claim. Kingfisher's own
+  shell cut such a command to the setting and ran it; the program is now refused instead.
+- **A `FilesystemMiddleware` of your own in kingfisher's place keeps its own ceiling**,
+  deepagents' hour unless you pass `max_execute_timeout=`. A call from code meets no other
+  check, so keep it at most your `KINGFISHER_EXECUTION_TIMEOUT_S`.
+
 ## `doctor` and `list` say what startup refuses or never reads, after #1256
 
 - **A prompt slot keyed on a name no lock uses now exits 1.** A `system_prompt.slots`
