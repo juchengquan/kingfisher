@@ -10,7 +10,7 @@ from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.logged import ORIGINS_LOGGER
 from kingfisher.plugins import LocalSessions
 from tests.conftest import RecordedEvents
-from tests.unit.stand_ins import ElsewhereRunner
+from tests.unit.stand_ins import Elsewhere, ElsewhereRunner
 
 
 def test_a_plain_definitions_folder_reports_every_catalogue_as_derived(cfg):
@@ -167,7 +167,8 @@ def test_no_value_on_the_line_contains_a_space(cfg, tmp_path):
         Definitions.from_roots(cfg.catalogue_roots),
         tools=Definitions.from_roots({**cfg.catalogue_roots, "tools": tmp_path}).tools,
     )
-    line = Origins.of(cfg, catalogue=catalogue, sessions=object()).line()
+    # A deployment's own, saying nothing of `where`: the default it inherits is `<supplied>`.
+    line = Origins.of(cfg, catalogue=catalogue, sessions=Elsewhere(tmp_path)).line()
 
     pairs = line.split(" ")
     assert all("=" in pair for pair in pairs), line

@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A `Sessions` of your own writes no `held`, and may answer `where`, after #1262
+
+- **`held` is no longer part of `Sessions`.** Kingfisher has not asked it since a sweep
+  began taking each session's claim rather than asking whether it was held, so a
+  `Sessions` of your own need not write it. One you already wrote is left unused, and
+  `LocalSessions` keeps its own, which its `claim` reads.
+- **`where(cfg)` is a method of `Sessions`, answering `None`.** It names the folder your
+  sessions are kept in on this host, which `doctor` and the origins line report; `None`
+  reads as `<supplied>`, as a `Sessions` without it did before. One you already wrote
+  overrides it, and nothing else changes.
+
 ## A `host_path` that raises fails the tool call, after #1260
 
 - **If your backend's `host_path` raises while an offered tool's `path` is looked up, that

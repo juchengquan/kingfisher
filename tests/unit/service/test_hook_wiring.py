@@ -133,8 +133,8 @@ def _bodiless(function: Any) -> bool:
 @pytest.mark.parametrize("interface", INTERFACES, ids=lambda one: one.__name__)
 def test_every_method_an_interface_leaves_unwritten_is_abstract(interface):
     """Checked method by method, since one abstract method is enough to make the rule above
-    pass: a `Sessions.held` left without `@abstractmethod` is a hook missing it taken at
-    startup, and a `None` where a turn asks whether a claim is held."""
+    pass: a `Sessions.claim` left without `@abstractmethod` is a hook missing it taken at
+    startup, and a `None` every turn reads as its session being busy."""
     unwritten = {
         name
         for name, value in vars(interface).items()

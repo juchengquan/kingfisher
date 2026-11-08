@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any, Literal, get_args
 from .session.threads import off_loop, thread_pool
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from .agent.tool_context import Caller
     from .config import Config
     from .definitions.catalogue import Definitions
@@ -140,10 +142,9 @@ class Sessions(ABC):
     - a session serves under `/skills/` the skills kingfisher read;
     - every async twin answers as its sync one does.
 
-    Anything else is read only where an implementation declares it, by name: `where(cfg)`
-    here, the folder these sessions are kept in on this host, for the origins line;
-    `host_path`, `shell_prompt`, `unprotected` and `copy` on a backend `open` returns; and
-    `runs_here` on its shell.
+    Anything else is read only where an implementation declares it, by name: `host_path`,
+    `shell_prompt`, `unprotected` and `copy` on a backend `open` returns, and `runs_here`
+    on its shell -- deepagents' classes, which kingfisher cannot give a default.
 
     `copy(source, destination)` copies one file within the session, both paths as the file
     tools name them, and answers `None`, or why it could not. A turn's ending copies each
@@ -224,12 +225,10 @@ class Sessions(ABC):
         claim of the turn that took it over."""
         ...
 
-    @abstractmethod
-    def held(
-        self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
-    ) -> bool:
-        """Whether a claim on this session is young enough that its turn may be running."""
-        ...
+    def where(self, cfg: Config) -> Path | None:  # noqa: ARG002 -- an override reads it
+        """The folder these sessions are kept in on this host, which the origins line
+        reports, or `None` where they are kept elsewhere."""
+        return None
 
     # Written out so a subclass inherits each twin as its sync one on kingfisher's pool,
     # and overrides only one it can await.
