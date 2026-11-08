@@ -412,6 +412,45 @@ def test_a_callers_listing_names_no_own_tool_the_build_holds_back(policied, tool
     assert f"{tool}  [private tool" not in "\n".join(render(b))
 
 
+@pytest.mark.parametrize("kept_by", ["its-lock", "the-grants"])
+def test_a_callers_listing_says_nothing_shadows_a_tool_they_are_not_offered(policied, kept_by):
+    """B's listing withheld the catalogue's `line_count` and still said a subagent's own
+    answers for it, so a caller shown no such tool was told it exists.
+
+    Both ways a tool is kept from a caller, since a filter on the lock alone passes the first.
+    """
+    from kingfisher.cli.listing import render
+
+    agents = policied.catalogue_roots["agents"]
+    surveyor = AGENT + "subagents: [counter]\n"
+    if kept_by == "the-grants":
+        # Open, and granted only by an agent B cannot open.
+        (tools_dir(policied) / "line_count.py").write_text(
+            TOOL.replace('ToolSpec(line_count, source_ids=["A"])', "line_count"),
+            encoding="utf-8",
+        )
+        surveyor = surveyor.replace("tools: [line_count]", "tools: []")
+        (agents / "keeper.yaml").write_text(
+            AGENT.replace("surveyor", "keeper").replace("[A, B]", "[A]"), encoding="utf-8"
+        )
+    (agents / "surveyor.yaml").write_text(surveyor, encoding="utf-8")
+    subagents = policied.catalogue_roots["subagents"]
+    subagents.mkdir(parents=True, exist_ok=True)
+    (subagents / "counter.py").write_text(
+        CARRIER.replace("def count(", "def line_count(").replace(
+            'ToolSpec(count, source_ids=["A"])', "line_count"
+        ),
+        encoding="utf-8",
+    )
+    a = inventory(policied, source_ids=["A"])
+    b = inventory(policied, source_ids=["B"])
+
+    assert a.shadowed == {"counter": ("line_count",)}, "the control: A is offered it"
+    assert b.bundled_tools == {"counter": ("line_count",)}, "B holds the subagent's own"
+    assert b.shadowed == {}
+    assert "shadowing the catalogue's" not in "\n".join(render(b))
+
+
 def test_a_moved_tool_the_caller_cannot_reach_is_not_named_to_them(policied):
     """The listing's moved-tool rows read the agent's half only, and named a tool to a
     caller whose every other view of the deployment withholds it.

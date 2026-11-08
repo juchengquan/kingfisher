@@ -18,6 +18,17 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A scoped listing's faults name no tool or skill kept from the caller, after #1255
+
+- **`kingfisher list --as` no longer says a subagent's own tool shadows a catalogue tool
+  the caller is not offered**, whether its lock or the grants keep it from them.
+  `Inventory.shadowed` and `shadowed` in `--json` leave it out, and the subagent's own
+  tool is listed as a plain private tool.
+- **An agent or subagent naming a skill twice reads `skills names one skill twice, bare
+  and qualified`** in a scoped `Inventory.doubled_skills`, and in the listing, where the
+  caller is not told of that skill. The fault is still there and the listing still exits
+  1, since startup refuses the file whoever asks. The operator's view is unchanged.
+
 ## A rewind can take back the files or the conversation alone, after #1252
 
 - **`Session.rewind(to, only="files")` takes back the files in `/outputs` and `/memory`

@@ -1646,9 +1646,12 @@ it.** A misfiled skill is loaded and offered, so it is kept to what reached
 definitions offer, as `skills` is -- emptying it would take away the one skill fault a
 caller can act on, and a rule holds that so the three cannot collapse into one
 `if scoped`. A skill that would not load, or nested too deep, has no name to filter by
-and is the operator's diagnostic. The fault maps key agents as well as subagents, and a subagents-only fixture left the agent
-half unheld -- the only survivor of that review's twenty-one mutations -- so each fixture
-holds both kinds. *(2026-10-13, from an architecture review.)*
+and is the operator's diagnostic. A skill named twice is kept for a caller its lock or
+the grants keep it from, worded without its name: startup refuses the file whoever asks,
+so dropping it would call a deployment that will not start fine. The fault maps key
+agents as well as subagents, and a subagents-only fixture left the agent half unheld --
+the only survivor of that review's twenty-one mutations -- so each fixture holds both
+kinds. *(2026-10-13, from an architecture review; a skill named twice 2026-11-08.)*
 
 **The HTTP surface asked who was calling and authenticated nobody.** It went on
 2026-09-15; its decisions stay as the record. Reading source ids off a header was
