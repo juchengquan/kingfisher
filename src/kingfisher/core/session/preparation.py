@@ -224,7 +224,7 @@ class Preparation:
                 catalogue=catalogue,
             )
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
-        earlier = (yield from read_ledger(harness)) if self._graph is None else None
+        earlier = (yield from read_ledger(harness, log.off_path)) if self._graph is None else None
         # The ledger, written before the log, names every turn the log opens; a supplied
         # graph keeps none, and the log is all that names its turns.
         taken = earlier.turns if earlier is not None else logged_turns(log)

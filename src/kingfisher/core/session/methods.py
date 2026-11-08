@@ -28,10 +28,9 @@ from .steps import Steps, adrive, changing, drive, on_host, reading
 from .store import (
     HarnessFiles,
     pending_from_mark,
-    read_off_path,
     read_pause_mark,
 )
-from .turnlog import read_turn_log
+from .turnlog import read_log
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -200,9 +199,9 @@ class SessionMethods:
 
     def _turns_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[TurnRecord, ...]]:
         harness = HarnessFiles((yield from self._existing_files(session_id, opened)))
-        lines = yield from read_turn_log(harness)
+        log = yield from read_log(harness)
         files = turn_files((yield from read_file_history(harness)))
-        return turn_records(lines, (yield from read_off_path(harness)), files)
+        return turn_records(log, files)
 
     def _rewind_in(
         self, session_id: str, to: str | Start, only: RewindPart | None, opened: list[Any]

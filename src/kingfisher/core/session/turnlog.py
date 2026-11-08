@@ -233,8 +233,13 @@ class TurnLog:
     #: The turn the session is at: the last a rewind did not leave behind, or `None` where
     #: none ran or the session was rewound to the start.
     current: str | None = None
+    #: The turns from the first to `current`, each the parent of the next.
+    path: tuple[str, ...] = ()
     #: The conversation `current` ended on, which the turn is built on.
     conversation: tuple[Message, ...] = ()
+    #: The turns a rewind left behind, read once with the log for everything a turn reads
+    #: of it: the ledger leaves them out, and ranking copies follows the branches they made.
+    off_path: frozenset[str] = frozenset()
 
     @property
     def written(self) -> bool:
@@ -266,11 +271,14 @@ def parse_log(held: bytes, off_path: frozenset[str]) -> TurnLog:
         None,
     )
     turns = by_turn(parsed)
+    path = path_to(turns, current)[0] if current else []
     return TurnLog(
         lines=tuple(lines),
         damaged=damaged,
         current=current,
-        conversation=replayed(turns, path_to(turns, current)[0]) if current else (),
+        path=tuple(path),
+        conversation=replayed(turns, path),
+        off_path=off_path,
     )
 
 

@@ -25,6 +25,7 @@ from .file_history import (
     unlisted_in,
     versions_in,
 )
+from .files import walk_artifacts
 from .model import START, RewindError, RewindPart, Start
 from .steps import changing
 from .store import (
@@ -34,13 +35,12 @@ from .store import (
     clear_pause,
     pending_from_mark,
     read_ledger,
-    read_off_path,
     read_pause_mark,
     write_drift,
     write_listing,
     write_off_path,
 )
-from .turnlog import PARENT, by_turn, path_to, read_turn_log, task_of
+from .turnlog import PARENT, by_turn, path_to, read_log, task_of
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -48,26 +48,14 @@ if TYPE_CHECKING:
     from kingfisher.core.layout import Layout
 
     from .steps import Steps
-    from .turnlog import Logged
+    from .turnlog import TurnLog
 
 
-def current_path(turns: Logged, off_path: frozenset[str]) -> list[str]:
-    """The turns from the first to where the session is, each the parent of the next."""
-    # The turns ran in the order the log holds them, so the last one a rewind did not leave
-    # behind is where the session is.
-    head = [turn for turn in turns if turn not in off_path]
-    return path_to(turns, head[-1])[0] if head else []
-
-
-def turn_records(
-    lines: list[dict[str, Any]],
-    off_path: frozenset[str],
-    files: Mapping[str, TurnFiles],
-) -> tuple[TurnRecord, ...]:
+def turn_records(log: TurnLog, files: Mapping[str, TurnFiles]) -> tuple[TurnRecord, ...]:
     """Every turn the log holds, oldest first, each marked if it is on the session's path
     and with what it did to its files where the file history has its line."""
-    turns = by_turn(lines)
-    current = set(current_path(turns, off_path))
+    turns = by_turn([line for _, line in log.lines])
+    current = set(log.path)
     return tuple(
         TurnRecord(
             id=turn,
@@ -91,8 +79,9 @@ def rewound(
         msg = f"a rewind takes back 'files' or 'conversation' alone, or both, not {only!r}"
         raise ValueError(msg)
     harness = HarnessFiles(files)
-    turns = by_turn((yield from read_turn_log(harness)))
-    ledger = yield from read_ledger(harness)
+    log = yield from read_log(harness)
+    turns = by_turn([line for _, line in log.lines])
+    ledger = yield from read_ledger(harness, log.off_path)
     path: list[str]
     if to is START:
         path = []
@@ -120,9 +109,7 @@ def rewound(
     if mark is not None:
         yield from clear_pause(harness)
     # The turn the next one follows, whose conversation remembers the files as it left them.
-    remembered = (
-        path if only != "files" else current_path(turns, (yield from read_off_path(harness)))
-    )
+    remembered = path if only != "files" else list(log.path)
     records = yield from read_file_history(harness)
     # Before the path, and written again with the files: a rewind dying between would leave
     # the next turn comparing the files with another turn's listing. Without one, it copies
@@ -210,7 +197,8 @@ def rewind_files(  # noqa: PLR0913 -- the folders, both turns, and what records 
     A file found as that turn left it is listed as it is now, or a size and time a copy back
     changed would read as the next turn's change.
     """
-    now, _ = yield from artifacts_now(files, layout)
+    walked = yield from walk_artifacts(files, layout)
+    now, _ = yield from artifacts_now(files, layout, walked)
     if now is None:
         cut = dict.fromkeys(layout.artifact_dirs, "a listing of it came back cut short")
         folders = tuple(sorted(layout.artifact_dirs)) if remembered else ()
@@ -255,7 +243,8 @@ def rewind_files(  # noqa: PLR0913 -- the folders, both turns, and what records 
             changed.append(where)
         elif where in restored:
             if relisted is None:
-                again, _ = yield from artifacts_now(files, layout)
+                rewalked = yield from walk_artifacts(files, layout)
+                again, _ = yield from artifacts_now(files, layout, rewalked)
                 relisted = {one: mark for one, (mark, _) in (again or {}).items()}
             listing[where] = relisted.get(where) or listing[where]
     yield from write_listing(harness, ARTIFACTS_SEEN, listing)

@@ -30,6 +30,7 @@ from kingfisher.core.session.files import (
     inputs_changed,
     inputs_seen,
     read_artifact,
+    walk_artifacts,
 )
 from kingfisher.core.session.messages import Message, as_record
 from kingfisher.core.session.steps import drive
@@ -287,7 +288,7 @@ def test_collecting_and_reading_agree_on_every_name(cfg, session_dir):
     (session_dir / "outputs" / ".hidden").write_text("h")
     backend = backend_at(cfg, session_dir)
 
-    names = drive(collect_artifacts(backend, cfg.layout))
+    names = collect_artifacts(drive(walk_artifacts(backend, cfg.layout)))
 
     assert {"outputs/deep/er/x.bin", "outputs/.hidden"} <= set(names)
     for name in names:
@@ -303,7 +304,7 @@ def test_a_name_starting_with_a_dot_is_collected_at_any_depth(cfg, session_dir):
         (session_dir / "outputs" / name).parent.mkdir(parents=True, exist_ok=True)
         (session_dir / "outputs" / name).write_text("x")
 
-    names = drive(collect_artifacts(backend_at(cfg, session_dir), cfg.layout))
+    names = collect_artifacts(drive(walk_artifacts(backend_at(cfg, session_dir), cfg.layout)))
 
     assert {
         "outputs/plain.txt",
