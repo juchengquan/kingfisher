@@ -66,7 +66,7 @@ def subagent_skills(
     offered: SkillRegistry,
     activated: Selection,
     *,
-    held: frozenset[str] | None = None,
+    held: frozenset[str] | None,
 ) -> Selection:
     """Which skills a subagent is told about, or `None` for none."""
     # The file's own names are refused, not the caller's share: a typo is the file's fault.
@@ -90,7 +90,7 @@ def subagent_helpers(
     defined: Mapping[str, Any],
     activated: Selection,
     *,
-    held: frozenset[str] | None = None,
+    held: frozenset[str] | None,
     #: What the refusal lists, for this caller. No default: `refuse_unoffered`'s own lists
     #: every definition, out of reach or not.
     listing: str,

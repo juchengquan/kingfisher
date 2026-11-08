@@ -58,7 +58,7 @@ def _elsewhere(cfg, url: str):
 
 def _found(cfg, names, **kwargs):
     return dict(
-        indistinct_subagents(cfg, Capabilities(subagents=names), **kwargs)
+        indistinct_subagents(cfg, Capabilities(subagents=names), held=None, **kwargs)
     )
 
 
@@ -169,7 +169,7 @@ def test_a_request_that_activated_no_subagents_is_asked_nothing(cfg, session_dir
     """
     define_each(cfg, ASKED)
 
-    assert indistinct_subagents(cfg, Capabilities(subagents=None)) == ()
+    assert indistinct_subagents(cfg, Capabilities(subagents=None), held=None) == ()
 
 
 # -- an override counts as asking too --------------------------------------

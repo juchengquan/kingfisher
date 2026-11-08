@@ -523,7 +523,12 @@ dropped at any of the three, passed the whole suite, and the subagent then wrote
 `/skills/` and the saved tool results. Forgetting one is now refused by `ty` and by every
 build, and `None` is still an answer, said out loud. A test says "none of it" through the
 `*_UNWIRED` sets in `tests/conftest.py`; `test_no_setting_every_graph_shares_has_a_default`
-holds the signatures. *(Measured 2026-10-28.)*
+holds the signatures. *(Measured 2026-10-28.)* The helpers that narrow a build to its
+caller take `held` the same way: `activated_subagents`, `indistinct_subagents`,
+`subagent_skills`, `subagent_helpers` and `private_tools`. Handed `held=None` where
+`build_agent` asks `private_tools`, a caller a tool's audience shuts out was given that
+subagent's tool, and the 213 tests of the audience, wiring and bundle modules passed.
+*(Measured 2026-11-08.)*
 
 **`general-purpose` is built by the builder a declared subagent is.** Assembled apart, it
 twice went without what declared subagents were given -- the path guards above, then the

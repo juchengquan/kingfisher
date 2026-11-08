@@ -176,7 +176,7 @@ def handed_graphs_in(catalogue: Definitions) -> frozenset[str]:
 
 
 def private_tools(
-    catalogue: Definitions, name: str, *, held: frozenset[str] | None = None
+    catalogue: Definitions, name: str, *, held: frozenset[str] | None
 ) -> tuple[FoundTool, ...]:
     """The tools a subagent brings itself that this caller may use, or none."""
     repository = catalogue.bundled_tools.get(name)

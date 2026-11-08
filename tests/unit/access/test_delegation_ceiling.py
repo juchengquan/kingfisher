@@ -484,7 +484,7 @@ def test_a_subagents_skills_are_narrowed_by_it():
     wrong = []
     for selection, cap, expected in DECLARED:
         spec = replace(a_subagent(HELPER, "helper.yaml"), skills=selection)
-        got = subagent_skills(spec, offering("a", "b", "c"), cap)
+        got = subagent_skills(spec, offering("a", "b", "c"), cap, held=None)
         if got != as_identities(expected):
             wrong.append(f"skills={selection!r} under {cap!r} gave {got}, wanted {expected!r}")
 
@@ -499,7 +499,7 @@ def test_undeclared_skills_and_tools_both_mean_none():
 
     assert parsed.skills is None
     assert (parsed.builtin_tools, parsed.tools) == (None, None)
-    assert subagent_skills(parsed, offering("a", "b"), ("a", "b")) is None
+    assert subagent_skills(parsed, offering("a", "b"), ("a", "b"), held=None) is None
     assert narrowed(parsed.tools, by=("a", "b")) is None
 
 
