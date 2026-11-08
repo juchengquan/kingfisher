@@ -34,7 +34,7 @@ from .agents.spec import DIRECTORY as AGENT_DIRECTORY
 from .agents.spec import AgentError
 from .importing import skipped
 from .middlewares.catalogue import LocalMiddlewareRepository
-from .prompts import unused_names
+from .prompts import refuse_unused_names
 from .skill_locks import SkillLock, SkillLockError
 from .skills import registry as skill_registry
 from .skills.catalogue import LocalSkillRepository
@@ -319,13 +319,9 @@ class Definitions:
                 )
                 # Here, with every lock read: a slot keyed on a misspelt name is never sent,
                 # and a slot key is no lock, or it would make itself legal.
-                if unused := unused_names(spec.slots, self.vocabulary):
-                    msg = (
-                        f"{kind} {spec.name!r}: system_prompt.slots is keyed on "
-                        f"{', '.join(unused)}, which no lock here names, so that text "
-                        "is never sent -- `kingfisher list` prints the names in use"
-                    )
-                    raise error(msg)
+                refuse_unused_names(
+                    spec.slots, self.vocabulary, subject=f"{kind} {spec.name!r}", error=error
+                )
         # A bundle's tools too, though only one subagent can call them: otherwise the
         # deployment starts fine and fails on the first request activating that subagent.
         for name, repository in self.bundled_tools.items():

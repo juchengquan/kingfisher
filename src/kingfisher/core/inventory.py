@@ -37,7 +37,9 @@ from .definitions.catalogue import (
 )
 from .definitions.importing import defined_in_a_definition_file
 from .definitions.middlewares.catalogue import MiddlewareError
+from .definitions.prompts import unused_names
 from .definitions.skill_locks import SkillLock, SkillLockError
+from .definitions.skills.registry import SkillRegistry
 from .definitions.subagents.rules import miscounted, refuse_cycles
 from .definitions.subagents.spec import SubagentError
 from .definitions.tools.catalogue import ToolError
@@ -84,8 +86,8 @@ class Catalogued:
     """
 
     name: str
-    #: What stopped the directory being read, or `None`. Never set for `skills`, which fail
-    #: one at a time, into `skills_unloadable`, `skills_misplaced` and `skills_misfiled`.
+    #: What stopped the directory being read, or `None`. A skill that does not load is not
+    #: this but `skills_unloadable`, `skills_misplaced` or `skills_misfiled`: the rest load.
     error: str | None
     #: How many the agent can reach. Zero is a fact about the definitions, not a failure.
     defined: int
@@ -148,6 +150,9 @@ class Inventory:
     skills_misfiled: tuple[tuple[str, str], ...] = ()
     #: Why `skill_locks.yaml` will not load, or `None`. Startup refuses the same file.
     skill_locks_error: str | None = None
+    #: Why the skills catalogue could not be read at all, which startup refuses. The skills
+    #: fields are then empty, and carried rather than raised so every other kind still lists.
+    skills_error: str | None = None
 
     #: Subagent name -> its description.
     subagents: Mapping[str, str] = _NOTHING
@@ -183,6 +188,13 @@ class Inventory:
     doubled_skills: Mapping[str, str] = _NOTHING
     #: Whether `doubled_skills` was asked at all; `False` is not "none".
     doubled_skills_checked: bool = True
+
+    #: Definition -> the source ids and datazones its prompt slots are keyed on that no lock
+    #: uses, keyed as `moved_tools` is. Startup refuses this, and `doctor` promises to say
+    #: in advance what startup refuses.
+    unused_slot_keys: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    #: Whether `unused_slot_keys` was asked at all; `False` is not "none".
+    unused_slot_keys_checked: bool = True
 
     #: Definitions whose `source: bundled` entries and own folder disagree, with how.
     #: Startup refuses this, and `doctor` promises to say in advance what startup refuses.
@@ -225,6 +237,9 @@ class Inventory:
     #: for. Legal, but usually a renamed definition, whose subagent shows no other symptom
     #: than holding nothing.
     orphaned_assets: tuple[str, ...] = ()
+    #: `tools/` and `skills/` directly under `subagents/` that nothing reads: a definition
+    #: filed in one does not exist, and nothing else says so.
+    unread_folders: tuple[str, ...] = ()
 
     #: Subagents that are graphs their definitions built: deepagents runs one as given, so a
     #: `tools:` grant is no limit on it.
@@ -256,7 +271,7 @@ class Inventory:
         """
         return (
             Catalogued("agents", self.agents_error, len(self.agents), "file"),
-            Catalogued("skills", None, len(self.skills), "file"),
+            Catalogued("skills", self.skills_error, len(self.skills), "folder"),
             Catalogued("subagents", self.subagents_error, len(self.subagents), "file"),
             Catalogued("tools", self.tools_error, len(self.tools), "module"),
             Catalogued("middlewares", self.middlewares_error, len(self.middlewares), "module"),
@@ -282,6 +297,7 @@ def _bundled(
     str | None,
     tuple[str, ...],
     tuple[str, ...],
+    tuple[str, ...],
 ]:
     """What each subagent brings itself, for a listing, and the folders that bring it to nobody.
 
@@ -292,6 +308,7 @@ def _bundled(
     shadowed: Mapping[str, tuple[str, ...]] | None = _NO_NAMES
     error: str | None = None
     orphans: tuple[str, ...] = ()
+    unread: tuple[str, ...] = ()
     carried: tuple[str, ...] = ()
     reasons: list[str] = []
     try:
@@ -330,15 +347,16 @@ def _bundled(
         # `SubagentError`: reaching a bundle's tools reads the bundles first, which refuses
         # one subagent's folder holding two definitions. Joined to `reasons`, so both report.
         error = "; ".join([*reasons, str(exc)])
-        return tools, skills, shadowed, error, orphans, carried
+        return tools, skills, shadowed, error, orphans, unread, carried
 
     error = "; ".join(reasons) or None
     orphans = tuple(resolved.subagents.orphaned_assets)
+    unread = resolved.subagents.unread_folders
     # Asked of the backing, not the file extension: a `.py` under `subagents/` may own a
     # folder like any document.
     bundles = resolved.subagents.bundles
     carried = tuple(sorted(name for name, one in bundles.items() if one.root is None))
-    return tools, skills, shadowed, error, orphans, carried
+    return tools, skills, shadowed, error, orphans, unread, carried
 
 
 def _subject(kind: str, name: str) -> str:
@@ -530,7 +548,32 @@ def _doubled_skills(resolved: Definitions) -> Mapping[str, DoubledSkill] | None:
             for name, spec in specs.items()
             if (found := doubled_skill(spec.skills, resolved.registry)) is not None
         })
-    except (AgentError, SubagentError):
+    except (AgentError, SubagentError, ConfigError):
+        # `ConfigError`: the skills catalogue would not read, which `skills_error` carries.
+        return None
+
+
+def _unused_slot_keys(resolved: Definitions) -> Mapping[str, tuple[str, ...]] | None:
+    """Definitions keying a prompt slot on a name no lock uses, or `None` when that could
+    not be asked.
+
+    Through the names `warm` refuses, against the whole deployment's locks: a slot key is
+    refused whoever is asking.
+    """
+    try:
+        # Read first, as `warm` reads them: one that will not load leaves its locks out of
+        # the vocabulary, and a slot keyed on a name only those use would read as misspelt.
+        _ = resolved.tools.found, resolved.skill_locks
+        return MappingProxyType({
+            _subject(kind, name): unused
+            for kind, specs in (
+                ("agent", resolved.agents.specs),
+                ("subagent", resolved.subagents.specs),
+            )
+            for name, spec in specs.items()
+            if (unused := unused_names(spec.slots, resolved.vocabulary))
+        })
+    except (AgentError, SubagentError, ToolError, SkillLockError):
         return None
 
 
@@ -641,22 +684,39 @@ def _skill_locks(resolved: Definitions) -> tuple[Mapping[str, SkillLock], str | 
     """Each lock `skill_locks.yaml` writes, by the name it writes, and why the file will
     not load where it will not."""
     try:
-        _ = resolved.locked_skills
+        # The skills catalogue not reading is `skills_error`'s: what each lock means is then
+        # unknown, and what the file writes still stands.
+        with suppress(ConfigError):
+            _ = resolved.locked_skills
     except SkillLockError as exc:
         return {}, str(exc)
     return {lock.name: lock for lock in resolved.skill_locks}, None
 
 
-def _skills_shut(resolved: Definitions, held: frozenset[str] | None) -> frozenset[str]:
+def _registry(resolved: Definitions) -> tuple[SkillRegistry, str | None]:
+    """What the agent will be told about, and why the skills catalogue could not be read.
+
+    Empty where it could not, so every other kind still lists.
+    """
+    try:
+        return resolved.registry, None
+    except ConfigError as exc:
+        return SkillRegistry(offered={}), str(exc)
+
+
+def _skills_shut(
+    resolved: Definitions, held: frozenset[str] | None, registry: SkillRegistry
+) -> frozenset[str]:
     """The skills whose own lock shuts this caller out, as `source::name`.
 
     Every skill where the locks will not load: a lock that cannot be read cannot be passed,
-    and `_skill_locks` carries the fault.
+    and `_skill_locks` carries the fault. `registry` is the one `_registry` read, which is
+    empty where the skills would not.
     """
     try:
         return resolved.skills_shut(held)
-    except SkillLockError:
-        return frozenset() if held is None else frozenset(resolved.registry.offered)
+    except (SkillLockError, ConfigError):
+        return frozenset() if held is None else frozenset(registry.offered)
 
 
 def _builtin_tools(
@@ -785,7 +845,9 @@ def inventory_for(
     middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved, held)
     unresolved_subagents = _unresolved_subagents(resolved, held)
+    registry, skills_error = _registry(resolved)
     doubled_skills = _doubled_skills(resolved)
+    unused_slot_keys = _unused_slot_keys(resolved)
     miscounted_bundles = _miscounted_bundles(resolved)
 
     builtin, offered_tools, sources, tools_error, builtin_checked, build_error = _tools(
@@ -799,7 +861,6 @@ def inventory_for(
         else None
     )
 
-    registry = resolved.registry
     subagents: Mapping[str, str] = _NOTHING
     subagent_sources: Mapping[str, str] = _NOTHING
     subagents_error: str | None = None
@@ -823,10 +884,10 @@ def inventory_for(
     except SubagentError as exc:
         subagents_error = str(exc)
 
-    bundled_tools, bundled_skills, shadowed, bundles_error, orphaned_assets, carried = (
+    bundled_tools, bundled_skills, shadowed, bundles_error, orphaned_assets, unread, carried = (
         _bundled(resolved)
         if subagents_error is None
-        else (_NO_NAMES, _NO_NAMES, _NO_NAMES, None, (), ())
+        else (_NO_NAMES, _NO_NAMES, _NO_NAMES, None, (), (), ())
     )
     held_back = _shut_out_of_bundles(resolved, held)
     bundled_misplaced: Mapping[str, tuple[str, ...]] = _NO_NAMES
@@ -882,7 +943,7 @@ def inventory_for(
         offers("tools", held, reached_agents, same=spell), shut=_shut_out(resolved, held)
     )
     granted_skill = offers("skills", held, reached_agents, same=registry.identity)
-    shut_skills = _skills_shut(resolved, held)
+    shut_skills = _skills_shut(resolved, held, registry)
 
     def offers_skill(name: str) -> bool:
         return granted_skill(name) and registry.identity(name) not in shut_skills
@@ -972,6 +1033,9 @@ def inventory_for(
         ),
         # The operator's, like the other faults: who a skill is locked to is policy.
         skill_locks_error=None if scoped else skill_locks_error,
+        # Kept for a scoped view, as `agents_error` is: a catalogue that will not read gives
+        # nobody a skill, and startup refuses it whoever is asking.
+        skills_error=skills_error,
         subagents=MappingProxyType(dict(for_caller_subagents)),
         # Keyed off the names above, not `reaching` again: a second walk answers a second
         # question, naming subagents no agent in reach hands work to.
@@ -1023,6 +1087,9 @@ def inventory_for(
             )
         ),
         doubled_skills_checked=doubled_skills is not None,
+        # Empty for a scoped view: what a slot is keyed on is policy, as the locks are.
+        unused_slot_keys=_NO_NAMES if scoped or unused_slot_keys is None else unused_slot_keys,
+        unused_slot_keys_checked=unused_slot_keys is not None,
         miscounted_bundles=(
             _NOTHING
             if miscounted_bundles is None
@@ -1050,6 +1117,7 @@ def inventory_for(
         bundles_error=bundles_error,
         # Empty for a scoped view: an orphan reaches nobody, so it is the operator's diagnostic.
         orphaned_assets=() if scoped else orphaned_assets,
+        unread_folders=() if scoped else unread,
         compiled_subagents=tuple(
             name for name in compiled_subagents if name in for_caller_subagents
         ),

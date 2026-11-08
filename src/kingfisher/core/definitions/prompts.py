@@ -208,3 +208,15 @@ def unused_names(slots: Slots, vocabulary: Vocabulary | None) -> tuple[str, ...]
             )
         )
     )
+
+
+def refuse_unused_names(
+    slots: Slots, vocabulary: Vocabulary | None, *, subject: str, error: type[Exception]
+) -> None:
+    """Refuse a slot keyed on a name no lock uses, whose text is never sent."""
+    if unused := unused_names(slots, vocabulary):
+        msg = (
+            f"{subject}: {FIELD}.slots is keyed on {', '.join(unused)}, which no lock here "
+            "names, so that text is never sent -- `kingfisher list` prints the names in use"
+        )
+        raise error(msg)

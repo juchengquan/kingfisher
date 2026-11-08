@@ -69,9 +69,9 @@ there is no second mechanism for it.
   no slot fills is refused rather than sent as braces. No escape until a definition
   needs one; slots do not nest.
 - **A slot keyed on a name no lock uses is refused at startup,** in `warm`, where every
-  lock has been read. Unlike a caller's name, which is held and opens nothing, a slot
-  keyed on `sales_bd` is a sentence never sent. A slot key is not added to the
-  vocabulary: it would make itself legal. *(2026-10-23.)*
+  lock has been read, and `doctor` and `list` fail on it first. Unlike a caller's name,
+  which is held and opens nothing, a slot keyed on `sales_bd` is a sentence never sent. A
+  slot key is not added to the vocabulary: it would make itself legal. *(2026-10-23.)*
 
 ## The catalogue
 
@@ -368,7 +368,8 @@ the same rule.
 folder. A bundled entry takes no `source_ids` -- it reaches whoever reaches the
 subagent -- and no `file::name` path. A subagent inheriting the catalogue with `"*"`
 and listing its own `fetch` gets its own, and `list` marks the shadowing; a folder named
-after no definition stays a warning. *(2026-09-23.)*
+after no definition stays a warning, as does a `tools/` or `skills/` directly in
+`subagents/`, which nothing reads unless a carried bundle names it by path. *(2026-09-23.)*
 
 **The definitions are read again when they change, not once at startup.** Each turn asks
 `Versions.current()` once and keeps the answer to its end, subagents included. The folder
@@ -6137,7 +6138,11 @@ default both ways, with the raise count checked so a new refusal cannot inherit 
 about another. It counts a raise of a class the function was *handed*, which
 `importing.load` and `documents.require_literal_prompt` do; driving it found a sixth
 escape, a bundle folder holding two definitions; and each defect is run and the frame
-that raised compared with its key.
+that raised compared with its key. It cannot see a raise of a loop variable: `warm` refused
+a misspelt slot key that way, and `doctor` and `list` exited 0 over it, so the refusal is
+`prompts.refuse_unused_names`, taking `error`. Nor does it count `ConfigError`, so the
+registry refusing a skills folder called `catalogue` -- which took both commands down to one
+line -- is held by its own test. *(2026-11-08.)*
 
 **`doctor` asks the fence the questions a run asks.** It kept its own copy of the required
 ABI and its own kernel reading, and told a kernel that could be fenced to wait "until that

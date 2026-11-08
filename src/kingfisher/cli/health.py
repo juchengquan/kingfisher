@@ -49,6 +49,9 @@ RETIRED: dict[str, str] = {
                                   "collected from the definitions' locks",
 }
 
+#: How the retired flags were spelt, either way.
+FLAG_SPELLINGS = frozenset({"1", "true", "yes", "on", "0", "false", "no", "off"})
+
 #: Prefixes that went whole, matched rather than enumerated: a list of suffixes would
 #: miss whichever one nobody remembered setting.
 RETIRED_PREFIXES: dict[str, str] = {
@@ -364,7 +367,10 @@ def retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
     stale = {
         name: instead
         for name, instead in RETIRED.items()
-        if (values.get(name) or "").strip()
+        if (value := (values.get(name) or "").strip())
+        # Kingfisher's own shell exports this name holding the skills folder, so only a
+        # yes/no is the old flag: a `doctor` run in that shell must not call the path stale.
+        and (name != "KINGFISHER_SKILLS" or value.lower() in FLAG_SPELLINGS)
     }
     stale.update(
         {

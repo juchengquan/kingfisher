@@ -909,8 +909,9 @@ cannot fill a slot.
 Refused when the definition loads: a `{{name}}` no slot fills — in either form, so
 doubled braces are reserved in a prompt — a slot placed nowhere, a slot inside a
 slot's text, two defaults in one slot, and `source_ids: ["*"]`, which is what the
-default is for. Refused at startup: a slot keyed on a source id or datazone no lock
-names, since no caller could hold it — `kingfisher list` prints the names in use.
+default is for. Refused at startup, and failed by `doctor` and `kingfisher list` first: a
+slot keyed on a source id or datazone no lock names, since no caller could hold it —
+`kingfisher list` prints the names in use.
 
 ### Your own keys
 
@@ -1422,7 +1423,9 @@ and `doctor` warns on `subagent bundles`, neither of them failing.
 
 **`tools` and `skills` are reserved directory names** anywhere under
 `subagents/`, so a skill's own `config.yaml` is never read as a subagent
-definition. A grouping folder cannot be called either of them.
+definition. A grouping folder cannot be called either of them, and one directly in
+`subagents/` is no subagent's own either: `doctor` warns on `subagent folders` that
+nothing reads it.
 
 **What a listing shows.** Private assets appear indented under their owner:
 

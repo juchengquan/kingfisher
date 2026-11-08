@@ -1015,6 +1015,33 @@ def test_doctor_warns_about_an_orphaned_bundle_and_does_not_fail_on_it(cfg):
     assert worst(checks) != "fail", "a folder naming no definition is legal"
 
 
+def test_a_definition_filed_in_tools_directly_under_subagents_is_warned_about(cfg):
+    """`subagents/tools/helper.yaml` was skipped by both walks and by the orphan check, so
+    the subagent did not exist and nothing said so. The `skills/` beside it, which a carried
+    bundle reads by path, is the control."""
+    root = cfg.definitions / "subagents"
+    define(root / "tools", "helper")
+    (root / "skills" / "sampling").mkdir(parents=True)
+    (root / "skills" / "sampling" / "SKILL.md").write_text(
+        "---\nname: sampling\ndescription: d\n---\n", encoding="utf-8"
+    )
+    (root / "pack.py").write_text(
+        "from pathlib import Path\n\nSUBAGENTS = [{'name': 'surveyor', 'description': 'd', "
+        "'system_prompt': 'Go.', 'builtin_tools': ['read_file'], "
+        "'skills': Path(__file__).parent / 'skills'}]\n",
+        encoding="utf-8",
+    )
+
+    found = inventory(cfg)
+    checks = examine(cfg)
+
+    assert "helper" not in found.subagents
+    assert found.unread_folders == ("tools",)
+    assert "tools/ sits directly in subagents/" in "\n".join(render(found))
+    assert {check.name: check for check in checks}["subagent folders"].verdict == "warn"
+    assert worst(checks) != "fail", "a warning: kingfisher still starts"
+
+
 def policied(cfg, under_a_policy):
     """`cfg`, with a lock on another agent when asked: the build reads bundles again for one."""
     if under_a_policy:

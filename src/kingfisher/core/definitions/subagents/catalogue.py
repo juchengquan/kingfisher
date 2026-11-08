@@ -214,6 +214,30 @@ class LocalSubagentRepository:
         )
 
     @cached_property
+    def unread_folders(self) -> tuple[str, ...]:
+        """`tools/` and `skills/` directly in the catalogue that nothing reads.
+
+        Both walks skip a folder of those names, and the catalogue's own is named for no
+        subagent, so a definition filed in one does not exist. A carried bundle may still
+        name `skills/` by path, as `Path(__file__).parent / 'skills'` beside it does.
+        """
+        directory = Path(self.root)
+        carried = [
+            skills
+            for bundle in self.bundles.values()
+            if bundle.root is None
+            for skills in bundle.skills
+        ]
+        return tuple(
+            sorted(
+                kind
+                for kind in ASSET_DIRECTORIES
+                if (directory / kind).is_dir()
+                and not any(one.is_relative_to(directory / kind) for one in carried)
+            )
+        )
+
+    @cached_property
     def sources(self) -> dict[str, str]:
         """Where each subagent is defined, by name, relative to the catalogue."""
         return {name: where for name, (_, where) in self._defined.items()}
