@@ -749,12 +749,12 @@ def test_the_wrapper_a_compiled_subagents_tools_wear_passes_the_runtime_on(
     assert (result.status, result.content) == ("success", "alpha")
 
 
-def test_the_signature_the_wrapper_shows_is_no_way_round_it(cfg):
+def test_the_signature_the_wrapper_shows_is_no_way_round_it(cfg, session_dir):
     """langgraph reads `tool.func` and never calls it; whatever one day calls it would run
     the tool with none of the wrapper's guards, were it the tool's own function."""
     _a_tool(cfg, source=FIRST_LINE_WITH_A_SCHEMA)
     (loaded,) = LocalToolRepository(tools_dir(cfg)).found
-    (wrapped,) = guarded_tools([loaded.tool], None)
+    (wrapped,) = guarded_tools([loaded.tool], paths_in(cfg, session_dir))
 
     with pytest.raises(TypeError, match="runs through its GuardedTool"):
         wrapped.func(file_path="/inputs/notes.txt", runtime=None)

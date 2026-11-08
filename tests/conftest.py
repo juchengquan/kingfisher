@@ -17,7 +17,7 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 from kingfisher.core.access import ALL
 from kingfisher.core.agent.models import WIRE_FORMATS, summarizer_count
 from kingfisher.core.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
-from kingfisher.core.interfaces import RunEvents
+from kingfisher.core.interfaces import NoScratchRunLimit, RunEvents
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.logged import ORIGINS
 from kingfisher.core.workspace import ensure_definitions, ensure_layout
@@ -652,9 +652,9 @@ FAKE_COUNT = summarizer_count(FakeToolCallingModel(responses=[]))
 #: The settings one build's graphs share, as a build wiring none of them passes each. The
 #: three functions take no default for them, so a call site in the package that forgets one
 #: is refused rather than built under no rule; a test about something else says "none" here.
+#: Not `paths` or `budget`, which have no "none": a test passes `paths_in` and its own budget.
 STANDING_UNWIRED: dict[str, Any] = {
     "permissions": None,
-    "keep_results_rounds": None,
     "recorder": None,
     "ledger": None,
     "clearing": None,
@@ -662,16 +662,14 @@ STANDING_UNWIRED: dict[str, Any] = {
     "gated": (),
     "skills": None,
     "pdf_attachments": None,
-    "scratch_run_limit": None,
+    "scratch_run_limit": NoScratchRunLimit(),
     "turn_text": None,
 }
 COMPILED_UNWIRED: dict[str, Any] = {
-    "endpoints": ALL,
     "tools": ALL,
-    "paths": None,
     "held": None,
     "gated": (),
-    "scratch_run_limit": None,
+    "scratch_run_limit": NoScratchRunLimit(),
 }
 SUBAGENT_UNWIRED: dict[str, Any] = {
     **COMPILED_UNWIRED,
@@ -683,8 +681,6 @@ SUBAGENT_UNWIRED: dict[str, Any] = {
     "instructions": "",
     "turn_text": None,
     "pdf_attachments": None,
-    "scratch_run_limit": None,
-    "budget": None,
 }
 
 

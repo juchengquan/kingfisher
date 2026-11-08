@@ -9,6 +9,7 @@ from kingfisher.core.access.capabilities import ALL, Capabilities, CapabilityErr
 from kingfisher.core.agent.kinds.subagents import as_subagent
 from kingfisher.core.agent.kinds.tools import ToolSurface
 from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
+from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.definitions import seeding
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
@@ -19,7 +20,14 @@ from kingfisher.core.definitions.tools.spec import (
     split_reference,
     tool_name,
 )
-from tests.conftest import SUBAGENT_UNWIRED, FakeToolCallingModel, a_subagent, tools_dir, unwired
+from tests.conftest import (
+    SUBAGENT_UNWIRED,
+    FakeToolCallingModel,
+    a_subagent,
+    paths_in,
+    tools_dir,
+    unwired,
+)
 
 TOOL = """from langchain_core.tools import tool
 
@@ -381,7 +389,7 @@ def test_an_agents_long_form_grant_reaches_the_tools_it_carries():
     assert [tool_name(one) for one in surface.carried] == ["probe"]
 
 
-def test_a_subagents_long_form_grant_reaches_the_tools_it_holds(cfg):
+def test_a_subagents_long_form_grant_reaches_the_tools_it_holds(cfg, session_dir):
     """The same question one level down, where a definition rather than a request does
     the naming.
     """
@@ -392,13 +400,15 @@ def test_a_subagents_long_form_grant_reaches_the_tools_it_holds(cfg):
         cfg,
         runs=FakeToolCallingModel(responses=[]),
         catalogue=PROBE,
+        paths=paths_in(cfg, session_dir),
+        budget=StepBudget(cfg.recursion_limit),
         **unwired(SUBAGENT_UNWIRED, tools=("probe",), builtin_tools=("read_file",)),
     )
 
     assert [tool_name(one) for one in built["tools"]] == ["probe"]
 
 
-def test_a_subagents_long_form_grant_survives_the_ceiling(cfg):
+def test_a_subagents_long_form_grant_survives_the_ceiling(cfg, session_dir):
     """The ceiling merges the two axes into the allowlist the subagent runs under, and
     took the written form as a name.
     """
@@ -409,6 +419,8 @@ def test_a_subagents_long_form_grant_survives_the_ceiling(cfg):
         cfg,
         runs=FakeToolCallingModel(responses=[]),
         catalogue=PROBE,
+        paths=paths_in(cfg, session_dir),
+        budget=StepBudget(cfg.recursion_limit),
         **unwired(SUBAGENT_UNWIRED, tools=("probe",), builtin_tools=("read_file",)),
     )
 

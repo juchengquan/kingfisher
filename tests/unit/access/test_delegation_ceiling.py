@@ -18,6 +18,7 @@ from kingfisher.core.access.capabilities import (
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.kinds.subagents import as_subagent, subagent_skills
 from kingfisher.core.agent.middlewares.narrowing import GrantedOnlyMiddleware
+from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.skills.registry import ListedSkill, SkillRegistry
 from kingfisher.core.definitions.subagents.spec import SubagentError
@@ -26,6 +27,7 @@ from tests.conftest import (
     SUBAGENT_UNWIRED,
     FakeToolCallingModel,
     a_subagent,
+    paths_in,
     subagents_dir,
     unwired,
 )
@@ -370,7 +372,7 @@ def test_a_request_is_narrowed_by_it():
     assert not wrong, "\n".join(wrong)
 
 
-def test_a_subagent_is_narrowed_by_it(cfg):
+def test_a_subagent_is_narrowed_by_it(cfg, session_dir):
     """The level that carried the copy.
 
     One `cfg` for every case, which nothing here writes to: a spec is built from a
@@ -384,7 +386,12 @@ def test_a_subagent_is_narrowed_by_it(cfg):
 
         runs = FakeToolCallingModel(responses=[])
         built = as_subagent(
-            spec, cfg, runs=runs, **unwired(SUBAGENT_UNWIRED, tools=cap, builtin_tools=cap)
+            spec,
+            cfg,
+            runs=runs,
+            paths=paths_in(cfg, session_dir),
+            budget=StepBudget(cfg.recursion_limit),
+            **unwired(SUBAGENT_UNWIRED, tools=cap, builtin_tools=cap),
         )
 
         allowlists = [

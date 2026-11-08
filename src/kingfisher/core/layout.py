@@ -119,9 +119,8 @@ def _route(*parts: str) -> str:
 SKILLS_ROUTE = _route(SKILLS)
 BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 
-#: `/outputs` and `/scratchpad` reach the default backend, the shell's, so the shell,
-#: whose `TMPDIR` is the scratchpad, and the file tools write the same place.
-OUTPUTS_ROUTE = _route(OUTPUTS)
+#: `/scratchpad` reaches the default backend, the shell's, as `/outputs` does, so the
+#: shell, whose `TMPDIR` is the scratchpad, and the file tools write the same place.
 SCRATCH_ROUTE = _route(SCRATCH)
 
 #: Routed only so it can be denied: `FilesystemMiddleware` refuses `permissions=` unless

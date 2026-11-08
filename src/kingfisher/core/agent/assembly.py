@@ -32,7 +32,7 @@ from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.definitions.subagents.spec import RunOn, SubagentSpec, opens_skills
 from kingfisher.core.definitions.tools.spec import FoundTool, audienced, own_audiences
-from kingfisher.core.interfaces import AgentsMiddlewares
+from kingfisher.core.interfaces import AgentsMiddlewares, NoScratchRunLimit
 from kingfisher.core.layout import Layout
 from kingfisher.core.reachable import Reachable
 
@@ -60,7 +60,7 @@ from .kinds.declared_middleware import (
 )
 from .kinds.subagents import (
     as_subagent,
-    clearing_mark,
+    model_and_mark,
     model_of,
     subagent_helpers,
     subagent_skills,
@@ -374,6 +374,10 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     and `scratch_run_limit` by every one holding offered tools; `None` limits nothing.
     `subagent_middlewares` is asked of every portable subagent; `None` runs the agent's own.
     """
+    # Each hook's default is filled in here, once, and not by `Kingfisher`, which hands on
+    # what it was given: `builtin_tool_names` and the tests build without either.
+    run_limit = NoScratchRunLimit() if scratch_run_limit is None else scratch_run_limit
+    choosing = subagent_middlewares or AgentsMiddlewares()
     # The agent file is the baseline and the request only subtracts from it. One
     # function, because the run's report of what it activated reads the same answer.
     asked = capabilities or UNRESTRICTED
@@ -553,23 +557,20 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         tools: tuple[str, ...] | None = None,
         reachable: tuple[str, ...] | None = None,
         inner: Sequence[Any] = (),
-        limit: ScratchRunLimit | None = None,
+        limit: ScratchRunLimit,
         hands_to_compiled: bool = False,
     ) -> list[Any]:
         return standing_middleware(
             "agent",
+            cfg=cfg,
             hands_to_compiled=hands_to_compiled,
             name="" if agent is None else agent.name,
             inner=inner,
             names=guarded,
             paths=paths,
-            layout=cfg.layout,
             backend=backend,
             budget=budget,
-            execution_timeout_s=cfg.execution_timeout_s,
-            models=cfg.models,
             permissions=permissions,
-            keep_results_rounds=cfg.keep_results_rounds,
             trigger=trigger,
             count=count,
             pdf_attachments=pdf_attachments,
@@ -589,7 +590,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
 
     # What the probe below builds with: nothing narrowed yet, and no subagents to name.
     # No limit either: this stack never runs, and a deployment's is asked once a graph.
-    middleware[:] = agents_standing(inner=switched)
+    middleware[:] = agents_standing(inner=switched, limit=NoScratchRunLimit())
 
     if gated:
         # `True`, not an `InterruptOnConfig`: its `when` is a narrowing this format does
@@ -719,7 +720,6 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                 subject=f"agent {agent.name!r}",
             )
         )
-        choosing = subagent_middlewares or AgentsMiddlewares()
 
         def middleware_of(spec: SubagentSpec) -> tuple[SubagentSpec, str | None]:
             """`spec`, holding the agent's middleware the deployment chose for it if it
@@ -741,8 +741,9 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             *,
             # This subagent's model, not the agent's.
             runs: Any,
+            model: Any,
+            helper: bool,
             helpers: list[Any] | None = None,
-            default_model: Any = None,
             tool_objects: list[Any] | None = None,
             # Read with `runs`, from the entry that built it.
             clear_results_at: int | None = None,
@@ -756,10 +757,10 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                 *,
                 kind: Literal["subagent", "general-purpose"],
                 refused_by: str | None,
+                model: Any,
+                helper: bool,
                 helpers: list[Any] | None,
-                default_model: Any,
                 tool_objects: list[Any] | None,
-                run_on: RunOn | None,
             ) -> dict[str, Any]:
                 """`spec` under `name`'s grants, folder, skills, model and records."""
                 return as_subagent(
@@ -768,14 +769,15 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                     kind=kind,
                     refused_by=refused_by,
                     runs=runs,
+                    model=model,
+                    helper=helper,
                     instructions=instructions,
                     turn_text=turn_text,
                     pdf_attachments=pdf_attachments,
-                    scratch_run_limit=scratch_run_limit,
+                    scratch_run_limit=run_limit,
                     backend=backend,
                     permissions=permissions,
                     gated=gated,
-                    endpoints=capabilities.endpoints,
                     builtin_tools=surface.granted_builtin,
                     tools=surface.offered_grant,
                     # Behind the deployment's switch too, like the agent's own index.
@@ -786,7 +788,6 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                     ),
                     skill_sources=skills_sources(roots.registry.folders) if skills_on else None,
                     helpers=helpers,
-                    default_model=default_model,
                     tool_objects=tool_objects,
                     catalogue=walked,
                     # Its own folder's, looked up by the key a grant uses, which is
@@ -796,7 +797,6 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                     # either way, so withholding its index leaves the files reachable unnamed.
                     private_skills=private_skills(roots, name),
                     paths=paths,
-                    run_on=run_on,
                     held=held,
                     recorder=recording(defined[name]),
                     ledger=ledger,
@@ -837,21 +837,21 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                     ),
                     kind="general-purpose",
                     refused_by=f"the {name!r} subagent",
-                    helpers=None,
                     # What this subagent runs: a helper's spec must name a model.
-                    default_model=runs,
+                    model=runs,
+                    helper=True,
+                    helpers=None,
                     tool_objects=None,
-                    run_on=None,
                 )
                 helpers = [*(helpers or ()), general]
             return built_as(
                 defined[name],
                 kind="subagent",
                 refused_by=None,
+                model=model,
+                helper=helper,
                 helpers=helpers,
-                default_model=default_model,
                 tool_objects=tool_objects,
-                run_on=wanted.get(name),
             )
 
         # One compiled agent per definition, however many places it appears: compiling
@@ -866,33 +866,28 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         # nested one none, and refuses a nested spec with no model.
         root = running
 
-        def with_helpers(
-            name: str, *, nested: bool, inherited: Any = None, inherited_mark: int | None
-        ) -> Any:
-            # `inherited` alone in the key: the mark comes with the model it was read beside.
-            key = (name, nested, id(inherited))
+        def with_helpers(name: str, *, nested: bool, inherited: tuple[Any, int | None]) -> Any:
+            # The model alone in the key: the mark comes with the model it was read beside.
+            key = (name, nested, id(inherited[0]))
             if key not in compiled:
-                override = wanted.get(name)
-                mine = model_of(
+                # `None` at the top for one naming none: deepagents hands it the agent's.
+                mine, marked = model_and_mark(
                     defined[name],
                     cfg,
                     endpoints=capabilities.endpoints,
-                    run_on=override,
+                    run_on=wanted.get(name),
                     inherited=inherited,
                 )
-                # Beside `mine`, from the same entry: a mark read off another model's
-                # clears by a size this one's summariser may come to first.
-                marked = clearing_mark(
-                    defined[name], cfg, run_on=override, inherited=inherited_mark
-                )
+                # What this subagent actually runs: its own model, else its summoner's,
+                # which deepagents hands a spec that names none.
+                runs = mine if mine is not None else root
                 helpers = [
                     with_helpers(
                         helper,
                         nested=True,
                         # Its parent's model, not the agent's: "runs whatever
                         # summoned it", one level down.
-                        inherited=mine if mine is not None else root,
-                        inherited_mark=marked,
+                        inherited=(runs, marked),
                     )
                     # `activated`, not the grant, which may be `"*"`: it leaves out
                     # a helper out of this caller's reach.
@@ -902,18 +897,17 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                 ]
                 compiled[key] = built(
                     name,
-                    # What this subagent actually runs: its own model, else its
-                    # summoner's, which deepagents hands a spec that names none.
-                    runs=mine if mine is not None else root,
+                    runs=runs,
+                    model=mine,
+                    helper=nested,
                     helpers=helpers or None,
-                    default_model=inherited if nested else None,
                     tool_objects=list(surface.objects.values()) if nested else None,
                     clear_results_at=marked,
                 )
             return compiled[key]
 
         extras["subagents"] = [
-            with_helpers(n, nested=False, inherited_mark=mark) for n in activated
+            with_helpers(n, nested=False, inherited=(None, mark)) for n in activated
         ]
 
     # deepagents adds a `general-purpose` subagent with the agent's capabilities and none
@@ -937,11 +931,10 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             instructions=instructions,
             turn_text=turn_text,
             pdf_attachments=pdf_attachments,
-            scratch_run_limit=scratch_run_limit,
+            scratch_run_limit=run_limit,
             backend=backend,
             permissions=permissions,
             gated=gated,
-            endpoints=capabilities.endpoints,
             builtin_tools=surface.granted_builtin,
             tools=surface.offered_grant,
             catalogue=walked,
@@ -970,7 +963,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         tools=permitted,
         reachable=tuple(spec["name"] for spec in supplied),
         inner=[*switched, *named],
-        limit=scratch_run_limit,
+        limit=run_limit,
         hands_to_compiled=any("runnable" in spec for spec in supplied),
     )
 

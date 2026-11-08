@@ -20,7 +20,6 @@ from kingfisher.core.agent.middlewares.standing import FILESYSTEM, standing_midd
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import (
     SUMMARIZER,
-    deployment_default,
     model_named,
     refuse_a_mark_deepagents_reaches_first,
     summarizer_count,
@@ -38,7 +37,6 @@ from kingfisher.core.definitions.subagents.spec import (
     opens_skills,
 )
 from kingfisher.core.definitions.tools.spec import FoundTool, Offering, select, split_reference
-from kingfisher.core.interfaces import NoScratchRunLimit
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -122,35 +120,34 @@ def _subject(spec: SubagentSpec | AgentSpec) -> str:
     return f"{kind} {spec.name!r}"
 
 
-def model_of(  # a parameter per rule picking the model: folding two hides which answered
-    spec: SubagentSpec | AgentSpec,
-    cfg: Config,
-    *,
-    endpoints: Selection,
-    run_on: RunOn | None = None,
-    inherited: Any = None,
-) -> Any | None:
-    """The model instance this definition runs, or `inherited` where it asks for none."""
-    model_id = resolved_model(spec.wanted, override=run_on)
-    if model_id is None:
-        return inherited
-    return model_named(model_id, cfg, endpoints=endpoints, subject=_subject(spec))
+def model_of(spec: SubagentSpec | AgentSpec, cfg: Config, *, endpoints: Selection) -> Any | None:
+    """The model instance this definition runs, or `None` where it names none."""
+    if spec.wanted is None:
+        return None
+    return model_named(spec.wanted, cfg, endpoints=endpoints, subject=_subject(spec))
 
 
-def clearing_mark(
+def model_and_mark(
     spec: SubagentSpec,
     cfg: Config,
     *,
-    run_on: RunOn | None = None,
-    inherited: int | None = None,
-) -> int | None:
-    """The `clear_results_at` of the entry `model_of` builds this subagent from, or
-    `inherited`, its summoner's, where it runs its summoner's model."""
+    endpoints: Selection,
+    run_on: RunOn | None,
+    inherited: tuple[Any, int | None],
+) -> tuple[Any, int | None]:
+    """The model this subagent runs and the `clear_results_at` of the entry it was built
+    from, or `inherited`, its summoner's pair, where it names none.
+
+    Read together: a mark off another model's entry clears by a size this one's
+    summariser may come to first.
+    """
     model_id = resolved_model(spec.wanted, override=run_on)
     if model_id is None:
         return inherited
+    # Built first, so a name the catalogue lacks is refused naming this subagent.
+    model = model_named(model_id, cfg, endpoints=endpoints, subject=_subject(spec))
     profile, _ = cfg.models.resolve(model_id)
-    return profile.clear_results_at
+    return model, profile.clear_results_at
 
 
 def indistinct(
@@ -180,32 +177,23 @@ def indistinct(
 
 def compiled_subagent(  # noqa: PLR0913 -- one per thing still decided for a graph kingfisher did not build
     spec: SubagentSpec,
-    cfg: Config,
     *,
-    endpoints: Selection,
+    #: An instance, never left to the graph: it would reach for `init_chat_model` and read
+    #: credentials around the catalogue.
+    model: Any,
     tools: Selection,
     catalogue: Sequence[FoundTool] = (),
     #: This subagent's own tools, held whatever the request granted, as on the assembled path.
     private: Sequence[FoundTool] = (),
     #: What its tools resolve paths against: a compiled subagent has no middleware to do it.
-    paths: SessionPaths | None,
-    run_on: RunOn | None = None,
-    default_model: Any = None,
+    paths: SessionPaths,
     held: frozenset[str] | None,
     #: What the agent stops on, as the names calls carry.
     gated: Collection[str],
     #: Asked about this subagent by name, beside the rule of whoever hands it the work.
-    scratch_run_limit: ScratchRunLimit | None,
+    scratch_run_limit: ScratchRunLimit,
 ) -> dict[str, Any]:
     """A subagent its definition built itself, wrapped the way deepagents takes one."""
-    model = model_of(
-        spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model
-    )
-    if model is None:
-        # Built here, not left to the graph: it would reach for `init_chat_model` and read
-        # credentials around the catalogue.
-        model = deployment_default(cfg, endpoints=endpoints)
-
     # `narrowed`, not `ceiling`: `builtin_tools` is refused for a compiled subagent, so there
     # is no second axis to merge. `spelt` first, or `narrowed` silently drops a `where::what`
     # no other file defines.
@@ -222,8 +210,7 @@ def compiled_subagent(  # noqa: PLR0913 -- one per thing still decided for a gra
     granted = [one.tool for one in mine if one.name not in gated]
 
     # Only where it holds a tool to run anything, as a graph kingfisher builds is asked.
-    limit = NoScratchRunLimit() if scratch_run_limit is None else scratch_run_limit
-    answer = limit_answer(limit, spec.name, "compiled") if granted else (True, None)
+    answer = limit_answer(scratch_run_limit, spec.name, "compiled") if granted else (True, None)
     # Wrapped: this graph gets no kingfisher middleware, so its tools carry their guards or
     # have none.
     runnable = spec.build(
@@ -255,7 +242,13 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     #: What it runs: its own model, else its summoner's, which deepagents hands a spec
     #: naming none. Its summariser sizes the PDFs this subagent's turn may hold open.
     runs: Any,
-    endpoints: Selection,
+    #: What goes on the spec, or `None` for deepagents to hand it its caller's, which it
+    #: does only at the top: `create_sub_agent` refuses a helper's spec naming none. An
+    #: instance, never a name: `init_chat_model` would infer its own provider and read
+    #: credentials from the environment, around the catalogue.
+    model: Any = None,
+    #: Built for another subagent's `SubAgentMiddleware`, whose stack is the spec's alone.
+    helper: bool = False,
     builtin_tools: Selection,
     tools: Selection,
     backend: Any,
@@ -266,9 +259,6 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     # `Any`: deepagents' `SubAgent` is a TypedDict a plain dict cannot satisfy without
     # restating its schema.
     helpers: list[Any] | None = None,
-    # Passed only for a helper: `SubAgentMiddleware` supplies no model and `create_sub_agent`
-    # refuses a spec naming none. Omitted at the top so deepagents' own defaults hold.
-    default_model: Any = None,
     tool_objects: list[Any] | None = None,
     catalogue: Sequence[FoundTool] = (),
     #: This subagent's own tools, held whatever the request granted: a subagent is made of
@@ -278,10 +268,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     private_skills: tuple[tuple[str, ...], tuple[tuple[str, str], ...]] | None = None,
     skill_sources: list[Any] | None = None,
     #: The parent's: a subagent runs in the parent's session on the parent's backend.
-    paths: SessionPaths | None,
-    #: Where this request wants it to run, replacing the file's answer; `None` lets the file
-    #: decide.
-    run_on: RunOn | None = None,
+    paths: SessionPaths,
     extra_middleware: list[Any] | None = None,
     #: The caller's source ids, for this definition's own audiences. `tools` is the agent's
     #: ceiling and is never narrowed by these.
@@ -291,7 +278,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     recorder: RecorderMiddleware | None,
     #: The turn's, whose rows its cleared results' handles name; `None` clears nothing.
     ledger: Ledger | None,
-    #: As `clearing_mark` reads it for this subagent.
+    #: As `model_and_mark` reads it for this subagent.
     clear_results_at: int | None = None,
     #: The deployment's instructions, which every subagent is given ahead of its own.
     instructions: str,
@@ -300,28 +287,24 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     #: What the deployment hands over in place of a PDF, asked by every subagent built here.
     pdf_attachments: PdfAttachments | None,
     #: Which graphs' offered tools the deployment refuses a run, asked of this one by name.
-    scratch_run_limit: ScratchRunLimit | None,
+    scratch_run_limit: ScratchRunLimit,
     #: What the agent stops on, which every subagent it reaches stops on too.
     gated: Collection[str],
-    #: The build's, which the agent's compiled graph measures; `None` assumes the default
-    #: stack's cost.
-    budget: StepBudget | None,
+    #: The build's, which the agent's compiled graph measures.
+    budget: StepBudget,
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`."""
     if spec.build is not None:
         # deepagents runs a built graph as given, so nothing below applies to it.
         return compiled_subagent(
             spec,
-            cfg,
-            endpoints=endpoints,
+            # `runs`, not `model`, which leaves deepagents to hand over the summoner's: it
+            # hands a graph none.
+            model=runs,
             tools=tools,
             catalogue=catalogue,
             private=private,
             paths=paths,
-            run_on=run_on,
-            # `runs`, not `default_model`: deepagents hands a graph no model, so one naming
-            # none would otherwise run the deployment's default rather than its summoner's.
-            default_model=runs,
             held=held,
             gated=gated,
             scratch_run_limit=scratch_run_limit,
@@ -369,11 +352,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     # in the same place: `create_sub_agent` merges nothing, so left among the definition's
     # own it would sit innermost and hear a refusal for length before clearing could.
     own = [one for one in extra_middleware or () if one.name == SUMMARIZER]
-    summarizing = (
-        (own or [create_summarization_middleware(runs, backend)])
-        if default_model is not None
-        else []
-    )
+    summarizing = (own or [create_summarization_middleware(runs, backend)]) if helper else []
     summarizers = [*summarizing, *(extra_middleware or ())]
     # By its definition's middleware alone: a helper's added summariser is deepagents' own.
     refuse_a_mark_deepagents_reaches_first(runs, clear_results_at, extra_middleware or ())
@@ -395,17 +374,14 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
             *([SubAgentMiddleware(backend=backend, subagents=helpers)] if helpers else []),
             *(one for one in extra_middleware or [] if one not in summarizing),
         ],
+        cfg=cfg,
         names=frozenset(entry.name for entry in (*catalogue, *private)),
         hands_to_compiled=any("runnable" in one for one in helpers or ()),
         paths=paths,
-        layout=cfg.layout,
         permissions=permissions,
         # The parent's, whose shell is the one this subagent's `execute` runs on.
         backend=backend,
-        budget=StepBudget(cfg.recursion_limit) if budget is None else budget,
-        execution_timeout_s=cfg.execution_timeout_s,
-        models=cfg.models,
-        keep_results_rounds=cfg.keep_results_rounds,
+        budget=budget,
         trigger=trigger,
         count=count,
         pdf_attachments=pdf_attachments,
@@ -431,20 +407,16 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         tools_subject=refused_by or f"the {spec.name!r} subagent",
         # The parent's sources, passed in rather than rebuilt: two walks could disagree
         # and offer the subagent a different skill than the one named.
-        skills=None
-        if skills is None or skills == ALL or backend is None
-        else tuple(skills),
+        skills=None if skills is None or skills == ALL else tuple(skills),
         skill_sources=skill_sources or [],
         turn_text=turn_text,
         # A helper's stack is its parent's `SubAgentMiddleware`'s, which caches nothing.
-        turn_cached=default_model is None,
+        turn_cached=not helper,
     )
     # A deployment's own goes outside all of it, in the slot deepagents' merge gives one in
     # every other stack: among the rest, one that offloads would cut a long result before
     # the recorder kept it whole.
-    if default_model is not None and any(
-        one.name == FILESYSTEM for one in extra_middleware or ()
-    ):
+    if helper and any(one.name == FILESYSTEM for one in extra_middleware or ()):
         subagent["middleware"].sort(key=lambda one: one.name != FILESYSTEM)
 
     # Objects, not names: names raise inside `ToolNode`. The whole set goes in and
@@ -452,13 +424,8 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     # as "the parent's tools", and a subagent granted none would be built holding them.
     subagent["tools"] = [one.tool for one in (*private, *mine)] + list(tool_objects or [])
 
-    # An instance, not a name: deepagents' `init_chat_model` would infer its own provider and
-    # read credentials from the environment, around the catalogue and the profile's params.
-    built = model_of(
-        spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model
-    )
-    if built is not None:
-        subagent["model"] = built
+    if model is not None:
+        subagent["model"] = model
     # On the spec, not left to deepagents: it copies the agent's gates only into the specs
     # `create_deep_agent` builds, and a helper's `SubAgentMiddleware` above gets none.
     if gated:

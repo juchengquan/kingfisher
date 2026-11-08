@@ -29,6 +29,7 @@ from tests.conftest import (
     FAKE_COUNT,
     STANDING_UNWIRED,
     FakeToolCallingModel,
+    paths_in,
     subagent_of,
     subagents_dir,
     tools_dir,
@@ -151,20 +152,18 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
         ("general-purpose", {"reachable": ("helper",)}),
     ],
 )
-def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, kind, given):
+def test_what_is_the_agents_alone_is_refused_elsewhere(cfg, session_dir, kind, given):
     """A subagent handed the declared-subagent check meant for the agent's own `task`, or
     `general-purpose` a skills index, which it is never handed."""
     with pytest.raises(ValueError, match="agent"):
         standing_middleware(
             kind,
+            cfg=cfg,
             name="helper",
             names=frozenset(),
-            paths=None,
-            layout=cfg.layout,
+            paths=paths_in(cfg, session_dir),
             backend=None,
             budget=StepBudget(cfg.recursion_limit),
-            execution_timeout_s=cfg.execution_timeout_s,
-            models=cfg.models,
             trigger=170_000,
             count=FAKE_COUNT,
             **unwired(STANDING_UNWIRED, **given),
@@ -180,14 +179,12 @@ def test_an_ungranted_call_is_refused_once_before_anything_splits_it(cfg, sessio
 
     stack = standing_middleware(
         "agent",
+        cfg=cfg,
         name="",
         names=frozenset(),
-        paths=None,
-        layout=cfg.layout,
+        paths=paths_in(cfg, session_dir),
         backend=backend_at(cfg, session_dir),
         budget=StepBudget(cfg.recursion_limit),
-        execution_timeout_s=cfg.execution_timeout_s,
-        models=cfg.models,
         trigger=170_000,
         count=FAKE_COUNT,
         **unwired(STANDING_UNWIRED, tools=("read_file",)),
@@ -215,7 +212,6 @@ SHARED_SETTINGS = {
     standing_middleware: frozenset(
         {
             "permissions",
-            "keep_results_rounds",
             "recorder",
             "clearing",
             "tools",
@@ -228,7 +224,6 @@ SHARED_SETTINGS = {
     ),
     as_subagent: frozenset(
         {
-            "endpoints",
             "builtin_tools",
             "tools",
             "backend",
@@ -245,9 +240,7 @@ SHARED_SETTINGS = {
             "budget",
         }
     ),
-    compiled_subagent: frozenset(
-        {"endpoints", "tools", "paths", "held", "gated", "scratch_run_limit"}
-    ),
+    compiled_subagent: frozenset({"tools", "paths", "held", "gated", "scratch_run_limit"}),
     activated_subagents: frozenset({"held"}),
     indistinct_subagents: frozenset({"held"}),
     subagent_skills: frozenset({"held"}),

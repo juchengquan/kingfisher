@@ -658,22 +658,3 @@ def test_an_artifact_survives_the_wrapping(paths, session, way):
     answer = answered(guarded(paired, paths), way, path="/inputs/x")
 
     assert answer.artifact == {"read": str(session / "inputs" / "x")}
-
-
-def test_without_a_session_a_failure_is_still_an_answer():
-    """`GuardedCallsMiddleware` puts the session condition on translation and not on the
-    error half, and this follows it: a build with no session has nowhere to translate
-    against, and a tool that raises still must not end the run.
-    """
-    from langchain_core.tools import tool
-
-    @tool
-    def missing(path: str) -> str:
-        """Raise."""
-        msg = f"no such file: {path}"
-        raise FileNotFoundError(msg)
-
-    answer = answered(guarded(missing, None), path="/inputs/gone.txt")
-
-    assert answer.status == "error"
-    assert "/inputs/gone.txt" in answer.content, "nothing to translate against, so untranslated"

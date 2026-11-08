@@ -12,6 +12,7 @@ from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.kinds.subagents import as_subagent
 from kingfisher.core.agent.middlewares.builtin_tools import MAPPINGS, TODOS
+from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.prompting import (
     memory_guidelines,
     render_system_prompt,
@@ -28,6 +29,7 @@ from tests.conftest import (
     FakeToolCallingModel,
     a_subagent,
     an_agent,
+    paths_in,
     start,
     subagents_dir,
     unwired,
@@ -263,17 +265,22 @@ system_prompt: |
 """
 
 
-def _subagent_prompt(cfg, instructions: str = ""):
+def _subagent_prompt(cfg, session_dir, instructions: str = ""):
     spec = a_subagent(SUBAGENT, "reviewer.yaml")
     runs = FakeToolCallingModel(responses=[])
-    shared = unwired(SUBAGENT_UNWIRED, instructions=instructions)
+    shared = unwired(
+        SUBAGENT_UNWIRED,
+        instructions=instructions,
+        paths=paths_in(cfg, session_dir),
+        budget=StepBudget(cfg.recursion_limit),
+    )
     return as_subagent(spec, cfg, runs=runs, **shared)["system_prompt"]
 
 
-def test_a_subagent_is_given_the_deployments_instructions(cfg):
+def test_a_subagent_is_given_the_deployments_instructions(cfg, session_dir):
     """A house rule that reached the agent and not the work it handed on is one delegated
     work escapes."""
-    prompt = _subagent_prompt(cfg, "Always cite the file.")
+    prompt = _subagent_prompt(cfg, session_dir, "Always cite the file.")
 
     assert prompt.index("You review analyses") < prompt.index("Always cite the file.")
 

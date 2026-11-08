@@ -7,7 +7,7 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from kingfisher.core.layout import OUTPUTS_ROUTE, SCRATCH_ROUTE, Layout
+from kingfisher.core.layout import Layout
 
 from .host_paths import HOST_PATH_SAID, HOST_ROOTS, HostPathError
 from .prompting import what_you_make_goes
@@ -175,22 +175,17 @@ def refusal_text(escaped: ValueError, paths: SessionPaths) -> str:
 _REFUSED_WRITE = "permission denied for write on "
 
 
-def where_to_write(text: str, paths: SessionPaths | None = None) -> str:
+def where_to_write(text: str, paths: SessionPaths) -> str:
     """`text` with the folders a write may land in, where a deny rule refused one.
 
     One sentence for every scope in `denied_scopes`, naming neither the rule nor what the
     folder holds: `/.harness` is denied too and the agent is shown nothing of it, and why
     a folder is kept is the prompt's to say before the call rather than this message's
     after it. Beside `refusal_text` so the pair offers the model the same folders.
-
-    Without `paths` the shipped routes are said, which no build reaches: a deny rule comes
-    from a session's layout, so a build with none raises no refusal to rewrite.
     """
     if _REFUSED_WRITE not in text:
         return text
-    outputs_route = paths.outputs_route if paths is not None else OUTPUTS_ROUTE
-    scratch_route = paths.scratch_route if paths is not None else SCRATCH_ROUTE
     return (
         f"{text} -- that path is not yours to write. "
-        f"{what_you_make_goes(outputs_route, scratch_route)}"
+        f"{what_you_make_goes(paths.outputs_route, paths.scratch_route)}"
     )

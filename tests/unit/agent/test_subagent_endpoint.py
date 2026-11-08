@@ -7,23 +7,18 @@ from functools import partial
 
 import pytest
 from langchain_core.messages import AIMessage
-from langchain_core.runnables import RunnableLambda
 
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.kinds.subagents import compiled_subagent
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
-from kingfisher.core.definitions.subagents.spec import SubagentSpec
 from kingfisher.core.environment import config_from_env
 from kingfisher.plugins import backend_at
 from tests.conftest import (
-    COMPILED_UNWIRED,
     FakeToolCallingModel,
     subagent_of,
     subagents_dir,
-    unwired,
 )
 from tests.unit.conftest import define
 
@@ -285,26 +280,6 @@ def test_an_agent_naming_no_model_is_held_to_the_endpoints_too(
             build()
     else:
         assert build().model.model == "fake-model"
-
-
-@pytest.mark.parametrize(("endpoints", "refused"), [(("elsewhere",), True), (("fake",), False)])
-def test_a_built_subagent_naming_no_model_is_held_to_the_endpoints_too(
-    cfg, endpoints, refused
-):
-    """A built subagent naming no model is handed the default, which went unchecked."""
-    spec = SubagentSpec(
-        name="researcher",
-        description="d",
-        system_prompt="",
-        build=lambda model, tools: RunnableLambda(lambda state: state),
-    )
-
-    if refused:
-        with pytest.raises(CapabilityError, match="the default model 'fake-model'"):
-            compiled_subagent(spec, cfg, **unwired(COMPILED_UNWIRED, endpoints=endpoints))
-    else:
-        built = compiled_subagent(spec, cfg, **unwired(COMPILED_UNWIRED, endpoints=endpoints))
-        assert built["name"] == "researcher"
 
 
 def test_grants_clamp_endpoints_like_everything_else():

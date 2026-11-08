@@ -64,12 +64,12 @@ def test_an_offered_tool_refusing_a_host_path_still_names_the_type():
     assert "HostPathError: /etc/hosts" in answer.content
 
 
-def test_a_built_in_refusing_a_host_path_is_handed_back_as_said():
+def test_a_built_in_refusing_a_host_path_is_handed_back_as_said(paths):
     """The correction `reject_host_path` writes is for the model, so it goes back as
     written."""
     from kingfisher.core.agent.host_paths import HostPathError
 
-    guard = GuardedCallsMiddleware()
+    guard = GuardedCallsMiddleware(frozenset(), paths)
 
     answer = guard.wrap_tool_call(_Request("read_file"), _raises(HostPathError("use /inputs")))
 
@@ -408,14 +408,12 @@ def stack(cfg, session_dir, paths):
 
     return standing_middleware(
         "agent",
+        cfg=cfg,
         name="",
         names=frozenset({"probe"}),
         paths=paths,
-        layout=cfg.layout,
         backend=backend_at(cfg, session_dir),
         budget=StepBudget(cfg.recursion_limit),
-        execution_timeout_s=cfg.execution_timeout_s,
-        models=cfg.models,
         trigger=170_000,
         count=FAKE_COUNT,
         **STANDING_UNWIRED,
@@ -467,14 +465,12 @@ def _stack_around(cfg, session_dir, paths, inner):
 
     return standing_middleware(
         "agent",
+        cfg=cfg,
         name="",
         names=frozenset({"probe"}),
         paths=paths,
-        layout=cfg.layout,
         backend=backend_at(cfg, session_dir),
         budget=StepBudget(cfg.recursion_limit),
-        execution_timeout_s=cfg.execution_timeout_s,
-        models=cfg.models,
         trigger=170_000,
         count=FAKE_COUNT,
         inner=inner,
