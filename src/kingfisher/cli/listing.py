@@ -84,6 +84,7 @@ def render(found: Inventory) -> Iterator[str]:
     yield from _unresolved_subagents(found)
     yield from _unresolved_tools(found)
     yield from _doubled_skills(found)
+    yield from _unused_slot_keys(found)
     yield from _access(found)
 
 
@@ -191,6 +192,19 @@ def _doubled_skills(found: Inventory) -> Iterator[str]:
     yield "  (startup refuses each: keep one entry, the one carrying the audience you mean)"
 
 
+def _unused_slot_keys(found: Inventory) -> Iterator[str]:
+    """Definitions keying a prompt slot on a name no lock uses, which startup refuses.
+
+    Said here or nowhere: the names in use below are what locks say, never what a slot does.
+    """
+    if not found.unused_slot_keys:
+        return
+    yield "\nprompt slots keyed on names no lock uses"
+    for subject, names in sorted(found.unused_slot_keys.items()):
+        yield f"  {subject}: {', '.join(names)}"
+    yield "  (startup refuses each, as that text is never sent: spell it as a lock does)"
+
+
 def origins_document(origins: Origins) -> dict[str, object]:
     """Where everything was read from, for a script rather than a person."""
     return {
@@ -257,7 +271,9 @@ def _skills(found: Inventory) -> Iterator[str]:
     # With its description, which is what deepagents puts in front of the model.
     for name, described in found.skills.items():
         yield f"  {name}{f' — {described}' if described else ''}"
-    if not found.skills:
+    if found.skills_error is not None:
+        yield f"  cannot load: {found.skills_error}"
+    elif not found.skills:
         yield "  (none)"
 
     # Reported, not refused, so one malformed skill does not stop a deployment; a
@@ -347,6 +363,14 @@ def _subagents(found: Inventory) -> Iterator[str]:
             f"— nothing in it is named {owner}"
         )
         yield "    (rename the folder, or the `name:` inside it, so the two match)"
+    for folder in found.unread_folders:
+        # Not an orphan's line: no rename makes subagents/ itself a subagent's own folder.
+        yield (
+            f"  ! {folder}/ sits directly in subagents/, so nothing reads it — no folder of "
+            f"that name is walked for definitions, and subagents/ is no subagent's own"
+        )
+        yield "    (a definition goes in subagents/ or a folder of its own, and a subagent's"
+        yield "     own tools/ and skills/ in the folder named for it)"
 
 
 def _audience_json(audience: Audience) -> list[object]:
@@ -385,6 +409,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "skills_misplaced": list(found.skills_misplaced),
         "skills_misfiled": [list(pair) for pair in found.skills_misfiled],
         "skill_locks_error": found.skill_locks_error,
+        "skills_error": found.skills_error,
         "skills_enabled": found.skills_enabled,
         "subagents": dict(found.subagents),
         "subagent_sources": dict(found.subagent_sources),
@@ -402,6 +427,8 @@ def as_json(found: Inventory) -> dict[str, object]:
         "unresolved_tools_checked": found.unresolved_tools_checked,
         "doubled_skills": dict(found.doubled_skills),
         "doubled_skills_checked": found.doubled_skills_checked,
+        "unused_slot_keys": {k: list(v) for k, v in found.unused_slot_keys.items()},
+        "unused_slot_keys_checked": found.unused_slot_keys_checked,
         "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
         "bundled_misplaced": {k: list(v) for k, v in found.bundled_misplaced.items()},
@@ -412,6 +439,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "builtin_tools_checked": found.builtin_tools_checked,
         "bundles_error": found.bundles_error,
         "orphaned_assets": list(found.orphaned_assets),
+        "unread_folders": list(found.unread_folders),
         "miscounted_bundles": dict(found.miscounted_bundles),
         "miscounted_bundles_checked": found.miscounted_bundles_checked,
         # Each name a lock uses and the definitions using it, or `null` where nothing is
@@ -451,6 +479,7 @@ def failed(found: Inventory) -> bool:
         or found.unresolved_subagents
         or found.unresolved_tools
         or found.doubled_skills
+        or found.unused_slot_keys
     ):
         return True
     # Not a kind, so the walk below misses it; without a graph nothing runs.

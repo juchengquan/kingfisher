@@ -18,6 +18,28 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `doctor` and `list` say what startup refuses or never reads, after #1256
+
+- **A prompt slot keyed on a name no lock uses now exits 1.** A `system_prompt.slots`
+  entry keyed on `sales_bd` where the locks say `sales_db` was refused by startup and
+  passed both commands. `doctor` fails on its new *prompt slots* row, `kingfisher list`
+  prints *prompt slots keyed on names no lock uses*, and `--json` carries
+  `unused_slot_keys`. A listing scoped with `--as` leaves it out, as it leaves out the
+  locks. Nothing that started before stops: startup already refused it.
+- **A skills folder called `catalogue` is one failed row, not the whole answer.** Both
+  commands printed the registry's refusal alone and exited 2; they now list everything
+  else, fail the *skills* row (`list` prints it as `cannot load:` under skills), and exit
+  1. `Inventory.skills_error` carries it, and `by_kind()` answers it as the skills kind's
+  error, whose `written_as` is now `folder`.
+- **A `tools/` or `skills/` folder directly in `subagents/` is warned about.** A folder
+  of either name is walked for no definitions, and `subagents/` itself is no subagent's
+  own, so a subagent filed there did not exist and nothing said so. `doctor` warns on
+  *subagent folders*, `list` prints a `!` line under subagents, and `--json` carries
+  `unread_folders`; neither fails. A `skills/` that a definition beside it carries by
+  path is read, and not reported.
+- **`doctor` no longer calls `KINGFISHER_SKILLS` retired when it holds a path**, as
+  kingfisher's own shell exports it. Only a yes/no there is the old flag.
+
 ## A scoped listing's faults name no tool or skill kept from the caller, after #1255
 
 - **`kingfisher list --as` no longer says a subagent's own tool shadows a catalogue tool

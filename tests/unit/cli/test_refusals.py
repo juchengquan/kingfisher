@@ -119,6 +119,15 @@ def a_prompt_naming_a_slot_nothing_fills(cfg):
     )
 
 
+def a_slot_keyed_on_a_name_no_lock_uses(cfg):
+    _write(
+        _root(cfg, "agents") / "a.yaml",
+        "name: a\ndescription: d\nsource_ids: [sales_db]\nsystem_prompt:\n  text: |\n"
+        "    {{x}}\n  slots:\n    x:\n      - source_ids: [sales_bd]\n        text: |\n"
+        "          Y.\n",
+    )
+
+
 def a_tool_module_that_will_not_import(cfg):
     _write(_root(cfg, "tools") / "broken.py", "def (:\n")
 
@@ -336,6 +345,10 @@ REFUSALS: dict[str, Refusal] = {
     "core/definitions/prompts.py::_entry": Refusal(5, defect=a_slot_inside_a_slot),
     "core/definitions/prompts.py::_refuse_blanks": Refusal(
         2, defect=a_prompt_naming_a_slot_nothing_fills),
+    # A function of its own rather than inline in `warm`, whose loop picks the error class:
+    # a raise of a loop variable is one this table cannot see, and `doctor` missed it.
+    "core/definitions/prompts.py::refuse_unused_names": Refusal(
+        1, defect=a_slot_keyed_on_a_name_no_lock_uses),
     # The envelope all three kinds' modules arrive in. A tool catalogue reaches it
     # here because one of them has to; what the other two get from the same two
     # refusals is now the same sentence rather than a near copy of it.

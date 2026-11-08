@@ -13,9 +13,9 @@ from .check import Check
 def _catalogues(found: Inventory) -> Iterator[Check]:
     """Each definition directory, every one of which can fail on its own."""
     for kind in found.by_kind():
-        # Skills load one at a time and have no single error, so their row comes from
-        # `_subagent_tools` instead.
-        if kind.name == "skills":
+        # Skills that read are counted under `_subagent_tools`, beside the ones that do not
+        # load; only a catalogue that would not read at all is this row's.
+        if kind.name == "skills" and kind.error is None:
             continue
         if kind.error is not None:
             yield Check(
@@ -139,6 +139,31 @@ def _skill_entries(found: Inventory) -> Iterator[Check]:
         )
 
 
+def _prompt_slots(found: Inventory) -> Iterator[Check]:
+    """A prompt slot keyed on a name no lock uses.
+
+    A failure because `warm` refuses it: a deployment carrying one does not start.
+    """
+    if not found.unused_slot_keys_checked:
+        yield Check(
+            "prompt slots",
+            "warn",
+            "not checked -- a catalogue it reads did not load, which is above",
+        )
+        return
+    if not found.unused_slot_keys:
+        yield Check("prompt slots", "ok", "every slot is keyed on names a lock uses")
+        return
+    for subject, names in sorted(found.unused_slot_keys.items()):
+        yield Check(
+            "prompt slots",
+            "fail",
+            f"{subject} keys system_prompt.slots on {', '.join(names)}, which no lock here "
+            f"names, so that text is never sent",
+            "spell each as a lock does -- `kingfisher list` prints the names in use",
+        )
+
+
 def _skill_locks(cfg: Config, found: Inventory) -> Iterator[Check]:
     """How many skills are locked, and where.
 
@@ -241,6 +266,19 @@ def _subagent_tools(found: Inventory) -> Iterator[Check]:
             "rename the folder, or the `name:` inside it, so the two match",
         )
 
+    # A warning, as for an orphan, and worded apart: no rename makes `subagents/` itself
+    # a subagent's own folder, so a definition filed here simply does not exist.
+    if found.unread_folders:
+        yield Check(
+            "subagent folders",
+            "warn",
+            f"{', '.join(f'subagents/{one}/' for one in found.unread_folders)}: not read -- "
+            f"no folder of that name is walked for definitions, and subagents/ is no "
+            f"subagent's own",
+            "put a definition in subagents/ or a folder of its own, and a subagent's own "
+            "tools/ and skills/ in the folder named for it",
+        )
+
     # A warning: everything runs without the skill, and nothing else says it is missing.
     if found.bundled_misplaced:
         deep = "; ".join(
@@ -254,6 +292,9 @@ def _subagent_tools(found: Inventory) -> Iterator[Check]:
             "move each to sit directly in the subagent's skills folder",
         )
 
+    # Said with the catalogues above: a second `skills` row here would count none, as fine.
+    if found.skills_error is not None:
+        return
     detail = f"{len(found.skills)} loadable"
     if not found.skills_enabled:
         detail += ", and KINGFISHER_SKILLS_ENABLED is off so none will be offered"
@@ -341,6 +382,7 @@ def checks(cfg: Config, found: Inventory) -> Iterator[Check]:
     yield from _subagent_references(found)
     yield from _skill_entries(found)
     yield from _skill_locks(cfg, found)
+    yield from _prompt_slots(found)
     yield from _bundled_entries(found)
     yield from _subagent_tools(found)
     yield from _definitions(cfg, found)

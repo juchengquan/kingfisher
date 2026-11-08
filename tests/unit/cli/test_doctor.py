@@ -19,6 +19,7 @@ from kingfisher.core.inventory import inventory
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions, ShellSettings
 from kingfisher.plugins.sessions.sandbox.confinement import LINUX_FENCES
+from kingfisher.plugins.sessions.shell import shell_env
 from tests.conftest import an_agent, middlewares_dir, subagents_dir, tools_dir, verbs
 
 BROKEN_TOOL = '''
@@ -193,6 +194,25 @@ def test_a_broken_middleware_module_is_a_failure(cfg):
     assert checks["middlewares"].verdict == "fail"
     assert "wrong.py" in checks["middlewares"].detail
     assert checks["tools"].verdict == "ok", "one catalogue must not take the others down"
+
+
+def test_a_skills_folder_called_catalogue_is_a_failure_beside_every_other_row(cfg):
+    """The registry refusing it escaped `inventory`, so `doctor` and `list` printed that one
+    line in place of every row -- through a lock and a scoped view as well."""
+    skill = cfg.definitions / "skills" / "catalogue" / "audit"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: audit\ndescription: d\n---\n", encoding="utf-8")
+    (cfg.definitions / "skill_locks.yaml").write_text(
+        "- name: audit\n  source_ids: [A]\n", encoding="utf-8"
+    )
+    an_agent(cfg, "analyst", builtin_tools="[read_file]", skills="[audit]")
+
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert checks["skills"].verdict == "fail"
+    assert "'catalogue'" in checks["skills"].detail
+    assert checks["agents"].verdict == "ok", "one catalogue must not take the others down"
+    assert inventory(cfg, source_ids=["A"]).skills_error == checks["skills"].detail
 
 
 AGENT_NAMING_A_MOVED_TOOL = """
@@ -966,6 +986,18 @@ def test_the_service_settings_are_reported_by_their_prefixes(cfg, monkeypatch):
     assert "KINGFISHER_SERVER_INVENTED_LATER" in check.detail
     assert "KINGFISHER_SERVICE_PORT" in check.detail
     assert "removed" in check.remedy
+
+
+def test_the_skills_folder_kingfishers_own_shell_exports_is_not_called_retired(
+    cfg, session_dir
+):
+    """`doctor` run in an agent's shell told it to move the skills folder's path into
+    `KINGFISHER_SKILLS_ENABLED`, a yes/no setting. Handed what that shell exports, not a
+    path written here; `test_a_retired_setting_is_reported` is the old flag beside it."""
+    exported = shell_env(cfg, session_dir)
+
+    assert "KINGFISHER_SKILLS" in exported
+    assert not list(health.retired(exported))
 
 
 def test_a_retired_name_left_empty_is_not_reported(cfg, monkeypatch):

@@ -1697,6 +1697,33 @@ def test_a_fault_on_an_entry_out_of_reach_is_not_reported_to_that_caller(
     assert code == 0, "and the exit status follows the view"
 
 
+KEYED_ON_A_MISSPELLING = """name: analyst
+description: An agent.
+source_ids: [sales_db]
+system_prompt:
+  text: |
+    You do the task.
+    {{figures}}
+  slots:
+    figures:
+      - source_ids: [sales_bd]
+        text: |
+          Net of returns.
+"""
+
+
+def test_a_callers_listing_is_not_told_what_a_slot_is_keyed_on(cfg, at_the_command_line, capsys):
+    """A slot keyed on `sales_bd` is the operator's to fix, and naming it to a caller scoped
+    with `--as` hands them policy. The unscoped listing, which fails on it, is the control."""
+    _workspace(cfg, KEYED_ON_A_MISSPELLING)
+
+    assert main(["list"]) == 1
+    assert "sales_bd" in capsys.readouterr().out
+
+    assert main(["list", "--as", "sales_db"]) == 0
+    assert "sales_bd" not in capsys.readouterr().out
+
+
 def test_the_operator_is_still_told_which_definition_moved_it(cfg, at_the_command_line, capsys):
     """The control, and the half that matters most: the fault is real, and the unscoped
     listing is where somebody goes to fix it.
@@ -2158,6 +2185,7 @@ TROUBLES_BESIDE_THE_ERRORS = {
         {"agent 'analyst'": "skills names 'audit' and 'catalogue::audit', which are one skill"},
         "which are one skill",
     ),
+    "unused_slot_keys": ({"agent 'analyst'": ("sales_bd",)}, "sales_bd"),
 }
 
 #: Why a field the inventory says it asked, by a `_checked` twin, is no trouble. Every
