@@ -21,6 +21,7 @@ from tests.conftest import (
     FAKE_KEY_VAR,
     FakeToolCallingModel,
     declared_subagents,
+    paths_in,
     unwired,
 )
 from tests.unit.definitions.test_gate_declaration import _agent
@@ -424,7 +425,7 @@ def test_the_refusal_names_what_was_returned_and_the_class_trap(cfg, session_dir
     assert "class is callable" in said  # and why it got that far
 
 
-def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
+def test_something_that_merely_looks_like_a_graph_is_refused(cfg, session_dir, fake_model):
     """The looseness the first version of this check had, and admitted to.
 
     It duck-typed on `invoke`, so an object with that one method got through and
@@ -447,10 +448,12 @@ def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
     )
 
     with pytest.raises(SubagentError, match="not a graph"):
-        compiled_subagent(spec, cfg, **COMPILED_UNWIRED)
+        compiled_subagent(
+            spec, model=fake_model, paths=paths_in(cfg, session_dir), **COMPILED_UNWIRED
+        )
 
 
-def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
+def test_the_check_is_the_interface_not_a_particular_graph_class(cfg, session_dir, fake_model):
     """Against `Runnable`, which is what `CompiledSubAgent` declares -- not against
     `CompiledStateGraph`, which is an implementation class upstream may rename and
     which would take every compiled subagent down to enforce a spelling.
@@ -465,7 +468,9 @@ def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
         name="researcher", description="d", system_prompt="", build=lambda model, tools: not_a_graph
     )
 
-    subagent = compiled_subagent(spec, cfg, **COMPILED_UNWIRED)
+    subagent = compiled_subagent(
+        spec, model=fake_model, paths=paths_in(cfg, session_dir), **COMPILED_UNWIRED
+    )
 
     assert subagent["runnable"] is not_a_graph
 
@@ -593,7 +598,9 @@ def test_a_request_that_withheld_a_tool_withholds_it_from_the_graph(cfg, session
     assert seen == []
 
 
-def test_a_compiled_subagent_is_handed_the_tool_it_named_either_way(cfg):
+def test_a_compiled_subagent_is_handed_the_tool_it_named_either_way(
+    cfg, session_dir, fake_model
+):
     """`build` is given the tools this subagent was granted, and the grant is resolved
     by the same set membership everything else uses -- so a definition writing the
     documented long form for a tool no other file defines was handed an empty list,
@@ -630,8 +637,9 @@ def test_a_compiled_subagent_is_handed_the_tool_it_named_either_way(cfg):
 
     compiled_subagent(
         spec,
-        cfg,
+        model=fake_model,
         catalogue=(FoundTool(tool=probe, source="probe.py"),),
+        paths=paths_in(cfg, session_dir),
         **unwired(COMPILED_UNWIRED, tools=("probe",)),
     )
 

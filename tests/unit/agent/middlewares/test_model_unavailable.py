@@ -15,7 +15,7 @@ from kingfisher.core.agent.middlewares.model_reply import ModelReplyMiddleware
 from kingfisher.core.session.provider_errors import unavailable
 from kingfisher.core.session.runtime import ModelUnavailableError
 from kingfisher.plugins import LocalSessions
-from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
+from tests.conftest import EVERY_TOOL, an_agent, paths_in, start, subagents_dir
 from tests.unit.scripted import Scripted
 
 
@@ -123,10 +123,10 @@ def test_a_refused_model_call_is_raised_as_the_stop_and_another_as_itself():
         guard.wrap_model_call(None, _raising(RefusedError(400)))
 
 
-def test_only_a_task_call_hands_a_refusal_back():
+def test_only_a_task_call_hands_a_refusal_back(cfg, session_dir):
     """A tool's own timeout is the tool's failure, not a model that cannot answer; and a
     compiled subagent's raw provider error is handed back as a declared one's is."""
-    guard = GuardedCallsMiddleware()
+    guard = GuardedCallsMiddleware(frozenset(), paths_in(cfg, session_dir))
 
     told = guard.wrap_tool_call(Call("task", subagent_type="helper"), _raising(RefusedError(429)))
     assert isinstance(told, ToolMessage)

@@ -40,8 +40,7 @@ class GuardedTool(BaseTool):
     #: Typed `Any` rather than `BaseTool` and `SessionPaths`: this is a pydantic
     #: model, and naming those would make the wrapper refuse a tool it can carry.
     inner: Any
-    #: `None` where a build has no session to translate against; errors still convert.
-    paths: Any = None
+    paths: Any
     #: The compiled subagent this tool was handed to, which `current_graph()` answers while
     #: it runs. `None` leaves the name alone: `eval`'s tools read the graph that ran `eval`.
     graph: str | None = None
@@ -82,8 +81,6 @@ class GuardedTool(BaseTool):
         return args, None
 
     def _translated(self, kwargs: dict[str, Any]) -> dict[str, Any]:
-        if self.paths is None:
-            return kwargs
         try:
             return self.paths.translated(kwargs)
         except (UnsafeReferenceError, HostPathError) as escaped:
@@ -163,7 +160,7 @@ class GuardedTool(BaseTool):
 
 def guarded_tools(
     tools: Sequence[Any],
-    paths: SessionPaths | None,
+    paths: SessionPaths,
     *,
     graph: str | None = None,
     limit: tuple[bool, str | None] = (True, None),
@@ -176,7 +173,7 @@ def guarded_tools(
 
 
 def _guarded(
-    one: Any, paths: SessionPaths | None, graph: str | None, limit: tuple[bool, str | None]
+    one: Any, paths: SessionPaths, graph: str | None, limit: tuple[bool, str | None]
 ) -> BaseTool:
     """One tool, wrapped without changing what it advertises.
 

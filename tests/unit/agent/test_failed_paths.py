@@ -233,7 +233,9 @@ def test_the_one_sentence_says_what_each_folder_is_for():
     assert "`/scratchpad/<name>` to work on it" in said
 
 
-def test_every_refusal_that_offers_somewhere_to_write_ends_with_the_one_sentence():
+def test_every_refusal_that_offers_somewhere_to_write_ends_with_the_one_sentence(
+    cfg, session_dir
+):
     """Three refusals offered it in three wordings -- a deny rule's, a fence's, and a save
     outside the session's folders -- and a model reading three wordings for one rule reads
     three rules. Each refusal's own rule compares against the function that words it, so
@@ -245,7 +247,9 @@ def test_every_refusal_that_offers_somewhere_to_write_ends_with_the_one_sentence
     """
     one = what_you_make_goes(DEFAULT_LAYOUT.outputs_route, DEFAULT_LAYOUT.scratch_route)
     offered = {
-        "a deny rule": where_to_write("Error: permission denied for write on /inputs/x.txt"),
+        "a deny rule": where_to_write(
+            "Error: permission denied for write on /inputs/x.txt", paths_in(cfg, session_dir)
+        ),
         "a fence": kept_note("inputs", DEFAULT_LAYOUT),
         "a save outside the folders": stray_save("/cleaned.csv", DEFAULT_LAYOUT),
         "a fence outside the folders": stray_note("/cleaned.csv", DEFAULT_LAYOUT),

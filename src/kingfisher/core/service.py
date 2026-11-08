@@ -35,7 +35,6 @@ from .definitions.agents.spec import AgentSpec
 from .definitions.catalogue import Definitions
 from .definitions.seeding import SEED_HINT, starter_agent
 from .interfaces import (
-    AgentsMiddlewares,
     Instructions,
     MemoryStore,
     PdfAttachments,
@@ -147,9 +146,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             unused_results if unused_results is not None else DeleteUnusedResults()
         )
         self.pdf_attachments: PdfAttachments | None = pdf_attachments
-        self.subagent_middlewares: SubagentMiddlewares = (
-            subagent_middlewares if subagent_middlewares is not None else AgentsMiddlewares()
-        )
+        self.subagent_middlewares: SubagentMiddlewares | None = subagent_middlewares
         self.scratch_run_limit: ScratchRunLimit | None = scratch_run_limit
         self.memory_store: MemoryStore | None = memory_store
         # Only a subclass has had its methods checked, by Python as it was made. Each hook

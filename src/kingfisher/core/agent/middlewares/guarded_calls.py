@@ -62,29 +62,24 @@ class GuardedCallsMiddleware(AgentMiddleware):
     innermost.
     """
 
-    def __init__(
-        self, names: frozenset[str] = frozenset(), paths: SessionPaths | None = None
-    ) -> None:
+    def __init__(self, names: frozenset[str], paths: SessionPaths) -> None:
         super().__init__()
         self.names = names
-        #: `None` where a build has no session to translate against; failures still convert.
         self.paths = paths
 
     def _translated(self, request: Any) -> Any:
         """The same call with its path arguments made real, or the request unchanged when
-        it names no tool of ours or there is no session to translate against; or, for a
-        path that climbs out, the failed result to answer with, reported the way
-        `reject_host_path` reports one."""
+        it names no tool of ours; or, for a path that climbs out, the failed result to
+        answer with, reported the way `reject_host_path` reports one."""
         call = request.tool_call
-        paths = self.paths
-        if paths is None or call.get("name") not in self.names:
+        if call.get("name") not in self.names:
             return request
         # Around the translation alone: a built-in's host-path refusal caught here would
         # read as the translation's rule.
         try:
-            args = paths.translated(call.get("args") or {}, call=call.get("id") or None)
+            args = self.paths.translated(call.get("args") or {}, call=call.get("id") or None)
         except (UnsafeReferenceError, HostPathError) as escaped:
-            return failed(call, refusal_text(escaped, paths))
+            return failed(call, refusal_text(escaped, self.paths))
         return replace(request, tool_call={**call, "args": args})
 
     def _failed(self, request: Any, exc: Exception) -> ToolMessage | None:

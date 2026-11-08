@@ -298,7 +298,7 @@ def activated_subagents(
     refuse_cycles(defined)
     # Deliberately no catalogue-wide check that every model is runnable: `run_on` lets a
     # caller move a subagent onto a model they reach, so that is refused per subagent, at
-    # `as_subagent`, once the override is resolved.
+    # `model_and_mark`, once the override is resolved.
     # `ALL` is every subagent this caller reaches, not every definition: that would hand
     # two of a name to a caller who reaches one, and the refusal would name the other.
     activated = (

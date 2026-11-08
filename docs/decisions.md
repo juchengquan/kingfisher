@@ -259,10 +259,10 @@ which `model_of` calls too: two copies of those steps, one forgetting the endpoi
 check, is a run sent where the caller refused. `backend` and `definition` have no name
 a file could carry, so a value written for one is refused, on the class.
 
-**A subagent is handed its own model, not its agent's.** Its model is not built until
-`as_subagent`'s last line, so the one in scope where its middleware is made is the
-agent's -- wrong in the direction that costs money, since a subagent pinned to the cheap
-model would be compacted by the expensive one. `with_helpers` passes the right one.
+**A subagent is handed its own model, not its agent's.** The agent's is the one in scope
+where a subagent's middleware is made -- wrong in the direction that costs money, since a
+subagent pinned to the cheap model would be compacted by the expensive one.
+`with_helpers` builds the subagent's and passes it.
 
 **The example is `compaction.py`, and it runs.** It is the motivating case: handed
 `model: "gpt-5"` as a string, langchain's summarizer calls `init_chat_model`, which
@@ -864,13 +864,14 @@ must be told the model it will run; a helper under a cheap-pinned subagent once 
 expensive one. Only the helper half had been held: handing an inheriting subagent's
 middleware `None` left all 2,084 tests green.
 
-**The duplication that occasioned this was left alone, and that is the decision.** A
-subagent's model is resolved twice per build. Measured: **0.010ms** to build against an
-admit at 15-46ms, so no saving; both sites resolve from the same inputs, so they cannot
-disagree; and the review's case, a top-level call carrying an inherited model, cannot
-arise. `default_model=inherited if nested else None` equals `default_model=inherited`
-for the one caller there is: it guards a caller that does not exist, which is why no
-test can hold it. *(2026-09-23, from an architecture review.)*
+**The duplication that occasioned this was left alone, then removed.** A subagent's model
+was built in `with_helpers`, again for its spec in `as_subagent`, and a third time for a
+compiled one: six builds for a helper with a nested reviewer. A build takes **0.010ms**,
+so it cost nothing, and was left on 2026-09-23. It went because `default_model` meant two
+things, a model and "this is a helper", and the copies had to be read side by side to see
+they agreed. `model_and_mark` now builds the model once beside its clearing mark, and
+`as_subagent` is handed the model for its spec -- `None` where deepagents hands over the
+caller's -- with `helper` said apart. *(2026-11-09, from a cleanup review.)*
 
 **Reversed on 2026-08-19: a list of models, and `distinct: true`.** `model` took a
 list tried in order, and `alias` was the only thing that could use one, so the two

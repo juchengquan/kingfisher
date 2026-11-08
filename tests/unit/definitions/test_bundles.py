@@ -34,6 +34,7 @@ from tests.conftest import (
     a_subagent,
     agent_named,
     an_agent,
+    paths_in,
     subagent_of,
 )
 
@@ -1545,7 +1546,9 @@ def test_a_compiled_subagent_is_handed_the_tools_in_its_own_folder(cfg, session_
     assert "probe" in dispatched_by(subagent_of(built, "surveyor"))
 
 
-def test_a_compiled_subagents_bundle_wins_a_name_the_catalogue_also_defines(cfg, tmp_path):
+def test_a_compiled_subagents_bundle_wins_a_name_the_catalogue_also_defines(
+    cfg, session_dir, fake_model, tmp_path
+):
     """The assembled path's rule, which has to hold here too: `build` is handed one
     list and whatever it builds dispatches by name, so two tools of a name is one tool
     and nothing saying which.
@@ -1587,9 +1590,10 @@ def test_a_compiled_subagents_bundle_wins_a_name_the_catalogue_also_defines(cfg,
             build=build,
             tools=ALL,
         ),
-        cfg,
+        model=fake_model,
         catalogue=LocalToolRepository(tmp_path / "shared").found,
         private=LocalToolRepository(tmp_path / "own").found,
+        paths=paths_in(cfg, session_dir),
         **COMPILED_UNWIRED,
     )
 

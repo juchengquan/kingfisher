@@ -17,8 +17,6 @@ from kingfisher.core.agent.backend import (
 from kingfisher.core.agent.prompting import EXECUTE, WRITE_TODOS, skills_index
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.config import ConfigError
-from kingfisher.core.interfaces import NoScratchRunLimit
-from kingfisher.core.layout import Layout
 
 from .attachments import AttachmentsMiddleware
 from .builtin_tools import BuiltinToolsMiddleware, longest_command
@@ -42,7 +40,7 @@ from .turn_instructions import TurnInstructionsMiddleware
 
 if TYPE_CHECKING:
     from kingfisher.core.agent.models import SummarizerCount
-    from kingfisher.core.config import Models
+    from kingfisher.core.config import Config
     from kingfisher.core.interfaces import PdfAttachments, ScratchRunLimit
     from kingfisher.core.session.ledger import Ledger
 
@@ -58,18 +56,15 @@ FILESYSTEM = FilesystemMiddleware.__name__
 def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing one is built from
     kind: Kind,
     *,
+    cfg: Config,
     name: str,
     names: frozenset[str],
-    paths: SessionPaths | None,
-    layout: Layout,
+    paths: SessionPaths,
     backend: Any,
     budget: StepBudget,
     trigger: int,
     count: SummarizerCount,
-    execution_timeout_s: int,
-    models: Models,
     permissions: Any,
-    keep_results_rounds: int | None,
     recorder: RecorderMiddleware | None,
     ledger: Ledger | None,
     clearing: Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None,
@@ -81,7 +76,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     indexed: bool = False,
     reachable: Sequence[str] | None = None,
     pdf_attachments: PdfAttachments | None,
-    scratch_run_limit: ScratchRunLimit | None,
+    scratch_run_limit: ScratchRunLimit,
     inner: Sequence[AgentMiddleware[Any, Any, Any]] = (),
     turn_text: str | None,
     turn_cached: bool = True,
@@ -99,9 +94,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     is held to it in model calls; one per build, shared by all three kinds. `trigger` is
     where this graph's own summariser fires and `count` how it counts, which size the PDFs
     its turn may hold open, and `pdf_attachments` is the deployment's say in what each of
-    them is replaced with.
-    `name` is the graph's, as `scratch_run_limit` is asked about it, and `models` the
-    deployment's catalogue, whose endpoints say who answered each call.
+    them is replaced with. `name` is the graph's, as `scratch_run_limit` is asked about it.
 
     `inner` is what the deployment's settings switch on and what its definitions name, which
     go inside every standing one. Taken here rather than appended by each caller so that the
@@ -139,7 +132,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # After clearing, which measures what the summariser counted. Outside the step budget
     # and the reply checks, so the reply it records is the one kept and a call asked again
     # goes as they built it; and outside the caching slot, which marks what this sends.
-    standing.append(SignedThinkingMiddleware(signers_of(models)))
+    standing.append(SignedThinkingMiddleware(signers_of(cfg.models)))
     # The agent's always, since the built-ins are read off its stack; a subagent's only where
     # its grant holds the list, since it costs a step on every call; never `general-purpose`'s,
     # a helper for one job. Outside `BuiltinToolsMiddleware`, which takes its prose out where
@@ -154,7 +147,9 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         StepBudgetMiddleware(budget, subagent=kind != "agent")
     )
     # Ahead of the rest, which have nothing to say about a call that is not run.
-    standing.append(ModelReplyMiddleware(subagent=kind != "agent", outputs=layout.outputs_route))
+    standing.append(
+        ModelReplyMiddleware(subagent=kind != "agent", outputs=cfg.layout.outputs_route)
+    )
     # On every graph, narrowed or not. The agent's checks `task` whether or not this caller
     # narrowed anything: a subagent a future deepagents adds does not arrive unrestricted.
     # Ahead of the tools' own middleware, which read what it leaves in the request, so an
@@ -173,20 +168,19 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # Where the graph holds offered tools, whose calls it binds, or hands work to a compiled
     # subagent, whose tools run under this graph's rule and are in no `names` of its.
     if names or hands_to_compiled:
-        limit = NoScratchRunLimit() if scratch_run_limit is None else scratch_run_limit
         standing.append(
             ScratchRunsMiddleware(
                 names,
                 backend=backend,
                 tools=granted,
                 gated=gated,
-                seconds=execution_timeout_s,
-                limit=limit_answer(limit, name, kind),
+                seconds=cfg.execution_timeout_s,
+                limit=limit_answer(scratch_run_limit, name, kind),
             )
         )
     # Inside the recorder, so a call whose only file was replaced fails and leaves no row.
     standing.append(AttachmentsMiddleware(trigger, count, pdf_attachments))
-    longest = longest_command(execution_timeout_s)
+    longest = longest_command(cfg.execution_timeout_s)
     # deepagents merges by name, so this *replaces* the `FilesystemMiddleware` it would
     # build itself -- in this graph's stack and, through the spec, in each subagent's.
     # Its offloading is off: a result too long to show whole is kingfisher's to save, in
@@ -209,14 +203,14 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     shell = shell_told(backend)
     standing.append(
         BuiltinToolsMiddleware(
-            layout,
+            cfg.layout,
             shell,
             root=session_root_of(backend),
             longest=longest,
             here=shell_runs_here(backend),
-            expires_after=keep_results_rounds,
+            expires_after=cfg.keep_results_rounds,
             ledger=ledger,
-            folders=folders_of(layout, backend),
+            folders=folders_of(cfg.layout, backend),
             skilled=skills is not None or indexed,
         )
     )
@@ -227,7 +221,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
                 backend=backend,
                 sources=list(skill_sources),
                 system_prompt=skills_index(
-                    layout, shell, shelled=granted is None or EXECUTE in granted
+                    cfg.layout, shell, shelled=granted is None or EXECUTE in granted
                 ),
             )
         )
