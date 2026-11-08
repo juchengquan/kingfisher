@@ -204,12 +204,6 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   which model rows ran. A summary on a single batch reopens clearing acting before the
   summariser's own check, which *A refusal for length is clearing's to answer first* in
   `decisions.md` measured and left accepted. *(2026-10-23.)*
-- **The test suite's growth, counted again around 2026-11-27.** *The size of the test
-  suite* in `decisions.md` holds growth by a rule in `CLAUDE.md`, and puts a count per
-  pull request into CI if the weekly rate is not then well under 430 test functions. The
-  baseline is 3,413 functions named `test_*` on 6b542f37, 2026-10-28. Cutting stopped at
-  #1140 until then; if it resumes, the config, CLI and seeding files, never read for it,
-  come before more of the half written before September. *(2026-10-28.)*
 
 ## When deepagents moves
 
