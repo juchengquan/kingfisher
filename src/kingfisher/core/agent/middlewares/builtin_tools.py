@@ -67,7 +67,8 @@ BACKENDS_ONLY = (
 )
 
 
-#: deepagents' longest `timeout`, which `create_deep_agent` offers no way to lower.
+#: deepagents' default longest `timeout`, which a `FilesystemMiddleware` a deployment puts
+#: in place of kingfisher's keeps unless it sets its own, so no setting past it is promised.
 _LONGEST = (
     inspect.signature(FilesystemMiddleware.__init__).parameters["max_execute_timeout"].default
 )
@@ -290,7 +291,11 @@ def _timed(description: str, timed: str) -> str:
 
 def _overlong(request: Any, longest: int) -> ToolMessage | None:
     """The refusal of an `execute` call asking for longer than `longest`, as deepagents'
-    own would read; `None` for any other call."""
+    own would read; `None` for any other call.
+
+    Kingfisher's `FilesystemMiddleware` refuses the same call. This holds a direct one
+    where a deployment's has taken its place, keeping a ceiling of its own.
+    """
     call = request.tool_call
     if call.get("name") != EXECUTE:
         return None

@@ -379,6 +379,26 @@ def test_a_tool_taking_the_turns_backend_still_gets_it_from_code(cfg, session_di
     assert MINE in answered
 
 
+def test_a_command_from_code_is_held_to_the_setting(cfg, session_dir):
+    """`tools.execute(...)` from `eval` reached the backend with a `timeout` of 3000 under a
+    30s setting, which a direct call is refused, so a sandbox honouring it could run one
+    command past the session's claim.
+    """
+    wired = replace(cfg, interpreter_enabled=True, execution_timeout_s=30)
+    # Under deepagents' own hour, so only the setting can refuse it.
+    asked = "{command: 'touch scratchpad/ran', timeout: 3000}"
+
+    answered, _ = _from_code(
+        wired,
+        session_dir,
+        f"(async () => await tools.execute({asked}))()",
+        capabilities=Capabilities(builtin_tools=("execute", "eval", "read_file")),
+    )
+
+    assert "exceeds maximum allowed (30s)" in answered
+    assert not (session_dir / "scratchpad" / "ran").exists()
+
+
 @pytest.mark.parametrize(
     ("gated", "spelled"),
     # A built-in, which reaches the sandbox by name, and an offered tool, which
