@@ -236,6 +236,12 @@ class TurnLog:
     #: The conversation `current` ended on, which the turn is built on.
     conversation: tuple[Message, ...] = ()
 
+    @property
+    def written(self) -> bool:
+        """Whether a turn has written here. Any line, not a conversation: a session rewound
+        to the start has none."""
+        return bool(self.lines) or self.damaged
+
 
 def read_log(harness: HarnessFiles) -> Steps[TurnLog]:
     """The log, and the conversation the session is at; empty where no turn wrote one."""

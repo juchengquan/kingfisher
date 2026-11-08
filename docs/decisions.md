@@ -6063,14 +6063,16 @@ since deepagents lands a new one ahead of its caching and memory, which would no
 finished the request; and not by wrapping the model, since deepagents picks a model's
 profile from the instance it is handed. The stop is a `BaseException`, so a fallback
 answering for a failed call does not carry the turn on and run the tools it calls. No
-claim, turn log or last-used time is written, and a session made in order to look is
-removed. The code interpreter's runtime, which the caught call starts where a grant
-lists its tools, is closed as a turn's teardown closes it: left open, `kingfisher
-prompt` printed its listing and never exited. Each block is named by matching what
-wrote it, so a deployment's own reads `unknown` rather than being guessed at; the
+claim, turn log or last-used time is written to a session already there, and one made in
+order to look is removed -- under a claim taken only for that, and only where its turn
+log has no line, since a turn started on the new id while the look was built would lose
+its whole session. The code interpreter's runtime, which the caught call starts where a
+grant lists its tools, is closed as a turn's teardown closes it: left open, `kingfisher
+prompt` printed its listing and never exited. Each block is named by matching what wrote
+it, so a deployment's own reads `unknown` rather than being guessed at; the
 interpreter's heading is spelt here because langchain-quickjs keeps its template
 private. Not shown: the conversation, which a turn writes and a placeholder task does
-not stand for. *(2026-10-26.)*
+not stand for. *(2026-10-26; the removal under a claim, 2026-11-08.)*
 
 ## What doctor promises
 

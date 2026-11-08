@@ -119,6 +119,54 @@ def test_a_session_made_to_look_is_gone_when_the_look_is_refused(scripted):
     assert [s.id for s in kf.sessions()] == []
 
 
+def _with_this_while_built(monkeypatch, kf, meanwhile):
+    """`kf`, calling `meanwhile` once a look has made its session and before it builds."""
+    build = kf._graph_for
+
+    def built_after(*args, **kwargs):
+        # Put back first: a turn run by `meanwhile` builds through here too.
+        monkeypatch.setattr(kf, "_graph_for", build)
+        meanwhile()
+        return build(*args, **kwargs)
+
+    monkeypatch.setattr(kf, "_graph_for", built_after)
+
+
+def test_a_turn_run_in_a_session_made_to_look_keeps_it(scripted, monkeypatch):
+    """A look deleted the session it had made without its claim or its turn log, so a turn
+    run on the same new id while the look was built lost its log, inputs and outputs."""
+    an_agent(scripted, "only")
+    kf = _kingfisher(scripted)
+
+    def a_turn():
+        Scripted.script.append(AIMessage(content="done"))
+        kf.run(Request("go", agent="only", session_id="new"))
+
+    _with_this_while_built(monkeypatch, kf, a_turn)
+    kf.sent(Request("go", agent="only", session_id="new"))
+
+    session = kf.session("new")
+    assert session is not None
+    assert len(session.turns()) == 1
+
+
+def test_a_session_made_to_look_is_left_to_a_turn_holding_it(scripted, monkeypatch):
+    """A turn still running has written no line of its log, so its claim is all that says
+    the session is no longer the look's to remove."""
+    an_agent(scripted, "only")
+    kf = _kingfisher(scripted)
+    held = []
+
+    def a_turn_starts():
+        held.append(LocalSessions().claim(scripted, "new", stale_after=3600))
+
+    _with_this_while_built(monkeypatch, kf, a_turn_starts)
+    kf.sent(Request("go", agent="only", session_id="new"))
+
+    assert held[0] is not None
+    assert [s.id for s in kf.sessions()] == ["new"]
+
+
 def test_a_session_already_there_is_left_as_it_was(scripted):
     """No claim, no transcript, no last-used time moved: a preview that wrote any of them
     would change when the session is reaped, or stop the next turn as busy."""
