@@ -19,7 +19,7 @@ from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.layout import PAUSED_STATE
+from kingfisher.core.layout import INPUTS_SEEN, PAUSED_STATE
 from kingfisher.core.logged import stamp_warnings
 from kingfisher.core.reporting import (
     opening_events,
@@ -60,8 +60,8 @@ from .store import (
     clear_pause,
     pending_from_mark,
     read_drift,
-    read_inputs_seen,
     read_ledger,
+    read_listing,
     read_pause_mark,
     take_pause,
 )
@@ -189,7 +189,6 @@ class Preparation:
         log: TurnLog,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
-        history = log.conversation
         # Optional on a backend, like `host_path`; reported rather than raised.
         unprotected = tuple(getattr(files, "unprotected", ()))
 
@@ -245,7 +244,7 @@ class Preparation:
             turn_agent=agent.name if agent is not None else None,
         )
         lost = history_lost(
-            len(history),
+            len(log.conversation),
             cut=log.damaged,
             written=earlier.messages if earlier is not None else None,
         )
@@ -294,7 +293,7 @@ class Preparation:
             asked = getattr(request, "task", "")
             if asked:
                 prepared = yield from self._with_message(
-                    prepared, asked, request, placement, history=history, earlier=earlier
+                    prepared, asked, request, placement, earlier=earlier
                 )
             if pause is not None and resume is None:
                 yield from clear_pause(harness)
@@ -331,23 +330,23 @@ class Preparation:
             raise
         return prepared
 
-    def _with_message(  # noqa: PLR0913 -- the turn's, handed on
+    def _with_message(
         self,
         prepared: Prepared,
         asked: str,
         request: Request | Resume,
         placement: InputsPlacement,
         *,
-        history: tuple[Any, ...],
         earlier: KeptLedger | None,
     ) -> Steps[Prepared]:
         """`prepared` with its message, saying what changed in the inputs folder since the
         agent last heard, however it changed.
         """
         layout = self.cfg.layout
+        history = prepared.log.conversation
         now = yield from inputs_seen(prepared.files, layout)
         # A first turn was told of nothing; a session older than the record, of unknown.
-        before = (yield from read_inputs_seen(prepared.harness)) if history else {}
+        before = (yield from read_listing(prepared.harness, INPUTS_SEEN)) if history else {}
         drift = yield from read_drift(prepared.harness)
         message = turn_message(
             asked,
@@ -550,7 +549,6 @@ class Preparation:
             built_from=built_from(catalogue, agent)
             if agent is not None and isinstance(built, Assembled)
             else None,
-            history=log.conversation,
             log=log,
             ledger=ledger,
             # Written once the inputs are placed, which this must not wait for.

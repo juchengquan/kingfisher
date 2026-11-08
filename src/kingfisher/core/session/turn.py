@@ -60,13 +60,12 @@ class Prepared:
     #: What a graph kingfisher built is driven with, or `None` for one the caller built,
     #: whose context is not known here.
     context: ToolContext | None = None
-    #: What was said in this session before now: the saver holds one turn only, so
-    #: this is where a conversation comes from.
-    history: tuple[Message, ...] = ()
-    #: The turn log as this turn read it, `history` rebuilt from it, which the turn's end
-    #: writes back with its own lines rather than reading it again.
+    #: The turn log as this turn read it, which the turn's end writes back with its own
+    #: lines rather than reading it again. Its `conversation` is what was said in this
+    #: session before now: the saver holds one turn only, so that is where one comes from.
     log: TurnLog = field(default_factory=TurnLog)
-    #: Why `history` is shorter than the last turn left it, or `None` where it is whole.
+    #: Why `log.conversation` is shorter than the last turn left it, or `None` where it
+    #: is whole.
     #: Carried to the end as well as announced, as `discarded` is.
     history_lost: str | None = None
     #: Answers to a turn that stopped for them, in langgraph's shape, or `None`. Never
