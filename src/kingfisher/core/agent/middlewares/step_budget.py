@@ -110,7 +110,7 @@ class StepBudgetMiddleware(AgentMiddleware):
     call, and stop a subagent at the end of its own.
 
     A turn either finished well inside its budget or ran to the limit and stopped mid-work;
-    told, it can end on an answer. The note goes last and is never stored: the transcript
+    told, it can end on an answer. The note goes last and is never stored: the conversation
     stays clean and it never piles up. Last, it would take the conversation's cache
     breakpoint, which `PromptCachingMiddleware` moves back onto what is stored.
     """

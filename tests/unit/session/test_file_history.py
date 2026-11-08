@@ -16,13 +16,12 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, MemoryEntry, Request
 from kingfisher.core.layout import ARTIFACTS_SEEN, FILE_HISTORY, HARNESS, KEPT_FILES
-from kingfisher.core.session import file_history, files
+from kingfisher.core.session import copying, file_history, files
+from kingfisher.core.session.copying import UNCOUNTED, copied_on_host
 from kingfisher.core.session.file_history import (
     HELD_BY_STORE,
     LATE,
     OVER_BUDGET,
-    UNCOUNTED,
-    copied_on_host,
     dropped_for_space,
     folder_for,
 )
@@ -431,7 +430,7 @@ def test_a_copy_on_this_host_keeps_what_the_file_held_when_its_source_changes(
             target.touch()
             raise OSError(95, "Operation not supported", str(target))
 
-        monkeypatch.setattr(file_history, "_clone", refuse)
+        monkeypatch.setattr(copying, "_clone", refuse)
     root = tmp_path.resolve()
     (root / "outputs").mkdir()
     source = root / "outputs" / "report.txt"

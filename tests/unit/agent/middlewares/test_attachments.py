@@ -28,8 +28,8 @@ from kingfisher.core.agent.middlewares.attachments import (
     AttachmentsMiddleware,
     pdf_allowance,
 )
-from kingfisher.core.agent.middlewares.recorded import readable_size
 from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
+from kingfisher.core.agent.middlewares.result_rows import readable_size
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.agent.models import SummarizerCount, summarizer_count, summarizer_trigger

@@ -9,10 +9,11 @@ from dataclasses import replace
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.agent.middlewares.recorded import filed_at, kept_text, stamped_id, unfiled
+from kingfisher.core.agent.middlewares.result_rows import filed_at, kept_text, stamped_id, unfiled
 from kingfisher.core.logged import warn
 from kingfisher.core.result import ResultError
 
+from .messages import from_record
 from .steps import Steps, changing, on_host, reading
 from .store import (
     HarnessFiles,
@@ -24,7 +25,6 @@ from .store import (
     read_ledger,
     write_ledger,
 )
-from .transcript import from_record
 from .turnlog import read_turn_log
 from .unused import UnusedFiles, settle_unused
 

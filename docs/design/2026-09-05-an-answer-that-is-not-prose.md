@@ -140,7 +140,7 @@ exists. This one fails on turn two of a session and never on turn one, which is
 the shape of bug that reaches production.
 
 **The document is recorded twice and replayed forever.** `_record` reads state
-back and `as_transcript` keeps tool calls with their full `args`. A structured
+back and `as_messages` keeps tool calls with their full `args`. A structured
 turn therefore writes the document into the session history twice -- once as the
 synthetic tool call's arguments, once inside the filler sentence -- and
 `user_payload` replays the whole transcript on every later turn.
@@ -258,13 +258,13 @@ is the one line that would otherwise be written by accident.
 
 **The transcript records one assistant message carrying the document.** The
 synthetic call and its result are translated away rather than stored. This is
-what `as_transcript` is for -- it is where what the graph holds becomes records
+what `as_messages` is for -- it is where what the graph holds becomes records
 this package owns -- and a structured return is LangChain spelling an answer as
 a tool call. It halves the replay cost, and it keeps a framework-generated tool
 name out of a record whose whole purpose is to outlive the harness.
 
 Recording a marker instead of the document is not an option. That is the
-flattened transcript `core/session/transcript.py` argues against in its opening
+flattened transcript `core/session/messages.py` argues against in its opening
 paragraph, and an agent that cannot see the document it just emitted will
 contradict it on the next turn.
 

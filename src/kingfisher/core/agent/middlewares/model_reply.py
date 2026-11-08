@@ -33,7 +33,7 @@ GIVE_UP = 3
 KEPT_WHOLE = 500
 
 #: How the result of a call refused for being cut begins. Clearing reads it to leave the
-#: refusal whole once a replayed transcript has dropped its error status.
+#: refusal whole once the turn log, which keeps no status, has replayed it.
 NOT_RUN = "Not run: your reply reached "
 
 #: On a cut reply kept in the conversation: the cut answers asked again in the same call

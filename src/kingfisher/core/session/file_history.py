@@ -3,21 +3,14 @@ put back where any turn left it: a copy of each version, and a line a turn sayin
 
 from __future__ import annotations
 
-import ctypes
-import errno
 import hashlib
 import json
-import os
 import re
-import shutil
-import stat
-import sys
 from collections.abc import Mapping
 from contextlib import suppress
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.agent.permitted_backend import HostPathFailedError, host_path_in_turn
 from kingfisher.core.layout import (
     ARTIFACTS_SEEN,
     FILE_HISTORY,
@@ -29,16 +22,15 @@ from kingfisher.core.layout import (
 from kingfisher.core.logged import warn
 from kingfisher.core.result import TurnFiles
 
+from .copying import SAME, UNCOUNTED, content_mark, copied_through
 from .files import Seen, artifacts_seen
 from .memory import without_any
 from .memory_writer import unread_dropped
-from .steps import Steps, changing, on_host, reading
-from .store import Drift, HarnessFiles, read_listing, read_off_path, write_listing
+from .steps import Steps, reading
+from .store import HarnessFiles, read_listing, read_off_path, write_listing
 from .turnlog import PARENT, read_turn_log
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from kingfisher.core.config import Config
     from kingfisher.core.layout import Layout
     from kingfisher.core.result import MemoryEntry
@@ -70,16 +62,11 @@ WHY = "why"
 DROPPED_IN = "dropped_in"
 OUTSIDE_BUDGET = "outside_budget"
 
-#: Said by `_copied` of a file whose contents are the version the last turn left, which it
-#: then neither writes nor records.
-_SAME = "its contents are the version the last turn left"
-
 #: Why a version has no copy, where kingfisher decided it rather than a copy failing.
 LATE = "the turn ended past its deadline, when its claim may have no time left for a copy"
 HELD_BY_STORE = "a MemoryStore keyed the turn, so the memory file was a copy of the user's"
 OVER_BUDGET = "it alone is larger than KINGFISHER_REWIND_MAX_BYTES"
 UNREAD_MEMORY = "the memory file could not be read"
-UNCOUNTED = "its size is unknown, so KINGFISHER_REWIND_MAX_BYTES could not count its copy"
 
 #: The reasons a later turn would meet again, so it is not asked to try: the rest are asked
 #: again by the next turn, which copies the version if it is still there.
@@ -97,18 +84,6 @@ STATE_KEPT = (INPUTS_SEEN, MEMORY_WRITER)
 #: being plain segments.
 STATE_FOLDER = ".state"
 _DIGESTED = re.compile(r"_[0-9a-f]{32}")
-
-# Not blocking, or a FIFO left under a listed name would hold the ending on its open.
-_SOURCE = (
-    os.O_RDONLY
-    | getattr(os, "O_NOFOLLOW", 0)
-    | getattr(os, "O_NONBLOCK", 0)
-    | getattr(os, "O_CLOEXEC", 0)
-)
-_CHUNK = 1024 * 1024
-# macOS's value, which Linux's is not: only the macOS clone may use it.
-_AT_FDCWD = -2
-_FICLONE = 0x40049409
 
 
 def folder_for(turn: str) -> str:
@@ -139,12 +114,15 @@ def read_file_history(harness: HarnessFiles) -> Steps[list[dict[str, Any]]]:
     return records
 
 
+def _a_folder(under: Any) -> bool:
+    """Whether `under` is a folder `folder_for` could have named."""
+    return isinstance(under, str) and bool(_PLAIN.fullmatch(under) or _DIGESTED.fullmatch(under))
+
+
 def _under(record: dict[str, Any]) -> str | None:
     """The record's folder, or `None` for one no `folder_for` gave."""
     under = record.get(UNDER)
-    if isinstance(under, str) and (_PLAIN.fullmatch(under) or _DIGESTED.fullmatch(under)):
-        return under
-    return None
+    return under if _a_folder(under) else None
 
 
 def _entries(record: dict[str, Any], key: str) -> dict[str, dict[str, Any]]:
@@ -156,9 +134,7 @@ def _entries(record: dict[str, Any], key: str) -> dict[str, dict[str, Any]]:
 
 def _named(record: dict[str, Any]) -> set[str]:
     """Every path the record says anything of."""
-    removed = record.get(REMOVED)
-    gone = [path for path in removed if isinstance(path, str)] if isinstance(removed, list) else []
-    return {*_entries(record, KEPT), *_entries(record, NOT_KEPT), *gone}
+    return {*_entries(record, KEPT), *_entries(record, NOT_KEPT), *removed_in(record)}
 
 
 def _held(records: list[dict[str, Any]]) -> list[tuple[int, str, int]]:
@@ -235,7 +211,7 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
     # At 0 nothing the agent made is copied, so the folders are not even listed: on a backend
     # listing no marks, each file would otherwise be read back to be told unchanged.
     off = cfg.rewind_max_bytes == 0
-    now, memory = yield from _artifacts_now(prepared.files, cfg.layout, listed=not off)
+    now, memory = yield from artifacts_now(prepared.files, cfg.layout, listed=not off)
     if now is None:
         # No line rather than a wrong one: each file the listing missed would read as
         # removed, and a rewind would delete it.
@@ -251,7 +227,7 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
     under = folder_for(turn)
     try:
         records, not_kept, dropped = yield from _copies_recorded(
-            prepared, cfg, (now, memory), (before, unlisted), under
+            prepared, cfg, under, now=now, memory=memory, before=before, unlisted=unlisted
         )
     except Exception:
         # Before the error goes on: no line will name these copies, so no rewind reads them,
@@ -275,18 +251,19 @@ def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
         yield from write_listing(harness, ARTIFACTS_SEEN, seen)
 
 
-def _copies_recorded(
+def _copies_recorded(  # noqa: PLR0913 -- the folders as found and as last listed, by name
     prepared: Prepared,
     cfg: Config,
-    found: tuple[dict[str, Seen], bytes | None],
-    listing: tuple[dict[str, str | None], list[str]],
     under: str,
+    *,
+    now: dict[str, Seen],
+    memory: bytes | None,
+    before: dict[str, str | None],
+    unlisted: list[str],
 ) -> Steps[tuple[list[dict[str, Any]], dict[str, dict[str, Any]], list[tuple[int, str]]]]:
     """The turn's copies made and its line written: the history as written, what was not
     copied, and the copies dropped for space, which the caller removes."""
     turn, harness = prepared.turn.id, prepared.harness
-    now, memory = found
-    before, unlisted = listing
     memory_file = cfg.layout.memory_file_route.lstrip("/")
     records = yield from read_file_history(harness)
     # Once, before any copy: until the deadline the claim has a whole superstep's bound left,
@@ -311,7 +288,7 @@ def _copies_recorded(
                 # A file the listing gives no mark is told unchanged by its contents, where
                 # the copy reads them; on the other routes it is copied every turn.
                 last = before.get(path) if listed is None else None
-                copied, why, read = yield from _copied(
+                copied, why, read = yield from copied_through(
                     prepared.files, f"/{path}", destination, size, counted=budgeted, last=last
                 )
                 if listed is None and read is not None:
@@ -319,7 +296,7 @@ def _copies_recorded(
                     # these. Only where the listing gave none: beside one, the two would differ.
                     mark = read
                     now[path] = (read, size)
-                if why == _SAME:
+                if why == SAME:
                     continue
             if why is None:
                 kept[path] = {MARK: mark, BYTES: copied}
@@ -448,7 +425,7 @@ def _line(  # noqa: PLR0913 -- a line's keys, each by name
     return line
 
 
-def _artifacts_now(
+def artifacts_now(
     files: Any, layout: Layout, *, listed: bool = True
 ) -> Steps[tuple[dict[str, Seen] | None, bytes | None]]:
     """The artifact folders as `artifacts_seen` lists them, but the memory file marked by its
@@ -467,7 +444,7 @@ def _artifacts_now(
         return {}, None
     if got.error or got.content is None:
         return now, None
-    now[memory_file] = (f"{SHA} {hashlib.sha256(got.content).hexdigest()}", len(got.content))
+    now[memory_file] = (content_mark(got.content), len(got.content))
     return now, got.content
 
 
@@ -484,119 +461,6 @@ def _kept_whole(
     return len(content), None
 
 
-def _copied(  # noqa: PLR0913 -- the two keywords are a turn's end's alone
-    backend: Any,
-    source: str,
-    destination: str,
-    size: int | None,
-    *,
-    counted: bool = False,
-    last: str | None = None,
-) -> Steps[tuple[int | None, str | None, str | None]]:
-    """What the copy of `source` at `destination` came to, or why there is none, and the
-    mark of the contents where it read them.
-
-    On this host where the backend names both ends here; else by the backend's own `copy`;
-    else read and written whole, which holds the file in this process's memory. `counted`
-    where a budget has to count the copy: the backend's own `copy` reports no size, so one
-    whose listing gave none is refused before it is made, or the budget would count it as
-    nothing and bound nothing. Read whole, contents whose mark is `last` are not written
-    again, and `_SAME` says so.
-    """
-    whence = yield on_host(_on_this_host, backend, source)
-    where = yield on_host(_on_this_host, backend, destination)
-    if whence is not None and where is not None:
-        try:
-            return (yield on_host(copied_on_host, whence, where)), None, None
-        except OSError as exc:
-            return None, exc.strerror or str(exc), None
-    own = getattr(backend, "copy", None)
-    if callable(own):
-        refused: object = UNCOUNTED
-        if size is not None or not counted:
-            try:
-                refused = yield on_host(own, source, destination)
-            except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing plugin
-                failed = f"{type(backend).__name__}.copy raised {type(exc).__name__}: {exc}"
-                return None, failed, None
-        return (None, str(refused), None) if refused else (size, None, None)
-    return (yield from _copied_whole(backend, source, destination, last))
-
-
-def _copied_whole(
-    backend: Any, source: str, destination: str, last: str | None
-) -> Steps[tuple[int | None, str | None, str | None]]:
-    """`_copied`, read and written whole through this process."""
-    (got,) = yield reading(backend, "download_files", [source])
-    if got.error or got.content is None:
-        return None, got.error or "the backend handed back no content", None
-    read = f"{SHA} {hashlib.sha256(got.content).hexdigest()}"
-    if read == last:
-        return None, _SAME, read
-    (put,) = yield changing(backend, "upload_files", [(destination, got.content)])
-    return (None, put.error, read) if put.error else (len(got.content), None, read)
-
-
-def _on_this_host(backend: Any, path: str) -> tuple[Path | None, Path] | None:
-    try:
-        return host_path_in_turn(backend, path)
-    except HostPathFailedError:
-        # Not a refusal here: the backend's own copy may still reach the file.
-        return None
-
-
-def copied_on_host(source: tuple[Path | None, Path], destination: tuple[Path | None, Path]) -> int:
-    """Copy one file on this host, as a clone where the filesystem makes one; its size.
-
-    Never through a link: the shell may leave one in `/outputs` naming any file this process
-    can read, and a rewind would hand what it named back to the agent.
-    """
-    root, path = source
-    # As `PermittedBackend.on_this_host` judges a tool's path: a root that answered is
-    # resolved, so anything else is a link below it.
-    if root is not None and path.resolve() != path:
-        raise OSError(errno.ELOOP, "it is or runs through a link", str(path))
-    target = destination[1]
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.unlink(missing_ok=True)
-    held = os.open(path, _SOURCE)
-    try:
-        found = os.fstat(held)
-        if not stat.S_ISREG(found.st_mode):
-            raise OSError(errno.EINVAL, "it is not a regular file", str(path))
-        try:
-            _clone(held, target)
-        except OSError:
-            # Refused by a filesystem that makes no clones, as ext4 and tmpfs refuse it.
-            target.unlink(missing_ok=True)
-            with os.fdopen(os.dup(held), "rb") as read, target.open("xb") as write:
-                shutil.copyfileobj(read, write, _CHUNK)
-        return found.st_size
-    finally:
-        os.close(held)
-
-
-def _clone(source: int, target: Path) -> None:
-    """Make `target` share the open file `source`'s blocks until either changes, or raise
-    `OSError`."""
-    if sys.platform == "darwin":
-        libc = ctypes.CDLL(None, use_errno=True)
-        if libc.fclonefileat(source, _AT_FDCWD, os.fsencode(target), 0) != 0:
-            code = ctypes.get_errno()
-            raise OSError(code, os.strerror(code), str(target))
-        return
-    if sys.platform == "linux":
-        import fcntl  # noqa: PLC0415 -- POSIX only, and asked only here
-
-        made = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
-        try:
-            fcntl.ioctl(made, _FICLONE, source)
-        finally:
-            os.close(made)
-        return
-    raise OSError(errno.ENOTSUP, "no clones on this platform", str(target))
-
-
 def forget_in_copies(harness: HarnessFiles, layout: Layout, entry: MemoryEntry) -> Steps[None]:
     """Take `entry` out of every copy of the memory file, and what the writer had not read
     out of every copy of its state, so no rewind brings either back; and remove each turn's
@@ -610,7 +474,7 @@ def forget_in_copies(harness: HarnessFiles, layout: Layout, entry: MemoryEntry) 
         # counts it, and the shell can read it.
         if folder not in named:
             yield from harness.drop(f"{KEPT_FILES}/{folder}")
-    states = {one[UNDER] for record in records if (one := _state_of(record).get(MEMORY_WRITER))}
+    states = {one[UNDER] for record in records if (one := state_in(record).get(MEMORY_WRITER))}
     for under in sorted(states):
         yield from unread_dropped(harness, f"{KEPT_FILES}/{under}/{STATE_FOLDER}/{MEMORY_WRITER}")
     for record in records:
@@ -640,7 +504,7 @@ def _kept_state(
         if held is None:
             continue
         digest = hashlib.sha256(held).hexdigest()
-        last = next((one for one in map(_state_of, reversed(records)) if name in one), {})
+        last = next((one for one in map(state_in, reversed(records)) if name in one), {})
         if last.get(name, {}).get(SHA) == digest:
             kept[name] = last[name]
             continue
@@ -649,7 +513,7 @@ def _kept_state(
     return kept
 
 
-def _state_of(record: dict[str, Any]) -> dict[str, dict[str, str]]:
+def state_in(record: dict[str, Any]) -> dict[str, dict[str, str]]:
     """The record's kept state, by name, each with a folder `folder_for` could have named."""
     held = record.get(STATE)
     if not isinstance(held, dict):
@@ -657,237 +521,25 @@ def _state_of(record: dict[str, Any]) -> dict[str, dict[str, str]]:
     return {
         name: one
         for name, one in held.items()
-        if isinstance(one, dict)
-        and isinstance(one.get(UNDER), str)
-        and (_PLAIN.fullmatch(one[UNDER]) or _DIGESTED.fullmatch(one[UNDER]))
+        if isinstance(one, dict) and _a_folder(one.get(UNDER))
     }
 
 
-def restore_state(
-    harness: HarnessFiles,
-    records: list[dict[str, Any]],
-    path: list[str],
-    names: tuple[str, ...],
-) -> Steps[tuple[str, ...]]:
-    """Put back each of `names` as the last turn of `path` to keep it left it, and drop one
-    no turn of `path` kept; the names dropped.
-
-    Dropped rather than left: what the agent heard of the inputs folder, or what the writer
-    has not read, on another branch, is a conversation this one never had.
-    """
-    on_path = set(path)
-    kept = [_state_of(one) for one in records if one.get(TURN) in on_path]
-    dropped = []
-    for name in names:
-        entry = next((one[name] for one in reversed(kept) if name in one), None)
-        held = (
-            (yield from harness.fetch(f"{KEPT_FILES}/{entry[UNDER]}/{STATE_FOLDER}/{name}"))
-            if entry is not None
-            else None
-        )
-        if held is None:
-            yield from harness.drop(name)
-            dropped.append(name)
-        else:
-            yield from harness.store(name, held)
-    return tuple(dropped)
-
-
-
-#: Why a file has no version to go back to, where no copy failed but a record is missing.
-NO_RECORD = "no record says what the folders held when that turn ended"
-BEFORE_FIRST = "nothing records what the folders held before the first turn"
-COPIES_OFF = "a turn on the way kept no record of it, KINGFISHER_REWIND_MAX_BYTES being 0"
-
-
-def rewind_files(  # noqa: PLR0913 -- the folders, both turns, and what records them
-    files: Any,
-    harness: HarnessFiles,
-    layout: Layout,
-    records: list[dict[str, Any]],
-    *,
-    path: list[str] | None,
-    remembered: list[str],
-) -> Steps[tuple[tuple[str, ...], dict[str, str], Drift]]:
-    """Put the artifact folders back as the last turn of `path` left them, or leave them for
-    `None`, and say which files are not as the last turn of `remembered`, whose conversation
-    the next turn follows, left them: the paths put back, each that could not be with why,
-    and those.
-
-    The last listing becomes the folders as that turn left them, which the next turn compares
-    with to find what it changed: compared with them as they are, it would record no file it
-    did not touch, and a rewind back to it would rebuild such a file as another turn left it.
-    A file found as that turn left it is listed as it is now, or a size and time a copy back
-    changed would read as the next turn's change.
-    """
-    now, _ = yield from _artifacts_now(files, layout)
-    if now is None:
-        cut = dict.fromkeys(layout.artifact_dirs, "a listing of it came back cut short")
-        folders = tuple(sorted(layout.artifact_dirs)) if remembered else ()
-        # The listing left dropped, the next turn copies every file it finds.
-        return (), cut if path is not None else {}, Drift(unsure=folders)
-    marks = {where: mark for where, (mark, _) in now.items()}
-    restored: tuple[str, ...] = ()
-    not_restored: dict[str, str] = {}
-    if path is not None:
-        restored, not_restored, marks = yield from restore_files(
-            files, layout, records, path, marks
-        )
-    memory_file = layout.memory_file_route.lstrip("/")
-    then = _held_at(records, remembered, memory_file)
-    if then is None:
-        # The listing left dropped, the next turn copies every file it finds. After a rewind to
-        # the start the conversation remembers no file, and finds them as they are; else
-        # nothing says what it remembers.
-        return restored, not_restored, Drift(unsure=tuple(sorted(marks)) if remembered else ())
-    held, unknown = then
-    listing = {where: mark for where, (_, mark, _) in held.items()}
-    changed: list[str] = []
-    # Named by its folder, not file by file: a folder of hundreds would fill the next turn's
-    # message.
-    unsure = [
-        folder
-        for folder in sorted(unknown)
-        if any(_unknown_in(one, {folder}, memory_file) for one in marks)
-    ]
-    relisted: dict[str, str | None] | None = None
-    for where in sorted({*marks, *listing}):
-        if _unknown_in(where, unknown, memory_file):
-            continue
-        if where not in marks or where not in listing:
-            changed.append(where)
-            continue
-        # A listing of names marks no file, and reading each back would cost a rewind what
-        # every turn's end costs such a backend: told it may have changed, the agent reads it.
-        if marks[where] is None or listing[where] is None:
-            unsure.append(where)
-        elif marks[where] != listing[where]:
-            changed.append(where)
-        elif where in restored:
-            if relisted is None:
-                again, _ = yield from _artifacts_now(files, layout)
-                relisted = {one: mark for one, (mark, _) in (again or {}).items()}
-            listing[where] = relisted.get(where) or listing[where]
-    yield from write_listing(harness, ARTIFACTS_SEEN, listing)
-    return restored, not_restored, Drift(changed=tuple(changed), unsure=tuple(unsure))
-
-
-def restore_files(
-    files: Any,
-    layout: Layout,
-    records: list[dict[str, Any]],
-    path: list[str],
-    marks: dict[str, str | None],
-) -> Steps[tuple[tuple[str, ...], dict[str, str], dict[str, str | None]]]:
-    """Put each file in the artifact folders, listed with `marks`, back as the last turn of
-    `path` left it: the paths put back, a file that turn did not have removed among them,
-    each path that could not be, with why, and the files there after, each put back marked
-    as that turn recorded it.
-
-    A file whose version there is unknown is left as it is: rewritten by a guess, it would
-    be lost to every later rewind as well.
-    """
-    memory_file = layout.memory_file_route.lstrip("/")
-    found = _held_at(records, path, memory_file)
-    if found is None:
-        return (), dict.fromkeys(sorted(marks), NO_RECORD if path else BEFORE_FIRST), marks
-    held, unknown = found
-    after = dict(marks)
-    restored: list[str] = []
-    not_restored: dict[str, str] = {}
-    # Named by its folder, not file by file: a folder of hundreds would fill the next turn's
-    # message.
-    for folder in sorted(unknown):
-        if any(_unknown_in(one, {folder}, memory_file) for one in marks):
-            not_restored[folder] = COPIES_OFF
-    for where in sorted({*held, *marks}):
-        if _unknown_in(where, unknown, memory_file):
-            continue
-        version = held.get(where)
-        done, why = yield from _put_back(files, where, version, marks.get(where))
-        if done:
-            restored.append(where)
-            if version is None:
-                del after[where]
-            else:
-                after[where] = version[1]
-        elif why is not None:
-            not_restored[where] = why
-    return tuple(restored), not_restored, after
-
-
-def _put_back(
-    files: Any,
-    where: str,
-    version: tuple[str | None, str | None, str | None] | None,
-    mark_now: str | None,
-) -> Steps[tuple[bool, str | None]]:
-    """Put `where` back as `version`, `None` for a turn that did not have it: whether it
-    changed, and why not where it could not."""
-    if version is None:
-        # Whether or not a copy holds it, as a file rewritten is: the folders are put back as
-        # the turn left them, and a version too large to copy is the deployment's to keep.
-        yield changing(files, "delete", f"/{where}")
-        return True, None
-    under, mark, why = version
-    if mark is not None and mark_now == mark:
-        return False, None
-    if under is None:
-        return False, why or "its version has no copy"
-    _, refused, _ = yield from _copied(
-        files, f"{HARNESS_ROUTE}{KEPT_FILES}/{under}/{where}", f"/{where}", None
-    )
-    return (True, None) if refused is None else (False, refused)
-
-
-def _held_at(
-    records: list[dict[str, Any]], path: list[str], memory_file: str
-) -> tuple[dict[str, tuple[str | None, str | None, str | None]], set[str]] | None:
-    """Each file the artifact folders held when the last turn of `path` ended, as the
-    folder of its copy or `None`, its mark, and why there is no copy, and the folders whose
-    files besides the memory file are unknown there; `None` where every file is unknown,
-    because that turn or one before it since the first to keep a record has none.
-    """
-    by_turn = {record[TURN]: record for record in records}
-    first = next((at for at, turn in enumerate(path) if turn in by_turn), None)
-    if first is None or any(turn not in by_turn for turn in path[first:]):
-        return None
-    held: dict[str, tuple[str | None, str | None, str | None]] = {}
-    unknown: set[str] = set()
-    for turn in path[first:]:
-        record = by_turn[turn]
-        if unlisted := _unlisted(record):
-            unknown |= unlisted
-            held = {where: one for where, one in held.items()
-                    if not _unknown_in(where, unlisted, memory_file)}
-        else:
-            # A turn listing the folders after one that did not names every file in them,
-            # what it compared against holding the memory file alone.
-            unknown = set()
-        for gone in _removed(record):
-            held.pop(gone, None)
-        held.update(_versions(record))
-    return held, unknown
-
-
-def _unlisted(record: dict[str, Any]) -> set[str]:
+def unlisted_in(record: dict[str, Any]) -> set[str]:
+    """The artifact folders the record's turn did not list."""
     unlisted = record.get(UNLISTED)
     if not isinstance(unlisted, list):
         return set()
     return {one for one in unlisted if isinstance(one, str)}
 
 
-def _unknown_in(where: str, folders: set[str], memory_file: str) -> bool:
-    """Whether `where` is one of the files a turn at 0 did not list in `folders`."""
-    return where != memory_file and where.partition("/")[0] in folders
-
-
-def _removed(record: dict[str, Any]) -> list[str]:
+def removed_in(record: dict[str, Any]) -> list[str]:
+    """The paths there when the turn before the record's ended and gone when it did."""
     removed = record.get(REMOVED)
     return [one for one in removed if isinstance(one, str)] if isinstance(removed, list) else []
 
 
-def _versions(record: dict[str, Any]) -> dict[str, tuple[str | None, str | None, str | None]]:
+def versions_in(record: dict[str, Any]) -> dict[str, tuple[str | None, str | None, str | None]]:
     """Each file the record's turn changed, as the folder of its copy or `None`, its mark,
     and why there is no copy."""
     under = _under(record)
@@ -910,11 +562,11 @@ def turn_files(records: list[dict[str, Any]]) -> dict[str, TurnFiles]:
     for record in records:
         if not isinstance(turn := record.get(TURN), str):
             continue
-        versions = _versions(record)
+        versions = versions_in(record)
         found[turn] = TurnFiles(
             changed=tuple(sorted(versions)),
-            removed=tuple(sorted(_removed(record))),
+            removed=tuple(sorted(removed_in(record))),
             without_copy={where: why for where, (_, _, why) in versions.items() if why},
-            unrecorded=tuple(sorted(_unlisted(record))),
+            unrecorded=tuple(sorted(unlisted_in(record))),
         )
     return found

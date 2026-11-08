@@ -11,9 +11,9 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.layout import HARNESS, LEDGER_FILE, MEMORY_WRITER
+from kingfisher.core.session.messages import as_record
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.store import SECOND_COPY, HarnessFiles
-from kingfisher.core.session.transcript import as_record
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, read_conversation, start, tools_dir
 from tests.unit.agent.middlewares.test_clearing import TOOLS as BULKY

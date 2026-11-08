@@ -200,7 +200,7 @@ def kept_memory(  # noqa: PLR0913 -- the turn, and how it ended
     entries, dropped = identifying(found, prepared.caller_context)
     unread = yield from _not_yet_read(prepared.harness)
     messages = (
-        list(runtime.as_transcript(runtime.held_in(snapshot))) if snapshot is not None else None
+        list(runtime.as_messages(runtime.held_in(snapshot))) if snapshot is not None else None
     )
     # A resume's state is the paused turn's, whose messages were read when it paused.
     resumed_from = prepared.resume is not None and unread.paused_at is not None

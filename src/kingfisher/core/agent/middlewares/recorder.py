@@ -18,7 +18,7 @@ from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.logged import warn
 from kingfisher.core.result import MAIN, WORKING, LedgerEntry, Listed
 
-from .recorded import arguments, filed_at, stamp, summary, unfiled
+from .result_rows import arguments, filed_at, stamp, summary, unfiled
 from .results import answer_in, answered
 
 if TYPE_CHECKING:
@@ -429,7 +429,7 @@ def _stamped(result: Any, answer: ToolMessage, number: str, shown: Any | None = 
     """The result with its id as a last line, in what the model is handed.
 
     Copied, not changed in place: a tool may hand back a message it still holds. A list of
-    blocks gains one starting on a new line, because the transcript and `.text` join blocks
+    blocks gains one starting on a new line, because the turn log and `.text` join blocks
     with nothing between them. `shown` stands in for the content where the whole of it is
     too long to show; `answer` stays the one found by identity either way.
     """

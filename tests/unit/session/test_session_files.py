@@ -31,8 +31,8 @@ from kingfisher.core.session.files import (
     inputs_seen,
     read_artifact,
 )
+from kingfisher.core.session.messages import Message, as_record
 from kingfisher.core.session.steps import drive
-from kingfisher.core.session.transcript import Message, as_record
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import EVERY_TOOL, Through, an_agent, start, supplied
 from tests.unit.scripted import Scripted

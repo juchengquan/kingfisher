@@ -39,8 +39,9 @@ from kingfisher.core.layout import (
 )
 from kingfisher.core.request import Decision, DecisionError
 from kingfisher.core.result import AWAITING
-from kingfisher.core.session import file_history, preparation, rewind
-from kingfisher.core.session.file_history import COPIES_OFF, OVER_BUDGET, dropped_for_space
+from kingfisher.core.session import copying, preparation, rewind
+from kingfisher.core.session.file_history import OVER_BUDGET, dropped_for_space
+from kingfisher.core.session.rewind import COPIES_OFF
 from kingfisher.plugins import LocalSessions
 from tests.conftest import (
     EVERY_TOOL,
@@ -429,7 +430,7 @@ def test_on_a_disk_that_makes_no_clones_a_file_put_back_is_not_the_next_turns_ch
         target.touch()
         raise OSError(95, "Operation not supported", str(target))
 
-    monkeypatch.setattr(file_history, "_clone", refuse)
+    monkeypatch.setattr(copying, "_clone", refuse)
     kf = Kingfisher(rewinding, sessions=LocalSessions())
     report = _outputs(rewinding) / "report.md"
     report.write_text("LONG", encoding="utf-8")

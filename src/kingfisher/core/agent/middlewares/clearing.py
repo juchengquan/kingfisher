@@ -21,7 +21,7 @@ from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.session.runtime import with_call_args
 
 from .model_reply import NOT_RUN
-from .recorded import (
+from .result_rows import (
     STAMP_PATTERN,
     arguments,
     expired_handle,
@@ -70,8 +70,8 @@ _TEXT_HANDLE = re.compile(
     r"\A[\d,]+ chars(?: written)?, cleared(?:; .* holds the current text)?\Z", re.S
 )
 
-#: The ways a result says it failed once the transcript has dropped its status, which a
-#: replayed result has: a file tool's error, a call that never finished or never ran
+#: The ways a result says it failed once its status is gone, as it is from one the turn
+#: log replays: a file tool's error, a call that never finished or never ran
 #: (deepagents' `PatchToolCallsMiddleware`), a command that exited non-zero, and a call
 #: refused because the reply was cut off writing it.
 _FAILED = re.compile(

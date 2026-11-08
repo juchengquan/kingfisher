@@ -21,12 +21,12 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from assets.middlewares.summarize_by_count import SummarizeByCount
 from kingfisher import Kingfisher, Request
-from kingfisher.core.agent.middlewares.recorded import expired_handle
+from kingfisher.core.agent.middlewares.result_rows import expired_handle
 from kingfisher.core.layout import HARNESS, LEDGER_FILE, TURNS_FILE
 from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.core.result import AWAITING
-from kingfisher.core.session.runtime import as_transcript
-from kingfisher.core.session.transcript import Message
+from kingfisher.core.session.messages import Message
+from kingfisher.core.session.runtime import as_messages
 from kingfisher.core.session.turnlog import (
     ACTION,
     ANSWER,
@@ -122,13 +122,13 @@ def _conversation(cfg) -> tuple[Message, ...]:
 def _ended_on(*reply: AIMessage) -> tuple[Message, ...]:
     """The conversation as the model last saw it: what the last call was handed, and the
     reply it gave, where it gave one."""
-    handed = [one for one in as_transcript(Scripted.heard[-1]) if one.role != "system"]
-    return (*handed, *as_transcript(reply))
+    handed = [one for one in as_messages(Scripted.heard[-1]) if one.role != "system"]
+    return (*handed, *as_messages(reply))
 
 
 def _handed_first(at: int) -> tuple[Message, ...]:
     """What call `at`, the first of a turn, was handed before the turn's own message."""
-    *before, asked = [one for one in as_transcript(Scripted.heard[at]) if one.role != "system"]
+    *before, asked = [one for one in as_messages(Scripted.heard[at]) if one.role != "system"]
     assert asked.role == "user", "the turn's own message was not the last thing handed"
     return tuple(before)
 
