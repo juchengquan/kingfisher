@@ -20,7 +20,6 @@ from kingfisher.core.access import (
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions, bundled_skill_mounts
 from kingfisher.core.definitions.skills import registry as skill_registry
-from kingfisher.core.definitions.skills.registry import SkillRegistry
 from kingfisher.core.definitions.subagents.rules import (
     refuse_cycles,
     refuse_two_of_a_name,
@@ -38,25 +37,6 @@ if TYPE_CHECKING:
     from kingfisher.core.definitions.agents.spec import AgentSpec
 
 
-def available_skills(cfg: Config, *, catalogue: Definitions | None = None) -> tuple[str, ...]:
-    """Every skill this request may activate."""
-    return activatable_skills(cfg, catalogue=catalogue).names
-
-
-def activatable_skills(
-    cfg: Config, *, catalogue: Definitions | None = None
-) -> SkillRegistry:
-    """The registry that decides which skills the agent is told about."""
-    return (catalogue or Definitions.from_config(cfg)).registry
-
-
-def defined_subagents(
-    cfg: Config, *, catalogue: Definitions | None = None
-) -> dict[str, SubagentSpec]:
-    """Every subagent this request may activate."""
-    return dict((catalogue or Definitions.from_config(cfg)).subagents.specs)
-
-
 def _unrunnable(cfg: Config, specs: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each of these a deployment cannot run.
 
@@ -72,14 +52,14 @@ def _unrunnable(cfg: Config, specs: Mapping[str, Any]) -> tuple[tuple[str, str],
     return tuple(found)
 
 
-def unrunnable_subagents(cfg: Config) -> tuple[tuple[str, str], ...]:
+def unrunnable_subagents(cfg: Config, catalogue: Definitions) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each defined subagent this deployment cannot run."""
-    return _unrunnable(cfg, defined_subagents(cfg))
+    return _unrunnable(cfg, catalogue.subagents.specs)
 
 
-def unrunnable_agents(cfg: Config) -> tuple[tuple[str, str], ...]:
+def unrunnable_agents(cfg: Config, catalogue: Definitions) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each defined agent this deployment cannot run."""
-    return _unrunnable(cfg, dict(Definitions.from_config(cfg).agents.specs))
+    return _unrunnable(cfg, catalogue.agents.specs)
 
 
 def for_the_caller(
@@ -111,23 +91,22 @@ def offered_to(
     return f"{tuple(sorted(reachable))}"
 
 
-def agents_to_ask(cfg: Config, *, catalogue: Definitions | None = None) -> tuple[Any, ...]:
+def agents_to_ask(catalogue: Definitions) -> tuple[Any, ...]:
     """The agents whose activations decide what this caller can be handed work by.
 
     For the listing beside a refusal about a file, so read on a refusal path only.
     Every agent, unnarrowed: `narrowed_for` and `handed_work_by` already narrow for the
     caller, and restating that here would be a condition nothing can tell is right.
     """
-    return tuple((catalogue or Definitions.from_config(cfg)).agents.specs.values())
+    return tuple(catalogue.agents.specs.values())
 
 
 def settled_request(
-    cfg: Config,
     asked: Capabilities,
     *,
     ceiling: Selection,
     held: frozenset[str] | None,
-    catalogue: Definitions | None = None,
+    catalogue: Definitions,
 ) -> Capabilities:
     """`asked`, each subagent it names settled to the one it means for this caller.
 
@@ -137,7 +116,7 @@ def settled_request(
     """
     if ceiling != ALL or not isinstance(asked.subagents, tuple):
         return asked
-    defined = defined_subagents(cfg, catalogue=catalogue)
+    defined = catalogue.subagents.specs
     reached = within_reach(defined, defined, held)
     names = tuple(dict.fromkeys(_one_reached(name, reached) for name in asked.subagents))
     # Against what this caller reaches rather than every definition: a request naming
@@ -162,12 +141,11 @@ def _one_reached(name: str, reached: Iterable[str]) -> str:
 
 
 def refuse_misnamed_by(
-    cfg: Config,
     agent: AgentSpec | None,
     asked: Capabilities,
     *,
     held: frozenset[str] | None,
-    catalogue: Definitions | None = None,
+    catalogue: Definitions,
 ) -> None:
     """Refuse a subagent an agent's own file names wrong, of those this request asks for.
 
@@ -179,14 +157,14 @@ def refuse_misnamed_by(
     written = narrowed(asked.subagents, by=agent.subagents)
     if not written:
         return
-    defined = defined_subagents(cfg, catalogue=catalogue)
+    defined = catalogue.subagents.specs
     subject = f"agent {agent.name!r}"
     refuse_unoffered(
         written,
         offered=defined,
         kind="subagent",
         subject=subject,
-        listing=offered_to(defined, held, by=agents_to_ask(cfg, catalogue=catalogue)),
+        listing=offered_to(defined, held, by=agents_to_ask(catalogue)),
     )
     refuse_two_of_a_name(written, subject=subject)
 
@@ -195,7 +173,7 @@ def indistinct_subagents(  # noqa: PLR0913 -- the agent and caller make this the
     cfg: Config,
     capabilities: Capabilities,
     *,
-    catalogue: Definitions | None = None,
+    catalogue: Definitions,
     run_on: Mapping[str, RunOn] | None = None,
     agent: AgentSpec | None = None,
     held: frozenset[str] | None,
@@ -206,7 +184,7 @@ def indistinct_subagents(  # noqa: PLR0913 -- the agent and caller make this the
     capabilities = for_the_caller(agent, capabilities, held=held)
     if capabilities.subagents is None:
         return ()
-    defined = defined_subagents(cfg, catalogue=catalogue)
+    defined = catalogue.subagents.specs
     named = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
     wanted = run_on or {}
 
@@ -281,10 +259,9 @@ def private_skills(
 
 
 def activated_subagents(
-    cfg: Config,
     capabilities: Capabilities,
     *,
-    catalogue: Definitions | None = None,
+    catalogue: Definitions,
     held: frozenset[str] | None,
     #: For the refusal's listing alone; what it judges is every definition, whoever
     #: asks. `None` where a build resolved no spec.
@@ -293,7 +270,7 @@ def activated_subagents(
     """Which subagents this request wired, and every definition available."""
     if capabilities.subagents is None:
         return {}, ()
-    defined = defined_subagents(cfg, catalogue=catalogue)
+    defined = catalogue.subagents.specs
     # Of the whole catalogue, before anything reads a spec.
     refuse_cycles(defined)
     # Deliberately no catalogue-wide check that every model is runnable: `run_on` lets a

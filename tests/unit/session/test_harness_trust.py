@@ -11,6 +11,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.layout import HARNESS, PAUSED_STATE, TURNS_FILE
 from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
@@ -136,7 +137,7 @@ def test_doctor_warns_where_nothing_it_can_see_keeps_the_shell_out(cfg, sessions
     """
     from kingfisher.cli.health_isolation import _session_files, fence_of
 
-    (check,) = _session_files(sessions, fence_of(cfg, sessions))
+    (check,) = _session_files(sessions, fence_of(cfg, sessions, Definitions.from_config(cfg)))
 
     assert check.verdict == "warn"
     assert because in check.detail
@@ -151,7 +152,7 @@ def test_doctor_is_satisfied_where_the_sandbox_keeps_the_shell_out(cfg):
     from kingfisher.cli.health_isolation import _session_files, fence_of
     from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced
 
-    confined = fence_of(cfg, LocalSessions())
+    confined = fence_of(cfg, LocalSessions(), Definitions.from_config(cfg))
     if harness_unfenced(ShellSettings(), confined) is not None:
         pytest.skip("no sandbox kingfisher applies itself is available on this host")
 

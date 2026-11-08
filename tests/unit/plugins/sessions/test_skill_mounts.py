@@ -323,7 +323,8 @@ def test_the_shell_cannot_write_through_the_view(mounted, session_dir):
 
 def test_without_mounts_the_shell_is_given_the_catalogue_itself(cfg, session_dir):
     """Nothing is built for a deployment that mounts nothing."""
-    assert shell_env(cfg, session_dir)["KINGFISHER_SKILLS"] == str(cfg.skills_dir)
+    exported = shell_env(cfg, session_dir, catalogue=Definitions.from_config(cfg))
+    assert exported["KINGFISHER_SKILLS"] == str(cfg.skills_dir)
 
 
 def test_the_view_holds_the_catalogue_and_every_mount(mounted):
@@ -394,22 +395,9 @@ def test_doctor_asks_the_fence_what_a_run_asks(mounted, monkeypatch):
         confinement, "resolve", lambda *a, **kw: asked.append((a, kw)) or real(*a, **kw)
     )
     LocalSessions().open(mounted, "run")
-    fence_of(mounted, LocalSessions())
+    fence_of(mounted, LocalSessions(), Definitions.from_config(mounted))
 
     run, doctor = asked
     # The control: without the view among a run's skills there is nothing to drift.
     assert any(path.parent.name == SKILLS_VIEW for path in run[1]["skills"])
     assert doctor == run
-
-
-def test_a_mount_a_run_refuses_does_not_stop_doctor_at_the_fence(mounted):
-    """Reading the run's skills raises for a mount a run refuses, which would end
-    `doctor` before the rows between the fence and the one saying why.
-    """
-    cfg = replace(mounted, skills_mounts={"a/b": mounted.skills_mounts["vendor"]})
-
-    shell = confinement.ShellSettings.from_env()
-    assert (
-        fence_of(cfg, LocalSessions(shell=shell)).mechanism
-        == confinement.shell_confinement(cfg, shell).mechanism
-    )

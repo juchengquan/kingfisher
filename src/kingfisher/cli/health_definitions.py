@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 from kingfisher import Config, Inventory
 from kingfisher.core.config import SKILL_LOCKS_FILE
 
 from .check import Check
+
+if TYPE_CHECKING:
+    from kingfisher.plugins import Definitions
 
 
 def _catalogues(found: Inventory) -> Iterator[Check]:
@@ -321,7 +325,7 @@ def _subagent_tools(found: Inventory) -> Iterator[Check]:
         yield Check("skills", "ok", detail)
 
 
-def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
+def _definitions(cfg: Config, found: Inventory, catalogue: Definitions) -> Iterator[Check]:
     """Which definitions this deployment cannot actually run."""
     # Only when both catalogues parsed: these read the same files, so a broken one would
     # raise out of here and end the diagnosis. Its own row already reports it.
@@ -347,7 +351,7 @@ def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
     )
 
     # Agents too: one that cannot start is what `doctor --help` says this catches.
-    unrunnable = (*unrunnable_agents(cfg), *unrunnable_subagents(cfg))
+    unrunnable = (*unrunnable_agents(cfg, catalogue), *unrunnable_subagents(cfg, catalogue))
     if not unrunnable:
         yield Check("definitions run", "ok", "every definition resolves to a model")
         return
@@ -372,8 +376,8 @@ def _buildable(found: Inventory) -> Iterator[Check]:
     )
 
 
-def checks(cfg: Config, found: Inventory) -> Iterator[Check]:
-    """These, in the order `examine` reports them."""
+def checks(cfg: Config, found: Inventory, catalogue: Definitions) -> Iterator[Check]:
+    """These, in the order `examine` reports them, `found` read off `catalogue`."""
     # Before the catalogues: without a graph the built-in set is unknown, not empty.
     yield from _buildable(found)
     yield from _catalogues(found)
@@ -385,4 +389,4 @@ def checks(cfg: Config, found: Inventory) -> Iterator[Check]:
     yield from _prompt_slots(found)
     yield from _bundled_entries(found)
     yield from _subagent_tools(found)
-    yield from _definitions(cfg, found)
+    yield from _definitions(cfg, found, catalogue)

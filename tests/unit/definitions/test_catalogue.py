@@ -10,10 +10,6 @@ import pytest
 
 from kingfisher.core import versions as versions_module
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
-from kingfisher.core.agent.activation import (
-    available_skills,
-    defined_subagents,
-)
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.kinds.tools import offered_tool_names
 from kingfisher.core.config import ConfigError
@@ -89,7 +85,7 @@ def test_a_missing_kind_folder_means_none_of_that_kind_and_is_never_made(cfg):
 
     catalogue = Kingfisher(cfg, sessions=LocalSessions()).catalogue
 
-    assert available_skills(cfg, catalogue=catalogue) == ()
+    assert catalogue.registry.names == ()
     assert catalogue.subagents.specs == {}
     assert catalogue.tools.found == ()
     assert not any(cfg.catalogue_roots[kind].exists() for kind in ("skills", "subagents", "tools"))
@@ -136,11 +132,11 @@ def test_a_supplied_folder_missing_a_kind_offers_none_of_it(tmp_path, cfg):
     roots = resolve_definitions(replace(cfg, definitions=staged))
 
     assert roots.skills.root == staged / "skills"
-    assert available_skills(cfg, catalogue=roots) == ("staged-only",)
-    assert offered_tool_names(cfg, catalogue=roots) == ()
+    assert roots.registry.names == ("staged-only",)
+    assert offered_tool_names(roots) == ()
     # The control: the configured folder does offer it, so the line above is not
     # passing on a tool that never loads.
-    assert offered_tool_names(cfg) == ("elsewhere",)
+    assert offered_tool_names(resolve_definitions(cfg)) == ("elsewhere",)
 
 
 def test_the_agent_reads_the_supplied_catalogue_and_not_the_configured_one(tmp_path, cfg):
@@ -152,12 +148,12 @@ def test_the_agent_reads_the_supplied_catalogue_and_not_the_configured_one(tmp_p
     )
     roots = _staged(tmp_path / "staged", skill="staged-only", subagent=SUBAGENT, tool=TOOL)
 
-    assert available_skills(cfg, catalogue=roots) == ("staged-only",)
-    assert tuple(defined_subagents(cfg, catalogue=roots)) == ("reviewer",)
-    assert offered_tool_names(cfg, catalogue=roots) == ("elsewhere",)
+    assert roots.registry.names == ("staged-only",)
+    assert tuple(roots.subagents.specs) == ("reviewer",)
+    assert offered_tool_names(roots) == ("elsewhere",)
 
     # And the configured one is still what is read when nothing is supplied.
-    assert available_skills(cfg) == ("configured",)
+    assert resolve_definitions(cfg).registry.names == ("configured",)
 
 
 def test_the_skills_route_follows_the_catalogue(tmp_path, cfg, session_dir):
@@ -345,7 +341,7 @@ def test_the_agent_it_builds_offers_the_staged_definitions(tmp_path, cfg, sessio
     ).graph
 
     assert graph is not None
-    assert available_skills(enabled, catalogue=roots) == ("staged-only",)
+    assert roots.registry.names == ("staged-only",)
 
 
 # -- the type itself ------------------------------------------------------

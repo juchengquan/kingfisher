@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import platform
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 from kingfisher import Config, ConfigError
 from kingfisher.plugins import ShellSettings
@@ -19,6 +20,9 @@ from kingfisher.plugins.sessions.sandbox.confinement import (
 from kingfisher.plugins.sessions.sandbox.sandbox_exec import fenced_sessions
 
 from .check import Check
+
+if TYPE_CHECKING:
+    from kingfisher.plugins import Definitions
 
 #: Appended to every answer this check gives, because it qualifies all of them.
 FROM_CONFIG = " (from configuration; an injected runner is not visible here)"
@@ -105,22 +109,18 @@ def named(sessions: object) -> str:
     return f"{type(sessions).__module__}.{type(sessions).__qualname__}"
 
 
-def fence_of(cfg: Config, sessions: object) -> Confinement:
+def fence_of(cfg: Config, sessions: object, catalogue: Definitions | None) -> Confinement:
     """The confinement a run of `sessions` gives its shell, asked once for every row.
 
     Once, because each asking rewrites the macOS profile, and rows asking separately can
     name different fences. Sessions doctor cannot see into get the defaults, which no row
-    reads: every row is quiet or warns for them.
+    reads: every row is quiet or warns for them. `catalogue` is `None` where the
+    definitions did not read, which a later row says; the configured folders stand in.
     """
     # Here, not at the top: it loads deepagents, as `LocalSessions` does.
     from kingfisher.plugins.sessions.shell import shell_skills  # noqa: PLC0415
 
-    try:
-        skills = shell_skills(cfg)
-    except ConfigError:
-        # A mount a run refuses before it has a shell. Raised here, it would drop every
-        # row between this one and the row that says why.
-        skills = None
+    skills = None if catalogue is None else shell_skills(cfg, catalogue)
     # Not `from_env`: the variables reach such sessions only if they are built on
     # `backend_at`, so a value they never read must not fail this deployment's doctor.
     return shell_confinement(cfg, shell_of(sessions) or ShellSettings(), skills=skills)

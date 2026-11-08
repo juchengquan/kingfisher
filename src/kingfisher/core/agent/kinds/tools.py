@@ -15,8 +15,6 @@ from kingfisher.core.definitions.tools.spec import FoundTool, Offering, carried,
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from kingfisher.core.config import Config
-
 
 def _tools_by_name(graph: Any) -> dict[str, Any] | None:
     """A compiled graph's tool table, or `None` where it holds none.
@@ -46,12 +44,9 @@ def registered_tools(graph: Any) -> tuple[str, ...] | None:
     return () if "model" in nodes else None
 
 
-def offered_tool_names(
-    cfg: Config, *, catalogue: Definitions | None = None
-) -> tuple[str, ...]:
+def offered_tool_names(catalogue: Definitions) -> tuple[str, ...]:
     """The tools the definitions offer, as a grant would write them."""
-    found = (catalogue or Definitions.from_config(cfg)).tools.found
-    return tuple(sorted(Offering.of(found).offered))
+    return tuple(sorted(Offering.of(catalogue.tools.found).offered))
 
 
 def _refuse_shadowed(

@@ -15,6 +15,7 @@ from kingfisher import seed
 from kingfisher.cli import health, health_isolation
 from kingfisher.cli.__main__ import main
 from kingfisher.cli.health import examine, worst
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.inventory import inventory
 from kingfisher.core.service import Kingfisher
 from kingfisher.plugins import LocalSessions, ShellSettings
@@ -994,7 +995,7 @@ def test_the_skills_folder_kingfishers_own_shell_exports_is_not_called_retired(
     """`doctor` run in an agent's shell told it to move the skills folder's path into
     `KINGFISHER_SKILLS_ENABLED`, a yes/no setting. Handed what that shell exports, not a
     path written here; `test_a_retired_setting_is_reported` is the old flag beside it."""
-    exported = shell_env(cfg, session_dir)
+    exported = shell_env(cfg, session_dir, catalogue=Definitions.from_config(cfg))
 
     assert "KINGFISHER_SKILLS" in exported
     assert not list(health.retired(exported))

@@ -49,6 +49,7 @@ from kingfisher.core.access import Datazone, ExtraDatazone, with_datazone
 
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.definitions.agents.spec import AgentError
+from kingfisher.core.definitions.catalogue import resolve_definitions
 from kingfisher.core.logged import RUN_LOGGER, logged
 from kingfisher.core.session.model import held_by_a_turn
 
@@ -1175,8 +1176,13 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
     from .configured import configured_sessions  # noqa: PLC0415
 
     sessions = configured_sessions()
-    found = inventory(cfg, sessions=sessions)
-    checks = examine(cfg, found, from_dotenv=from_dotenv, sessions=sessions)
+    # Read once and handed to the listing and every check, so all of them describe one set
+    # of files rather than the folder at four moments.
+    catalogue = resolve_definitions(cfg)
+    found = inventory(cfg, catalogue=catalogue, sessions=sessions)
+    checks = examine(
+        cfg, found, catalogue=catalogue, from_dotenv=from_dotenv, sessions=sessions
+    )
     origins = found.origins
     if as_document:
         # With the origins: the text form opens with them, and the two forms must agree.
