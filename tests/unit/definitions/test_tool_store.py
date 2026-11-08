@@ -41,12 +41,6 @@ def test_a_directory_that_does_not_exist_is_not_an_error(tmp_path):
     assert LocalToolRepository(tmp_path / "absent").found == ()
 
 
-def test_an_empty_directory_contributes_nothing(tmp_path):
-    (tmp_path / "tools").mkdir()
-
-    assert LocalToolRepository(tmp_path / "tools").found == ()
-
-
 def test_a_module_without_an_export_list_is_refused_by_name(tmp_path):
     """Scanning the module for anything callable would guess."""
     directory = _write(tmp_path / "tools", "quiet.py", "def add(a, b):\n    return a + b\n")

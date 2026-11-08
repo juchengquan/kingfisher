@@ -51,12 +51,6 @@ def test_a_root_skill_is_taken_too(cfg):
     assert _read(cfg.skills_dir).taken == ("flat",)
 
 
-def test_an_empty_catalogue_takes_nothing(cfg):
-    cfg.skills_dir.mkdir(parents=True, exist_ok=True)
-
-    assert _read(cfg.skills_dir).taken == ()
-
-
 # -- subtracting a name that is no longer enough ---------------------------
 
 

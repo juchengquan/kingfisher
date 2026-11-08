@@ -54,13 +54,6 @@ def test_a_folder_called_catalogue_is_refused(cfg):
         _read(cfg.skills_dir)
 
 
-def test_an_empty_catalogue_is_not_an_error(cfg):
-    """A deployment may legitimately ship no skills."""
-    cfg.skills_dir.mkdir(parents=True, exist_ok=True)
-
-    assert _read(cfg.skills_dir).names == ()
-
-
 def test_a_missing_skills_folder_is_no_skills_and_no_source(tmp_path, caplog):
     """Handed a source it cannot list, deepagents logs "Cannot load skills" -- when the
     catalogue is read, and on every turn after -- for a folder a deployment simply

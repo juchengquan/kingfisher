@@ -149,18 +149,6 @@ def test_grants_clamp_middleware_like_everything_else():
 # -- the format -----------------------------------------------------------
 
 
-def test_the_field_parses_in_both_yaml_forms():
-    inline = a_subagent(
-        "name: r\ndescription: d\nmiddlewares: [a, b]\nsystem_prompt: |\n  Body.\n", "r.md"
-    )
-    block = a_subagent(
-        "name: r\ndescription: d\nmiddlewares:\n  - a\n  - b\nsystem_prompt: |\n  Body.\n",
-        "r.md",
-    )
-
-    assert inline.middlewares == block.middlewares == ("a", "b")
-
-
 def test_omitting_it_means_none():
     """Read as everything, a subagent's forgotten `middlewares:` line would run every
     middleware the deployment registered.

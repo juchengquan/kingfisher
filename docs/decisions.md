@@ -7610,6 +7610,23 @@ although pytest no longer refuses two: a citation by bare name has to name one f
 `test_no_two_test_modules_share_a_name` refuses what the default mode used to.
 *(2026-11-05, from a review.)*
 
+**Four more went on 2026-11-09, and the growth this section waited on is answered.** A
+review read the tests added since the last cut: 81 about rewinding, the turn log and the
+file history, and 29 about access. None could go, since each guards data lost or who
+reaches what. Four definitions tests could: an empty tools folder, a subagent's
+`middlewares:` in both YAML forms, and two empty skills catalogues. Three repeat checks
+others make, confirmed by breaking what each covers with the four left out. The fourth,
+`test_an_empty_catalogue_takes_nothing`, caught a break nothing else did, an empty
+registry inventing a name; but only a branch written for that case could make it, and
+its cost is one wrong line in a listing, so it went as kind 3. Not taken: loosening the
+reading that keeps a repeat guarding a keep-list item, which would free three fence and
+turn-log tests, or folding 116 same-shape tests into tables, which keeps every case and
+folds their sentences into one. Measured again after two weeks rather than a month,
+since the answer was not close: 3,496 functions on 57340daf against 3,413 on 2026-10-28,
+with 55 cut between, is 138 added in 12 days, about 80 a week, across the whole rewind
+and turn-log build. That is well under 430, so no count goes into CI. Cutting goes on
+only as the four kinds, in a file read for other work. *(2026-11-09, from a review.)*
+
 ## Proposals, and what became of them
 
 What is still being argued is in `docs/design/`, and `docs/README.md` lists it,
