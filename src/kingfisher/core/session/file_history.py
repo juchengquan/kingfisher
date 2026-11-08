@@ -17,7 +17,7 @@ from contextlib import suppress
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.agent.permitted_backend import host_path
+from kingfisher.core.agent.permitted_backend import HostPathFailedError, host_path_in_turn
 from kingfisher.core.layout import (
     ARTIFACTS_SEEN,
     FILE_HISTORY,
@@ -26,7 +26,7 @@ from kingfisher.core.layout import (
     KEPT_FILES,
     MEMORY_WRITER,
 )
-from kingfisher.core.logged import raised, warn
+from kingfisher.core.logged import warn
 from kingfisher.core.result import TurnFiles
 
 from .files import Seen, artifacts_seen
@@ -539,17 +539,9 @@ def _copied_whole(
 
 def _on_this_host(backend: Any, path: str) -> tuple[Path | None, Path] | None:
     try:
-        return host_path(backend, path)
-    except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing plugin
-        error_type, error_at = raised(exc)
-        warn(
-            "host_path_failed",
-            f"{type(backend).__name__}.host_path raised {error_type} at {error_at}",
-            plugin=type(backend).__name__,
-            method="host_path",
-            error_type=error_type,
-            error_at=error_at,
-        )
+        return host_path_in_turn(backend, path)
+    except HostPathFailedError:
+        # Not a refusal here: the backend's own copy may still reach the file.
         return None
 
 

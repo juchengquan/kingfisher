@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A `host_path` that raises fails the tool call, after #1260
+
+- **If your backend's `host_path` raises while an offered tool's `path` is looked up, that
+  tool call now fails and the turn goes on**, with a `host_path_failed` warning. Before, the
+  turn ended with your exception. The model is told the session's storage could not say
+  where the path is kept, never your exception's message.
+
 ## A command from `eval`'s code keeps the execution timeout, after #1257
 
 - **`execute` called from `eval`'s code is refused a `timeout` past

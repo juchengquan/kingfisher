@@ -5867,6 +5867,19 @@ everywhere: kingfisher makes no link a tool must reach, the skills view being th
 and outside the session, and a link an operator placed in the catalogue is named by its
 target instead. A backend's own `host_path` is still taken at its word. *(2026-10-20.)*
 
+**A `host_path` that raises fails the tool call, not the turn.** Asked for a tool's
+`path`, a deployment's method that raised ended the turn with its exception, while the
+copying at a turn's end, asking the same method, logged `host_path_failed` and went on.
+Both now ask through `host_path_in_turn`, one catch, so they cannot drift: the copying
+reads a crash as a file not on this host and copies through the backend, and the call is
+refused with a fixed sentence naming only the virtual path, never the exception's message,
+which may name the host's own paths. This follows the 2026-10-22 ruling on
+`ScratchRunLimit`, not the 2026-10-19 one on a deployment's middleware, both under *Tool
+failure*: a hook is a rule, and a rule that did not run is not a rule, while `host_path`
+is a lookup, and refusing the one call is the safe direction. `host_path` from
+`kingfisher.plugins` still lets the exception through, so a deployment's test of its
+method sees it. *(2026-11-08.)*
+
 **`reject_host_path` is scoped to the workspace, and was scoped to one session.**
 `WorkspaceScopedBackend` stored a `workspace` and was handed the session directory --
 the one value that made the suggested virtual path right, so the scope came with it.

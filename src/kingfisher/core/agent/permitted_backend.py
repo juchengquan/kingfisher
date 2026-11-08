@@ -33,6 +33,8 @@ from deepagents.middleware.filesystem import (
     _grep_backend,
 )
 
+from kingfisher.core.logged import raised, warn
+
 from .backend import folders_of, miscased, strays
 from .host_paths import UnsafeReferenceError
 from .prompting import miscased_path, stray_save
@@ -83,8 +85,9 @@ class PermittedBackend(BackendProtocol):
             for rule in self._permissions
         ]
 
-    def on_this_host(self, path: str) -> Path:
-        """Where a tool may be handed `path` as a real file, or `UnsafeReferenceError`.
+    def on_this_host(self, path: str, *, call: str | None = None) -> Path:
+        """Where a tool may be handed `path` as a real file, or `UnsafeReferenceError`;
+        `call` is the tool call's id, for the log.
 
         The turn's rules first, as `read_file` applies them, so a refused path is never
         looked up; then the backend's own answer to where the path lives.
@@ -92,7 +95,7 @@ class PermittedBackend(BackendProtocol):
         where, refused = self._where("read", path)
         if refused:
             raise UnsafeReferenceError(refused)
-        mapped = host_path(self._inner, where)
+        mapped = host_path_in_turn(self._inner, where, call=call)
         if mapped is None:
             msg = (
                 f"{where} is not kept on this host by this session's backend, so it "
@@ -385,6 +388,9 @@ def host_path(backend: Any, where: str) -> tuple[Path | None, Path] | None:
     The backend's own mapping, not a second one: a route is followed as the composite
     follows it, a filesystem answers from its root, and a backend with its own
     `host_path` is taken at its word. Anything else answers `None`.
+
+    What the backend's own method raises goes through, so a deployment's test of that
+    method sees it; a turn asks through `host_path_in_turn`.
     """
     own = getattr(backend, "host_path", None)
     if callable(own):
@@ -399,3 +405,36 @@ def host_path(backend: Any, where: str) -> tuple[Path | None, Path] | None:
         root = Path(backend.cwd)
         return root, root / where.lstrip("/")
     return None
+
+
+class HostPathFailedError(UnsafeReferenceError):
+    """A backend's own `host_path` raised, and `host_path_failed` was logged."""
+
+
+def host_path_in_turn(
+    backend: Any, where: str, *, call: str | None = None
+) -> tuple[Path | None, Path] | None:
+    """`host_path` as a turn asks it, a tool call or the copying at its end: where the
+    backend's own method raises, logged on `call` and refused as `HostPathFailedError`.
+
+    A lookup, not a rule, so refusing is the safe answer and the turn goes on. Neither the
+    log nor the refusal holds the exception's message, which may name the host's own paths.
+    """
+    try:
+        return host_path(backend, where)
+    except Exception as exc:  # noqa: BLE001 -- a turn outlives a failing plugin
+        error_type, error_at = raised(exc)
+        warn(
+            "host_path_failed",
+            f"{type(backend).__name__}.host_path raised {error_type} at {error_at}",
+            plugin=type(backend).__name__,
+            method="host_path",
+            error_type=error_type,
+            error_at=error_at,
+            **({} if call is None else {"call": call}),
+        )
+        msg = (
+            f"the session's storage could not say where {where} is kept, so it cannot be "
+            "handed to a tool as a file"
+        )
+        raise HostPathFailedError(msg) from None
