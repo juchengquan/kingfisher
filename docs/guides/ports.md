@@ -1095,7 +1095,9 @@ into two sessions and reads back what your answer names. The turn's rules still
 apply first: a path the file tools may not read, `/.harness` among them, is
 refused before your method is asked. `host_path(backend, virtual)`, from
 `kingfisher.plugins`, answers as kingfisher will: `(the root it must stay in, the
-path)`, or `None`.
+path)`, or `None`. If your method raises, kingfisher fails that tool call and logs
+`host_path_failed`, while `host_path` lets the error through, so a test of your
+method sees it.
 
 **Running a command for an offered tool: `run_in_scratch`.** An offered tool whose
 agent may use the shell can run a program over files it hands in —

@@ -3797,15 +3797,16 @@ CALLER_FACING_ERRORS = frozenset({
 
 #: The rest, which say the deployment is wrong rather than the caller.
 #: `HostPathError` and `UnsafeReferenceError` refuse a path the *agent* produced
-#: mid-turn, and reach the model as a correction, never a caller. Being here does
-#: not mean private -- `ConfigError` was public long before this rule existed -- it
-#: means a consumer is not expected to branch on it.
+#: mid-turn, and `HostPathFailedError` one the backend's `host_path` raised on; each
+#: reaches the model as a correction, never a caller. Being here does not mean
+#: private -- `ConfigError` was public long before this rule existed -- it means a
+#: consumer is not expected to branch on it.
 DEPLOYMENT_ERRORS = frozenset({
     # `MiddlewareError` joins `ToolError` here for the reason `AgentError` sits here
     # while `SubagentError` sits above: a caller may upload a subagent and cannot
     # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
-    "AgentError", "ConfigError", "HostPathError", "LoadError",
+    "AgentError", "ConfigError", "HostPathError", "HostPathFailedError", "LoadError",
     "MiddlewareError", "SkillLockError", "ToolError", "UnsafeReferenceError",
 })
 

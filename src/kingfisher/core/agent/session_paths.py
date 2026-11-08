@@ -69,19 +69,22 @@ class SessionPaths:
                     return text
         return None
 
-    def translated(self, args: Mapping[str, Any]) -> dict[str, Any]:
-        """The same arguments with their paths made real, refusing what escapes."""
+    def translated(
+        self, args: Mapping[str, Any], *, call: str | None = None
+    ) -> dict[str, Any]:
+        """The same arguments with their paths made real, refusing what escapes; `call` is
+        the tool call's id, for the log."""
         if (host := self.host_path_in(args)) is not None:
             msg = f"{host!r} {HOST_PATH_SAID}, and a tool is handed this session's own paths"
             raise HostPathError(msg)
         wanted = {key: args[key] for key in args if key in PATH_ARGUMENTS}
-        return {**args, **{key: self.real(value) for key, value in wanted.items()}}
+        return {**args, **{key: self.real(value, call=call) for key, value in wanted.items()}}
 
-    def real(self, value: Any) -> Any:
+    def real(self, value: Any, *, call: str | None = None) -> Any:
         """One argument, resolved where the session's backend keeps it."""
         if not isinstance(value, str) or not value.strip():
             return value
-        return str(self._permitted.on_this_host(value))
+        return str(self._permitted.on_this_host(value, call=call))
 
 
 #: A path a failure quotes. Every backend quotes one the same way, and quoting is what

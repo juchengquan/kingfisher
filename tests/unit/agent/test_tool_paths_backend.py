@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from deepagents import FilesystemPermission
 from deepagents.backends import CompositeBackend, FilesystemBackend
 from deepagents.backends.protocol import BackendProtocol
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import Capabilities
@@ -17,7 +19,14 @@ from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.plugins import LocalSessions, ShellSettings, backend_at
 from kingfisher.plugins.sessions.sandbox.confinement import harness_unfenced, shell_confinement
-from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, start, tools_dir
+from tests.conftest import (
+    EVERY_TOOL,
+    FakeToolCallingModel,
+    RecordedEvents,
+    an_agent,
+    start,
+    tools_dir,
+)
 from tests.unit.scripted import Scripted
 from tests.unit.stand_ins import Elsewhere, ElsewhereFiles
 
@@ -104,6 +113,47 @@ def test_a_backend_keeping_sessions_elsewhere_on_this_host_still_serves_a_path(
     events = list(kf.stream(Request("go", agent="only", inputs=(source,))))
 
     assert _said(events) == "alpha\n[A-0001]"
+
+
+#: Where a deployment's mount keeps its sessions, which its own exception quotes.
+MOUNT = "/mnt/tenant-store-8812"
+
+
+class _Unmapped(ElsewhereFiles):
+    def host_path(self, virtual: str) -> None:
+        msg = f"the mount table lost {MOUNT}{virtual}"
+        raise RuntimeError(msg)
+
+
+class _UnmappedSessions(Elsewhere):
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        opened = super().open(cfg, session_id, catalogue=catalogue)
+        opened.__class__ = _Unmapped
+        return opened
+
+
+def test_a_host_path_that_raises_fails_the_call_and_not_the_turn(scripted, tmp_path):
+    """A deployment's `host_path` raising ended the turn with its exception, whose message
+    may name the host's own paths and must reach neither the model nor the log."""
+    _with_the_tool(scripted)
+    Scripted.script.extend([_calls(path="/inputs/notes.txt"), AIMessage("done")])
+    sink = RecordedEvents()
+    kf = Kingfisher(scripted, sessions=_UnmappedSessions(tmp_path / "remote"), run_events=sink)
+
+    result = kf.run(Request("go", agent="only"))
+
+    assert result.answer == "done"
+    (told,) = [one for one in Scripted.heard[-1] if isinstance(one, ToolMessage)]
+    assert told.status == "error"
+    assert "the session's storage could not say where /inputs/notes.txt is kept" in told.text
+    assert MOUNT not in told.text
+    (warned,) = sink.named("host_path_failed")
+    assert (warned["call"], warned["plugin"], warned["error_type"]) == (
+        "c1",
+        "_Unmapped",
+        "RuntimeError",
+    )
+    assert MOUNT not in json.dumps(warned)
 
 
 # -- the pieces --------------------------------------------------------------

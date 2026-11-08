@@ -82,7 +82,7 @@ class GuardedCallsMiddleware(AgentMiddleware):
         # Around the translation alone: a built-in's host-path refusal caught here would
         # read as the translation's rule.
         try:
-            args = paths.translated(call.get("args") or {})
+            args = paths.translated(call.get("args") or {}, call=call.get("id") or None)
         except (UnsafeReferenceError, HostPathError) as escaped:
             return failed(call, refusal_text(escaped, paths))
         return replace(request, tool_call={**call, "args": args})
