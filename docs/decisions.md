@@ -5622,9 +5622,12 @@ because the default is one object serving every workspace. A deployment building
 cannot say which sessions there are. `backend_at` is public because building on the
 default needs it.
 
-**The lock is on the sessions**: `claim`, `release`, `held` -- a create that fails while
+**The lock is on the sessions**: `claim` and `release` -- a create that fails while
 another claim is live, which `write` cannot be. Not chosen: a lock beside the backend,
 which asks less of an adapter and gives a session two things to wire to one place.
+`held`, which answered whether a claim was live, left the interface once a sweep took
+the claim rather than asking first: nothing in the core asked it, and a deployment wrote
+it for nothing. `LocalSessions` keeps its own, which its `claim` reads. *(2026-11-08.)*
 
 **A claim answers a token, and only that token releases it.** `release(cfg, session_id)`
 removed whatever claim was there, so a turn that outlived `stale_after` ended the claim
@@ -6668,8 +6671,11 @@ deployment's own saver" under *Sessions: what persists and where* says why.
 interface: `LoggedRunEvents`, `InstructionsFile`, the shipped wire formats. `plugins/`
 holds what the core never names -- `LocalSessions` and `JsonlRunEvents`. What the core
 needs beyond an interface it reads as extras an implementation may declare --
-`host_path`, `shell_prompt`, `unprotected`, `runs_here`, `where` -- never by identity:
-one `isinstance` would make kingfisher's own sessions impossible to ship apart.
+`host_path`, `shell_prompt`, `unprotected`, `runs_here` -- never by identity: one
+`isinstance` would make kingfisher's own sessions impossible to ship apart. `where`
+was one until 2026-11-08, and is now a method of `Sessions` answering `None`: once every
+interface was a base class, its optional methods belong on it, where a deployment finds
+them; the other four are on deepagents' classes, which kingfisher cannot give one.
 `test_the_core_imports_nothing_from_plugins` holds it; only `cli/` is excused.
 
 **A plugin imports the core and never another plugin**, and `kingfisher.plugins`

@@ -132,9 +132,6 @@ class Elsewhere(Sessions):
         if (lock / "token").is_file() and (lock / "token").read_text(encoding="utf-8") == token:
             shutil.rmtree(lock, ignore_errors=True)
 
-    def held(self, cfg, session_id, /, *, stale_after, now=None):
-        return (self.root / session_id / HARNESS / "claim").is_dir()
-
 
 class ElsewhereRunner(CommandRunner):
     """A runner that ships its commands off this machine, which is the case where

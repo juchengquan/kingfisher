@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from .definitions.catalogue import DEFINITION_KINDS
+from .interfaces import Sessions
 
 if TYPE_CHECKING:
     from .config import Config
@@ -164,8 +165,7 @@ def _catalogue(cfg: Config, kind: str, catalogue: Definitions | None) -> Origin:
 
 def kingfishers_own(sessions: object, cfg: Config) -> bool:
     """Whether `sessions` keep them where kingfisher's own would, in the workspace."""
-    where = getattr(sessions, "where", None)
-    return callable(where) and where(cfg) == cfg.sessions_root
+    return isinstance(sessions, Sessions) and sessions.where(cfg) == cfg.sessions_root
 
 
 def _sessions(cfg: Config, sessions: object | None) -> Origin:

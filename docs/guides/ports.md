@@ -865,7 +865,9 @@ with the id of the session it is for, and returns that session's backend — and
 answers the questions
 only something that sees every session can: `sessions(cfg)` lists them with when
 each was last used, `mark_used`, `size` and `delete` do what they say. `reap`,
-`kingfisher sessions` and the session quota are answered by it. `LocalSessions`
+`kingfisher sessions` and the session quota are answered by it. `where(cfg)` names the
+folder they are kept in on this host, which the origins line reports; `Sessions`
+answers `None`, read as `<supplied>`, so override it only where they are on this host. `LocalSessions`
 keeps each session as a directory under `<workspace>/sessions`, named for its id, and
 refuses with `UnknownSessionError` an id that cannot name one there — empty, starting
 with `.`, or holding `/` or NUL. Which session a turn runs in is the request's to say:
@@ -958,9 +960,9 @@ the backend to avoid. Passing a backend itself is a `TypeError`, and
 id handed the same storage.
 
 **The turn lock is on the sessions.** They have `claim(cfg, session_id, /, *,
-stale_after, now=None)`, `release(cfg, session_id, token, /)` and `held(cfg, session_id,
-/, *, stale_after, now=None)`: a claim that fails while another is live, which a `write`
-cannot be, because a `write` overwrites and two turns would both take it. One lock per
+stale_after, now=None)` and `release(cfg, session_id, token, /)`: a claim that fails
+while another is live, which a `write` cannot be, because a `write` overwrites and two
+turns would both take it. One lock per
 session, not one for the object: a turn in one session must not refuse a turn in
 another. `claim` answers a token naming its taker, or `None` when a live turn holds the
 session, and `release` gives back only the claim that token took: a turn that outlived
@@ -1200,12 +1202,11 @@ where your class translates them, every file falls back to its name, and
 `turn_files_unmarked` says so. The price is a read of every file in those folders, inside
 the sandbox, at every turn.
 
-**Three more extras are read where you declare them.** `unprotected` on the backend,
+**Two more extras are read where you declare them.** `unprotected` on the backend,
 a tuple of what it could not make read-only, which a turn reports to its caller as
-`protect_failed`. `runs_here` on the shell, `True` when its commands run on this host,
-which keeps deepagents' own note of each folder's path here; a shell that does not say
-is taken to run elsewhere. And `where(cfg)` on your sessions, the folder they are kept
-in on this host, which the origins line reports; without it they are `<supplied>`.
+`protect_failed`. And `runs_here` on the shell, `True` when its commands run on this
+host, which keeps deepagents' own note of each folder's path here; a shell that does
+not say is taken to run elsewhere.
 
 **The fence comes from the environment unless you say.** `LocalSessions()` reads
 `KINGFISHER_SHELL_SANDBOX` and `KINGFISHER_SHELL_PATH_EXTRA` as it is built, so the
