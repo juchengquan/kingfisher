@@ -198,7 +198,7 @@ def indistinct_subagents(  # noqa: PLR0913 -- the agent and caller make this the
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
     agent: AgentSpec | None = None,
-    held: frozenset[str] | None = None,
+    held: frozenset[str] | None,
 ) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each activated subagent that asked to run elsewhere and did
     not.
@@ -285,7 +285,7 @@ def activated_subagents(
     capabilities: Capabilities,
     *,
     catalogue: Definitions | None = None,
-    held: frozenset[str] | None = None,
+    held: frozenset[str] | None,
     #: For the refusal's listing alone; what it judges is every definition, whoever
     #: asks. `None` where a build resolved no spec.
     agent: AgentSpec | None = None,

@@ -10,8 +10,15 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
+from kingfisher.core.agent.activation import activated_subagents, indistinct_subagents
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.kinds.subagents import as_subagent, compiled_subagent
+from kingfisher.core.agent.kinds.subagents import (
+    as_subagent,
+    compiled_subagent,
+    subagent_helpers,
+    subagent_skills,
+)
+from kingfisher.core.agent.kinds.tools import private_tools
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
 from kingfisher.core.definitions.agents.spec import AgentSpec
@@ -241,6 +248,11 @@ SHARED_SETTINGS = {
     compiled_subagent: frozenset(
         {"endpoints", "tools", "paths", "held", "gated", "scratch_run_limit"}
     ),
+    activated_subagents: frozenset({"held"}),
+    indistinct_subagents: frozenset({"held"}),
+    subagent_skills: frozenset({"held"}),
+    subagent_helpers: frozenset({"held"}),
+    private_tools: frozenset({"held"}),
 }
 
 
