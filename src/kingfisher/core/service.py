@@ -311,7 +311,9 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
             capabilities=capabilities,
             run_on=request.run_on,
             middleware_registry=self.middlewares,
-            instructions=self.instructions.text(self.cfg),
+            instructions=_text_from(
+                self.instructions, self.instructions.text(self.cfg), "the instructions"
+            ),
             turn_text=self._turn_text(session_id, caller),
             users_memory=users_memory,
             pdf_attachments=self.pdf_attachments,
@@ -327,13 +329,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         if self.turn_instructions is None:
             return None
         said = self.turn_instructions.text(self.cfg, session_id, caller)
-        if not isinstance(said, str):
-            msg = (
-                f"{type(self.turn_instructions).__name__}.text answered "
-                f"{type(said).__name__}; it answers the turn's text as a str"
-            )
-            raise TypeError(msg)
-        return said
+        return _text_from(self.turn_instructions, said, "the turn's text")
 
     def _open_files(self, session_id: str, *, catalogue: Definitions) -> Steps[Any]:
         """The backend a session's files are reached through, by kingfisher and any agent it builds.
@@ -381,3 +377,15 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
         return spec
 
 
+
+
+def _text_from(hook: object, said: object, what: str) -> str:
+    """`said`, refused naming `hook` when it is not text: a forgotten `return` otherwise
+    fails deep in the prompt builder, naming neither."""
+    if not isinstance(said, str):
+        msg = (
+            f"{type(hook).__name__}.text answered {type(said).__name__}; "
+            f"it answers {what} as a str"
+        )
+        raise TypeError(msg)
+    return said

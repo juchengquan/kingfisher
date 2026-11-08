@@ -18,7 +18,7 @@ from kingfisher.core.agent.middlewares.caching import CACHING, PromptCachingMidd
 from kingfisher.core.agent.prompting import session_section
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.agents.spec import AgentSpec
-from kingfisher.core.interfaces import TurnInstructions
+from kingfisher.core.interfaces import Instructions, TurnInstructions
 from kingfisher.core.layout import MEMORY
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
@@ -397,18 +397,36 @@ def test_the_plugin_is_asked_once_a_turn_for_its_session(scripted, awaited):
     assert "Session s, turn 2." in str(Scripted.heard[-1][0].content)
 
 
-def test_a_hook_answering_anything_but_text_is_refused(scripted):
-    """`Told(...)`, the shape this answered before, would reach the model as its repr."""
+class _Shaped(TurnInstructions):
+    """The shape this hook answered before, `Told(...)`."""
 
-    class Shaped(TurnInstructions):
-        def text(self, cfg, session_id: str, caller) -> Any:
-            return {"everyone": "Today is Friday."}
+    def text(self, cfg, session_id: str, caller) -> Any:
+        return {"everyone": "Today is Friday."}
 
+
+class _Unreturned(Instructions):
+    """A `text` whose `return` was forgotten."""
+
+    def text(self, cfg) -> Any:
+        _ = "Never share an account number."
+
+
+@pytest.mark.parametrize(
+    ("wired", "said"),
+    [
+        ({"turn_instructions": _Shaped()}, "_Shaped.text answered dict; it answers the turn's"),
+        ({"instructions": _Unreturned()}, "_Unreturned.text answered NoneType; it answers the"),
+    ],
+    ids=["turn", "standing"],
+)
+def test_a_hook_answering_anything_but_text_is_refused(scripted, wired, said):
+    """A turn's text answered as a dict reached the model as its repr, and standing text
+    answered as nothing failed every turn inside the prompt builder, naming neither hook."""
     an_agent(scripted, **EVERY_TOOL)
-    kf = Kingfisher(scripted, sessions=LocalSessions(), turn_instructions=Shaped())
+    kf = Kingfisher(scripted, sessions=LocalSessions(), **wired)
     Scripted.script.extend([AIMessage(content="done")])
 
-    with pytest.raises(TypeError, match="answered dict; it answers the turn's text as a str"):
+    with pytest.raises(TypeError, match=said):
         kf.run(Request("go", agent="only", session_id="s"))
 
 
