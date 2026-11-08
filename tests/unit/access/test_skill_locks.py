@@ -135,6 +135,33 @@ def test_a_caller_is_shown_no_skill_while_the_locks_will_not_load(cfg, broken):
     assert set(shown) == (set() if broken else {"review"})
 
 
+def test_a_skill_named_twice_is_not_named_to_a_caller_its_lock_shuts_out(cfg):
+    """B's listing told them of no skill and named `audit` in the fault about an agent
+    naming it twice, which was kept to the agents B reaches and not to the skill's lock.
+
+    The fault itself stays, and fails the listing: startup refuses the file whoever asks.
+    """
+    import json
+
+    from kingfisher.cli.listing import as_json, failed, render
+    from kingfisher.core.inventory import inventory
+
+    _skill(cfg.skills_dir, "audit", "audit")
+    an_agent(
+        cfg, source_ids="[A, B]", builtin_tools="[read_file]", skills="[audit, 'catalogue::audit']"
+    )
+    lock_skills(cfg, "- name: audit\n  source_ids: [A]\n")
+
+    shown = {}
+    for caller in ("A", "B"):
+        found = inventory(cfg, source_ids=[caller])
+        assert failed(found), f"{caller}'s listing calls a deployment startup refuses fine"
+        shown[caller] = "\n".join(render(found)) + json.dumps(as_json(found))
+
+    assert "names 'audit' and 'catalogue::audit'" in shown["A"], "the control: A is told"
+    assert "audit" not in shown["B"]
+
+
 def test_a_skill_locked_to_a_datazone_is_told_only_inside_it(cfg):
     """A lock's datazone dropped would tell the skill to every caller holding its source
     ids, in every zone."""

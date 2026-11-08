@@ -30,6 +30,7 @@ from .config import Config, ConfigError
 from .definitions.agents.spec import AgentError, AgentSpec
 from .definitions.catalogue import (
     Definitions,
+    DoubledSkill,
     bundled_tool_names,
     doubled_skill,
     resolve_definitions,
@@ -380,6 +381,19 @@ def _without(
     )
 
 
+def _among(
+    by_name: Mapping[str, tuple[str, ...]], told: Container[str]
+) -> Mapping[str, tuple[str, ...]]:
+    """Each subagent's names that `told` holds, less one left with none."""
+    return MappingProxyType(
+        {
+            name: kept
+            for name, names in by_name.items()
+            if (kept := tuple(one for one in names if one in told))
+        }
+    )
+
+
 def _kept[V](by_name: Mapping[str, V], reached: Container[str]) -> Mapping[str, V]:
     """Only the entries for definitions this caller reaches."""
     return MappingProxyType({name: one for name, one in by_name.items() if name in reached})
@@ -495,7 +509,11 @@ def _unresolved_tools(
         return None
 
 
-def _doubled_skills(resolved: Definitions) -> Mapping[str, str] | None:
+#: A doubled skill as `doubled_skills` words it to a caller who is not told of the skill.
+_DOUBLED_UNNAMED = "skills names one skill twice, bare and qualified"
+
+
+def _doubled_skills(resolved: Definitions) -> Mapping[str, DoubledSkill] | None:
     """Definitions naming one skill twice, bare and qualified, or `None` when that could
     not be asked.
 
@@ -871,6 +889,9 @@ def inventory_for(
     # Each definition's lines through the answers above rather than a walk of their own: a
     # tool kept out of `tools` for this caller must not come back under whoever grants it.
     for_caller_tools = tuple(name for name in offered_tools if offers_tool(name))
+    # By the bare name, which `shadowed` holds: a bundle answering for a catalogue tool this
+    # caller is not offered would tell them the tool exists.
+    told_tools = {split_reference(one)[1] for one in for_caller_tools}
     own_tools = _kept(_without(bundled_tools, held_back), for_caller_subagents)
     # A gate also stops a call one of the agent's own subagents makes, so a tool in its bundle
     # is a gate's to keep. Not a compiled one's: deepagents hands that graph none of the gates.
@@ -989,8 +1010,17 @@ def inventory_for(
             _NO_NAMES if unresolved_tools is None else _kept(unresolved_tools, reached_subjects)
         ),
         unresolved_tools_checked=unresolved_tools is not None,
+        # Kept for a caller not told of the skill, since startup refuses the file whoever
+        # asks, but without its name.
         doubled_skills=(
-            _NOTHING if doubled_skills is None else _kept(doubled_skills, reached_subjects)
+            _NOTHING
+            if doubled_skills is None
+            else MappingProxyType(
+                {
+                    subject: found.said if offers_skill(found.meant) else _DOUBLED_UNNAMED
+                    for subject, found in _kept(doubled_skills, reached_subjects).items()
+                }
+            )
         ),
         doubled_skills_checked=doubled_skills is not None,
         miscounted_bundles=(
@@ -1011,7 +1041,7 @@ def inventory_for(
         ),
         bundled_misplaced=_kept(bundled_misplaced, for_caller_subagents),
         shadowed=(
-            _kept(_without(shadowed, held_back), for_caller_subagents)
+            _kept(_among(_without(shadowed, held_back), told_tools), for_caller_subagents)
             if shadowed is not None
             else _NO_NAMES
         ),

@@ -443,7 +443,16 @@ def resolve_definitions(cfg: Config) -> Definitions:
     return Definitions.from_config(cfg)
 
 
-def doubled_skill(skills: Selection, registry: SkillRegistry) -> str | None:
+class DoubledSkill(NamedTuple):
+    """Two `skills:` entries that are one skill, spelt bare and qualified."""
+
+    #: Both entries and the skill they mean, as a refusal words it.
+    said: str
+    #: The skill, as `source::name`, so a listing can ask whether its caller is told of it.
+    meant: str
+
+
+def doubled_skill(skills: Selection, registry: SkillRegistry) -> DoubledSkill | None:
     """How two `skills:` entries are one skill, spelt bare and qualified, if they are.
 
     Asked as well as refused, so `doctor` can report what startup refuses.
@@ -456,7 +465,10 @@ def doubled_skill(skills: Selection, registry: SkillRegistry) -> str | None:
         if (meant := registry.identity(written)) is None:
             continue
         if (first := seen.setdefault(meant, written)) != written:
-            return f"skills names {first!r} and {written!r}, which are one skill ({meant!r})"
+            return DoubledSkill(
+                f"skills names {first!r} and {written!r}, which are one skill ({meant!r})",
+                meant,
+            )
     return None
 
 
@@ -466,8 +478,8 @@ def refuse_one_skill_twice(
     """Refuse two `skills:` entries that are one skill."""
     if (found := doubled_skill(skills, registry)) is not None:
         msg = (
-            f"{subject}: {found}. One name is one thing to build, so a second entry for it "
-            f"is either two answers that cannot both apply or a line that says nothing"
+            f"{subject}: {found.said}. One name is one thing to build, so a second entry for "
+            f"it is either two answers that cannot both apply or a line that says nothing"
         )
         raise error(msg)
 
