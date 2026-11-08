@@ -4844,7 +4844,12 @@ across a restart was resumed with nothing said. *(2026-11-02.)* A subagent defin
 package was recorded as nothing until 2026-11-05, and a pause from before then is refused
 once rather than recognised: nothing recorded from a package's folder is also what a
 subagent added since looks like to an agent given every one, and the gap was three days
-old. *(2026-11-05.)*
+old. *(2026-11-05.)* `skill_locks.yaml` is not among those files, so a change to a skill's
+lock refuses no resume. The resumed turn is built under the locks as they are, as every
+turn is, so a narrowed lock takes the skill away from there on; a refusal could not take
+back what the turn read before it paused, and the call that runs is the one a person
+approved. A tool's lock refuses one only because it is written in the tool's own file.
+*(2026-11-08.)*
 
 What the old per-session sqlite bought survives by another route, measured rather than
 assumed: a conversation deleted with its session (one workspace held 132 orphaned threads
