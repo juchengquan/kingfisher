@@ -33,8 +33,8 @@ from kingfisher.core.agent.middlewares.clearing import (
     high_mark,
 )
 from kingfisher.core.agent.middlewares.model_reply import _refusal
-from kingfisher.core.agent.middlewares.recorded import arguments, stamp, summary
 from kingfisher.core.agent.middlewares.recorder import UNRECORDED
+from kingfisher.core.agent.middlewares.result_rows import arguments, stamp, summary
 from kingfisher.core.agent.models import SummarizerCount, summarizer_count, summarizer_trigger
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, LEDGER_FILE

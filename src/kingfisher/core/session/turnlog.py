@@ -15,14 +15,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.agent.middlewares.recorded import expired_handle, stamped_id
+from kingfisher.core.agent.middlewares.result_rows import expired_handle, stamped_id
 from kingfisher.core.layout import TURNS_FILE
 from kingfisher.core.logged import warn
 
 from . import runtime
+from .messages import Message, Part, as_record, from_record, joined
 from .steps import Steps
 from .store import RESUMED, HarnessFiles, KeptLedger, read_off_path
-from .transcript import Message, Part, as_record, from_record, joined
 
 if TYPE_CHECKING:
     from kingfisher.core.request import Decision
@@ -106,7 +106,7 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     answer: str,
 ) -> list[dict[str, Any]]:
     """This turn's lines: its opening, a resume's answers, the messages it added, the
-    summary it ended on and its answer. `history` is how many messages its transcript held
+    summary it ended on and its answer. `history` is how many messages its conversation held
     as it began, `resumed` set for a resume.
     """
     held = runtime.held_in(snapshot)
@@ -116,7 +116,7 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     else:
         opening = {"turn": turn, PARENT: parent, RESUMED: True}
         began, carried = resumed.held, resumed.carried
-    added = [as_record(one) for one in runtime.as_transcript(held[began:])]
+    added = [as_record(one) for one in runtime.as_messages(held[began:])]
     if resumed is None:
         _with_parts(added, parts, turn)
     lines = [
@@ -127,13 +127,13 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     summary = runtime.summary_in(snapshot)
     if summary is not None and _identity(summary) != carried:
         written, cut = summary
-        (said,) = runtime.as_transcript([written])
+        (said,) = runtime.as_messages([written])
         # A position in what the log replays, which counts records rather than messages,
         # and after a summary it carried opens on that summary rather than on the cut.
         at = (
-            1 + len(runtime.as_transcript(held[carried[1] : cut]))
+            1 + len(runtime.as_messages(held[carried[1] : cut]))
             if carried is not None
-            else len(runtime.as_transcript(held[:cut]))
+            else len(runtime.as_messages(held[:cut]))
         )
         lines.append({"turn": turn, **as_record(said), CUT: at})
     lines.append({"turn": turn, ANSWER: answer})
@@ -289,7 +289,7 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
     """Add this turn to `log`, as the turn read it. `ledger` is the ledger as this turn
     writes it back, or `None` where it keeps none.
     """
-    seen = runtime.as_transcript(runtime.as_seen(snapshot))
+    seen = runtime.as_messages(runtime.as_seen(snapshot))
     lines = list(log.lines)
     if ledger is not None:
         expired = {

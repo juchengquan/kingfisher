@@ -35,6 +35,7 @@ from .files import collect_artifacts
 from .ledger import file_left, keep_ledger, sweep_results
 from .memory import kept_in_store
 from .memory_writer import kept_memory
+from .messages import joined
 from .provider_errors import refused_request
 from .steps import (
     Steps,
@@ -54,7 +55,6 @@ from .store import (
     write_pause_mark,
 )
 from .threads import finished
-from .transcript import joined
 from .turn import (
     Prepared,
     decision_needed,
@@ -70,7 +70,7 @@ if TYPE_CHECKING:
 
     from kingfisher.core.interfaces import MemoryStore, RunEvents, UnusedResults
 
-    from .transcript import Message
+    from .messages import Message
 
 
 
@@ -212,7 +212,7 @@ class Running:
             runtime.summarised_away(snapshot),
             tool_results_route=self.cfg.layout.tool_results_route,
         )
-        written = self._transcript_of(snapshot)
+        written = self._ended_on(snapshot)
         return (
             yield from keep_ledger(
                 prepared.harness,
@@ -236,19 +236,19 @@ class Running:
             session_id=prepared.session.id,
         )
 
-    def _transcript_of(self, snapshot: Any) -> tuple[Message, ...]:
-        """The conversation this turn writes, or nothing where there is no state."""
+    def _ended_on(self, snapshot: Any) -> tuple[Message, ...]:
+        """The conversation this turn ended on, or nothing where there is no state."""
         if snapshot is None:
             # No state, or a turn that died before its first superstep: this runs after
             # every turn, failed ones included.
             return ()
         messages = runtime.as_seen(snapshot)
-        return runtime.as_transcript(messages) if messages else ()
+        return runtime.as_messages(messages) if messages else ()
 
     def _record_turn(self, prepared: Prepared, snapshot: Any, *, answer: str) -> Steps[None]:
         """Log what was said this turn, as records this package owns, and the answer the
         caller is handed."""
-        if self._transcript_of(snapshot):
+        if self._ended_on(snapshot):
             # After the ledger: a write dying between the two leaves the log a turn short of
             # the ledger's count, which the next turn reports.
             yield from keep_turns(

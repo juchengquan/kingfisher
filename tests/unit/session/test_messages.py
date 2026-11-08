@@ -6,8 +6,8 @@ import json
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from kingfisher.core.session.runtime import as_transcript, user_payload
-from kingfisher.core.session.transcript import Message, ToolCall, as_record, from_record
+from kingfisher.core.session.messages import Message, ToolCall, as_record, from_record
+from kingfisher.core.session.runtime import as_messages, user_payload
 
 
 def a_conversation():
@@ -25,14 +25,14 @@ def a_conversation():
 
 def test_a_conversation_survives_the_round_trip():
     """Through records, through JSON, and back."""
-    records = as_transcript(a_conversation())
+    records = as_messages(a_conversation())
 
     assert tuple(from_record(json.loads(json.dumps(as_record(one)))) for one in records) == records
 
 
 def test_what_the_agent_did_is_kept_not_only_what_it_said():
     """The reason "flattened" is not the same as "user and assistant"."""
-    records = as_transcript(a_conversation())
+    records = as_messages(a_conversation())
 
     assert [m.role for m in records] == ["user", "assistant", "tool", "assistant"]
     assert records[1].tool_calls == (
@@ -44,7 +44,7 @@ def test_what_the_agent_did_is_kept_not_only_what_it_said():
 
 def test_nothing_stored_belongs_to_a_framework():
     """A record that held a framework's object would be read back only by that framework."""
-    document = "\n".join(json.dumps(as_record(one)) for one in as_transcript(a_conversation()))
+    document = "\n".join(json.dumps(as_record(one)) for one in as_messages(a_conversation()))
 
     for line in document.splitlines():
         parsed = json.loads(line)
@@ -55,7 +55,7 @@ def test_nothing_stored_belongs_to_a_framework():
 
 def test_records_go_back_to_the_shape_the_graph_wants():
     """The other direction."""
-    records = as_transcript(a_conversation())
+    records = as_messages(a_conversation())
 
     sent = user_payload("and now?", records)["messages"]
 
@@ -76,7 +76,7 @@ def test_block_content_is_flattened_to_text():
     """Anthropic returns a list of blocks where OpenAI returns a string."""
     blocks = AIMessage(content=[{"type": "text", "text": "one "}, {"type": "text", "text": "two"}])
 
-    assert as_transcript([blocks])[0].content == "one two"
+    assert as_messages([blocks])[0].content == "one two"
 
 
 def test_a_message_kind_this_vocabulary_has_no_role_for_is_dropped():
@@ -86,7 +86,7 @@ def test_a_message_kind_this_vocabulary_has_no_role_for_is_dropped():
         type = "some_future_thing"
         content = "?"
 
-    assert as_transcript([Odd(), HumanMessage(content="hi")]) == (
+    assert as_messages([Odd(), HumanMessage(content="hi")]) == (
         Message(role="user", content="hi"),
     )
 
@@ -96,4 +96,4 @@ def test_a_system_message_has_a_role_even_though_none_is_stored():
     here -- but the vocabulary covers it, because a record that could not express a
     system message would drop one a graph handed back.
     """
-    assert as_transcript([SystemMessage(content="rules")])[0].role == "system"
+    assert as_messages([SystemMessage(content="rules")])[0].role == "system"

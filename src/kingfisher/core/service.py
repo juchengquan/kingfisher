@@ -52,13 +52,13 @@ from .origins import Origins
 from .reporting import what_opens
 from .request import Request, Resume, caller_of
 from .session.disposal import Disposal
+from .session.first_call import FirstCall
 from .session.ledger import Ledger
 from .session.methods import SessionMethods
 from .session.model import opened_for
 from .session.preparation import Preparation
 from .session.runlog import LoggedRunEvents
 from .session.running import Running
-from .session.sent import Preview
 from .session.steps import (
     Steps,
     changing,
@@ -75,7 +75,7 @@ if TYPE_CHECKING:
     from .interfaces import RunEvents
 
 
-class Kingfisher(SessionMethods, Disposal, Preparation, Running, Preview):
+class Kingfisher(SessionMethods, Disposal, Preparation, Running, FirstCall):
     """A configured kingfisher. Construct once; call `run` or `stream` per request."""
 
     def __init__(  # noqa: PLR0913 -- the composition root: each argument is substitutable

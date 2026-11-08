@@ -15,7 +15,7 @@ from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.request import Decision, DecisionError
 from kingfisher.core.result import DECISIONS, PendingDecision, RunEvent
 
-from .transcript import Message, Role, ToolCall
+from .messages import Message, Role, ToolCall
 
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
 OutOfSteps = GraphRecursionError
@@ -82,7 +82,7 @@ def _as_langchain(message: Message) -> Any:
     return {"role": message.role, "content": message.content}
 
 
-def as_transcript(messages: Iterable[Any]) -> tuple[Message, ...]:
+def as_messages(messages: Iterable[Any]) -> tuple[Message, ...]:
     """What the graph ended up holding, as records this package owns."""
     read: list[Message] = []
     for raw in messages:
@@ -543,7 +543,7 @@ def as_seen(snapshot: Any) -> list[Any]:
     if (summary := summary_in(snapshot)) is None:
         return messages
     message, cut = summary
-    # Cut here, before `as_transcript` drops any message: the cut is a position in this list.
+    # Cut here, before `as_messages` drops any message: the cut is a position in this list.
     return [message, *messages[cut:]]
 
 

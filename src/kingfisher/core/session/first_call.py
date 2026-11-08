@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from .model import Conversation
 
 
-class Preview:
+class FirstCall:
     """Building a turn's agent as the turn would, and showing what it would send."""
 
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.

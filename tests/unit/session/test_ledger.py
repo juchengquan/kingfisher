@@ -29,12 +29,12 @@ from langgraph.types import Command
 
 from kingfisher import Capabilities, Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.recorded import summary
 from kingfisher.core.agent.middlewares.recorder import (
     PREVIEW_CHARS,
     RecorderMiddleware,
     made_together,
 )
+from kingfisher.core.agent.middlewares.result_rows import summary
 from kingfisher.core.agent.prompting import render_system_prompt
 from kingfisher.core.layout import (
     DEFAULT_LAYOUT,

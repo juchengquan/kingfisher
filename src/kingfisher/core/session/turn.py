@@ -8,12 +8,12 @@ from dataclasses import dataclass, field
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.core.agent.middlewares.recorded import readable_size
+from kingfisher.core.agent.middlewares.result_rows import readable_size
 from kingfisher.core.layout import Layout
 from kingfisher.core.result import LedgerEntry, MemoryEntry, PendingDecision, RunEvent
 
 from . import runtime
-from .transcript import Part
+from .messages import Part
 from .turnlog import TurnLog
 
 if TYPE_CHECKING:
@@ -24,10 +24,10 @@ if TYPE_CHECKING:
 
     from .files import InputsChanged
     from .ledger import Ledger
+    from .messages import Message
     from .model import Conversation, Turn
     from .runlog import RunLogger
     from .store import Drift, HarnessFiles, KeptLedger
-    from .transcript import Message
     from .turnlog import Resuming
 
 

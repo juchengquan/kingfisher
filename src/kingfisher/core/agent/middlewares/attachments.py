@@ -15,7 +15,7 @@ from kingfisher.core.logged import raised, warn
 from kingfisher.core.session.threads import off_loop, thread_pool
 
 from .narrowing import requested_tool_name
-from .recorded import readable_size
+from .result_rows import readable_size
 from .results import answer_in, answered
 
 if TYPE_CHECKING:

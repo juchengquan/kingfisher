@@ -3045,7 +3045,7 @@ a refusal for length before clearing could answer it.*
 different places: clearing each model call, first, where it measures what the summariser
 counted, and the recorder each tool call, ahead of the guards that rewrite what the
 model wrote. What they share is how a record is written -- a row's arguments and
-summary, and the id a result ends in -- in `core.agent.middlewares.recorded`.
+summary, and the id a result ends in -- in `core.agent.middlewares.result_rows`.
 *(2026-10-19; the reason restated 2026-10-21, once clearing reached every graph the
 recorder does.)*
 
@@ -3185,7 +3185,7 @@ model sees, so nothing of the prompt was cached. The conversation stops being ev
 said; the words summarised away are in `conversation_history/`, which the summary names.
 The summary keeps the `lc_source` mark deepagents knows it by, as `Message.summary`:
 read back unmarked, the next summary copies it into its history file as if the user had
-said it. The cut is applied before the messages become records, since `as_transcript`
+said it. The cut is applied before the messages become records, since `as_messages`
 drops roles it does not know and the cut is a position. **Reversed: restoring the
 summary into the next turn's state instead.** A private key cannot be passed in as input,
 only written with `update_state` onto a saver that is new each turn, and the cut would
@@ -4445,7 +4445,7 @@ test now ties to the layout -- without it, `system.md` could have kept teaching 
 with everything green. *(2026-09-24.)*
 
 **A session's history is kingfisher's own records, not a framework's.**
-`core/session/transcript.py` keeps what the agent *did* as well as what it said -- tool
+`core/session/messages.py` keeps what the agent *did* as well as what it said -- tool
 calls and results, not only human and assistant text -- since an agent that cannot see
 what it already did will do it again. The records are the turn log's lines, and the
 promise is that the conversation any turn ended on can be rebuilt from the log alone.

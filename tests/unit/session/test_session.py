@@ -82,7 +82,7 @@ def test_the_turn_message_names_both_forms_of_the_scratch_path(workspace):
     agent's handling of the two spellings.
     """
     from kingfisher.core.session.files import InputsChanged
-    from kingfisher.core.session.transcript import joined
+    from kingfisher.core.session.messages import joined
     from kingfisher.core.session.turn import turn_message
 
     message = joined(turn_message("count the rows", InputsChanged(), layout=DEFAULT_LAYOUT))

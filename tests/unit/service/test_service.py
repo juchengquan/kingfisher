@@ -19,9 +19,9 @@ from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
 from kingfisher.core.session.files import InputsChanged
+from kingfisher.core.session.messages import joined
 from kingfisher.core.session.provider_errors import refused_credentials, refused_request
 from kingfisher.core.session.steps import drive
-from kingfisher.core.session.transcript import joined
 from kingfisher.core.session.turn import turn_message
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
