@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import caller_holds
 from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.agent.sent import first_call
 
+from .model import SessionBusyError
 from .steps import Steps, adrive, changing, drive, on_host
+from .store import HarnessFiles
+from .turnlog import read_log
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -36,6 +40,7 @@ class Preview:
     _session_for: Callable[..., Steps[Conversation]]
     _known_steps: Callable[[], Steps[tuple[str, ...]]]
     _open_files: Callable[..., Steps[Any]]
+    _under_claim: Callable[..., Steps[Any]]
     _agent_named: Callable[..., AgentSpec]
     _graph_for: Callable[..., Any]
 
@@ -43,8 +48,9 @@ class Preview:
         """What the first model call of `request`'s turn would be sent, with no turn run.
 
         Built in the session the request names, as its turn would be, and caught before
-        the call leaves: no model is called and the session is neither claimed nor
-        written to. A session made in order to look is removed again.
+        the call leaves: no model is called, and a session already there is neither
+        claimed nor written to. One made in order to look is removed again, under its
+        claim, unless a turn has started in it meanwhile.
         """
         return drive(self._sent_steps(request, source_ids))
 
@@ -73,7 +79,17 @@ class Preview:
             return (yield from self._looked(request, session.id, files, held, catalogue))
         finally:
             if made:
-                yield changing(self._sessions, "delete", self.cfg, session.id)
+                # Refused, the claim is a turn's that started on this id during the look,
+                # and so is the session.
+                with suppress(SessionBusyError):
+                    yield from self._under_claim(
+                        session.id, "the look leaves it", self._unused_removed, session.id, files
+                    )
+
+    def _unused_removed(self, session_id: str, files: Any) -> Steps[None]:
+        """Delete a session this look made, unless a turn ran in it during the look."""
+        if not (yield from read_log(HarnessFiles(files))).written:
+            yield changing(self._sessions, "delete", self.cfg, session_id)
 
     def _looked(
         self,

@@ -151,10 +151,10 @@ class Preparation:
         claimed = yield from self._claim_or_refuse(session.id, "wait, or start another session")
         try:
             log = yield from read_log(harness)
-            if log.lines or log.damaged:
+            if log.written:
                 # Written only by a turn holding the claim, so another turn ran here,
                 # whatever the listing said: not a session this request made, nor its to
-                # delete. Any line, not a conversation: one rewound to the start has none.
+                # delete.
                 made = False
             prepared = yield from self._claimed(
                 request,
