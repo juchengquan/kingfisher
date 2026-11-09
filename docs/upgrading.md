@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `doctor` fails on whatever startup refuses, after #1280
+
+- **`doctor` can exit 1 on a new `startup` row.** It now runs the check a turn runs
+  before it starts, and where that refuses the definitions while every definitions row
+  passed, it fails this row with startup's own message. Nothing that starts today fails
+  it: the row says only what startup already refuses, where no other row named the fault.
+
 ## `UnsafeReferenceError` is now `UnreachablePathError`, after #1271
 
 - **Importing `UnsafeReferenceError` from `kingfisher.core.agent.host_paths` fails**,

@@ -15,7 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.cli.health import examine, worst
+from kingfisher.cli.health import examine
+from kingfisher.core import versions
+from kingfisher.core.access.capabilities import CapabilityError
+from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from tests.conftest import repository_root
 
@@ -616,13 +619,61 @@ def test_doctor_fails_on_every_refusal_a_file_can_reach(key, cfg):
 
     Driven against each broken catalogue rather than asserted about the checks,
     because what matters is the exit code somebody gates on and not which check
-    happens to carry the message.
+    happens to carry the message. Failed by a row of its own, though: the `startup`
+    row below fails every one of these, and says only what startup says.
     """
     defect = REFUSALS[key].defect
     assert defect is not None, "the parametrize above selects on this"
     defect(cfg)
 
-    assert worst(examine(cfg)) == "fail"
+    failed = [check.name for check in examine(cfg) if check.verdict == "fail"]
+
+    assert failed, "doctor exits 0 on a catalogue startup refuses"
+    assert "startup" not in failed, "only the backstop caught it: write a row that names it"
+
+
+PLANTED = "a refusal no row knows"
+
+
+def _planted_in_warm(cfg, monkeypatch) -> None:
+    warm = Definitions.warm
+
+    def refusing(definitions: Definitions) -> Definitions:
+        warm(definitions)
+        raise ConfigError(PLANTED)
+
+    monkeypatch.setattr(Definitions, "warm", refusing)
+
+
+def _planted_after_warm(cfg, monkeypatch) -> None:
+    # Asked only where a tool is offered.
+    _write(_root(cfg, "tools") / "echo.py", TOOL.format(n="echo"))
+
+    def refusing(*_: object) -> None:
+        # Not `ConfigError`, which startup suppresses here.
+        raise CapabilityError(PLANTED)
+
+    monkeypatch.setattr(versions, "builtin_tool_names", refusing)
+
+
+@pytest.mark.parametrize("plant", [_planted_in_warm, _planted_after_warm])
+def test_doctor_fails_on_a_refusal_no_row_names(plant, cfg, monkeypatch):
+    """A check written into startup's with no row beside it: startup refuses the folder,
+    and `doctor`, asking only its own rows, exited 0 over it.
+
+    Planted, because every refusal a file reaches today has its row, which the table
+    above sees to; this is for the one written next. Both halves of startup's check, so
+    `doctor` asking `warm` alone fails here, and startup is asked first, so each plant is
+    known to reach it.
+    """
+    plant(cfg, monkeypatch)
+    with pytest.raises((ConfigError, CapabilityError), match=PLANTED):
+        versions.checked(cfg, Definitions.from_config(cfg))
+
+    failed = [check for check in examine(cfg) if check.verdict == "fail"]
+
+    assert [check.name for check in failed] == ["startup"]
+    assert failed[0].detail.endswith(PLANTED)
 
 
 def test_a_refusal_no_file_can_reach_says_why():

@@ -392,6 +392,27 @@ def retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
     )
 
 
+def _startup(cfg: Config, catalogue: Definitions) -> Iterator[Check]:
+    """A refusal of startup's that no row of these names.
+
+    Startup's own check, run here, so one added to it with no row beside it fails `doctor`
+    rather than leaving it passing a folder startup refuses.
+    """
+    # Here, not at the top: importing it loads deepagents.
+    from kingfisher.core.versions import checked  # noqa: PLC0415
+
+    try:
+        checked(cfg, catalogue)
+    # Whatever it raises, startup refuses on.
+    except Exception as exc:  # noqa: BLE001
+        yield Check(
+            "startup",
+            "fail",
+            f"{type(exc).__name__}: {exc}",
+            "fix what it names: startup refuses these definitions, and no row above says why",
+        )
+
+
 def examine(
     cfg: Config,
     found: Inventory | None = None,
@@ -437,7 +458,12 @@ def examine(
             raise read
         if found is None:
             found = inventory(cfg, catalogue=read, sessions=sessions)
+        first = len(checks)
         checks += health_definitions.checks(cfg, found, read)
+        # Only where every row passed: a failed one names the fault startup refuses, in
+        # its own words, and this would say it twice.
+        if all(check.verdict != "fail" for check in checks[first:]):
+            checks += _startup(cfg, read)
     except ConfigError as exc:
         checks.append(
             Check(
