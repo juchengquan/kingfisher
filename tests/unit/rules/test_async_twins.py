@@ -44,7 +44,7 @@ DIFFERS = {
         "it refuses before any work is done, so it has nothing to await"
     ),
     "core/agent/scratch.py:ScratchRunner.arun": (
-        "a backend's own async method is preferred to its sync one on a thread"
+        "the backend's method runs on a thread, told to stop when the awaiting call is cancelled"
     ),
     "core/agent/tool_guards.py:GuardedTool._arun": (
         "a wrapped tool with no async run of its own is run through its sync one"

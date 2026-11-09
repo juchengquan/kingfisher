@@ -56,10 +56,9 @@ registered the middleware, or want the locks. The shipped `assets/` has several,
 among them, and ships the middleware they name beside them -- so seed that set
 with `--all`.
 
-`seed` takes a *destination* rather than a whole `Config` — anything with a
-`definitions` folder, which both `WorkspacePaths` and `Config` satisfy. That is
-what lets it run on a fresh folder, before there is a `models.yaml` inside it to
-read.
+`seed` takes the definitions folder's path rather than a whole `Config` --
+`paths.definitions` above. That is what lets it run on a fresh folder, before
+there is a `models.yaml` inside it to read.
 
 The formats — agents, skills, subagents, and the catalogue they live in — are
 documented in [`docs/guides/formats.md`](docs/guides/formats.md). Tools and
@@ -87,6 +86,16 @@ when it leaves the conversation, or at once if it is too long to show whole.
 `kf.session(session_id).result("A-0002")` from Python. A run
 that should leave nothing behind can say so at the time: `kingfisher run
 --delete-session`, or `Kingfisher.run(..., delete_session=True)` from Python.
+
+`kingfisher turns --session ID` lists the turns a session kept, oldest first, with a `*`
+on the path to where it is now -- `kf.session(session_id).turns()` from Python.
+`kingfisher rewind --session ID --to TURN` puts the session back where that turn ended:
+its conversation and the files in `/outputs` and `/memory`. `--to-start` goes back to
+before the first turn, and `--only files` or `--only conversation` takes back one and
+leaves the other -- `kf.session(session_id).rewind(turn_id, only="files")` from Python,
+with `START` for the start. The turns after it are kept, so a rewind to one of them
+returns. A file with no copy of that version stays as it is, named in
+`Rewound.not_restored`; `KINGFISHER_REWIND_MAX_BYTES` caps what the copies may hold.
 
 An agent can be written to stop before a tool runs and wait for you — see
 *Approval gates* in [`formats.md`](docs/guides/formats.md), and
