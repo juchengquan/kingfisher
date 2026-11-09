@@ -67,7 +67,9 @@ def test_the_conversation_counts_against_the_session_quota(cfg):
 
 
 def test_a_real_graph_carries_the_conversation_within_a_saver(cfg, session_dir):
-    """The whole reason a checkpointer exists."""
+    """A second turn on the same thread not seeing the first, because the saver kept nothing
+    between them.
+    """
     from langchain_core.messages import AIMessage
 
     from kingfisher.core.agent.assembly import build_agent

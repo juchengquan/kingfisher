@@ -273,7 +273,9 @@ def test_a_claim_someone_could_still_hold_spares_its_session(cfg):
 
 
 def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
-    """One rule, so they cannot drift."""
+    """Reaping judging a claim stale at another age than the claim itself does, so a session
+    is removed while its turn still holds it, or kept long after.
+    """
     import time
 
     kf = service(cfg)

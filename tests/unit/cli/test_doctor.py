@@ -346,7 +346,9 @@ def test_a_clean_catalogue_says_its_subagent_references_are_fine(cfg, shipped):
 
 
 def test_an_unconfined_shell_warns_and_does_not_fail(cfg, capsys, monkeypatch):
-    """The distinction the exit code turns on."""
+    """An unconfined shell failing `doctor`, or passing it without a warning, when it is a
+    risk an operator may choose to run.
+    """
 
     checks = {check.name: check for check in examine(cfg, sessions=_shelled("off"))}
 
@@ -795,7 +797,9 @@ def test_doctor_says_a_missing_key_once_and_inside_its_report(cfg, monkeypatch, 
 
 
 def test_a_definition_that_cannot_run_is_named(cfg, tmp_path):
-    """The check nothing else does."""
+    """A subagent whose model needs a key this machine does not have, `ELSEWHERE_KEY`,
+    passed by `doctor` rather than named with its remedy.
+    """
     half = _half_keyed(cfg, tmp_path)
     subagents_dir(half).mkdir(parents=True, exist_ok=True)
     (subagents_dir(half) / "far.yaml").write_text(
@@ -1396,7 +1400,9 @@ def test_the_warning_and_the_remedy_name_the_same_missing_piece(cfg, monkeypatch
 
 
 def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
-    """"confined" was true and unhelpful."""
+    """`doctor` saying only "confined", which was true and told an operator nothing, rather
+    than which fence does it and, for bubblewrap, that the shell has no network.
+    """
     from kingfisher.plugins.sessions.sandbox.confinement import Confinement, _unwrapped
 
     assert health_isolation._mechanism(Confinement(wrap=lambda c: c, mechanism="sandbox-exec")) == (

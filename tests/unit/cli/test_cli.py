@@ -21,7 +21,9 @@ from tests.conftest import an_agent, repository_root, start, verbs
 
 
 def test_bare_invocation_prints_help_and_does_nothing(capsys):
-    """The safe default a shipped command needs."""
+    """`kingfisher` with no verb doing something, or failing, instead of printing its verbs
+    and exiting 0.
+    """
     assert main([]) == 0
 
     printed = capsys.readouterr().out
@@ -125,7 +127,9 @@ def test_the_reason_is_printed_on_every_definition_skipped(cfg, monkeypatch, cap
 
 
 def test_no_line_is_printed_when_nothing_wanted_a_source_id(cfg, monkeypatch, capsys, tmp_path):
-    """It earns its lines or it has none."""
+    """`kingfisher seed` printing the access-control line when nothing it seeded named a
+    source id.
+    """
     plain = tmp_path / "plain" / "skills" / "only"
     plain.mkdir(parents=True)
     (plain / "SKILL.md").write_text(
@@ -197,7 +201,7 @@ def test_an_unknown_verb_is_named_along_with_the_ones_that_exist(capsys):
 
 
 def test_every_verb_the_parser_offers_has_something_to_run_it():
-    """The one risk the dispatch table introduces."""
+    """A verb the parser offers with no handler to run it, or a handler no verb reaches."""
     from kingfisher.cli.__main__ import HANDLERS, build_parser
 
     offered = set(verbs(build_parser()))
@@ -212,7 +216,9 @@ def test_every_verb_the_parser_offers_has_something_to_run_it():
 
 
 def test_the_env_file_beside_you_is_read(tmp_path, monkeypatch, capsys, shipped):
-    """The failure this was written for."""
+    """The command ignoring a `.env` in the folder it runs from, so a setting written there
+    never reaches it.
+    """
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text(
         f"KINGFISHER_DEFINITIONS_DIR={tmp_path / 'definitions'}\n", encoding="utf-8"
@@ -246,7 +252,7 @@ def test_a_parent_directorys_env_file_is_not_read(tmp_path, monkeypatch):
 
 
 def test_the_environment_wins_over_the_file(tmp_path, monkeypatch, capsys, shipped):
-    """`override=False`, and it matters."""
+    """A `.env` setting overriding the same variable set in the shell."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text(
         f"KINGFISHER_DEFINITIONS_DIR={tmp_path / 'from-the-file'}\n", encoding="utf-8"

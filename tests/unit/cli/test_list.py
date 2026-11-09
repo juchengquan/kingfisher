@@ -48,7 +48,9 @@ def test_definitions_holding_an_agent_do_not_say_none(cfg, at_the_command_line, 
 
 
 def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatch, capsys):
-    """The one error a caller causes and can fix."""
+    """A missing model catalogue raising out of `kingfisher list`, rather than reported with
+    exit 2 and where the setting was looked for.
+    """
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
     monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
 
@@ -156,7 +158,9 @@ def test_the_header_names_every_catalogue_including_tools(cfg):
 
 
 def test_the_json_carries_the_kind_and_a_path_a_script_can_open(cfg, tmp_path):
-    """Two things the header deliberately does not do."""
+    """The JSON listing giving a folder as the header's `./name`, or leaving out what kind
+    of place it is, so a script cannot open it.
+    """
     import json
     from dataclasses import replace
 
@@ -171,7 +175,9 @@ def test_the_json_carries_the_kind_and_a_path_a_script_can_open(cfg, tmp_path):
 
 
 def test_json_and_the_human_form_describe_the_same_definitions(cfg, at_the_command_line, capsys):
-    """Two formats, one answer."""
+    """`kingfisher list` and `kingfisher list --json` naming different definitions, or one
+    showing the access section the other leaves out.
+    """
     import json
 
     _seed_something(cfg)
@@ -272,7 +278,9 @@ def test_the_listing_marks_a_compiled_subagent(cfg):
 
 
 def test_the_listing_says_what_a_compiled_subagent_costs(cfg):
-    """The assumption a reader would otherwise make."""
+    """A compiled subagent listed without saying that a `tools:` grant narrows what it is
+    handed, not what its own graph can call.
+    """
     from kingfisher.cli.listing import render
     from kingfisher.core.inventory import inventory
 

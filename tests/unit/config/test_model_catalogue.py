@@ -527,7 +527,9 @@ models:
 
 
 def test_a_model_on_an_unkeyed_endpoint_is_not_reported_as_undefined(tmp_path):
-    """The message this whole change exists to fix."""
+    """A model whose endpoint has no key refused as one the catalogue does not define,
+    rather than naming the key it is missing.
+    """
     models = load(written(tmp_path, TWO_ENDPOINTS), KEYS)
 
     with pytest.raises(ConfigError) as refused:
@@ -564,7 +566,7 @@ def test_what_cannot_run_is_kept_apart_from_what_can(tmp_path):
 
 
 def test_a_catalogue_with_every_key_reaches_nothing_unreachable(tmp_path):
-    """The negative control."""
+    """A catalogue with every key reporting a model as unreachable, or dropping one."""
     models = load(
         written(tmp_path, TWO_ENDPOINTS),
         {**KEYS, "ELSEWHERE_API_KEY": "sk-elsewhere"},
