@@ -24,7 +24,9 @@ WORKSPACE = Offering(
 
 
 def test_a_name_on_the_wrong_axis_is_not_called_unknown():
-    """The mistake the split creates."""
+    """A built-in written under `tools` called unknown, when the fix is to move it to
+    `builtin_tools`.
+    """
     with pytest.raises(CapabilityError) as raised:
         WORKSPACE.refuse_unknown(ALL, ("read_file",), subject="this request")
 
@@ -84,7 +86,7 @@ def test_naming_nothing_cannot_name_something_wrong():
 
 
 def test_narrowing_one_axis_does_not_cost_the_other():
-    """The whole point of the split."""
+    """Narrowing `tools` to one offered tool taking the built-ins away with the rest."""
     permitted = WORKSPACE.permitted(ALL, ("http_fetch",))
 
     assert set(permitted or ()) == {"read_file", "execute", "http_fetch"}

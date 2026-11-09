@@ -131,7 +131,9 @@ def test_a_selection_naming_nothing_carries_no_claims():
 
 
 def test_the_derived_field_cannot_be_written_by_hand():
-    """It is read out of `tools`."""
+    """A subagent file writing `tool_sources` by hand accepted, when that field is worked
+    out from `tools`.
+    """
     with pytest.raises(Exception, match="unknown field 'tool_sources'"):
         a_subagent("name: a\ndescription: d\ntool_sources: {}\nsystem_prompt: |\n  b\n", "a.yaml")
 
@@ -290,7 +292,9 @@ def test_the_long_form_of_a_unique_tool_reaches_the_allowlist():
 
 
 def test_a_clashing_name_still_has_to_be_spelt_out():
-    """The behaviour this must not change."""
+    """A tool name two files offer accepted bare, when it has to be written out as
+    `a/t.py::fetch` or `b/t.py::fetch`.
+    """
     offering = Offering(offered=CLASHING, sources={})
 
     assert offering.spelt(("fetch",)) == ("fetch",)

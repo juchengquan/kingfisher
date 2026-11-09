@@ -57,7 +57,9 @@ def test_a_folder_that_is_itself_a_skill_is_not_a_source(cfg):
 
 
 def test_two_parties_can_both_ship_one_name(cfg):
-    """The whole point."""
+    """Two parties' skills of one name, `lookup`, collapsed into one, so one party's
+    description answers for both.
+    """
     registry = _two_parties(cfg)
 
     assert set(registry.offered) == {"research::lookup", "legal::lookup"}
@@ -82,7 +84,9 @@ def _read(cfg):
 
 
 def test_a_bare_name_that_two_sources_offer_is_refused(cfg):
-    """The safety property."""
+    """A bare skill name that two sources offer resolved to one of them, so a caller gets
+    whichever was read first.
+    """
     registry = _two_parties(cfg)
 
     with pytest.raises(CapabilityError, match="more than one source"):

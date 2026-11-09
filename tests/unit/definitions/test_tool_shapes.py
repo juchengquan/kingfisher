@@ -195,7 +195,9 @@ SHAPES = {
 
 
 def test_an_entry_that_is_not_a_tool_is_refused(cfg):
-    """Measured before this: every one of them loaded."""
+    """An entry in `TOOLS` that is not a tool loaded, as every one of them did before this,
+    or refused without naming its file, what it found and the entry.
+    """
     for body, kind, shown in NOT_TOOLS.values():
         _install(cfg, "probe", body)
 

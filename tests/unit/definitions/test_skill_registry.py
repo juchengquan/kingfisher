@@ -184,7 +184,9 @@ def test_the_metadata_still_carries_what_the_registry_reads():
 
 
 def test_a_header_naming_something_else_is_reported(cfg):
-    """The gap the two neighbouring reports left open."""
+    """A skill whose header names something other than its folder going unreported, or
+    reported as missing when it loads under the header's name.
+    """
     _skill(cfg.skills_dir, "company-lookup", GOOD.format(name="find-company", desc="Looks up."))
 
     registry = _read(cfg.skills_dir)

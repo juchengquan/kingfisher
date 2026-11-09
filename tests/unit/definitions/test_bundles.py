@@ -53,7 +53,9 @@ def define(directory, name, filename=None):
 
 
 def test_a_folder_named_after_its_definition_is_that_subagents_bundle(tmp_path):
-    """The whole rule, and the only one."""
+    """A folder named after the definition inside it not read as that subagent's bundle, or
+    its tools and skills looked for anywhere but inside that folder.
+    """
     define(tmp_path / "surveyor", "surveyor")
     (tmp_path / "surveyor" / "tools").mkdir()
     (tmp_path / "surveyor" / "skills" / "sampling").mkdir(parents=True)
@@ -208,7 +210,9 @@ def test_a_real_bundle_is_not_reported_as_orphaned(tmp_path):
 
 
 def test_a_skills_config_file_is_not_read_as_a_subagent(tmp_path):
-    """The hazard the reserved names exist for."""
+    """A YAML file inside a bundle's skills, such as a skill's own `config.yaml`, read as a
+    subagent definition.
+    """
     define(tmp_path / "surveyor", "surveyor")
     sampling = tmp_path / "surveyor" / "skills" / "sampling"
     sampling.mkdir(parents=True)
@@ -220,7 +224,7 @@ def test_a_skills_config_file_is_not_read_as_a_subagent(tmp_path):
 
 
 def test_a_yaml_beside_a_bundles_tools_is_not_read_either(tmp_path):
-    """Same reason, other directory."""
+    """A YAML file inside a bundle's `tools/` read as a subagent definition."""
     define(tmp_path / "surveyor", "surveyor")
     tools = tmp_path / "surveyor" / "tools"
     tools.mkdir()
@@ -282,7 +286,9 @@ def test_a_bundles_tools_are_loaded_under_their_owners_name(tmp_path):
 
 
 def test_a_bundles_tool_is_not_in_the_shared_offering(tmp_path):
-    """The whole feature in one assertion."""
+    """A tool from a subagent's bundle offered beside the shared tools, to every agent that
+    is granted tools.
+    """
     catalogue = catalogue_with_bundle(tmp_path)
 
     offering = Offering.of(catalogue.tools.found)
@@ -421,7 +427,9 @@ def test_a_subagent_holds_the_tool_from_its_own_folder(cfg, session_dir):
 
 
 def test_a_private_tool_survives_a_request_that_granted_no_tools(cfg, session_dir):
-    """The decision, stated as a test."""
+    """A subagent stripped of its own bundled tool because the request granted no tools, a
+    grant that narrows only the shared ones.
+    """
     workspace_with_bundle(cfg, definition=OWN_TOOL_ONLY)
 
     built = build_agent(
@@ -701,7 +709,7 @@ def test_a_shadowing_tool_gets_one_row_and_the_annotation_that_says_more(cfg):
 
 
 def test_the_main_agent_never_holds_another_subagents_private_tool(cfg, session_dir):
-    """The point of the whole feature."""
+    """The main agent handed a tool from a subagent's bundle, which only that subagent may hold."""
     workspace_with_bundle(cfg)
 
     built = build_agent(

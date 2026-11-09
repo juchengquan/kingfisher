@@ -177,7 +177,9 @@ def test_a_star_may_not_be_written_in_the_mapping_form():
 
 
 def test_a_star_in_the_mapping_form_is_refused_even_with_no_settings():
-    """Two ways to say one thing is one way too many."""
+    """A `name: "*"` entry in the mapping form accepted because it carries no settings, when
+    every middleware is written only as the plain `["*"]`.
+    """
     with pytest.raises(AgentError, match="does not take"):
         agent_spec(written('middlewares:\n  - name: "*"\n'))
 

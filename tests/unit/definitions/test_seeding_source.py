@@ -85,7 +85,9 @@ def test_an_explicit_directory_beats_the_variable(tmp_path):
 
 
 def test_the_refusal_says_both_ways_of_answering_it(tmp_path, monkeypatch):
-    """A variable and a flag."""
+    """The refusal for a missing seed source naming only one of its two fixes,
+    `KINGFISHER_ASSETS` or `--from`.
+    """
 
     monkeypatch.chdir(tmp_path)
     with pytest.raises(ConfigError) as refused:
@@ -113,7 +115,7 @@ def test_a_given_directory_is_seeded_instead(cfg, tmp_path):
 
 
 def test_a_source_that_is_not_a_directory_is_refused(cfg, tmp_path):
-    """Loudly, and before anything is written."""
+    """A seed source that is not a directory accepted instead of refused as nothing to seed from."""
     with pytest.raises(ConfigError, match="nothing to seed from"):
         seeding.seed(cfg.definitions, tmp_path / "no-such-directory")
 

@@ -114,7 +114,9 @@ def test_a_skill_repository_lists_no_skills_of_its_own(catalogue):
 
 
 def test_a_tool_repository_imports_each_module_once_for_every_view_of_it(catalogue, capfd):
-    """The reason this kind became a class."""
+    """A tool module imported again for each view of the repository, so its top-level code
+    runs twice.
+    """
     tools = LocalToolRepository(catalogue / "tools")
 
     assert Offering.of(tools.found).sources == {"noisy": "noisy.py"}
@@ -124,7 +126,9 @@ def test_a_tool_repository_imports_each_module_once_for_every_view_of_it(catalog
 
 
 def test_a_subagent_repository_parses_each_definition_once_for_both_views(catalogue, monkeypatch):
-    """The same fix one kind over."""
+    """A subagent definition parsed again for each view of the repository, once for its
+    specs and once for its sources.
+    """
     parsed = []
     # Patched on the reading module rather than on a name the catalogue imported:
     # the catalogue calls `reading.read` through the module now, so a name bound

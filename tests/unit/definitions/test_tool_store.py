@@ -71,7 +71,7 @@ def test_two_modules_claiming_one_tool_name_both_load(tmp_path):
 
 
 def test_one_module_claiming_a_name_twice_is_refused(tmp_path):
-    """Where the refusal still belongs."""
+    """A module that lists one tool twice in `TOOLS` loaded rather than refused."""
     body = MODULE.replace("TOOLS = [add]", "TOOLS = [add, add]")
     directory = _write(tmp_path / "tools", "twice.py", body)
 
