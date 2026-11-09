@@ -13,22 +13,6 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 
 ## Waiting on a decision
 
-- **Whether a client may read `turns.jsonl`.** With the transcript gone, the turn log is
-  the only record of what was said, and a client -- a frontend reading the sessions'
-  remote storage, say -- could rebuild a conversation from it without asking kingfisher.
-  Whether its lines become a documented, read-only contract waits on a design the owner
-  has in progress. Such a contract would have to cover more than the lines: the `.2`
-  second copy and the seal line ending each copy, which #1232 added, the `at` lines a
-  later turn's clearing writes, and `off_path.jsonl`, which names the turns a rewind left
-  behind. The session is at the last turn the log opens that this file does not name, and
-  its conversation runs along that turn's parents, so a client reading the log alone
-  would show an abandoned branch after any rewind that takes back the conversation. It
-  would fix the file's shape too. The log is one file read and written whole each turn,
-  and what `decisions.md` names for when a session measures slow, an append on the
-  backend, changes what a client reads: each copy ends in one seal over everything above
-  it, which an append cannot keep. A file per turn would change it as well. So the log's
-  layout is settled with the contract or before it, with the sizes
-  `scripts/session_survey.py` brings back from the client's deployment. *(2026-11-07.)*
 - **Keeping the cache through a memory change on MiniMax.** The breakpoint ahead of the
   memory block saves little there, so each change the writer makes costs the next turn
   most of its cache; `KINGFISHER_MEMORY_EVERY` went to 4 to pay it half as often. Moving
@@ -167,10 +151,12 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   fires at 170,000 tokens, which needs that deployment's sessions. *(2026-10-27.)*
 - **`scripts/session_survey.py` on the client's deployment.** Three questions wait on its
   numbers: whether per-session memory earns its writer runs, what replaying old tool
-  output costs in speed and window as a session grows, and what sessions hold on disk. It
-  answers the M2.5 one above as well. It reads a sessions folder, and the run log when
-  given one, and prints counts only -- nothing anyone said, no session ids -- so its
-  output can be sent back as it is. *(2026-11-01.)*
+  output costs in speed and window as a session grows, and what sessions hold on disk,
+  which also says whether the turn log, read and written whole each turn, wants another
+  layout: an append cannot keep the one seal ending each copy, and a file per turn
+  changes it too. It answers the M2.5 one above as well. It reads a sessions folder, and
+  the run log when given one, and prints counts only -- nothing anyone said, no session
+  ids -- so its output can be sent back as it is. *(2026-11-09.)*
 - **`scripts/turn_deadline_survey.py` on the client's deployment.** Whether to stop a
   turn's work at its limit, which #1201 left open, waits on how often real programs and
   subagents run near or past it. Measured with test models under a 2s limit: a program's
