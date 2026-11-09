@@ -29,7 +29,9 @@ def test_a_caller_reaches_an_agent_their_source_id_is_listed_on(two_agents):
 
 
 def test_an_agent_out_of_reach_reads_as_one_that_does_not_exist(two_agents):
-    """Decision 15."""
+    """An agent the caller's locks keep from them refused in other words than an agent that
+    does not exist, which tells them it is there.
+    """
     kf = Kingfisher(two_agents, sessions=LocalSessions())
     with pytest.raises(CapabilityError, match="no agent named 'assistant'"):
         agent_named(kf, "assistant", source_ids=("B",))

@@ -417,7 +417,9 @@ def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
 
 
 def test_a_disallowed_tool_is_refused_even_when_the_model_calls_it_anyway(cfg, session_dir):
-    """The filter is not the boundary."""
+    """A shell call the model makes though the request withheld it run, because the tool was
+    only left out of what the model sees rather than refused at the call.
+    """
     responses = [
         AIMessage(
             content="",
@@ -756,7 +758,9 @@ def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
 
 
 def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch, cfg):
-    """The reason any of this changed."""
+    """A listing that cannot read the built-in tools reporting none, as if the agent had no
+    built-ins, rather than saying they are unknown.
+    """
     from kingfisher.core import inventory as inventory_module
     from kingfisher.core.agent import assembly as agent_module
 

@@ -208,7 +208,9 @@ def test_the_builtin_survives_when_no_subagents_are_named(cfg, session_dir):
 
 
 def test_an_unnamed_subagent_is_still_refused(cfg, session_dir):
-    """The backstop."""
+    """A `task` call naming a subagent the request never named run, rather than refused with
+    the names it may use.
+    """
     responses = [
         AIMessage(
             content="",
@@ -241,7 +243,9 @@ def test_an_unnamed_subagent_is_still_refused(cfg, session_dir):
 
 
 def test_an_unrestricted_request_delegates_as_before(cfg, session_dir):
-    """The rule attaches to *tool* narrowing."""
+    """The subagent ceiling applied to a request that narrowed no tools, refusing the
+    general-purpose helper it was always allowed.
+    """
     responses = [
         AIMessage(
             content="",
@@ -669,7 +673,9 @@ def test_mixing_the_wildcard_with_a_name_is_refused(cfg, session_dir):
 
 
 def test_a_tool_the_request_withheld_is_still_dropped(cfg, session_dir):
-    """The half that must *not* change."""
+    """A subagent refused outright for naming a tool the request withheld, rather than built
+    with that tool dropped.
+    """
     definition = TYPO.replace("reed_file", "read_file, execute")
 
     wired = _with_helper(cfg, definition)

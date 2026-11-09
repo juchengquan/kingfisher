@@ -58,7 +58,7 @@ def _offered(built) -> set[str]:
 
 
 def test_an_agent_holds_only_the_tools_its_file_names(cfg, session_dir):
-    """The whole point of the file."""
+    """An agent handed write, delete or shell tools its file does not name."""
     _agents(cfg, NARROW)
 
     built = build_agent(
@@ -118,7 +118,9 @@ def test_the_agent_runs_the_model_its_file_names(cfg, session_dir):
 
 
 def test_a_request_that_names_no_agent_is_refused_once_the_definitions_have_any(cfg):
-    """No default and no implicit one."""
+    """A request that names no agent given one anyway, a default or whichever comes first,
+    rather than refused.
+    """
     _agents(cfg, NARROW, CHEAP)
     service = Kingfisher(cfg, sessions=LocalSessions())
 

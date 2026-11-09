@@ -279,7 +279,9 @@ def test_a_grant_naming_something_gone_reports_only_what_is_there():
 
 
 def test_a_grant_written_today_goes_stale_when_a_tool_arrives():
-    """The case that motivated this."""
+    """A tool that arrives after a grant was written not reported as withheld by it, so
+    "everything but the shell" quietly stops meaning everything.
+    """
     offered_today = ("execute", "ls", "read_file")
     grant = tuple(n for n in offered_today if n != "execute")  # "everything but the shell"
 

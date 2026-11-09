@@ -326,7 +326,9 @@ def test_deepagents_own_middleware_is_discovered_across_the_package():
 
 
 def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, session_dir):
-    """The whole point: said, not forbidden."""
+    """A deployment's middleware that replaces deepagents' filesystem one refused, or put in
+    place without the warning that it does.
+    """
     # By the class a deployment silences every kingfisher warning by, not `UserWarning`.
     with pytest.warns(KingfisherWarning, match="deepagents merges by name"):
         built = build_agent(
