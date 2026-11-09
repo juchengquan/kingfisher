@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from typing import Any
+
 from tests.conftest import subagents_dir
 
 
@@ -30,3 +33,11 @@ def offer_skills(cfg, *names: str) -> None:
 def lock_skills(cfg, text: str) -> None:
     """`skill_locks.yaml`, beside the skills folder as a deployment keeps it."""
     (cfg.skills_dir.parent / "skill_locks.yaml").write_text(text, encoding="utf-8")
+
+
+def _marked(cfg: Any, model: str | None = None, **fields: Any) -> Any:
+    """`cfg`, with one model's entry -- the default's unless named -- carrying `fields`."""
+    models = cfg.models
+    name = model or models.default
+    entry = replace(models.models[name], **fields)
+    return replace(cfg, models=replace(models, models={**models.models, name: entry}))

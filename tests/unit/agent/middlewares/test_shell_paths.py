@@ -33,8 +33,8 @@ from kingfisher.plugins import LocalSessions, ShellPrompt
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from kingfisher.plugins.sessions.shell import kingfishers_shell
 from tests.conftest import EVERY_TOOL, an_agent, hosts_shell, start, subagents_dir
-from tests.unit.agent.test_shell_prompt import Plain
 from tests.unit.scripted import Scripted
+from tests.unit.stand_ins import Here, Plain
 
 #: One skill, for a graph that must hold one to be told how the shell reaches them.
 DEMO_SKILL = "---\nname: demo\ndescription: D.\n---\nGo.\n"
@@ -221,14 +221,6 @@ def test_a_subagent_is_told_the_inputs_folder_the_layout_names(shelled):
     assert len(offered) == 3
     for tools in offered:
         assert '`/in/data.csv` is `"$KINGFISHER_SESSION_ROOT/in/data.csv"`' in _execute(tools)
-
-
-class Here(Plain):
-    """A runner a deployment supplies that runs its commands on this host."""
-
-    @property
-    def local(self) -> bool:
-        return True
 
 
 class Theirs(LocalShellBackend):

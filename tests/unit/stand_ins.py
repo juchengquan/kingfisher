@@ -9,19 +9,31 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
+from deepagents.middleware.summarization import SummarizationMiddleware
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import Field
 
+from kingfisher import MemoryChanges, MemoryEntry
 from kingfisher.core.definitions.catalogue import Definitions
-from kingfisher.core.interfaces import CommandResult, CommandRunner, Sessions
+from kingfisher.core.interfaces import (
+    CommandResult,
+    CommandRunner,
+    MemoryStore,
+    PdfAttachments,
+    Sessions,
+    UnusedResults,
+)
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, SKILLS_ROUTE
+from kingfisher.plugins import LocalSessions
 from tests.conftest import FakeGraph, FakeToolCallingModel
 
 
@@ -262,3 +274,141 @@ def _ran(tool, request):
 
 async def _aran(tool, request):
     return await tool.ainvoke({"type": "tool_call", **request.tool_call})
+
+
+@dataclass(frozen=True)
+class Plain(CommandRunner):
+    """The runner a deployment writes first: it runs the command it is handed, and is
+    handed nothing else. Not local, so no fence of this host's is put in front of it.
+    """
+
+    @property
+    def local(self) -> bool:
+        return False
+
+    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+        done = subprocess.run(  # noqa: S602 -- `execute` is a shell by definition
+            command, shell=True, capture_output=True, text=True, timeout=timeout, check=False
+        )
+        return CommandResult(
+            output=done.stdout + done.stderr, exit_code=done.returncode, truncated=False
+        )
+
+
+class Here(Plain):
+    """A runner a deployment supplies that runs its commands on this host."""
+
+    @property
+    def local(self) -> bool:
+        return True
+
+
+#: Where `Early` fires: well under deepagents' 170,000 on a model with no profile.
+EARLY = 100_000
+
+
+class Early(SummarizationMiddleware):
+    """deepagents' summariser in its own place, firing at `EARLY` tokens."""
+
+    name = "early"
+    wants = frozenset({"model", "backend"})
+
+    def __init__(self, model: Any, backend: Any) -> None:
+        super().__init__(model, backend=backend, trigger=("tokens", EARLY))
+        self.name = "SummarizationMiddleware"
+
+
+@dataclass
+class _Asked:
+    """The two things `_input_budget` reads off a request."""
+
+    model: Any
+    model_settings: dict[str, Any]
+
+
+class SlowAgent(FakeGraph):
+    """A turn that keeps taking steps, as a real one can for hours."""
+
+    def __init__(self, steps: int = 50) -> None:
+        self.steps = steps
+        self.taken = 0
+
+    def stream(self, state, config, stream_mode=None, subgraphs=False):
+        for _ in range(self.steps):
+            self.taken += 1
+            yield ((), "updates", {"agent": {"messages": [AIMessage(content="working")]}})
+        yield ((), "values", {"messages": [AIMessage(content="done")]})
+
+
+class _Ordered(LocalSessions):
+    """Kingfisher's own backends, noting every file written or deleted through one, in order."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.written: list[str] = []
+        #: The paths of each save, a list a save.
+        self.saves: list[list[str]] = []
+
+    def open(self, cfg, session_id, /, *, catalogue=None):
+        opened = super().open(cfg, session_id, catalogue=catalogue)
+        upload = opened.upload_files
+
+        def noted(files):
+            self.written.extend(path for path, _ in files)
+            self.saves.append([path for path, _ in files])
+            return upload(files)
+
+        opened.upload_files = noted  # ty: ignore[invalid-assignment]
+        delete = opened.delete
+
+        def deleted(path):
+            self.written.append(f"deleted {path}")
+            return delete(path)
+
+        opened.delete = deleted  # ty: ignore[invalid-assignment]
+        return opened
+
+    def at(self, name: str) -> int:
+        """Where the first write of a path ending in `name` came."""
+        return next(i for i, path in enumerate(self.written) if path.endswith(name))
+
+
+class Shelf(MemoryStore):
+    """A store in a dict, recording every call, merging by id as a store should."""
+
+    def __init__(self, **users: tuple[MemoryEntry, ...]) -> None:
+        self.users: dict[str, tuple[MemoryEntry, ...]] = dict(users)
+        self.calls: list[tuple[Any, ...]] = []
+
+    def key(self, caller) -> str | None:
+        self.calls.append(("key",))
+        return caller.context.get("user_id")
+
+    def load(self, key: str) -> tuple[MemoryEntry, ...]:
+        self.calls.append(("load", key))
+        return self.users.get(key, ())
+
+    def apply(self, key: str, changes: MemoryChanges) -> tuple[MemoryEntry, ...]:
+        self.calls.append(("apply", key, changes))
+        kept = {one.id: one for one in self.users.get(key, ())}
+        for one in changes.removed:
+            kept.pop(one.id, None)
+        for one in (*changes.changed, *changes.added):
+            kept[one.id] = one
+        self.users[key] = tuple(kept.values())
+        return self.users[key]
+
+
+#: Written into what a turn is asked, handed and answered, and into what a failing hook
+#: raises, so that finding it in a run event is content leaking.
+SAID = "q7-said-q7"
+
+
+class _FailingPdfs(PdfAttachments):
+    def replacement(self, pdf):
+        raise RuntimeError(SAID)
+
+
+class _FailingSweep(UnusedResults):
+    def settle(self, found):
+        raise RuntimeError(SAID)

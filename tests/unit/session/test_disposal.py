@@ -525,7 +525,7 @@ def test_a_turn_stopped_at_a_bound_keeps_its_session(cfg):
     """
     from dataclasses import replace
 
-    from tests.unit.session.test_quotas import SlowAgent
+    from tests.unit.stand_ins import SlowAgent
 
     kf = Kingfisher(
         replace(cfg, turn_timeout_s=0),

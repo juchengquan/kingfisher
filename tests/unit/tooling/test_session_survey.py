@@ -17,7 +17,8 @@ from kingfisher.core.session.store import SECOND_COPY, HarnessFiles
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, read_conversation, start, tools_dir
 from tests.unit.agent.middlewares.test_clearing import TOOLS as BULKY
-from tests.unit.agent.middlewares.test_clearing import _marked, _one
+from tests.unit.agent.middlewares.test_clearing import _one
+from tests.unit.conftest import _marked
 from tests.unit.scripted import Scripted
 
 SURVEY = Path(__file__).resolve().parents[3] / "scripts" / "session_survey.py"

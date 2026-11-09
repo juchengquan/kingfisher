@@ -4,7 +4,6 @@ deepagents' place included."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 from typing import Any
 
 import pytest
@@ -34,27 +33,14 @@ from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, subagents_dir
-from tests.unit.stand_ins import Shown
+from tests.unit.conftest import _marked
+from tests.unit.stand_ins import EARLY, Early, Shown, _Asked
 
 #: The notice a summariser in deepagents' place is built with, which is not the subject
 #: here but for the one test asking what it says.
 pytestmark = pytest.mark.filterwarnings("ignore:.*a name deepagents uses:UserWarning")
 
 KB = 1024
-
-#: Where `Early` fires: well under deepagents' 170,000 on a model with no profile.
-EARLY = 100_000
-
-
-class Early(SummarizationMiddleware):
-    """deepagents' summariser in its own place, firing at `EARLY` tokens."""
-
-    name = "early"
-    wants = frozenset({"model", "backend"})
-
-    def __init__(self, model: Any, backend: Any) -> None:
-        super().__init__(model, backend=backend, trigger=("tokens", EARLY))
-        self.name = "SummarizationMiddleware"
 
 
 #: Where `Late` fires: past deepagents' 170,000 on a model with no profile.
@@ -93,14 +79,6 @@ class Foreign(AgentMiddleware):
     """In deepagents' summariser's place, and no summariser kingfisher can read."""
 
     name = "SummarizationMiddleware"
-
-
-@dataclass
-class _Asked:
-    """The two things `_input_budget` reads off a request."""
-
-    model: Any
-    model_settings: dict[str, Any]
 
 
 def _anthropic(window: int | None, output: int = 4_096) -> ChatAnthropic:
@@ -411,14 +389,6 @@ def test_every_graph_clears_by_the_count_of_the_summarizer_it_runs(cfg, session_
 def _counted(middleware: Any) -> int:
     (clearing,) = [one for one in middleware if isinstance(one, ResultClearingMiddleware)]
     return clearing.count.request(REPORTED, [])
-
-
-def _marked(cfg: Any, model: str | None = None, **fields: Any) -> Any:
-    """`cfg`, with one model's entry -- the default's unless named -- carrying `fields`."""
-    models = cfg.models
-    name = model or models.default
-    entry = replace(models.models[name], **fields)
-    return replace(cfg, models=replace(models, models={**models.models, name: entry}))
 
 
 def test_a_mark_the_deployments_summarizer_reaches_first_is_refused_at_build(

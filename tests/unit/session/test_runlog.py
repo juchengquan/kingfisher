@@ -19,7 +19,7 @@ from langchain_core.outputs import ChatGeneration, LLMResult
 from langgraph.types import Command
 
 from kingfisher import Kingfisher
-from kingfisher.core.interfaces import PdfAttachments, RunEvents, UnusedResults
+from kingfisher.core.interfaces import RunEvents
 from kingfisher.core.logged import ORIGINS_LOGGER, RUN_LOGGER, WARNINGS_LOGGER, warn
 from kingfisher.core.request import Decision, Request, Resume
 from kingfisher.core.session import running
@@ -51,7 +51,7 @@ from tests.unit.session.test_stream_delegations import (
     _twice,
 )
 from tests.unit.session.test_unused_results import LEFT, STRAY, _folder
-from tests.unit.stand_ins import StubAgent
+from tests.unit.stand_ins import SAID, StubAgent, _FailingPdfs, _FailingSweep
 
 
 def _logger(sink, *, session_id: str = "s") -> RunLogger:
@@ -76,10 +76,6 @@ def test_every_event_says_which_session_and_turn_it_came_from():
     (event,) = sink.events
     assert (event["session_id"], event["turn_id"]) == ("s", "t1")
     assert (event["model"], event["endpoint"]) == ("m", "gateway")
-
-
-#: Written into everything a turn is asked, handed and answered below.
-SAID = "q7-said-q7"
 
 
 def _raised(error: Exception) -> Exception:
@@ -213,16 +209,6 @@ def test_a_sink_that_fails_does_not_fail_the_turn(cfg, caplog):
     assert {r.kingfisher["turn_id"] for r in caplog.records[1:]} == {result.turn_id}
 
 
-class _FailingPdfs(PdfAttachments):
-    def replacement(self, pdf):
-        raise RuntimeError(SAID)
-
-
-class _FailingSweep(UnusedResults):
-    def settle(self, found):
-        raise RuntimeError(SAID)
-
-
 @pytest.mark.parametrize("awaited", [False, True], ids=["run", "arun"])
 def test_a_turns_warnings_reach_the_deployments_sink_with_its_ids(scripted, awaited):
     """A turn's warnings went to Python's logging whatever sink was wired, so a deployment
@@ -269,7 +255,7 @@ def test_a_turns_warnings_reach_the_deployments_sink_with_its_ids(scripted, awai
             "only",
         )
         assert one["error_type"] == "RuntimeError"
-        assert one["error_at"].startswith("session/test_runlog.py:")
+        assert one["error_at"].startswith("unit/stand_ins.py:")
         assert one["message"].startswith(("the PDF attachments plugin raised RuntimeError at ",
                                           "session s: the unused results plugin raised "))
     assert (pdf["agent"], pdf["call"], pdf["tool"]) == ("helper", "s1", "read_file")

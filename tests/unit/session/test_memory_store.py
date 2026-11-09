@@ -12,41 +12,15 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, MemoryChanges, MemoryEntry, Request
-from kingfisher.core.interfaces import MemoryStore
 from kingfisher.core.session.memory import store_failed
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start
 from tests.unit.scripted import Scripted
+from tests.unit.stand_ins import Shelf
 
 #: What the memory block says with a store and a key, and without.
 USERS = "kept for their later conversations"
 SESSIONS = "kept for later turns of this conversation"
-
-
-class Shelf(MemoryStore):
-    """A store in a dict, recording every call, merging by id as a store should."""
-
-    def __init__(self, **users: tuple[MemoryEntry, ...]) -> None:
-        self.users: dict[str, tuple[MemoryEntry, ...]] = dict(users)
-        self.calls: list[tuple[Any, ...]] = []
-
-    def key(self, caller) -> str | None:
-        self.calls.append(("key",))
-        return caller.context.get("user_id")
-
-    def load(self, key: str) -> tuple[MemoryEntry, ...]:
-        self.calls.append(("load", key))
-        return self.users.get(key, ())
-
-    def apply(self, key: str, changes: MemoryChanges) -> tuple[MemoryEntry, ...]:
-        self.calls.append(("apply", key, changes))
-        kept = {one.id: one for one in self.users.get(key, ())}
-        for one in changes.removed:
-            kept.pop(one.id, None)
-        for one in (*changes.changed, *changes.added):
-            kept[one.id] = one
-        self.users[key] = tuple(kept.values())
-        return self.users[key]
 
 
 class Broken(Shelf):

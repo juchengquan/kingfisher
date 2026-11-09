@@ -529,8 +529,9 @@ def _failing_plugins(scripted, monkeypatch) -> list[str]:
     from kingfisher.cli import __main__ as entry
     from tests.conftest import EVERY_TOOL, subagents_dir
     from tests.unit.scripted import Scripted
-    from tests.unit.session.test_runlog import _called, _FailingPdfs, _FailingSweep
+    from tests.unit.session.test_runlog import _called
     from tests.unit.session.test_unused_results import LEFT, STRAY, _folder
+    from tests.unit.stand_ins import _FailingPdfs, _FailingSweep
 
     subagents_dir(scripted).mkdir(parents=True, exist_ok=True)
     (subagents_dir(scripted) / "helper.yaml").write_text(

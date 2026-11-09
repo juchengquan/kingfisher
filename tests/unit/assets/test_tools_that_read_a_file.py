@@ -8,7 +8,6 @@ stream chunks. So whatever a tool is going to spend has to be bounded by the too
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -17,6 +16,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.plugins import backend_at
 from tests.conftest import a_pdf, on_backend
+from tests.unit.assets.conftest import _asked
 
 
 @pytest.fixture
@@ -49,33 +49,6 @@ def _readers(shipped) -> dict[str, dict[str, Any]]:
         if "_fetched" in module:
             found[tool_name(one)] = module
     return found
-
-
-@dataclass
-class _Got:
-    """What a backend hands back for one file."""
-
-    content: bytes | None
-    error: str | None = None
-
-
-class _Backend:
-    """A backend holding one answer, so a tool's own read is what is under test."""
-
-    def __init__(self, content: bytes) -> None:
-        self._content = content
-
-    def download_files(self, paths: list[str]) -> list[_Got]:
-        return [_Got(self._content) for _ in paths]
-
-
-@dataclass
-class _Runtime:
-    context: Any
-
-
-def _asked(content: bytes) -> _Runtime:
-    return _Runtime(context=type("_Ctx", (), {"backend": _Backend(content)})())
 
 
 #: Every shipped file that asks a backend for a file, by its path under the assets.

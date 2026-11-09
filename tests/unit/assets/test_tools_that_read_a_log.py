@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
+from tests.unit.assets.conftest import _asked
 
 MB = 1024 * 1024
 
@@ -33,19 +34,8 @@ def _held(tool: Any) -> dict[str, Any]:
     return tool.__globals__
 
 
-class _Got:
-    def __init__(self, content: bytes) -> None:
-        self.content, self.error = content, None
-
-
-class _Runtime:
-    def __init__(self, content: bytes) -> None:
-        backend = type("_B", (), {"download_files": lambda _s, _p: [_Got(content)]})()
-        self.context = type("_C", (), {"backend": backend})()
-
-
 def _said(tool: Any, body: bytes, name: str = "app.log") -> str:
-    return tool(file_path=f"/inputs/{name}", runtime=_Runtime(body))
+    return tool(file_path=f"/inputs/{name}", runtime=_asked(body))
 
 
 def _minute(n: int) -> str:

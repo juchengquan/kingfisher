@@ -92,11 +92,6 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   verdict. If the deployment's hook decides without reading it, the same work fits in a
   middleware and the keyword can go. Ask the deployment what its hook reads.
   *(2026-11-01.)*
-- **The hooks are listed twice in the tests.** `test_architecture.py` holds their names,
-  to cap how many there are, and `test_hook_wiring.py` holds each name with its
-  interface. A new hook is written into both, and missing either turns a test red, so
-  nothing slips; it is only one place too many. Merging them into one list is a small
-  tidy-up whenever someone is next in either file. *(2026-11-01.)*
 - **Every definition read per turn, from a source that may be remote.** Tools, agents,
   subagents, skills and middleware fetched from an API, or from a wrapper over today's
   folder. Agreed: a session keeps only its agent's name and reads the definition fresh,

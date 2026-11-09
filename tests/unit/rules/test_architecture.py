@@ -1706,17 +1706,18 @@ def test_the_cross_plugin_rule_tells_its_own_from_another(tmp_path):
 
 
 #: The keywords a deployment changes what kingfisher does through, beyond what every
-#: `Kingfisher` is built from. A new one is written here only once it passes *A hook on
-#: `Kingfisher` is admitted by three rules* in `docs/decisions.md`.
-HOOKS = frozenset({
-    "instructions",
-    "turn_instructions",
-    "pdf_attachments",
-    "scratch_run_limit",
-    "subagent_middlewares",
-    "run_events",
-    "unused_results",
-    "memory_store",
+#: `Kingfisher` is built from, each with the interface in `core.interfaces` it takes. A new
+#: one is written here only once it passes *A hook on `Kingfisher` is admitted by three
+#: rules* in `docs/decisions.md`. `test_hook_wiring.py` reads the interfaces from here.
+HOOKS = MappingProxyType({
+    "run_events": "RunEvents",
+    "instructions": "Instructions",
+    "turn_instructions": "TurnInstructions",
+    "unused_results": "UnusedResults",
+    "pdf_attachments": "PdfAttachments",
+    "subagent_middlewares": "SubagentMiddlewares",
+    "scratch_run_limit": "ScratchRunLimit",
+    "memory_store": "MemoryStore",
 })
 #: Where that entry says grouping them in code is weighed again.
 REGROUP_AT = 10
@@ -1730,10 +1731,10 @@ def test_every_hook_on_kingfisher_was_admitted():
     built_from = {"self", "cfg", "sessions", "middlewares", "graph"}
     taken = set(inspect.signature(Kingfisher.__init__).parameters) - built_from
 
-    assert taken == HOOKS, (
-        f"new {sorted(taken - HOOKS)}, gone {sorted(HOOKS - taken)} -- judge a new hook by "
-        "'A hook on `Kingfisher` is admitted by three rules' in docs/decisions.md, then "
-        "write it in HOOKS"
+    assert taken == HOOKS.keys(), (
+        f"new {sorted(taken - HOOKS.keys())}, gone {sorted(HOOKS.keys() - taken)} -- judge "
+        "a new hook by 'A hook on `Kingfisher` is admitted by three rules' in "
+        "docs/decisions.md, then write it in HOOKS"
     )
     assert len(HOOKS) < REGROUP_AT, (
         f"{len(HOOKS)} hooks -- weigh grouping them in code, as that entry says"
@@ -1747,9 +1748,9 @@ def test_the_guide_groups_every_hook():
     section = guide.split("## Which there are", 1)[1].split("\n## ", 1)[0]
     grouped = set(re.findall(r"^\|[^|]*\| `(\w+)` \|", section, flags=re.MULTILINE))
 
-    assert grouped == HOOKS, (
-        f"ports.md groups {sorted(grouped - HOOKS)} beyond HOOKS and leaves out "
-        f"{sorted(HOOKS - grouped)} -- its table under 'Which there are' lists each"
+    assert grouped == HOOKS.keys(), (
+        f"ports.md groups {sorted(grouped - HOOKS.keys())} beyond HOOKS and leaves out "
+        f"{sorted(HOOKS.keys() - grouped)} -- its table under 'Which there are' lists each"
     )
 
 

@@ -69,6 +69,7 @@ from tests.conftest import (
     write_old_record,
 )
 from tests.unit.scripted import Scripted
+from tests.unit.stand_ins import _Ordered
 
 TOOL_RESULTS_ROUTE = DEFAULT_LAYOUT.tool_results_route
 
@@ -196,39 +197,6 @@ def _text(cfg, number: str) -> str:
 
 
 # -- when and where it is kept -------------------------------------------------
-
-
-class _Ordered(LocalSessions):
-    """Kingfisher's own backends, noting every file written or deleted through one, in order."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.written: list[str] = []
-        #: The paths of each save, a list a save.
-        self.saves: list[list[str]] = []
-
-    def open(self, cfg, session_id, /, *, catalogue=None):
-        opened = super().open(cfg, session_id, catalogue=catalogue)
-        upload = opened.upload_files
-
-        def noted(files):
-            self.written.extend(path for path, _ in files)
-            self.saves.append([path for path, _ in files])
-            return upload(files)
-
-        opened.upload_files = noted
-        delete = opened.delete
-
-        def deleted(path):
-            self.written.append(f"deleted {path}")
-            return delete(path)
-
-        opened.delete = deleted
-        return opened
-
-    def at(self, name: str) -> int:
-        """Where the first write of a path ending in `name` came."""
-        return next(i for i, path in enumerate(self.written) if path.endswith(name))
 
 
 def test_a_result_is_recorded_kept_and_handed_to_the_caller(ledgered):

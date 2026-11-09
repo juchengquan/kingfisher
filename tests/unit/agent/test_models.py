@@ -21,6 +21,7 @@ from kingfisher.core.agent.models import (
 from kingfisher.core.config import ConfigError, Endpoint, ModelProfile, WireFormat
 from kingfisher.core.model_catalogue import load
 from tests.conftest import repository_root
+from tests.unit.stand_ins import _Asked
 
 if TYPE_CHECKING:
     from typing import Any
@@ -297,14 +298,6 @@ def test_without_a_window_a_clearing_mark_is_held_to_170000():
     with pytest.raises(ConfigError, match=r"'a-gateway-model' .*\(no advertised input window\)"):
         refuse_a_mark_deepagents_reaches_first(model, 170_000)
     refuse_a_mark_deepagents_reaches_first(model, 169_999)
-
-
-@dataclass
-class _Asked:
-    """The two things `_input_budget` reads off a request."""
-
-    model: Any
-    model_settings: dict[str, Any]
 
 
 def test_the_summarizer_trigger_is_where_deepagents_summarizes():

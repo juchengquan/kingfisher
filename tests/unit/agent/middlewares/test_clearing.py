@@ -56,6 +56,7 @@ from tests.conftest import (
     subagents_dir,
     tools_dir,
 )
+from tests.unit.conftest import _marked
 from tests.unit.scripted import Scripted
 
 TOOL_RESULTS_ROUTE = DEFAULT_LAYOUT.tool_results_route
@@ -1096,14 +1097,6 @@ def bulky(scripted):
     an_agent(scripted, **EVERY_TOOL)
     start(scripted, "s")
     return scripted
-
-
-def _marked(cfg: Any, model: str | None = None, **fields: Any) -> Any:
-    """`cfg`, with one model's entry -- the default's unless named -- carrying `fields`."""
-    models = cfg.models
-    name = model or models.default
-    entry = replace(models.models[name], **fields)
-    return replace(cfg, models=replace(models, models={**models.models, name: entry}))
 
 
 def _turn(cfg: Any, *script: AIMessage | Exception) -> Any:
