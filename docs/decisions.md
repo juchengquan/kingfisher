@@ -6533,10 +6533,17 @@ call beside the failing one has ended, and on the loop only once a thread is fre
 the tool's error callbacks, so 40 calls asked beside a failing one all charged. A failing
 call now stops its turn where it raises: in the middleware, and for what no middleware
 answers for, inside the thread. An interrupt rising from a paused subagent through its
-`task` call is no failure, and stops nothing. A refused call says why its turn stopped,
-as a plain fact and no advice: "did not run" alone reads the same whether the caller
-stopped the turn on purpose or it ran out of time, and only the first is not to be undone.
-*(2026-11-09.)*
+`task` call is no failure, and stops nothing. *(2026-11-09.)*
+
+**Rejected: a refused call saying why its turn stopped.** "Did not run" reads the same
+whether the user stopped the turn on purpose or it ran out of time, and only the first is
+not to be undone, so the refusal was to say which. Measured first, on MiniMax-M3: 2 of 5
+refunds ran, 3 were refused, and the next message asked "how far did you get?", 10 replies
+a wording. The plain sentence was followed by the refunds sent again unasked 1 time in 10,
+"because its caller stopped it" 3, "because it ran out of time" 4; half of those re-sends
+came with no text at all, and 19 of the 22 replies that held back asked first. A reason
+does not stop a model re-sending, so the sentence stays plain, and keeping it from
+re-sending is for the warning the next turn is given, measured there. *(2026-11-09.)*
 
 **Kingfisher's own thread pool, one per process.** `asyncio.to_thread` borrows the
 loop's default executor, `min(32, cpu+4)` workers, and a call blocking on a round trip

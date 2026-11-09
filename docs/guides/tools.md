@@ -314,9 +314,8 @@ service you act on refuse the repeat:
   whatever becomes of the rest.
 
 **A turn stopped by its caller or its time** runs no call that has not begun, and that
-call's result says so and why: its caller stopped the turn, it ran out of time, or
-another call in it failed. One a thread is running, as it runs a plain function,
-finishes, and the next turn reads what it returned: `astream` waits for it, at most
+call's result says so. One a thread is running, as it runs a plain function, finishes,
+and the next turn reads what it returned: `astream` waits for it, at most
 `KINGFISHER_CANCEL_WAIT_S` (five seconds unless set) before letting its caller go and
 keeping the session busy until the call ends. One that runs past the turn's deadline by
 more than the longest a step may take is left running, and the turn ends without its

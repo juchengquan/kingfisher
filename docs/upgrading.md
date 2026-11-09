@@ -638,9 +638,9 @@ its turns are not checked.
 ## A stopped turn starts no more calls, and waits for those on threads, after #1188
 
 - **A call that has not begun when its turn stops is not run.** Its result says "This
-  call did not run: the turn stopped before it began, because …", and why: its caller
-  stopped it, it ran out of time, or another call in it failed, from the moment that call
-  raised. Every call the model had asked for used to run.
+  call did not run: the turn stopped before it began." A turn stops when its caller stops
+  reading, it runs out of time, or one of its calls fails the graph, from the moment that
+  call raises. Every call the model had asked for used to run.
 - **Cancelling `astream` or `arun` waits for a call a thread is running**, for at most
   `KINGFISHER_CANCEL_WAIT_S` (`Config.cancel_wait_s`, 5 seconds unless set; 0 lets the
   caller go at once), and the next turn reads what the call returned. It used to return

@@ -22,7 +22,7 @@ from langchain_core.tools.base import _get_runnable_config_param, _signature_par
 from .host_paths import HostPathError, UnreachablePathError
 from .middlewares.recorder import ran
 from .middlewares.scratch_runs import HANDED
-from .middlewares.stopping import not_run, on_a_thread, stopping, unless_stopping, waited_for
+from .middlewares.stopping import NOT_RUN, on_a_thread, stopping, unless_stopping, waited_for
 from .session_paths import SessionPaths, as_asked, refusal_text
 from .tool_context import ToolContext, naming
 
@@ -118,7 +118,7 @@ class GuardedTool(BaseTool):
         **kwargs: Any,
     ) -> Any:
         if stopping():
-            raise ToolException(not_run())
+            raise ToolException(NOT_RUN)
         # No recorder sees this call, so the answer it feeds is stamped with it here.
         ran(self.inner.name)
         args, runner = self._with_runner(self._translated(kwargs))
@@ -143,7 +143,7 @@ class GuardedTool(BaseTool):
         **kwargs: Any,
     ) -> Any:
         if stopping():
-            raise ToolException(not_run())
+            raise ToolException(NOT_RUN)
         ran(self.inner.name)
         args, runner = self._with_runner(self._translated(kwargs))
         # Read as `arun` reads it: a tool with no `_arun` of its own runs its `_run`.
