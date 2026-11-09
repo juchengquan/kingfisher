@@ -22,8 +22,7 @@ from kingfisher.core.agent.models import (
     SUMMARIZER,
     model_named,
     refuse_a_mark_deepagents_reaches_first,
-    summarizer_count,
-    summarizer_trigger,
+    summarizer_trigger_and_count,
 )
 from kingfisher.core.agent.prompting import subagent_prompt
 from kingfisher.core.agent.session_paths import SessionPaths
@@ -357,8 +356,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
     # By its definition's middleware alone: a helper's added summariser is deepagents' own.
     refuse_a_mark_deepagents_reaches_first(runs, clear_results_at, extra_middleware or ())
     # A summariser it names takes deepagents' place in its stack, so it is the one read.
-    trigger = summarizer_trigger(runs, summarizers)
-    count = summarizer_count(runs, summarizers)
+    trigger, count = summarizer_trigger_and_count(runs, summarizers)
     # From `standing_middleware`, so the agent, this subagent and `general-purpose` cannot
     # differ. `paths` is handed down, not read off the backend, which need not carry it.
     # A helper's summariser goes outside them, where deepagents puts its own in every other

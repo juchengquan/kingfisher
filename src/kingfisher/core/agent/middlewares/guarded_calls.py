@@ -10,7 +10,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import ToolException
 
-from kingfisher.core.agent.host_paths import HostPathError, UnsafeReferenceError
+from kingfisher.core.agent.host_paths import HostPathError, UnreachablePathError
 from kingfisher.core.agent.session_paths import (
     SessionPaths,
     as_asked,
@@ -78,7 +78,7 @@ class GuardedCallsMiddleware(AgentMiddleware):
         # read as the translation's rule.
         try:
             args = self.paths.translated(call.get("args") or {}, call=call.get("id") or None)
-        except (UnsafeReferenceError, HostPathError) as escaped:
+        except (UnreachablePathError, HostPathError) as escaped:
             return failed(call, refusal_text(escaped, self.paths))
         return replace(request, tool_call={**call, "args": args})
 

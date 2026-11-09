@@ -32,7 +32,11 @@ from kingfisher.core.agent.middlewares.recorder import RecorderMiddleware
 from kingfisher.core.agent.middlewares.result_rows import readable_size
 from kingfisher.core.agent.middlewares.standing import standing_middleware
 from kingfisher.core.agent.middlewares.step_budget import StepBudget
-from kingfisher.core.agent.models import SummarizerCount, summarizer_count, summarizer_trigger
+from kingfisher.core.agent.models import (
+    SummarizerCount,
+    summarizer_trigger,
+    summarizer_trigger_and_count,
+)
 from kingfisher.core.interfaces import PdfAttachments
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
@@ -398,7 +402,7 @@ def test_a_turns_pdfs_fill_half_the_trigger_as_its_summariser_counts_them():
     from langchain_anthropic import ChatAnthropic
 
     model = ChatAnthropic(model="a-gateway-model", api_key="sk-not-real")
-    count, trigger = summarizer_count(model), summarizer_trigger(model)
+    trigger, count = summarizer_trigger_and_count(model)
 
     allowed = pdf_allowance(trigger, count)
     charged = count.each([_pdf_answer(allowed)]) - count.each([_pdf_answer(0)])

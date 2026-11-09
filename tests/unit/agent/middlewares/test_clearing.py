@@ -35,7 +35,11 @@ from kingfisher.core.agent.middlewares.clearing import (
 from kingfisher.core.agent.middlewares.model_reply import _refusal
 from kingfisher.core.agent.middlewares.recorder import UNRECORDED
 from kingfisher.core.agent.middlewares.result_rows import arguments, stamp, summary
-from kingfisher.core.agent.models import SummarizerCount, summarizer_count, summarizer_trigger
+from kingfisher.core.agent.models import (
+    SummarizerCount,
+    summarizer_trigger,
+    summarizer_trigger_and_count,
+)
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, LEDGER_FILE
 from kingfisher.core.result import MAIN, LedgerEntry
@@ -61,7 +65,7 @@ BIG = "x" * 8_000
 
 #: How deepagents' own summariser counts on the model these tests fake: four characters a
 #: token, where no reply reports its usage.
-FAKE_COUNT = summarizer_count(FakeToolCallingModel(responses=[]))
+_, FAKE_COUNT = summarizer_trigger_and_count(FakeToolCallingModel(responses=[]))
 
 
 def _text(first: str) -> str:
@@ -347,7 +351,7 @@ def test_a_pass_starts_and_stops_where_the_summariser_counts_the_marks():
     starts late and stops wrong: on an Anthropic model langchain counts 3.3 characters a
     token, not 4, and scales the whole by the provider's last reported usage but no one
     message, so a pass taking each saving unscaled cleared past the low mark."""
-    count = summarizer_count(_anthropic(None))
+    _, count = summarizer_trigger_and_count(_anthropic(None))
     talk = Talk()
     old = [talk.call("web_search", {"query": f"q{n}"}, _text(f"result {n}")) for n in range(14)]
     talk.pad()

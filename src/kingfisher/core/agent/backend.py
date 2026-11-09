@@ -108,7 +108,7 @@ def miscased(where: str, layout: Layout, folders: frozenset[str]) -> str | None:
     By name, never by asking the disk: the rules and the routes match exactly, so on a
     case-insensitive volume `/.HARNESS/` matches neither and the default backend opens the
     real `.harness`. The folders are `folders` and every route of `layout`, nested ones
-    included, since `/scratchpad/TOOL_RESULTS/` gets past the deny on the saved results.
+    included, since `/scratchpad/TOOL_RESULTS/` gets past the deny on the recorded results.
     """
     parts = where.strip("/").split("/")
     spelled = list(parts)

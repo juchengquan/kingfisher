@@ -32,8 +32,9 @@ class HostPathError(ValueError):
     """A host path reached a file tool."""
 
 
-class UnsafeReferenceError(ValueError):
-    """A reference names somewhere other than where it was allowed to."""
+class UnreachablePathError(ValueError):
+    """A path a tool cannot be handed as a real file: refused this turn, kept off this
+    host, or reached through a link."""
 
 
 def reject_host_path(

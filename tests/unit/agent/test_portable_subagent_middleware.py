@@ -123,7 +123,7 @@ def _built(
         cfg,
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        middleware_registry=REGISTRY,
+        middlewares=REGISTRY,
         agent=LocalAgentRepository(cfg.catalogue_roots["agents"]).specs[agent],
         subagent_middlewares=plugin,
         **given,

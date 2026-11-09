@@ -402,7 +402,7 @@ def _shown(answer: ToolMessage, entry: LedgerEntry, text: str) -> Any | None:
     """
     if len(text) <= PREVIEW_ABOVE:
         return None
-    # Previewed though nothing was kept: an unsaved result can be any size, and handed
+    # Previewed though nothing was kept: a result not recorded can be any size, and handed
     # whole it can overflow the window.
     if entry.path is None:
         shown = _preview(text, NOT_KEPT.format(tool=entry.tool))

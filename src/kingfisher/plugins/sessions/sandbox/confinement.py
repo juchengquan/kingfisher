@@ -280,7 +280,7 @@ def shell_confinement(
         # retired `PROMPT.md`, whose presence refuses every start: one session's shell
         # writing it, where the profile grants the whole workspace, stopped the deployment.
         authored=(*cfg.authored_files.values(), *_keys_file(cfg), cfg.retired_prompt),
-        # So a renamed inputs folder and saved results are the ones the profile denies.
+        # So a renamed inputs folder and recorded results are the ones the profile denies.
         layout=cfg.layout,
     )
 

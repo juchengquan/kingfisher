@@ -133,7 +133,7 @@ def _enclosing(saved_results: tuple[str, ...]) -> tuple[str, ...]:
 def _enclosing_denial(sessions_root: Path, folder: str) -> str:
     """Deny writes to every session's `folder` node, not to what it holds.
 
-    For a folder enclosing the saved results, which are guarded by their position under
+    For a folder enclosing the recorded results, which are guarded by their position under
     it: renaming it would let the shell write through the new name and rename it back.
     """
     root = re.escape(f"{fenced_sessions(sessions_root)}/")
@@ -152,7 +152,7 @@ def _session_folder_denial(sessions_root: Path, folder: str) -> str:
 
     `.harness` is what kingfisher reads back and trusts. `inputs` is the caller's and
     nothing versions it; dropping its write bits is not enough, since the shell owns
-    them. The saved results are what a later turn reads back as a tool's answer.
+    them. The recorded results are what a later turn reads back as a tool's answer.
     """
     root = re.escape(f"{fenced_sessions(sessions_root)}/")
     written = f"^{root}[^/]+/{re.escape(folder)}(/|$)"

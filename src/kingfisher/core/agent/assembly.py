@@ -86,8 +86,7 @@ from .models import (
     deployment_default,
     model_named,
     refuse_a_mark_deepagents_reaches_first,
-    summarizer_count,
-    summarizer_trigger,
+    summarizer_trigger_and_count,
 )
 from .permitted_backend import PermittedBackend
 from .prompting import EXECUTE, memory_guidelines, skills_index, system_prompt
@@ -164,7 +163,7 @@ def read_only_permissions(layout: Layout) -> list[FilesystemPermission]:
 
     These bind the file tools and not `execute`, and neither half suffices alone. The
     shell's half is `confinement.resolve`, macOS-only and switchable off, and the fences,
-    which refuse `/inputs` and `.harness` in their own terms -- the saved results in only
+    which refuse `/inputs` and `.harness` in their own terms -- the recorded results in only
     some, since Landlock cannot carve a folder out of the scratchpad it grants whole. The
     write bits `plugins.sessions.permissions` drops under `/inputs` are not that half: the
     shell runs as the files' owner and can lift them.
@@ -278,14 +277,14 @@ def _provisions(
     }
 
 
-def _deployment_middleware(
+def _named_middleware(
     agent: AgentSpec | None,
-    registry: Mapping[str, MiddlewareFactory],
+    selectable: Mapping[str, MiddlewareFactory],
     allowed: Selection,
     *,
     provisions: Mapping[str, Any],
 ) -> list[Any]:
-    """What this deployment's registry owes one graph, freshly built.
+    """The offered middleware `agent`'s definition names, freshly built for one graph.
 
     Per graph, because two graphs sharing a middleware instance would share its state.
     `provisions` holds none, so it may be built once.
@@ -293,7 +292,7 @@ def _deployment_middleware(
     if agent is None:
         return []
     return declared_middleware(
-        agent, registry, allowed, kind="agent", provisions=provisions
+        agent, selectable, allowed, kind="agent", provisions=provisions
     )
 
 
@@ -345,7 +344,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     cfg: Config,
     *,
     capabilities: Capabilities | None = None,
-    middleware_registry: Mapping[str, MiddlewareFactory] | None = None,
+    middlewares: Mapping[str, MiddlewareFactory] | None = None,
     model: Any | None = None,
     backend: Any,
     checkpointer: Any | None = None,
@@ -427,11 +426,11 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     running, mark = _running(agent, cfg, capabilities.endpoints, model)
     # Merged once, so an agent and its subagents select from one mapping, or a name would
     # mean different things one level apart.
-    middlewares = offered_middleware(middleware_registry or {}, roots.middlewares)
+    selectable = offered_middleware(middlewares or {}, roots.middlewares)
     # `asked`, the turn's grant, and not the agent's: a tool is shown what its caller may
     # use, and the agent it runs under is one of the things they may use.
     reachable = Reachable(
-        cfg=cfg, catalogue=roots, granted=asked, held=held, middlewares=middlewares
+        cfg=cfg, catalogue=roots, granted=asked, held=held, middlewares=selectable
     )
     agent_provisions = (
         {}
@@ -445,13 +444,12 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         )
     )
     # Before anything the summariser sizes: one of these may be it, in deepagents' place.
-    named = _deployment_middleware(
-        agent, middlewares, capabilities.middlewares, provisions=agent_provisions
+    named = _named_middleware(
+        agent, selectable, capabilities.middlewares, provisions=agent_provisions
     )
     # The agent's alone: `general-purpose` runs its own copies of these, so the same answer.
     refuse_a_mark_deepagents_reaches_first(running, mark, named)
-    trigger = summarizer_trigger(running, named)
-    count = summarizer_count(running, named)
+    trigger, count = summarizer_trigger_and_count(running, named)
     clearing = result_clearing(
         ledger,
         trigger,
@@ -716,7 +714,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             if agent is None
             else approved_middleware(
                 agent.middlewares,
-                registered=middlewares,
+                registered=selectable,
                 granted=capabilities.middlewares,
                 subject=f"agent {agent.name!r}",
             )
@@ -725,7 +723,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         def middleware_of(spec: SubagentSpec) -> tuple[SubagentSpec, str | None]:
             """`spec`, holding the agent's middleware the deployment chose for it if it
             is portable, and who chose it: one written to travel cannot name any."""
-            # No agent resolved is nothing to inherit, as `_deployment_middleware` answers.
+            # No agent resolved is nothing to inherit, as `_named_middleware` answers.
             if not spec.portable or agent is None:
                 return spec, None
             # A tuple, so `"*"` answered is a name refused rather than a grant of all.
@@ -806,7 +804,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                     # Called per graph: two graphs sharing an instance would share its state.
                     extra_middleware=declared_middleware(
                         selecting,
-                        middlewares,
+                        selectable,
                         capabilities.middlewares,
                         kind="subagent",
                         provisions=_provisions(
@@ -951,8 +949,8 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             clear_results_at=mark,
             budget=budget,
             # Its own instances: two graphs sharing one would share its state.
-            extra_middleware=_deployment_middleware(
-                agent, middlewares, capabilities.middlewares, provisions=agent_provisions
+            extra_middleware=_named_middleware(
+                agent, selectable, capabilities.middlewares, provisions=agent_provisions
             ),
         )
     )

@@ -70,7 +70,7 @@ _CITING = "You can cite it by that id when you rely on that result."
 #: What the agent's results are recorded as, and how one is seen again.
 TOOL_RESULTS_FILE = "tool_results.md"
 
-#: A sentence for each way to read a saved result back, and every tool it needs: `glob`
+#: A sentence for each way to read a recorded result back, and every tool it needs: `glob`
 #: finds a file only `read_file` opens.
 _READING = (
     (
@@ -317,7 +317,7 @@ def _file_tools(held: tuple[str, ...], layout: Layout) -> str:
 
 
 def _expiring(rounds: int | None) -> str:
-    """Said where saved results expire, since the rest promises every one is kept."""
+    """Said where recorded results expire, since the rest promises every one is kept."""
     if rounds is None:
         return ""
     return (

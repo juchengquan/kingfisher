@@ -298,7 +298,7 @@ def test_a_helpers_session_text_follows_what_its_own_middleware_writes(
         cfg,
         backend=backend_at(cfg, session_dir),
         model=model,
-        middleware_registry={"stamps": _Stamps},
+        middlewares={"stamps": _Stamps},
         capabilities=Capabilities(subagents=("reviewer", "checker")),
         turn_text=TEXT,
     )
@@ -335,7 +335,7 @@ def _own_caching(cfg, session_dir, **wiring: Any):
         ),
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        middleware_registry={"caching": _OwnCaching},
+        middlewares={"caching": _OwnCaching},
         **wiring,
     )
 

@@ -78,7 +78,7 @@ def _everything(cfg, session_dir):
         ),
         backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        middleware_registry={"offered": _Offered},
+        middlewares={"offered": _Offered},
         capabilities=Capabilities(
             builtin_tools=("read_file", "task", "eval"),
             tools=("lookup",),

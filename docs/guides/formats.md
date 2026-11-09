@@ -512,7 +512,7 @@ Four things worth knowing before you restrict this list:
   hold: without `execute` it hears nothing of the shell, without `write_todos`
   nothing of the checklist, and the file tools' section names only the file tools
   granted, or is left out when there are none. Single sentences follow it too: how
-  to see a saved result again names only `read_file`, `grep` and `glob` where held,
+  to see a recorded result again names only `read_file`, `grep` and `glob` where held,
   `glob` only beside `read_file`, and an agent holding none is told to call the tool
   again. With memory on, it is told to save with `edit_file`, or `write_file` where
   it lacks that; holding neither, as `operator.yaml` does, it is told its memory can

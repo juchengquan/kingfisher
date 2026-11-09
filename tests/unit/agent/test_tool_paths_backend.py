@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from kingfisher import Kingfisher, Request
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent, read_only_permissions
-from kingfisher.core.agent.host_paths import UnsafeReferenceError
+from kingfisher.core.agent.host_paths import UnreachablePathError
 from kingfisher.core.agent.permitted_backend import PermittedBackend, host_path
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.layout import DEFAULT_LAYOUT
@@ -182,7 +182,7 @@ def test_a_backend_with_some_routes_here_serves_those_and_refuses_the_rest(tmp_p
     paths = _paths(mixed, tmp_path)
 
     assert paths.real("/inputs/in.csv") == str((inputs / "in.csv").resolve())
-    with pytest.raises(UnsafeReferenceError, match=r"not kept on this host.*ToolContext"):
+    with pytest.raises(UnreachablePathError, match=r"not kept on this host.*ToolContext"):
         paths.real("/outputs/report.txt")
 
 
@@ -209,7 +209,7 @@ def test_a_rule_added_after_the_guards_were_built_still_applies(tmp_path):
 
     rules.append(FilesystemPermission(operations=["read"], paths=["/memory/**"], mode="deny"))
 
-    with pytest.raises(UnsafeReferenceError, match="permission denied"):
+    with pytest.raises(UnreachablePathError, match="permission denied"):
         paths.real("/memory/AGENTS.md")
 
 

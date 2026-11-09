@@ -85,26 +85,17 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     """Every standing middleware for one graph, in the order it wraps it.
 
     Built here and nowhere else, so what kingfisher guarantees on a graph is read in one
-    place. `names` are the offered tools the graph holds; `tools` narrows what it is
-    offered and `skills` its skills index, each `None` where nothing narrows -- `indexed`
-    saying a graph `skills` leaves `None` is handed every skill's index beside it -- and `gated`
-    what it stops on for a person; `clearing` builds the result clearing for that grant,
-    `None` where no ledger is kept, as `ledger` is, and `reachable` is the agent's alone.
-    `budget` is the turn's, whose step limit reaches only the agent's own run, so a subagent
-    is held to it in model calls; one per build, shared by all three kinds. `trigger` is
-    where this graph's own summariser fires and `count` how it counts, which size the PDFs
-    its turn may hold open, and `pdf_attachments` is the deployment's say in what each of
-    them is replaced with. `name` is the graph's, as `scratch_run_limit` is asked about it.
+    place. `tools` and `skills` are `None` where nothing narrows them, and `indexed` hands a
+    graph whose `skills` is `None` every skill's index anyway. `budget` is the turn's, whose
+    step limit reaches only the agent's own run, so a subagent is held to it in model calls.
 
     `inner` is what the deployment's settings switch on and what its definitions name, which
     go inside every standing one. Taken here rather than appended by each caller so that the
     one layer that must stay under them -- `OfferedToolFailureMiddleware`, which answers
     for what the tool raised and must not answer for them -- cannot be left off a graph.
 
-    `turn_text` is what the deployment's `TurnInstructions` said to this graph, `None`
-    where it wired none; `turn_cached` is false only for a helper, whose stack its
-    parent's own `SubAgentMiddleware` builds with no prompt caching. `hands_to_compiled`
-    says the graph may hand work to a compiled subagent.
+    `turn_cached` is false only for a helper, whose stack its parent's own
+    `SubAgentMiddleware` builds with no prompt caching.
     """
     if kind != "agent" and reachable is not None:
         msg = f"the declared-subagent check is the agent's, not a {kind}'s"
