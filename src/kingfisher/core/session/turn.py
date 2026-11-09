@@ -46,6 +46,9 @@ class Prepared:
     events: tuple[RunEvent, ...]
     deadline: float
     timeout_s: float
+    #: When the turn started, as its log's opening line says it: the instant its tools are
+    #: handed as `Caller.started`, in seconds since 1970.
+    started: float
     #: The backend the session's files are reached through: the one the graph runs on,
     #: so what is placed and collected is what the agent read and wrote.
     files: Any

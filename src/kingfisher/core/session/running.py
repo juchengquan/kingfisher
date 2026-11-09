@@ -3,6 +3,7 @@ stream, and what a turn leaves once it ends."""
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
@@ -261,6 +262,8 @@ class Running:
                 seen=ended,
                 ledger=prepared.ledger.earlier if prepared.ledger is not None else None,
                 answer=answer,
+                started=prepared.started,
+                ended=time.time(),
             )
             # Only with the message saying so: kept by a turn the agent never heard from,
             # what changed before it would never be said.

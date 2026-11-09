@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The turn log keeps when each turn ran and what each reply reasoned, after #1269
+
+- **A turn's opening line in `.harness/turns.jsonl` carries `started`, and its answer
+  line `ended`**: seconds since 1970 as floats, on the clock a run event's `ts` reads.
+  `TurnRecord.started` and `TurnRecord.ended` hand them on, and are `None` for a turn
+  logged before this.
+- **An assistant line carries `reasoning`** where its provider handed back reasoning with
+  text in it: Anthropic's thinking, which MiniMax's replies carry too, and a Responses
+  reply's summary. It is never sent back to the model, so later turns are handed what
+  they were before; the log grows by it, and `KINGFISHER_SESSION_MAX_BYTES` counts it as
+  it counts the rest of the log.
+
 ## A `Sessions` of your own writes no `held`, and may answer `where`, after #1262
 
 - **`held` is no longer part of `Sessions`.** Kingfisher has not asked it since a sweep

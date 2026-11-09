@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import replace
 from typing import Any
 
@@ -32,8 +33,11 @@ from kingfisher.core.session.turnlog import (
     ANSWER,
     AT,
     CUT,
+    ENDED,
     PARENT,
     PARTS,
+    REASONING,
+    STARTED,
     _rewritten,
 )
 from kingfisher.plugins import LocalSessions
@@ -141,6 +145,11 @@ def _searches(prefix: str, count: int) -> list[AIMessage]:
     return [_calls(("web_search", f"{prefix}{n}", f"{prefix}{n}")) for n in range(count)]
 
 
+def _untimed(line: dict[str, Any]) -> dict[str, Any]:
+    """`line` without the times it was written at, which a test cannot know beforehand."""
+    return {key: value for key, value in line.items() if key not in (STARTED, ENDED)}
+
+
 def _summaries(cfg, turn: str) -> int:
     return sum(CUT in line for line in _lines(cfg) if line["turn"] == turn)
 
@@ -210,8 +219,8 @@ def test_the_log_rebuilds_the_conversation_across_summaries_pauses_and_resumes(l
         {"turn": last.turn_id, PARENT: again.turn_id},
     ]
     first, second = _openings(logged)[:2]
-    assert first == {"turn": paused.turn_id, PARENT: None}
-    assert second == {"turn": resumed.turn_id, PARENT: paused.turn_id, "resumed": True}
+    assert _untimed(first) == {"turn": paused.turn_id, PARENT: None}
+    assert _untimed(second) == {"turn": resumed.turn_id, PARENT: paused.turn_id, "resumed": True}
 
 
 def test_the_log_rebuilds_the_conversation_a_failed_turn_left(logged):
@@ -353,7 +362,7 @@ def test_each_answer_names_the_call_it_answered_and_not_its_place_in_the_pause(l
         {"turn": resumed.turn_id, "decision": second, "call_id": "gb", ACTION: "approve"},
         {"turn": resumed.turn_id, "decision": first, "call_id": "ga", ACTION: "reject"},
     ]
-    assert [line for line in _lines(logged) if ANSWER in line] == [
+    assert [_untimed(line) for line in _lines(logged) if ANSWER in line] == [
         {"turn": paused.turn_id, ANSWER: paused.answer},
         {"turn": resumed.turn_id, ANSWER: "done"},
     ]
@@ -583,10 +592,96 @@ def test_each_turn_ends_on_the_answer_its_caller_was_handed(logged):
     assert paused.stop_reason == AWAITING, "the control: the turn never stopped at the gate"
     ends = {}
     for line in _lines(logged):
-        ends[line["turn"]] = line
+        ends[line["turn"]] = _untimed(line)
     assert ends == {
         answered.turn_id: {"turn": answered.turn_id, ANSWER: "42"},
         paused.turn_id: {"turn": paused.turn_id, ANSWER: ""},
         failed: {"turn": failed, ANSWER: ""},
     }
     assert _conversation(logged) == _ended_on()
+
+
+def test_each_turn_keeps_when_it_started_and_ended(logged):
+    """Without them nothing in the log lines up with the run events a client reads, and
+    `turns()` cannot say when a turn ran; read off any line but its own, a resume shows the
+    paused turn's start as its own."""
+    kf = Kingfisher(logged, sessions=LocalSessions())
+    before = time.time()
+    paused = _say(kf, "dig", _calls(("sql_query", "q", "g1")))
+    between = time.time()
+    (pending,) = paused.pending
+    resumed = _resume(
+        kf, Decision(call_id=pending.call_id, action="approve"), script=(AIMessage("done"),)
+    )
+    after = time.time()
+
+    opened = {line["turn"]: line[STARTED] for line in _openings(logged)}
+    ended = {line["turn"]: line[ENDED] for line in _lines(logged) if ANSWER in line}
+    assert before <= opened[paused.turn_id] < ended[paused.turn_id] <= between
+    assert between <= opened[resumed.turn_id] < ended[resumed.turn_id] <= after
+    assert [(one.id, one.started, one.ended) for one in kf.session("s").turns()] == [
+        (turn, opened[turn], ended[turn]) for turn in (paused.turn_id, resumed.turn_id)
+    ]
+
+
+def test_a_replys_reasoning_is_kept_on_its_line_and_never_handed_back(logged):
+    """Kept on the message rather than its line, every turn after one that reasoned warns
+    `conversation_not_logged` and writes no `at` line, since earlier turns reach the state
+    as the rebuild handed them, without it; and a rebuild handing it back sends a reply's
+    thinking to models that never wrote it."""
+    sink = RecordedEvents()
+    kf = Kingfisher(logged, sessions=LocalSessions(), run_events=sink)
+    # As the two chat classes hand them back: Anthropic's thinking block, which MiniMax
+    # sends too, and a Responses reply's reasoning summary.
+    thought = AIMessage(
+        content=[
+            {"type": "thinking", "thinking": "Search before answering.", "signature": "s"},
+            {"type": "text", "text": "Looking."},
+        ],
+        tool_calls=[{"name": "web_search", "args": {"query": "q"}, "id": "c1"}],
+        response_metadata={"model_provider": "anthropic"},
+    )
+    summed = AIMessage(
+        content=[
+            {
+                "type": "reasoning",
+                "id": "rs_1",
+                "summary": [{"type": "summary_text", "text": "The search answered it."}],
+            },
+            {"type": "text", "text": "Ten results.", "annotations": []},
+        ],
+        response_metadata={"model_provider": "openai"},
+    )
+    _say(kf, "find", thought, summed)
+    at = len(Scripted.heard)
+    _say(kf, "and?", AIMessage("nothing more"))
+
+    replies = [line for line in _lines(logged) if line.get("role") == "assistant"]
+    assert [line.get(REASONING) for line in replies] == [
+        "Search before answering.",
+        "The search answered it.",
+        None,
+    ]
+    assert replies[0]["content"] == "Looking."
+    handed = [one for one in Scripted.heard[at] if isinstance(one, AIMessage)]
+    assert len(handed) == 2, "the control: the next turn was not handed the earlier replies"
+    assert all(isinstance(one.content, str) and not one.additional_kwargs for one in handed)
+    assert sink.named("conversation_not_logged") == []
+    assert _conversation(logged) == _ended_on(AIMessage("nothing more"))
+
+
+def test_a_reply_whose_reasoning_cannot_be_read_still_logs_its_turn(logged):
+    """Raised out of the turn's end, a reasoning block langchain cannot read costs the turn
+    its log, and the next turn is built without anything it said."""
+    odd = AIMessage(
+        content=[{"type": "text", "text": "Answered."}],
+        additional_kwargs={"reasoning": "not a block"},
+        response_metadata={"model_provider": "openai"},
+    )
+    with pytest.raises(TypeError):
+        _ = odd.content_blocks  # the control: langchain cannot read it
+
+    _say(Kingfisher(logged, sessions=LocalSessions()), "go", odd)
+
+    (reply,) = (line for line in _lines(logged) if line.get("role") == "assistant")
+    assert reply == {"turn": reply["turn"], "role": "assistant", "content": "Answered."}
