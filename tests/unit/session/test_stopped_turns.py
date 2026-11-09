@@ -26,7 +26,7 @@ from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.session import running
 from kingfisher.core.session.model import SessionBusyError
 from kingfisher.plugins import LocalSessions, backend_at
-from tests.conftest import RecordedEvents, an_agent, start, tools_dir
+from tests.conftest import RecordedEvents, an_agent, paths_in, start, tools_dir
 from tests.unit.scripted import Scripted
 
 #: More calls in one reply than langgraph's executor runs at once, so some are queued.
@@ -197,7 +197,9 @@ def test_a_call_not_begun_when_an_awaited_turn_stops_is_not_run(charging):
 
 @pytest.mark.parametrize("awaited", [False, True], ids=["run", "awaited"])
 @pytest.mark.parametrize("stopped", [False, True], ids=["running", "stopping"])
-def test_a_call_from_code_is_not_begun_once_its_turn_is_stopping(stopped, awaited):
+def test_a_call_from_code_is_not_begun_once_its_turn_is_stopping(
+    stopped, awaited, cfg, session_dir
+):
     """`eval` and a compiled subagent call tools no middleware sees, so a program still
     running when its turn stopped went on starting calls. Running is the control."""
     charges: list[str] = []
@@ -207,7 +209,7 @@ def test_a_call_from_code_is_not_begun_once_its_turn_is_stopping(stopped, awaite
         charges.append(amount)
         return f"charged {amount}"
 
-    (guarded,) = guarded_tools([charge], None)
+    (guarded,) = guarded_tools([charge], paths_in(cfg, session_dir))
     flag = threading.Event()
     if stopped:
         flag.set()
@@ -442,7 +444,7 @@ def test_a_turn_ending_after_its_caller_left_warns_by_its_errors_type_never_its_
     assert "card number" not in str(warned)
 
 
-def test_a_call_from_code_is_waited_for_through_a_cancel():
+def test_a_call_from_code_is_waited_for_through_a_cancel(cfg, session_dir):
     """`eval` and a compiled subagent run a sync tool through `GuardedTool`, whose cancel
     let go of the thread at once and left the charge to land after."""
     charges: list[str] = []
@@ -455,7 +457,7 @@ def test_a_call_from_code_is_waited_for_through_a_cancel():
         charges.append(amount)
         return f"charged {amount}"
 
-    (guarded,) = guarded_tools([charge], None)
+    (guarded,) = guarded_tools([charge], paths_in(cfg, session_dir))
 
     async def cancelled() -> list[str]:
         call = asyncio.ensure_future(guarded.ainvoke({"amount": "10"}))
