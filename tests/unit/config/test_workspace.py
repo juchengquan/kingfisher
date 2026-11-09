@@ -98,7 +98,9 @@ def test_the_definitions_folder_carries_a_keys_example_holding_no_keys(tmp_path)
 
 
 def test_the_catalogue_example_is_refreshed_but_not_rewritten(tmp_path):
-    """Neither of the two obvious rules."""
+    """`models.yaml.example` rewritten when it is already current, or never refreshed once
+    it is stale.
+    """
     folder = ensure_definitions(tmp_path / "definitions")
     example = folder / EXAMPLE
     untouched = example.stat().st_mtime_ns

@@ -69,7 +69,9 @@ def _events(cfg, session_dir, name="s"):
 
 
 def test_a_subagents_prose_reaches_the_caller(cfg, session_dir):
-    """The whole point."""
+    """A subagent's prose kept out of the caller's stream, so only the main agent is heard
+    while a subagent works.
+    """
     events = _events(cfg, session_dir)
 
     prose = "".join(e.text for e in events if e.kind == "token")

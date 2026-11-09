@@ -54,7 +54,9 @@ def test_nothing_stored_belongs_to_a_framework():
 
 
 def test_records_go_back_to_the_shape_the_graph_wants():
-    """The other direction."""
+    """Stored records not turned back into the messages the graph takes, losing a tool
+    result's call id or the new question.
+    """
     records = as_messages(a_conversation())
 
     sent = user_payload("and now?", records)["messages"]
