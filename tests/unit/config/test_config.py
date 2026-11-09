@@ -1,3 +1,6 @@
+"""Reading the configuration from the environment: what is required, what defaults, and what
+is refused."""
+
 from __future__ import annotations
 
 import os

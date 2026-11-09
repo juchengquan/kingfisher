@@ -1,3 +1,6 @@
+"""The caller's files in `/inputs`: where they land, and how they are made read-only to the
+agent and to the operating system."""
+
 from __future__ import annotations
 
 import os

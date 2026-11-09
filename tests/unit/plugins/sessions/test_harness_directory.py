@@ -1,11 +1,7 @@
 """What a session keeps about itself, where the agent cannot reach it.
 
-`.harness` holds a session's conversation, the lock a turn holds and its run
-log. Each of those used to live under `state_dir`, one
-directory per kind keyed by session id, where two things were true and neither
-was intended: nothing deleted them when the session went, and -- because
-`state_dir` defaults inside the workspace and `writable_roots` returns the whole
-workspace -- the shell could reach them anyway.
+`.harness` holds a session's conversation, the lock a turn holds and its run log,
+inside the session's own folder, so that deleting the session deletes them with it.
 """
 
 from __future__ import annotations

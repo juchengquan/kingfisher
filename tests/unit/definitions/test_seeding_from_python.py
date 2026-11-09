@@ -12,7 +12,6 @@ from kingfisher import (
 )
 from kingfisher.core.config import ConfigError
 from tests.conftest import repository_root
-from tests.integration.seed_example import main, seed_definitions
 
 
 @pytest.fixture
@@ -104,60 +103,3 @@ def test_no_source_configured_says_how_to_name_one(tmp_path, monkeypatch):
 
     with pytest.raises(ConfigError, match="KINGFISHER_ASSETS"):
         definitions_source(paths.assets)
-
-
-# -- the script on the live shelf ----------------------------------------
-
-
-def test_the_example_script_takes_everything_too(tmp_path, assets):
-    """Both branches, because the flag is half of what the example teaches."""
-    default = seed_definitions(tmp_path / "a", assets)
-    complete = seed_definitions(tmp_path / "b", assets, everything=True)
-
-    assert default.skipped
-    assert not complete.skipped
-    assert len(complete.written) > len(default.written)
-
-
-def test_the_example_script_reports_what_it_left(tmp_path, assets, capsys):
-    """Its output is its point, so the output is what this asserts."""
-    code = main(["--definitions", str(tmp_path / "definitions"), "--from", str(assets)])
-    printed = capsys.readouterr().out
-
-    assert code == 0
-    assert "seeded agents/operator.yaml" in printed
-    assert "skipped " in printed, "the example stopped reporting what it left behind"
-    assert "seed again with --all" in printed, "a skip with no remedy is half a message"
-    # The remedy this script used to get wrong, and the reason it prints the
-    # record's own lines now: these names are locks, and it said to register them.
-    assert "switches on access control" in printed
-    assert "register those" not in printed
-
-
-def test_the_example_script_says_why_nothing_was_seeded(tmp_path, capsys):
-    """It closed on a bare "nothing seeded", leaving a reader to guess between an empty
-    tree and one whose every definition was held back."""
-    empty = tmp_path / "empty"
-    empty.mkdir()
-
-    code = main(["--definitions", str(tmp_path / "definitions"), "--from", str(empty)])
-
-    assert code == 1
-    assert f"nothing to seed — {empty} holds none of" in capsys.readouterr().err
-
-
-def test_the_example_script_refuses_with_no_source_configured(tmp_path, monkeypatch, capsys):
-    """The error path is part of the example -- it is what makes it pasteable rather
-    than a snippet.
-    """
-    monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
-    definitions = tmp_path / "definitions"
-
-    code = main(["--definitions", str(definitions)])
-
-    assert code == 2, "a missing source is a configuration error, not an empty run"
-    assert "KINGFISHER_ASSETS" in capsys.readouterr().err
-    assert (definitions / "models.yaml.example").is_file(), (
-        "the refusal left no laid-out folder, so the explicit `ensure_definitions` in "
-        "the example buys nothing and the README's reason for it is wrong"
-    )

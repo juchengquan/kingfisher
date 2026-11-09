@@ -1,3 +1,5 @@
+"""What the system prompt tells the agent about the session's folders, skills, memory and shell."""
+
 from __future__ import annotations
 
 from dataclasses import replace

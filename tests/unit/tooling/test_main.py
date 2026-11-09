@@ -1,4 +1,4 @@
-"""The driver's rendering, which had no tests at all."""
+"""What the development driver prints for a turn's events."""
 
 from __future__ import annotations
 

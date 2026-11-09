@@ -237,11 +237,6 @@ ignore = ["ANN401"]
 # Its own entry because `tests/**` below holds none of these four, and ruff adds the
 # two together rather than letting one replace the other.
 "tests/integration/driver.py" = ["T201", "PLR0911", "PLR0912", "PLR0915"]
-# The seeding example on the same shelf, for the first of those reasons only:
-# what it prints *is* its output, and it is short and flat because the flow it
-# demonstrates is four calls. If it ever needs the other three it has stopped
-# being an example.
-"tests/integration/seed_example.py" = ["T201"]
 # The shipped command, for the first of those reasons only: it prints what the
 # library returned and decides nothing, so it is short and flat. `T201` is the
 # whole exemption -- if this ever needs the other three it has stopped being a

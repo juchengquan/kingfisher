@@ -3473,7 +3473,6 @@ def test_only_the_record_says_what_a_skipped_definition_needs():
         # The snippet most people copy, and it once dropped a file's datazone.
         repo / "README.md",
         repo / "tests" / "integration" / "driver.py",
-        repo / "tests" / "integration" / "seed_example.py",
         *(repo / "evals").glob("*.py"),
     ]
     offenders = [
