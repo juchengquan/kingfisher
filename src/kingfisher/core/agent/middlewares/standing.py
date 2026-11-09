@@ -121,7 +121,8 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # Ahead of every tool wrapper here and in `inner`, so a deployment's reads what the tool
     # reads.
     standing.append(CurrentGraphMiddleware(None if kind == "agent" else name))
-    # Ahead of the recorder, so a call refused because its turn stopped takes no id.
+    # Ahead of the recorder, so a call refused here because its turn stopped takes no id.
+    # An awaited call refused where its thread begins is past the recorder, and has one.
     standing.append(StoppingMiddleware())
     # After clearing, which measures what the summariser counted. Outside the step budget
     # and the reply checks, so the reply it records is the one kept and a call asked again

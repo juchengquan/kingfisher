@@ -8,9 +8,8 @@ import contextvars
 import threading
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
-from time import monotonic
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import Held, with_datazone
@@ -109,7 +108,8 @@ class _Turn:
 _ENDED = object()
 
 #: How long a caller who has stopped a turn waits for calls a thread is still running.
-#: Past it the caller is let go, and the turn holds its session until they end.
+#: Past it the caller is let go, and the turn holds its session until they end, or until
+#: `superstep_bound` past its deadline, where its claim may lapse.
 LEFT_WAIT_S = 5.0
 
 #: Turns ending after their caller left, held here: the loop keeps only a weak reference to
@@ -121,14 +121,16 @@ class _OwnedStream:
     """A graph's async stream driven by a task the turn owns, so the turn decides when the
     graph is cancelled, and that it is cancelled once.
 
-    Cancelled with its caller, a second cancel broke out of langgraph's own wait for the
-    calls it was cancelling, and those ran on behind the next turn.
+    Cancelled with its caller, the graph would be cancelled again with each cancel the
+    caller gets, and a second breaks out of langgraph's own wait for the calls it is
+    cancelling, which then run on behind the next turn.
     """
 
     def __init__(self, opened: Callable[[], AsyncIterator[Any]], context: Any) -> None:
         self._handed: asyncio.Queue[Any] = asyncio.Queue(maxsize=1)
         self._cancelled = False
         self.task = asyncio.get_running_loop().create_task(self._run(opened), context=context)
+        self.task.add_done_callback(self._wake)
 
     async def _run(self, opened: Callable[[], AsyncIterator[Any]]) -> None:
         chunks = opened()
@@ -140,54 +142,51 @@ class _OwnedStream:
             # the calls it started run on unwatched until it is closed.
             if (close := getattr(chunks, "aclose", None)) is not None:
                 await close()
-        await self._handed.put(_ENDED)
+
+    def _wake(self, _: asyncio.Task[None]) -> None:
+        # Wakes a reader waiting on an empty queue; a full one is read before `next`
+        # finds it empty and the task done.
+        with suppress(asyncio.QueueFull):
+            self._handed.put_nowait(_ENDED)
 
     async def next(self) -> Any:
         """The next chunk, `_ENDED` once there is none, or what the graph raised."""
-        if not self._handed.empty():
-            # Without a task of its own: a reply streams a chunk a token.
-            return self._handed.get_nowait()
-        getting = asyncio.ensure_future(self._handed.get())
-        try:
-            await asyncio.wait({getting, self.task}, return_when=asyncio.FIRST_COMPLETED)
-        finally:
-            if not getting.done():
-                getting.cancel()
-        if getting.done() and not getting.cancelled():
-            return getting.result()
-        self.task.result()
-        return _ENDED
+        if self._handed.empty() and self.task.done():
+            chunk = _ENDED
+        else:
+            chunk = await self._handed.get()
+        if chunk is _ENDED:
+            self.task.result()
+        return chunk
 
     async def settle(
-        self, threads: OnThreads, *, leaving: bool
+        self, threads: OnThreads, *, leaving: bool, until: float
     ) -> tuple[bool, asyncio.CancelledError | None]:
         """Whether the graph and every call a thread runs for it have ended, cancelling the
         graph once; and a cancel that came meanwhile.
 
-        Waited for through any cancel, and for at most `LEFT_WAIT_S` once the caller has
-        left: `leaving`, or cancelled during the wait.
+        Waited for through any cancel, never past `until`, and for at most `LEFT_WAIT_S`
+        once the caller has left: `leaving`, or cancelled during the wait.
         """
         if not self._cancelled:
             self._cancelled = True
             self.task.cancel()
-        until = monotonic() + LEFT_WAIT_S if leaving else None
+        let_go = time.monotonic() + LEFT_WAIT_S if leaving else until
         cancelled: asyncio.CancelledError | None = None
         while waiting := {one for one in (self.task, *threads.running) if not one.done()}:
-            left = None if until is None else until - monotonic()
-            if left is not None and left <= 0:
+            left = min(until, let_go) - time.monotonic()
+            if left <= 0:
                 return False, cancelled
             try:
                 await asyncio.wait(waiting, timeout=left)
             except asyncio.CancelledError as exc:
                 cancelled = cancelled or exc
-                if until is None:
-                    until = monotonic() + LEFT_WAIT_S
+                let_go = min(let_go, time.monotonic() + LEFT_WAIT_S)
         return True, cancelled
 
 
 def _next_chunk(chunks: Iterator[Any]) -> Any:
     return next(chunks, _ENDED)
-
 
 
 def _as_request(value: str | Request | Resume) -> Request | Resume:
@@ -633,13 +632,13 @@ class Running:
             raise cancelled
         with warning_into(heard):
             context = contextvars.copy_context()
-        # Raised by the first call on a thread that a cancel reaches, which comes before
-        # this turn's own stop when the graph fails and cancels the calls itself.
+        # Raised where a call fails or a call on a thread is cancelled: the turn's own stop
+        # cancels the graph, which cancels its calls.
         context.run(STOPPING.set, threading.Event())
         context.run(ON_THREADS.set, turn.threads)
         graph = turn.prepared.graph
         stream: _OwnedStream | None = None
-        leaving = False
+        left: BaseException | None = None
         try:
             with self._turn_outcome(turn):
                 for event in turn.prepared.events:
@@ -652,39 +651,47 @@ class Running:
                     if (stop := self._bound(turn)) is not None:
                         yield stop
                         break
-        except (asyncio.CancelledError, GeneratorExit):
-            leaving = True
+        except (asyncio.CancelledError, GeneratorExit) as leaving:
+            left = leaving
             raise
         finally:
+            # Past this the claim may lapse and another turn take the session, so a call
+            # still running is left behind rather than waited for.
+            until = turn.prepared.deadline + self.cfg.superstep_bound
             ended, late = (
                 (True, None)
                 if stream is None
-                else await stream.settle(turn.threads, leaving=leaving)
+                else await stream.settle(turn.threads, leaving=left is not None, until=until)
             )
             # `_end_later`'s task copies this context, so a turn ending after its caller
             # left is heard too.
             with warning_into(heard):
-                if ended:
+                if ended or time.monotonic() >= until:
                     await self._aend_turn(turn)
                 else:
-                    self._end_later(turn, stream)
-            if late is not None and not leaving:
+                    self._end_later(turn, stream, until)
+            # A cancel is already on its way out; one that came while a closing caller
+            # waited is its task's, and lost if not raised.
+            if late is not None and not isinstance(left, asyncio.CancelledError):
                 raise late
         for event in self._ending(turn):
             yield event
 
-    def _end_later(self, turn: _Turn, stream: _OwnedStream | None) -> None:
-        """End `turn` once the calls its threads run have, for a caller already gone."""
-        later = asyncio.ensure_future(self._end_when_settled(turn, stream))
+    def _end_later(self, turn: _Turn, stream: _OwnedStream | None, until: float) -> None:
+        """End `turn` once the calls its threads run have, or at `until`, for a caller
+        already gone."""
+        later = asyncio.ensure_future(self._end_when_settled(turn, stream, until))
         _ENDING_LATER.add(later)
         later.add_done_callback(_ENDING_LATER.discard)
 
-    async def _end_when_settled(self, turn: _Turn, stream: _OwnedStream | None) -> None:
+    async def _end_when_settled(
+        self, turn: _Turn, stream: _OwnedStream | None, until: float
+    ) -> None:
         try:
             if stream is not None:
-                # Bounded only by a cancel, as the loop shutting down sends: then the
-                # session is let go of without what the threads would have said.
-                await stream.settle(turn.threads, leaving=False)
+                # A cancel, as the loop shutting down sends, cuts this to `LEFT_WAIT_S`:
+                # then the session is let go of without what the threads would have said.
+                await stream.settle(turn.threads, leaving=False, until=until)
             await self._aend_turn(turn)
         except Exception as exc:  # noqa: BLE001 -- nobody is left to raise it to
             error_type, error_at = raised(exc)
@@ -751,7 +758,8 @@ class Running:
 
         Cancelling stops a model call at once. A tool call a thread runs cannot be
         stopped, so a cancel waits for it, at most `LEFT_WAIT_S`; past that the caller is
-        let go, and the session is refused as busy until the call ends.
+        let go, and the session is refused as busy until the call ends, or until the turn's
+        deadline plus `superstep_bound`, where it ends without that call's answer.
 
         Middleware runs through its `a`-prefixed hooks here, so one written only as
         `wrap_model_call` raises the first time this reaches it.

@@ -12,6 +12,7 @@ import asyncio
 import contextvars
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import aclosing
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -19,10 +20,12 @@ from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
+from langgraph.errors import GraphInterrupt
 
 from kingfisher import Kingfisher, Request
-from kingfisher.core.agent.middlewares.stopping import NOT_RUN, STOPPING
+from kingfisher.core.agent.middlewares.stopping import NOT_RUN, STOPPING, StoppingMiddleware
 from kingfisher.core.agent.tool_guards import guarded_tools
+from kingfisher.core.config import Config
 from kingfisher.core.session import running
 from kingfisher.core.session.model import SessionBusyError
 from kingfisher.plugins import LocalSessions, backend_at
@@ -79,7 +82,12 @@ async def break_soon() -> str:
     raise Broke
 
 
-TOOLS = [charge, charge_later, break_soon]
+def break_now() -> str:
+    """Fail the graph at once."""
+    raise Broke
+
+
+TOOLS = [charge, charge_later, break_soon, break_now]
 '''
 
 
@@ -105,7 +113,7 @@ def charging(scripted, tmp_path, monkeypatch):
     """An agent holding `charge`, and the files that say what it began and what it did."""
     tools_dir(scripted).mkdir(parents=True, exist_ok=True)
     (tools_dir(scripted) / "charging.py").write_text(TOOLS, encoding="utf-8")
-    an_agent(scripted, tools="[charge, charge_later, break_soon]")
+    an_agent(scripted, tools="[charge, charge_later, break_soon, break_now]")
     start(scripted, "s")
     made = Charging(
         scripted, tmp_path / "charges.txt", tmp_path / "begun.txt", tmp_path / "released"
@@ -227,6 +235,39 @@ def test_a_call_from_code_is_not_begun_once_its_turn_is_stopping(
     assert (said == NOT_RUN) is stopped
 
 
+class _Failing(BaseException):
+    """What no middleware converts."""
+
+
+@pytest.mark.parametrize("awaited", [False, True], ids=["run", "awaited"])
+@pytest.mark.parametrize(
+    ("raised", "stops"),
+    [(GraphInterrupt(()), False), (_Failing(), True)],
+    ids=["interrupt", "failure"],
+)
+def test_an_interrupt_passing_up_through_a_call_does_not_stop_its_turn(raised, stops, awaited):
+    """A subagent pausing for approval raises through its `task` call, and read as a
+    failure it would refuse every call beside it, each then kept as "did not run" for the
+    resume. A failure is the control: on the loop, as one an inner middleware raises."""
+    flag = threading.Event()
+    context = contextvars.copy_context()
+    context.run(STOPPING.set, flag)
+
+    def handler(_: Any) -> Any:
+        raise raised
+
+    async def ahandler(_: Any) -> Any:
+        raise raised
+
+    with pytest.raises(type(raised)):
+        if awaited:
+            context.run(asyncio.run, StoppingMiddleware().awrap_tool_call(None, ahandler))
+        else:
+            context.run(StoppingMiddleware().wrap_tool_call, None, handler)
+
+    assert flag.is_set() is stops
+
+
 # -- a call a thread is running ------------------------------------------------
 
 
@@ -317,10 +358,34 @@ def test_a_caller_that_stops_reading_waits_for_the_call_its_thread_runs(charging
     assert "hold" in asyncio.run(stopped_reading())
 
 
+def test_a_cancel_reaching_a_caller_closing_its_turn_is_raised(charging):
+    """A caller closing its turn waits for the call a thread runs, and a cancel reaching it
+    then was swallowed: its task went on as if never cancelled, so a timeout around it
+    never fired."""
+    Scripted.script.append(_asking("0", "hold"))
+
+    async def closing() -> None:
+        async with aclosing(charging.kf().astream(_asked())) as events:
+            async for event in events:
+                if event.kind == "tool_result":
+                    break
+
+    async def cancelled() -> None:
+        task = asyncio.ensure_future(closing())
+        await _until(lambda: charging.charged() == ["0"])
+        await asyncio.sleep(0.2)
+        task.cancel()
+        asyncio.get_running_loop().call_later(0.2, charging.release.touch)
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(cancelled())
+
+
 def test_a_turn_out_of_time_answers_once_its_calls_have_ended(charging, monkeypatch):
     """Out of time, an awaited turn answered while a call was still running, so the next
-    turn could start before its charge landed. Waits as the sync path does, with no bound:
-    the caller has not left."""
+    turn could start before its charge landed. Waits as the sync path does, past
+    `LEFT_WAIT_S`: the caller has not left."""
     cfg = replace(charging.cfg, turn_timeout_s=0.5)
     monkeypatch.setenv("KF_TEST_SLOW", "0.8")
     monkeypatch.setattr(running, "LEFT_WAIT_S", 0.1)
@@ -343,7 +408,8 @@ def test_a_turn_out_of_time_answers_once_its_calls_have_ended(charging, monkeypa
 
 def test_a_turn_whose_graph_fails_raises_once_its_calls_have_ended(charging, monkeypatch):
     """A graph failing beside a call a thread runs raised out of the turn at once, and the
-    call charged behind whatever the caller did next. No bound: the caller has not left."""
+    call charged behind whatever the caller did next. Past `LEFT_WAIT_S`: the caller has
+    not left."""
     monkeypatch.setattr(running, "LEFT_WAIT_S", 0.1)
     broke = {"name": "break_soon", "args": {}, "id": "c-broke"}
     asked = _asking("hold")
@@ -358,9 +424,28 @@ def test_a_turn_whose_graph_fails_raises_once_its_calls_have_ended(charging, mon
     assert asyncio.run(failed()) == ["hold"], "the turn raised before its call ended"
 
 
+@pytest.mark.parametrize("awaited", [False, True], ids=["run", "awaited"])
+def test_a_turn_whose_graph_fails_begins_none_of_the_calls_still_queued(charging, awaited):
+    """A graph says it failed only once every call beside the failing one has ended, so
+    the turn stopped too late: 40 calls asked beside a failing one all charged, those
+    still waiting for a thread too."""
+    broke = {"name": "break_now", "args": {}, "id": "c-broke"}
+    asked = _asking(*(str(n) for n in range(1, CALLS + 1)))
+    # First, so it fails while most of the charges still wait for a thread.
+    Scripted.script.append(AIMessage(content="", tool_calls=[broke, *asked.tool_calls]))
+
+    with pytest.raises(BaseException, check=_broke):  # noqa: B017 -- `check` narrows it
+        if awaited:
+            asyncio.run(charging.kf().arun(_asked()))
+        else:
+            charging.kf().run(_asked())
+
+    assert len(charging.charged()) < CALLS
+
+
 def test_a_caller_cancelling_a_turn_that_waits_out_of_time_is_let_go_of(charging, monkeypatch):
-    """A turn out of time waits for its calls with no bound, and a caller giving up on it
-    then has left: it is let go after the bound, and hears its cancel."""
+    """A turn out of time waits for its calls past `LEFT_WAIT_S`, and a caller giving up on
+    it then has left: it is let go after the bound, and hears its cancel."""
     cfg = replace(charging.cfg, turn_timeout_s=0.5)
     monkeypatch.setenv("KF_TEST_SLOW", "0.8")
     monkeypatch.setattr(running, "LEFT_WAIT_S", 0.2)
@@ -408,6 +493,72 @@ def test_a_caller_is_let_go_of_while_a_hung_call_holds_the_session(charging, mon
 
     assert asyncio.run(hung()) < 2, "the caller was held for the hung call"
     assert "receipt R-hold" in _told_next(charging, "c-hold").text
+
+
+def test_a_turn_its_caller_left_ends_before_its_claim_could_lapse(charging, monkeypatch):
+    """A turn whose caller had left waited for a hung call with no bound, holding its
+    session past the point another turn may take the claim over, and then wrote its ending
+    behind that turn. It ends a superstep's bound past its deadline, without the answer."""
+    cfg = replace(charging.cfg, turn_timeout_s=0.5)
+    monkeypatch.setattr(Config, "superstep_bound", property(lambda _: 0.5))
+    monkeypatch.setattr(running, "LEFT_WAIT_S", 0.1)
+    Scripted.script.append(_asking("hold"))
+
+    async def left() -> ToolMessage:
+        turn = asyncio.ensure_future(charging.kf(cfg).arun(_asked()))
+        await _until(lambda: "hold" in _lines(charging.begun))
+        turn.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await turn
+        await asyncio.sleep(1.5)
+        try:
+            # Under a claim that is not stale, so only the turn letting go frees it.
+            return await asyncio.to_thread(_told_next, charging, "c-hold")
+        finally:
+            charging.release.touch()
+
+    assert "receipt" not in asyncio.run(left()).text
+
+
+def test_a_turn_out_of_time_ends_before_its_claim_could_lapse(charging, monkeypatch):
+    """Out of time, a turn waited for a hung call with no bound, its caller held as long as
+    the call and its claim left to lapse under it. It answers a superstep's bound past its
+    deadline, with the session already let go of."""
+    cfg = replace(charging.cfg, turn_timeout_s=0.3)
+    monkeypatch.setenv("KF_TEST_SLOW", "0.5")
+    monkeypatch.setattr(Config, "superstep_bound", property(lambda _: 0.5))
+    Scripted.script.append(_asking("1", "hold"))
+
+    async def out_of_time() -> tuple[Any, list[str]]:
+        try:
+            result = await charging.kf(cfg).arun(_asked())
+            charged = charging.charged()
+            # Under a claim that is not stale, so only the turn letting go frees it.
+            await asyncio.to_thread(_told_next, charging, "c-hold")
+            return result, charged
+        finally:
+            charging.release.touch()
+
+    result, charged = asyncio.run(out_of_time())
+
+    assert result.stop_reason == "max_duration"
+    assert charged == ["1"], "the turn waited for the hung call"
+    assert "c-1" in [entry.call for entry in result.ledger], "answered before it ended"
+
+
+def test_a_stream_ending_with_its_last_chunk_unread_still_ends():
+    """The graph's task can end with its last chunk still queued, where the wake it leaves
+    does not fit, and a reader then waited on the empty queue for ever."""
+
+    async def chunks() -> Any:
+        yield "last"
+
+    async def read() -> list[Any]:
+        stream = running._OwnedStream(chunks, contextvars.copy_context())
+        await asyncio.wait({stream.task})
+        return [await asyncio.wait_for(stream.next(), 2) for _ in range(2)]
+
+    assert asyncio.run(read()) == ["last", running._ENDED]
 
 
 def test_a_turn_ending_after_its_caller_left_warns_by_its_errors_type_never_its_words(
@@ -469,6 +620,43 @@ def test_a_call_from_code_is_waited_for_through_a_cancel(cfg, session_dir):
         return list(charges)
 
     assert asyncio.run(cancelled()) == ["10"]
+
+
+def test_a_call_from_code_waiting_for_a_thread_is_not_begun_once_its_turn_stops(
+    cfg, session_dir
+):
+    """`GuardedTool` checked its turn only before handing a call to the thread pool, so a
+    compiled subagent's call still waiting for a thread charged after its turn stopped."""
+    charges: list[str] = []
+    begun, release = threading.Event(), threading.Event()
+
+    def charge(amount: str) -> str:
+        """Charge the customer."""
+        if amount == "first":
+            begun.set()
+            release.wait(10)
+        charges.append(amount)
+        return f"charged {amount}"
+
+    (guarded,) = guarded_tools([charge], paths_in(cfg, session_dir))
+    stopping = threading.Event()
+    context = contextvars.copy_context()
+    context.run(STOPPING.set, stopping)
+
+    async def stopped() -> Any:
+        loop = asyncio.get_running_loop()
+        # One thread, so the second call waits for the first's.
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
+        first = loop.create_task(guarded.ainvoke({"amount": "first"}), context=context)
+        second = loop.create_task(guarded.ainvoke({"amount": "second"}), context=context)
+        await _until(begun.is_set)
+        stopping.set()
+        release.set()
+        await first
+        return await second
+
+    assert asyncio.run(stopped()) == NOT_RUN
+    assert charges == ["first"]
 
 
 def test_a_cancelled_command_is_ended_not_waited_out(cfg, session_dir):

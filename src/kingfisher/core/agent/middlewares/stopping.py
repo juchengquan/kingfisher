@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import functools
 import threading
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
@@ -13,6 +14,9 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool, StructuredTool, ToolException
+from langgraph.errors import GraphBubbleUp
+
+from kingfisher.core.session.threads import finished
 
 from .results import answer_in, failed
 
@@ -67,28 +71,33 @@ async def waited_for[T](work: Awaitable[T]) -> tuple[T, asyncio.CancelledError |
     pending = asyncio.ensure_future(work)
     if (threads := ON_THREADS.get()) is not None:
         threads.hold(pending)
-    cancelled: asyncio.CancelledError | None = None
-    while True:
-        try:
-            return await asyncio.shield(pending), cancelled
-        except asyncio.CancelledError as exc:
-            # The work itself cancelled -- the loop shutting down -- not its caller.
-            if pending.cancelled():
-                raise
-            cancelled = cancelled or exc
-            if (flag := STOPPING.get()) is not None:
-                flag.set()
-        except BaseException as failure:
-            if cancelled is not None:
-                raise cancelled from failure
-            raise
+    return await finished(pending, on_cancel=_stop)
 
 
-def _unless_stopping(tool: Any) -> Any:
+def _stop() -> None:
+    if (flag := STOPPING.get()) is not None:
+        flag.set()
+
+
+@contextmanager
+def _stopping_if_it_fails() -> Iterator[None]:
+    """A call that raises fails its graph, which says so only once every call beside it has
+    ended: from the raise, those not yet begun are refused. An interrupt is no failure,
+    and the calls beside it run as they would."""
+    try:
+        yield
+    except GraphBubbleUp:
+        raise
+    except BaseException:
+        _stop()
+        raise
+
+
+def unless_stopping(tool: Any) -> Any:
     """`tool`, refusing to begin on its thread once its turn is stopping.
 
-    Checked there, not only where the middleware is: an awaited graph passes every call of
-    a reply through the middleware at once, and the rest wait for a thread.
+    Checked there, not only where the call is handed over: an awaited graph hands every
+    call of a reply over at once, and the rest wait for a thread.
     """
     if not isinstance(tool, StructuredTool) or tool.func is None:
         return tool
@@ -98,7 +107,14 @@ def _unless_stopping(tool: Any) -> Any:
     def begun(*args: Any, **kwargs: Any) -> Any:
         if stopping():
             raise ToolException(NOT_RUN)
-        return body(*args, **kwargs)
+        try:
+            return body(*args, **kwargs)
+        except BaseException as failure:
+            # What no middleware answers for fails the graph, and the loop hears of it only
+            # once a thread is free to run the tool's error callbacks: stopped here, at once.
+            if not isinstance(failure, Exception):
+                _stop()
+            raise
 
     return tool.model_copy(update={"func": begun})
 
@@ -107,16 +123,17 @@ class StoppingMiddleware(AgentMiddleware):
     """Refuse a call that begins once its turn is stopping, and on the async path wait for
     one a thread runs.
 
-    Closing a graph's stream waits for every call its reply queued, and each began then:
-    40 calls asked together, stopped with a few under way, all charged. Cancelled, an
-    awaited graph let go of a call on a thread at once, so the next turn was told it did
-    not complete and its charge landed after.
+    Closing a graph's stream waits for every call its reply queued, starting each as a
+    thread frees: 40 calls asked together and stopped with a few under way all charge. A
+    cancelled awaited graph lets go of a call on a thread at once, so the next turn is told
+    it did not complete while its charge lands after.
     """
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         if stopping():
             return failed(request.tool_call, NOT_RUN)
-        return handler(request)
+        with _stopping_if_it_fails():
+            return handler(request)
 
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
@@ -124,11 +141,12 @@ class StoppingMiddleware(AgentMiddleware):
         if stopping():
             return failed(request.tool_call, NOT_RUN)
         threads = ON_THREADS.get()
-        if threads is None or not on_a_thread(request.tool):
-            return await handler(request)
-        result, cancelled = await waited_for(
-            handler(request.override(tool=_unless_stopping(request.tool)))
-        )
+        with _stopping_if_it_fails():
+            if threads is None or not on_a_thread(request.tool):
+                return await handler(request)
+            result, cancelled = await waited_for(
+                handler(request.override(tool=unless_stopping(request.tool)))
+            )
         call = str(request.tool_call.get("id") or "")
         if (answer := answer_in(result, call)) is not None:
             threads.answers[call] = answer

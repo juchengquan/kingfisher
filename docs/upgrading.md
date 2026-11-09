@@ -639,14 +639,17 @@ its turns are not checked.
 
 - **A call that has not begun when its turn stops is not run.** Its result says "This
   call did not run: the turn stopped before it began." A turn stops when its caller stops
-  reading, it runs out of time, or its graph fails. Every call the model had asked for used
-  to run.
+  reading, it runs out of time, or one of its calls fails the graph, from the moment that
+  call raises. Every call the model had asked for used to run.
 - **Cancelling `astream` or `arun` waits for a call a thread is running**, for at most 5
   seconds, and the next turn reads what the call returned. It used to return at once,
   telling the next turn the call did not complete while it went on running.
 - **A request sent while that call still runs raises `SessionBusyError`**, including after
   the 5 seconds, when the caller is let go and the session stays held until the call ends.
-  Wait for the cancelled task before sending again.
+  Wait for the cancelled task before sending again. A call still running at the turn's
+  deadline plus `Config.superstep_bound`, the most the session's claim allows a step past
+  it, is left running: the turn ends there without its answer, as `astream` does when out
+  of time.
 - **A turn that then fails as it ends warns `turn_not_ended`** on your `RunEvents`, with
   the error's type and place; nobody is left to raise it to.
 - **The shell's command is ended when its turn is cancelled.** A `CommandRunner` of your

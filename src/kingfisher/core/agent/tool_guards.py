@@ -22,7 +22,7 @@ from langchain_core.tools.base import _get_runnable_config_param, _signature_par
 from .host_paths import HostPathError, UnreachablePathError
 from .middlewares.recorder import ran
 from .middlewares.scratch_runs import HANDED
-from .middlewares.stopping import NOT_RUN, on_a_thread, stopping, waited_for
+from .middlewares.stopping import NOT_RUN, on_a_thread, stopping, unless_stopping, waited_for
 from .session_paths import SessionPaths, as_asked, refusal_text
 from .tool_context import ToolContext, naming
 
@@ -151,10 +151,13 @@ class GuardedTool(BaseTool):
         checked = self.inner._arun if own else self.inner._run
         with self._named():
             try:
-                running = self.inner._arun(**args, **self._handed(checked, config, run_manager))
+                handed = self._handed(checked, config, run_manager)
                 if not on_a_thread(self.inner):
-                    return await running
-                result, cancelled = await waited_for(running)
+                    return await self.inner._arun(**args, **handed)
+                # Checked again where its thread begins: the turn may stop while it waits
+                # for one.
+                begun = unless_stopping(self.inner)._arun(**args, **handed)
+                result, cancelled = await waited_for(begun)
             except ToolException:
                 raise
             except Exception as exc:

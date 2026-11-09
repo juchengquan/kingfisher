@@ -6477,22 +6477,25 @@ that error when the wait is removed.
 **Narrowed: a cancel waits for a call a thread runs, for at most `LEFT_WAIT_S`.** The
 wait above ended with the turn, and a cancelled awaited graph let go of a call on a
 thread at once: the session was free, the next turn was told the call did not complete,
-and the charge landed 1.4 seconds after that turn had finished, on a 1.5-second tool.
-A cancel now waits for such a call, through any number of cancels, for at most five
+and the charge landed 1.4 seconds after that turn had finished, on a 1.5-second tool. A
+cancel now waits for such a call, through any number of cancels, for at most five
 seconds; past that the caller is let go and the turn holds its session until the call
-ends, so a retry meanwhile gets `SessionBusyError`. That is the window the paragraph
-above calls worse than a slow cancel, taken on the maintainer's call: an unbounded wait
-holds a caller as long as a hung tool, which *Not taken: a thread-backed `astream`*
-refused at 120 seconds, and the refusal now says a running or dead turn holds the
-session. A model call still stops at once, an awaited tool is cancelled, and a command
-is ended rather than waited out. *(2026-11-02.)*
+ends, so a retry meanwhile gets `SessionBusyError`, or until its deadline plus
+`superstep_bound`, where it ends without the call's answer: past that point another turn
+may take its claim over, and the ending would write behind that turn. That is the window
+the paragraph above calls worse than a slow cancel, taken on the maintainer's call: an
+unbounded wait holds a caller as long as a hung tool, which *Not taken: a thread-backed
+`astream`* refused at 120 seconds, and the refusal now says a running or dead turn holds
+the session. A model call still stops at once, an awaited tool is cancelled, and a
+command is ended rather than waited out. *(2026-11-02.)*
 
 **The awaited graph runs in a task the turn owns, and is cancelled once.** langgraph
 waits for the calls it cancels, but a second cancel breaks out of that wait, and a web
 framework cancels again and again: an awaited tool not yet reached charged behind the
 next turn. The turn's task hands chunks over a one-slot queue, cancels the graph's task
 exactly once, and waits through every later cancel. A turn out of time and a graph that
-fails stop the same way and wait for their calls with no bound, since no caller has left.
+fails stop the same way and wait for their calls past `LEFT_WAIT_S`, since no caller has
+left, to the same bound the claim sets.
 A call's answer is kept even where the graph's step was cancelled before taking it, and
 joined to the conversation the ending writes, so the next model reads the receipt rather
 than "did not complete". A call still queued for a thread is refused where the thread
@@ -6522,7 +6525,12 @@ times. `StoppingMiddleware` refuses a call that begins once its turn is stopping
 `GuardedTool` refuses one from `eval` or a compiled subagent. The flag is a context
 variable set in a context of the turn's own, which the graph's stream runs in and
 langgraph's threads copy, so it is never set in the caller's. A call already running
-finishes: no thread can be killed. *(2026-11-02.)*
+finishes: no thread can be killed. *(2026-11-02.)* A graph says it failed only once every
+call beside the failing one has ended, and on the loop only once a thread is free to run
+the tool's error callbacks, so 40 calls asked beside a failing one all charged. A failing
+call now stops its turn where it raises: in the middleware, and for what no middleware
+answers for, inside the thread. An interrupt rising from a paused subagent through its
+`task` call is no failure, and stops nothing. *(2026-11-09.)*
 
 **Kingfisher's own thread pool, one per process.** `asyncio.to_thread` borrows the
 loop's default executor, `min(32, cpu+4)` workers, and a call blocking on a round trip

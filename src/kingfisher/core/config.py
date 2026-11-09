@@ -393,7 +393,13 @@ class Config:
         straddles the deadline, and then still has to emit its result, collect what it
         left and let go.
         """
-        return self.turn_timeout_s + max(
+        return self.turn_timeout_s + self.superstep_bound + self._memory_writer_bound
+
+    @property
+    def superstep_bound(self) -> float:
+        """The longest one superstep can hold past the turn's deadline, which the claim
+        leaves room for and a stopped turn waits for its calls no longer than."""
+        return max(
             # Every bound on a superstep, not the model's alone: the deadline is read
             # between chunks, and a shell command straddles it exactly as a model call
             # does. Measured, a 6s command under a 1s turn and a 1s model timeout let a
@@ -406,7 +412,7 @@ class Config:
             # Not zero, even with neither models nor a bound on a command: zero would
             # restore the overlap.
             ModelProfile.timeout_s,
-        ) + self._memory_writer_bound
+        )
 
     @property
     def _memory_writer_bound(self) -> float:

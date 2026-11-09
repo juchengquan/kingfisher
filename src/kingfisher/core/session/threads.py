@@ -63,12 +63,14 @@ def off_loop[T](
     return asyncio.get_running_loop().run_in_executor(pool, call)
 
 
-async def finished[T](work: Awaitable[T]) -> tuple[T, asyncio.CancelledError | None]:
+async def finished[T](
+    work: Awaitable[T], *, on_cancel: Callable[[], object] | None = None
+) -> tuple[T, asyncio.CancelledError | None]:
     """What `work` produced once it has finished, and the cancel that arrived meanwhile.
 
     Waited for through every cancel, so whatever `work` took -- a session's claim, above
     all -- reaches the caller, and the cancel is handed back rather than raised so the
-    caller can give that back first.
+    caller can give that back first. `on_cancel` is called as each arrives.
     """
     pending = asyncio.ensure_future(work)
     cancelled: asyncio.CancelledError | None = None
@@ -80,6 +82,8 @@ async def finished[T](work: Awaitable[T]) -> tuple[T, asyncio.CancelledError | N
             if pending.cancelled():
                 raise
             cancelled = exc
+            if on_cancel is not None:
+                on_cancel()
         except BaseException as failed:
             if cancelled is not None:
                 raise cancelled from failed

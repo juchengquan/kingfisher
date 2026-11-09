@@ -316,7 +316,10 @@ service you act on refuse the repeat:
 **A turn stopped by its caller or its time** runs no call that has not begun, and that
 call's result says so. One a thread is running, as it runs a plain function, finishes,
 and the next turn reads what it returned: `astream` waits for it, at most five seconds
-before letting its caller go and keeping the session busy until the call ends. An
+before letting its caller go and keeping the session busy until the call ends. One that
+runs past the turn's deadline by more than the longest a step may take is left running,
+and the turn ends without its answer. A call that fails the graph stops the turn as it
+raises, so the calls beside it that have not begun are not run either. An
 `async def` tool is cancelled where it next awaits, so one that has sent its request
 and awaits the reply may have acted without answering.
 

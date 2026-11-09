@@ -65,7 +65,9 @@ into the definitions folder.
 
 **A turn stops between steps, so the turn timeout is a deadline and not a limit.** A
 turn out of time stops when the step it is inside hands something back, and a tool call
-a thread is running for it finishes before the turn answers, on `astream` as on `stream`.
+a thread is running for it finishes before the turn answers: on `stream` however long it
+takes, and on `astream` until the longest bound below has passed, when the turn answers
+without it.
 That step is bounded by `KINGFISHER_EXECUTION_TIMEOUT_S` where it runs a shell command and by the
 model's `timeout_s` in `models.yaml` where it calls one — so a turn may overrun
 `KINGFISHER_TURN_TIMEOUT_S` by the longest of those, and lowering them is what makes the
