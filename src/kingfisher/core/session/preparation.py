@@ -19,13 +19,10 @@ from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.tools.spec import ambiguous
 from kingfisher.core.layout import INPUTS_SEEN, PAUSED_STATE
 from kingfisher.core.logged import stamp_warnings
-from kingfisher.core.reporting import (
-    opening_events,
-    subagent_only,
-    withheld_by_kind,
-)
+from kingfisher.core.reporting import opening_events, withheld_by_kind
 from kingfisher.core.request import DecisionError, Request, Resume, caller_of
 from kingfisher.core.versions import built_from
 
@@ -503,7 +500,9 @@ class Preparation:
                 agent=agent if held is not None else None,
                 held=held,
             )
-            shared = subagent_only(allowed, catalogue=catalogue)
+            # Granted names two files define: the agent holds neither, and only a subagent
+            # naming one gets it.
+            shared = ambiguous(allowed.tools, catalogue.tools.found)
             # The agent and the caller as well as the grant: the grant alone may be
             # `"*"`, naming subagents the build never activated.
             indistinct = indistinct_subagents(

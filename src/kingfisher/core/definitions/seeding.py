@@ -10,6 +10,7 @@ from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
+from typing import NamedTuple
 
 import yaml
 
@@ -44,12 +45,6 @@ holding every tool:
 
 Leave out `builtin_tools:` or `tools:` and it holds none of them, as with
 `skills:` and `subagents:`; ["*"] is all. See docs/guides/formats.md for the rest."""
-
-
-def destinations(definitions: Path) -> tuple[tuple[str, Path], ...]:
-    """Each kind of definition, and the catalogue it belongs in."""
-    roots = definition_roots_for(definitions)
-    return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS)
 
 
 #: The kinds whose definitions are YAML with a `middlewares:` field. Named rather than
@@ -392,9 +387,14 @@ def _read(path: Path) -> str | None:
         return None
 
 
-#: Why a definition is held back: `Skipped.wants`, the names, the datazones, and what
-#: the file computes.
-_Wanted = tuple[str, tuple[str, ...], tuple[str, ...], tuple[str, ...]]
+class _Wanted(NamedTuple):
+    """Why a definition is held back, in `Skipped`'s order after its label."""
+
+    names: tuple[str, ...]
+    wants: str
+    datazones: tuple[str, ...] = ()
+    #: What the file computes, as it is written there.
+    unread: tuple[str, ...] = ()
 
 
 def _audienced(
@@ -403,7 +403,7 @@ def _audienced(
     """One audience answer, or `None` where a file names nobody."""
     if not source_ids and not datazones and not unread:
         return None
-    return "source_ids", source_ids, datazones, unread
+    return _Wanted(source_ids, "source_ids", datazones, unread)
 
 
 def _deployment_specific(path: Path, *, kind: str) -> _Wanted | None:
@@ -420,7 +420,7 @@ def _deployment_specific(path: Path, *, kind: str) -> _Wanted | None:
         # Naming nothing, so it is copied and the loader reports it in its own words.
         fields = {} if isinstance(decoded, str) else decoded
         if named := middleware_named(fields):
-            return "middlewares", named, (), ()
+            return _Wanted(named, "middlewares")
         return _audienced(_source_ids_named(fields), _datazones_named(fields))
     if path.suffix == ".py" and kind in AUDIENCED_KINDS:
         return _audienced(*_audiences_in_code(text))
@@ -491,15 +491,13 @@ def _as_one(folder: Path, *, kind: str) -> _Wanted | None:
         and (wanted := _deployment_specific(path, kind=kind)) is not None
     ]
     middlewares = [
-        name for wants, names, _, _ in answers if wants == "middlewares" for name in names
+        name for one in answers if one.wants == "middlewares" for name in one.names
     ]
     if middlewares:
-        return "middlewares", tuple(dict.fromkeys(middlewares)), (), ()
-    source_ids = [
-        name for wants, names, _, _ in answers if wants == "source_ids" for name in names
-    ]
-    datazones = [zone for _, _, zones, _ in answers for zone in zones]
-    unread = [one for _, _, _, computed in answers for one in computed]
+        return _Wanted(tuple(dict.fromkeys(middlewares)), "middlewares")
+    source_ids = [name for one in answers if one.wants == "source_ids" for name in one.names]
+    datazones = [zone for one in answers for zone in one.datazones]
+    unread = [computed for one in answers for computed in one.unread]
     return _audienced(
         tuple(dict.fromkeys(source_ids)),
         tuple(dict.fromkeys(datazones)),
@@ -525,10 +523,7 @@ def _left_out(
     for name in names:
         wanted = None if name in left else _deployment_specific(directory / name, kind=kind)
         if wanted is not None:
-            label = f"{kind}/{(directory / name).relative_to(root)}"
-            left[name] = Skipped(
-                label, wanted[1], wants=wanted[0], datazones=wanted[2], unread=wanted[3]
-            )
+            left[name] = Skipped(f"{kind}/{(directory / name).relative_to(root)}", *wanted)
     return left
 
 
@@ -607,8 +602,9 @@ def _copy(
     written: list[str] = []
     overwritten: list[str] = []
     skipped: list[Skipped] = []
-    for kind, destination in destinations(definitions):
-        source = tree / kind
+    roots = definition_roots_for(definitions)
+    for kind in DEFINITION_KINDS:
+        source, destination = tree / kind, roots[kind]
         if not source.is_dir():
             # A source holding only some of the kinds is ordinary, not a refusal.
             continue
@@ -623,10 +619,7 @@ def _copy(
             if not everything and (
                 wanted := _deployment_specific(item, kind=kind)
             ) is not None:
-                wants, names, datazones, unread = wanted
-                skipped.append(
-                    Skipped(label, names, wants=wants, datazones=datazones, unread=unread)
-                )
+                skipped.append(Skipped(label, *wanted))
                 continue
             # Before the copy: afterwards there is nothing left to compare.
             overwritten += _overwritten(item, target, label, left_out)
@@ -643,10 +636,7 @@ def _copy(
     locks = tree / SKILL_LOCKS_FILE
     if locks.is_file():
         if not everything and (wanted := _locks_named(locks)) is not None:
-            wants, names, datazones, _ = wanted
-            skipped.append(
-                Skipped(SKILL_LOCKS_FILE, names, wants=wants, datazones=datazones)
-            )
+            skipped.append(Skipped(SKILL_LOCKS_FILE, *wanted))
         else:
             target = definitions / SKILL_LOCKS_FILE
             overwritten += _overwritten(locks, target, SKILL_LOCKS_FILE, lambda *_: {})

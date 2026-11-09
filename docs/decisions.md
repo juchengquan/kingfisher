@@ -1334,7 +1334,7 @@ tool out of the catalogue for a caller would have a definition naming it refused
 `refuse_unknown` for that caller alone -- the failure that reversed the central
 `access.yaml` below. So the build takes it out of the grant, `kingfisher list` and the
 run report out of what they say is offered, and the ledger stamps a result no wider than
-its tool, each through `core.definitions.tools.spec.out_of_reach`. A subagent's own tool
+its tool, each through `core.definitions.tools.spec.tools_shut`. A subagent's own tool
 is held back the same way.
 
 **The audience is kingfisher's record, not the tool's `metadata`.** `BaseTool.metadata`

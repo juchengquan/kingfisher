@@ -23,7 +23,6 @@ from kingfisher.core.agent.middlewares.narrowing import (
 )
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
-from kingfisher.core.definitions.subagents.rules import miscounted
 from kingfisher.core.definitions.subagents.spec import (
     KNOWN,
     NOT_PORTABLE,
@@ -377,10 +376,9 @@ def test_a_carried_bundle_makes_no_claim_to_check(cfg):
     catalogue = Definitions.from_config(cfg).warm()
 
     spec = catalogue.subagents.specs["surveyor"]
-    where, tools, skills = catalogue.bundled("surveyor")
 
     assert not any(spec.bundled.values())
-    assert miscounted(spec, where=where, tools=tools, skills=skills) is None
+    assert catalogue.miscounted("surveyor") is None
 
 
 def test_a_spec_cannot_both_describe_a_folder_and_carry_one():

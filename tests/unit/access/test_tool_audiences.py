@@ -377,7 +377,7 @@ def test_an_unrestricted_grant_still_gets_an_allowlist_without_the_tool():
         offering=Offering.of(found, builtin=("read_file",)),
         asked=Capabilities(),
         found=found,
-        out_of_reach=frozenset({"count"}),
+        tools_shut=frozenset({"count"}),
     )
 
     assert surface.permitted is not None

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING, Any
@@ -16,8 +16,6 @@ from kingfisher.core.access import (
     Selection,
     approved_middleware,
     approved_settings,
-    refuse_unprovided_wants,
-    refuse_written_wants,
 )
 from kingfisher.core.agent.models import SUMMARIZER, supplied_trigger
 from kingfisher.core.config import KingfisherWarning
@@ -177,6 +175,43 @@ def _wanted(
         else:
             arguments[name] = held.fallback
     return arguments
+
+
+def refuse_unprovided_wants(
+    wanted: Iterable[str], *, provided: Iterable[str], subject: str, registered_as: str
+) -> None:
+    """Refuse a want the build that is running has nothing to fill."""
+    offered = tuple(sorted(provided))
+    held = set(offered)
+    unknown = tuple(name for name in sorted(wanted) if name not in held)
+    if not unknown:
+        return
+    holds = ", ".join(offered) if offered else "nothing at all"
+    msg = (
+        f"{subject} names middleware {registered_as!r}, which wants "
+        f"{', '.join(repr(k) for k in unknown)}; this build provides {holds}. A wanted "
+        f"key is filled in where the agent is assembled, so a name nothing there "
+        f"answers to cannot be supplied by any file"
+    )
+    raise CapabilityError(msg)
+
+
+def refuse_written_wants(
+    wanted: Iterable[str], *, written: Iterable[str], subject: str, registered_as: str
+) -> None:
+    """Refuse a value written for a want that arrives whole rather than by name."""
+    named = set(written)
+    clashing = tuple(name for name in sorted(wanted) if name in named)
+    if not clashing:
+        return
+    keys = ", ".join(repr(k) for k in clashing)
+    msg = (
+        f"{subject} names middleware {registered_as!r}, which wants {keys} and also "
+        f"gives {keys} a value in `defaults` or `yaml_settable`. The harness hands that "
+        f"key over whole; only a want it resolves from a name -- a model -- has anywhere "
+        f"for a written value to go"
+    )
+    raise CapabilityError(msg)
 
 
 def _instantiate(

@@ -140,9 +140,9 @@ def miscounted(
     spec: SubagentSpec,
     *,
     where: str | None,
-    tools: Sequence[str] = (),
-    skills: Sequence[str] = (),
-    buried: Sequence[str] = (),
+    tools: Sequence[str],
+    skills: Sequence[str],
+    buried: Sequence[str],
 ) -> str | None:
     """How a definition's bundled entries differ from the folder they come from.
 
@@ -179,19 +179,12 @@ def miscounted(
     return "; ".join(differences) or None
 
 
-def refuse_miscounted(
-    spec: SubagentSpec,
-    *,
-    where: str | None,
-    tools: Sequence[str] = (),
-    skills: Sequence[str] = (),
-    buried: Sequence[str] = (),
-) -> None:
-    """Refuse a definition whose bundled entries and its own folder disagree."""
-    found = miscounted(spec, where=where, tools=tools, skills=skills, buried=buried)
+def refuse_miscounted(name: str, found: str | None) -> None:
+    """Refuse a definition whose bundled entries and its own folder disagree, as
+    `miscounted` found them."""
     if found is not None:
         msg = (
-            f"subagent {spec.name!r}: {found}. Only what is listed reaches the "
+            f"subagent {name!r}: {found}. Only what is listed reaches the "
             f"subagent, so the list and the folder have to match"
         )
         raise SubagentError(msg)

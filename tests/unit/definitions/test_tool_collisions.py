@@ -127,13 +127,13 @@ def test_what_the_agent_cannot_hold_is_said_out_loud(cfg):
     everywhere.
     """
     from kingfisher.core.definitions.catalogue import Definitions
-    from kingfisher.core.reporting import subagent_only
+    from kingfisher.core.definitions.tools.spec import ambiguous
 
     _two_vendors(cfg)
 
-    assert subagent_only(
-        Capabilities(tools=("vendor_a/fetch.py::fetch", "vendor_b/fetch.py::fetch")),
-        catalogue=Definitions.from_config(cfg),
+    assert ambiguous(
+        ("vendor_a/fetch.py::fetch", "vendor_b/fetch.py::fetch"),
+        Definitions.from_config(cfg).tools.found,
     ) == ("fetch",)
 
 

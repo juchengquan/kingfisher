@@ -46,7 +46,7 @@ def offers(
     """Whether any definition this caller reaches offers them one entry of a catalogue.
 
     The grant's half only: a tool's or skill's own lock is an and this cannot see, which
-    callers take out with `core.definitions.tools.spec.out_of_reach` or
+    callers take out with `core.definitions.tools.spec.tools_shut` or
     `Definitions.skills_shut` as well. A definition writing
     `["*"]` ends the walk, offering everything: `ALL` is the string `"*"`, and a union would
     collect the character. `same` compares two spellings of one entry.

@@ -24,8 +24,6 @@ _EXPORTS = {
     "refuse_ungranted_endpoint": "kingfisher.core.access.capabilities",
     "refuse_ungranted_models": "kingfisher.core.access.capabilities",
     "refuse_unoffered": "kingfisher.core.access.capabilities",
-    "refuse_unprovided_wants": "kingfisher.core.access.capabilities",
-    "refuse_written_wants": "kingfisher.core.access.capabilities",
     "unoffered": "kingfisher.core.access.capabilities",
     "withheld": "kingfisher.core.access.capabilities",
     "audit": "kingfisher.core.access.checks",
@@ -81,10 +79,6 @@ if TYPE_CHECKING:
         refuse_ungranted_models as refuse_ungranted_models,
     )
     from kingfisher.core.access.capabilities import refuse_unoffered as refuse_unoffered
-    from kingfisher.core.access.capabilities import (
-        refuse_unprovided_wants as refuse_unprovided_wants,
-    )
-    from kingfisher.core.access.capabilities import refuse_written_wants as refuse_written_wants
     from kingfisher.core.access.capabilities import unoffered as unoffered
     from kingfisher.core.access.capabilities import withheld as withheld
     from kingfisher.core.access.checks import audit as audit

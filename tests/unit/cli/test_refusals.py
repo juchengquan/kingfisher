@@ -376,7 +376,7 @@ REFUSALS: dict[str, Refusal] = {
     "core/definitions/catalogue.py::_one_registry": Refusal(
         1, defect=a_portable_subagent_carrying_one_skill_name_twice),
     # Raises the error class it was handed, agent's or subagent's: an agent's is filed.
-    "core/definitions/catalogue.py::refuse_one_skill_twice": Refusal(
+    "core/definitions/catalogue.py::refuse_doubled_skill": Refusal(
         1, defect=an_agent_naming_one_skill_bare_and_qualified),
     # Filed on the build rather than on a missing name, which is what it used to be:
     # an entry with no `build` is now a portable declaration rather than a compiled

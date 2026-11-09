@@ -129,7 +129,7 @@ def duplicated(found: Sequence[FoundTool]) -> tuple[str, ...]:
     return tuple(sorted(name for name, count in _by_name(found).items() if count > 1))
 
 
-def out_of_reach(found: Sequence[FoundTool], held: frozenset[str] | None) -> frozenset[str]:
+def tools_shut(found: Sequence[FoundTool], held: frozenset[str] | None) -> frozenset[str]:
     """The tools whose own audience shuts this caller out, as a grant would write them."""
     if held is None:
         return frozenset()
@@ -146,7 +146,7 @@ def audienced(found: Sequence[FoundTool]) -> dict[str, FoundTool]:
 
 
 def admitted(granted: Callable[[str], bool], *, shut: frozenset[str]) -> Callable[[str], bool]:
-    """A grant's answer about one tool, less the tools `out_of_reach` names."""
+    """A grant's answer about one tool, less the tools `tools_shut` names."""
     return lambda name: granted(name) and name not in shut
 
 

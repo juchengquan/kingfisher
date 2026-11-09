@@ -30,15 +30,6 @@ BUNDLED = "bundled"
 SOURCES: tuple[str, ...] = (SHARED, BUNDLED)
 
 
-def entry_fields(*extra: str) -> tuple[str, ...]:
-    """The keys one long-form entry may write, for a field carrying `extra`."""
-    return ("name", *extra)
-
-
-def _spelled(extra: tuple[str, ...]) -> str:
-    return " and/or ".join(repr(one) for one in extra)
-
-
 #: A key an entry may not write, with where it goes instead. On an entry, a datazone could
 #: only repeat or contradict the thing's own, and a contradiction makes it unreachable.
 ON_THE_THING: Mapping[str, str] = MappingProxyType(
@@ -156,20 +147,6 @@ class Reader:
             if not text(document[required]):
                 msg = f"{self.source}: {required!r} is present but empty"
                 raise self.error(msg)
-
-    def one_name(self, value: object, *, key: str) -> str | None:
-        """One name, or `None` when the field is absent. A list is refused."""
-        if value is None:
-            return None
-        if isinstance(value, (list, tuple, set)):
-            written = ", ".join(str(one) for one in value)
-            msg = (
-                f"{self.source}: {key} names {len(value)} things ({written}); "
-                f"it takes one. There is no fallback, so every name after the first "
-                f"would never be tried"
-            )
-            raise self.error(msg)
-        return text(value) or None
 
     def _no_star(self, key: str, why: str) -> str:
         """What a field that refuses the star says, however the star was spelled."""
@@ -303,7 +280,8 @@ class Reader:
         if isinstance(entry, str):
             return entry.strip()
         if not isinstance(entry, Mapping):
-            form = f"a name, or a mapping of 'name' and {_spelled(extra)}" if extra else "a name"
+            also = " and/or ".join(repr(one) for one in extra)
+            form = f"a name, or a mapping of 'name' and {also}" if extra else "a name"
             msg = (
                 f"{self.source}: {key} entry {position} is neither a name nor a "
                 f"mapping (got {type(entry).__name__}); an entry is {form}"
@@ -331,7 +309,7 @@ class Reader:
 
         if (
             complaint := unrecognised(
-                entry, known=entry_fields(*extra), declined=ON_THE_THING, noun="key"
+                entry, known=("name", *extra), declined=ON_THE_THING, noun="key"
             )
         ) is not None:
             msg = f"{self.source}: {key} entry {position} has {complaint}"
@@ -620,5 +598,16 @@ def _pasted_lock(name: str, source_ids: object) -> str:
 
 
 def wanted_model(document: Mapping[str, object], read: Reader) -> str | None:
-    """The model a definition names, or `None` for whatever summoned it."""
-    return read.one_name(document.get("model"), key="model")
+    """The model a definition names, or `None` for whatever summoned it. A list is refused."""
+    value = document.get("model")
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple, set)):
+        written = ", ".join(str(one) for one in value)
+        msg = (
+            f"{read.source}: model names {len(value)} things ({written}); "
+            f"it takes one. There is no fallback, so every name after the first "
+            f"would never be tried"
+        )
+        raise read.error(msg)
+    return text(value) or None
