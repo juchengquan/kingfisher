@@ -4640,8 +4640,22 @@ the whole result back. A difference the log cannot say -- a message more or fewe
 or call changed -- is warned of as `conversation_not_logged` and nothing is written for
 it. Expiry swaps a line only once its result is out of view (*Expiry reaches it once the
 result is out of view*, above), so the rebuild hands the model what the transcript did.
-**Left open:** whether `turns.jsonl` becomes a documented, read-only file a client
-reads, which is parked in `ONGOING.md`. *(2026-11-06.)*
+*(2026-11-06.)*
+
+**No client reads the turn log, and what it leaves out it leaves on purpose.** A client
+reads its own stream, so the log's lines, its two copies and their seals, and the `at`
+lines and `off_path.jsonl` it is read with promise nothing to anyone outside kingfisher,
+and its layout is kingfisher's to change. Reading the log alone was never enough anyway:
+the session is at the last turn it opens that `off_path.jsonl` does not name, so a reader
+without that file shows an abandoned branch after a rewind. What the log owes is the
+whole of what the model and its tools said, and what it leaves out of that it leaves on
+purpose: a picture or a PDF a tool handed the model, whose call and path it keeps -- the
+file stays where it was, and only a turn replacing an input loses which one the agent
+saw, since `/inputs` is not copied per turn; a result once expired and out of view, as
+*Expiry reaches it once the result is out of view* says; a subagent's own steps, whose
+`task` call and answer it keeps, its results filed in the ledger under that call; and
+each message's id, model, stop reason and token usage, which nothing that rebuilds or
+reads back the conversation needs. *(2026-11-09.)*
 
 **A session is put back where a turn it logged ended, and the turns after it are kept.**
 `Session.rewind(to)` puts the session on `to`'s path, along which the next turn's
