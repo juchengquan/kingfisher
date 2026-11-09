@@ -310,7 +310,9 @@ def test_the_driver_says_what_to_do_about_what_it_left(cfg, tmp_path, capsys, mo
 def test_a_definitions_folder_that_already_exists_does_not_reseed(
     cfg, tmp_path, capsys, monkeypatch
 ):
-    """The half that makes the other half safe."""
+    """The driver seeding again over a definitions folder that already exists, writing over
+    a skill someone edited.
+    """
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
     driver.main(["driver.py", "--list"])  # the first run, which seeds
@@ -351,7 +353,10 @@ def test_a_new_definitions_folder_seeds_before_the_catalogue_is_read(
 
 
 def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
-    """The dead end, closed."""
+    """The missing-catalogue error still telling a reader to run `kingfisher seed` once the
+    example it writes is there, or naming the driver's `--seed` flag, which the wheel
+    does not carry.
+    """
     from kingfisher.core import model_catalogue
 
     absent = tmp_path / "models.yaml"
@@ -581,7 +586,7 @@ def _intercepted(monkeypatch) -> list:
 
 
 def test_the_agent_named_on_the_command_line_reaches_the_request(cfg, monkeypatch):
-    """The whole flag."""
+    """The driver's `--agent` dropped on the way to the request, so the run asks for no agent."""
     driver = _driver_on(monkeypatch, cfg)
     seen = _intercepted(monkeypatch)
 

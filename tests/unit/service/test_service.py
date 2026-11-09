@@ -484,7 +484,9 @@ def test_a_narrowed_request_is_told_what_it_did_not_grant(cfg):
 
 
 def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
-    """Not off a list kept somewhere."""
+    """The withheld report taken from somewhere other than the agent that was built, so it
+    names a granted tool or misses an offered or built-in one the request withheld.
+    """
     from kingfisher.core.definitions import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
@@ -669,7 +671,9 @@ def test_a_caller_who_stops_reading_still_gives_the_session_back(cfg):
 
 
 def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg):
-    """Where history comes from now."""
+    """Only the new question sent to the graph on a session's second turn, without the
+    conversation before it.
+    """
     service = Kingfisher(
         cfg, graph=StubAgent("ok"), sessions=LocalSessions()
     )

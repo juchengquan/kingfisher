@@ -71,7 +71,9 @@ def a_policy(tmp_path, layout: Layout = DEFAULT_LAYOUT, **kwargs: Any) -> StubSa
 
 
 def test_the_session_is_writable_and_nothing_above_it_is(sandlock, tmp_path):
-    """The claim the fence exists to make."""
+    """The fence leaving the sessions folder or the workspace above a session writable, or
+    the session's own outputs unwritable.
+    """
     policy = a_policy(tmp_path)
 
     assert str(tmp_path / "sessions" / "s1" / OUTPUTS) in policy.fs_writable

@@ -376,7 +376,9 @@ def test_a_runner_is_given_the_command_already_confined(cfg, session_dir):
 
 
 def test_what_a_runner_returns_reaches_the_model(cfg, session_dir):
-    """The seam is only useful if the result travels."""
+    """A supplied runner's output and exit code lost on the way back, so the model sees
+    something other than what ran.
+    """
     backend = backend_at(cfg, session_dir, runner=Recorder(output="elsewhere", exit_code=3))
 
     result = backend.execute("whoami")
@@ -453,7 +455,9 @@ def test_the_workspace_itself_stays_fully_usable(cfg, session_dir):
 @macos
 @needs_a_real_toolchain
 def test_python_still_runs_with_its_dependencies(cfg, session_dir):
-    """The whole point of the re-allowed roots."""
+    """The fence denying the Python toolchain's own folders, so a script that imports an
+    installed package fails.
+    """
     backend = backend_at(cfg, session_dir)
 
     result = backend.execute('python3 -c "import yaml; print(\'deps ok\')"')
@@ -586,7 +590,9 @@ def test_a_literal_tmp_write_is_refused(cfg, session_dir):
 
 @macos
 def test_installing_into_the_environment_is_refused(cfg, session_dir):
-    """Two `pip install` attempts in one observed run."""
+    """The shell writing into kingfisher's own Python environment, as the two `pip install`
+    attempts in one observed run would have.
+    """
     import sys
 
     backend = backend_at(cfg, session_dir)
@@ -813,7 +819,9 @@ def test_a_supplied_runner_that_is_not_here_stops_the_confinement_claiming(cfg, 
 
 
 def test_a_supplied_runner_that_is_here_keeps_the_mechanism_and_adds_itself(cfg, session_dir):
-    """The other case, and it is not the same fact."""
+    """A supplied runner that runs here reported as replacing the fence, or not reported as
+    supplied at all.
+    """
     backend = backend_at(cfg, session_dir, runner=Recorder())
     confined = backend.default.confinement
 
@@ -822,7 +830,7 @@ def test_a_supplied_runner_that_is_here_keeps_the_mechanism_and_adds_itself(cfg,
 
 
 def test_no_supplied_runner_says_nothing_new(cfg, session_dir):
-    """The case every existing deployment is in."""
+    """A deployment that supplies no runner reported as having supplied one."""
     assert not backend_at(cfg, session_dir).default.confinement.supplied
 
 
@@ -909,7 +917,9 @@ def test_a_definition_root_stays_readable(cfg, session_dir):
 
 @macos
 def test_the_rest_of_the_workspace_is_still_writable(cfg, session_dir):
-    """The bound on the rule."""
+    """The rule that keeps the shell out of the definitions denying writes to the rest of
+    the workspace too.
+    """
     backend = backend_at(cfg, session_dir)
     target = cfg.workspace / "ordinary-work.txt"
 

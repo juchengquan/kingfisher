@@ -3335,7 +3335,9 @@ def _agent_construction_stubs(path: Path) -> list[int]:
 
 
 def test_no_test_stubs_out_agent_construction():
-    """The blind spot, closed and kept closed."""
+    """A test that stubs out `create_deep_agent`, so the build it checks is one deepagents
+    never validated.
+    """
     # Every module under tests/, since a fixture in `conftest.py` or a helper stubs for
     # every test that uses it.
     offenders = [
@@ -3836,7 +3838,9 @@ def test_every_error_is_classified_by_who_caused_it():
 
 
 def test_every_caller_facing_error_is_public():
-    """The rule the split is for."""
+    """An error a caller causes left off `kingfisher`'s public names, so the caller cannot
+    catch it from the address it imports.
+    """
     import kingfisher
 
     assert set(kingfisher.__all__) >= CALLER_FACING_ERRORS
@@ -3976,7 +3980,10 @@ def test_both_import_collectors_see_the_same_modules():
 
 
 def test_the_back_door_rule_tells_the_two_consumers_apart():
-    """The questions the tree cannot ask."""
+    """The back-door rule letting an outsider reach behind the front door, letting
+    kingfisher's own code reach behind it for a name the door carries, or refusing it one
+    only the back door has.
+    """
     deep = "kingfisher.core.service"
     private = "kingfisher.plugins.sessions.sandbox.confinement"
 
@@ -5256,7 +5263,9 @@ def test_no_root_at_all_is_an_error_rather_than_a_climb(tmp_path):
 
 
 def test_a_directory_that_only_half_matches_is_not_the_root(tmp_path):
-    """Both halves of the marker are load-bearing."""
+    """A folder holding only half of the checkout marker, `tests/` and `pyproject.toml`
+    without `src/kingfisher`, taken as the repository root.
+    """
     outer = _fake_checkout(tmp_path / "outer")
     half = outer / "nested"
     (half / "tests").mkdir(parents=True)

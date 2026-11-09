@@ -153,13 +153,15 @@ def test_what_the_catalogue_loads_is_accounted_for():
 
 
 def test_what_a_caller_can_subtract_is_accounted_for():
-    """The driver exposes four."""
+    """A grant kind the driver lets a caller subtract also listed as one that cannot be
+    subtracted, or a kind in neither list.
+    """
     assert set(driver.GRANTS) | set(NOT_SUBTRACTABLE) == set(AXES)
     assert not set(driver.GRANTS) & set(NOT_SUBTRACTABLE)
 
 
 def test_a_ninth_axis_cannot_be_added_in_silence():
-    """The point of all of the above."""
+    """A ninth grant kind added with nothing deciding whether a caller may subtract it."""
     unaccounted = set(AXES) - (set(driver.GRANTS) | set(NOT_SUBTRACTABLE))
     assert not unaccounted, f"{sorted(unaccounted)} is a kind nothing has decided about"
 
