@@ -19,7 +19,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import read_only_permissions
 from kingfisher.core.agent.backend import miscased
-from kingfisher.core.agent.host_paths import UnsafeReferenceError
+from kingfisher.core.agent.host_paths import UnreachablePathError
 from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.prompting import miscased_path, stray_save
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
@@ -148,7 +148,7 @@ def test_a_tool_handed_the_backend_is_refused_the_same_spellings(scripted, sessi
     assert handed.read("/.HARNESS/secret.txt").error == said
     assert handed.delete("/.HARNESS/secret.txt").error == said
     assert asyncio.run(handed.adelete("/.HARNESS/secret.txt")).error == said
-    with pytest.raises(UnsafeReferenceError, match="other capitals"):
+    with pytest.raises(UnreachablePathError, match="other capitals"):
         handed.on_this_host("/.HARNESS/secret.txt")
     (downloaded,) = handed.download_files(["/.HARNESS/secret.txt"])
     (uploaded,) = handed.upload_files([("/scratchpad/TOOL_RESULTS/A-0009-x.txt", b"FORGED")])

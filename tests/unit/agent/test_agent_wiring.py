@@ -192,7 +192,7 @@ def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, session_dir):
         agent=_named(("audit",)),
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        middleware_registry={"audit": _Audit},
+        middlewares={"audit": _Audit},
     )
 
     assert "_Audit" in {type(m).__name__ for m in built.middleware}
@@ -210,7 +210,7 @@ def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
         agent=_named(("audit",)),
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        middleware_registry={"audit": _Audit},
+        middlewares={"audit": _Audit},
         capabilities=Capabilities(builtin_tools=("read_file",)),
     )
 
@@ -239,7 +239,7 @@ def test_an_agent_naming_middleware_nothing_registered_is_refused(cfg, session_d
             agent=_named(("audit",)),
             backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-            middleware_registry={},
+            middlewares={},
         )
 
 
@@ -254,7 +254,7 @@ def test_a_request_may_not_quietly_drop_the_agents_middleware(cfg, session_dir):
             agent=_named(("audit",)),
             backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-            middleware_registry={"audit": _Audit},
+            middlewares={"audit": _Audit},
             capabilities=Capabilities(middlewares=()),
         )
 
@@ -268,7 +268,7 @@ def test_an_agent_that_names_none_wires_none(cfg, session_dir):
         agent=_named(None),
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        middleware_registry={"audit": _Audit},
+        middlewares={"audit": _Audit},
     )
 
     assert "_Audit" not in {type(m).__name__ for m in built.middleware}
@@ -334,7 +334,7 @@ def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, session_dir):
             agent=_named(("audit",)),
             backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-            middleware_registry={"audit": FilesystemMiddleware},
+            middlewares={"audit": FilesystemMiddleware},
         )
 
     assert "FilesystemMiddleware" in {m.name for m in built.middleware}
@@ -391,7 +391,7 @@ def test_a_middleware_named_its_own_thing_warns_about_nothing(cfg, session_dir):
             agent=_named(("audit",)),
             backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-            middleware_registry={"audit": _Audit},
+            middlewares={"audit": _Audit},
         )
 
     assert _replacement_warnings(recorded) == []
@@ -411,7 +411,7 @@ def test_a_registered_instance_is_refused_rather_than_called(cfg, session_dir):
             # instance is not one -- so a deployment running `ty` never gets
             # here. The runtime guard is for the registry assembled from
             # configuration, and for everyone who does not.
-            middleware_registry={"audit": _Audit()},  # ty: ignore[invalid-argument-type]
+            middlewares={"audit": _Audit()},  # ty: ignore[invalid-argument-type]
         )
 
     message = str(raised.value)
@@ -455,7 +455,7 @@ def test_a_registered_class_is_built_again_for_every_graph(cfg, session_dir):
             agent=_named(("audit",)),
             backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-            middleware_registry={"audit": _Audit},
+            middlewares={"audit": _Audit},
         )
         seen.append(next(m for m in assembled.middleware if type(m) is _Audit))
 
@@ -510,7 +510,7 @@ def _with_a_subagent(cfg, session_dir, injected, definition: str = _SUBAGENT):
         agent=_named(("wants",), subagents=("reviewer",)),
         backend=backend_at(cfg, session_dir),
         model=injected,
-        middleware_registry={"wants": _WantsEverything},
+        middlewares={"wants": _WantsEverything},
     )
 
     # `subagent["middleware"]` stays a subscript: the record types what
@@ -558,7 +558,7 @@ def test_a_subagent_that_inherits_is_given_no_model_of_its_own(cfg, session_dir)
         agent=_named(("wants",), subagents=("reviewer",)),
         backend=backend_at(cfg, session_dir),
         model=injected,
-        middleware_registry={"wants": _WantsEverything},
+        middlewares={"wants": _WantsEverything},
     )
 
     subagent = next(s for s in declared_subagents(built) if s["name"] == "reviewer")
@@ -575,7 +575,7 @@ def _a_pinned_subagent(cfg, session_dir, injected) -> dict:
         agent=_named(("wants",), subagents=("reviewer",)),
         backend=backend_at(cfg, session_dir),
         model=injected,
-        middleware_registry={"wants": _WantsEverything},
+        middlewares={"wants": _WantsEverything},
     )
     return next(s for s in declared_subagents(built) if s["name"] == "reviewer")
 
@@ -649,5 +649,5 @@ def test_a_middleware_naming_a_model_this_request_withheld_is_refused(cfg, sessi
             capabilities=Capabilities(endpoints=("fake",)),
             backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-            middleware_registry={"wants": _WantsOnlyAModel},
+            middlewares={"wants": _WantsOnlyAModel},
         )

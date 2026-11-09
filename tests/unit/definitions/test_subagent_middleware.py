@@ -34,7 +34,7 @@ def build(cfg, registry=None, **caps):
             cfg, ensure_session_layout(cfg.workspace / "sessions" / "s", cfg.layout)
         ),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        middleware_registry=registry,
+        middlewares=registry,
         capabilities=Capabilities(**caps),
     )
 

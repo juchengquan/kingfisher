@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class UnusedFile:
-    """One saved result no ledger row names."""
+    """One recorded result no ledger row names."""
 
     #: Where it is in the session, as the agent's file tools name it.
     path: str
@@ -35,7 +35,7 @@ class UnusedFile:
 
 
 class UnusedFiles:
-    """The saved results one turn judged safe to drop, and nothing else of the session.
+    """The recorded results one turn judged safe to drop, and nothing else of the session.
 
     Iterate it for each `UnusedFile`. The backend stays private and every path is checked
     against the set: a plugin handed this is handed those files, not the session.

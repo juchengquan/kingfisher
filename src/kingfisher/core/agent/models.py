@@ -171,17 +171,36 @@ def _reserved_output(model: BaseChatModel) -> int:
 SUMMARIZER = "SummarizationMiddleware"
 
 
+def summarizer_trigger_and_count(
+    model: BaseChatModel, stack: Sequence[Any] = ()
+) -> tuple[int, SummarizerCount]:
+    """Where the summariser of a graph on `model` handed `stack` fires, as
+    `summarizer_trigger` reads it, and how it counts: read off the one summariser, so what
+    clearing measures against the trigger is counted in its unit."""
+    summarizer = _summarizer_in(stack)
+    return _trigger_of(model, summarizer), _count_of(model, summarizer)
+
+
 def summarizer_trigger(model: BaseChatModel, stack: Sequence[Any] = ()) -> int:
     """How large a conversation on `model` gets, in deepagents' approximate tokens,
     before the summariser of a graph handed `stack` rewrites it.
 
-    The last of `stack` answering to `SUMMARIZER` is that summariser, as deepagents'
-    merge keeps the last; with none, or one `supplied_trigger` cannot read, it is
+    With no summariser in `stack`, or one `supplied_trigger` cannot read, it is
     deepagents' own, read from `compute_summarization_defaults`, never a number copied
     out of it. Capped where the request's input budget is reached first.
     """
+    return _trigger_of(model, _summarizer_in(stack))
+
+
+def _summarizer_in(stack: Sequence[Any]) -> Any:
+    """The last of `stack` answering to `SUMMARIZER`, as deepagents' merge keeps the last,
+    or `None` where the graph runs deepagents' own."""
     supplied = [one for one in stack if getattr(one, "name", None) == SUMMARIZER]
-    trigger = supplied_trigger(supplied[-1]) if supplied else None
+    return supplied[-1] if supplied else None
+
+
+def _trigger_of(model: BaseChatModel, summarizer: Any) -> int:
+    trigger = None if summarizer is None else supplied_trigger(summarizer)
     if trigger is None:
         trigger = _deepagents_own(model)
     window = _advertised_window(model)
@@ -259,9 +278,8 @@ class SummarizerCount:
         return self.each(messages, tools=tools) if self.tools else self.each(messages)
 
 
-def summarizer_count(model: BaseChatModel, stack: Sequence[Any] = ()) -> SummarizerCount:
-    """How the summariser of a graph on `model` handed `stack` counts: the one
-    `summarizer_trigger` reads, and deepagents' own where it reads none."""
+def _count_of(model: BaseChatModel, summarizer: Any) -> SummarizerCount:
+    """How `summarizer` counts, or deepagents' own summariser where it is `None`."""
     # Here, as in `_deepagents_own`.
     from deepagents.middleware.summarization import (  # noqa: PLC0415
         _token_counter_accepts_tools,
@@ -270,8 +288,7 @@ def summarizer_count(model: BaseChatModel, stack: Sequence[Any] = ()) -> Summari
         _get_approximate_token_counter,
     )
 
-    supplied = [one for one in stack if getattr(one, "name", None) == SUMMARIZER]
-    helper = _langchains(supplied[-1]) if supplied else None
+    helper = None if summarizer is None else _langchains(summarizer)
     if helper is not None:
         whole, each = helper.token_counter, helper._partial_token_counter
     else:
@@ -316,6 +333,13 @@ def _summarised_window(model: Any) -> int | None:
     return window if isinstance(window, int) else None
 
 
+def model_id(model: Any) -> str | None:
+    """The id a chat model sends, as langchain traces its calls and the run log names
+    them: each class keeps it under a name of its own."""
+    named = model._get_ls_params().get("ls_model_name")
+    return named if isinstance(named, str) else None
+
+
 def refuse_a_mark_deepagents_reaches_first(
     model: BaseChatModel, mark: int | None, named: Sequence[Any] = ()
 ) -> None:
@@ -336,9 +360,8 @@ def refuse_a_mark_deepagents_reaches_first(
         if window is not None
         else "no advertised input window"
     )
-    named_as = model._get_ls_params().get("ls_model_name")
     msg = (
-        f"model {named_as!r} sets clear_results_at: {mark}, and deepagents summarises "
+        f"model {model_id(model)!r} sets clear_results_at: {mark}, and deepagents summarises "
         f"its conversation at {trigger} tokens ({where}), before clearing would start. "
         f"Lower it below {trigger} in models.yaml, or leave it out for the default"
     )

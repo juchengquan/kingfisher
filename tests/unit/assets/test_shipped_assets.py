@@ -1333,7 +1333,7 @@ def test_the_operator_stops_before_running_a_command(cfg, session_dir, shipped):
 
 def test_assistant_builds_from_the_definitions_alone(cfg, session_dir, shipped):
     """A shipped definition naming middleware has to build with no
-    `middleware_registry=` at all, from `middlewares/` alone.
+    `middlewares=` at all, from `middlewares/` alone.
 
     The agent-and-subagent pair that shipped here first was broken for as long as it
     existed and nothing noticed, because every test touching it replaced the spec or
@@ -1449,7 +1449,7 @@ def _read_under_summarizer(
             ),
             model=model,
             backend=backend,
-            middleware_registry=_documented_registry(shipped),
+            middlewares=_documented_registry(shipped),
         ).graph
     graph.invoke(
         {"messages": [{"role": "user", "content": "read them"}]},

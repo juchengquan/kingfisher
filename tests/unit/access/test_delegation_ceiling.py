@@ -791,7 +791,7 @@ def _audited_build(cfg, session_dir, **caps):
         ),
         backend=backend_at(wired, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        middleware_registry={"audit": _Audit},
+        middlewares={"audit": _Audit},
         capabilities=Capabilities(**caps),
     )
 

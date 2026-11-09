@@ -7585,7 +7585,7 @@ wording is a discriminator in `src` that is not a sentence -- narrower classes, 
 code on the error -- across thirty-odd raise sites, not costed here.
 
 **The carve-out, for whoever needs it.** Six message spans reach a model's context, all
-from `core/agent/`: `HostPathError` and `UnsafeReferenceError`, plus literals written
+from `core/agent/`: `HostPathError` and `UnreachablePathError`, plus literals written
 inline in `narrowing.py`. Both classes subclass `ValueError` and their tests catch the
 base, so a rule keyed on the exception name exempts nothing. Wording is behaviour
 there, twice measured: told only the virtual spelling, an agent passed it to `execute`

@@ -65,7 +65,7 @@ when left out:
 | | `scratch_run_limit` | [below](#scratchrunlimit--which-graphs-tools-may-run-commands) |
 | | `subagent_middlewares` | [below](#subagentmiddlewares--what-a-portable-subagent-runs) |
 | **After the turn** | `run_events` | [below](#runevents--where-kingfishers-logs-go) |
-| | `unused_results` | [below](#unusedresults--what-becomes-of-a-saved-result-nothing-names) |
+| | `unused_results` | [below](#unusedresults--what-becomes-of-a-recorded-result-nothing-names) |
 | **What outlives the session** | `memory_store` | [below](#memorystore--a-users-memory-across-their-sessions) |
 
 Something kingfisher does that you want done differently is usually middleware, which a
@@ -451,7 +451,7 @@ async path langchain hands each event to a worker thread. So the events of tool
 calls made together can interleave, though each call's start comes before its end,
 and a sink that keeps state between events wants a lock.
 
-## `UnusedResults` — what becomes of a saved result nothing names
+## `UnusedResults` — what becomes of a recorded result nothing names
 
 A result kingfisher records — not a file tool's, nor the checklist's — is filed under
 `/scratchpad/tool_results/` once it leaves the conversation, or as it arrives where it is
@@ -1004,7 +1004,7 @@ with `glob`, what a turn left is listed with `glob` under
 to them, though your backend's own refusals still apply; at
 the end of the turn that folder is listed with `ls`, and a result file no row of the
 ledger names is handed to
-[`UnusedResults`](#unusedresults--what-becomes-of-a-saved-result-nothing-names), whose
+[`UnusedResults`](#unusedresults--what-becomes-of-a-recorded-result-nothing-names), whose
 default removes it with `delete`. So all of those
 work on a backend that keeps the session somewhere other than the directory it was
 handed. `/inputs` has to take that upload

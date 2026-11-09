@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 from langchain.agents.middleware import AgentMiddleware, ModelResponse
 from langchain_core.messages import AIMessage
 
+from kingfisher.core.agent.models import model_id
+
 if TYPE_CHECKING:
     from kingfisher.core.config import Models
 
@@ -33,13 +35,6 @@ def signers_of(models: Models) -> dict[str, dict[str, str]]:
         name: {"endpoint": profile.endpoint, "address": models.endpoints[profile.endpoint].base_url}
         for name, profile in models.models.items()
     }
-
-
-def model_id(model: Any) -> str | None:
-    """The id a chat model sends, as langchain traces its calls and the run log names
-    them: each class keeps it under a name of its own."""
-    named = model._get_ls_params().get("ls_model_name")
-    return named if isinstance(named, str) else None
 
 
 def _readable(reply: AIMessage, signer: Mapping[str, str | None]) -> bool:

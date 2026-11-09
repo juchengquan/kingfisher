@@ -36,7 +36,7 @@ from deepagents.middleware.filesystem import (
 from kingfisher.core.logged import raised, warn
 
 from .backend import folders_of, miscased, strays
-from .host_paths import UnsafeReferenceError
+from .host_paths import UnreachablePathError
 from .prompting import miscased_path, stray_save
 
 if TYPE_CHECKING:
@@ -86,7 +86,7 @@ class PermittedBackend(BackendProtocol):
         ]
 
     def on_this_host(self, path: str, *, call: str | None = None) -> Path:
-        """Where a tool may be handed `path` as a real file, or `UnsafeReferenceError`;
+        """Where a tool may be handed `path` as a real file, or `UnreachablePathError`;
         `call` is the tool call's id, for the log.
 
         The turn's rules first, as `read_file` applies them, so a refused path is never
@@ -94,7 +94,7 @@ class PermittedBackend(BackendProtocol):
         """
         where, refused = self._where("read", path)
         if refused:
-            raise UnsafeReferenceError(refused)
+            raise UnreachablePathError(refused)
         mapped = host_path_in_turn(self._inner, where, call=call)
         if mapped is None:
             msg = (
@@ -103,7 +103,7 @@ class PermittedBackend(BackendProtocol):
                 "`runtime: ToolRuntime[ToolContext]` reads it through "
                 "`runtime.context.backend` instead"
             )
-            raise UnsafeReferenceError(msg)
+            raise UnreachablePathError(msg)
         root, candidate = mapped
         real = candidate.resolve()
         # Refused, not resolved and judged again: the rules judged the path typed, and a
@@ -111,7 +111,7 @@ class PermittedBackend(BackendProtocol):
         # the session. A root that answered is already resolved, as upstream roots one.
         if root is not None and real != candidate:
             msg = f"{where} is or runs through a link, and a tool is handed none"
-            raise UnsafeReferenceError(msg)
+            raise UnreachablePathError(msg)
         return real
 
     def _where(self, operation: FilesystemOperation, path: str) -> tuple[str, str | None]:
@@ -407,7 +407,7 @@ def host_path(backend: Any, where: str) -> tuple[Path | None, Path] | None:
     return None
 
 
-class HostPathFailedError(UnsafeReferenceError):
+class HostPathFailedError(UnreachablePathError):
     """A backend's own `host_path` raised, and `host_path_failed` was logged."""
 
 

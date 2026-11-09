@@ -263,7 +263,7 @@ def unfiled_note(number: str) -> str:
 
 
 def expired_note(rounds: int) -> str:
-    """Appended to a search of the saved results that found nothing."""
+    """Appended to a search of the recorded results that found nothing."""
     return (
         f"A saved result older than {rounds} rounds of this conversation has expired and "
         "its file is gone; to see it again, call the tool that made it again."

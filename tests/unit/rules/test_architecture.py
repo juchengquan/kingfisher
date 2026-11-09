@@ -792,7 +792,9 @@ NOT_A_MODULE = frozenset({
 #: a table keyed by name alone would have to excuse both.
 PROSE_GONE: dict[str, frozenset[str]] = {
     "docs/decisions.md": frozenset({"subagents.spec.DIRECTORY"}),
-    "docs/upgrading.md": frozenset({"core.interfaces.ThreadStore"}),
+    "docs/upgrading.md": frozenset({
+        "core.agent.host_paths.UnsafeReferenceError", "core.interfaces.ThreadStore",
+    }),
     # The dead names the liveness rules were written against, quoted as such.
     "tests/unit/rules/test_architecture.py": frozenset({
         "core.access.capabilities.AXES", "subagents.spec.DIRECTORY",
@@ -3796,7 +3798,7 @@ CALLER_FACING_ERRORS = frozenset({
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.
-#: `HostPathError` and `UnsafeReferenceError` refuse a path the *agent* produced
+#: `HostPathError` and `UnreachablePathError` refuse a path the *agent* produced
 #: mid-turn, and `HostPathFailedError` one the backend's `host_path` raised on; each
 #: reaches the model as a correction, never a caller. Being here does not mean
 #: private -- `ConfigError` was public long before this rule existed -- it means a
@@ -3807,7 +3809,7 @@ DEPLOYMENT_ERRORS = frozenset({
     # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
     "AgentError", "ConfigError", "HostPathError", "HostPathFailedError", "LoadError",
-    "MiddlewareError", "SkillLockError", "ToolError", "UnsafeReferenceError",
+    "MiddlewareError", "SkillLockError", "ToolError", "UnreachablePathError",
 })
 
 #: Caused by the model's provider, and never raised to a caller: a turn ends on it as a

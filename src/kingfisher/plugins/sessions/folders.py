@@ -95,7 +95,7 @@ def ensure_session_layout(session_dir: Path, layout: Layout) -> Path:
     session_dir = Path(session_dir).expanduser().resolve()
     # Before anything is made or written: `mkdir` and the scaffold would go through a link.
     refuse_linked_folders(session_dir, layout)
-    # The saved results before the first result: bubblewrap binds them read-only only where
+    # The recorded results before the first result: bubblewrap binds them read-only only where
     # they exist when its fence is built, so one made mid-turn would be the shell's to write.
     for name in layout.made_dirs:
         (session_dir / name).mkdir(parents=True, exist_ok=True)

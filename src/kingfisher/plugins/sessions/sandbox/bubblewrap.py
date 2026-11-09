@@ -77,7 +77,7 @@ def argv_for(
     # After the folders' own binds, and that order is the mechanism: bwrap applies binds
     # in sequence, so a read-only subpath bind lands on top of the writable one. `present`
     # drops an absent one, which is why `ensure_session_layout` makes them first. `inputs`
-    # is the caller's, and its write bits are the shell's to lift; a saved result is what
+    # is the caller's, and its write bits are the shell's to lift; a recorded result is what
     # a later turn reads back as a tool's answer.
     for path in present([Path(session_dir) / name for name in layout.shell_read_only]):
         argv += ["--ro-bind", str(path), str(path)]

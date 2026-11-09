@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `UnsafeReferenceError` is now `UnreachablePathError`, after #1271
+
+- **Importing `UnsafeReferenceError` from `kingfisher.core.agent.host_paths` fails**,
+  where *`UnsafeReferenceError` leaves `kingfisher`* sent you. The class is
+  `UnreachablePathError` now, named for what it refuses: a path a tool cannot be handed
+  as a file. Nothing raises it at a caller -- the model gets the refusal as a failed tool
+  result -- so an `except` naming it never fired, and can go.
+
 ## The turn log keeps when each turn ran and what each reply reasoned, after #1269
 
 - **A turn's opening line in `.harness/turns.jsonl` carries `started`, and its answer

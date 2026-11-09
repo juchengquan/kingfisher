@@ -24,8 +24,8 @@ from kingfisher.core.agent.middlewares.attachments import AttachmentsMiddleware,
 from kingfisher.core.agent.middlewares.clearing import DEFAULT_MARK, ResultClearingMiddleware
 from kingfisher.core.agent.models import (
     _earliest,
-    summarizer_count,
     summarizer_trigger,
+    summarizer_trigger_and_count,
     supplied_trigger,
 )
 from kingfisher.core.config import ConfigError
@@ -230,7 +230,7 @@ def test_clearing_counts_as_the_summarizer_in_the_stack_does(summarizer, tools):
         decided = deciding.token_counter(REPORTED)
         helper = deciding
 
-    count = summarizer_count(model, [built])
+    _, count = summarizer_trigger_and_count(model, [built])
     assert count.request(REPORTED, tools) == decided
     assert decided != count_tokens_approximately(REPORTED, tools=tools), "the control"
     partial = helper._partial_token_counter
@@ -286,7 +286,8 @@ def test_of_two_summarizers_the_count_is_the_later_ones():
     early, recounting = Early(model, None), Calibrated(model, None)
 
     for stack, kept in (([early, recounting], recounting), ([recounting, early], early)):
-        assert summarizer_count(model, stack).request(REPORTED, TOOLS) == _decided(kept)
+        _, count = summarizer_trigger_and_count(model, stack)
+        assert count.request(REPORTED, TOOLS) == _decided(kept)
     assert _decided(early) != _decided(recounting), "the control: the two count differently"
 
 
@@ -294,7 +295,7 @@ def _built(cfg: Any, session_dir: Any, **given: Any) -> Any:
     return build_agent(
         cfg,
         backend=backend_at(cfg, session_dir),
-        middleware_registry={
+        middlewares={
             "early": Early,
             "late": Late,
             "foreign": Foreign,
@@ -338,7 +339,7 @@ def test_every_graph_holds_the_pdfs_its_own_summarizer_lets_through(cfg, session
 
     graphs = {spec["name"]: spec["middleware"] for spec in built.subagents or ()}
     # At the rate the running model's counter charges, which is what each graph reads.
-    count = summarizer_count(built.model)
+    _, count = summarizer_trigger_and_count(built.model)
     assert _allowance(built.middleware) == pdf_allowance(EARLY, count)
     assert _allowance(graphs["general-purpose"]) == pdf_allowance(EARLY, count)
     assert _allowance(graphs["helper"]) == pdf_allowance(EARLY, count)

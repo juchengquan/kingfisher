@@ -9,7 +9,7 @@ import yaml
 from langchain.agents.middleware import AgentMiddleware
 
 from kingfisher.core.access.capabilities import ALL, CapabilityError
-from kingfisher.core.agent.assembly import _deployment_middleware, _provisions
+from kingfisher.core.agent.assembly import _named_middleware, _provisions
 from kingfisher.core.agent.kinds.declared_middleware import ByName, declared_middleware
 from kingfisher.core.agent.middlewares.recorder import result_id
 from kingfisher.core.definitions.agents import spec as agent_format
@@ -652,7 +652,7 @@ def test_a_build_with_no_agent_owes_the_deployment_nothing():
     """`build_agent` takes capabilities rather than a definition for `--list` and for
     every test that builds one, so this is the ordinary path rather than an edge.
     """
-    assert _deployment_middleware(None, {"audit": Audit}, ALL, provisions={}) == []
+    assert _named_middleware(None, {"audit": Audit}, ALL, provisions={}) == []
 
 
 def test_each_graph_gets_middleware_of_its_own(cfg):
@@ -668,10 +668,10 @@ def test_each_graph_gets_middleware_of_its_own(cfg):
         object(), definition, cfg=cfg, endpoints=ALL, backend=object()
     )
 
-    (first,) = _deployment_middleware(
+    (first,) = _named_middleware(
         definition, {"audit": Audit}, ALL, provisions=provisions
     )
-    (second,) = _deployment_middleware(
+    (second,) = _named_middleware(
         definition, {"audit": Audit}, ALL, provisions=provisions
     )
 

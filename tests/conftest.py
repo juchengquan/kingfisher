@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
 from kingfisher.core.access import ALL
-from kingfisher.core.agent.models import WIRE_FORMATS, summarizer_count
+from kingfisher.core.agent.models import WIRE_FORMATS, summarizer_trigger_and_count
 from kingfisher.core.config import Config, Endpoint, Landing, ModelProfile, Models, WireFormat
 from kingfisher.core.interfaces import NoScratchRunLimit, RunEvents
 from kingfisher.core.layout import DEFAULT_LAYOUT
@@ -647,7 +647,7 @@ EVERY_TOOL = {"builtin_tools": '["*"]', "tools": '["*"]'}
 
 #: How a summariser on `FakeToolCallingModel` counts, four characters a token: handed beside
 #: a `trigger` by a test about something else, it sizes PDFs as most model classes do.
-FAKE_COUNT = summarizer_count(FakeToolCallingModel(responses=[]))
+_, FAKE_COUNT = summarizer_trigger_and_count(FakeToolCallingModel(responses=[]))
 
 #: The settings one build's graphs share, as a build wiring none of them passes each. The
 #: three functions take no default for them, so a call site in the package that forgets one

@@ -93,7 +93,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, FirstCall):
         instructions: Instructions | None = None,
         # Left out, no turn is told anything of its own. Asked once per turn.
         turn_instructions: TurnInstructions | None = None,
-        # Left out, each saved result nothing names is removed.
+        # Left out, each recorded result nothing names is removed.
         unused_results: UnusedResults | None = None,
         # Left out, each PDF a tool returns is handed over or refused by its size alone.
         pdf_attachments: PdfAttachments | None = None,
@@ -306,7 +306,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, FirstCall):
             # deployment withheld.
             capabilities=capabilities,
             run_on=request.run_on,
-            middleware_registry=self.middlewares,
+            middlewares=self.middlewares,
             instructions=_text_from(
                 self.instructions, self.instructions.text(self.cfg), "the instructions"
             ),

@@ -15,7 +15,7 @@ from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.attachments import pdf_allowance
 from kingfisher.core.agent.middlewares.clearing import UNSHOWN, high_mark
 from kingfisher.core.agent.middlewares.standing import FILESYSTEM
-from kingfisher.core.agent.models import SUMMARIZER, summarizer_count, summarizer_trigger
+from kingfisher.core.agent.models import SUMMARIZER, summarizer_trigger_and_count
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.subagents.rules import refuse_cycles
 from kingfisher.core.definitions.subagents.spec import SubagentError, SubagentSpec
@@ -742,7 +742,7 @@ def test_a_helper_naming_its_own_summarizer_runs_that_one_alone(cfg, session_dir
         cfg,
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        middleware_registry={"early": Early},
+        middlewares={"early": Early},
         agent=LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["only"],
     )
 
@@ -771,9 +771,9 @@ def test_a_helpers_clearing_and_pdfs_are_sized_by_the_summarizer_it_runs(cfg, se
 
     helper = _reviewers_helper(built)["middleware"]
     (summarizer,) = _summarizers(helper)
-    fires = summarizer_trigger(model, [summarizer])
+    fires, count = summarizer_trigger_and_count(model, [summarizer])
     assert fires < 170_000, "a fraction of this window, not deepagents' fixed default"
-    assert _allowance(helper) == pdf_allowance(fires, summarizer_count(model, [summarizer]))
+    assert _allowance(helper) == pdf_allowance(fires, count)
     assert _high(helper) == high_mark(fires, None, subject="the helper")
 
 
@@ -842,7 +842,7 @@ def test_a_helpers_own_summarizer_stands_where_its_default_would(cfg, session_di
             cfg,
             backend=backend_at(cfg, session_dir),
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-            middleware_registry={"early": Early},
+            middlewares={"early": Early},
             agent=LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["only"],
             ledger=Ledger("t", KeptLedger()),
         )
@@ -959,7 +959,7 @@ def _built_with_own_filesystem(cfg, session_dir):
         cfg,
         backend=backend_at(cfg, session_dir),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        middleware_registry={"own-fs": OwnFilesystem},
+        middlewares={"own-fs": OwnFilesystem},
         agent=LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["only"],
     )
 

@@ -99,19 +99,11 @@ _NAMING_A_PATH = frozenset({"file_path", *PATH_ARGUMENTS})
 def as_asked(text: str, args: Mapping[str, Any]) -> str:
     """`text` with every path it quotes spelled the way the call spelled it.
 
-    What a failure says about a path has to be the path the model wrote, and twice over
-    it was not. The composite strips a route before calling the backend that holds it,
-    and that backend reports its own root: a miss under `/inputs/nope.txt` came back as
-    `File '/nope.txt' not found`, a path in a different place, which a model is left to
-    retry or write. And an `OSError` carries the host path it failed on, so a refused
-    write answered with `/private/.../sessions/<id>/scratchpad/...` -- the spelling the
-    file tools exist not to have, and `reject_host_path` refuses when a model writes one.
-
-    One rule for both, because both are the asked-for path with a prefix taken off or
-    put on: a quoted path that ends with one the call named, or that one ends with, is
-    that path said another way. Longest first, so a call naming two paths rewrites each
-    against the one it is really a tail of. Then each folder the paths run through, as a
-    tail only: a failure about a parent is an `OSError` quoting the host's spelling of it --
+    A quoted path that ends with one the call named, or that one ends with, is that path
+    said another way: a route the composite stripped, or the host's prefix an `OSError`
+    put on. Longest first, so a call naming two paths rewrites each against the one it is
+    really a tail of. Then each folder the paths run through, as a tail only: a failure
+    about a parent is an `OSError` quoting the host's spelling of it --
     `write_file /outputs/a.txt/b.txt` beside a file `a.txt` quoted `.../outputs/a.txt` --
     while a route the composite stripped is stripped from the asked path itself.
     """

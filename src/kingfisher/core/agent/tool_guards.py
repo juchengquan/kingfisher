@@ -19,7 +19,7 @@ from langchain_core.tools import BaseTool, StructuredTool, ToolException
 # `RunnableConfig` above is imported to run, not only to type.
 from langchain_core.tools.base import _get_runnable_config_param, _signature_parameters
 
-from .host_paths import HostPathError, UnsafeReferenceError
+from .host_paths import HostPathError, UnreachablePathError
 from .middlewares.recorder import ran
 from .middlewares.scratch_runs import HANDED
 from .session_paths import SessionPaths, as_asked, refusal_text
@@ -53,11 +53,11 @@ class GuardedTool(BaseTool):
     # `args_schema` -- is handed it only if these show the inner function's signature.
     @functools.cached_property
     def func(self) -> Any:
-        return _uncallable(getattr(self.inner, "func", None))
+        return _signature_only(getattr(self.inner, "func", None))
 
     @functools.cached_property
     def coroutine(self) -> Any:
-        return _uncallable(getattr(self.inner, "coroutine", None))
+        return _signature_only(getattr(self.inner, "coroutine", None))
 
     @functools.cached_property
     def _injected_args_keys(self) -> frozenset[str]:
@@ -83,7 +83,7 @@ class GuardedTool(BaseTool):
     def _translated(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         try:
             return self.paths.translated(kwargs)
-        except (UnsafeReferenceError, HostPathError) as escaped:
+        except (UnreachablePathError, HostPathError) as escaped:
             raise ToolException(refusal_text(escaped, self.paths)) from escaped
 
     def _handed(self, run: Any, config: RunnableConfig, manager: Any) -> dict[str, Any]:
@@ -198,7 +198,7 @@ def _guarded(
     )
 
 
-def _uncallable(original: Any) -> Any:
+def _signature_only(original: Any) -> Any:
     """`original`'s signature and annotations, on a function that refuses to run.
 
     Read for its signature only; handing out the inner function itself would give whatever

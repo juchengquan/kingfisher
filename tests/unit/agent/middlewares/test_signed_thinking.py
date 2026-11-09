@@ -22,9 +22,9 @@ from kingfisher.core.agent.middlewares.signed_thinking import (
     SERVED_BY,
     SignedThinkingMiddleware,
     kept_for,
-    model_id,
 )
 from kingfisher.core.agent.middlewares.step_budget import StepBudgetMiddleware
+from kingfisher.core.agent.models import model_id
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.plugins import backend_at
 from tests.conftest import EVERY_TOOL, FAKE_ENDPOINT, OTHER_ENDPOINT, an_agent, subagents_dir
