@@ -14,8 +14,9 @@ from kingfisher.core.backing import MemoryBacking, memory_backing
 
 # Past the front door on purpose: a probe only `doctor` wants is no public promise, and
 # the command ships in this wheel, so it takes each name where it lives.
-from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
+from kingfisher.core.definitions.catalogue import DEFINITION_KINDS, resolve_definitions
 from kingfisher.core.origins import kingfishers_own
+from kingfisher.plugins import Definitions
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.confinement import (
     LINUX_FENCES,
@@ -395,11 +396,13 @@ def examine(
     cfg: Config,
     found: Inventory | None = None,
     *,
+    catalogue: Definitions | None = None,
     from_dotenv: frozenset[str] | None = None,
     sessions: object | None = None,
 ) -> tuple[Check, ...]:
     """Every check, in the order somebody diagnosing would want them.
 
+    `found` and `catalogue` are what the command already read, read here when not given.
     `from_dotenv` is the names `.env` added, which only the command line knows.
     `sessions` are the ones the command runs on, built from its settings when not given.
     """
@@ -408,21 +411,33 @@ def examine(
         from .configured import configured_sessions  # noqa: PLC0415
 
         sessions = configured_sessions()
+    # Once, for every row that reads the definitions, which could otherwise each see the
+    # folder as it was at a different moment. Kept, not raised: the fence is asked first,
+    # and every row between it and the one saying why would be lost.
+    read: Definitions | ConfigError
+    try:
+        read = resolve_definitions(cfg) if catalogue is None else catalogue
+    except ConfigError as exc:
+        read = exc
     checks: list[Check] = []
     # First: a setting that stopped being read looks exactly like one nobody set.
     checks += retired()
     checks += _models(cfg)
     checks += _certificates()
-    confined = health_isolation.fence_of(cfg, sessions)
+    confined = health_isolation.fence_of(
+        cfg, sessions, read if isinstance(read, Definitions) else None
+    )
     checks += _keys_file(cfg, sessions, confined)
     checks += _keys_file_mode(cfg)
     checks += _starting_environment(cfg, from_dotenv, sessions, confined)
     checks += _packs(cfg)
     checks += _at_rest(cfg, sessions)
     try:
+        if isinstance(read, ConfigError):
+            raise read
         if found is None:
-            found = inventory(cfg, sessions=sessions)
-        checks += health_definitions.checks(cfg, found)
+            found = inventory(cfg, catalogue=read, sessions=sessions)
+        checks += health_definitions.checks(cfg, found, read)
     except ConfigError as exc:
         checks.append(
             Check(

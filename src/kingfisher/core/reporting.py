@@ -19,12 +19,7 @@ from .access import (
     stated,
     withheld,
 )
-from .agent.activation import (
-    activatable_skills,
-    available_skills,
-    defined_subagents,
-    for_the_caller,
-)
+from .agent.activation import for_the_caller
 from .agent.kinds.tools import (
     offered_tool_names,
     private_tools,
@@ -58,10 +53,10 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
     this is measured against the directories the agent was built from.
     """
     default = UNRESTRICTED
-    offered_tools = tuple(offered_tool_names(cfg, catalogue=catalogue))
+    offered_tools = tuple(offered_tool_names(catalogue))
     # A skill may be written bare or as `source::name`, and the agent file and registry
     # may differ: compared as written, an audience `catalogue::audit` hides no `audit`.
-    identity = activatable_skills(cfg, catalogue=catalogue).identity
+    identity = catalogue.registry.identity
 
     def subagents() -> tuple[str, ...]:
         """Every subagent this run could have been handed work by, for this caller.
@@ -70,7 +65,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
         asking only the first would report a subagent nothing activates as withheld, which
         says it exists. The listing asks `handed_work_by` too.
         """
-        defined = defined_subagents(cfg, catalogue=catalogue)
+        defined = catalogue.subagents.specs
         # No branch on `held`: unscoped, `handed_work_by` answers every subagent. A scoped
         # run with no spec (an injected graph) reaches none; kingfisher did not wire them.
         return handed_work_by([agent] if agent is not None else [], defined, held)
@@ -107,7 +102,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
             lambda: tuple(
                 name
                 for name in (
-                    available_skills(cfg, catalogue=catalogue)
+                    catalogue.registry.names
                     if cfg.skills_enabled and opens_skills(allowed.builtin_tools)
                     else ()
                 )
@@ -209,7 +204,7 @@ def what_opens(
     for audience in _skills_told(cfg, catalogue, allowed=offered):
         reasons.see(path, audience)
 
-    defined = defined_subagents(cfg, catalogue=catalogue)
+    defined = catalogue.subagents.specs
     for name in activated(offered.subagents, defined):
         spec = defined[name]
         # Its own line is the only place a subagent says who reaches it, and it may
@@ -244,12 +239,12 @@ def _skills_told(
     """
     if not cfg.skills_enabled or not opens_skills(allowed.builtin_tools):
         return ()
-    identity = activatable_skills(cfg, catalogue=catalogue).identity
+    identity = catalogue.registry.identity
     # By the skill each spelling means, as the withheld report compares them: the lock
     # written on `catalogue::audit` is the lock on `audit`.
     by_skill = {meant: lock.audience for meant, lock in catalogue.locked_skills.items()}
     named = (
-        available_skills(cfg, catalogue=catalogue)
+        catalogue.registry.names
         if allowed.skills == ALL
         else (allowed.skills or ())
     )

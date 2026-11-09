@@ -256,7 +256,6 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, FirstCall):
         # deployment would serve: its own grant under the request's, a bare subagent
         # name settled, then what the agent declares for this caller.
         asked = settled_request(
-            self.cfg,
             self.grants.intersect(capabilities or UNRESTRICTED),
             ceiling=for_the_caller(spec, self.grants, held=held).subagents,
             held=held,

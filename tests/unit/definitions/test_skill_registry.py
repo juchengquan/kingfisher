@@ -9,7 +9,6 @@ from dataclasses import replace
 import pytest
 
 from kingfisher.core.access.capabilities import Capabilities, CapabilityError
-from kingfisher.core.agent.activation import available_skills
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
@@ -91,7 +90,7 @@ def test_validation_offers_only_what_will_load(cfg):
     _skill(cfg.skills_dir, "good", GOOD.format(name="good", desc="A fine skill."))
     _skill(cfg.skills_dir, "nodesc", "---\nname: nodesc\n---\nBody.\n")
 
-    assert available_skills(cfg) == ("good",)
+    assert Definitions.from_config(cfg).registry.names == ("good",)
 
 
 def test_activating_a_skill_the_agent_cannot_load_is_refused(cfg, session_dir):

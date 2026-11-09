@@ -10,6 +10,7 @@ from kingfisher.core.agent.activation import indistinct_subagents
 from kingfisher.core.agent.models import WIRE_FORMATS
 from kingfisher.core.config import Endpoint, ModelProfile
 from kingfisher.core.definitions.agents.reading import read
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.documents import DefinitionText
 from kingfisher.core.definitions.subagents.rules import resolved_model
 from kingfisher.core.definitions.subagents.spec import RunOn
@@ -58,7 +59,13 @@ def _elsewhere(cfg, url: str):
 
 def _found(cfg, names, **kwargs):
     return dict(
-        indistinct_subagents(cfg, Capabilities(subagents=names), held=None, **kwargs)
+        indistinct_subagents(
+            cfg,
+            Capabilities(subagents=names),
+            catalogue=Definitions.from_config(cfg),
+            held=None,
+            **kwargs,
+        )
     )
 
 
@@ -169,7 +176,9 @@ def test_a_request_that_activated_no_subagents_is_asked_nothing(cfg, session_dir
     """
     define_each(cfg, ASKED)
 
-    assert indistinct_subagents(cfg, Capabilities(subagents=None), held=None) == ()
+    asked = Capabilities(subagents=None)
+    catalogue = Definitions.from_config(cfg)
+    assert indistinct_subagents(cfg, asked, catalogue=catalogue, held=None) == ()
 
 
 # -- an override counts as asking too --------------------------------------

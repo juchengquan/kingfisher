@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 
 from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.core.agent.activation import available_skills
 from kingfisher.core.agent.assembly import (
     CapabilityError,
     build_agent,
 )
 from kingfisher.core.definitions import seeding
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository, reachable
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.subagents.spec import SubagentError
@@ -45,7 +45,7 @@ def test_a_seeded_skill_is_discovered(cfg):
     """Seeding puts a skill where discovery looks."""
     seeding.seed(cfg.definitions, FIXTURE)
 
-    assert "probe-skill" in available_skills(cfg)
+    assert "probe-skill" in Definitions.from_config(cfg).registry.names
 
 
 def _materialise(readme: str, cfg) -> None:

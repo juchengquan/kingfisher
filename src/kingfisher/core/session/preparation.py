@@ -217,7 +217,6 @@ class Preparation:
             # Before the build and the reports, which must both see a bare name settled to
             # the one this caller reaches.
             allowed = settled_request(
-                self.cfg,
                 allowed,
                 ceiling=for_the_caller(agent, self.grants, held=held).subagents,
                 held=held,

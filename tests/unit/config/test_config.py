@@ -385,9 +385,11 @@ def test_no_message_names_a_variable_nothing_reads(cfg, session_dir):
 
     import kingfisher
     from kingfisher.cli import health
+    from kingfisher.core.definitions.catalogue import Definitions
     from kingfisher.plugins.sessions.shell import shell_env
 
     read = _looked_up()
+    exported = shell_env(cfg, session_dir, catalogue=Definitions.from_config(cfg))
     # A name `doctor` reports as retired is the one kind of message that names a
     # variable nothing reads *on purpose* -- saying so is the whole of what it is
     # for. Allowed rather than exempted by file, so a message inventing a name
@@ -405,7 +407,7 @@ def test_no_message_names_a_variable_nothing_reads(cfg, session_dir):
         | set(FOLDED_SETTINGS)
         # And a name kingfisher's shell is handed, which the agent reads rather than
         # kingfisher. Asked of `shell_env`, so a message naming one it stopped handing fails.
-        | {name for name in shell_env(cfg, session_dir) if name.startswith("KINGFISHER_")}
+        | {name for name in exported if name.startswith("KINGFISHER_")}
     )
     package = _Path(kingfisher.__file__).parent
 

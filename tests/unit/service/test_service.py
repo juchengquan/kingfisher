@@ -552,13 +552,11 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # so adding a preset failed a test about *reporting* for a reason having
     # nothing to do with reporting. Sortedness is still asserted -- this is a
     # line a person reads -- but the membership comes from the catalogue.
-    # `available_skills`, because the report measures against what the *run* was
+    # The registry's names, because the report measures against what the *run* was
     # offered, which resolves a skill in a source folder -- `incident::postmortem`.
     # A directory listing did not show that one, and the two agreed until a sourced
     # skill shipped.
-    from kingfisher.core.agent.activation import available_skills
-
-    seeded_skills = set(available_skills(wired))
+    seeded_skills = set(Definitions.from_config(wired).registry.names)
     seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
     # Not vacuous: the granted name has to be one the catalogue offers, or
     # "everything except it" would be the whole catalogue by accident.
@@ -604,7 +602,6 @@ def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
     """The control: suppressing the row where nothing is offered must not suppress it
     where something is.
     """
-    from kingfisher.core.agent.activation import available_skills
     from kingfisher.core.definitions import seeding
 
     seeding.seed(cfg.definitions, shipped)
@@ -619,7 +616,8 @@ def test_the_skills_axis_is_still_reported_when_the_switch_is_on(cfg, shipped):
     prepared = drive(Kingfisher(on, sessions=LocalSessions())._prepare_steps(asked))
     withheld = dict(withheld_told(prepared.events))
 
-    assert withheld["skill"] == tuple(sorted(set(available_skills(on)) - {"code-review"}))
+    offered = Definitions.from_config(on).registry.names
+    assert withheld["skill"] == tuple(sorted(set(offered) - {"code-review"}))
     assert withheld["skill"], "and the catalogue really does offer more than the one granted"
 
 

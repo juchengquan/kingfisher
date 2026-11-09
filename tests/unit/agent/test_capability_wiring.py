@@ -19,7 +19,6 @@ from pydantic import Field
 from typing_extensions import TypedDict
 
 from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.core.agent.activation import available_skills
 from kingfisher.core.agent.assembly import (
     CapabilityError,
     build_agent,
@@ -30,6 +29,7 @@ from kingfisher.core.agent.middlewares.narrowing import (
     NarrowedSkillsMiddleware,
 )
 from kingfisher.core.agent.prompting import memory_guidelines, subagent_prompt
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.layout import DEFAULT_LAYOUT, MEMORY
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
@@ -687,7 +687,7 @@ def test_skills_are_read_from_the_definitions_folder_and_never_the_workspace(cfg
 
     assert str(backend.routes["/skills/"].cwd) == str((cfg.definitions / "skills").resolve())
     assert backend.read("/skills/shared/SKILL.md").error is None
-    assert available_skills(wired) == ("shared",)
+    assert Definitions.from_config(wired).registry.names == ("shared",)
 
 
 def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir):

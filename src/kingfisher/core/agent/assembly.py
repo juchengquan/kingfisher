@@ -37,7 +37,6 @@ from kingfisher.core.layout import Layout
 from kingfisher.core.reachable import Reachable
 
 from .activation import (
-    activatable_skills,
     activated_subagents,
     agents_to_ask,
     for_the_caller,
@@ -382,6 +381,8 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     # function, because the run's report of what it activated reads the same answer.
     asked = capabilities or UNRESTRICTED
     capabilities = for_the_caller(agent, asked, held=held)
+    # The only reader left that falls back to the folder, as `held=None` falls back to no
+    # lock: tests build without either. Every helper below is handed `roots`.
     roots = catalogue or Definitions.from_config(cfg)
     # Before anything reads the skills, a subagent's included: it is told only what its
     # agent was, so a skill shut here is shut to every graph in the run.
@@ -515,7 +516,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
         permissions.append(memory_is_denied(cfg.layout))
 
     if skills_on:
-        registry = activatable_skills(cfg, catalogue=roots)
+        registry = roots.registry
         # One source per folder, so a nested skill is visible, labelled as the registry
         # labels it: a label is the first half of what a request grants.
         sources = skills_sources(registry.folders)
@@ -632,9 +633,9 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
 
     # `asked`, not `capabilities`: combined, the agent's names are the ones this caller
     # reaches, and a typo in the file must be refused whoever is calling.
-    refuse_misnamed_by(cfg, agent, asked, held=held, catalogue=roots)
+    refuse_misnamed_by(agent, asked, held=held, catalogue=roots)
     defined, activated = activated_subagents(
-        cfg, capabilities, catalogue=roots, held=held, agent=agent
+        capabilities, catalogue=roots, held=held, agent=agent
     )
     # What a refusal may list, not what it judges. `None` with nobody to narrow for or no
     # agent resolved: an empty `offered:` list is worse than a wide one.
@@ -696,7 +697,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     if capabilities.subagents is not None:
         # The registry rather than its `names`: a subagent's grant has to be
         # resolved to the skill it means, not merely recognised as a word.
-        offered = activatable_skills(cfg, catalogue=roots)
+        offered = roots.registry
         for name in activated:
             subject = f"subagent {name!r}"
             surface.offers.refuse_unknown(
@@ -860,7 +861,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
 
         # Every agent this caller can open, not the one being built: this refusal is
         # about a subagent's file, and what it could name instead is the catalogue's.
-        listing = offered_to(defined, held, by=agents_to_ask(cfg, catalogue=roots))
+        listing = offered_to(defined, held, by=agents_to_ask(roots))
 
         # For a helper: deepagents gives a top-level subagent the agent's model but a
         # nested one none, and refuses a nested spec with no model.

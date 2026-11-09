@@ -445,6 +445,7 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
 
 def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeypatch):
     """The rule the fence exists to keep, stated the way it actually breaks."""
+    from kingfisher.core.definitions.catalogue import Definitions
     from kingfisher.plugins.sessions.sandbox import bubblewrap, fence
     from kingfisher.plugins.sessions.sandbox.confinement import _unwrapped
     from kingfisher.plugins.sessions.shell import fence_for, shell_env
@@ -463,7 +464,7 @@ def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeyp
 
     session = tmp_path / "sessions" / "s1"
     session.mkdir(parents=True)
-    env = shell_env(cfg, session)
+    env = shell_env(cfg, session, catalogue=Definitions.from_config(cfg))
 
     fence_for(cfg, session, Confinement(wrap=_unwrapped, mechanism="Landlock"), (), env)
     readable, writable = seen["Landlock"]

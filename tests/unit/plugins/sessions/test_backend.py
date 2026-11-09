@@ -16,6 +16,7 @@ from kingfisher.core.agent.host_paths import (
     HostPathError,
     reject_host_path,
 )
+from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.layout import (
     BUNDLED_SKILLS_ROUTE,
     DEFAULT_LAYOUT,
@@ -33,24 +34,29 @@ from tests.unit.definitions.test_bundles import (
 )
 
 
+def _env(cfg, session_dir):
+    """`shell_env` over the configured definitions, which every test of it here reads."""
+    return shell_env(cfg, session_dir, catalogue=Definitions.from_config(cfg))
+
+
 def test_shell_env_carries_no_credentials(cfg, session_dir):
     """The allowlist is the security story: the shell can run tools, not read keys."""
-    env = shell_env(cfg, session_dir)
+    env = _env(cfg, session_dir)
     assert cfg.models.resolve()[1].api_key not in env.values()
     assert not any("KEY" in name or "TOKEN" in name or "SECRET" in name for name in env)
 
 
 def test_shell_env_supplies_a_usable_toolchain(cfg, session_dir):
     """LocalShellBackend defaults to an EMPTY env -- without PATH nothing resolves."""
-    env = shell_env(cfg, session_dir)
+    env = _env(cfg, session_dir)
     assert env["PATH"]
     assert "/usr/bin" in env["PATH"]
 
 
 def test_home_points_at_this_session_not_the_real_home(cfg, session_dir):
     """So ~/.aws, ~/.ssh and ~/.config are not where the agent's tooling looks."""
-    assert shell_env(cfg, session_dir)["HOME"] == str(session_dir / "scratchpad")
-    assert shell_env(cfg, session_dir)["HOME"] != str(cfg.workspace)
+    assert _env(cfg, session_dir)["HOME"] == str(session_dir / "scratchpad")
+    assert _env(cfg, session_dir)["HOME"] != str(cfg.workspace)
 
 
 def test_a_session_that_was_never_made_is_refused(cfg, tmp_path):
@@ -292,7 +298,7 @@ def test_scratch_is_the_session_s_own(cfg, session_dir):
     readable by every other session's shell. Per session, `reap` and `session_bytes`
     already cover it and neither fence has to grant anything extra.
     """
-    assert shell_env(cfg, session_dir)["TMPDIR"] == str(session_dir / "scratchpad")
+    assert _env(cfg, session_dir)["TMPDIR"] == str(session_dir / "scratchpad")
 
 
 def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
@@ -300,7 +306,7 @@ def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
     caller's agent could read it."""
     other = ensure_session_layout(workspace / "sessions" / "second", DEFAULT_LAYOUT)
 
-    assert shell_env(cfg, session_dir)["TMPDIR"] != shell_env(cfg, other)["TMPDIR"]
+    assert _env(cfg, session_dir)["TMPDIR"] != _env(cfg, other)["TMPDIR"]
 
 
 def test_scratch_is_created_private(cfg, session_dir):
@@ -407,7 +413,7 @@ def test_what_tools_cache_under_home_is_disposed_of_with_the_session(cfg, sessio
     """`reap` removes session directories and nothing else."""
     from kingfisher.plugins.sessions.folders import remove_tree
 
-    home = Path(shell_env(cfg, session_dir)["HOME"])
+    home = Path(_env(cfg, session_dir)["HOME"])
     home.mkdir(parents=True, exist_ok=True)
     (home / ".cache").mkdir()
     (home / ".cache" / "big.bin").write_bytes(b"x" * 1000)
@@ -421,7 +427,7 @@ def test_what_tools_cache_counts_against_the_session_quota(cfg, session_dir):
     from kingfisher.plugins.sessions.folders import session_bytes
 
     before = session_bytes(session_dir)
-    home = Path(shell_env(cfg, session_dir)["HOME"])
+    home = Path(_env(cfg, session_dir)["HOME"])
     home.mkdir(parents=True, exist_ok=True)
     (home / "cached.bin").write_bytes(b"x" * 5000)
 
@@ -435,12 +441,12 @@ def test_home_is_not_shared_between_two_sessions(cfg, workspace):
     first = ensure_session_layout(workspace / "sessions" / "one", DEFAULT_LAYOUT)
     second = ensure_session_layout(workspace / "sessions" / "two", DEFAULT_LAYOUT)
 
-    assert shell_env(cfg, first)["HOME"] != shell_env(cfg, second)["HOME"]
+    assert _env(cfg, first)["HOME"] != _env(cfg, second)["HOME"]
 
 
 def test_the_catalogue_is_named_because_the_shell_cannot_derive_it(cfg, session_dir):
     """Every other virtual path is reached from `$KINGFISHER_SESSION_ROOT`."""
-    env = shell_env(cfg, session_dir)
+    env = _env(cfg, session_dir)
 
     assert env["KINGFISHER_SKILLS"] == str(cfg.skills_dir)
     assert not Path(env["KINGFISHER_SKILLS"]).is_relative_to(session_dir)
@@ -527,13 +533,12 @@ def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
 
     backend_at(cfg, session_dir)
 
-    assert Path(shell_env(cfg, session_dir)["HOME"]).is_dir()
+    assert Path(_env(cfg, session_dir)["HOME"]).is_dir()
 
 
 def test_a_session_opened_without_a_catalogue_reads_the_definitions_once(cfg, monkeypatch):
     """`backend_at` handed `shell_env` the catalogue it was given rather than the one it
     had read, so an opening with none read the definitions a second time for the shell."""
-    from kingfisher.core.definitions.catalogue import Definitions
     from kingfisher.plugins.sessions.backend import LocalSessions
 
     reads = []
