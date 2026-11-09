@@ -4602,6 +4602,25 @@ A reader working the answer out from the last assistant line would show the bloc
 caller never saw, and a failed turn's last words as an answer it never gave. With no
 `role`, the rebuild skips it, as it skips a resume's answers. *(2026-11-06.)*
 
+**A turn's lines keep when it ran and what its replies reasoned.** The opening line
+carries `started` and the answer line `ended`: seconds since 1970 as floats, on the wall
+clock a run event's `ts` reads, so a turn lines up with the events a client reads without
+converting either. A number rather than a date string, which has to carry its time zone,
+and a duration is a subtraction. `started` is the instant the turn's tools are handed as
+`Caller.started`. An assistant line carries `reasoning`, what its provider handed back as
+reasoning -- Anthropic's thinking blocks, which MiniMax's replies carry too, and a
+Responses reply's summary -- read through langchain's `content_blocks`, so each chat
+class's shape is langchain's to translate. Redacted thinking and an encrypted item carry
+no text and are left out, and a block langchain cannot read leaves the line without it
+rather than the turn without its log. **For the record only:** the rebuild never reads
+it, so a later turn is handed what it always was, and a reply's thinking reaches a model
+again only inside its own turn, where `SignedThinkingMiddleware` decides which. **On the
+line, not on `Message`:** the state holds earlier turns as the rebuild handed them,
+without it, and a turn's end compares every field of a message but its text, so every
+turn after one that reasoned would warn `conversation_not_logged` and write no `at` line.
+**The cost, taken:** the log grows by every reply's reasoning, which no expiry touches,
+and is read and written whole every turn. *(2026-11-09.)*
+
 **The transcript is gone: the turn log is the only record of what was said.**
 `.harness/transcript.jsonl` held the conversation the next turn was built from, and the
 log held every message as first written, from which a rewind already rebuilt any turn's

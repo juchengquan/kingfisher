@@ -247,8 +247,10 @@ class Preparation:
             cut=log.damaged,
             written=earlier.messages if earlier is not None else None,
         )
-        # One for the turn, so the store is asked about the caller its tools are handed.
-        caller = caller_of(request, held, datetime.now(UTC))
+        # One for the turn, so the store is asked about the caller its tools are handed; and
+        # one start, so the tools and the turn log agree on when the turn began.
+        started = datetime.now(UTC)
+        caller = caller_of(request, held, started)
         remembers = self._graph is None and self.cfg.memory_enabled and (
             for_the_caller(agent, allowed, held=held).memory is not False
         )
@@ -276,6 +278,7 @@ class Preparation:
             log=log,
             earlier=earlier,
             caller=caller,
+            started=started.timestamp(),
             users_memory=users.key is not None,
             catalogue=catalogue,
         )
@@ -438,6 +441,7 @@ class Preparation:
         placement: Any,
         log: TurnLog,
         catalogue: Definitions,
+        started: float,
         earlier: KeptLedger | None = None,
         caller: Caller | None = None,
         users_memory: bool = False,
@@ -577,6 +581,7 @@ class Preparation:
             ),
             deadline=deadline,
             timeout_s=cfg.turn_timeout_s,
+            started=started,
         )
 
     def _restored(self, session: Conversation, state: bytes) -> Any:

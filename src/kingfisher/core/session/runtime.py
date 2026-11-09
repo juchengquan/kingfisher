@@ -86,13 +86,7 @@ def as_messages(messages: Iterable[Any]) -> tuple[Message, ...]:
     """What the graph ended up holding, as records this package owns."""
     read: list[Message] = []
     for raw in messages:
-        # Both shapes occur: `_as_langchain` emits plain dicts where one will do, and a
-        # graph may hand back what it was given rather than a coerced object.
-        role = (
-            _CANONICAL.get(str(raw.get("role", "")))
-            if isinstance(raw, dict)
-            else _ROLES.get(getattr(raw, "type", ""))
-        )
+        role = _role(raw)
         if role is None:
             continue
         if isinstance(raw, dict):
@@ -114,6 +108,42 @@ def as_messages(messages: Iterable[Any]) -> tuple[Message, ...]:
             )
         )
     return tuple(read)
+
+
+def reasoning_in(messages: Iterable[Any]) -> tuple[str, ...]:
+    """What each message `as_messages` keeps reasoned, in its order: `""` for one whose
+    provider handed back none a reader can read."""
+    return tuple(_reasoning(raw) for raw in messages if _role(raw) is not None)
+
+
+def _role(raw: Any) -> Role | None:
+    """The role a message is kept under, or `None` for one that is not kept."""
+    # Both shapes occur: `_as_langchain` emits plain dicts where one will do, and a graph
+    # may hand back what it was given rather than a coerced object.
+    if isinstance(raw, dict):
+        return _CANONICAL.get(str(raw.get("role", "")))
+    return _ROLES.get(getattr(raw, "type", ""))
+
+
+def _reasoning(raw: Any) -> str:
+    """A reply's reasoning as langchain's standard blocks read it, whichever provider wrote
+    it, each block apart from the next by a blank line."""
+    if not isinstance(raw, AIMessage):
+        return ""
+    try:
+        blocks = raw.content_blocks
+    except (AttributeError, KeyError, TypeError, ValueError):
+        # A provider block langchain cannot read costs the line its reasoning, not the turn
+        # its log.
+        return ""
+    # Redacted thinking and an encrypted reasoning item carry no text, and are left out.
+    return "\n\n".join(
+        said
+        for block in blocks
+        if block.get("type") == "reasoning"
+        and isinstance(said := block.get("reasoning"), str)
+        and said.strip()
+    )
 
 
 #: A role already kingfisher's, for a message handed back as a plain dict. Spelled

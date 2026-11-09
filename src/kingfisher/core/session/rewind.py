@@ -40,7 +40,7 @@ from .store import (
     write_listing,
     write_off_path,
 )
-from .turnlog import PARENT, by_turn, path_to, read_log, task_of
+from .turnlog import PARENT, by_turn, path_to, read_log, task_of, times_of
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -64,8 +64,11 @@ def turn_records(log: TurnLog, files: Mapping[str, TurnFiles]) -> tuple[TurnReco
             resumed=bool(opening.get(RESUMED)),
             current=turn in current,
             files=files.get(turn),
+            started=started,
+            ended=ended,
         )
         for turn, (opening, body) in turns.items()
+        for started, ended in (times_of(opening, body),)
     )
 
 

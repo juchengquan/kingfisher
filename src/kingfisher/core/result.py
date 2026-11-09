@@ -121,6 +121,10 @@ class TurnRecord:
     #: as nothing changing: a turn from before files were recorded, or one that ended
     #: before its record was written.
     files: TurnFiles | None = None
+    #: When it started and ended, in seconds since 1970 as a run event's `ts` is; `None`
+    #: for a turn logged before the log kept times.
+    started: float | None = None
+    ended: float | None = None
 
 
 @dataclass(frozen=True)

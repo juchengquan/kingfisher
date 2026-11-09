@@ -58,6 +58,16 @@ PARTS = "parts"
 #: even when empty, so a reader never takes it from the last assistant line.
 ANSWER = "answer"
 
+#: On a turn's opening line, when it started, and on its answer line, when it ended:
+#: seconds since 1970 on the wall clock, as every run event's `ts` is, so a turn lines up
+#: with the events a client reads.
+STARTED = "started"
+ENDED = "ended"
+
+#: On an assistant line, what its provider handed back as its reasoning. For the record
+#: only: the rebuild never reads it, so a later turn is handed what it always was.
+REASONING = "reasoning"
+
 
 @dataclass(frozen=True)
 class Resuming:
@@ -104,6 +114,8 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     resumed: Resuming | None,
     snapshot: Any,
     answer: str,
+    started: float,
+    ended: float,
 ) -> list[dict[str, Any]]:
     """This turn's lines: its opening, a resume's answers, the messages it added, the
     summary it ended on and its answer. `history` is how many messages its conversation held
@@ -111,12 +123,19 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     """
     held = runtime.held_in(snapshot)
     if resumed is None:
-        opening: dict[str, Any] = {"turn": turn, PARENT: parent}
+        opening: dict[str, Any] = {"turn": turn, PARENT: parent, STARTED: started}
         began, carried = history, None
     else:
-        opening = {"turn": turn, PARENT: parent, RESUMED: True}
+        opening = {"turn": turn, PARENT: parent, RESUMED: True, STARTED: started}
         began, carried = resumed.held, resumed.carried
-    added = [as_record(one) for one in runtime.as_messages(held[began:])]
+    # On the line and not on `Message`: earlier turns are in the state as the rebuild handed
+    # them, without it, and `_rewritten` compares every field of a message but its text.
+    added = [
+        {**as_record(one), **({REASONING: why} if why else {})}
+        for one, why in zip(
+            runtime.as_messages(held[began:]), runtime.reasoning_in(held[began:]), strict=True
+        )
+    ]
     if resumed is None:
         _with_parts(added, parts, turn)
     lines = [
@@ -136,7 +155,7 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
             else len(runtime.as_messages(held[:cut]))
         )
         lines.append({"turn": turn, **as_record(said), CUT: at})
-    lines.append({"turn": turn, ANSWER: answer})
+    lines.append({"turn": turn, ANSWER: answer, ENDED: ended})
     return lines
 
 
@@ -293,6 +312,8 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
     seen: Sequence[Message],
     ledger: KeptLedger | None,
     answer: str,
+    started: float,
+    ended: float,
 ) -> Steps[None]:
     """Add this turn to `log`, as the turn read it. `seen` is the conversation the turn
     ended on; `ledger` the ledger as this turn writes it back, or `None` where it keeps none.
@@ -314,6 +335,8 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
         resumed=resumed,
         snapshot=snapshot,
         answer=answer,
+        started=started,
+        ended=ended,
     )
     # Before the answer, which stays the turn's last line; the rebuild skips the answer, so
     # the `at` lines still apply after the turn's own messages.
@@ -385,6 +408,19 @@ def task_of(body: Sequence[dict[str, Any]]) -> str | None:
         part["text"] for part in (message or {}).get(PARTS, ()) if part.get("by") == "user"
     ]
     return "".join(asked) if asked else None
+
+
+def times_of(
+    opening: Mapping[str, Any], body: Sequence[Mapping[str, Any]]
+) -> tuple[float | None, float | None]:
+    """When a turn started and ended, as its lines say: `None` for either one a turn logged
+    before the log kept times does not hold."""
+    end = next((line for line in body if ANSWER in line), {})
+    return _seconds(opening.get(STARTED)), _seconds(end.get(ENDED))
+
+
+def _seconds(value: Any) -> float | None:
+    return float(value) if isinstance(value, int | float) else None
 
 
 def path_to(turns: Logged, target: str) -> tuple[list[str], bool]:
