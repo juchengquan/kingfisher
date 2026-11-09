@@ -6530,7 +6530,10 @@ call beside the failing one has ended, and on the loop only once a thread is fre
 the tool's error callbacks, so 40 calls asked beside a failing one all charged. A failing
 call now stops its turn where it raises: in the middleware, and for what no middleware
 answers for, inside the thread. An interrupt rising from a paused subagent through its
-`task` call is no failure, and stops nothing. *(2026-11-09.)*
+`task` call is no failure, and stops nothing. A refused call says why its turn stopped,
+as a plain fact and no advice: "did not run" alone reads the same whether the caller
+stopped the turn on purpose or it ran out of time, and only the first is not to be undone.
+*(2026-11-09.)*
 
 **Kingfisher's own thread pool, one per process.** `asyncio.to_thread` borrows the
 loop's default executor, `min(32, cpu+4)` workers, and a call blocking on a round trip

@@ -20,12 +20,38 @@ from kingfisher.core.session.threads import finished
 
 from .results import answer_in, failed
 
-#: Set once the turn this runs in is stopping: its caller stopped reading, it ran out of
-#: time, or its graph failed. Read on langgraph's threads, which copy the context.
-STOPPING: ContextVar[threading.Event | None] = ContextVar("kingfisher_turn_stopping", default=None)
 
-#: What a call refused for it is answered with.
+class Stopping(threading.Event):
+    """A turn's stop: raised once, with the first reason it is given."""
+
+    why: str | None = None
+
+    def stop(self, why: str | None = None) -> None:
+        if not self.is_set():
+            self.why = why
+            self.set()
+
+
+#: Set once the turn this runs in is stopping: its caller stopped reading, it ran out of
+#: time, or one of its calls failed. Read on langgraph's threads, which copy the context.
+STOPPING: ContextVar[Stopping | None] = ContextVar("kingfisher_turn_stopping", default=None)
+
+#: Why a turn stopped, in the words a call it refused says it in. A plain fact and no
+#: advice: the model reads it, and an instruction here changes what it does next.
+LEFT = "its caller stopped it"
+OUT_OF_TIME = "it ran out of time"
+FAILED = "another call in it failed"
+
+#: What a call refused for a stop with no reason given is answered with.
 NOT_RUN = "This call did not run: the turn stopped before it began."
+
+
+def not_run() -> str:
+    """What a call refused because its turn is stopping is answered with."""
+    flag = STOPPING.get()
+    if flag is None or flag.why is None:
+        return NOT_RUN
+    return f"This call did not run: the turn stopped before it began, because {flag.why}."
 
 
 @dataclass(frozen=True)
@@ -74,9 +100,9 @@ async def waited_for[T](work: Awaitable[T]) -> tuple[T, asyncio.CancelledError |
     return await finished(pending, on_cancel=_stop)
 
 
-def _stop() -> None:
+def _stop(why: str | None = None) -> None:
     if (flag := STOPPING.get()) is not None:
-        flag.set()
+        flag.stop(why)
 
 
 @contextmanager
@@ -89,7 +115,7 @@ def _stopping_if_it_fails() -> Iterator[None]:
     except GraphBubbleUp:
         raise
     except BaseException:
-        _stop()
+        _stop(FAILED)
         raise
 
 
@@ -106,14 +132,14 @@ def unless_stopping(tool: Any) -> Any:
     @functools.wraps(body)
     def begun(*args: Any, **kwargs: Any) -> Any:
         if stopping():
-            raise ToolException(NOT_RUN)
+            raise ToolException(not_run())
         try:
             return body(*args, **kwargs)
         except BaseException as failure:
             # What no middleware answers for fails the graph, and the loop hears of it only
             # once a thread is free to run the tool's error callbacks: stopped here, at once.
             if not isinstance(failure, Exception):
-                _stop()
+                _stop(FAILED)
             raise
 
     return tool.model_copy(update={"func": begun})
@@ -131,7 +157,7 @@ class StoppingMiddleware(AgentMiddleware):
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         if stopping():
-            return failed(request.tool_call, NOT_RUN)
+            return failed(request.tool_call, not_run())
         with _stopping_if_it_fails():
             return handler(request)
 
@@ -139,7 +165,7 @@ class StoppingMiddleware(AgentMiddleware):
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
         if stopping():
-            return failed(request.tool_call, NOT_RUN)
+            return failed(request.tool_call, not_run())
         threads = ON_THREADS.get()
         with _stopping_if_it_fails():
             if threads is None or not on_a_thread(request.tool):

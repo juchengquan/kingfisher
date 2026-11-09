@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
-import threading
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from contextlib import contextmanager, suppress
@@ -14,7 +13,14 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import Held, with_datazone
 from kingfisher.core.agent.interpreter import release_interpreter
-from kingfisher.core.agent.middlewares.stopping import ON_THREADS, STOPPING, OnThreads
+from kingfisher.core.agent.middlewares.stopping import (
+    LEFT,
+    ON_THREADS,
+    OUT_OF_TIME,
+    STOPPING,
+    OnThreads,
+    Stopping,
+)
 from kingfisher.core.config import Config
 from kingfisher.core.layout import INPUTS_SEEN, PAUSED_STATE, REWOUND_FILE
 from kingfisher.core.logged import TurnWarnings, raised, warn, warning_into
@@ -590,22 +596,27 @@ class Running:
         Driven in a context of its own, which the graph's threads copy, so `STOPPING` and
         the turn's warnings are this turn's alone and never set in its caller's context.
         """
-        stopping = threading.Event()
+        stopping = Stopping()
         with warning_into(heard):
             context = contextvars.copy_context()
         context.run(STOPPING.set, stopping)
         graph = turn.prepared.graph
         chunks = iter(context.run(graph.stream, self._payload(turn), **self._driving(turn)))
+        why: str | None = None
         try:
             while (chunk := context.run(_next_chunk, chunks)) is not _ENDED:
                 yield from self._read(turn, *chunk)
                 if (stop := self._bound(turn)) is not None:
+                    why = OUT_OF_TIME
                     yield stop
                     return
+        except GeneratorExit:
+            why = why or LEFT
+            raise
         finally:
             # Before the close, which waits for every call the graph queued: one that
             # begins after this is refused rather than run.
-            stopping.set()
+            stopping.stop(why)
             if (close := getattr(chunks, "close", None)) is not None:
                 context.run(close)
 
@@ -632,13 +643,13 @@ class Running:
             raise cancelled
         with warning_into(heard):
             context = contextvars.copy_context()
-        # Raised where a call fails or a call on a thread is cancelled: the turn's own stop
-        # cancels the graph, which cancels its calls.
-        context.run(STOPPING.set, threading.Event())
+        stopping = Stopping()
+        context.run(STOPPING.set, stopping)
         context.run(ON_THREADS.set, turn.threads)
         graph = turn.prepared.graph
         stream: _OwnedStream | None = None
         left: BaseException | None = None
+        why: str | None = None
         try:
             with self._turn_outcome(turn):
                 for event in turn.prepared.events:
@@ -649,12 +660,16 @@ class Running:
                     for event in self._read(turn, *chunk):
                         yield event
                     if (stop := self._bound(turn)) is not None:
+                        why = OUT_OF_TIME
                         yield stop
                         break
         except (asyncio.CancelledError, GeneratorExit) as leaving:
             left = leaving
             raise
         finally:
+            # Before the graph is cancelled, whose calls on threads would stop the turn first,
+            # giving no reason. A call that failed has already given its own.
+            stopping.stop(why or (LEFT if left is not None else None))
             # Past this the claim may lapse and another turn take the session, so a call
             # still running is left behind rather than waited for.
             until = turn.prepared.deadline + self.cfg.superstep_bound

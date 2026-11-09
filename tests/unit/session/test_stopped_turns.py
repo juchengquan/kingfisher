@@ -23,7 +23,15 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.errors import GraphInterrupt
 
 from kingfisher import Kingfisher, Request
-from kingfisher.core.agent.middlewares.stopping import NOT_RUN, STOPPING, StoppingMiddleware
+from kingfisher.core.agent.middlewares.stopping import (
+    FAILED,
+    LEFT,
+    NOT_RUN,
+    OUT_OF_TIME,
+    STOPPING,
+    Stopping,
+    StoppingMiddleware,
+)
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.config import Config
 from kingfisher.core.session import running
@@ -169,19 +177,27 @@ def _told_next(charging: Charging, call: str) -> ToolMessage:
 # -- a call not yet begun ------------------------------------------------------
 
 
-def test_a_call_not_begun_when_a_turn_stops_is_not_run(charging):
+@pytest.mark.parametrize("stopped_by", [LEFT, OUT_OF_TIME], ids=["caller", "time"])
+def test_a_call_not_begun_when_a_turn_stops_is_not_run(charging, monkeypatch, stopped_by):
     """Closing a turn's stream waited for every call the reply queued, and a queued call
     began then: 40 calls asked together, stopped with a few under way, charged 40 times.
-    """
+    Each refusal says why the turn stopped, which is what tells a caller's own stop, not to
+    be undone, from a deadline."""
     Scripted.script.extend([_many(), AIMessage(content="done")])
 
-    turn = charging.kf().stream(_asked())
-    for event in turn:
-        if event.kind == "tool_result":
-            break
-    turn.close()
+    if stopped_by == LEFT:
+        turn = charging.kf().stream(_asked())
+        for event in turn:
+            if event.kind == "tool_result":
+                break
+        turn.close()
+    else:
+        monkeypatch.setenv("KF_TEST_SLOW", "0.5")
+        result = charging.kf(replace(charging.cfg, turn_timeout_s=0.2)).run(_asked())
+        assert result.stop_reason == "max_duration"
 
     assert 0 < len(charging.charged()) < CALLS
+    assert f"because {stopped_by}" in _told_next(charging, f"c-{CALLS - 1}").text
 
 
 def test_a_call_not_begun_when_an_awaited_turn_stops_is_not_run(charging):
@@ -201,6 +217,7 @@ def test_a_call_not_begun_when_an_awaited_turn_stops_is_not_run(charging):
     asyncio.run(cancelled_once_some_began())
 
     assert 0 < len(charging.charged()) < CALLS
+    assert f"because {LEFT}" in _told_next(charging, f"c-{CALLS - 1}").text
 
 
 @pytest.mark.parametrize("awaited", [False, True], ids=["run", "awaited"])
@@ -218,9 +235,9 @@ def test_a_call_from_code_is_not_begun_once_its_turn_is_stopping(
         return f"charged {amount}"
 
     (guarded,) = guarded_tools([charge], paths_in(cfg, session_dir))
-    flag = threading.Event()
+    flag = Stopping()
     if stopped:
-        flag.set()
+        flag.stop()
     context = contextvars.copy_context()
     context.run(STOPPING.set, flag)
 
@@ -249,7 +266,7 @@ def test_an_interrupt_passing_up_through_a_call_does_not_stop_its_turn(raised, s
     """A subagent pausing for approval raises through its `task` call, and read as a
     failure it would refuse every call beside it, each then kept as "did not run" for the
     resume. A failure is the control: on the loop, as one an inner middleware raises."""
-    flag = threading.Event()
+    flag = Stopping()
     context = contextvars.copy_context()
     context.run(STOPPING.set, flag)
 
@@ -441,6 +458,7 @@ def test_a_turn_whose_graph_fails_begins_none_of_the_calls_still_queued(charging
             charging.kf().run(_asked())
 
     assert len(charging.charged()) < CALLS
+    assert f"because {FAILED}" in _told_next(charging, f"c-{CALLS}").text
 
 
 def test_a_caller_cancelling_a_turn_that_waits_out_of_time_is_let_go_of(charging, monkeypatch):
@@ -639,7 +657,7 @@ def test_a_call_from_code_waiting_for_a_thread_is_not_begun_once_its_turn_stops(
         return f"charged {amount}"
 
     (guarded,) = guarded_tools([charge], paths_in(cfg, session_dir))
-    stopping = threading.Event()
+    stopping = Stopping()
     context = contextvars.copy_context()
     context.run(STOPPING.set, stopping)
 
@@ -650,7 +668,7 @@ def test_a_call_from_code_waiting_for_a_thread_is_not_begun_once_its_turn_stops(
         first = loop.create_task(guarded.ainvoke({"amount": "first"}), context=context)
         second = loop.create_task(guarded.ainvoke({"amount": "second"}), context=context)
         await _until(begun.is_set)
-        stopping.set()
+        stopping.stop()
         release.set()
         await first
         return await second
