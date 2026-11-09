@@ -100,7 +100,9 @@ def test_an_agent_lists_the_subagents_it_activates_and_not_their_helpers(cfg):
 
 
 def test_the_names_a_subtraction_uses_are_the_names_the_listing_shows(cfg):
-    """The guard this whole record exists for."""
+    """The names a subtraction is taken from differing from the names the listing shows, so
+    subtracting a listed name leaves it granted.
+    """
     _populate(cfg)
 
     found = inventory(cfg)
@@ -215,7 +217,7 @@ def test_a_delegation_cycle_is_carried_like_any_other_failure(cfg):
 
 
 def test_definitions_with_no_cycle_report_none(cfg):
-    """The negative control."""
+    """Subagents that hand work down a chain, `a` to `b` to `c`, reported as a cycle."""
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     for name, helper in (("a", "b"), ("b", "c")):
         (subagents_dir(cfg) / f"{name}.yaml").write_text(

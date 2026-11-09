@@ -130,7 +130,10 @@ def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_
 
 
 def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
-    """Pinned rather than derived twice."""
+    """A path denied, or left open, that the layout does not declare: pinned as literals,
+    since an expectation derived the way the code derives it passes whatever the code
+    says.
+    """
     assert DEFAULT_LAYOUT.denied_scopes() == (
         "/.harness/**",
         "/inputs/**",

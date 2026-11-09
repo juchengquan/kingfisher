@@ -385,7 +385,9 @@ def test_removal_reaches_through_nested_hardened_directories(session_dir):
 
 
 def test_a_directory_we_cannot_unlock_is_reported_not_raised(session_dir, monkeypatch):
-    """The same degradation `protect_inputs` chose."""
+    """A session whose locked `/inputs` cannot be unlocked raising out of the sweep, or
+    reported as removed while it is still there.
+    """
     with writable_inputs(session_dir, DEFAULT_LAYOUT) as inputs:
         (inputs / "theirs.pdf").write_text("x")
     protect_inputs(session_dir, DEFAULT_LAYOUT)
@@ -399,7 +401,9 @@ def test_a_directory_we_cannot_unlock_is_reported_not_raised(session_dir, monkey
 
 
 def test_an_unrelated_failure_leaves_inputs_hardened(session_dir, monkeypatch):
-    """Unlocking is for the one error it can fix."""
+    """A sweep that fails for another reason, a busy file, leaving `/inputs` unlocked on the
+    session it could not remove.
+    """
     import errno
 
     with writable_inputs(session_dir, DEFAULT_LAYOUT) as inputs:

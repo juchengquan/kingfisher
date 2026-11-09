@@ -317,7 +317,9 @@ def test_bubblewrap_takes_over_where_landlock_cannot_run(monkeypatch):
 
 
 def test_neither_available_still_warns_rather_than_pretending(monkeypatch):
-    """The case a fallback must not swallow."""
+    """A Linux host with neither Landlock nor bubblewrap reported as confined, or left
+    without the warning that its shell is not fenced.
+    """
     confinement = a_linux_host(monkeypatch, landlock=False, bwrap=False)
     confined = confinement._linux()
 
