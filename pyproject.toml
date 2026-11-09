@@ -5,25 +5,26 @@ build-backend = "hatchling.build"
 [project]
 name = "kingfisher"
 version = "0.1.0"
-description = "Add your description here"
+description = "A library for running agents against a workspace, with what each request may do decided by the caller rather than by the code."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 authors = [
     {name="juchengquan"}
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
     # Held at 0.7.22 by the owner's call: raise it only once they say so. A ceiling
     # rather than the lock alone, so that `uv lock --upgrade` stops here as well.
     "deepagents>=0.7.22,<0.7.23",
-    # Imported directly by core/agent/assembly.py, lazily, so that installing it
-    # costs nothing until `KINGFISHER_INTERPRETER` is on. It also arrives through
-    # deepagents' own `quickjs` extra, but an extra is not a promise either -- if
-    # upstream renames it, uv warns and moves on while our import breaks. The
+    # Imported directly by core/agent/interpreter.py, lazily, so that installing it
+    # costs nothing until `KINGFISHER_INTERPRETER_ENABLED` is on. It also arrives
+    # through deepagents' own `quickjs` extra, but an extra is not a promise either --
+    # if upstream renames it, uv warns and moves on while our import breaks. The
     # floor is deepagents' (`>=0.3.8` at 0.7.22) rather than the one the docs page
     # advertises, which is behind what the library actually needs. Verified rather
     # than copied: the interpreter tests pass against 0.3.8, which is also what the
@@ -105,8 +106,9 @@ dependencies = [
     # builds, so under `requires-python` 6.0 installs nowhere.
     "pyyaml>=6.0.1",
     "python-dotenv>=1.2.2",
-    # The library imports none of it, but core/session/runtime.py reads its errors by
-    # shape -- `status_code`, `body`, class names -- which the next major may change.
+    # The library imports none of it, but core/session/provider_errors.py reads its
+    # errors by shape -- `status_code`, `body`, class names -- which the next major may
+    # change.
     "anthropic>=0.120.0,<1",
     # Imported by tool files, which run in this process: an `args_schema` is a pydantic
     # model, as in assets/tools/sql_explain.py.
@@ -132,34 +134,19 @@ fence = ["sandlock>=0.8.8; sys_platform == 'linux'"]
 loguru = ["loguru>=0.4.0"]
 
 [project.scripts]
-# This said "seeding a workspace and looking at one, which are the two things
-# the library cannot do for itself" -- a rule that excluded `run` on the grounds
-# that `kingfisher.run` already existed. It measured the library's completeness
-# rather than the user's, and it was replaced: see *The command line* in
-# `docs/decisions.md`. Left as a comment rather than deleted, because the rule
-# held for weeks and the next person to want a sixth verb should meet the test
-# it was replaced with -- what does a person at a terminal need to do -- rather
-# than an empty line.
-#
-# What did not change: `tests/integration/driver.py` stays the development
-# driver and keeps a bare invocation that runs the eval smoke, which is a fine
-# default for a driver and a wrong one for a stranger's first command. `run`
-# requires a task argument and cannot be reached by accident.
+# A new verb answers what a person at a terminal needs to do, not what the library
+# cannot do for itself: see *The command line* in `docs/decisions.md`. The development
+# driver stays `tests/integration/driver.py`, whose bare invocation runs the eval
+# smoke -- a fine default for a driver and a wrong one for a stranger's first command.
 kingfisher = "kingfisher.cli.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kingfisher"]
 
-# Definitions do not ride along. They lived at `src/kingfisher/assets` so that
-# `pip install kingfisher` followed by `kingfisher seed` wrote a workspace that
-# already worked; they are content, and where a deployment gets its content is a
-# setting now -- `KINGFISHER_ASSETS`. This repository keeps its own in
-# `assets/`, outside this list and outside the wheel.
-#
-# What that costs is real and is written down rather than glossed: a fresh
-# install seeds nothing, and since a request must name an agent, it cannot run
-# until definitions arrive from somewhere. See *Packaging: where the
-# definitions live* in docs/decisions.md.
+# Definitions do not ride along: they are content, and where a deployment gets its
+# content is a setting, `KINGFISHER_ASSETS`. This repository keeps its own in `assets/`,
+# outside the wheel, so a fresh install seeds nothing and cannot run until definitions
+# arrive. See *Packaging: where the definitions live* in docs/decisions.md.
 
 [dependency-groups]
 dev = [
@@ -247,10 +234,8 @@ ignore = ["ANN401"]
 # A driver whose whole job is printing, with the branchiness that implies --
 # and one exit code per way a run can end, which is the clearer shape here.
 #
-# Listed before `tests/**` below and therefore overridden by it, which is fine:
-# the test ignores are a superset of these four. It stays spelled out because
-# the reasons differ -- a test may print because it is a test, and this prints
-# because printing is its output.
+# Its own entry because `tests/**` below holds none of these four, and ruff adds the
+# two together rather than letting one replace the other.
 "tests/integration/driver.py" = ["T201", "PLR0911", "PLR0912", "PLR0915"]
 # The seeding example on the same shelf, for the first of those reasons only:
 # what it prints *is* its output, and it is short and flat because the flow it

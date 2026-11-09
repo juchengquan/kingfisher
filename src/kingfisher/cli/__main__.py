@@ -12,6 +12,7 @@ import time
 import warnings
 from collections.abc import Sequence
 from contextlib import contextmanager
+from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -50,7 +51,7 @@ from kingfisher.core.access import Datazone, ExtraDatazone, with_datazone
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import resolve_definitions
-from kingfisher.core.logged import RUN_LOGGER, logged
+from kingfisher.core.logged import RUN_LOGGER
 from kingfisher.core.session.model import held_by_a_turn
 
 from .health import examine, retired, worst
@@ -58,11 +59,10 @@ from .listing import as_json, failed, origins_document, render
 from .progress import show
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Iterator
     from typing import TextIO
 
     from kingfisher import Config, Kingfisher, PendingDecision, RunResult, Session
-    from kingfisher.plugins import JsonlRunEvents
 
 #: Read from the working directory only: a bare `load_dotenv()` walks up looking for
 #: one, and a command should not pick up a file two directories above.
@@ -673,7 +673,7 @@ def _prompt(args: argparse.Namespace) -> int:
     if args.tell is not None and not args.tell.strip():
         print(EMPTY_TELL, file=sys.stderr)
         return 2
-    from .sent import as_document, render  # noqa: PLC0415
+    from .sent import render  # noqa: PLC0415
 
     kf = _configured(config_from_env(), tell=args.tell)
     sent = kf.sent(
@@ -681,7 +681,7 @@ def _prompt(args: argparse.Namespace) -> int:
         source_ids=with_datazone(args.held, args.datazone, args.extra_datazones),
     )
     if args.json:
-        print(json.dumps(as_document(sent), indent=2))
+        print(json.dumps(asdict(sent), indent=2))
     else:
         for line in render(sent):
             print(line)
@@ -697,6 +697,7 @@ def _configured(cfg: Config, *, log: Path | None = None, tell: str | None = None
 
     from .configured import (  # noqa: PLC0415
         CommandTurnInstructions,
+        KeptAndSaid,
         configured_sessions,
     )
 
@@ -704,27 +705,8 @@ def _configured(cfg: Config, *, log: Path | None = None, tell: str | None = None
         cfg,
         sessions=configured_sessions(),
         turn_instructions=CommandTurnInstructions(tell or ""),
-        run_events=_kept_in(log),
+        run_events=None if log is None else KeptAndSaid(log.expanduser()),
     )
-
-
-def _kept_in(log: Path | None) -> JsonlRunEvents | None:
-    """Where `--log` keeps a turn's events, or `None` for the library's default."""
-    if log is None:
-        return None
-    from kingfisher.plugins import JsonlRunEvents  # noqa: PLC0415
-
-    class KeptAndSaid(JsonlRunEvents):
-        """The file, and each event on stderr as well where `--log-level` shows it: a
-        command's user reads the terminal, and a plugin they wired that broke must still
-        say so there."""
-
-        def record(self, event: Mapping[str, object]) -> None:
-            # Unfiltered: a deployment may total its tokens from the file.
-            super().record(event)
-            logged(event)
-
-    return KeptAndSaid(log.expanduser())
 
 
 def _drive(

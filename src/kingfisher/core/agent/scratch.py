@@ -72,9 +72,6 @@ class ScratchRunner:
         if refused is not None:
             return ScratchRun(error=refused)
         args = (list(argv), dict(files))
-        native = scratch_runs_of(self._backend, "arun_in_scratch")
-        if native is not None:
-            return await native(*args, outputs=tuple(outputs), timeout=self._left(timeout))
         method = scratch_runs_of(self._backend)
         if method is None:
             return ScratchRun(error=_NO_METHOD)

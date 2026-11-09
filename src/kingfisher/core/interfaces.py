@@ -143,8 +143,9 @@ class Sessions(ABC):
     - every async twin answers as its sync one does.
 
     Anything else is read only where an implementation declares it, by name: `host_path`,
-    `shell_prompt`, `unprotected` and `copy` on a backend `open` returns, and `runs_here`
-    on its shell -- deepagents' classes, which kingfisher cannot give a default.
+    `unprotected`, `copy` and `run_in_scratch` on a backend `open` returns, and
+    `shell_prompt`, `session_root` and `runs_here` on its shell -- deepagents' classes,
+    which kingfisher cannot give a default.
 
     `copy(source, destination)` copies one file within the session, both paths as the file
     tools name them, and answers `None`, or why it could not. A turn's ending copies each

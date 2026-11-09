@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from kingfisher import SENT_SOURCES
 
@@ -40,11 +39,6 @@ def render(sent: Sent) -> Iterator[str]:
             f"{_marked(cached=tool.cached)}"
         )
         yield tool.description.strip("\n")
-
-
-def as_document(sent: Sent) -> dict[str, Any]:
-    """The same, as JSON takes it, every tool's parameters included."""
-    return asdict(sent)
 
 
 def _marked(*, cached: bool) -> str:
