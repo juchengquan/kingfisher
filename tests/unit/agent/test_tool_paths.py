@@ -308,7 +308,9 @@ def test_the_agents_own_name_reaches_the_tool_as_a_real_file(cfg, session_dir):
 
 
 def test_another_sessions_file_is_not_reachable_through_a_tool(cfg, session_dir):
-    """The leak, end to end."""
+    """An offered tool handed a path into another session's folder, so one tenant's tool
+    reads another's files.
+    """
     a_workspace_with_the_tool(cfg)
     other = session_dir.parent / "another-tenant" / "outputs"
     other.mkdir(parents=True, exist_ok=True)

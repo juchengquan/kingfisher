@@ -319,7 +319,9 @@ def test_a_lookup_finds_a_session_and_a_stranger_gets_none(cfg):
 
 
 def test_asking_does_not_disturb_the_session(cfg):
-    """The whole reason this exists."""
+    """Looking a session up or listing sessions touching its folder's time or taking its
+    claim, so asking about an idle session keeps it from being reaped.
+    """
     import os
     import time
 

@@ -251,7 +251,9 @@ def test_a_loop_through_a_name_two_files_share_is_refused_before_it_is_built(
 
 
 def test_a_definition_reached_twice_is_not_a_cycle():
-    """The distinction the check exists to draw."""
+    """A subagent reached by more than one path refused as a cycle, though no definition in
+    the chain reaches itself.
+    """
     specs = {
         "reviewer": a_subagent(REVIEWER, "reviewer.yaml"),
         "second-opinion": a_subagent(NESTING_HELPER, "second-opinion.yaml"),
@@ -305,7 +307,9 @@ def test_a_helper_is_not_handed_the_parents_task_tool(cfg, session_dir):
 
 
 def test_a_subagent_that_names_a_helper_gets_a_task_tool(cfg, session_dir):
-    """What the whole change is for."""
+    """A subagent whose definition names a helper built without the `task` tool it needs to
+    hand work on.
+    """
     define_each(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir)

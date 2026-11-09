@@ -96,7 +96,7 @@ def test_an_edit_is_refused_as_well_as_a_write(cfg, session_dir):
 
 
 def test_reading_a_skill_still_works(cfg, session_dir):
-    """The point is read-only, not unreachable."""
+    """Reading a skill's `SKILL.md` with `read_file` denied along with writing to it."""
     _a_skill(cfg)
 
     said = _drive(cfg, session_dir, "read_file", {"file_path": "/skills/demo/SKILL.md"})
@@ -110,7 +110,9 @@ def test_reading_a_skill_still_works(cfg, session_dir):
 
 @macos
 def test_the_shell_cannot_write_into_the_catalogue(cfg, session_dir):
-    """The half the tool rule cannot reach."""
+    """The shell writing into the skills catalogue, which the file tools' read-only rule
+    does not cover.
+    """
     directory = _a_skill(cfg)
     shell = backend_at(cfg, session_dir)
 
@@ -122,7 +124,9 @@ def test_the_shell_cannot_write_into_the_catalogue(cfg, session_dir):
 
 @macos
 def test_the_shell_can_still_read_a_skill_and_write_elsewhere(cfg, session_dir):
-    """The carve-out is a carve-out."""
+    """The shell's fence on the catalogue also denying it a skill's read, or a write
+    elsewhere in the session.
+    """
     directory = _a_skill(cfg)
     shell = backend_at(cfg, session_dir)
 

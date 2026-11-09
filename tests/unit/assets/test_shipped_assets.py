@@ -623,7 +623,9 @@ def test_a_failed_call_is_recorded_as_failed(shipped):
 
 
 def test_an_answer_that_used_nothing_says_so(shipped):
-    """The most useful line this subagent ever prints."""
+    """A compiled subagent's answer that called no tool not saying so, leaving its caller to
+    take an answer from memory as one read from the files.
+    """
     graph = compiled(shipped, [line_count], [AIMessage(content="I already knew that.")])
 
     answer = graph.invoke({"messages": [HumanMessage(content="how long is it?")]})

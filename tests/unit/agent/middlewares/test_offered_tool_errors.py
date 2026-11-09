@@ -39,7 +39,9 @@ def _raises(exc: BaseException):
 
 
 def test_an_offered_tools_exception_becomes_a_failed_tool_result():
-    """The failure this was written for."""
+    """An offered tool that raises ending the run, instead of handing the model a failed
+    result that names what went wrong.
+    """
     guard = OfferedToolFailureMiddleware(frozenset({"csv_profile"}))
 
     answer = guard.wrap_tool_call(
@@ -78,7 +80,9 @@ def test_a_built_in_refusing_a_host_path_is_handed_back_as_said(paths):
 
 
 def test_a_built_in_tool_is_left_exactly_as_it_was():
-    """The half that keeps this narrow."""
+    """A built-in tool's exception caught as if it were an offered tool's, when the guard
+    covers only the tools the definitions offer.
+    """
     guard = OfferedToolFailureMiddleware(frozenset({"csv_profile"}))
 
     with pytest.raises(FileNotFoundError):
@@ -86,7 +90,7 @@ def test_a_built_in_tool_is_left_exactly_as_it_was():
 
 
 def test_a_tool_that_works_is_untouched():
-    """The negative control."""
+    """A tool that answers normally having its answer rewritten by the guard."""
     guard = OfferedToolFailureMiddleware(frozenset({"probe"}))
 
     assert guard.wrap_tool_call(_Request("probe"), lambda _r: "the answer") == "the answer"

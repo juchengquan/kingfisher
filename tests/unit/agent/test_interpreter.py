@@ -70,7 +70,9 @@ def test_eval_is_an_ordinary_tool_a_request_may_withhold(cfg, session_dir):
 
 
 def test_a_request_that_withheld_the_shell_cannot_reach_it_from_code(cfg, session_dir):
-    """The whole reason for adopting this."""
+    """Code run through `eval` able to call the shell a request withheld, because the
+    interpreter was handed every tool rather than the granted ones.
+    """
     wired = replace(cfg, interpreter_enabled=True)
     built = build_agent(
         wired,

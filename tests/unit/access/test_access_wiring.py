@@ -942,7 +942,9 @@ def test_a_star_keeps_every_skill_the_caller_passes_the_lock_of(with_skills):
 
 
 def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills):
-    """The half a selection alone does not prove."""
+    """A skill locked away from this caller still named to the model among its skills,
+    though the request cannot select it.
+    """
     kf = Kingfisher(with_skills, sessions=LocalSessions())
     held = ("B",)
     session = session_at(kf, "sk1")
