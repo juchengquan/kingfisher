@@ -82,7 +82,9 @@ def test_two_folders_may_each_define_one_name(cfg):
 
 
 def test_each_subagent_holds_the_tool_it_named(cfg, session_dir):
-    """Two helpers, two vendors, one name."""
+    """Two vendors' subagents that each grant a tool called `fetch` handed the same one, so
+    one vendor's subagent runs the other's code.
+    """
     _two_vendors(cfg)
     for vendor in ("vendor_a", "vendor_b"):
         _subagent(cfg, vendor, grant=f"{vendor}/fetch.py::fetch")
@@ -199,7 +201,9 @@ def test_a_subagent_can_actually_call_the_one_it_named(cfg, session_dir):
 
 
 def test_a_bare_name_two_files_offer_is_refused(cfg, session_dir):
-    """The safety property."""
+    """A bare tool name that two files offer resolved to one of them, so a grant of `fetch`
+    runs whichever file was read first.
+    """
     _two_vendors(cfg)
 
     with pytest.raises(CapabilityError, match="more than one source offers"):

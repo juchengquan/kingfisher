@@ -167,7 +167,9 @@ def test_the_activated_subagent_keeps_its_plain_name(cfg, session_dir):
 
 
 def test_subtracting_something_else_still_hits_the_clash(cfg, session_dir):
-    """The reachable path the CLI actually has."""
+    """The clash between two vendors' subagents missed when the request subtracts some other
+    subagent with `all_but`, the form the command sends, rather than naming both.
+    """
     from kingfisher.core.access.capabilities import all_but
 
     _two_vendors(cfg)

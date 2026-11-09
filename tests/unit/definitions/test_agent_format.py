@@ -115,7 +115,9 @@ def test_the_star_is_how_an_agent_asks_for_every_tool():
 
 
 def test_leaving_skills_and_subagents_out_grants_none():
-    """The same rule on the other grant fields."""
+    """An agent file that leaves out `skills`, `subagents` or `middlewares` read as granting
+    every one of them.
+    """
     spec = _read(MINIMAL, "plain.yaml")
 
     assert spec.skills is None

@@ -35,7 +35,9 @@ def test_a_foldered_skill_still_counts_as_taken(cfg):
 
 
 def test_taken_answers_bare_names_where_names_spells_them_out(cfg):
-    """Two different questions."""
+    """`taken` answering the `party::name` spellings that `names` gives, so a caller asking
+    whether a bare name is free never finds it taken.
+    """
     for party in ("research", "legal"):
         _skill(cfg.skills_dir, f"{party}/lookup", "lookup")
     registry = _read(cfg.skills_dir)

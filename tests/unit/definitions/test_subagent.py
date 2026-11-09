@@ -138,7 +138,9 @@ def _definition(*extra_lines: str) -> str:
 
 
 def test_a_typo_of_an_optional_field_is_refused_not_ignored():
-    """The bug this closes."""
+    """A misspelt optional field such as `tolls:` ignored rather than refused, so the
+    subagent runs as if the line were not there.
+    """
     with pytest.raises(SubagentError, match="tolls") as raised:
         a_subagent(_definition("tolls: [read_file]"), "reviewer.yaml")
 
@@ -171,7 +173,9 @@ def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed():
 
 
 def test_every_unaccepted_field_is_reported_at_once():
-    """Not just the first."""
+    """A definition with several unaccepted fields reporting only the first, so each is
+    found on a separate run.
+    """
     with pytest.raises(SubagentError) as raised:
         a_subagent(
             _definition("tolls: [read_file]", "temperature: 0.2", "permissions: [deny]"),
@@ -186,7 +190,9 @@ def test_every_unaccepted_field_is_reported_at_once():
 
 
 def test_a_deliberately_unexposed_field_says_why():
-    """These are not "not yet"."""
+    """A field kingfisher refuses on purpose answered with a spelling suggestion instead of
+    the reason it is refused.
+    """
     for field in sorted(REFUSED):
         with pytest.raises(SubagentError, match=field) as raised:
             a_subagent(_definition(f"{field}: something"), "reviewer.yaml")
@@ -497,7 +503,9 @@ def test_empty_metadata_is_allowed():
 
 
 def test_metadata_survives_loading_the_catalogue(tmp_path):
-    """The only consumer there is."""
+    """A subagent's `metadata` dropped on the way through the repository, so a deployment
+    reading it there finds every subagent unowned.
+    """
     directory = tmp_path / "subagents"
     directory.mkdir()
     (directory / "reviewer.yaml").write_text(
@@ -537,7 +545,7 @@ def test_provider_is_no_longer_a_field():
 
 
 def test_a_model_names_where_it_runs_by_naming_what_it_runs():
-    """One field, where there were two."""
+    """A subagent's `model: cheap-one` not read as the catalogue entry it asks to run on."""
     definition = (
         "name: reviewer\ndescription: d\nmodel: cheap-one\nsystem_prompt: |\n  You review.\n"
     )

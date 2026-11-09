@@ -49,7 +49,9 @@ def test_a_tool_in_a_subfolder_is_found(tmp_path):
 
 
 def test_nesting_does_not_reach_the_name(tmp_path):
-    """The rule everything else depends on."""
+    """A tool filed several folders deep named after those folders as well as itself, so a
+    grant that writes its name no longer matches it.
+    """
     _tool(tmp_path / "research" / "deep" / "deeper", "find_company")
 
     assert [one.name for one in LocalToolRepository(tmp_path).found] == ["find_company"], (
@@ -164,7 +166,9 @@ def test_two_folders_may_each_define_one_name(tmp_path):
 
 
 def test_the_walk_refuses_to_descend_into_debris(tmp_path):
-    """New guard, because the exposure is new."""
+    """The walk importing a `.py` under `__pycache__`, `.venv` or a hidden folder, which
+    runs whatever that file says.
+    """
     for debris in ["__pycache__", ".venv", ".hidden"]:
         junk = tmp_path / debris
         junk.mkdir(parents=True)
@@ -252,7 +256,9 @@ def test_sources_say_where_a_nested_subagent_lives(tmp_path):
 
 
 def test_sources_report_the_file_when_the_name_is_not_it(tmp_path):
-    """The case that makes this worth having at all."""
+    """A subagent whose file has another name reported at a path that does not exist,
+    `analysis/profiler.yaml` rather than `analysis/whatever.yaml`.
+    """
     directory = tmp_path / "analysis"
     directory.mkdir(parents=True)
     (directory / "whatever.yaml").write_text(SUBAGENT.format(name="profiler"), encoding="utf-8")

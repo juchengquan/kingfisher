@@ -106,7 +106,9 @@ def test_granting_every_subagent_reports_what_naming_them_reports(cfg, session_d
 
 
 def test_a_second_endpoint_somewhere_else_is_not_reported(cfg, session_dir):
-    """The negative control."""
+    """A subagent whose endpoint really is another host reported as running on the main
+    agent's machine.
+    """
     elsewhere = _elsewhere(cfg, "https://api.openai.com/v1")
     define_each(elsewhere, ASKED)
 
