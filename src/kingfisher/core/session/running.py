@@ -113,11 +113,6 @@ class _Turn:
 #: What a graph's stream is read as once it has nothing more.
 _ENDED = object()
 
-#: How long a caller who has stopped a turn waits for calls a thread is still running.
-#: Past it the caller is let go, and the turn holds its session until they end, or until
-#: `superstep_bound` past its deadline, where its claim may lapse.
-LEFT_WAIT_S = 5.0
-
 #: Turns ending after their caller left, held here: the loop keeps only a weak reference to
 #: a task, and one collected would never let go of its session.
 _ENDING_LATER: set[asyncio.Task[None]] = set()
@@ -166,18 +161,18 @@ class _OwnedStream:
         return chunk
 
     async def settle(
-        self, threads: OnThreads, *, leaving: bool, until: float
+        self, threads: OnThreads, *, leaving: bool, until: float, wait: float
     ) -> tuple[bool, asyncio.CancelledError | None]:
         """Whether the graph and every call a thread runs for it have ended, cancelling the
         graph once; and a cancel that came meanwhile.
 
-        Waited for through any cancel, never past `until`, and for at most `LEFT_WAIT_S`
-        once the caller has left: `leaving`, or cancelled during the wait.
+        Waited for through any cancel, never past `until`, where the claim may lapse, and
+        for at most `wait` once the caller has left: `leaving`, or cancelled meanwhile.
         """
         if not self._cancelled:
             self._cancelled = True
             self.task.cancel()
-        let_go = time.monotonic() + LEFT_WAIT_S if leaving else until
+        let_go = time.monotonic() + wait if leaving else until
         cancelled: asyncio.CancelledError | None = None
         while waiting := {one for one in (self.task, *threads.running) if not one.done()}:
             left = min(until, let_go) - time.monotonic()
@@ -187,7 +182,7 @@ class _OwnedStream:
                 await asyncio.wait(waiting, timeout=left)
             except asyncio.CancelledError as exc:
                 cancelled = cancelled or exc
-                let_go = min(let_go, time.monotonic() + LEFT_WAIT_S)
+                let_go = min(let_go, time.monotonic() + wait)
         return True, cancelled
 
 
@@ -676,7 +671,12 @@ class Running:
             ended, late = (
                 (True, None)
                 if stream is None
-                else await stream.settle(turn.threads, leaving=left is not None, until=until)
+                else await stream.settle(
+                    turn.threads,
+                    leaving=left is not None,
+                    until=until,
+                    wait=self.cfg.cancel_wait_s,
+                )
             )
             # `_end_later`'s task copies this context, so a turn ending after its caller
             # left is heard too.
@@ -704,9 +704,11 @@ class Running:
     ) -> None:
         try:
             if stream is not None:
-                # A cancel, as the loop shutting down sends, cuts this to `LEFT_WAIT_S`:
+                # A cancel, as the loop shutting down sends, cuts this to the cancel wait:
                 # then the session is let go of without what the threads would have said.
-                await stream.settle(turn.threads, leaving=False, until=until)
+                await stream.settle(
+                    turn.threads, leaving=False, until=until, wait=self.cfg.cancel_wait_s
+                )
             await self._aend_turn(turn)
         except Exception as exc:  # noqa: BLE001 -- nobody is left to raise it to
             error_type, error_at = raised(exc)
@@ -772,7 +774,7 @@ class Running:
         """`stream`, for a caller already on an event loop.
 
         Cancelling stops a model call at once. A tool call a thread runs cannot be
-        stopped, so a cancel waits for it, at most `LEFT_WAIT_S`; past that the caller is
+        stopped, so a cancel waits for it, at most `cancel_wait_s`; past that the caller is
         let go, and the session is refused as busy until the call ends, or until the turn's
         deadline plus `superstep_bound`, where it ends without that call's answer.
 

@@ -641,11 +641,12 @@ its turns are not checked.
   call did not run: the turn stopped before it began, because …", and why: its caller
   stopped it, it ran out of time, or another call in it failed, from the moment that call
   raised. Every call the model had asked for used to run.
-- **Cancelling `astream` or `arun` waits for a call a thread is running**, for at most 5
-  seconds, and the next turn reads what the call returned. It used to return at once,
-  telling the next turn the call did not complete while it went on running.
+- **Cancelling `astream` or `arun` waits for a call a thread is running**, for at most
+  `KINGFISHER_CANCEL_WAIT_S` (`Config.cancel_wait_s`, 5 seconds unless set; 0 lets the
+  caller go at once), and the next turn reads what the call returned. It used to return
+  at once, telling the next turn the call did not complete while it went on running.
 - **A request sent while that call still runs raises `SessionBusyError`**, including after
-  the 5 seconds, when the caller is let go and the session stays held until the call ends.
+  that wait, when the caller is let go and the session stays held until the call ends.
   Wait for the cancelled task before sending again. A call still running at the turn's
   deadline plus `Config.superstep_bound`, the most the session's claim allows a step past
   it, is left running: the turn ends there without its answer, as `astream` does when out

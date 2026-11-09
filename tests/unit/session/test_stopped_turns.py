@@ -283,6 +283,7 @@ def test_an_interrupt_passing_up_through_a_call_does_not_stop_its_turn(raised, s
             context.run(StoppingMiddleware().wrap_tool_call, None, handler)
 
     assert flag.is_set() is stops
+    assert flag.why == (FAILED if stops else None)
 
 
 # -- a call a thread is running ------------------------------------------------
@@ -402,10 +403,9 @@ def test_a_cancel_reaching_a_caller_closing_its_turn_is_raised(charging):
 def test_a_turn_out_of_time_answers_once_its_calls_have_ended(charging, monkeypatch):
     """Out of time, an awaited turn answered while a call was still running, so the next
     turn could start before its charge landed. Waits as the sync path does, past
-    `LEFT_WAIT_S`: the caller has not left."""
-    cfg = replace(charging.cfg, turn_timeout_s=0.5)
+    the cancel wait: the caller has not left."""
+    cfg = replace(charging.cfg, turn_timeout_s=0.5, cancel_wait_s=0.1)
     monkeypatch.setenv("KF_TEST_SLOW", "0.8")
-    monkeypatch.setattr(running, "LEFT_WAIT_S", 0.1)
     Scripted.script.append(_asking("1", "hold"))
 
     async def out_of_time() -> tuple[bool, Any]:
@@ -425,9 +425,9 @@ def test_a_turn_out_of_time_answers_once_its_calls_have_ended(charging, monkeypa
 
 def test_a_turn_whose_graph_fails_raises_once_its_calls_have_ended(charging, monkeypatch):
     """A graph failing beside a call a thread runs raised out of the turn at once, and the
-    call charged behind whatever the caller did next. Past `LEFT_WAIT_S`: the caller has
+    call charged behind whatever the caller did next. Past the cancel wait: the caller has
     not left."""
-    monkeypatch.setattr(running, "LEFT_WAIT_S", 0.1)
+    cfg = replace(charging.cfg, cancel_wait_s=0.1)
     broke = {"name": "break_soon", "args": {}, "id": "c-broke"}
     asked = _asking("hold")
     Scripted.script.append(AIMessage(content="", tool_calls=[*asked.tool_calls, broke]))
@@ -435,7 +435,7 @@ def test_a_turn_whose_graph_fails_raises_once_its_calls_have_ended(charging, mon
     async def failed() -> list[str]:
         asyncio.get_running_loop().call_later(0.4, charging.release.touch)
         with pytest.raises(BaseException, check=_broke):  # noqa: B017 -- `check` narrows it
-            await charging.kf().arun(_asked())
+            await charging.kf(cfg).arun(_asked())
         return charging.charged()
 
     assert asyncio.run(failed()) == ["hold"], "the turn raised before its call ended"
@@ -458,15 +458,17 @@ def test_a_turn_whose_graph_fails_begins_none_of_the_calls_still_queued(charging
             charging.kf().run(_asked())
 
     assert len(charging.charged()) < CALLS
-    assert f"because {FAILED}" in _told_next(charging, f"c-{CALLS}").text
+    if awaited:
+        # Not on the sync path: there langgraph cancels the calls a failure left unstarted
+        # before a thread takes them, and those read as not completed rather than refused.
+        assert f"because {FAILED}" in _told_next(charging, f"c-{CALLS}").text
 
 
 def test_a_caller_cancelling_a_turn_that_waits_out_of_time_is_let_go_of(charging, monkeypatch):
-    """A turn out of time waits for its calls past `LEFT_WAIT_S`, and a caller giving up on
-    it then has left: it is let go after the bound, and hears its cancel."""
-    cfg = replace(charging.cfg, turn_timeout_s=0.5)
+    """A turn out of time waits for its calls past the cancel wait, and a caller giving up
+    on it then has left: it is let go after the wait, and hears its cancel."""
+    cfg = replace(charging.cfg, turn_timeout_s=0.5, cancel_wait_s=0.2)
     monkeypatch.setenv("KF_TEST_SLOW", "0.8")
-    monkeypatch.setattr(running, "LEFT_WAIT_S", 0.2)
     Scripted.script.append(_asking("1", "hold"))
 
     async def given_up() -> float:
@@ -490,11 +492,10 @@ def test_a_caller_is_let_go_of_while_a_hung_call_holds_the_session(charging, mon
     """A wait with no bound would keep a caller as long as a hung tool; let go of at once,
     the next turn ran beside the call. The caller goes after the bound, the session is
     refused until the call ends, and its answer is kept for the turn after."""
-    monkeypatch.setattr(running, "LEFT_WAIT_S", 0.2)
     Scripted.script.append(_asking("hold"))
 
     async def hung() -> float:
-        kf = charging.kf()
+        kf = charging.kf(replace(charging.cfg, cancel_wait_s=0.2))
         turn = asyncio.ensure_future(kf.arun(_asked()))
         await _until(lambda: "hold" in _lines(charging.begun))
         cancelled_at = time.monotonic()
@@ -517,9 +518,8 @@ def test_a_turn_its_caller_left_ends_before_its_claim_could_lapse(charging, monk
     """A turn whose caller had left waited for a hung call with no bound, holding its
     session past the point another turn may take the claim over, and then wrote its ending
     behind that turn. It ends a superstep's bound past its deadline, without the answer."""
-    cfg = replace(charging.cfg, turn_timeout_s=0.5)
+    cfg = replace(charging.cfg, turn_timeout_s=0.5, cancel_wait_s=0.1)
     monkeypatch.setattr(Config, "superstep_bound", property(lambda _: 0.5))
-    monkeypatch.setattr(running, "LEFT_WAIT_S", 0.1)
     Scripted.script.append(_asking("hold"))
 
     async def left() -> ToolMessage:
@@ -585,7 +585,6 @@ def test_a_turn_ending_after_its_caller_left_warns_by_its_errors_type_never_its_
     """Nobody is left to raise a failed ending to, so the deployment's `RunEvents` is all
     that hears it: warned outside the turn's warnings it reached none, and logged with its
     traceback it carried the error's words."""
-    monkeypatch.setattr(running, "LEFT_WAIT_S", 0.2)
     ending = running.Running._aend_turn
 
     async def failing(self: Any, turn: Any) -> None:
@@ -598,7 +597,9 @@ def test_a_turn_ending_after_its_caller_left_warns_by_its_errors_type_never_its_
     Scripted.script.append(_asking("hold"))
 
     async def left() -> None:
-        kf = Kingfisher(charging.cfg, sessions=LocalSessions(), run_events=sink)
+        kf = Kingfisher(
+            replace(charging.cfg, cancel_wait_s=0.2), sessions=LocalSessions(), run_events=sink
+        )
         turn = asyncio.ensure_future(kf.arun(_asked()))
         await _until(lambda: "hold" in _lines(charging.begun))
         turn.cancel()

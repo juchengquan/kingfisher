@@ -184,6 +184,7 @@ def test_citing_results_is_on_unless_turned_off(env):
 LIMITS = {
     "execution_timeout_s": "KINGFISHER_EXECUTION_TIMEOUT_S",
     "turn_timeout_s": "KINGFISHER_TURN_TIMEOUT_S",
+    "cancel_wait_s": "KINGFISHER_CANCEL_WAIT_S",
     "session_max_bytes": "KINGFISHER_SESSION_MAX_BYTES",
     "rewind_max_bytes": "KINGFISHER_REWIND_MAX_BYTES",
     "recursion_limit": "KINGFISHER_RECURSION_LIMIT",
@@ -210,10 +211,12 @@ def test_a_limit_that_is_set_is_passed_on(env, name, key):
 
 
 #: The least each limit takes. A timeout, a recursion limit or a pool of nothing cannot
-#: run a turn; a TTL or a byte cap of nothing is a deployment keeping nothing.
+#: run a turn; a TTL or a byte cap of nothing is a deployment keeping nothing; a cancel
+#: wait of nothing lets the caller go at once.
 FLOORS = {
     "KINGFISHER_EXECUTION_TIMEOUT_S": 1,
     "KINGFISHER_TURN_TIMEOUT_S": 1,
+    "KINGFISHER_CANCEL_WAIT_S": 0,
     "KINGFISHER_RECURSION_LIMIT": 1,
     "KINGFISHER_THREAD_POOL_SIZE": 1,
     "KINGFISHER_SESSION_MAX_BYTES": 0,

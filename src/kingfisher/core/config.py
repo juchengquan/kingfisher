@@ -340,6 +340,10 @@ class Config:
     # Nothing else bounds `recursion_limit` times a model's `timeout_s`, which allows
     # 150 x 120s, about 5 hours; an hour is far past any real turn.
     turn_timeout_s: int = 3600
+    #: How long a cancelled `astream` or `arun` holds its caller for a call a thread is
+    #: still running. Only that: the call's answer is kept either way, and past the wait
+    #: the session answers busy until the call ends. 0 lets the caller go at once.
+    cancel_wait_s: int = 5
     # Unset by default: workspaces vary by orders of magnitude. Checked before a turn,
     # never during: `execute` writes without any file tool seeing it.
     session_max_bytes: int | None = None
