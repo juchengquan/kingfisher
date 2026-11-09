@@ -31,7 +31,7 @@ from .checkpointing import (
     paused_state,
 )
 from .file_history import keep_turn_files
-from .files import collect_artifacts
+from .files import collect_artifacts, walk_artifacts
 from .ledger import file_left, keep_ledger, sweep_results
 from .memory import kept_in_store
 from .memory_writer import kept_memory
@@ -81,7 +81,7 @@ class _Turn:
     answer: str = ""
     ok: bool = False
     stop_reason: str = END_TURN
-    kept: tuple[str, ...] = ()
+    artifacts: tuple[str, ...] = ()
     subagent_names: runtime.SubagentNames = field(default_factory=runtime.SubagentNames)
     seen: runtime.SeenMessages = field(default_factory=runtime.SeenMessages)
     delegations: runtime.Delegations = field(default_factory=runtime.Delegations)
@@ -410,10 +410,13 @@ class Running:
                 # After the writer and the store, either of which may make the memory file
                 # this turn hands back; and however they end, so a failed write still
                 # leaves the rest named.
-                turn.kept = yield from collect_artifacts(prepared.files, self.cfg.layout)
+                walked = yield from walk_artifacts(prepared.files, self.cfg.layout)
+                turn.artifacts = collect_artifacts(walked)
             yield from self._sweep_results(prepared, turn.recorded)
             # Last, after the memory writer and the store: the memory file as the turn left it.
-            yield from keep_turn_files(prepared, self.cfg)
+            # The same walk: the sweep hands over results in the scratchpad, which it does not
+            # reach.
+            yield from keep_turn_files(prepared, self.cfg, walked)
         except OSError as exc:
             # A full disk refusing the record is no reason to lose the answer as well: it
             # was paid for, and nothing streamed it before `finished`.
@@ -486,7 +489,7 @@ class Running:
                 answer=turn.answer,
                 # Collected after the graph finished, so it includes what the shell
                 # wrote, which no file tool would have reported.
-                artifacts=turn.kept,
+                artifacts=turn.artifacts,
                 memory=turn.memory,
                 stop_reason=turn.stop_reason,
                 ledger=turn.recorded,

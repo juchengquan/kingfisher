@@ -312,14 +312,15 @@ class KeptLedger:
         return None
 
 
-def read_ledger(harness: HarnessFiles) -> Steps[KeptLedger]:
-    """This session's ledger, or an empty one where no turn has written it."""
+def read_ledger(harness: HarnessFiles, off_path: frozenset[str]) -> Steps[KeptLedger]:
+    """This session's ledger, or an empty one where no turn has written it, read with
+    `off_path` as the turns a rewind left behind."""
     held = yield from harness.fetch(LEDGER_FILE)
     if held is None:
         return KeptLedger()
     # Replaced, not refused: rows hold any language, and a cut inside a character raised
     # on every later turn.
-    return _kept(held.decode("utf-8", errors="replace"), (yield from read_off_path(harness)))
+    return _kept(held.decode("utf-8", errors="replace"), off_path)
 
 
 def read_off_path(harness: HarnessFiles) -> Steps[frozenset[str]]:

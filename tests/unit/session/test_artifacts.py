@@ -10,7 +10,7 @@ from kingfisher.core.layout import Layout
 from kingfisher.core.request import Request
 from kingfisher.core.result import ArtifactError
 from kingfisher.core.run import run
-from kingfisher.core.session.files import collect_artifacts, read_artifact
+from kingfisher.core.session.files import collect_artifacts, read_artifact, walk_artifacts
 from kingfisher.core.session.steps import drive
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import start
@@ -26,8 +26,8 @@ MOVED = Layout(inputs="in", outputs="out", memory="mem", scratchpad="scratch")
 def test_what_a_turn_produced_comes_back_under_the_layout_it_was_produced_in(
     layout, cfg, tmp_path
 ):
-    """`collect_artifacts` walked the module constants, so a deployment that renamed
-    its outputs folder was handed `()` -- measured, with the turn's own report sitting
+    """The artifact walk read the module constants, so a deployment that renamed its
+    outputs folder was handed `()` -- measured, with the turn's own report sitting
     in the session and the session reapable, so what is not named here is lost. The
     caller is the one edge of this module a renamed layout reaches, and it was the one
     edge the rename was not threaded through.
@@ -142,12 +142,16 @@ def test_inputs_are_not_reported(cfg):
     assert not any(path.startswith("inputs/") for path in result.artifacts)
 
 
+def _collected(cfg, session_dir) -> tuple[str, ...]:
+    return collect_artifacts(drive(walk_artifacts(backend_at(cfg, session_dir), cfg.layout)))
+
+
 def test_paths_are_relative_to_the_session(cfg, session_dir):
     """A host path would be useless to a caller that does not share the disk."""
     (session_dir / "outputs" / "nested").mkdir(parents=True)
     (session_dir / "outputs" / "nested" / "out.csv").write_text("a,b\n")
 
-    artifacts = drive(collect_artifacts(backend_at(cfg, session_dir), cfg.layout))
+    artifacts = _collected(cfg, session_dir)
 
     assert "outputs/nested/out.csv" in artifacts
     assert not any(path.startswith("/") for path in artifacts)
@@ -166,11 +170,11 @@ def test_a_shell_write_is_reported_even_though_no_tool_saw_it(cfg, session_dir):
         check=True,
     )
 
-    assert "outputs/model.txt" in drive(collect_artifacts(backend_at(cfg, session_dir), cfg.layout))
+    assert "outputs/model.txt" in _collected(cfg, session_dir)
 
 
 def test_directories_are_omitted(cfg, session_dir):
     """An empty one carries nothing to persist and reappears with its files."""
     (session_dir / "outputs" / "empty").mkdir(parents=True)
 
-    assert "outputs/empty" not in drive(collect_artifacts(backend_at(cfg, session_dir), cfg.layout))
+    assert "outputs/empty" not in _collected(cfg, session_dir)

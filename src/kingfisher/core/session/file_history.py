@@ -9,7 +9,7 @@ import re
 from collections.abc import Mapping
 from contextlib import suppress
 from time import monotonic
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from kingfisher.core.layout import (
     ARTIFACTS_SEEN,
@@ -23,11 +23,11 @@ from kingfisher.core.logged import warn
 from kingfisher.core.result import TurnFiles
 
 from .copying import SAME, UNCOUNTED, content_mark, copied_through
-from .files import Seen, artifacts_seen
+from .files import Seen, Walked
 from .memory import without_any
 from .memory_writer import unread_dropped
 from .steps import Steps, reading
-from .store import HarnessFiles, read_listing, read_off_path, write_listing
+from .store import HarnessFiles, read_listing, write_listing
 from .turnlog import PARENT, read_turn_log
 
 if TYPE_CHECKING:
@@ -186,10 +186,11 @@ def dropped_for_space(
     for at, record in enumerate(records):
         for path in _named(record):
             mentioned.setdefault(path, []).append(at)
+    tree = None if parents is None else _tree(records, parents)
     ranked = []
     for at, path, size in _held(records):
-        if parents is not None:
-            restores_up_to = _reach(records, at, path, parents)
+        if tree is not None:
+            restores_up_to = _reach(records, at, path, tree)
         else:
             later = [one for one in mentioned[path] if one > at]
             restores_up_to = later[0] - 1 if later else len(records)
@@ -204,14 +205,15 @@ def dropped_for_space(
     return dropped
 
 
-def keep_turn_files(prepared: Prepared, cfg: Config) -> Steps[None]:
+def keep_turn_files(prepared: Prepared, cfg: Config, walked: Walked) -> Steps[None]:
     """Copy each file in the artifact folders that changed since the last turn ended, and add
-    this turn's line to the history: what it kept, what it could not and why, what went."""
+    this turn's line to the history: what it kept, what it could not and why, what went.
+    `walked` is the folders as the turn's end found them."""
     turn, harness = prepared.turn.id, prepared.harness
-    # At 0 nothing the agent made is copied, so the folders are not even listed: on a backend
-    # listing no marks, each file would otherwise be read back to be told unchanged.
+    # At 0 nothing the agent made is copied, so the listing goes unused: on a backend listing
+    # no marks, each file would otherwise be read back to be told unchanged.
     off = cfg.rewind_max_bytes == 0
-    now, memory = yield from artifacts_now(prepared.files, cfg.layout, listed=not off)
+    now, memory = yield from artifacts_now(prepared.files, cfg.layout, None if off else walked)
     if now is None:
         # No line rather than a wrong one: each file the listing missed would read as
         # removed, and a rewind would delete it.
@@ -334,7 +336,7 @@ def _copies_recorded(  # noqa: PLR0913 -- the folders as found and as last liste
             for line in (yield from read_turn_log(harness))
             if PARENT in line and isinstance(line.get("turn"), str)
         }
-        if cfg.rewind_max_bytes is not None and (yield from read_off_path(harness))
+        if cfg.rewind_max_bytes is not None and prepared.log.off_path
         else None
     )
     dropped = dropped_for_space(records, cfg.rewind_max_bytes, parents)
@@ -370,16 +372,29 @@ def _warn_unmarked(turn: str, now: Mapping[str, Seen], *, budgeted: bool) -> Non
     )
 
 
-def _reach(
-    records: list[dict[str, Any]], at: int, path: str, parents: Mapping[str, str | None]
-) -> int:
-    """The newest line whose turn the copy on line `at` still restores, down every branch
-    from its turn until `path` next changes there: the last line, the turn now ending,
-    where it is that turn's version, which no other copy outranks."""
+class _Tree(NamedTuple):
+    """The turns as a rewind left them, for ranking copies."""
+
+    #: Each turn's children, by the turn.
+    children: dict[str | None, list[str]]
+    #: Each turn's line in the history, by the turn.
+    line: dict[str, int]
+
+
+def _tree(records: list[dict[str, Any]], parents: Mapping[str, str | None]) -> _Tree:
+    """Built once for all the copies ranked, not per copy: per copy, a thousand turns cost
+    half a second at every turn's end."""
     children: dict[str | None, list[str]] = {}
     for turn, parent in parents.items():
         children.setdefault(parent, []).append(turn)
-    line = {record[TURN]: number for number, record in enumerate(records)}
+    return _Tree(children, {record[TURN]: number for number, record in enumerate(records)})
+
+
+def _reach(records: list[dict[str, Any]], at: int, path: str, tree: _Tree) -> int:
+    """The newest line whose turn the copy on line `at` still restores, down every branch
+    from its turn until `path` next changes there: the last line, the turn now ending,
+    where it is that turn's version, which no other copy outranks."""
+    children, line = tree
     newest = at
     waiting = list(children.get(records[at][TURN], ()))
     while waiting:
@@ -426,21 +441,25 @@ def _line(  # noqa: PLR0913 -- a line's keys, each by name
 
 
 def artifacts_now(
-    files: Any, layout: Layout, *, listed: bool = True
+    files: Any, layout: Layout, walked: Walked | None
 ) -> Steps[tuple[dict[str, Seen] | None, bytes | None]]:
-    """The artifact folders as `artifacts_seen` lists them, but the memory file marked by its
-    contents, and those contents; `None` for either that could not be read. Not `listed`,
+    """The artifact folders as `walked` found them, but the memory file marked by its
+    contents, and those contents; `None` for either that could not be read. Without `walked`,
     the memory file alone, where it is there.
 
     By its contents because a listing may give no mark, and a memory file without one would
     be copied every turn; it is small, and every turn reads it whole into the prompt anyway.
     """
     memory_file = layout.memory_file_route.lstrip("/")
-    now = (yield from artifacts_seen(files, layout)) if listed else {memory_file: (None, None)}
+    if walked is None:
+        now: dict[str, Seen] | None = {memory_file: (None, None)}
+    else:
+        # Every file a listing missed would read as removed.
+        now = None if walked.cut else dict(walked.seen)
     if now is None or memory_file not in now:
         return now, None
     (got,) = yield reading(files, "download_files", [layout.memory_file_route])
-    if not listed and got.error == "file_not_found":
+    if walked is None and got.error == "file_not_found":
         return {}, None
     if got.error or got.content is None:
         return now, None

@@ -23,6 +23,7 @@ from .store import (
     names_a_result,
     patched,
     read_ledger,
+    read_off_path,
     write_ledger,
 )
 from .turnlog import read_turn_log
@@ -322,7 +323,8 @@ def read_result(files: Any, number: str) -> Steps[str]:
 
     `ResultError` for an id no row has, and for a result kept nowhere.
     """
-    row = (yield from read_ledger(HarnessFiles(files))).row(number)
+    harness = HarnessFiles(files)
+    row = (yield from read_ledger(harness, (yield from read_off_path(harness)))).row(number)
     if row is None:
         msg = f"no result {number} in this session"
         raise ResultError(msg)

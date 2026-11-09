@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from kingfisher.core.layout import Layout
 from kingfisher.core.logged import warn
@@ -132,23 +132,41 @@ def inputs_seen(backend: Any, layout: Layout) -> Steps[dict[str, str | None] | N
 type Seen = tuple[str | None, int | None]
 
 
-def artifacts_seen(backend: Any, layout: Layout) -> Steps[dict[str, Seen] | None]:
-    """Each file under the artifact folders by its path in the session, as `inputs_seen`
-    marks it, with its size; `None` where a listing came back incomplete."""
+class Walked(NamedTuple):
+    """The artifact folders as one walk of them found them."""
+
+    #: Each file by its path in the session, as `inputs_seen` marks it, with its size.
+    seen: dict[str, Seen]
+    #: Each folder a listing of came back failed or cut short, with which.
+    cut: dict[str, str]
+
+
+def walk_artifacts(backend: Any, layout: Layout) -> Steps[Walked]:
+    """Each file under the artifact folders, and the folders a listing missed some of.
+
+    A walk of what is there rather than a record of tool calls: `execute` bypasses
+    the file tools, and a script produces most of `/outputs`.
+    """
     seen: dict[str, Seen] = {}
+    cut: dict[str, str] = {}
     for name in layout.artifact_dirs:
+        # Two patterns: deepagents' `**` skips a name starting with a dot, so alone it
+        # drops `/outputs/.env` without a word.
         for pattern in ("**", ".*"):
             result = yield reading(backend, "glob", pattern, path=f"/{name}/")
             if result.error or result.truncated:
-                # Every file it missed would read as removed.
-                return None
+                # Not `result.error`, a backend's own words, which may name what the agent
+                # left there.
+                cut.setdefault(
+                    name, "the listing failed" if result.error else "the listing was cut short"
+                )
             for match in result.matches or ():
                 if not match.get("is_dir"):
                     size = match.get("size")
                     seen[match["path"].lstrip("/")] = (
                         _version(match), size if isinstance(size, int) else None
                     )
-    return seen
+    return Walked(seen, cut)
 
 
 def _version(entry: Mapping[str, Any]) -> str | None:
@@ -193,41 +211,24 @@ def inputs_changed(
     )
 
 
-def collect_artifacts(backend: Any, layout: Layout) -> Steps[tuple[str, ...]]:
-    """What this session holds that is worth keeping, relative to the session.
-
-    A walk of what is there rather than a record of tool calls: `execute` bypasses
-    the file tools, and a script produces most of `/outputs`.
-    """
-    found: set[str] = set()
-    for name in layout.artifact_dirs:
-        # Two patterns: deepagents' `**` skips a name starting with a dot, so alone it
-        # drops `/outputs/.env` without a word.
-        for pattern in ("**", ".*"):
-            result = yield reading(backend, "glob", pattern, path=f"/{name}/")
-            if result.error or result.truncated:
-                # Reported, not raised: the turn has run, and failing it now would lose
-                # its answer over a listing. Not `result.error`, a backend's own words,
-                # which may name what the agent left there.
-                why = "the listing failed" if result.error else "the listing was cut short"
-                warn(
-                    "artifacts_incomplete",
-                    f"artifacts under /{name}/ may be incomplete: {why}",
-                    folder=name,
-                    reason=why,
-                )
-            found.update(
-                match["path"].lstrip("/")
-                for match in result.matches or ()
-                if not match.get("is_dir")
-            )
-    return tuple(sorted(found))
+def collect_artifacts(walked: Walked) -> tuple[str, ...]:
+    """What this session holds that is worth keeping, relative to the session."""
+    for name, why in walked.cut.items():
+        # Reported, not raised: the turn has run, and failing it now would lose its answer
+        # over a listing.
+        warn(
+            "artifacts_incomplete",
+            f"artifacts under /{name}/ may be incomplete: {why}",
+            folder=name,
+            reason=why,
+        )
+    return tuple(sorted(walked.seen))
 
 
 def read_artifact(backend: Any, name: str, layout: Layout) -> Steps[bytes]:
     """One file a turn produced, as bytes, by the name `collect_artifacts` gave it.
 
-    Only under the folders `collect_artifacts` walks: the same backend reaches the
+    Only under the folders `walk_artifacts` walks: the same backend reaches the
     harness directory, which a caller who may read a turn's output may not.
     """
     artifacts = layout.artifact_dirs
