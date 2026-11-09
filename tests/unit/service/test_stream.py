@@ -1,3 +1,5 @@
+"""`stream`: the events a turn yields, in order, ending in its result."""
+
 from __future__ import annotations
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage

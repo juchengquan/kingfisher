@@ -1,3 +1,6 @@
+"""The backend `LocalSessions` opens for a session: where it is rooted, what it routes and
+refuses, and the environment its shell runs in."""
+
 from __future__ import annotations
 
 import os
@@ -154,7 +157,8 @@ def test_the_deny_rules_are_the_ones_the_layout_declares(cfg, session_dir):
 
 
 def test_outputs_is_unrouted_and_the_table_says_so(cfg, session_dir):
-    """The absence used to be the only record of it."""
+    """The backend mounts a route for a path the layout table calls unrouted, so the table
+    no longer says where `/outputs/` or `/scratchpad/` files go."""
     backend = backend_at(cfg, session_dir)
     unrouted = {r.path for r in DEFAULT_LAYOUT.routes if not r.routed}
 

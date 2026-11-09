@@ -1,3 +1,5 @@
+"""Laying out a workspace and a definitions folder, and what each is made holding."""
+
 from __future__ import annotations
 
 from kingfisher import WorkspacePaths

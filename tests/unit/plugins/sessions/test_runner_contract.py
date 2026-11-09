@@ -1,4 +1,4 @@
-"""The runner port, which had no tests at all, and now has a contract."""
+"""The `CommandRunner` contract, and the kit that tells a runner breaking it apart."""
 
 from __future__ import annotations
 

@@ -1,3 +1,6 @@
+"""What `build_agent` wires into an agent: the tools, permissions and middleware its definition
+and the grant ask for."""
+
 from __future__ import annotations
 
 import warnings

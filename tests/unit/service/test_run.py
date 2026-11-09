@@ -1,3 +1,6 @@
+"""`run` and `Kingfisher.run`: one turn from a request to its result, and what it leaves in the
+session."""
+
 from __future__ import annotations
 
 import json

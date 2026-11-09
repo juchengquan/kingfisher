@@ -732,7 +732,8 @@ def _half_keyed(cfg, tmp_path):
 
 
 def test_an_endpoint_with_no_key_is_reported_rather_than_ticked(cfg, tmp_path):
-    """It used to be invisible."""
+    """`doctor` ticks the credentials while an endpoint's key is unset, so the first call to a
+    model behind it fails with nothing having said why."""
     checks = {check.name: check for check in examine(_half_keyed(cfg, tmp_path))}
 
     assert checks["credentials"].verdict == "warn"

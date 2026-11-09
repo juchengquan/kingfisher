@@ -1,11 +1,8 @@
 """A conversation lives inside the session it belongs to.
 
-One session used to be one logical thing kept in two stores keyed by the same id with
-nothing linking them: a directory, and a row set in a database shared by every
-session. Everything that went wrong with retention came from that seam -- `discard`
-had to delete both in the right order, sessions that could not be removed left their
-threads behind, and a directory deleted any other way orphaned its thread forever,
-132 of them in one real workspace.
+Kept in the session's folder rather than a database every session shares, so that
+however a session is deleted its conversation goes with it, and no thread is left
+behind with no session to belong to.
 """
 
 from __future__ import annotations

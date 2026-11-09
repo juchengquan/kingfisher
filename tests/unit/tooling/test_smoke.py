@@ -1,3 +1,5 @@
+"""The smoke eval's generated dataset, its ground truth, and the checks that grade an answer."""
+
 from __future__ import annotations
 
 import csv

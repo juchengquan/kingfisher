@@ -94,7 +94,8 @@ def test_validation_offers_only_what_will_load(cfg):
 
 
 def test_activating_a_skill_the_agent_cannot_load_is_refused(cfg, session_dir):
-    """It used to build."""
+    """A grant names a skill the loader dropped for having no description, and the agent
+    builds anyway, told of a skill it can never load."""
     _skill(cfg.skills_dir, "nodesc", "---\nname: nodesc\n---\nBody.\n")
 
     with pytest.raises(CapabilityError, match="unknown skill"):

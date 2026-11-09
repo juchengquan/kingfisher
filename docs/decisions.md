@@ -6080,8 +6080,10 @@ is registered in code, and a lock switches on access control -- hence `HELD_BACK
 total. The integration driver and `seed_example.py`, the script people copy, each told
 a reader to *register* a source id. `Seeded.report()` is every line a person is owed, and
 every caller prints it; `test_only_the_record_says_what_a_skipped_definition_needs` finds
-any `skipped …` line composed outside `seeding.py`, searching the README, the driver, the
-example and `evals/` too. *(2026-09-23.)*
+any `skipped …` line composed outside `seeding.py`, searching the README, the driver and
+`evals/` too. *(2026-09-23.)* The example was deleted on 2026-11-09: nothing linked it, the
+README's snippet is the copy people take and `kingfisher seed` the command, so a third copy
+could only drift.
 
 **What the model is sent is shown by the library, and the command prints it.**
 `Kingfisher.sent` builds a request's agent as its turn would -- in the session it names,
