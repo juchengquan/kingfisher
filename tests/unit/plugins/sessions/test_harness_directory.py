@@ -10,33 +10,23 @@ workspace -- the shell could reach them anyway.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TURNS_FILE
+from kingfisher.core.layout import HARNESS, TURNS_FILE
 from kingfisher.core.request import Request
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import CLAIM, backend_at
-from tests.conftest import FakeToolCallingModel, Through, macos, start
+from tests.conftest import FakeToolCallingModel, Through, start
+from tests.unit.plugins.sessions.conftest import CONVERSATION, kept_conversation
 
 AGENT = """name: assistant
 description: An agent.
 system_prompt: |
   You help.
 """
-
-
-#: A conversation as kept, for a tool to be refused rewriting or reading.
-CONVERSATION = '{"role": "user", "content": "You help"}\n'
-
-
-def kept_conversation(session_dir) -> Path:
-    """Where the default backend keeps a session's conversation, on disk."""
-    return Path(session_dir) / HARNESS / TURNS_FILE
 
 
 def _agent(cfg) -> None:
@@ -104,48 +94,6 @@ def test_a_listing_does_not_show_the_harness(cfg, session_dir):
 
     assert "outputs" in said, said
     assert ".harness" not in said, said
-
-
-# -- the shell half, which tool permissions never see ---------------------
-
-
-@macos
-def test_the_shell_cannot_write_into_the_harness(cfg, session_dir):
-    """The half a tool rule cannot reach: the shell backend roots at the session, so
-    `/.harness` is an ordinary relative path to `execute`."""
-    kept = kept_conversation(session_dir)
-    kept.parent.mkdir(parents=True, exist_ok=True)
-    kept.write_text(CONVERSATION, encoding="utf-8")
-    shell = backend_at(cfg, session_dir)
-
-    shell.execute(f'printf "rewritten" > "{kept}"')
-    shell.execute(f'rm -f "{kept}"')
-
-    assert kept.read_text(encoding="utf-8") == CONVERSATION
-
-
-@macos
-def test_the_shell_can_still_write_the_rest_of_the_session(cfg, session_dir):
-    """The bound on the rule: one directory is carved out, not the session."""
-    shell = backend_at(cfg, session_dir)
-
-    assert shell.execute(f'echo fine > "{session_dir}/outputs/ok.txt"').exit_code == 0
-    assert shell.execute('echo fine > "$TMPDIR/ok.txt"').exit_code == 0
-
-
-@macos
-def test_one_session_s_harness_is_not_denied_by_naming_another(cfg, workspace):
-    """The profile is one static text covering every session, so the rule has to be a
-    pattern -- and a pattern that matched too much would deny a path with `.harness`
-    somewhere in the middle of it."""
-    from kingfisher.plugins.sessions.folders import ensure_session_layout
-
-    session = ensure_session_layout(workspace / "sessions" / "second", DEFAULT_LAYOUT)
-    decoy = session / "outputs" / ".harness"
-    decoy.mkdir(parents=True, exist_ok=True)
-    shell = backend_at(cfg, session)
-
-    assert shell.execute(f'echo fine > "{decoy}/ok.txt"').exit_code == 0
 
 
 def test_the_conversation_and_the_claim_go_with_the_session(cfg):

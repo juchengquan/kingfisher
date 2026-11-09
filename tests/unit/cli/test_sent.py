@@ -18,9 +18,9 @@ from kingfisher.core.agent.sent import _OPENINGS, labelled, sent_tool
 from kingfisher.core.interfaces import TurnInstructions
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, FakeGraph, an_agent, start, tools_dir
-from tests.unit.agent.middlewares.test_shell_paths import Here
 from tests.unit.agent.test_interpreter import _close_every_interpreter, _quickjs_workers
 from tests.unit.scripted import Scripted
+from tests.unit.stand_ins import Here
 
 WHERE = '''from langchain.tools import ToolRuntime
 

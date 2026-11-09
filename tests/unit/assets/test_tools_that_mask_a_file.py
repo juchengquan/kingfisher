@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
+from tests.unit.assets.conftest import _asked
 
 
 @pytest.fixture
@@ -30,21 +31,8 @@ def _held(mask: Any) -> dict[str, Any]:
     return mask.__globals__
 
 
-class _Got:
-    def __init__(self, content: bytes) -> None:
-        self.content, self.error = content, None
-
-
-class _Runtime:
-    """A backend holding one answer, so the tool's own work is what is under test."""
-
-    def __init__(self, content: bytes) -> None:
-        backend = type("_B", (), {"download_files": lambda _s, _p: [_Got(content)]})()
-        self.context = type("_C", (), {"backend": backend})()
-
-
 def _said(mask: Any, body: bytes, **asked: Any) -> str:
-    return mask(file_path="/inputs/given.log", runtime=_Runtime(body), **asked)
+    return mask(file_path="/inputs/given.log", runtime=_asked(body), **asked)
 
 
 #: One line per pattern that makes it work hardest: a long run the pattern can start

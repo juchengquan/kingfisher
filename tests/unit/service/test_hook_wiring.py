@@ -21,18 +21,10 @@ from kingfisher.core.interfaces import (
 from kingfisher.core.session.runlog import LoggedRunEvents
 from kingfisher.core.session.unused import DeleteUnusedResults
 from kingfisher.plugins import LocalSessions
+from tests.unit.rules.test_architecture import HOOKS as ADMITTED
 
-#: Each hook keyword and the interface it takes.
-HOOKS: dict[str, type] = {
-    "run_events": interfaces.RunEvents,
-    "instructions": interfaces.Instructions,
-    "turn_instructions": interfaces.TurnInstructions,
-    "unused_results": interfaces.UnusedResults,
-    "pdf_attachments": interfaces.PdfAttachments,
-    "subagent_middlewares": interfaces.SubagentMiddlewares,
-    "scratch_run_limit": interfaces.ScratchRunLimit,
-    "memory_store": interfaces.MemoryStore,
-}
+#: Each hook keyword and the interface it takes, from the one table of them.
+HOOKS: dict[str, type] = {keyword: getattr(interfaces, name) for keyword, name in ADMITTED.items()}
 
 
 class _Everything:

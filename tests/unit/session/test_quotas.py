@@ -16,21 +16,7 @@ from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.folders import session_bytes
 from tests.conftest import EVERY_TOOL, FakeGraph, an_agent, start
 from tests.unit.scripted import Scripted
-from tests.unit.stand_ins import StubAgent
-
-
-class SlowAgent(FakeGraph):
-    """A turn that keeps taking steps, as a real one can for hours."""
-
-    def __init__(self, steps: int = 50) -> None:
-        self.steps = steps
-        self.taken = 0
-
-    def stream(self, state, config, stream_mode=None, subgraphs=False):
-        for _ in range(self.steps):
-            self.taken += 1
-            yield ((), "updates", {"agent": {"messages": [AIMessage(content="working")]}})
-        yield ((), "values", {"messages": [AIMessage(content="done")]})
+from tests.unit.stand_ins import SlowAgent, StubAgent
 
 
 class Holding(FakeGraph):

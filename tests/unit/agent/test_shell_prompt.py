@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import subprocess
 import warnings
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,10 +11,8 @@ from deepagents.backends import CompositeBackend, LocalShellBackend
 
 from kingfisher.core.agent.backend import session_root_of, shell_prompt_of, shell_told
 from kingfisher.core.agent.prompting import EXECUTE, render_system_prompt, skills_index
-from kingfisher.core.interfaces import CommandRunner
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 from kingfisher.plugins import (
-    CommandResult,
     LocalSessions,
     ShellPrompt,
     ShellSettings,
@@ -25,6 +21,7 @@ from kingfisher.plugins import (
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.shell import kingfishers_shell
 from tests.conftest import hosts_shell
+from tests.unit.stand_ins import Plain
 
 #: What a command can see of the claims kingfisher's own wording makes.
 PROBE = (
@@ -45,25 +42,6 @@ THEIRS = ShellPrompt(
     prompt="## The shell\n\nIt runs in a sandbox holding this session at `/workspace`, so "
     "`/{{inputs}}/x` is `/workspace/{{inputs}}/x` there.",
 )
-
-
-@dataclass(frozen=True)
-class Plain(CommandRunner):
-    """The runner a deployment writes first: it runs the command it is handed, and is
-    handed nothing else. Not local, so no fence of this host's is put in front of it.
-    """
-
-    @property
-    def local(self) -> bool:
-        return False
-
-    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
-        done = subprocess.run(  # noqa: S602 -- `execute` is a shell by definition
-            command, shell=True, capture_output=True, text=True, timeout=timeout, check=False
-        )
-        return CommandResult(
-            output=done.stdout + done.stderr, exit_code=done.returncode, truncated=False
-        )
 
 
 def _seen(output: str) -> dict[str, str]:

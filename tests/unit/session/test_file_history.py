@@ -31,12 +31,11 @@ from kingfisher.core.session.store import HarnessFiles
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from tests.conftest import read_record, start
-from tests.unit.session.test_memory_store import Shelf
 from tests.unit.session.test_memory_store import _kingfisher as _with_store
 from tests.unit.session.test_memory_store import _turn as _store_turn
 from tests.unit.session.test_memory_writer import _turn as _writer_turn
 from tests.unit.session.test_memory_writer import _writing
-from tests.unit.stand_ins import StubAgent
+from tests.unit.stand_ins import Shelf, StubAgent
 
 
 def _session(cfg, session_id: str = "s") -> Path:

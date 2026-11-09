@@ -17,7 +17,7 @@ from kingfisher.core.session.store import HarnessFiles
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import an_agent, start, write_old_record
-from tests.unit.session.test_turn_log import _say
+from tests.unit.session.conftest import _say
 
 OLD = b'{"turn": "req-1", "messages": 2}\n{"turn": "req-2", "messages": 4}\n'
 NEW = OLD + b'{"turn": "req-3", "messages": 6}\n'

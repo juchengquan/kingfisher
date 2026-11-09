@@ -731,7 +731,7 @@ def test_a_helper_naming_its_own_summarizer_runs_that_one_alone(cfg, session_dir
     """Beside deepagents' own, a deployment's summariser answers to the same name, which
     langchain refuses to build; in every other graph the one a definition names replaces
     deepagents', and a helper's is no different."""
-    from tests.unit.agent.middlewares.test_summarizer_trigger import Early
+    from tests.unit.stand_ins import Early
 
     define_each(
         cfg, REVIEWER, HELPER.replace("system_prompt:", "middlewares: [early]\nsystem_prompt:")
@@ -834,7 +834,7 @@ def test_a_helpers_history_is_kept_apart_from_its_summoners(cfg, session_dir):
 def test_a_helpers_own_summarizer_stands_where_its_default_would(cfg, session_dir):
     """A summariser a helper's definition named sat innermost, inside clearing and every
     standing middleware, where `create_sub_agent` left it among the definition's own."""
-    from tests.unit.agent.middlewares.test_summarizer_trigger import Early
+    from tests.unit.stand_ins import Early
 
     def helpers_stack(helper: str) -> list:
         define_each(cfg, REVIEWER, helper)

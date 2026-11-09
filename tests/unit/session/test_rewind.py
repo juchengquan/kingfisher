@@ -50,26 +50,15 @@ from tests.conftest import (
     read_record,
     read_record_bytes,
     start,
-    tools_dir,
     write_old_record,
 )
 from tests.unit.scripted import Scripted
-from tests.unit.session.test_turn_log import TOOLS, _calls, _resume, _say, _searches
+from tests.unit.session.conftest import _calls, _resume, _say, _searches
 from tests.unit.stand_ins import StubAgent
 
 
 def _conversation(cfg) -> tuple:
     return read_conversation(cfg.workspace / "sessions" / "s" / HARNESS)
-
-
-@pytest.fixture
-def rewinding(scripted):
-    """An agent with a search tool and a gated query, and the session `s`."""
-    tools_dir(scripted).mkdir(parents=True, exist_ok=True)
-    (tools_dir(scripted) / "probe.py").write_text(TOOLS, encoding="utf-8")
-    an_agent(scripted, interrupt_on="[sql_query]", **EVERY_TOOL)
-    start(scripted, "s")
-    return scripted
 
 
 def _sent(index: int = 0) -> str:

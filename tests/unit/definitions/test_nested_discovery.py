@@ -292,3 +292,41 @@ def test_a_second_level_of_grouping_is_where_it_stops(tmp_path):
     assert LocalSkillRepository(tmp_path).misplaced == (
         "research/deep/company-lookup",
     ), "the warning has to still fire"
+
+
+def test_a_skill_hidden_below_the_deepest_source_is_reported_not_ignored(tmp_path):
+    """Reach is two levels: a skill at the root, or one inside a folder that becomes its
+    own source.
+    """
+
+    for path in ("flat/SKILL.md", "grouped/nested/SKILL.md", "a/b/deep/SKILL.md"):
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("---\nname: x\ndescription: d\n---\nbody\n", encoding="utf-8")
+    (tmp_path / "not-a-skill").mkdir()
+
+    found = [str(one.relative_to(tmp_path)) for one in reachable(tmp_path)]
+    assert found == ["flat", "grouped/nested"]
+    assert LocalSkillRepository(tmp_path).misplaced == ("a/b/deep",)
+
+
+def test_one_folder_of_grouping_is_not_misplaced(tmp_path):
+    """The negative control for the level that now works."""
+    from kingfisher.core.definitions.skills.catalogue import LocalSkillRepository
+
+    target = tmp_path / "research" / "lookup" / "SKILL.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("---\nname: lookup\ndescription: d\n---\nbody\n", encoding="utf-8")
+
+    assert LocalSkillRepository(tmp_path).misplaced == ()
+
+
+def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
+    """The negative control: only folders that actually hide one are named, or every
+    stray directory in a catalogue becomes a warning.
+    """
+
+    (tmp_path / "notes").mkdir()
+    (tmp_path / "notes" / "readme.txt").write_text("nothing to see", encoding="utf-8")
+
+    assert LocalSkillRepository(tmp_path).misplaced == ()
