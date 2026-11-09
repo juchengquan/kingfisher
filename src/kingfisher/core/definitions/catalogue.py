@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, fields, replace
-from functools import cached_property
+from functools import cached_property, partial
 from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
@@ -17,6 +17,7 @@ from kingfisher.core.access import (
     CapabilityError,
     Selection,
     collected,
+    offers,
     reaches,
 )
 from kingfisher.core.config import (
@@ -39,11 +40,11 @@ from .skill_locks import SkillLock, SkillLockError
 from .skills import registry as skill_registry
 from .skills.catalogue import LocalSkillRepository
 from .skills.registry import SkillRegistry
+from .subagents import rules as subagent_rules
 from .subagents.catalogue import LocalSubagentRepository
-from .subagents.rules import refuse_miscounted
 from .subagents.spec import SubagentError
 from .tools.catalogue import CarriedTools, LocalToolRepository, ToolError
-from .tools.spec import FoundTool, Offering, audienced, reference
+from .tools.spec import FoundTool, Offering, admitted, audienced, placed, reference
 
 if TYPE_CHECKING:
     from kingfisher.core.access import Vocabulary
@@ -314,7 +315,7 @@ class Definitions:
             ("subagent", self.subagents.specs, SubagentError),
         ):
             for spec in specs.values():
-                refuse_one_skill_twice(
+                refuse_doubled_skill(
                     spec.skills, self.registry, subject=f"{kind} {spec.name!r}", error=error
                 )
                 # Here, with every lock read: a slot keyed on a misspelt name is never sent,
@@ -335,15 +336,8 @@ class Definitions:
         for spec in self.subagents.specs.values():
             offers.refuse_moved(spec.tool_sources, subject=f"subagent {spec.name!r}")
         # Likewise what a definition lists from its own folder, against the folder.
-        for name, spec in self.subagents.specs.items():
-            where, tools, skills = self.bundled(name)
-            refuse_miscounted(
-                spec,
-                where=where,
-                tools=tools,
-                skills=skills,
-                buried=self.bundled_misplaced.get(name, ()),
-            )
+        for name in self.subagents.specs:
+            subagent_rules.refuse_miscounted(name, self.miscounted(name))
         return self
 
     def bundled(self, name: str) -> tuple[str | None, tuple[str, ...], tuple[str, ...]]:
@@ -358,6 +352,21 @@ class Definitions:
             None if bundle is None else bundle.where,
             () if tools is None else tuple(one.name for one in tools.found),
             () if skills is None else tuple(skills.names),
+        )
+
+    def miscounted(self, name: str) -> str | None:
+        """How one subagent's bundled entries and its own folder disagree, or `None`.
+
+        One reading for `warm`, which refuses it, and the listing, which reports it, so a
+        listing cannot call fine what startup refuses.
+        """
+        where, tools, skills = self.bundled(name)
+        return subagent_rules.miscounted(
+            self.subagents.specs[name],
+            where=where,
+            tools=tools,
+            skills=skills,
+            buried=self.bundled_misplaced.get(name, ()),
         )
 
     @classmethod
@@ -439,6 +448,42 @@ def resolve_definitions(cfg: Config) -> Definitions:
     return Definitions.from_config(cfg)
 
 
+class CallerOffers(NamedTuple):
+    """Whether the agents a caller reaches offer them a tool or a skill, each less what its
+    own lock keeps from them."""
+
+    #: An entry as the catalogue spells it: a grant may write a tool the long way,
+    #: `where::what`, where the catalogue has its own name for it.
+    spell: Callable[[str], str]
+    tool: Callable[[str], bool]
+    skill: Callable[[str], bool]
+
+
+def caller_offers(  # noqa: PLR0913 -- the grant's two inputs, and each axis's lock and spelling
+    held: frozenset[str] | None,
+    agents: Sequence[object],
+    *,
+    tools: Iterable[str],
+    tools_shut: frozenset[str],
+    skills_shut: frozenset[str],
+    identity: Callable[[str], str | None],
+) -> CallerOffers:
+    """What `agents` offer this caller on the tool and skill axes.
+
+    The listing and the run's withheld report both ask this, so the two cannot come apart
+    about who reaches what. The shut sets are each caller's to read: a listing reads them
+    of a catalogue that may not load, and must not fail where a run never gets that far.
+    """
+    spell = partial(placed, offered=frozenset(tools))
+    tool = admitted(offers("tools", held, agents, same=spell), shut=tools_shut)
+    granted_skill = offers("skills", held, agents, same=identity)
+
+    def skill(name: str) -> bool:
+        return granted_skill(name) and identity(name) not in skills_shut
+
+    return CallerOffers(spell, tool, skill)
+
+
 class DoubledSkill(NamedTuple):
     """Two `skills:` entries that are one skill, spelt bare and qualified."""
 
@@ -468,7 +513,7 @@ def doubled_skill(skills: Selection, registry: SkillRegistry) -> DoubledSkill | 
     return None
 
 
-def refuse_one_skill_twice(
+def refuse_doubled_skill(
     skills: Selection, registry: SkillRegistry, *, subject: str, error: type[Exception]
 ) -> None:
     """Refuse two `skills:` entries that are one skill."""

@@ -10,7 +10,7 @@ from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.definitions.subagents.spec import SubagentError
 from kingfisher.core.definitions.tools.catalogue import ToolError
-from kingfisher.core.definitions.tools.spec import FoundTool, Offering, carried, out_of_reach
+from kingfisher.core.definitions.tools.spec import FoundTool, Offering, carried, tools_shut
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -80,7 +80,7 @@ class ToolSurface:
     found: tuple[FoundTool, ...] = ()
     #: Tools whose audience shuts this caller out. Taken out of the grant, not `found`: a
     #: definition naming one names a real tool, which `refuse_unknown` must not call a typo.
-    out_of_reach: frozenset[str] = frozenset()
+    tools_shut: frozenset[str] = frozenset()
     #: Every name a call anywhere under this build can carry, bundles included -- what a gate
     #: is judged against. Not `offering.offered`, which spells a name two files share the
     #: long way: a gate written that way was accepted and then matched nothing.
@@ -111,7 +111,7 @@ class ToolSurface:
             return None
         # The grant once a tool is taken out of it: an unrestricted request is no allowlist,
         # which would hand the tool back to the parent and every subagent it caps.
-        tools = self.offered_grant if self.out_of_reach else self.asked.tools
+        tools = self.offered_grant if self.tools_shut else self.asked.tools
         return self.offering.permitted(self.asked.builtin_tools, tools)
 
     @property
@@ -128,7 +128,7 @@ class ToolSurface:
             return ALL
         # `spelt` first: `narrowed` is set membership and would drop a long-form grant silently.
         granted = narrowed(self.offering.spelt(self.asked.tools), by=self.offering.offered)
-        return tuple(name for name in granted or () if name not in self.out_of_reach)
+        return tuple(name for name in granted or () if name not in self.tools_shut)
 
 
 def bundled_tools_in(catalogue: Definitions) -> tuple[tuple[FoundTool, str, str], ...]:
@@ -253,7 +253,7 @@ def resolve_tools(  # noqa: PLR0913 -- who is asking is passed in: only the comp
         asked=capabilities,
         objects=_tool_objects(probe),
         found=tuple(offered_tools),
-        out_of_reach=out_of_reach(offered_tools, held),
+        tools_shut=tools_shut(offered_tools, held),
         dispatchable=dispatchable,
         only_compiled={
             one.name: owner

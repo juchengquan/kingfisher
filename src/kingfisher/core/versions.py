@@ -69,11 +69,11 @@ class Versions:
                 self._refuse(found, exc)
             return self._current
 
-    def _refuse(self, held: object, exc: Exception) -> None:
-        """Say once that the folder, as it now holds `held`, was not taken."""
-        if held == self._refused:
+    def _refuse(self, content: object, exc: Exception) -> None:
+        """Say once that the folder, as it now holds `content`, was not taken."""
+        if content == self._refused:
             return
-        self._refused = held
+        self._refused = content
         # With its message: the operator wrote the definitions, and is the one reading.
         handed(
             self._sink,

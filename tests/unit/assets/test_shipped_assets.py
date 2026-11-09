@@ -26,7 +26,7 @@ from kingfisher.core.definitions.skills import spec as skill
 from kingfisher.core.definitions.skills.catalogue import reachable
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, tool_name
-from kingfisher.core.definitions.tools.spec import Offering, out_of_reach
+from kingfisher.core.definitions.tools.spec import Offering, tools_shut
 from kingfisher.core.layout import SCRATCH
 from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, middleware_of, repository_root, subagent_of
@@ -1185,7 +1185,7 @@ def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
         tools whose own audience shuts this caller out.
         """
         held = frozenset(names)
-        shut = out_of_reach(tools, held)
+        shut = tools_shut(tools, held)
         return tuple(one for one in auditor.declares(held).tools or () if one not in shut)
 
     assert holds("sales_db") == ("sql_query", "line_count")

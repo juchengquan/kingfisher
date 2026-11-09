@@ -15,7 +15,6 @@ from .access import (
     activated,
     handed_work_by,
     jointly,
-    offers,
     stated,
     withheld,
 )
@@ -25,9 +24,9 @@ from .agent.kinds.tools import (
     private_tools,
     registered_tools,
 )
-from .definitions.catalogue import Definitions
+from .definitions.catalogue import Definitions, caller_offers
 from .definitions.subagents.spec import opens_skills
-from .definitions.tools.spec import Offering, admitted, ambiguous, carried, out_of_reach, placed
+from .definitions.tools.spec import Offering, carried, tools_shut
 from .result import RunEvent
 
 if TYPE_CHECKING:
@@ -72,18 +71,14 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
 
     # The agent this run opened, not the subagents it reaches: a subagent only narrows
     # what reached it, so one declaring an ungranted tool names one reached by no path.
-    reached_agents = [] if agent is None else [agent]
-    # Spelt on tools as on skills: a grant may write the long form a catalogue spells short.
-    spelt = set(offered_tools)
-    offers_tool = admitted(
-        offers("tools", held, reached_agents, same=lambda one: placed(one, spelt)),
-        shut=out_of_reach(catalogue.tools.found, held),
+    reached = caller_offers(
+        held,
+        [] if agent is None else [agent],
+        tools=offered_tools,
+        tools_shut=tools_shut(catalogue.tools.found, held),
+        skills_shut=catalogue.skills_shut(held),
+        identity=identity,
     )
-    shut_skills = catalogue.skills_shut(held)
-    granted_skill = offers("skills", held, reached_agents, same=identity)
-
-    def offers_skill(name: str) -> bool:
-        return granted_skill(name) and identity(name) not in shut_skills
 
     offered = (
         # Built-ins and offered tools are granted apart, so reported apart. `or ()`: a
@@ -93,7 +88,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
         )),
         # Measured against what a definition in reach offers, not the whole catalogue:
         # else a caller who narrowed their grant is told every name nothing in reach offers.
-        ("tool", "tools", lambda: tuple(n for n in offered_tools if offers_tool(n))),
+        ("tool", "tools", lambda: tuple(n for n in offered_tools if reached.tool(n))),
         # `cfg` and `read_file` as well as the request: with skills switched off, or no
         # way to open one, the agent is told of none, and one "not granted" says others were.
         (
@@ -106,7 +101,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four independent sources of what is of
                     if cfg.skills_enabled and opens_skills(allowed.builtin_tools)
                     else ()
                 )
-                if offers_skill(name)
+                if reached.skill(name)
             ),
         ),
         ("subagent", "subagents", subagents),
@@ -249,12 +244,6 @@ def _skills_told(
         else (allowed.skills or ())
     )
     return tuple(by_skill.get(identity(one) or one, ALL) for one in named)
-
-
-def subagent_only(allowed: Capabilities, *, catalogue: Definitions) -> tuple[str, ...]:
-    """Names this run was granted that only a subagent can actually ask for."""
-    found = catalogue.tools.found
-    return ambiguous(allowed.tools, found)
 
 
 def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning kind
