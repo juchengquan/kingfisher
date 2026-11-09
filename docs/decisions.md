@@ -6204,7 +6204,13 @@ that raised compared with its key. It cannot see a raise of a loop variable: `wa
 a misspelt slot key that way, and `doctor` and `list` exited 0 over it, so the refusal is
 `prompts.refuse_unused_names`, taking `error`. Nor does it count `ConfigError`, so the
 registry refusing a skills folder called `catalogue` -- which took both commands down to one
-line -- is held by its own test. *(2026-11-08.)*
+line -- is held by its own test. *(2026-11-08.)* Behind the table, `doctor` runs startup's
+own check, `versions.checked`, and fails a `startup` row with startup's message when that
+refuses and every definitions row passed. The table still has to name each fault with a
+row of its own, and `test_doctor_fails_on_every_refusal_a_file_can_reach` fails an entry
+only the backstop caught; but a check written into `warm` without a row, or raising a class
+the table cannot see, no longer leaves `doctor` exiting 0. Only where the rows passed, or
+a failed row and the backstop would say one fault twice. *(2026-11-09.)*
 
 **`doctor` asks the fence the questions a run asks.** It kept its own copy of the required
 ABI and its own kernel reading, and told a kernel that could be fenced to wait "until that
@@ -7012,6 +7018,11 @@ Left whole:
   - `core/agent/assembly.py`: `build_agent` alone is 473 lines in one cluster.
   - `core/definitions/subagents/spec.py`: a new field lands in three of its lists at
     once, kept together on purpose.
+  - `core/agent/middlewares/builtin_tools.py`: its shell notes, description rewriters and
+    call checks read as three files, but since #863 made it one middleware, 4 of 7
+    commits on the descriptions, 6 of 9 on the calls and 4 of 5 on the shell notes
+    changed `BuiltinToolsMiddleware` too. A review proposed the split by counting the
+    three parts against each other and leaving the class out. *(2026-11-09.)*
 
 **`core/service.py` is three files, on the maintainer's call.** `Kingfisher` sets up
 and builds the agent; `Preparation` in `core/session/preparation.py` is a turn before

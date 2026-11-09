@@ -36,7 +36,7 @@ class Versions:
         self._lock = Lock()
         fresh = resolve_definitions(cfg)
         self._seen = _signature(fresh)
-        self._current = _checked(cfg, fresh)
+        self._current = checked(cfg, fresh)
         #: What the folder held when it was last refused, so a refusal is said once.
         self._refused: object = None
 
@@ -63,7 +63,7 @@ class Versions:
             if found in (self._current.digests, self._refused):
                 return self._current
             try:
-                self._current = _checked(self._cfg, fresh)
+                self._current = checked(self._cfg, fresh)
             # Whatever a changed folder raises, turns keep a set that loaded.
             except Exception as exc:  # noqa: BLE001
                 self._refuse(found, exc)
@@ -95,7 +95,7 @@ def _signature(definitions: Definitions) -> Mapping[str, tuple[int, int]]:
     return {key: (stat.st_size, stat.st_mtime_ns) for key, stat in stats.items()}
 
 
-def _checked(cfg: Config, definitions: Definitions) -> Definitions:
+def checked(cfg: Config, definitions: Definitions) -> Definitions:
     """`definitions` read and checked, or the refusal."""
     # Before the read, so an edit landing during it leaves the record behind the files,
     # and the next turn reads them again. A pause records what was loaded.
