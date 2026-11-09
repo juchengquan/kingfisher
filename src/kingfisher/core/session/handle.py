@@ -111,9 +111,10 @@ class Session:
         that is not as its conversation left it, and records it as its own change.
 
         A pause waiting on a decision is discarded, as a new request discards it.
-        `SessionBusyError` while a turn holds the session, and `RewindError` for a turn
-        it cannot rebuild: one it never ran, or one from before its turn log that recorded
-        no length or that a summary has since rewritten.
+        `SessionBusyError` while a turn holds the session; `RewindError` for a turn it
+        cannot rebuild: one it never ran, one that wrote no conversation to go back to, or
+        one of two turns run under one id that lead back into each other; `ValueError` for
+        an `only` other than those two.
         """
         return drive(self._service._rewind_in(self.id, to, only, self._opened))
 

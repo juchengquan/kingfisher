@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.core.access import Held, with_datazone
 from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.config import Config
-from kingfisher.core.layout import PAUSED_STATE, REWOUND_FILE
+from kingfisher.core.layout import INPUTS_SEEN, PAUSED_STATE, REWOUND_FILE
 from kingfisher.core.logged import TurnWarnings, warning_into
 from kingfisher.core.request import Request, Resume
 from kingfisher.core.result import (
@@ -51,7 +51,7 @@ from .store import (
     PENDING_MARK,
     clear_pause,
     pending_as_mark,
-    write_inputs_seen,
+    write_listing,
     write_pause_mark,
 )
 from .threads import finished
@@ -71,7 +71,6 @@ if TYPE_CHECKING:
     from kingfisher.core.interfaces import MemoryStore, RunEvents, UnusedResults
 
     from .messages import Message
-
 
 
 @dataclass
@@ -200,7 +199,7 @@ class Running:
             return None
 
     def _record_ledger(
-        self, prepared: Prepared, snapshot: Any
+        self, prepared: Prepared, snapshot: Any, ended: tuple[Message, ...]
     ) -> Steps[tuple[LedgerEntry, ...]]:
         """Keep what this turn's tools returned, whether or not the turn paused, filing
         first what left the conversation with no file."""
@@ -212,13 +211,12 @@ class Running:
             runtime.summarised_away(snapshot),
             tool_results_route=self.cfg.layout.tool_results_route,
         )
-        written = self._ended_on(snapshot)
         return (
             yield from keep_ledger(
                 prepared.harness,
                 prepared.ledger,
                 summarised=runtime.summarised_in(snapshot),
-                messages=len(written) if written else None,
+                messages=len(ended) if ended else None,
             )
         )
 
@@ -245,10 +243,12 @@ class Running:
         messages = runtime.as_seen(snapshot)
         return runtime.as_messages(messages) if messages else ()
 
-    def _record_turn(self, prepared: Prepared, snapshot: Any, *, answer: str) -> Steps[None]:
+    def _record_turn(
+        self, prepared: Prepared, snapshot: Any, ended: tuple[Message, ...], *, answer: str
+    ) -> Steps[None]:
         """Log what was said this turn, as records this package owns, and the answer the
         caller is handed."""
-        if self._ended_on(snapshot):
+        if ended:
             # After the ledger: a write dying between the two leaves the log a turn short of
             # the ledger's count, which the next turn reports.
             yield from keep_turns(
@@ -256,16 +256,16 @@ class Running:
                 prepared.log,
                 turn=prepared.turn.id,
                 parts=prepared.message,
-                history=prepared.history,
                 resumed=prepared.resuming,
                 snapshot=snapshot,
+                seen=ended,
                 ledger=prepared.ledger.earlier if prepared.ledger is not None else None,
                 answer=answer,
             )
             # Only with the message saying so: kept by a turn the agent never heard from,
             # what changed before it would never be said.
             if prepared.inputs_seen is not None:
-                yield from write_inputs_seen(prepared.harness, prepared.inputs_seen)
+                yield from write_listing(prepared.harness, INPUTS_SEEN, prepared.inputs_seen)
             # Told now, in a conversation that keeps it; a turn that wrote none tells it again.
             if prepared.drift is not None:
                 yield from prepared.harness.drop(REWOUND_FILE)
@@ -375,9 +375,10 @@ class Running:
             try:
                 # Before anything is let go of: the saver still holds the paused state.
                 snapshot = yield on_host(self._settled, prepared)
+                ended = self._ended_on(snapshot)
                 # Before the pause as well as the turn log: a resume carries on from
                 # that state, and a result in either must already have its row.
-                turn.recorded = yield from self._record_ledger(prepared, snapshot)
+                turn.recorded = yield from self._record_ledger(prepared, snapshot, ended)
                 turn.awaiting = yield from self._settle_pause(prepared, snapshot)
                 if turn.awaiting:
                     turn.pending.append(decision_needed(turn.awaiting))
@@ -401,7 +402,7 @@ class Running:
                 )
             # Normalised by `_turn_outcome` already; a turn that raised hands back none.
             yield from self._record_turn(
-                prepared, snapshot, answer=turn.answer if turn.ok else ""
+                prepared, snapshot, ended, answer=turn.answer if turn.ok else ""
             )
             try:
                 yield from self._keep_memory(turn, snapshot)
@@ -448,7 +449,7 @@ class Running:
         the stopped node with, rather than asking the same question again."""
         if turn.prepared.resume is not None:
             return turn.prepared.resume
-        return runtime.user_payload(joined(turn.prepared.message), turn.prepared.history)
+        return runtime.user_payload(joined(turn.prepared.message), turn.prepared.log.conversation)
 
     def _driving(self, turn: _Turn) -> dict[str, Any]:
         """The keywords both graph streams are driven with, shared so neither loses

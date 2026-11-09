@@ -204,7 +204,7 @@ def kept_memory(  # noqa: PLR0913 -- the turn, and how it ended
     )
     # A resume's state is the paused turn's, whose messages were read when it paused.
     resumed_from = prepared.resume is not None and unread.paused_at is not None
-    since = unread.paused_at if resumed_from else len(prepared.history)
+    since = unread.paused_at if resumed_from else len(prepared.log.conversation)
     said = (
         *unread.said,
         *_said_this_turn(messages, since=since or 0, task=prepared.task, answer=answer),

@@ -36,7 +36,7 @@ class Spared(Enum):
 
 
 class Disposal:
-    """Getting rid of a session, and everything it left in other places."""
+    """Getting rid of a session: one `Sessions.delete`, which removes all it holds."""
 
     #: Needed from the class this is mixed into; declared, or it is a contract nothing checks.
     cfg: Config

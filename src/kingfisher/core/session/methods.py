@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from .model import RewindPart, Start
 
+
 class SessionMethods:
     """The service's half of `Session`, and the sessions it can name, open and list."""
 

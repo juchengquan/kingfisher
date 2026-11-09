@@ -280,16 +280,15 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
     *,
     turn: str,
     parts: Sequence[Part],
-    history: Sequence[Message],
     resumed: Resuming | None,
     snapshot: Any,
+    seen: Sequence[Message],
     ledger: KeptLedger | None,
     answer: str,
 ) -> Steps[None]:
-    """Add this turn to `log`, as the turn read it. `ledger` is the ledger as this turn
-    writes it back, or `None` where it keeps none.
+    """Add this turn to `log`, as the turn read it. `seen` is the conversation the turn
+    ended on; `ledger` the ledger as this turn writes it back, or `None` where it keeps none.
     """
-    seen = runtime.as_messages(runtime.as_seen(snapshot))
     lines = list(log.lines)
     if ledger is not None:
         expired = {
@@ -303,7 +302,7 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
         turn,
         log.current,
         parts=parts,
-        history=len(history),
+        history=len(log.conversation),
         resumed=resumed,
         snapshot=snapshot,
         answer=answer,

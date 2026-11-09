@@ -17,7 +17,6 @@ from typing import Any
 
 from kingfisher.core.layout import (
     HARNESS_ROUTE,
-    INPUTS_SEEN,
     KEPT_FILES,
     LEDGER_FILE,
     OFF_PATH_FILE,
@@ -155,17 +154,6 @@ class HarnessFiles:
             raise OSError(msg)
 
 
-def read_inputs_seen(harness: HarnessFiles) -> Steps[dict[str, str | None] | None]:
-    """The inputs folder as the last turn the agent heard from found it, or `None` where
-    no turn kept it."""
-    return (yield from read_listing(harness, INPUTS_SEEN))
-
-
-def write_inputs_seen(harness: HarnessFiles, seen: Mapping[str, str | None]) -> Steps[None]:
-    """Keep the inputs folder as this turn found it."""
-    yield from write_listing(harness, INPUTS_SEEN, seen)
-
-
 def read_listing(harness: HarnessFiles, name: str) -> Steps[dict[str, str | None] | None]:
     """Each file a listing kept as `name` holds, with its version mark, or `None` where no
     turn kept one."""
@@ -269,8 +257,6 @@ class KeptLedger:
 
     #: Its rows and closing lines as written, which the turn writes back ahead of its own.
     lines: tuple[str, ...] = ()
-    #: Its closing lines, parsed, in the order the turns ran, on the path or not.
-    closings: tuple[Mapping[str, Any], ...] = ()
     #: The highest number a call has been given, a row or not, so the next is one past it.
     last: int = 0
     #: Every file a row names, which the sweep keeps.
@@ -297,21 +283,19 @@ class KeptLedger:
     #: `exchanges`, `unclosed`, `summarised` and `messages` leave them out, being what the
     #: conversation the model is handed holds.
     off_path: frozenset[str] = frozenset()
-    #: `exchanges` and `unclosed` with every branch in, in the order the turns ran, or
-    #: `None` where no turn is off the path and the two are the same.
-    every_exchange: tuple[tuple[LedgerEntry, ...], ...] | None = None
-    every_unclosed: tuple[tuple[LedgerEntry, ...], ...] | None = None
+    #: `exchanges` with every branch in, in the order the turns ran: what `expired` counts
+    #: rounds in, since a result left on a branch ages as one on the path does.
+    all_exchanges: tuple[tuple[LedgerEntry, ...], ...] = ()
+    #: `unclosed` beside `all_exchanges`.
+    all_unclosed: tuple[tuple[LedgerEntry, ...], ...] = ()
 
-    @property
-    def all_exchanges(self) -> tuple[tuple[LedgerEntry, ...], ...]:
-        """Every branch's exchanges: what `expired` counts rounds in, since a result left on
-        a branch ages as one on the path does."""
-        return self.exchanges if self.every_exchange is None else self.every_exchange
-
-    @property
-    def all_unclosed(self) -> tuple[tuple[LedgerEntry, ...], ...]:
-        """`unclosed` beside `all_exchanges`."""
-        return self.unclosed if self.every_unclosed is None else self.every_unclosed
+    def __post_init__(self) -> None:
+        # Given `exchanges` alone, no turn is off the path. Left empty, every result in them
+        # would be missed by `expired` and by `row`.
+        if not self.all_exchanges:
+            object.__setattr__(self, "all_exchanges", self.exchanges)
+        if not self.all_unclosed:
+            object.__setattr__(self, "all_unclosed", self.unclosed)
 
     @property
     def since(self) -> tuple[LedgerEntry, ...]:
@@ -388,7 +372,6 @@ def _kept(text: str, off_path: frozenset[str] = frozenset()) -> KeptLedger:
     every, on_path = _Track(), _Track()
     messages: int | None = None
     turns: set[str] = set()
-    closings: list[Mapping[str, Any]] = []
     # Each turn's entries, until its closing line says whether it was a resume.
     unclosed: dict[str, list[LedgerEntry]] = {}
     for line in text.splitlines():
@@ -414,7 +397,6 @@ def _kept(text: str, off_path: frozenset[str] = frozenset()) -> KeptLedger:
             unclosed.setdefault(entry.turn, []).append(entry)
         elif "id" not in row and isinstance(row.get("turn"), str):
             turns.add(row["turn"])
-            closings.append(row)
             # By the turn a row names, not where it sits: rows a crash left unclosed would
             # otherwise be counted as the next turn's.
             closed = unclosed.pop(row["turn"], [])
@@ -428,20 +410,21 @@ def _kept(text: str, off_path: frozenset[str] = frozenset()) -> KeptLedger:
                 if isinstance(row.get(MESSAGES), int):
                     messages = row[MESSAGES]
                 on_path.close(row, list(closed), [one for one in left if one.turn not in off_path])
+    exchanges = tuple(tuple(one) for one in on_path.exchanges)
+    cut = tuple(tuple(one) for one in on_path.cut)
     return KeptLedger(
         lines=tuple(lines),
-        closings=tuple(closings),
         last=last,
         paths=frozenset(paths),
         runs={run: tuple(found) for run, found in runs.items()},
-        exchanges=tuple(tuple(one) for one in on_path.exchanges),
-        unclosed=tuple(tuple(one) for one in on_path.cut),
+        exchanges=exchanges,
+        unclosed=cut,
         summarised=on_path.summarised,
         messages=messages,
         turns=frozenset(turns),
         off_path=off_path,
-        every_exchange=tuple(tuple(one) for one in every.exchanges) if off_path else None,
-        every_unclosed=tuple(tuple(one) for one in every.cut) if off_path else None,
+        all_exchanges=tuple(tuple(one) for one in every.exchanges) if off_path else exchanges,
+        all_unclosed=tuple(tuple(one) for one in every.cut) if off_path else cut,
     )
 
 

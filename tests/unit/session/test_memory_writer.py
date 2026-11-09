@@ -64,7 +64,8 @@ def _kinds(events, kind: str) -> list[str]:
 def test_the_writer_runs_on_the_fourth_turn_by_default_and_not_before(scripted):
     """A counter that never advanced would leave memory uncurated; one read as `>= 0`
     would cost a call on every "thanks"; a default back at 2 would cost the next turn
-    most of its cache twice as often."""
+    most of its cache twice as often; and each turn read from the conversation's start
+    would hand the writer every earlier reply again, paid for at every run."""
     kf = _writing(scripted)
 
     for said in ("one", "two", "three"):
@@ -73,6 +74,10 @@ def test_the_writer_runs_on_the_fourth_turn_by_default_and_not_before(scripted):
 
     _turn(kf, AIMessage(content="four"), AIMessage(content="- Likes EUR"))
     assert len(_writer_calls()) == 1, "the writer did not run on the fourth turn"
+    shown = _shown(_writer_calls()[0])
+    assert [shown.count(f"Agent: {said}") for said in ("one", "two", "three", "four")] == [
+        1, 1, 1, 1
+    ], "the writer was handed an earlier turn's reply again"
 
     _turn(kf, AIMessage(content="five"))
     assert len(_writer_calls()) == 1, "the count did not start again after the writer ran"
