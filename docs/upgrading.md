@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A turn after one that kept no record starts the record afresh, after #1291
+
+- **A turn whose parent has no line in `.harness/files.jsonl`** -- its listing of the
+  folders came back cut short, or it ran with `KINGFISHER_REWIND_ENABLED` off -- copies
+  every file in `/outputs` and `/memory` once, and `Session.turns()` lists each of them
+  under it as changed. A rewind to it or to any later turn puts the files back; before,
+  every turn after such a gap was rewound with its files left as they were and named in
+  `Rewound.not_restored`.
+- **A rewind to a turn at `KINGFISHER_REWIND_MAX_BYTES=0` that deleted the memory file no
+  longer brings the file back.**
+- **A gap in a session's history from before this stays**: a rewind past it still leaves
+  the files as they are, until a turn after this change follows one with no line.
+
 ## A deployment can switch the file history off, after #1290
 
 - **Nothing changes unless you set `KINGFISHER_REWIND_ENABLED=false`.** Then a turn's end

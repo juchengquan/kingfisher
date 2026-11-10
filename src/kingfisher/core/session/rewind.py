@@ -18,6 +18,7 @@ from .file_history import (
     STATE_FOLDER,
     TURN,
     UNDER,
+    WHOLE,
     artifacts_now,
     read_file_history,
     removed_in,
@@ -332,16 +333,25 @@ def _held_at(
     """Each file the artifact folders held when the last turn of `path` ended, as the
     folder of its copy or `None`, its mark, and why there is no copy, and the folders whose
     files besides the memory file are unknown there; `None` where every file is unknown,
-    because that turn or one before it since the first to keep a record has none.
+    because that turn or one before it has no record, since the first to keep one or the
+    last whose record names every file.
     """
     by_turn = {record[TURN]: record for record in records}
-    first = next((at for at, turn in enumerate(path) if turn in by_turn), None)
-    if first is None or any(turn not in by_turn for turn in path[first:]):
-        return None
-    held: dict[str, tuple[str | None, str | None, str | None]] = {}
+    held: dict[str, tuple[str | None, str | None, str | None]] | None = None
     unknown: set[str] = set()
-    for turn in path[first:]:
-        record = by_turn[turn]
+    begun = False
+    for turn in path:
+        record = by_turn.get(turn)
+        if record is None:
+            if begun:
+                held = None
+            continue
+        # A record naming every file is where the files are known again after a turn with
+        # none, and holds nothing over from before it.
+        if record.get(WHOLE) is True or not begun:
+            held, unknown, begun = {}, set(), True
+        elif held is None:
+            continue
         if unlisted := unlisted_in(record):
             unknown |= unlisted
             held = {where: one for where, one in held.items()
@@ -353,7 +363,7 @@ def _held_at(
         for gone in removed_in(record):
             held.pop(gone, None)
         held.update(versions_in(record))
-    return held, unknown
+    return None if held is None else (held, unknown)
 
 
 def _unknown_in(where: str, folders: set[str], memory_file: str) -> bool:

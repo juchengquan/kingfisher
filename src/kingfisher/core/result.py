@@ -91,7 +91,8 @@ class TurnFiles:
     session as `RunResult.artifacts` gives them. What the turn did, not what a rewind to it
     would do now: a file it left alone is put back too, as it stood then."""
 
-    #: Each file new or changed when the turn ended.
+    #: Each file new or changed when the turn ended; every file there, for a turn after one
+    #: that kept no record, which it had nothing to compare with.
     changed: tuple[str, ...] = ()
     #: Each file there when the turn before it ended and gone when this one did.
     removed: tuple[str, ...] = ()
