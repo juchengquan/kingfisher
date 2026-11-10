@@ -182,6 +182,40 @@ def test_the_interpreter_stays_readable_or_python_stops_working(cfg, tmp_path):
     assert Path(cfg.workspace).resolve() in roots
 
 
+def test_a_link_the_interpreter_is_reached_through_is_granted_as_a_link(tmp_path, monkeypatch):
+    """uv points a venv at `cpython-3.12-…`, a link to the patch's own folder. Granted only
+    the folder, bubblewrap left the venv's `python` dangling, and the fenced shell ran the
+    system's -- measured on ubuntu-26.04. A link into anything not granted is the control:
+    granting a link grants everything behind it.
+    """
+    import sys
+
+    real = tmp_path / "pythons" / "cpython-3.12.16"
+    (real / "bin").mkdir(parents=True)
+    (real / "bin" / "python3.12").write_text("", encoding="utf-8")
+    minor = tmp_path / "pythons" / "cpython-3.12"
+    minor.symlink_to(real)
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "bin").mkdir(parents=True)
+    (elsewhere / "bin" / "python3.12").write_text("", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.symlink_to(elsewhere)
+    venv = tmp_path / "venv"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin" / "python").symlink_to(minor / "bin" / "python3.12")
+    (venv / "bin" / "other").symlink_to(outside / "bin" / "python3.12")
+    monkeypatch.setattr(sys, "prefix", str(venv))
+    monkeypatch.setattr(sys, "base_prefix", str(real))
+
+    monkeypatch.setattr(sys, "executable", str(venv / "bin" / "python"))
+    through_uv = confinement.toolchain_roots()
+    monkeypatch.setattr(sys, "executable", str(venv / "bin" / "other"))
+    through_elsewhere = confinement.toolchain_roots()
+
+    assert minor in through_uv
+    assert outside not in through_elsewhere and elsewhere.resolve() not in through_elsewhere
+
+
 def test_the_sessions_root_is_named_twice_only_where_it_is_somewhere_else(cfg, tmp_path):
     """Inside the workspace it is a subpath of the root already returned, and naming it
     again would read as though it added something. Reached through a link it is not
