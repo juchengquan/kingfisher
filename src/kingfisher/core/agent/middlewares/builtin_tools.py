@@ -143,11 +143,10 @@ def hint(path: str) -> str:
 
 
 #: What a fence says of a write to a folder it keeps read-only. Each is the kernel's word,
-#: not kingfisher's: `sandbox-exec` denies the operation, the Linux fence denies the
-#: permission -- measured on the Linux job, in `tests/linux/test_fence_escapes.py` -- and
-#: bubblewrap mounts the folder read-only, which no job runs, so that one follows `_MISSING`
-#: rather than a measurement. Narrower than `_MISSING` on purpose: a file that is merely
-#: absent is not a folder that is kept, and the note would send the model somewhere else.
+#: not kingfisher's: `sandbox-exec` denies the operation, Landlock the permission, and
+#: bubblewrap mounts the folder read-only -- the two Linux ones measured on the Linux job.
+#: Narrower than `_MISSING` on purpose: a file that is merely absent is not a folder that
+#: is kept, and the note would send the model somewhere else.
 _REFUSED = ("Operation not permitted", "Permission denied", "Read-only file system")
 
 #: A path a message names: anything carrying a slash, up to the punctuation around it. The
