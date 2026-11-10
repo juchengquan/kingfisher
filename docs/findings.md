@@ -728,13 +728,13 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
 
 ## The Linux fence
 
-- **GitHub's `ubuntu-latest` runs Landlock ABI 7** against the 6 a full ruleset
-  needs, so the Landlock escape tests run there. **bubblewrap installs and is
-  still unavailable**, because the image refuses an unprivileged user namespace.
-  This was predicted the other way round and the first green run said otherwise.
-  Kept current in `.github/workflows/checks.yml` beside the job it governs, and
-  reported on every run by `tests/linux/test_a_fence_was_exercised.py`.
-  *(2026-08-27.)*
+- **GitHub's Ubuntu runners have Landlock ABI 8**, 24.04 and 26.04 alike, against the 6
+  a full ruleset needs, so the Landlock escape tests run on either; this said 7 when it
+  was written. **On 24.04 bubblewrap installs and is still unavailable**, because the
+  image refuses an unprivileged user namespace. This was predicted the other way round
+  and the first green run said otherwise. Reported on every run by
+  `tests/linux/test_a_fence_was_exercised.py`, whose coverage line gave the 8.
+  *(2026-08-27; the ABI read again 2026-11-10.)*
 
 - **`ubuntu-26.04` lets bubblewrap run, and its first run found two faults.**
   `ubuntu-latest` began landing on it on 2026-11-10. It allows the user namespace
