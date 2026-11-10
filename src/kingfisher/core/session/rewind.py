@@ -11,7 +11,7 @@ from kingfisher.core.layout import (
     KEPT_FILES,
     MEMORY_WRITER,
 )
-from kingfisher.core.result import Rewound, TurnFiles, TurnRecord
+from kingfisher.core.result import Rewound, TurnRecord
 
 from .copying import copied_through
 from .file_history import (
@@ -22,6 +22,7 @@ from .file_history import (
     read_file_history,
     removed_in,
     state_in,
+    turn_files,
     unlisted_in,
     versions_in,
 )
@@ -40,36 +41,39 @@ from .store import (
     write_listing,
     write_off_path,
 )
-from .turnlog import PARENT, by_turn, path_to, read_log, task_of, times_of
+from .turnlog import PARENT, by_turn, outcome_of, path_to, read_log, task_of, times_of
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from kingfisher.core.layout import Layout
 
     from .steps import Steps
     from .turnlog import TurnLog
 
 
-def turn_records(log: TurnLog, files: Mapping[str, TurnFiles]) -> tuple[TurnRecord, ...]:
-    """Every turn the log holds, oldest first, each marked if it is on the session's path
+def turn_records(harness: HarnessFiles, log: TurnLog) -> Steps[tuple[TurnRecord, ...]]:
+    """Every turn `log` holds, oldest first, each marked if it is on the session's path
     and with what it did to its files where the file history has its line."""
-    turns = by_turn([line for _, line in log.lines])
+    files = turn_files((yield from read_file_history(harness)))
     current = set(log.path)
-    return tuple(
-        TurnRecord(
-            id=turn,
-            parent=opening.get(PARENT),
-            task=task_of(body),
-            resumed=bool(opening.get(RESUMED)),
-            current=turn in current,
-            files=files.get(turn),
-            started=started,
-            ended=ended,
+    records = []
+    for turn, (opening, body) in by_turn([line for _, line in log.lines]).items():
+        started, ended = times_of(opening, body)
+        answer, stopped = outcome_of(body)
+        records.append(
+            TurnRecord(
+                id=turn,
+                parent=opening.get(PARENT),
+                task=task_of(body),
+                resumed=bool(opening.get(RESUMED)),
+                current=turn in current,
+                files=files.get(turn),
+                started=started,
+                ended=ended,
+                answer=answer,
+                stop_reason=stopped,
+            )
         )
-        for turn, (opening, body) in turns.items()
-        for started, ended in (times_of(opening, body),)
-    )
+    return tuple(records)
 
 
 def rewound(

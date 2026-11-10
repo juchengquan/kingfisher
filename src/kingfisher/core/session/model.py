@@ -7,9 +7,12 @@ from collections.abc import Collection, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import uuid4
 from weakref import WeakKeyDictionary
+
+if TYPE_CHECKING:
+    from kingfisher.core.result import TurnRecord
 
 
 class UnknownSessionError(ValueError):
@@ -18,6 +21,15 @@ class UnknownSessionError(ValueError):
 
 class TurnIdError(ValueError):
     """A request named a turn id its session already holds."""
+
+    #: The turn that holds the id, as `Session.turns` lists it, for a caller retrying one
+    #: to hand back what it answered; it is not run again. `None` where the turn log holds
+    #: no such turn: one that died after the ledger named it, before the log.
+    turn: TurnRecord | None
+
+    def __init__(self, message: str, *, turn: TurnRecord | None = None) -> None:
+        super().__init__(message)
+        self.turn = turn
 
 
 class RewindError(ValueError):

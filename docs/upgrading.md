@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A refused turn id says what that turn answered, after #1289
+
+- **`TurnRecord.answer` and `TurnRecord.stop_reason`** hand on what the turn's caller was
+  handed as `RunResult.answer` and `RunResult.stop_reason`. A turn that raised has an
+  empty answer and no stop reason; a turn logged before this has no stop reason, and one
+  logged before #1236 no answer either.
+- **`TurnIdError.turn`** is the `TurnRecord` of the turn holding the id. A caller retrying
+  a request under its own id can hand back `turn.answer` where `turn.stop_reason` is
+  `end_turn`, rather than fail a request the session already answered; the turn is still
+  not run again. It is `None` where the turn log holds no such turn.
+- **A turn's answer line in `.harness/turns.jsonl` carries `stop_reason`**, `null` for a
+  turn that raised.
+
 ## A turn after one that never finished is told so, after #1288
 
 - **A `Sessions` of your own must answer `took_over(cfg, session_id, token, /)`**: true

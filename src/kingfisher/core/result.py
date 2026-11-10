@@ -125,6 +125,13 @@ class TurnRecord:
     #: for a turn logged before the log kept times.
     started: float | None = None
     ended: float | None = None
+    #: What it handed its caller as `RunResult.answer`; `None` for a turn logged before the
+    #: log kept answers. Empty for a turn that raised too, which handed back none.
+    answer: str | None = None
+    #: Why it stopped, as `RunResult.stop_reason` says; `None` for a turn that raised and
+    #: for one logged before the log kept it. `answer` is a finished reply only where this
+    #: is `end_turn`.
+    stop_reason: str | None = None
 
 
 @dataclass(frozen=True)

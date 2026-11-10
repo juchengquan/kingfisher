@@ -3956,7 +3956,11 @@ inputs are placed or a pause is cleared; a made id that repeats one is drawn aga
 since eight hex digits repeat over enough turns. Refused rather than renamed: a caller
 passes its own id to tie the run to its request, and a renamed turn would cut that tie
 without a word. Still no de-duplication: a retry under the same id is refused, not
-answered with the first run's result. The ids held are the ones the ledger names, and
+answered with the first run's result. The refusal carries that turn as `turns` lists it,
+`TurnIdError.turn` *(2026-11-10)*, its answer and why it stopped among the rest, so the
+caller may answer the retry with what the turn said; kingfisher runs nothing either way.
+It is `None` where only the ledger names the turn: one that died before its log line.
+The ids held are the ones the ledger names, and
 for a graph a deployment supplies, which keeps no ledger, the ones its turn log opens:
 unchecked, a second turn under one id was logged as its own parent, and `turns` and
 `rewind` walked that loop forever. A graph built here reads only the ledger, which is
@@ -4642,6 +4646,11 @@ written when empty: a turn paused at a gate, and one that raised, which hands ba
 A reader working the answer out from the last assistant line would show the block the
 caller never saw, and a failed turn's last words as an answer it never gave. With no
 `role`, the rebuild skips it, as it skips a resume's answers. *(2026-11-06.)*
+Beside the answer, `stop_reason` as `RunResult.stop_reason` names it, `null` for a turn
+that raised *(2026-11-10)*: driven, a turn paused at a gate, one its provider could not
+serve and one that raised all wrote `""`, so a caller reading the answer alone took each
+for a turn that answered nothing. `TurnRecord.answer` and `TurnRecord.stop_reason` hand
+both on.
 
 **A turn's lines keep when it ran and what its replies reasoned.** The opening line
 carries `started` and the answer line `ended`: seconds since 1970 as floats, on the wall

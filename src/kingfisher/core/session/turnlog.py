@@ -58,6 +58,11 @@ PARTS = "parts"
 #: even when empty, so a reader never takes it from the last assistant line.
 ANSWER = "answer"
 
+#: Beside `answer`: why the turn stopped, as `RunResult.stop_reason` names it, and `null`
+#: for a turn that raised. The answer alone reads the same for a turn that said nothing,
+#: one its provider could not serve and one that failed.
+STOP_REASON = "stop_reason"
+
 #: On a turn's opening line, when it started, and on its answer line, when it ended:
 #: seconds since 1970 on the wall clock, as every run event's `ts` is, so a turn lines up
 #: with the events a client reads.
@@ -114,6 +119,7 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     resumed: Resuming | None,
     snapshot: Any,
     answer: str,
+    stop_reason: str | None,
     started: float,
     ended: float,
 ) -> list[dict[str, Any]]:
@@ -155,7 +161,7 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
             else len(runtime.as_messages(held[:cut]))
         )
         lines.append({"turn": turn, **as_record(said), CUT: at})
-    lines.append({"turn": turn, ANSWER: answer, ENDED: ended})
+    lines.append({"turn": turn, ANSWER: answer, STOP_REASON: stop_reason, ENDED: ended})
     return lines
 
 
@@ -312,6 +318,7 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
     seen: Sequence[Message],
     ledger: KeptLedger | None,
     answer: str,
+    stop_reason: str | None,
     started: float,
     ended: float,
 ) -> Steps[None]:
@@ -335,6 +342,7 @@ def keep_turns(  # noqa: PLR0913 -- the turn, what it began from, and what it en
         resumed=resumed,
         snapshot=snapshot,
         answer=answer,
+        stop_reason=stop_reason,
         started=started,
         ended=ended,
     )
@@ -415,8 +423,22 @@ def times_of(
 ) -> tuple[float | None, float | None]:
     """When a turn started and ended, as its lines say: `None` for either one a turn logged
     before the log kept times does not hold."""
-    end = next((line for line in body if ANSWER in line), {})
-    return _seconds(opening.get(STARTED)), _seconds(end.get(ENDED))
+    return _seconds(opening.get(STARTED)), _seconds(_answer_line(body).get(ENDED))
+
+
+def outcome_of(body: Sequence[Mapping[str, Any]]) -> tuple[str | None, str | None]:
+    """What a turn handed its caller, as its answer line says: the answer, and why it
+    stopped. `None` for either one the line does not hold."""
+    end = _answer_line(body)
+    answer, stopped = end.get(ANSWER), end.get(STOP_REASON)
+    return (
+        answer if isinstance(answer, str) else None,
+        stopped if isinstance(stopped, str) else None,
+    )
+
+
+def _answer_line(body: Sequence[Mapping[str, Any]]) -> Mapping[str, Any]:
+    return next((line for line in body if ANSWER in line), {})
 
 
 def _seconds(value: Any) -> float | None:
