@@ -1336,6 +1336,8 @@ def test_a_kernel_with_no_landlock_is_not_offered_one(cfg, monkeypatch):
     monkeypatch.setattr(health_isolation.platform, "system", lambda: "Linux")
     monkeypatch.setattr(health_isolation.platform, "release", lambda: "5.10.0")
     monkeypatch.setattr(health_isolation.confinement, "landlock_abi", lambda: None)
+    # Bubblewrap too, or the runner decides: where it works, doctor rightly offers it.
+    monkeypatch.setattr(health_isolation, "bubblewrap_available", lambda: False)
 
     remedy = {c.name: c for c in examine(cfg, sessions=_shelled("off"))}["shell"].remedy
 

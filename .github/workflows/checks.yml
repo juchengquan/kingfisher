@@ -70,9 +70,9 @@ jobs:
   # however many extras it asks for.
   fences:
     name: the Linux fence
-    # Not `ubuntu-latest`, which now lands on 24.04 or 26.04 by draw. 26.04 lets the
-    # bubblewrap half run, and two of its escape tests fail there; 24.04 skips them.
-    runs-on: ubuntu-24.04
+    # 26.04, not `ubuntu-latest`, which lands on 24.04 or 26.04 by draw: 24.04 refuses
+    # the user namespace bubblewrap needs, so its half would run on some PRs only.
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
 
@@ -84,22 +84,8 @@ jobs:
       - name: Pin a uv-managed Python
         run: uv python install 3.12
 
-      # bwrap is not on the image, and installing it is not sufficient to run
-      # its half. This job was written expecting bubblewrap to be the half a
-      # bare runner could exercise, on the grounds that `ubuntu-latest` had
-      # been below the ABI a full Landlock ruleset needs. The first green run
-      # said the opposite: the image is on Landlock ABI 7 against the 6
-      # required, so the Landlock escapes run, while bwrap installs and is
-      # still unavailable because the image refuses an unprivileged user
-      # namespace and the probe cannot make one.
-      #
-      # Installed anyway, for two reasons that survive being wrong about which
-      # half runs: the `fence coverage:` line then distinguishes "no binary"
-      # from "namespace refused", which are the same word otherwise; and the
-      # bubblewrap escapes begin running the day that policy relaxes, without
-      # this file having to be edited again to notice. Relaxing it here instead
-      # is one sysctl away and deliberately not done yet -- that is a decision
-      # about how much the runner is allowed to weaken, not a comment.
+      # Not on the image. Uninstalled, the `fence coverage:` line could not tell "no
+      # binary" from "namespace refused", and a skipped half reads the same either way.
       - name: Install bubblewrap
         run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
 

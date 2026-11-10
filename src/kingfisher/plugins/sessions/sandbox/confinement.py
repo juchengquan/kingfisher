@@ -308,7 +308,31 @@ def toolchain_roots(extra: tuple[str, ...] = ()) -> tuple[Path, ...]:
     """Where the interpreter the shell was told to run actually lives."""
     roots = [Path(sys.prefix), Path(sys.base_prefix)]
     roots += [Path(e) for e in extra]
-    return tuple(dict.fromkeys(p.resolve() for p in roots))
+    granted = tuple(dict.fromkeys(p.resolve() for p in roots))
+    return (*granted, *_links_on_the_way(Path(sys.executable), granted))
+
+
+def _links_on_the_way(executable: Path, granted: tuple[Path, ...]) -> tuple[Path, ...]:
+    """The linked folders `executable` is reached through that lead into `granted`.
+
+    Named as links, not resolved: uv points a venv at `cpython-3.12-…`, a link to the
+    patch's own folder, and bubblewrap granting only that folder left the venv's `python`
+    dangling, so the shell's `PATH` ran the system's. A link leading anywhere else stays
+    out, since granting a link grants everything it leads to.
+    """
+    found: list[Path] = []
+    seen: set[Path] = set()
+    hop = executable
+    while hop.is_symlink() and hop not in seen:
+        seen.add(hop)
+        target = hop.readlink()
+        hop = target if target.is_absolute() else hop.parent / target
+        for folder in hop.parents:
+            if folder.is_symlink() and any(
+                root == (real := folder.resolve()) or root in real.parents for root in granted
+            ):
+                found.append(folder)
+    return tuple(dict.fromkeys(found))
 
 
 def readable_roots(workspace: Path, sessions_root: Path, extra: tuple[str, ...] = (),

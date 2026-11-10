@@ -175,8 +175,11 @@ def test_the_network_is_closed(fenced):
     """The property Landlock does not have, and the reason this mode exists alongside
     it.
     """
+    # Joined at run time: Python 3.13 and later quote a `-c` program in its traceback, so
+    # a literal marker would be found in the refusal itself.
     result = fenced.run(
-        "python3 -c \"import socket;socket.create_connection(('1.1.1.1',53),3);print('NET-OPEN')\""
+        "python3 -c \"import socket;socket.create_connection(('1.1.1.1',53),3);"
+        "print('NET-'+'OPEN')\""
     )
 
     assert "NET-OPEN" not in result.output
