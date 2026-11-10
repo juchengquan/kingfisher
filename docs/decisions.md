@@ -4850,6 +4850,19 @@ changes its time, and by the time recorded it would read as the next turn's chan
 next turn's message names every file not as its conversation remembers it, and as `May
 have changed` one a listing gives no mark for, rather than reading each back.
 
+**A turn after one with no line starts the record afresh** *(2026-11-10)*. A turn whose
+listing came back cut short writes no line, and every turn after it was unknown to a
+rewind for good. Measured on `main` before this, one such turn among six: a rewind to the
+fifth put back no file though each had its copy, and a rewind to before the gap removed a
+file the gap turn made, which a rewind forward then could not bring back. So a turn whose
+parent has no line compares the folders with nothing, copying every file once, and its
+line says `whole`; a rewind starts from the last such line on its path, as from the
+first. **Not from any line after a gap**: one written before this names only what
+changed, and started from, a rewind would remove every file unchanged since. Every turn
+that compared with nothing says `whole`, a turn at 0 that found no memory file among
+them: compared alone, a memory file it deleted was never named removed, and a rewind to
+it put back the one before.
+
 **Copies are dropped down the tree once a rewind has made one.** By the order the turns
 ran, a copy whose file changed on a branch left behind looked superseded, though it is
 the version the path still holds. The parents are read from the turn log only where the

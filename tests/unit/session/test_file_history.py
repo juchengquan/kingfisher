@@ -30,7 +30,7 @@ from kingfisher.core.session.model import QuotaExceededError
 from kingfisher.core.session.store import HarnessFiles
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
-from tests.conftest import read_record, start
+from tests.conftest import read_record, start, write_old_record
 from tests.unit.session.test_memory_store import _kingfisher as _with_store
 from tests.unit.session.test_memory_store import _turn as _store_turn
 from tests.unit.session.test_memory_writer import _turn as _writer_turn
@@ -252,6 +252,35 @@ def test_with_rewinding_off_a_turn_reads_and_writes_no_history(cfg, monkeypatch)
     assert len(kept) > 2, "the turn before kept no history to leave"
 
 
+class _DeletingMemory(StubAgent):
+    """Deletes the memory file during the turn, as the agent's shell may."""
+
+    def __init__(self, memory: Path) -> None:
+        super().__init__("ok")
+        self.memory = memory
+
+    def stream(self, state, config, stream_mode=None, subgraphs=False):
+        self.memory.unlink()
+        yield from super().stream(state, config, stream_mode, subgraphs)
+
+
+def test_a_rewind_to_a_turn_at_0_that_deleted_the_memory_file_does_not_bring_it_back(cfg):
+    """At 0 a turn compares the memory file alone, so one it deleted was never named as
+    removed, and a rewind to that turn put back the memory file of the turn before."""
+    memory = _session(cfg, start(cfg, "s")) / "memory" / "AGENTS.md"
+    memory.write_text("- A\n", encoding="utf-8")
+    _run(Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions()), "t1")
+    at_0 = replace(cfg, rewind_max_bytes=0)
+    _run(Kingfisher(at_0, graph=_DeletingMemory(memory), sessions=LocalSessions()), "t2")
+    off = Kingfisher(at_0, graph=StubAgent("ok"), sessions=LocalSessions())
+    memory.write_text("- B\n", encoding="utf-8")
+    _run(off, "t3")
+
+    off.session("s").rewind("t2")
+
+    assert not memory.exists()
+
+
 def test_over_budget_the_copy_restoring_only_the_oldest_turns_goes_first(cfg):
     """By age the notes written once in the first turn would go first though every rewind
     needs them, and a file larger than the whole budget would be copied only to be dropped."""
@@ -456,6 +485,54 @@ def test_a_listing_cut_short_records_nothing_rather_than_every_file_as_removed(c
 
     assert set(_history(cfg)) == {"t1"}
     assert (_session(cfg) / HARNESS / ARTIFACTS_SEEN).read_bytes() == seen
+
+
+def test_a_turn_after_one_that_kept_no_record_starts_the_record_afresh(cfg):
+    """One turn with no line, its listing cut short, left every later turn's files unknown
+    to a rewind, none put back though each had its copies; and a rewind to before it removed
+    a file it made, which a rewind forward then could not bring back from its copy. A line
+    from before lines said so names only what changed: started from, a rewind would remove
+    every file unchanged since."""
+    sessions = _CutSessions()
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=sessions)
+    outputs = _session(cfg, start(cfg, "s")) / "outputs"
+    report, notes, made = outputs / "report.txt", outputs / "notes.txt", outputs / "made.txt"
+    # Unchanged from the first turn, so only a line naming every file names it after the gap.
+    notes.write_text("kept", encoding="utf-8")
+    report.write_text("v1", encoding="utf-8")
+    _run(kf, "t1")
+    sessions.cut = True
+    report.write_text("v2", encoding="utf-8")
+    made.write_text("made", encoding="utf-8")
+    _run(kf, "t2")
+    sessions.cut = False
+    report.write_text("v3", encoding="utf-8")
+    _run(kf, "t3")
+    _run(kf, "t4")
+    report.write_text("v5", encoding="utf-8")
+    _run(kf, "t5")
+
+    def held() -> tuple[str | None, ...]:
+        return tuple(
+            one.read_text(encoding="utf-8") if one.exists() else None
+            for one in (report, notes, made)
+        )
+
+    kf.session("s").rewind("t4")
+    assert held() == ("v3", "kept", "made")
+    kf.session("s").rewind("t1")
+    assert held() == ("v1", "kept", None)
+    kf.session("s").rewind("t5")
+    assert held() == ("v5", "kept", "made")
+
+    lines = (
+        json.dumps({key: one[key] for key in one if key != file_history.WHOLE})
+        for one in _history(cfg).values()
+    )
+    write_old_record(_session(cfg) / HARNESS / FILE_HISTORY, "".join(f"{one}\n" for one in lines))
+    back = kf.session("s").rewind("t4")
+    assert held() == ("v5", "kept", "made")
+    assert back.restored == ()
 
 
 # -- how a copy is made ----------------------------------------------------------

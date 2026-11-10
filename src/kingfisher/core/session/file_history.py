@@ -52,6 +52,9 @@ REMOVED = "removed"
 #: The artifact folders the turn did not list, `KINGFISHER_REWIND_MAX_BYTES` being 0: of
 #: their files only the memory file is named, and the rest are unknown at this turn.
 UNLISTED = "unlisted"
+#: Set where the turn compared the folders with nothing, so its line names every file it
+#: listed: a rewind can start from it, whatever the turns before it recorded.
+WHOLE = "whole"
 #: Each of `STATE_KEPT` as the turn left it, by name: `{UNDER, SHA}`, `UNDER` the folder
 #: holding its copy, an earlier turn's where it was the same.
 STATE = "state"
@@ -223,13 +226,27 @@ def keep_turn_files(prepared: Prepared, cfg: Config, walked: Walked) -> Steps[No
         )
         return
     stored = (yield from read_listing(harness, ARTIFACTS_SEEN)) or {}
-    # Unlisted, every other file would read as removed.
-    before = {path: mark for path, mark in stored.items() if not off or path in now}
+    records = yield from read_file_history(harness)
+    parent = prepared.log.current
+    if parent is not None and all(record[TURN] != parent for record in records):
+        # The listing is an older turn's, and no line says what the turns since did: compared
+        # with nothing, every file is named, or no rewind past them could put one back.
+        before = {}
+    else:
+        # Unlisted, every other file would read as removed.
+        before = {path: mark for path, mark in stored.items() if not off or path in now}
     unlisted = sorted(cfg.layout.artifact_dirs) if off else []
     under = folder_for(turn)
     try:
-        records, not_kept, dropped = yield from _copies_recorded(
-            prepared, cfg, under, now=now, memory=memory, before=before, unlisted=unlisted
+        not_kept, dropped = yield from _copies_recorded(
+            prepared,
+            cfg,
+            under,
+            records=records,
+            now=now,
+            memory=memory,
+            before=before,
+            unlisted=unlisted,
         )
     except Exception:
         # Before the error goes on: no line will name these copies, so no rewind reads them,
@@ -253,21 +270,21 @@ def keep_turn_files(prepared: Prepared, cfg: Config, walked: Walked) -> Steps[No
         yield from write_listing(harness, ARTIFACTS_SEEN, seen)
 
 
-def _copies_recorded(  # noqa: PLR0913 -- the folders as found and as last listed, by name
+def _copies_recorded(  # noqa: PLR0913 -- the history, and the folders as found and as last listed
     prepared: Prepared,
     cfg: Config,
     under: str,
     *,
+    records: list[dict[str, Any]],
     now: dict[str, Seen],
     memory: bytes | None,
     before: dict[str, str | None],
     unlisted: list[str],
-) -> Steps[tuple[list[dict[str, Any]], dict[str, dict[str, Any]], list[tuple[int, str]]]]:
-    """The turn's copies made and its line written: the history as written, what was not
+) -> Steps[tuple[dict[str, dict[str, Any]], list[tuple[int, str]]]]:
+    """The turn's copies made and its line added to `records` and written: what was not
     copied, and the copies dropped for space, which the caller removes."""
     turn, harness = prepared.turn.id, prepared.harness
     memory_file = cfg.layout.memory_file_route.lstrip("/")
-    records = yield from read_file_history(harness)
     # Once, before any copy: until the deadline the claim has a whole superstep's bound left,
     # which no copy on this host comes near, and past it as little as nothing.
     late = monotonic() > prepared.deadline
@@ -327,6 +344,7 @@ def _copies_recorded(  # noqa: PLR0913 -- the folders as found and as last liste
             removed=sorted(before.keys() - now.keys()),
             state=state,
             unlisted=unlisted,
+            whole=not before,
         )
     )
     # The tree only where a rewind made one: until then the order the turns ran is it.
@@ -345,7 +363,7 @@ def _copies_recorded(  # noqa: PLR0913 -- the folders as found and as last liste
     # Patched as parsed, so a key another version wrote survives.
     lines = "".join(f"{json.dumps(one, ensure_ascii=False)}\n" for one in records)
     yield from harness.store(FILE_HISTORY, lines.encode("utf-8"))
-    return records, not_kept, dropped
+    return not_kept, dropped
 
 
 def _warn_unmarked(turn: str, now: Mapping[str, Seen], *, budgeted: bool) -> None:
@@ -430,11 +448,12 @@ def _line(  # noqa: PLR0913 -- a line's keys, each by name
     removed: list[str],
     state: dict[str, dict[str, str]],
     unlisted: list[str],
+    whole: bool,
 ) -> dict[str, Any]:
     """A turn's line in the history, each key only where it holds something."""
     line: dict[str, Any] = {TURN: turn, UNDER: under}
     keys = ((KEPT, kept), (NOT_KEPT, not_kept), (REMOVED, removed), (STATE, state))
-    for key, held in (*keys, (UNLISTED, unlisted)):
+    for key, held in (*keys, (UNLISTED, unlisted), (WHOLE, whole)):
         if held:
             line[key] = held
     return line
