@@ -372,6 +372,55 @@ def arelease_gives_back_what_claim_took(make: Callable[[], Any]) -> None:
     backends.release(cfg, one, again)
 
 
+def a_claim_that_took_over_says_so(make: Callable[[], Any]) -> None:
+    """A turn asks `took_over` once it has claimed its session. A store answering no for a
+    claim that replaced a stale one leaves the turn after a killed one to repeat what that
+    turn did with no warning; one answering yes for a fresh claim warns every turn.
+    """
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends.open(cfg, one)
+    if (fresh := backends.claim(cfg, one, stale_after=3600)) is None:
+        msg = "a claim nobody held was refused"
+        raise AssertionError(msg)
+    if backends.took_over(cfg, one, fresh):
+        msg = "a fresh claim says it took one over"
+        raise AssertionError(msg)
+    # Seen from an hour on, the first claim is a dead turn's.
+    if (taken := backends.claim(cfg, one, stale_after=3600, now=time.time() + 7200)) is None:
+        msg = "a claim older than stale_after was not taken over"
+        raise AssertionError(msg)
+    if not backends.took_over(cfg, one, taken):
+        msg = "a claim that replaced a stale one does not say it took over"
+        raise AssertionError(msg)
+    if backends.took_over(cfg, one, fresh):
+        msg = "the claim taken over answers for the one that took it"
+        raise AssertionError(msg)
+    backends.release(cfg, one, taken)
+
+
+def atook_over_answers_as_took_over(make: Callable[[], Any]) -> None:
+    """An async turn asks `atook_over`; one answering otherwise than `took_over` warns, or
+    stays silent, only on the turns that are awaited."""
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends.open(cfg, one)
+    if backends.claim(cfg, one, stale_after=3600) is None:
+        msg = "a claim nobody held was refused"
+        raise AssertionError(msg)
+    if (taken := backends.claim(cfg, one, stale_after=3600, now=time.time() + 7200)) is None:
+        msg = "a claim older than stale_after was not taken over"
+        raise AssertionError(msg)
+
+    async def asked() -> bool:
+        return await backends.atook_over(cfg, one, taken)
+
+    if _on_a_loop_of_its_own(asked) is not True:
+        msg = "atook_over did not answer as took_over for a claim that replaced a stale one"
+        raise AssertionError(msg)
+    backends.release(cfg, one, taken)
+
+
 def aclaimed_by_answers_as_claimed_by(make: Callable[[], Any]) -> None:
     """An async turn asks `aclaimed_by` before its ending writes; one answering otherwise
     than `claimed_by` breaks only the turns that are awaited."""
@@ -444,6 +493,7 @@ SESSIONS_CHECKS: tuple[Callable[[Callable[[], Any]], None], ...] = (
     a_claim_is_released_only_by_its_token,
     a_late_release_leaves_the_claim_that_took_over,
     a_claim_taken_over_is_no_longer_its_takers,
+    a_claim_that_took_over_says_so,
     a_session_asked_for_is_listed,
     a_deleted_session_is_gone,
     a_host_path_stays_in_its_session,
@@ -454,6 +504,7 @@ SESSIONS_CHECKS: tuple[Callable[[Callable[[], Any]], None], ...] = (
     aclaim_and_claim_exclude_each_other,
     arelease_gives_back_what_claim_took,
     aclaimed_by_answers_as_claimed_by,
+    atook_over_answers_as_took_over,
     asize_counts_what_size_does,
     amark_used_moves_the_session_on,
 )

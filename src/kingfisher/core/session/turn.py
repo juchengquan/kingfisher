@@ -71,6 +71,9 @@ class Prepared:
     #: is whole.
     #: Carried to the end as well as announced, as `discarded` is.
     history_lost: str | None = None
+    #: Whether this turn took over the claim of one that never let go, which the model,
+    #: the caller and the operator are each told.
+    earlier_turn_unfinished: bool = False
     #: Answers to a turn that stopped for them, in langgraph's shape, or `None`. Never
     #: beside a message: a resume continues a graph mid-superstep.
     resume: dict[str, Any] | None = None
@@ -124,6 +127,7 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
     note: str = "",
     unavailable: tuple[str, ...] = (),
     drift: Drift | None = None,
+    unfinished: bool = False,
 ) -> tuple[Part, ...]:
     """The task and the caller's note, plus this turn's facts and nothing more, each
     piece naming who wrote it.
@@ -134,6 +138,9 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
     # Beside the task, as the caller wrote it: it is the caller's, and kingfisher's lines
     # after it are about where the work is done.
     noted = (Part(f"\n\n{note}", "caller"),) if note else ()
+    # Straight after the ask, where it was measured, and kept with it: a later turn reads
+    # why this one checked before acting.
+    warned = (Part(f"\n\n{UNFINISHED}", "kingfisher"),) if unfinished else ()
     arrived = _inputs_changed(changed, layout.inputs_route)
     # Each call the conversation shows invites another; refused, it costs a model call,
     # and on MiniMax-M3 one agent said it had re-read a file it no longer could.
@@ -151,6 +158,7 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
     return (
         Part(task, "user"),
         *noted,
+        *warned,
         Part(
             f"\n\n{layout.scratch_route} is yours to work in (from the shell, "
             f"{layout.scratchpad}).{arrived}{drifted}{lacking}{ledger}",
@@ -293,6 +301,27 @@ def decision_discarded(tools: tuple[str, ...]) -> RunEvent:
         kind="decision_discarded",
         text=f"a pending decision on {', '.join(tools)} was dropped by this turn",
         tools=tools,
+    )
+
+
+#: What the model is told on a turn that took over a dead turn's claim. Measured on
+#: MiniMax-M3 before kingfisher said it: a reminder already sent went out again 0 times in
+#: 6 with it, and 6 in 6 without, where the model had no way to ask whether it was sent.
+UNFINISHED = (
+    "The previous turn in this session was interrupted before it finished, and nothing "
+    "from it is in this conversation. Anything it did outside this session may already "
+    "have happened, so check before repeating an outside action."
+)
+
+
+def earlier_turn_unfinished() -> RunEvent:
+    """The event a turn opens with when it took over a claim whose turn never let go."""
+    return RunEvent(
+        kind="earlier_turn_unfinished",
+        text=(
+            "the previous turn in this session did not finish, and anything it did outside "
+            "the session may have happened; this turn's agent is told to check first"
+        ),
     )
 
 

@@ -316,6 +316,7 @@ and its sentence says them again:
 |---|---|---|
 | `artifacts_incomplete` | listing a folder of artifacts at a turn's end failed or was cut short | `folder`, `reason` |
 | `conversation_not_logged` | a turn ended on a conversation its turn log cannot rebuild, beyond the text of a message; the next turn is built on what the log rebuilds | `ended`, `rebuilt` |
+| `earlier_turn_unfinished` | a turn took the session over from one that never finished, killed or past its claim; its agent was told to check before repeating what that turn did outside, and `RunResult.earlier_turn_unfinished` says so | none |
 | `definitions_refused` | the definitions changed and the change failed its checks; the sentence keeps the error's message, since you wrote them | `error_type` |
 | `host_path_failed` | a backend's `host_path` raised | `plugin`, `method`, `error_type`, `error_at` |
 | `memory_store_failed` | a `MemoryStore` call raised | `plugin`, `method`, `error_type`, `error_at` |
@@ -973,13 +974,17 @@ caller however many judged it stale at once. `claimed_by(cfg, session_id, token,
 answers whether that token's claim still holds the session, false once it was taken over
 or given back: a turn asks it before its ending writes, and one that outlived its claim
 writes nothing, where it would land behind the turn that took the session and erase its
-conversation. `LocalSessions` does it with `mkdir` under the session's `.harness`, the
-token in a file inside, and a takeover that renames the stale claim aside under a name
-only it has, so a second taker's rename fails. Subclass `Sessions` and `aclaim`,
-`arelease` and `aclaimed_by` run them on kingfisher's pool; override them where your
-lock is a round trip you can await. Two turns in one session share a conversation and
-the last write wins, so this is what refuses the second. The backend `open` returns
-carries none of this.
+conversation. `took_over(cfg, session_id, token, /)` answers whether that token's claim
+replaced a stale one: a turn asks it once it has claimed the session, since a killed
+turn leaves nothing else behind, and tells its agent to check before repeating what that
+turn may have done outside. `LocalSessions` does it with `mkdir` under the session's
+`.harness`, the token in a file inside, and a takeover that renames the stale claim
+aside under a name only it has, so a second taker's rename fails, and a note in the
+claim that took over. Subclass `Sessions` and `aclaim`, `arelease`, `aclaimed_by` and
+`atook_over` run them on kingfisher's pool; override them where your lock is a round
+trip you can await. Two turns in one session share a conversation and the last write
+wins, so this is what refuses the second. The backend `open` returns carries none of
+this.
 
 **A pre-built graph names its sessions too.** `Kingfisher(cfg, graph=...)`
 runs its agent on the backend the graph was compiled with, but kingfisher still
@@ -1264,12 +1269,13 @@ place to read a failure than a turn is. And hold the object that makes them to
 `tests/checks/sessions.py`: that two
 sessions are kept apart, that a session is there on the next turn, that the claim
 is exclusive and released only by its token, a late one included, that a claim taken
-over or given back is no longer its taker's, that what is listed
+over or given back is no longer its taker's, that one which took over a stale claim
+says so and a fresh one does not, that what is listed
 and deleted is what exists, that where you say
 a file is on this host it is that session's file, that a session serves under
 `/skills/` the skills kingfisher read, and that every async twin —
-`aopen`, `asessions`, `adelete`, `aclaim`, `arelease`, `aclaimed_by`, `asize` and
-`amark_used` —
+`aopen`, `asessions`, `adelete`, `aclaim`, `arelease`, `aclaimed_by`, `atook_over`,
+`asize` and `amark_used` —
 answers as its sync one does.
 
 **A session has to serve under `/skills/` what kingfisher read.** Grants and the

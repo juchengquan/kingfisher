@@ -18,6 +18,29 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A turn after one that never finished is told so, after #1288
+
+- **A `Sessions` of your own must answer `took_over(cfg, session_id, token, /)`**: true
+  when the claim `token` took replaced a stale one, false for a claim taken fresh and for
+  a token that no longer holds the session. Until it does, it fails to instantiate,
+  naming the method. Note the takeover beside the token, in the branch of `claim` that
+  replaces a stale claim:
+
+  ```python
+  def took_over(self, cfg, session_id, token, /):
+      held = self._claim(session_id)  # what `claim` wrote, or None
+      return held is not None and held.token == token and held.took_over
+  ```
+
+  `atook_over` runs it on kingfisher's pool; override it where the answer is a round
+  trip you can await. `tests/checks/sessions.py` checks both.
+- **A turn that took the session over from one that never finished says so**, as an
+  `earlier_turn_unfinished` `RunEvent` before its agent runs, as
+  `RunResult.earlier_turn_unfinished`, and as an `earlier_turn_unfinished` warning on
+  your `RunEvents`. Its agent is told, after the ask, to check before repeating an
+  outside action, but one with no tool to check repeats it anyway. Where a repeat costs,
+  act on the event: you know whether you sent that ask again yourself.
+
 ## A turn that outlived its claim writes nothing, after #1281
 
 - **A `Sessions` of your own must answer `claimed_by(cfg, session_id, token, /)`**: true

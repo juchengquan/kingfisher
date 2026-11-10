@@ -139,6 +139,7 @@ class Sessions(ABC):
     - a claim is exclusive and one session's: a second claim on a held session fails,
       and a claim on another does not;
     - a claim taken over, or given back, is no longer its taker's;
+    - a claim that took over a stale one says so, and a fresh one does not;
     - a host path a backend names for a file is that session's file;
     - a session serves under `/skills/` the skills kingfisher read;
     - every async twin answers as its sync one does.
@@ -237,6 +238,16 @@ class Sessions(ABC):
         """
         ...
 
+    @abstractmethod
+    def took_over(self, cfg: Config, session_id: str, token: str, /) -> bool:
+        """Whether the claim `token` took replaced a stale one, whose turn never let go.
+
+        Asked once a turn has claimed its session: that turn died or outlived its claim, and
+        what it did outside the session may have happened with nothing in the session to
+        say so, so the turn that took over is told.
+        """
+        ...
+
     def where(self, cfg: Config) -> Path | None:  # noqa: ARG002 -- an override reads it
         """The folder these sessions are kept in on this host, which the origins line
         reports, or `None` where they are kept elsewhere."""
@@ -279,6 +290,9 @@ class Sessions(ABC):
 
     async def aclaimed_by(self, cfg: Config, session_id: str, token: str, /) -> bool:
         return await off_loop(thread_pool(), self.claimed_by, cfg, session_id, token)
+
+    async def atook_over(self, cfg: Config, session_id: str, token: str, /) -> bool:
+        return await off_loop(thread_pool(), self.took_over, cfg, session_id, token)
 
 
 class Instructions(ABC):
