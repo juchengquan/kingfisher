@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -400,3 +402,95 @@ def test_a_process_that_left_the_group_dies_when_its_command_times_out(
     assert not _escaped(
         lambda c, t: fenced.run(c, timeout=t), theirs, escape, then="sleep 30", timeout=2
     )
+
+
+#: A key in the host's starting environment, which no fenced command may read.
+HOST_KEY = "KF-HOST-STARTED-WITH-THIS-KEY"
+
+
+def _a_host() -> subprocess.Popen[bytes]:
+    """A process standing in for kingfisher, started with a key in its environment.
+
+    Started with it, not handed it later: `/proc/<pid>/environ` is what a process was
+    executed with, so a key set in this process after it started is not there to read,
+    and a check against it would pass under a fence that showed every key.
+    """
+    return subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        env={"PATH": "/usr/bin:/bin", "KF_TEST_HOST_KEY": HOST_KEY},
+    )
+
+
+@pytest.fixture
+def host():
+    started = _a_host()
+    yield started
+    started.kill()
+    started.wait()
+
+
+@needs_landlock
+def test_a_fenced_command_cannot_read_the_hosts_starting_environment(fenced, host, tmp_path):
+    """`configuration.md` said the kernel was expected to refuse another process's
+    `environ` under Landlock, with nothing holding it to that: a model key kingfisher
+    was started with would be the shell's to read. Named by pid, since inside the fence
+    `$PPID` is the reaper. The control is the same read with no fence, which finds it."""
+    read = f"cat /proc/{host.pid}/environ"
+
+    _, unconfined = unfenced(read, tmp_path)
+    assert HOST_KEY in unconfined, "the host's key was not there to find"
+    result = fenced.run(read)
+
+    assert HOST_KEY not in result.output
+    assert result.exit_code != 0
+
+
+@needs_landlock
+def test_a_fenced_command_cannot_signal_the_host(fenced, host, tmp_path):
+    """Landlock ABI 6 scopes signals to a command's own fence, and `sandlock` always asks
+    for it: without that, a command could stop or kill the process running every
+    session's turn. The control kills a process the same way with no fence."""
+    target = _a_host()
+    try:
+        unfenced(f"kill -TERM {target.pid}", tmp_path)
+        assert target.wait(5) != 0, "an unfenced kill did not reach the target"
+    finally:
+        target.kill()
+
+    result = fenced.run(f"kill -TERM {host.pid}")
+
+    assert result.exit_code != 0
+    time.sleep(0.2)
+    assert host.poll() is None, "a fenced command killed the host"
+
+
+@needs_landlock
+def test_a_fenced_command_cannot_signal_another_sessions_command(two_sessions):
+    """Each session's command is fenced on its own, so each is its own Landlock domain:
+    one session must not stop another's work, as on macOS it can. The control is the
+    command's own `kill $$`, which its fence allows."""
+    mine, theirs = two_sessions
+    pid_file = mine / "outputs" / "pid"
+    ran: dict[str, object] = {}
+
+    def theirs_running() -> None:
+        ran["result"] = _runner_for(mine).run(
+            f"echo $$ > {pid_file} && sleep 3 && echo FINISHED", timeout=20
+        )
+
+    running = threading.Thread(target=theirs_running)
+    running.start()
+    gone = time.monotonic() + 10
+    while not (pid_file.is_file() and pid_file.read_text(encoding="utf-8").strip()):
+        assert time.monotonic() < gone, "the other session's command never started"
+        time.sleep(0.05)
+    pid = int(pid_file.read_text(encoding="utf-8"))
+
+    killed = _runner_for(theirs).run(f"kill -TERM {pid}")
+    own = _runner_for(theirs).run("kill -TERM $$; echo SURVIVED")
+    running.join(20)
+
+    assert killed.exit_code != 0
+    assert "FINISHED" in ran["result"].output, "the other session's command was killed"
+    assert "SURVIVED" not in own.output, "a command could not signal itself: the control"
+

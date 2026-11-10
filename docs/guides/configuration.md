@@ -198,7 +198,7 @@ fences' code -- and for the definitions folder on 2026-10-13, the same way:
 | A session's top, beside its folders | readable, not writable | readable, not writable | readable, not writable | readable and writable |
 | Anywhere else -- `/tmp`, `/Users/Shared`, `/opt` | readable | hidden | hidden | readable |
 | `/etc`, `/usr` | readable | readable | readable | readable |
-| A process's environment as it started | readable | hidden | not settled | readable |
+| A process's environment as it started | readable | hidden | hidden | readable |
 | The network | open | closed | open | open |
 
 **On macOS the sandbox does not keep sessions apart.** It hides the operator's home,
@@ -217,8 +217,10 @@ The environment row is the one that surprises. On macOS a sandboxed shell cannot
 operator runs. It answers with the environment each process *started* with. So a key
 exported in a shell profile, a launchd plist or a container's `env:` is readable, and
 one `.env` added after kingfisher started is not. Landlock grants `/proc`, where
-command lines are readable. The kernel is expected to refuse another process's
-`environ`, but no test here holds it to that.
+command lines are readable, but the kernel refuses another process's `environ`, and
+keeps a command's signals inside its own fence: it can neither read the environment
+kingfisher started with nor stop kingfisher or another session's command. The Linux job
+holds all three.
 
 **Kingfisher does not keep the model keys from the shell; where they sit decides it.**
 On macOS, keep the keys file `KINGFISHER_MODEL_KEYS_FILE` names under the home folder
