@@ -56,6 +56,7 @@ into the definitions folder.
 | --- | --- | --- |
 | `KINGFISHER_EXECUTION_TIMEOUT_S` | How long one shell command may run, and one `eval` in the interpreter -- its own code, not the tools that code waits on -- and how long one offered tool call's commands may run all told, none of them past the turn's end. The model may give a command less with `execute`'s `timeout`, never more. | `120` |
 | `KINGFISHER_TURN_TIMEOUT_S` | How long one turn may run. | `3600` |
+| `KINGFISHER_CANCEL_WAIT_S` | How long a cancelled `astream` or `arun` holds its caller for a tool call a thread is still running, as one running a plain function is, before letting it go. The call's answer is kept either way: past the wait the session is refused as busy until the call ends, so a shorter wait holds the caller less and leaves the session busy longer. `0` lets the caller go at once. | `5` |
 | `KINGFISHER_RECURSION_LIMIT` | How many steps a turn may take before it stops. | `150` |
 | `KINGFISHER_THREAD_POOL_SIZE` | How many threads `astream` and `arun` hand blocking work to. One pool per process: a second service asking for a different number is refused when it is built. It serves the short work a turn does on this host, and any session-backends method left to its default, which runs the sync one on it: raise it for many turns at once on remote sessions whose async methods are those defaults. | `16` |
 | `KINGFISHER_SESSION_MAX_BYTES` | Cap on what one session may hold, its record of every turn's messages included and its copies of earlier turns' files not counted. Checked between turns, never during one. | none — unbounded |
@@ -64,8 +65,11 @@ into the definitions folder.
 | `KINGFISHER_MEMORY_EVERY` | Where memory is on, how many turns the memory writer waits between runs: one model call at a turn's end that rewrites the session's memory entries from what was said since it last ran. It also runs on any turn where the conversation was summarised. It runs on `memory_writer:` in `models.yaml`, or the agent's own model where that is absent. | `4` |
 
 **A turn stops between steps, so the turn timeout is a deadline and not a limit.** A
-turn out of time finishes the step it is inside before it stops, and that step is
-bounded by `KINGFISHER_EXECUTION_TIMEOUT_S` where it runs a shell command and by the
+turn out of time stops when the step it is inside hands something back, and a tool call
+a thread is running for it finishes before the turn answers: on `stream` however long it
+takes, and on `astream` until the longest bound below has passed, when the turn answers
+without it.
+That step is bounded by `KINGFISHER_EXECUTION_TIMEOUT_S` where it runs a shell command and by the
 model's `timeout_s` in `models.yaml` where it calls one — so a turn may overrun
 `KINGFISHER_TURN_TIMEOUT_S` by the longest of those, and lowering them is what makes the
 overrun smaller. The session stays claimed for the turn timeout plus that longest bound

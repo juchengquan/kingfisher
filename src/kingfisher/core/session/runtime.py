@@ -585,6 +585,23 @@ def summarised_away(snapshot: Any) -> list[Any]:
     return held_in(snapshot)[: summary[1]]
 
 
+def with_answers(snapshot: Any, answers: Mapping[str, Any]) -> Any:
+    """`snapshot` with each of `answers` after the message asking for its call, where the
+    state holds no answer to it: the graph was cancelled before it took the answer."""
+    values = getattr(snapshot, "values", None)
+    if not answers or not isinstance(values, Mapping) or not hasattr(snapshot, "_replace"):
+        return snapshot
+    messages = list(values.get("messages") or ())
+    answered = {getattr(one, "tool_call_id", None) for one in messages}
+    joined: list[Any] = []
+    for one in messages:
+        joined.append(one)
+        for call in getattr(one, "tool_calls", None) or ():
+            if call.get("id") in answers and call.get("id") not in answered:
+                joined.append(answers[call["id"]])
+    return snapshot._replace(values={**values, "messages": joined})
+
+
 def summarised_in(snapshot: Any) -> bool:
     """Whether a turn ended on a conversation deepagents had summarised, even before
     the turn began, as a resume's restored state can be."""

@@ -6474,6 +6474,38 @@ session is free. Returning sooner would leave a window in which a retry gets
 cancel. `test_a_cancelled_turn_does_not_keep_running_behind_the_caller` fails with
 that error when the wait is removed.
 
+**Narrowed: a cancel waits for a call a thread runs, for at most
+`KINGFISHER_CANCEL_WAIT_S`.** The wait above ended with the turn, and a cancelled
+awaited graph let go of a call on a thread at once: the session was free, the next turn
+was told the call did not complete, and the charge landed 1.4 seconds after that turn
+had finished, on a 1.5-second tool. A cancel now waits for such a call, through any
+number of cancels, for at most five seconds unless a deployment sets
+`KINGFISHER_CANCEL_WAIT_S`, since the wait only trades how long the caller is held
+against how long the session then answers busy; past that the caller is let go and the
+turn holds its session until the call ends, so a retry meanwhile gets
+`SessionBusyError`, or until its deadline plus `superstep_bound`, where it ends without
+the call's answer: past that point another turn may take its claim over, and the ending
+would write behind that turn. That is the window the paragraph above calls worse than a
+slow cancel, taken on the maintainer's call: an unbounded wait holds a caller as long as
+a hung tool, which *Not taken: a thread-backed `astream`* refused at 120 seconds, and
+the refusal now says a running or dead turn holds the session. A model call still stops
+at once, an awaited tool is cancelled, and a command is ended rather than waited out.
+*(2026-11-02; the setting 2026-11-09.)*
+
+**The awaited graph runs in a task the turn owns, and is cancelled once.** langgraph
+waits for the calls it cancels, but a second cancel breaks out of that wait, and a web
+framework cancels again and again: an awaited tool not yet reached charged behind the
+next turn. The turn's task hands chunks over a one-slot queue, cancels the graph's task
+exactly once, and waits through every later cancel. A turn out of time and a graph that
+fails stop the same way and wait for their calls past the cancel wait, since no caller
+has left, to the same bound the claim sets. A call's answer is kept even where the
+graph's step was cancelled before taking it, and joined to the conversation the ending
+writes, so the next model reads the receipt rather than "did not complete". A call still
+queued for a thread is refused where the thread begins, since every call of a reply has
+passed the middleware by then. Not reached: an awaited tool cancelled after its effect,
+a tool with a thread of its own, and a compiled graph's own tool, whose calls still read
+as not completed. *(2026-11-02.)*
+
 **Methods on `Kingfisher`, and no module-level pair.** `run` and `stream` have
 module-level conveniences; the async twins do not, because a new name in `__all__`
 needs a witness and no caller outside this wheel has asked. The day one does, it is
@@ -6487,6 +6519,31 @@ cancelled during the model call. Now the cancel waits for setup and ends the tur
 through the lifecycle's own ending -- *Cancelling waits* again.
 `test_cancelling_during_setup_leaves_the_session_free` lets setup go only after the
 cancel has landed, so it cannot pass by setup finishing first. *(2026-10-02.)*
+
+**A call that has not begun when its turn stops is not run.** Closing a turn's stream,
+because its caller stopped reading or its time ran out, closes the graph's, and
+langgraph's sync loop waits there for every call the reply queued, starting each as a
+thread frees: 40 calls asked together and stopped with the first few under way charged 40
+times. `StoppingMiddleware` refuses a call that begins once its turn is stopping, and
+`GuardedTool` refuses one from `eval` or a compiled subagent. The flag is a context
+variable set in a context of the turn's own, which the graph's stream runs in and
+langgraph's threads copy, so it is never set in the caller's. A call already running
+finishes: no thread can be killed. *(2026-11-02.)* A graph says it failed only once every
+call beside the failing one has ended, and on the loop only once a thread is free to run
+the tool's error callbacks, so 40 calls asked beside a failing one all charged. A failing
+call now stops its turn where it raises: in the middleware, and for what no middleware
+answers for, inside the thread. An interrupt rising from a paused subagent through its
+`task` call is no failure, and stops nothing. *(2026-11-09.)*
+
+**Rejected: a refused call saying why its turn stopped.** "Did not run" reads the same
+whether the user stopped the turn on purpose or it ran out of time, and only the first is
+not to be undone, so the refusal was to say which. Measured first, on MiniMax-M3: 2 of 5
+refunds ran, 3 were refused, and the next message asked "how far did you get?", 10 replies
+a wording. The plain sentence was followed by the refunds sent again unasked 1 time in 10,
+"because its caller stopped it" 3, "because it ran out of time" 4; half of those re-sends
+came with no text at all, and 19 of the 22 replies that held back asked first. A reason
+does not stop a model re-sending, so the sentence stays plain, and keeping it from
+re-sending is for the warning the next turn is given, measured there. *(2026-11-09.)*
 
 **Kingfisher's own thread pool, one per process.** `asyncio.to_thread` borrows the
 loop's default executor, `min(32, cpu+4)` workers, and a call blocking on a round trip

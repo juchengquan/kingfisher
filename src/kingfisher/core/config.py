@@ -340,6 +340,10 @@ class Config:
     # Nothing else bounds `recursion_limit` times a model's `timeout_s`, which allows
     # 150 x 120s, about 5 hours; an hour is far past any real turn.
     turn_timeout_s: int = 3600
+    #: How long a cancelled `astream` or `arun` holds its caller for a call a thread is
+    #: still running. Only that: the call's answer is kept either way, and past the wait
+    #: the session answers busy until the call ends. 0 lets the caller go at once.
+    cancel_wait_s: int = 5
     # Unset by default: workspaces vary by orders of magnitude. Checked before a turn,
     # never during: `execute` writes without any file tool seeing it.
     session_max_bytes: int | None = None
@@ -393,7 +397,13 @@ class Config:
         straddles the deadline, and then still has to emit its result, collect what it
         left and let go.
         """
-        return self.turn_timeout_s + max(
+        return self.turn_timeout_s + self.superstep_bound + self._memory_writer_bound
+
+    @property
+    def superstep_bound(self) -> float:
+        """The longest one superstep can hold past the turn's deadline, which the claim
+        leaves room for and a stopped turn waits for its calls no longer than."""
+        return max(
             # Every bound on a superstep, not the model's alone: the deadline is read
             # between chunks, and a shell command straddles it exactly as a model call
             # does. Measured, a 6s command under a 1s turn and a 1s model timeout let a
@@ -406,7 +416,7 @@ class Config:
             # Not zero, even with neither models nor a bound on a command: zero would
             # restore the overlap.
             ModelProfile.timeout_s,
-        ) + self._memory_writer_bound
+        )
 
     @property
     def _memory_writer_bound(self) -> float:
