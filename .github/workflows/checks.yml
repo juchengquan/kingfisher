@@ -70,7 +70,9 @@ jobs:
   # however many extras it asks for.
   fences:
     name: the Linux fence
-    runs-on: ubuntu-latest
+    # Not `ubuntu-latest`, which now lands on 24.04 or 26.04 by draw. 26.04 lets the
+    # bubblewrap half run, and two of its escape tests fail there; 24.04 skips them.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
