@@ -10,6 +10,7 @@ import time
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import Held, with_datazone
@@ -49,6 +50,7 @@ from .steps import (
     changing,
     drive,
     on_host,
+    reading,
 )
 from .store import (
     AGENT_MARK,
@@ -106,6 +108,16 @@ class _Turn:
 
 #: What a graph's stream is read as once it has nothing more.
 _ENDED = object()
+
+#: What a turn whose claim was taken over tells its caller, by `keep_failure`.
+TAKEN_OVER = (
+    "a newer turn took this session over before this one had kept everything, so nothing "
+    "after that was written"
+)
+
+
+class _TakenOver(Exception):  # noqa: N818 -- a signal within the ending, never raised past it
+    """This turn's claim is a later turn's now."""
 
 #: Turns ending after their caller left, held here: the loop keeps only a weak reference to
 #: a task, and one collected would never let go of its session.
@@ -214,6 +226,7 @@ class Running:
             answer=turn.answer,
             ok=turn.ok,
             paused=bool(turn.awaiting),
+            claimed=partial(self._still_claimed, prepared),
         )
         turn.pending.extend(said)
         # Only what changed: the store merges it into what other sessions saved since.
@@ -233,6 +246,15 @@ class Running:
             )
             if failed is not None:
                 turn.pending.append(failed)
+
+    def _still_claimed(self, prepared: Prepared) -> Steps[None]:
+        """Raise `_TakenOver` once a later turn holds this one's claim: what it wrote now
+        would land behind that turn's, and erase its conversation."""
+        held = yield reading(
+            self._sessions, "claimed_by", self.cfg, prepared.session.id, prepared.claim
+        )
+        if not held:
+            raise _TakenOver
 
     def _settled(self, prepared: Prepared) -> Any:
         """This turn's final graph state, or `None` where there is none.
@@ -434,6 +456,9 @@ class Running:
                     (yield on_host(self._settled, prepared)), turn.threads.answers
                 )
                 ended = self._ended_on(snapshot)
+                # Before the first write: a tool that hung past the claim leaves the turn
+                # ending in a session another turn may have taken over since.
+                yield from self._still_claimed(prepared)
                 # Before the pause as well as the turn log: a resume carries on from
                 # that state, and a result in either must already have its row.
                 turn.recorded = yield from self._record_ledger(prepared, snapshot, ended)
@@ -475,6 +500,17 @@ class Running:
             # The same walk: the sweep hands over results in the scratchpad, which it does not
             # reach.
             yield from keep_turn_files(prepared, self.cfg, walked)
+        except _TakenOver:
+            # The answer still goes to a caller waiting for it: the work was done, and only
+            # the session's record of it is lost.
+            turn.keep_failure = TAKEN_OVER
+            calls = [] if prepared.ledger is None else [one.call for one in prepared.ledger.entries]
+            warn(
+                "turn_outlived_claim",
+                f"a newer turn took the session over before this one ended; "
+                f"{len(calls)} result(s) it had were not kept",
+                calls=calls,
+            )
         except OSError as exc:
             # A full disk refusing the record is no reason to lose the answer as well: it
             # was paid for, and nothing streamed it before `finished`.

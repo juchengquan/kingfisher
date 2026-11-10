@@ -331,6 +331,7 @@ and its sentence says them again:
 | `turn_files_not_kept` | no file a turn left was copied, a listing having come back cut short | none |
 | `turn_files_unmarked` | the listing gave no checksum, size or time for files a turn left, so none could be told unchanged; once a turn | `folders` |
 | `turn_not_ended` | a turn whose caller had left raised as it ended, once its calls on threads had | `error_type`, `error_at` |
+| `turn_outlived_claim` | a turn ended after a newer turn had taken its session over, and kept nothing from there; its caller's `RunResult.keep_failure` says so | `calls` |
 | `unused_results_failed` | your `UnusedResults` raised | `error_type`, `error_at`, `left`, `files` |
 
 `plugin` is the class that raised and `method` what it was asked; `reason` is a fixed
@@ -963,19 +964,22 @@ id handed the same storage.
 **The turn lock is on the sessions.** They have `claim(cfg, session_id, /, *,
 stale_after, now=None)` and `release(cfg, session_id, token, /)`: a claim that fails
 while another is live, which a `write` cannot be, because a `write` overwrites and two
-turns would both take it. One lock per
-session, not one for the object: a turn in one session must not refuse a turn in
-another. `claim` answers a token naming its taker, or `None` when a live turn holds the
-session, and `release` gives back only the claim that token took: a turn that outlived
-`stale_after` has had its claim taken over, and its release must leave the new one. A
-claim older than `stale_after` is taken over by one caller however many judged it stale
-at once. `LocalSessions` does it with `mkdir` under the session's `.harness`, the token
-in a file inside, and a takeover that renames the stale claim aside under a name only it
-has, so a second taker's rename fails. Subclass
-`Sessions` and `aclaim` and `arelease` run them on kingfisher's pool; override them
-where your lock is a round trip you can await. Two turns in one session share a
-conversation and the last write wins, so this is what refuses the second. The backend
-`open` returns carries none of this.
+turns would both take it. One lock per session, not one for the object: a turn in one
+session must not refuse a turn in another. `claim` answers a token naming its taker, or
+`None` when a live turn holds the session, and `release` gives back only the claim that
+token took: a turn that outlived `stale_after` has had its claim taken over, and its
+release must leave the new one. A claim older than `stale_after` is taken over by one
+caller however many judged it stale at once. `claimed_by(cfg, session_id, token, /)`
+answers whether that token's claim still holds the session, false once it was taken over
+or given back: a turn asks it before its ending writes, and one that outlived its claim
+writes nothing, where it would land behind the turn that took the session and erase its
+conversation. `LocalSessions` does it with `mkdir` under the session's `.harness`, the
+token in a file inside, and a takeover that renames the stale claim aside under a name
+only it has, so a second taker's rename fails. Subclass `Sessions` and `aclaim`,
+`arelease` and `aclaimed_by` run them on kingfisher's pool; override them where your
+lock is a round trip you can await. Two turns in one session share a conversation and
+the last write wins, so this is what refuses the second. The backend `open` returns
+carries none of this.
 
 **A pre-built graph names its sessions too.** `Kingfisher(cfg, graph=...)`
 runs its agent on the backend the graph was compiled with, but kingfisher still
@@ -1259,11 +1263,13 @@ Run all six. The automatic pair costs nothing twice, and your own suite is a bet
 place to read a failure than a turn is. And hold the object that makes them to
 `tests/checks/sessions.py`: that two
 sessions are kept apart, that a session is there on the next turn, that the claim
-is exclusive and released only by its token, a late one included, that what is listed
+is exclusive and released only by its token, a late one included, that a claim taken
+over or given back is no longer its taker's, that what is listed
 and deleted is what exists, that where you say
 a file is on this host it is that session's file, that a session serves under
 `/skills/` the skills kingfisher read, and that every async twin —
-`aopen`, `asessions`, `adelete`, `aclaim`, `arelease`, `asize` and `amark_used` —
+`aopen`, `asessions`, `adelete`, `aclaim`, `arelease`, `aclaimed_by`, `asize` and
+`amark_used` —
 answers as its sync one does.
 
 **A session has to serve under `/skills/` what kingfisher read.** Grants and the

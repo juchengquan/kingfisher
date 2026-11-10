@@ -611,6 +611,9 @@ class LocalSessions(Sessions):
             return
         remove_tree(gone)
 
+    def claimed_by(self, cfg: Config, session_id: str, token: str, /) -> bool:
+        return _identity(_claim_at(cfg, session_id)) == token
+
     def held(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
     ) -> bool:

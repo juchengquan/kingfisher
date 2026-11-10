@@ -13,6 +13,7 @@ from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import TurnInstructions
 from kingfisher.core.layout import HARNESS, MEMORY_WRITER
 from kingfisher.core.model_catalogue import load
+from kingfisher.core.session import memory_writer, running
 from kingfisher.core.session.memory import listed
 from kingfisher.core.session.memory_writer import MAX_CHARACTERS, MAX_ENTRIES, writer_model
 from kingfisher.plugins import LocalSessions
@@ -59,6 +60,29 @@ def _kinds(events, kind: str) -> list[str]:
 
 
 # -- when it runs --------------------------------------------------------------
+
+
+def test_a_session_taken_over_while_the_writer_runs_keeps_its_new_turns_memory(
+    scripted, monkeypatch
+):
+    """The writer's model call is the one long wait in a turn's ending, and a claim can
+    lapse during it: a writer then writing behind the turn that took the session over
+    would replace that turn's memory with its own."""
+    kf = _writing(scripted, memory_every=1)
+    asked = memory_writer._asked
+
+    def taken_over_meanwhile(*args: Any) -> str:
+        # Judged stale at once: the claim this turn holds goes to another taker.
+        assert LocalSessions().claim(scripted, "s", stale_after=0) is not None
+        return asked(*args)
+
+    monkeypatch.setattr(memory_writer, "_asked", taken_over_meanwhile)
+    result, _ = _turn(kf, AIMessage(content="done"), AIMessage(content="- Likes EUR"))
+
+    assert result.keep_failure == running.TAKEN_OVER
+    memory = _memory_file(scripted)
+    assert not memory.exists() or "Likes EUR" not in memory.read_text(encoding="utf-8")
+    assert not (scripted.workspace / "sessions" / "s" / HARNESS / MEMORY_WRITER).exists()
 
 
 def test_the_writer_runs_on_the_fourth_turn_by_default_and_not_before(scripted):

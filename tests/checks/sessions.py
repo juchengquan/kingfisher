@@ -140,6 +140,37 @@ def a_late_release_leaves_the_claim_that_took_over(make: Callable[[], Any]) -> N
     backends.release(cfg, one, taken)
 
 
+def a_claim_taken_over_is_no_longer_its_takers(make: Callable[[], Any]) -> None:
+    """A turn asks `claimed_by` before its ending writes. A store answering yes for a
+    claim taken over lets a turn that outlived its claim write behind the turn that took
+    it, erasing that turn's conversation; one answering no for a live claim loses every
+    turn's record.
+    """
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends.open(cfg, one)
+    if (late := backends.claim(cfg, one, stale_after=3600)) is None:
+        msg = "a claim nobody held was refused"
+        raise AssertionError(msg)
+    if not backends.claimed_by(cfg, one, late):
+        msg = "a claim just taken is not its taker's"
+        raise AssertionError(msg)
+    # Seen from an hour on, the first claim is a dead turn's.
+    if (taken := backends.claim(cfg, one, stale_after=3600, now=time.time() + 7200)) is None:
+        msg = "a claim older than stale_after was not taken over"
+        raise AssertionError(msg)
+    if backends.claimed_by(cfg, one, late):
+        msg = "a claim taken over is still its first taker's"
+        raise AssertionError(msg)
+    if not backends.claimed_by(cfg, one, taken):
+        msg = "the claim that took over is not its taker's"
+        raise AssertionError(msg)
+    backends.release(cfg, one, taken)
+    if backends.claimed_by(cfg, one, taken):
+        msg = "a claim given back is still its taker's"
+        raise AssertionError(msg)
+
+
 def a_deleted_session_is_gone(make: Callable[[], Any]) -> None:
     cfg, backends = make()
     one = CONTRACT_SESSIONS[0]
@@ -341,6 +372,28 @@ def arelease_gives_back_what_claim_took(make: Callable[[], Any]) -> None:
     backends.release(cfg, one, again)
 
 
+def aclaimed_by_answers_as_claimed_by(make: Callable[[], Any]) -> None:
+    """An async turn asks `aclaimed_by` before its ending writes; one answering otherwise
+    than `claimed_by` breaks only the turns that are awaited."""
+    cfg, backends = make()
+    one = CONTRACT_SESSIONS[0]
+    backends.open(cfg, one)
+    if (token := backends.claim(cfg, one, stale_after=3600)) is None:
+        msg = "a claim nobody held was refused"
+        raise AssertionError(msg)
+
+    async def asked() -> tuple[bool, bool]:
+        return (
+            await backends.aclaimed_by(cfg, one, token),
+            await backends.aclaimed_by(cfg, one, "a-token-this-claim-was-never-given"),
+        )
+
+    if _on_a_loop_of_its_own(asked) != (True, False):
+        msg = "aclaimed_by did not answer as claimed_by: its own token yes, another no"
+        raise AssertionError(msg)
+    backends.release(cfg, one, token)
+
+
 def asize_counts_what_size_does(make: Callable[[], Any]) -> None:
     """An async turn checks the quota with `asize`. Counted differently, a session would
     be over its bound for one kind of caller and under it for the other.
@@ -390,6 +443,7 @@ SESSIONS_CHECKS: tuple[Callable[[Callable[[], Any]], None], ...] = (
     a_claim_is_exclusive,
     a_claim_is_released_only_by_its_token,
     a_late_release_leaves_the_claim_that_took_over,
+    a_claim_taken_over_is_no_longer_its_takers,
     a_session_asked_for_is_listed,
     a_deleted_session_is_gone,
     a_host_path_stays_in_its_session,
@@ -399,6 +453,7 @@ SESSIONS_CHECKS: tuple[Callable[[Callable[[], Any]], None], ...] = (
     adelete_removes_the_session,
     aclaim_and_claim_exclude_each_other,
     arelease_gives_back_what_claim_took,
+    aclaimed_by_answers_as_claimed_by,
     asize_counts_what_size_does,
     amark_used_moves_the_session_on,
 )
