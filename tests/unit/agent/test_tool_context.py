@@ -29,7 +29,7 @@ from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.request import Decision, Request, Resume
 from kingfisher.core.result import AWAITING
-from kingfisher.core.session import runtime
+from kingfisher.core.session import stream_chunks
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import (
     EVERY_TOOL,
@@ -574,7 +574,7 @@ def _run(cfg, session_dir, *responses: AIMessage, **keywords: Any) -> list[tuple
         for update in chunk.values():
             found += [
                 (bool(namespace), message)
-                for message in runtime.messages_in(update)
+                for message in stream_chunks.messages_in(update)
                 if isinstance(message, ToolMessage)
             ]
     return found

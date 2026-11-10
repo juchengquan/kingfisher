@@ -19,7 +19,7 @@ from kingfisher.core.agent.middlewares.result_rows import expired_handle, stampe
 from kingfisher.core.layout import TURNS_FILE
 from kingfisher.core.logged import warn
 
-from . import runtime
+from . import graph_state, runtime
 from .messages import Message, Part, as_record, from_record, joined
 from .steps import Steps
 from .store import RESUMED, HarnessFiles, KeptLedger, read_off_path
@@ -89,10 +89,10 @@ def resuming(graph: Any, config: Any, saver: Any, decisions: Sequence[Decision])
     if read is None:
         return None
     paused = read(config)
-    calls = runtime.calls_paused(paused, saver)
+    calls = graph_state.calls_paused(paused, saver)
     return Resuming(
-        held=len(runtime.held_in(paused)),
-        carried=_identity(runtime.summary_in(paused)),
+        held=len(graph_state.held_in(paused)),
+        carried=_identity(graph_state.summary_in(paused)),
         answered=tuple(
             {DECISION: one.call_id, "call_id": calls.get(one.call_id), ACTION: one.action}
             for one in decisions
@@ -121,7 +121,7 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     summary it ended on and its answer. `history` is how many messages its conversation held
     as it began, `resumed` set for a resume.
     """
-    held = runtime.held_in(snapshot)
+    held = graph_state.held_in(snapshot)
     if resumed is None:
         opening: dict[str, Any] = {"turn": turn, PARENT: parent, STARTED: started}
         began, carried = history, None
@@ -143,7 +143,7 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
         *({"turn": turn, **answer} for answer in (resumed.answered if resumed else ())),
         *({"turn": turn, **one} for one in added),
     ]
-    summary = runtime.summary_in(snapshot)
+    summary = graph_state.summary_in(snapshot)
     if summary is not None and _identity(summary) != carried:
         written, cut = summary
         (said,) = runtime.as_messages([written])

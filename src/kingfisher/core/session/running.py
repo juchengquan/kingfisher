@@ -31,7 +31,7 @@ from kingfisher.core.result import (
     normalize_answer,
 )
 
-from . import runtime
+from . import graph_state, provider_errors, runtime, stream_chunks
 from .checkpointing import (
     library_versions,
     paused_state,
@@ -88,9 +88,9 @@ class _Turn:
     ok: bool = False
     stop_reason: str = END_TURN
     artifacts: tuple[str, ...] = ()
-    subagent_names: runtime.SubagentNames = field(default_factory=runtime.SubagentNames)
-    seen: runtime.SeenMessages = field(default_factory=runtime.SeenMessages)
-    delegations: runtime.Delegations = field(default_factory=runtime.Delegations)
+    subagent_names: stream_chunks.SubagentNames = field(default_factory=stream_chunks.SubagentNames)
+    seen: stream_chunks.SeenMessages = field(default_factory=stream_chunks.SeenMessages)
+    delegations: stream_chunks.Delegations = field(default_factory=stream_chunks.Delegations)
     #: What the lifecycle produced and the loop still owes its caller: a context
     #: manager cannot yield into the generator around it.
     pending: list[RunEvent] = field(default_factory=list)
@@ -283,14 +283,14 @@ class Running:
         yield from file_left(
             prepared.files,
             prepared.ledger,
-            runtime.summarised_away(snapshot),
+            graph_state.summarised_away(snapshot),
             tool_results_route=self.cfg.layout.tool_results_route,
         )
         return (
             yield from keep_ledger(
                 prepared.harness,
                 prepared.ledger,
-                summarised=runtime.summarised_in(snapshot),
+                summarised=graph_state.summarised_in(snapshot),
                 messages=len(ended) if ended else None,
             )
         )
@@ -315,7 +315,7 @@ class Running:
             # No state, or a turn that died before its first superstep: this runs after
             # every turn, failed ones included.
             return ()
-        messages = runtime.as_seen(snapshot)
+        messages = graph_state.as_seen(snapshot)
         return runtime.as_messages(messages) if messages else ()
 
     def _record_turn(
@@ -356,7 +356,7 @@ class Running:
         a resume has a pause left to clear: setup dropped any a new request superseded.
         """
         harness = prepared.harness
-        waiting = runtime.pending_in(snapshot) if snapshot is not None else ()
+        waiting = graph_state.pending_in(snapshot) if snapshot is not None else ()
         if not waiting or prepared.saver is None:
             # Including the turn that was just resumed and ran to the end.
             if prepared.resume is not None:
@@ -409,13 +409,13 @@ class Running:
             yield
             turn.answer = normalize_answer(turn.answer)
             turn.ok = True
-        except runtime.OutOfSteps:
+        except stream_chunks.OutOfSteps:
             # `ok` stays true: it records that the caller was told how the turn ended.
             turn.answer = normalize_answer(turn.answer)
             turn.stop_reason = "max_steps"
             turn.ok = True
             turn.pending.append(out_of_steps(self.cfg))
-        except runtime.ModelUnavailableError as exc:
+        except provider_errors.ModelUnavailableError as exc:
             turn.answer = normalize_answer(turn.answer)
             turn.stop_reason = "model_unavailable"
             turn.ok = True
@@ -452,7 +452,7 @@ class Running:
         try:
             try:
                 # Before anything is let go of: the saver still holds the paused state.
-                snapshot = runtime.with_answers(
+                snapshot = graph_state.with_answers(
                     (yield on_host(self._settled, prepared)), turn.threads.answers
                 )
                 ended = self._ended_on(snapshot)
@@ -471,7 +471,7 @@ class Running:
                         turn.stop_reason = AWAITING
                 # Off the state, not the stream, so it is the agent's last reply and never
                 # a subagent's, whose cut answer is its caller's to read.
-                if turn.stop_reason == END_TURN and (cut := runtime.ended_cut_off(snapshot)):
+                if turn.stop_reason == END_TURN and (cut := graph_state.ended_cut_off(snapshot)):
                     turn.stop_reason = "max_tokens"
                     turn.pending.append(out_of_tokens(cut))
                 stopped = turn.stop_reason if turn.ok else None
@@ -528,10 +528,10 @@ class Running:
 
     def _read(self, turn: _Turn, namespace: Any, mode: Any, chunk: Any) -> tuple[RunEvent, ...]:
         """One stream chunk, read as events. The answer accumulates on `turn`."""
-        if (text := runtime.answer_in(namespace, mode, chunk)) is not None:
+        if (text := stream_chunks.answer_in(namespace, mode, chunk)) is not None:
             turn.answer = text
         return tuple(
-            runtime.events_in(
+            stream_chunks.events_in(
                 namespace,
                 mode,
                 chunk,
@@ -553,7 +553,7 @@ class Running:
         `subgraphs` and with it a subagent's tokens."""
         driving: dict[str, Any] = {
             "config": turn.prepared.config,
-            "stream_mode": runtime.STREAM_MODES,
+            "stream_mode": stream_chunks.STREAM_MODES,
             "subgraphs": True,
         }
         if turn.prepared.context is not None:

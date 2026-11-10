@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.session import runtime
+from kingfisher.core.session import stream_chunks
 from kingfisher.plugins import backend_at
 from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
 
@@ -75,7 +75,7 @@ def _said(built: Any, *, awaited: bool = False) -> dict[str, str]:
     said: dict[str, str] = {}
     for chunk in chunks:
         for update in chunk.values():
-            for message in runtime.messages_in(update):
+            for message in stream_chunks.messages_in(update):
                 if isinstance(message, ToolMessage) and message.name == "where":
                     said[message.tool_call_id] = str(message.content)
     return said

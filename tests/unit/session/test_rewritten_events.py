@@ -16,7 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.layout import HARNESS, TURNS_FILE
-from kingfisher.core.session import runtime
+from kingfisher.core.session import stream_chunks
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
@@ -24,11 +24,11 @@ from tests.unit.scripted import Scripted
 USAGE = {"input_tokens": 900, "output_tokens": 10, "total_tokens": 910}
 
 
-def _events(namespace: Any, mode: str, chunk: Any, seen: runtime.SeenMessages) -> list[Any]:
+def _events(namespace: Any, mode: str, chunk: Any, seen: stream_chunks.SeenMessages) -> list[Any]:
     return list(
-        runtime.events_in(
-            namespace, mode, chunk, runtime.SubagentNames(), seen=seen,
-            delegations=runtime.Delegations(),
+        stream_chunks.events_in(
+            namespace, mode, chunk, stream_chunks.SubagentNames(), seen=seen,
+            delegations=stream_chunks.Delegations(),
         )
     )
 
@@ -42,7 +42,7 @@ def test_a_message_the_conversation_already_held_is_not_announced_again():
         usage_metadata=USAGE,
     )
     result = ToolMessage("ten results", tool_call_id="c1", name="web_search", id="t1")
-    seen = runtime.SeenMessages()
+    seen = stream_chunks.SeenMessages()
     held = {"messages": [HumanMessage("go", id="h1"), reply, result]}
     assert _events((), "values", held, seen) == []
 
@@ -58,7 +58,7 @@ def test_a_step_that_writes_twice_reports_its_reply_and_not_its_rewrite():
     result under its old id, and the reply -- and langgraph streams that as a list of
     writes. Read as one mapping it carried nothing, so the turn lost the model call."""
     result = ToolMessage("ten results", tool_call_id="c1", name="web_search", id="t1")
-    seen = runtime.SeenMessages()
+    seen = stream_chunks.SeenMessages()
     _events((), "values", {"messages": [HumanMessage("go", id="h1"), result]}, seen)
 
     reply = AIMessage("done", id="a2", usage_metadata=USAGE)
@@ -72,7 +72,7 @@ def test_a_step_that_writes_twice_reports_its_reply_and_not_its_rewrite():
 def test_each_graph_is_judged_by_its_own_conversation():
     """A subagent's conversation is another graph's, streamed under its namespace: what
     the main agent holds does not make a subagent's message a rewrite, nor the reverse."""
-    seen = runtime.SeenMessages()
+    seen = stream_chunks.SeenMessages()
     result = ToolMessage("found", tool_call_id="c1", name="web_search", id="t1")
     _events((), "values", {"messages": [result]}, seen)
     _events(("task:1",), "values", {"messages": [HumanMessage("dig", id="s1")]}, seen)

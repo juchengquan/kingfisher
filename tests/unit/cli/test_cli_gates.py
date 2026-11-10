@@ -637,7 +637,7 @@ def _ran_as_printed(monkeypatch, cfg, said: str, result: RunResult) -> None:
     from kingfisher.cli.progress import show
     from kingfisher.core.layout import PAUSED_STATE
     from kingfisher.core.service import Kingfisher
-    from kingfisher.core.session import runtime
+    from kingfisher.core.session import graph_state
     from kingfisher.core.session.store import pending_as_mark, write_pause_mark
     from tests.conftest import an_agent, harness_of, start
 
@@ -657,13 +657,13 @@ def _ran_as_printed(monkeypatch, cfg, said: str, result: RunResult) -> None:
     drive(write_pause_mark(harness, mark))
     drive(harness.store(PAUSED_STATE, b"held"))
 
-    judge = runtime.resume_payload
+    judge = graph_state.resume_payload
 
     def judged(answers, pending):
         judge(answers, pending)
         raise _JudgedError
 
-    monkeypatch.setattr(runtime, "resume_payload", judged)
+    monkeypatch.setattr(graph_state, "resume_payload", judged)
     monkeypatch.setattr(cli, "config_from_env", lambda: cfg)
     monkeypatch.setattr(kingfisher, "Kingfisher", lambda *a, **k: kf)
     monkeypatch.setattr(cli, "show", show)

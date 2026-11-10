@@ -7010,9 +7010,9 @@ table, since no plugin takes anything from `core/access`. *(2026-10-19.)*
 
 **Not a portability claim.** Kingfisher is an adapter over deepagents, and another
 framework is out of scope rather than scheduled. Nothing declares what a runtime is --
-`core.session.runtime` is a module -- so a second would begin by discovering that
-interface, which is the right order: one derived from one implementation is shaped like
-it.
+three modules of `core/session/` read it, `runtime`, `stream_chunks` and `graph_state` --
+so a second would begin by discovering that interface, which is the right order: one
+derived from one implementation is shaped like it.
 
 **Where the kinds sit.** Each of the five is a directory under `core/definitions/`: a
 file somebody authors, its reader, and a registry of what was found. `DEFINITION_KINDS`
@@ -7083,6 +7083,11 @@ Taken:
     as well, and taken for what the reader imported: `core.definitions.fields`, which
     imported the vocabulary back, the one cycle in the tree. *(2026-10-19.)* `policy.py`
     went with the file it read, in *Reversed: `source_ids.yaml`*.
+  - `core/session/runtime.py`, the stream reader to `stream_chunks.py` and what a turn's
+    graph holds at its end, pauses included, to `graph_state.py`, the message conversion
+    both read staying: 5 of 26 crossed, moves and renames left out.
+    `ModelUnavailableError` went to `provider_errors.py`, which decides when a provider's
+    error is one. *(2026-11-10.)*
 
 Left whole:
 

@@ -10,15 +10,9 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from kingfisher.core.session.provider_errors import unavailable
-from kingfisher.core.session.runtime import (
-    ModelUnavailableError,
-    call_block_id,
-    cut_off,
-    cut_off_mark,
-    output_limit,
-    with_call_args,
-)
+from kingfisher.core.session.provider_errors import ModelUnavailableError, unavailable
+from kingfisher.core.session.runtime import call_block_id, cut_off, output_limit, with_call_args
+from kingfisher.core.session.stream_chunks import cut_off_mark
 
 from .replies import last_reply, replaced, text_of
 from .results import failed

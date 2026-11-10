@@ -8,10 +8,19 @@ from typing import TYPE_CHECKING
 
 from kingfisher.core.config import ConfigError
 
-from .runtime import PREVIEW, ModelUnavailableError
+from .stream_chunks import PREVIEW
 
 if TYPE_CHECKING:
     from kingfisher.core.config import Config, Endpoint
+
+
+class ModelUnavailableError(Exception):
+    """A model call the provider could not serve now, which ends a turn as a stop."""
+
+    def __init__(self, why: str) -> None:
+        super().__init__(why)
+        self.why = why
+
 
 # Matched on the exception's `status_code`, not its class: `anthropic` and `openai` each
 # raise their own `AuthenticationError`, and the command may import neither.

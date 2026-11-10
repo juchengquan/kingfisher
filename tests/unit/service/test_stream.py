@@ -331,16 +331,16 @@ def test_the_summarizer_is_not_streamed_as_the_answer(cfg):
 
 def test_the_adapter_owns_the_stream_modes(cfg):
     """`values` and `messages` are LangGraph's words, not orchestration's."""
-    from kingfisher.core.session import runtime
+    from kingfisher.core.session import stream_chunks
 
     values = {"messages": [AIMessage(content="42")]}
 
-    assert runtime.answer_in((), "values", values) == "42"
-    assert runtime.answer_in((), "updates", values) is None
+    assert stream_chunks.answer_in((), "values", values) == "42"
+    assert stream_chunks.answer_in((), "updates", values) is None
     assert list(
-        runtime.events_in(
-            (), "values", values, runtime.SubagentNames(), seen=runtime.SeenMessages(),
-            delegations=runtime.Delegations(),
+        stream_chunks.events_in(
+            (), "values", values, stream_chunks.SubagentNames(), seen=stream_chunks.SeenMessages(),
+            delegations=stream_chunks.Delegations(),
         )
     ) == []
 
