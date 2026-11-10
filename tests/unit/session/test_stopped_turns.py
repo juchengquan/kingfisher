@@ -159,11 +159,15 @@ def _told_next(charging: Charging, call: str) -> ToolMessage:
     """What the next turn's model was handed as the answer to `call`."""
     Scripted.script.append(AIMessage(content="noted"))
     charging.kf().run(Request("did it go through?", agent="only", session_id="s"))
-    return next(
-        one
-        for one in Scripted.heard[-1]
-        if isinstance(one, ToolMessage) and one.tool_call_id == call
+    handed = Scripted.heard[-1]
+    answers = [m for m in handed if isinstance(m, ToolMessage) and m.tool_call_id == call]
+    # Asserted, not `next()`: called on a thread, a miss would surface as asyncio's
+    # complaint about `StopIteration`, which says nothing of what the model was handed.
+    assert answers, (
+        f"the next turn's model was handed no answer to {call!r}, only "
+        f"{[(type(m).__name__, getattr(m, 'tool_call_id', None)) for m in handed]}"
     )
+    return answers[0]
 
 
 # -- a call not yet begun ------------------------------------------------------
