@@ -746,12 +746,12 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
   fence job runs on 26.04. *(2026-11-10.)*
 
 - **Each fence refuses a write in the kernel's words, and they differ.** `sandbox-exec`
-  says `Operation not permitted`, the Linux fence `Permission denied` (measured on the
-  Linux job, in `tests/linux/test_fence_escapes.py`), and bubblewrap binds the folder so
-  it would say `Read-only file system` -- not measured, since no job runs it. None of
-  them names the folder or the rule, and a path refused for being *outside* the session
-  reads the same, which is why `kept_under` resolves against the session root.
-  *(2026-10-22.)*
+  says `Operation not permitted`, Landlock `Permission denied`, and bubblewrap, which
+  binds the folder read-only, `Read-only file system`. The two Linux ones were measured
+  on the 26.04 Linux job, where `kept_under` read each refusal under `inputs/` and the
+  history folder. None of them names the folder or the rule, and a path refused for
+  being *outside* the session reads the same, which is why `kept_under` resolves against
+  the session root. *(2026-10-22; bubblewrap measured 2026-11-10.)*
 - **The shell's working directory is the session root, and `$HOME` is its scratchpad.**
   So `echo x > inputs/f` is a complete command, and a refusal of it names the path with
   no root in front; after a `cd`, the message names only the file, and nothing can say
