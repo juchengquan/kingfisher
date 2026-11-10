@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.request import Request
 from kingfisher.core.run import stream
-from kingfisher.core.session import runtime
+from kingfisher.core.session import stream_chunks
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import FakeGraph, FakeToolCallingModel, start
@@ -143,8 +143,8 @@ def test_a_subagents_values_chunk_is_not_the_runs_answer():
     """The bug `subgraphs=True` would otherwise have introduced."""
     theirs = {"messages": [AIMessage(content="SUBAGENT PROSE")]}
 
-    assert runtime.answer_in(("tools:abc",), "values", theirs) is None
-    assert runtime.answer_in((), "values", theirs) == "SUBAGENT PROSE"
+    assert stream_chunks.answer_in(("tools:abc",), "values", theirs) is None
+    assert stream_chunks.answer_in((), "values", theirs) == "SUBAGENT PROSE"
 
 
 class _SubagentSpeaksFirst(FakeGraph):
@@ -181,7 +181,7 @@ def test_the_map_never_names_the_main_agent():
     happens to carry.
     """
     for namespace in [(), ("tools:abc",)]:
-        subagent_names = runtime.SubagentNames()
+        subagent_names = stream_chunks.SubagentNames()
 
         named = subagent_names.name(namespace, {"lc_agent_name": "reviewer"})
 

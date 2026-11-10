@@ -14,7 +14,7 @@ from kingfisher.core.agent.prompting import memory_writer_prompt
 from kingfisher.core.layout import MEMORY_WRITER
 from kingfisher.core.result import MemoryChanges, MemoryEntry, RunEvent
 
-from . import provider_errors, runtime
+from . import graph_state, provider_errors, runtime
 from .memory import changes, listed, memory_text, with_entries, without_entries
 from .steps import Steps, changing, on_host
 
@@ -207,7 +207,7 @@ def kept_memory(  # noqa: PLR0913 -- the turn, and how it ended
     entries, dropped = identifying(found, prepared.caller_context)
     unread = yield from _not_yet_read(prepared.harness)
     messages = (
-        list(runtime.as_messages(runtime.held_in(snapshot))) if snapshot is not None else None
+        list(runtime.as_messages(graph_state.held_in(snapshot))) if snapshot is not None else None
     )
     # A resume's state is the paused turn's, whose messages were read when it paused.
     resumed_from = prepared.resume is not None and unread.paused_at is not None
@@ -220,7 +220,7 @@ def kept_memory(  # noqa: PLR0913 -- the turn, and how it ended
     events: list[RunEvent] = []
     written: str | None = None
     asked = False
-    if ok and (runtime.summarised_in(snapshot) or turns >= cfg.memory_every):
+    if ok and (graph_state.summarised_in(snapshot) or turns >= cfg.memory_every):
         revised, why = yield from _revised(prepared, layout, entries, said)
         asked = True
         # Read, kept or not: the next run reads what follows, not this again.

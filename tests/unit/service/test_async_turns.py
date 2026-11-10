@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.request import Request
 from kingfisher.core.service import Kingfisher
-from kingfisher.core.session import running, runtime
+from kingfisher.core.session import running, stream_chunks
 from kingfisher.core.session.model import SessionBusyError
 from kingfisher.plugins import LocalSessions
 from tests.conftest import start
@@ -71,12 +71,12 @@ class _OutOfSteps(StubAgent):
 
     def stream(self, state, config, stream_mode=None, subgraphs=False):
         yield from ()
-        raise runtime.OutOfSteps
+        raise stream_chunks.OutOfSteps
 
     async def astream(self, state, config, stream_mode=None, subgraphs=False):
         for chunk in ():  # pragma: no cover -- an async generator that only raises
             yield chunk
-        raise runtime.OutOfSteps
+        raise stream_chunks.OutOfSteps
 
 
 #: Each way a turn can end, as a factory rather than an instance: the two paths

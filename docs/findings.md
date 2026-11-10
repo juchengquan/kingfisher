@@ -37,7 +37,7 @@ wrong.*
   subagent's chunks arrive under a `tools:<id>` namespace, each carrying
   `lc_agent_name`. Kingfisher has streamed that way since the day of the probe
   and tags a subagent's `model_call`, `tool_result` and `token` events with
-  `agent=<name>` -- `SubagentNames` in `core/session/runtime.py`, held
+  `agent=<name>` -- `SubagentNames` in `core/session/stream_chunks.py`, held
   by `tests/unit/session/test_stream_subagents.py`.
 - **langgraph's `tasks` stream names the call that started a subagent.** A start event
   for a `tools` node carries an `id` equal to the namespace segment its subagent's
@@ -47,7 +47,7 @@ wrong.*
   helpers map at every level, a compiled subagent's as well, under `stream` and
   `astream` alike. deepagents' `task` tool passes no call id into the subagent's config,
   so on the stream this is the only place it is. `Delegations` in
-  `core/session/runtime.py`, held by `tests/unit/session/test_stream_delegations.py`.
+  `core/session/stream_chunks.py`, held by `tests/unit/session/test_stream_delegations.py`.
   *(2026-10-27, langgraph 1.2.15, deepagents 0.7.22.)*
 - **A step announces all its tasks before running any.** `tick` in
   `langgraph/pregel/_loop.py` emits every task start of the step together, so each
@@ -77,7 +77,7 @@ wrong.*
   every clearing pass re-announced each message it cleared, the replies with their old
   usage. `values` arrives after a step's writes and `updates` before them, so the ids
   the conversation held at the last `values` are what tell a rewrite apart --
-  `SeenMessages` in `core/session/runtime.py`, held by
+  `SeenMessages` in `core/session/stream_chunks.py`, held by
   `tests/unit/session/test_rewritten_events.py`. *(2026-10-16, langgraph 1.2.15.)*
 - **A middleware reaches the `custom` stream from inside the model call.**
   `request.runtime.stream_writer` on a `ModelRequest` is langgraph's writer for the

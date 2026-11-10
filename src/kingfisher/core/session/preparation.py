@@ -26,7 +26,7 @@ from kingfisher.core.reporting import opening_events, withheld_by_kind
 from kingfisher.core.request import DecisionError, Request, Resume, caller_of
 from kingfisher.core.versions import built_from
 
-from . import runtime
+from . import graph_state
 from .checkpointing import (
     build_session_checkpointer,
     library_versions,
@@ -393,7 +393,8 @@ class Preparation:
             raise DecisionError(msg)
         # The ids read back, not re-derived: they are the ones the caller was handed, and
         # re-deriving would need the graph, which does not exist yet.
-        return state, runtime.resume_payload(request.decisions, pending_from_mark(held)), (), held
+        answers = graph_state.resume_payload(request.decisions, pending_from_mark(held))
+        return state, answers, (), held
 
     def _refuse_stale_pause(
         self, session: Conversation, held: Mapping[str, str], request: Resume

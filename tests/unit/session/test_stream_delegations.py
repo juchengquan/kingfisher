@@ -21,7 +21,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from kingfisher import Kingfisher
 from kingfisher.core.request import Decision, Request, Resume
 from kingfisher.core.result import RunEvent
-from kingfisher.core.session import runtime
+from kingfisher.core.session import stream_chunks
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, start
 from tests.unit.agent.test_subagent_helpers import HELPER, REVIEWER
@@ -314,7 +314,7 @@ def _started(call_id: str, *calls: dict[str, Any], on: str = "tools") -> dict[st
 def test_a_segment_no_task_call_started_adds_nothing():
     """A supplied graph's own subgraph puts a segment in every chunk's namespace; read as
     a delegation, it would make every event look delegated."""
-    delegations = runtime.Delegations()
+    delegations = stream_chunks.Delegations()
     delegations.started((), _started("abc", _task("reviewer", "check", "t1")))
 
     assert delegations.within(("outer:zzz", "tools:abc")) == ("t1",)
@@ -333,7 +333,7 @@ def test_a_segment_no_task_call_started_adds_nothing():
 def test_only_a_task_running_one_task_call_starts_a_delegation(chunk):
     """With two calls in one task, the task's id would stand for both, and every chunk
     inside would be filed under whichever was read last."""
-    delegations = runtime.Delegations()
+    delegations = stream_chunks.Delegations()
 
     assert delegations.started((), chunk) is None
     assert delegations.within(("tools:abc",)) == ()
@@ -356,11 +356,11 @@ def test_a_delegation_start_prints_as_its_header():
 def test_the_chunk_that_names_a_dispatch_is_filed_under_it():
     """A program's dispatch is named by its first `messages` chunk, and that chunk read
     with what was known before it printed its first words outside the dispatch's block."""
-    stamped = (AIMessageChunk(content="first"), {runtime.DISPATCH: ["e1", "ptc_a"]})
+    stamped = (AIMessageChunk(content="first"), {stream_chunks.DISPATCH: ["e1", "ptc_a"]})
 
-    (token,) = runtime.events_in(
-        ("tools:abc",), "messages", stamped, runtime.SubagentNames(),
-        seen=runtime.SeenMessages(), delegations=runtime.Delegations(),
+    (token,) = stream_chunks.events_in(
+        ("tools:abc",), "messages", stamped, stream_chunks.SubagentNames(),
+        seen=stream_chunks.SeenMessages(), delegations=stream_chunks.Delegations(),
     )
 
     assert token.delegations == ("e1", "ptc_a")
@@ -369,13 +369,13 @@ def test_the_chunk_that_names_a_dispatch_is_filed_under_it():
 def test_a_cut_reply_inside_a_delegation_says_which():
     """A reply cut at the output cap is reported on the `custom` stream, not the state,
     so it is the one `model_call` that does not come through `updates`."""
-    delegations = runtime.Delegations()
+    delegations = stream_chunks.Delegations()
     delegations.started((), _started("abc", _task("reviewer", "check", "t1")))
-    reported = {runtime.CUT_OFF_MARK: {"input_tokens": 10, "output_tokens": 4}}
+    reported = {stream_chunks.CUT_OFF_MARK: {"input_tokens": 10, "output_tokens": 4}}
 
-    (cut,) = runtime.events_in(
-        ("tools:abc",), "custom", reported, runtime.SubagentNames(),
-        seen=runtime.SeenMessages(), delegations=delegations,
+    (cut,) = stream_chunks.events_in(
+        ("tools:abc",), "custom", reported, stream_chunks.SubagentNames(),
+        seen=stream_chunks.SeenMessages(), delegations=delegations,
     )
 
     assert cut.cut_off
@@ -390,7 +390,7 @@ def test_a_cut_reply_inside_a_delegation_says_which():
 def test_a_task_seen_running_two_task_calls_stands_for_neither(calls, filed):
     """A tool's start arrives one call at a time, so a `tools` task running two -- a
     supplied graph's own `ToolNode` -- filed everything inside under the later."""
-    delegations = runtime.Delegations()
+    delegations = stream_chunks.Delegations()
     for call in calls:
         delegations.entered("abc", call)
 

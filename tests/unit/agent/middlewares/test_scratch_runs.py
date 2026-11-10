@@ -48,7 +48,7 @@ from kingfisher.core.interfaces import (
     CommandRunner,
     ScratchRunLimit,
 )
-from kingfisher.core.session import runtime
+from kingfisher.core.session import stream_chunks
 from kingfisher.plugins import LocalSessions, NoScratchRunLimit, backend_at
 from kingfisher.plugins.sessions.scratch import ScratchFolder
 from tests.conftest import (
@@ -137,7 +137,7 @@ def _results(
 
     def keep(chunk: Any) -> None:
         for update in chunk.values():
-            for message in runtime.messages_in(update):
+            for message in stream_chunks.messages_in(update):
                 if isinstance(message, ToolMessage) and message.name:
                     found[message.name] = str(message.content)
 
@@ -502,7 +502,7 @@ def _answers(cfg, session_dir, *responses: AIMessage, **keywords: Any) -> list[s
         context=built.context,
     ):
         for update in chunk.values():
-            for message in runtime.messages_in(update):
+            for message in stream_chunks.messages_in(update):
                 if isinstance(message, ToolMessage) and message.name == "shout":
                     found.append(str(message.content))
     return found

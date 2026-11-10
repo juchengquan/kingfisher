@@ -14,7 +14,7 @@ from kingfisher.core.definitions.subagents import TASK_TOOL
 from kingfisher.core.interfaces import RunEvents
 from kingfisher.core.logged import INFO, handed, logged, raised
 
-from . import runtime
+from . import runtime, stream_chunks
 
 MODEL_CALL = "model_call"
 
@@ -66,7 +66,7 @@ class RunLogger(BaseCallbackHandler):
         self._calls: dict[Any, dict[str, Any]] = {}
         #: The same for each tool call under way.
         self._tools: dict[Any, dict[str, Any]] = {}
-        self._delegations = runtime.Delegations()
+        self._delegations = stream_chunks.Delegations()
 
     def _write(self, event: str, **fields: Any) -> None:
         # Through `handed`, never the sink itself: a turn outlives a failing sink, and
@@ -91,7 +91,7 @@ class RunLogger(BaseCallbackHandler):
         return {
             "agent": str(named) if named else None,
             "delegations": [
-                *(str(one) for one in metadata.get(runtime.DISPATCH) or ()),
+                *(str(one) for one in metadata.get(stream_chunks.DISPATCH) or ()),
                 *self._delegations.within(namespace),
             ],
         }
@@ -146,11 +146,11 @@ class RunLogger(BaseCallbackHandler):
         name = (serialized or {}).get("name", "?")
         found = dict(metadata or {})
         *namespace, node = _segments(found)
-        stamp = found.get(runtime.DISPATCH) or ()
+        stamp = found.get(stream_chunks.DISPATCH) or ()
         if name == TASK_TOOL and tool_call_id and stamp and stamp[-1] == tool_call_id:
             # A program's dispatch, filed by the stamp on every run inside it; the call
             # itself is the program's. Entered too, a lone one would name itself twice.
-            del found[runtime.DISPATCH]
+            del found[stream_chunks.DISPATCH]
         elif name == TASK_TOOL and tool_call_id:
             # Before anything inside it runs, whose events are filed under it from here.
             self._delegations.entered(node.partition(":")[2], tool_call_id)

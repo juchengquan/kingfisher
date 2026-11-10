@@ -11,12 +11,8 @@ from langchain.agents.middleware import AgentMiddleware
 from langgraph.errors import GraphInterrupt
 
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
-from kingfisher.core.session.runtime import (
-    DISPATCH,
-    SUBAGENT_TYPE_ARG,
-    dispatch_answered,
-    dispatch_started,
-)
+from kingfisher.core.session.runtime import SUBAGENT_TYPE_ARG
+from kingfisher.core.session.stream_chunks import DISPATCH, dispatch_answered, dispatch_started
 
 from .results import answer_in
 
