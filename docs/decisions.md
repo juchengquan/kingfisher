@@ -4168,6 +4168,19 @@ edited ones at their later version: a state no turn had. A turn at 0 forgets the
 files' marks, so the first turn after copies resume copies every file, and a rewind
 reaches it whole.
 
+**A deployment that never rewinds may switch the history off** *(2026-11-10)*. Asked for
+by one: at a budget of 0 a turn's end still read the history, the last listing, the
+memory file and both notes, and wrote the history back whole, twice, a line longer every
+turn. Measured over 300 turns on this host, about 2 ms a turn, but the 300th wrote 124 KB
+and the 300 wrote 18.6 MB, and it is seven round trips a turn on remote storage.
+`KINGFISHER_REWIND_ENABLED=false` skips all of it and refuses every rewind. **A switch
+beside 0, not 0 made to mean it**: at 0 a rewind still takes back the conversation, the
+memory file and both notes, which is what regeneration needs. **Every rewind refused, the
+conversation's alone too**: no turn kept the memory file or what the agent heard of its
+inputs, so it would leave a later turn's beside an earlier conversation. **Copies kept
+before are left** until the session is deleted: finding them would cost a read at every
+turn, for something met once a session, and `forget` still reaches them.
+
 **The memory file is outside every budget** *(2026-11-06)*. It shared the budget with
 `/outputs`, so a budget smaller than it never copied it, and a full one dropped its old
 versions to make room for a report: a rewind then brought back the conversation without

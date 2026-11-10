@@ -1170,7 +1170,8 @@ the object your `open` returns, never on a composite's routes, because the two p
 be routed to different backends, and an async turn calls it on kingfisher's thread pool.
 **At `KINGFISHER_REWIND_MAX_BYTES=0` none of this happens:** the folders are not even
 listed, nothing in them is copied but the memory file, which kingfisher reads whole, and
-your `copy` is never asked.
+your `copy` is never asked. **With `KINGFISHER_REWIND_ENABLED` off**, nothing at all is
+read or written for the history at a turn's end.
 
 **`own_copies`**, in `tests/checks/backend.py`, holds one you declare to three promises:
 the copy lands whole, it is a copy and not the same file, so rewriting the original in

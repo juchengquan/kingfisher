@@ -350,6 +350,9 @@ class Config:
     # What one session's copies of earlier turns' files may hold, which `session_max_bytes`
     # does not count. Unset keeps every copy.
     rewind_max_bytes: int | None = None
+    # Off, a turn keeps no file history and every rewind is refused: for a deployment that
+    # never rewinds, which would otherwise pay reads and writes at every turn's end.
+    rewind_enabled: bool = True
     # How many rounds of a conversation keep their saved tool results; an older one keeps
     # only its ledger row. Unset keeps every one: what a session can do without is the
     # deployment's to judge.

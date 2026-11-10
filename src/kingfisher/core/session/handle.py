@@ -113,8 +113,9 @@ class Session:
         A pause waiting on a decision is discarded, as a new request discards it.
         `SessionBusyError` while a turn holds the session; `RewindError` for a turn it
         cannot rebuild: one it never ran, one that wrote no conversation to go back to, or
-        one of two turns run under one id that lead back into each other; `ValueError` for
-        an `only` other than those two.
+        one of two turns run under one id that lead back into each other, and for every
+        rewind where `KINGFISHER_REWIND_ENABLED` is off; `ValueError` for an `only` other
+        than those two.
         """
         return drive(self._service._rewind_in(self.id, to, only, self._opened))
 

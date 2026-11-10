@@ -207,6 +207,51 @@ def test_at_a_budget_of_0_nothing_the_agent_made_is_compared_or_copied(cfg, monk
     assert _copy(cfg, "t4", "memory/AGENTS.md").read_text(encoding="utf-8") == "- A\n- B\n"
 
 
+def test_with_rewinding_off_a_turn_reads_and_writes_no_history(cfg, monkeypatch):
+    """Off, a turn's end still read the history and the last listing, and wrote the history
+    back whole, longer by a line every turn; and the copies kept before it went off stay as
+    they were, since no turn looks for them."""
+    session = _session(cfg, start(cfg, "s"))
+    memory, report = session / "memory" / "AGENTS.md", session / "outputs" / "report.txt"
+    memory.write_text("- A\n", encoding="utf-8")
+    report.write_text("one", encoding="utf-8")
+    _run(Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions()), "t1")
+    harness = session / HARNESS
+    history = (FILE_HISTORY, ARTIFACTS_SEEN, f"{KEPT_FILES}/")
+
+    def held() -> dict[Path, bytes]:
+        found = (one for one in harness.rglob("*") if one.is_file())
+        return {
+            one: one.read_bytes()
+            for one in found
+            if one.relative_to(harness).as_posix().startswith(history)
+        }
+
+    kept = held()
+    touched: list[str] = []
+    down, up = WorkspaceScopedBackend.download_files, WorkspaceScopedBackend.upload_files
+
+    def downloading(self, paths):
+        touched.extend(paths)
+        return down(self, paths)
+
+    def uploading(self, files):
+        touched.extend(path for path, _ in files)
+        return up(self, files)
+
+    monkeypatch.setattr(WorkspaceScopedBackend, "download_files", downloading)
+    monkeypatch.setattr(WorkspaceScopedBackend, "upload_files", uploading)
+    memory.write_text("- A\n- B\n", encoding="utf-8")
+    report.write_text("two", encoding="utf-8")
+    off = Kingfisher(replace(cfg, rewind_enabled=False), graph=StubAgent("ok"),
+                     sessions=LocalSessions())
+    _run(off, "t2")
+
+    assert [one for one in touched if one.removeprefix(f"/{HARNESS}/").startswith(history)] == []
+    assert held() == kept
+    assert len(kept) > 2, "the turn before kept no history to leave"
+
+
 def test_over_budget_the_copy_restoring_only_the_oldest_turns_goes_first(cfg):
     """By age the notes written once in the first turn would go first though every rewind
     needs them, and a file larger than the whole budget would be copied only to be dropped."""
