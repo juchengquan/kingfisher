@@ -100,9 +100,10 @@ jobs:
 
       # `-rs` so the log says which fence skipped and why. A green job here
       # with everything skipped is what `tests/linux/test_a_fence_was_exercised.py`
-      # exists to turn red.
+      # exists to turn red. `fE` too: `-r` replaces pytest's default rather than adding
+      # to it, and `-rs` alone names no failure.
       - name: pytest
-        run: uv run pytest -q -rs
+        run: uv run pytest -q -rfEs
 
   # The jobs above install every extra and the dev group, so a public name that
   # resolves only because one of those happens to be present looks fine there.
