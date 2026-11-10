@@ -736,6 +736,13 @@ did not work. All of it langchain-core 1.5.5, langgraph 1.2.11, deepagents 0.7.6
   reported on every run by `tests/linux/test_a_fence_was_exercised.py`.
   *(2026-08-27.)*
 
+- **`ubuntu-26.04` lets bubblewrap run, and two of its escape tests fail there.**
+  `ubuntu-latest` began landing on it on 2026-11-10. It allows the user namespace
+  24.04 refuses, so the bubblewrap escapes ran on a runner for the first time. Inside
+  the fence `python3` was the system's 3.14, not the project's. And 3.14 quotes a `-c`
+  program's source in its traceback, so the network test found its own marker in a
+  refused connection. The fence job is pinned to 24.04 until both pass. *(2026-11-10.)*
+
 - **Each fence refuses a write in the kernel's words, and they differ.** `sandbox-exec`
   says `Operation not permitted`, the Linux fence `Permission denied` (measured on the
   Linux job, in `tests/linux/test_fence_escapes.py`), and bubblewrap binds the folder so
