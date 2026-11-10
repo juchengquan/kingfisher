@@ -128,6 +128,18 @@ class AnswersForAnyClaimAsync(LocalSessions):
         return True
 
 
+class NeverTookOver(LocalSessions):
+    """A `took_over` that never looks, as a store that kept no note of a takeover would be."""
+
+    def took_over(self, cfg, session_id, token, /):
+        return False
+
+
+class NeverTookOverAsync(LocalSessions):
+    async def atook_over(self, cfg, session_id, token, /):
+        return False
+
+
 class OneLockForAll(LocalSessions):
     """One lock for the whole object, taken whichever session asks."""
 
@@ -198,14 +210,15 @@ class MarksNothingAsync(LocalSessions):
         ("asize_counts_what_size_does", WeighsNothingAsync, "where size counts"),
         ("amark_used_moves_the_session_on", MarksNothingAsync, "as last used as it was"),
         ("aclaimed_by_answers_as_claimed_by", AnswersForAnyClaimAsync, "did not answer"),
+        ("atook_over_answers_as_took_over", NeverTookOverAsync, "did not answer"),
     ],
-    ids=["aclaim", "arelease", "asize", "amark_used", "aclaimed_by"],
+    ids=["aclaim", "arelease", "asize", "amark_used", "aclaimed_by", "atook_over"],
 )
 def test_the_kit_catches_an_async_twin_that_disagrees(cfg, check, backends, said):
-    """A kit blind to an `aclaim`, `arelease`, `asize`, `amark_used` or `aclaimed_by`
-    that disagrees with its sync twin passes a deployment whose async turns share a held
-    session, leave it busy, miscount its quota, leave it to `reap` or write behind the
-    turn that took their session over.
+    """A kit blind to an `aclaim`, `arelease`, `asize`, `amark_used`, `aclaimed_by` or
+    `atook_over` that disagrees with its sync twin passes a deployment whose async turns
+    share a held session, leave it busy, miscount its quota, leave it to `reap`, write
+    behind the turn that took their session over, or repeat what a killed turn did.
     """
     with pytest.raises(AssertionError, match=said):
         _check(check)(lambda: (cfg, backends()))
@@ -280,6 +293,14 @@ def test_the_kit_catches_a_claim_still_answered_for_once_taken_over(cfg):
     """
     with pytest.raises(AssertionError, match="still its first taker's"):
         _check("a_claim_taken_over_is_no_longer_its_takers")(lambda: (cfg, AnswersForAnyClaim()))
+
+
+def test_the_kit_catches_a_takeover_never_reported(cfg):
+    """A kit that passed a `took_over` answering no for every claim would let a deployment's
+    turn after a killed one repeat what that turn did, with nothing said.
+    """
+    with pytest.raises(AssertionError, match="does not say it took over"):
+        _check("a_claim_that_took_over_says_so")(lambda: (cfg, NeverTookOver()))
 
 
 def test_two_callers_judging_one_claim_stale_take_it_over_once(cfg, monkeypatch):

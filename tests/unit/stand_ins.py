@@ -147,6 +147,10 @@ class Elsewhere(Sessions):
         held = self.root / session_id / HARNESS / "claim" / "token"
         return held.is_file() and held.read_text(encoding="utf-8") == token
 
+    # Never stale, so never taken over.
+    def took_over(self, cfg, session_id, token, /):
+        return False
+
 
 class ElsewhereRunner(CommandRunner):
     """A runner that ships its commands off this machine, which is the case where

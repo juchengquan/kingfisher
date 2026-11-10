@@ -21,7 +21,7 @@ from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.tools.spec import ambiguous
 from kingfisher.core.layout import INPUTS_SEEN, PAUSED_STATE
-from kingfisher.core.logged import stamp_warnings
+from kingfisher.core.logged import stamp_warnings, warn
 from kingfisher.core.reporting import opening_events, withheld_by_kind
 from kingfisher.core.request import DecisionError, Request, Resume, caller_of
 from kingfisher.core.versions import built_from
@@ -47,6 +47,7 @@ from .steps import (
     Steps,
     changing,
     on_host,
+    reading,
 )
 from .store import (
     AGENT_MARK,
@@ -65,6 +66,7 @@ from .store import (
 from .turn import (
     Prepared,
     decision_discarded,
+    earlier_turn_unfinished,
     history_lost,
     not_offered,
     turn_message,
@@ -147,6 +149,8 @@ class Preparation:
         # through would be reading it as it moved.
         claimed = yield from self._claim_or_refuse(session.id, "wait, or start another session")
         try:
+            # The only trace a killed turn leaves: its claim, gone stale and taken over.
+            took_over = yield reading(self._sessions, "took_over", cfg, session.id, claimed)
             log = yield from read_log(harness)
             if log.written:
                 # Written only by a turn holding the claim, so another turn ran here,
@@ -162,6 +166,7 @@ class Preparation:
                 catalogue=catalogue,
                 agent=agent,
                 log=log,
+                took_over=bool(took_over),
             )
         except BaseException:
             # Each a call that changes something, so a cancel arriving during it waits for
@@ -184,6 +189,7 @@ class Preparation:
         catalogue: Definitions,
         agent: AgentSpec | None,
         log: TurnLog,
+        took_over: bool,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
         # Optional on a backend, like `host_path`; reported rather than raised.
@@ -281,6 +287,18 @@ class Preparation:
         )
         if lost is not None:
             prepared = replace(prepared, events=(*prepared.events, lost), history_lost=lost.text)
+        if took_over:
+            # Counted, this is how often a deployment's turns die.
+            warn(
+                "earlier_turn_unfinished",
+                "this turn took the session over from one that never finished",
+            )
+            # First, so a caller streaming the turn can act on it before the agent does.
+            prepared = replace(
+                prepared,
+                events=(earlier_turn_unfinished(), *prepared.events),
+                earlier_turn_unfinished=True,
+            )
         # After the build's refusals and before the graph runs: a refused request must
         # leave the session's files and its gate as they were: a caller can send a file
         # again, and nobody can recreate a pause. `run_start` last, so a refused request
@@ -355,6 +373,7 @@ class Preparation:
             note=getattr(request, "note", ""),
             unavailable=not_offered(history, prepared.granted),
             drift=drift,
+            unfinished=prepared.earlier_turn_unfinished,
         )
         return replace(prepared, message=message, inputs_seen=now, drift=drift)
 

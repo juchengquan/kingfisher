@@ -53,6 +53,9 @@ class Recording(Sessions):
     def claimed_by(self, cfg, session_id, token, /):
         return True
 
+    def took_over(self, cfg, session_id, token, /):
+        return False
+
 
 class BoomError(RuntimeError):
     """What a deployment's own factory raises when its credentials are missing."""

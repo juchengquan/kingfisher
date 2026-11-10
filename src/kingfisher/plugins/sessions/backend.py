@@ -589,7 +589,13 @@ class LocalSessions(Sessions):
             with suppress(OSError):
                 aside.rename(path)
             return None
-        return token if _take(path, token) else None
+        taken = _take(path, token)
+        if taken:
+            # Unwritten, the turn is not told the one before it never finished: the claim
+            # holds either way, and refusing it would lock the session for a missing note.
+            with suppress(OSError):
+                (path / _TOOK_OVER).touch()
+        return token if taken else None
 
     def release(self, cfg: Config, session_id: str, token: str, /) -> None:
         path = _claim_at(cfg, session_id)
@@ -614,6 +620,10 @@ class LocalSessions(Sessions):
     def claimed_by(self, cfg: Config, session_id: str, token: str, /) -> bool:
         return _identity(_claim_at(cfg, session_id)) == token
 
+    def took_over(self, cfg: Config, session_id: str, token: str, /) -> bool:
+        path = _claim_at(cfg, session_id)
+        return _identity(path) == token and (path / _TOOK_OVER).is_file()
+
     def held(
         self, cfg: Config, session_id: str, /, *, stale_after: float, now: float | None = None
     ) -> bool:
@@ -636,6 +646,9 @@ CLAIM = "claim"
 #: The file in a claim naming the turn that took it, and in a claim moved aside, that
 #: it was.
 _TOKEN, _TAKEN = "token", "taken"
+
+#: The file in a claim that replaced a stale one.
+_TOOK_OVER = "took_over"
 
 
 def _take(path: Path, token: str) -> bool:

@@ -3503,6 +3503,31 @@ would take a store that refuses an old token's writes. `claimed_by` is required 
 `Sessions` rather than defaulted, since a default answering yes would leave a
 deployment's own store unprotected without a word. *(2026-11-10.)*
 
+**A turn after one that never finished is told so, by the claim it took over.** A turn
+killed after its tools ran leaves the session nothing but its claim: no turn log, no
+ledger and, since results are filed at the ending, no result file. So the turn asked the
+same thing next had no trace of the first and did it again, charging twice with nothing
+said. Taking over a stale claim is the one moment anything can know, so
+`Sessions.took_over` says it, and the turn that did tells its agent, after the ask and
+kept with it, "The previous turn in this session was interrupted before it finished, and
+nothing from it is in this conversation. Anything it did outside this session may
+already have happened, so check before repeating an outside action." Driven end to end
+on MiniMax-M3, asked again to send a reminder the dead turn had sent, an agent with a
+tool asking whether it was sent sent it again 1 time in 6 without the line and 0 in 6
+with it, as 3 in 8 against 0 in 6 had in a hand-built run before. One with no such tool
+sent it again 6 in 6 with the line or without: it searched the session, found nothing,
+and took the ask as the word to send. Telling it to ask the user when it cannot check
+the service did no better, 6 in 6 still, asked 2 times in 6 where nothing had been sent,
+and doubled its tool calls, a median of 19 against 8.5, so the line stays the plain one.
+Where nothing can be checked the caller is the one who can act: it hears
+`earlier_turn_unfinished` before the agent runs, and on `RunResult`, and knows whether
+it sent the ask again itself. The operator hears it as a warning, which counted is how
+often turns die. It cannot say what that turn was asked or which tools it started,
+which needs a record written as a turn goes, a write per turn and per batch of calls:
+not built until a deployment shows its turns die often and it retries in the same
+session, since one opening a new session after `SessionBusyError` is never told either
+way. *(2026-11-10.)*
+
 **An output is not evidence the command wrote it.** The run's folder is in the session's
 scratchpad because the Linux fences grant one session and nothing else, so the agent's
 shell and its file tools reach it while the run is going -- measured in one message

@@ -256,6 +256,10 @@ class RunResult:
     #: or `None`: a disk filling or a process killed while it was written. The agent is
     #: not told; what it lost is gone, and the caller decides whether to go on.
     history_lost: str | None = None
+    #: Whether this turn took the session over from one that never finished: killed, or
+    #: outlived its claim. What that turn did outside the session may have happened, and
+    #: the agent was told to check before repeating it.
+    earlier_turn_unfinished: bool = False
     #: Why this turn's conversation, ledger, pause or files were not all kept, or `None`:
     #: a disk that filled, or a backend that refused the write. The answer is here
     #: either way, and the next turn may not have it.
@@ -309,6 +313,9 @@ KINDS: tuple[str, ...] = (
     # The session's conversation read back shorter than the last turn left it, and this
     # turn runs on what was read; `RunResult.history_lost` says the same.
     "history_lost",
+    # The previous turn in this session never finished, and its outside effects may have
+    # happened; `RunResult.earlier_turn_unfinished` says the same.
+    "earlier_turn_unfinished",
     # The run itself.
     "run_start",
     "model_call",

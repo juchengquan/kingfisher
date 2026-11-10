@@ -588,6 +588,7 @@ class Running:
                 stop_reason=turn.stop_reason,
                 ledger=turn.recorded,
                 history_lost=prepared.history_lost,
+                earlier_turn_unfinished=prepared.earlier_turn_unfinished,
                 keep_failure=turn.keep_failure,
             ),
         )

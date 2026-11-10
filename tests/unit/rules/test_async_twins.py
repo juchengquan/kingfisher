@@ -26,6 +26,7 @@ DIFFERS = {
     "core/interfaces.py:Sessions.aclaim": _DEFAULT,
     "core/interfaces.py:Sessions.arelease": _DEFAULT,
     "core/interfaces.py:Sessions.aclaimed_by": _DEFAULT,
+    "core/interfaces.py:Sessions.atook_over": _DEFAULT,
     "core/session/steps.py:adrive": _CANCELLED,
     "core/session/running.py:Running._aend_turn": _CANCELLED,
     "core/session/running.py:Running._astream_turn": _CANCELLED,

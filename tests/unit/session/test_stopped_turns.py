@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -28,6 +29,7 @@ from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.config import Config
 from kingfisher.core.session import running
 from kingfisher.core.session.model import SessionBusyError
+from kingfisher.core.session.turn import UNFINISHED
 from kingfisher.plugins import LocalSessions, backend_at
 from tests.conftest import RecordedEvents, an_agent, paths_in, start, tools_dir
 from tests.unit.scripted import Scripted
@@ -595,6 +597,41 @@ def test_a_turn_that_outlived_its_claim_writes_nothing_behind_the_turn_that_took
     assert old["result"].keep_failure == running.TAKEN_OVER
     [warned] = sink.named("turn_outlived_claim")
     assert (warned["session_id"], warned["calls"]) == ("s", ["c-hold"])
+
+
+def test_a_turn_after_one_that_died_is_told_to_check_before_acting_again(charging, monkeypatch):
+    """A turn killed after its tools ran leaves nothing in the session but its claim, so the
+    turn asked the same thing next did it again, charging twice, with nothing said. That
+    turn's model, its caller and the operator are now told. The control is a turn after one
+    that ended, which is told nothing."""
+    sink = RecordedEvents()
+    kf = Kingfisher(charging.cfg, sessions=LocalSessions(), run_events=sink)
+    Scripted.script.extend([_asking("0"), AIMessage(content="charged")])
+    with monkeypatch.context() as killed:
+        # Dead before its ending: no record written, and the claim never given back.
+        killed.setattr(running.Running, "_end_turn", lambda self, turn: None)
+        kf.run(_asked())
+    claim = charging.cfg.workspace / "sessions" / "s" / ".harness" / "claim"
+    long_ago = time.time() - charging.cfg.claim_stale_after - 60
+    os.utime(claim, (long_ago, long_ago))
+
+    Scripted.script.append(AIMessage(content="checking first"))
+    events = list(kf.stream(_asked()))
+    asked = [one.text for one in Scripted.heard[-1] if isinstance(one, HumanMessage)]
+
+    assert events[0].kind == "earlier_turn_unfinished"
+    assert UNFINISHED in asked[-1]
+    assert events[-1].result.earlier_turn_unfinished is True
+    [warned] = sink.named("earlier_turn_unfinished")
+    assert warned["session_id"] == "s"
+
+    Scripted.script.append(AIMessage(content="done"))
+    events = list(kf.stream(_asked()))
+    asked = [one.text for one in Scripted.heard[-1] if isinstance(one, HumanMessage)]
+
+    assert UNFINISHED not in asked[-1]
+    assert UNFINISHED in asked[0], "the warning was not kept with the message it was said in"
+    assert events[-1].result.earlier_turn_unfinished is False
 
 
 def test_a_turn_ending_after_its_caller_left_warns_by_its_errors_type_never_its_words(
