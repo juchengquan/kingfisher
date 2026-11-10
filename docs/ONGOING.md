@@ -185,6 +185,26 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   which model rows ran. A summary on a single batch reopens clearing acting before the
   summariser's own check, which *A refusal for length is clearing's to answer first* in
   `decisions.md` measured and left accepted. *(2026-10-23.)*
+- **The client's answers on turns that stop or die.** Two questions, each changing what
+  is built next. Does it cancel turns, or run `astream` under a web framework that
+  cancels on a disconnect? Since #1188 a cancelled turn waits up to
+  `KINGFISHER_CANCEL_WAIT_S` for the calls it has on threads, and its session stays busy
+  until they end, so a deployment that cancels often feels that wait and the refusals
+  after it. And what does it do on `SessionBusyError`, and how often do its pods die? A
+  dead turn holds its session until its claim lapses, the turn limit plus the longest
+  model or command bound, a little over an hour by default, so frequent deaths are felt
+  first as that lock. Only a turn taking over the dead one's claim is told it never
+  finished (#1288), so a deployment opening a new session on `SessionBusyError` never
+  hears it. *(2026-11-10.)*
+- **What a turn that never finished had done.** #1288 tells the next turn only that the
+  one before it never finished, not what it was asked nor which tools it started. Saying
+  that needs a record written as a turn goes, a write per turn and per batch of calls on
+  every turn for the rare one that dies, and *A turn after one that never finished is
+  told so* in `decisions.md` holds it until a deployment shows its turns die often and it
+  retries in the same session, which the entry above asks. Unmeasured: whether naming
+  the calls stops an agent with no tool to check from repeating them. The batch behind
+  #1288 tried the plain line and one telling the agent to ask the user, and both sent the
+  reminder again 6 times in 6. *(2026-11-10.)*
 
 ## When deepagents moves
 
