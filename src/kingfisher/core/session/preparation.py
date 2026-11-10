@@ -42,6 +42,7 @@ from .model import (
     TurnIdError,
     refuse_files_of_another,
 )
+from .rewind import turn_records
 from .runlog import RunLogger
 from .steps import (
     Steps,
@@ -236,7 +237,10 @@ class Preparation:
                 f"session {session.id} already has a turn {request.turn_id!r}; "
                 "give each turn an id of its own"
             )
-            raise TurnIdError(msg)
+            listed = yield from turn_records(harness, log)
+            raise TurnIdError(
+                msg, turn=next((one for one in listed if one.id == request.turn_id), None)
+            )
         # Before the build, because every row the graph records names the turn; and before
         # the memory store is asked, so that a warning from here on names it too.
         turn = session.allocate_turn(request.turn_id, taken=taken)

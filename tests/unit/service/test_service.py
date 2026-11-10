@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,7 +16,7 @@ from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.interfaces import CommandResult, CommandRunner
-from kingfisher.core.layout import DEFAULT_LAYOUT
+from kingfisher.core.layout import DEFAULT_LAYOUT, TURNS_FILE
 from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
 from kingfisher.core.session.files import InputsChanged
@@ -30,10 +31,12 @@ from tests.conftest import (
     FakeGraph,
     agent_for,
     an_agent,
+    read_record,
     start,
     subagents_dir,
     tools_dir,
     withheld_told,
+    write_old_record,
 )
 from tests.unit.scripted import Scripted
 from tests.unit.stand_ins import StubAgent
@@ -457,6 +460,32 @@ def test_a_supplied_graph_refuses_a_turn_id_its_turn_log_holds(cfg):
     assert log.read_bytes() == kept
     turns = kf.session("s").turns()
     assert [(turn.id, turn.parent) for turn in turns] == [("req-77", None), ("req-78", "req-77")]
+
+
+def test_a_refused_turn_id_hands_back_the_turn_that_holds_it(scripted):
+    """A caller retrying a turn that finished could only fail a request its session had
+    already answered; the record must be that id's and not the last turn's, and none rather
+    than a crash where the ledger names a turn the log never opened."""
+    an_agent(scripted)
+    kf = Kingfisher(scripted, sessions=LocalSessions())
+    session = start(scripted, "s")
+    Scripted.script.extend((AIMessage("first"), AIMessage("second")))
+    kf.run(Request("go", agent="only", session_id=session, turn_id="req-77"))
+    kf.run(Request("on", agent="only", session_id=session, turn_id="req-78"))
+
+    with pytest.raises(TurnIdError) as refused:
+        kf.run(Request("go", agent="only", session_id=session, turn_id="req-77"))
+
+    held = refused.value.turn
+    assert held is not None
+    assert (held.id, held.answer, held.stop_reason) == ("req-77", "first", "end_turn")
+    # A turn that died after the ledger and before the log: the ledger alone names it.
+    log = scripted.workspace / "sessions" / session / ".harness" / TURNS_FILE
+    lines = read_record(log).splitlines(keepends=True)
+    write_old_record(log, "".join(one for one in lines if json.loads(one)["turn"] != "req-78"))
+    with pytest.raises(TurnIdError, match="req-78") as refused:
+        kf.run(Request("on", agent="only", session_id=session, turn_id="req-78"))
+    assert refused.value.turn is None
 
 
 def test_a_caller_naming_one_file_twice_catches_it_by_the_front_door_name(cfg, tmp_path):

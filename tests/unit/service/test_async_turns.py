@@ -693,7 +693,7 @@ def test_an_ending_whose_record_fails_still_lets_go_of_the_interpreter(cfg, monk
     assert not claim_of(cfg, session).exists()
 
 
-def _refused(self, prepared, snapshot, ended, *, answer):
+def _refused(self, prepared, snapshot, ended, **_):
     yield from ()
     msg = "the backend refused the write"
     raise OSError(msg)

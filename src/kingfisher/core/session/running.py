@@ -319,7 +319,13 @@ class Running:
         return runtime.as_messages(messages) if messages else ()
 
     def _record_turn(
-        self, prepared: Prepared, snapshot: Any, ended: tuple[Message, ...], *, answer: str
+        self,
+        prepared: Prepared,
+        snapshot: Any,
+        ended: tuple[Message, ...],
+        *,
+        answer: str,
+        stop_reason: str | None,
     ) -> Steps[None]:
         """Log what was said this turn, as records this package owns, and the answer the
         caller is handed."""
@@ -336,6 +342,7 @@ class Running:
                 seen=ended,
                 ledger=prepared.ledger.earlier if prepared.ledger is not None else None,
                 answer=answer,
+                stop_reason=stop_reason,
                 started=prepared.started,
                 ended=time.time(),
             )
@@ -485,7 +492,11 @@ class Running:
                 )
             # Normalised by `_turn_outcome` already; a turn that raised hands back none.
             yield from self._record_turn(
-                prepared, snapshot, ended, answer=turn.answer if turn.ok else ""
+                prepared,
+                snapshot,
+                ended,
+                answer=turn.answer if turn.ok else "",
+                stop_reason=stopped,
             )
             try:
                 yield from self._keep_memory(turn, snapshot)

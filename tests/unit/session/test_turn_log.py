@@ -25,7 +25,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.middlewares.result_rows import expired_handle
 from kingfisher.core.layout import HARNESS, LEDGER_FILE, TURNS_FILE
 from kingfisher.core.request import Decision, DecisionError, Resume
-from kingfisher.core.result import AWAITING
+from kingfisher.core.result import AWAITING, END_TURN
 from kingfisher.core.session.messages import Message
 from kingfisher.core.session.runtime import as_messages
 from kingfisher.core.session.turnlog import (
@@ -38,6 +38,7 @@ from kingfisher.core.session.turnlog import (
     PARTS,
     REASONING,
     STARTED,
+    STOP_REASON,
     _rewritten,
 )
 from kingfisher.plugins import LocalSessions
@@ -319,8 +320,8 @@ def test_each_answer_names_the_call_it_answered_and_not_its_place_in_the_pause(l
         {"turn": resumed.turn_id, "decision": first, "call_id": "ga", ACTION: "reject"},
     ]
     assert [_untimed(line) for line in _lines(logged) if ANSWER in line] == [
-        {"turn": paused.turn_id, ANSWER: paused.answer},
-        {"turn": resumed.turn_id, ANSWER: "done"},
+        {"turn": paused.turn_id, ANSWER: paused.answer, STOP_REASON: AWAITING},
+        {"turn": resumed.turn_id, ANSWER: "done", STOP_REASON: END_TURN},
     ]
     assert _conversation(logged) == _ended_on(done)
 
@@ -532,28 +533,38 @@ def test_a_message_rewritten_in_the_state_is_logged_as_the_model_read_it(logged)
 def test_each_turn_ends_on_the_answer_its_caller_was_handed(logged):
     """Logged before the answer is cleaned, the line keeps the `<think>` block the caller
     never saw; logged off the turn's last words, a failed turn has an answer it never gave;
-    and an empty answer left unwritten leaves a reader guessing from the assistant lines.
+    an empty answer left unwritten leaves a reader guessing from the assistant lines; and
+    without why each stopped, a caller retrying a turn its provider could not serve, or one
+    that raised, reads it as a turn that answered nothing.
     """
     kf = Kingfisher(logged, sessions=LocalSessions())
     answered = _say(kf, "first", AIMessage("<think>mulling</think>\n\n42"))
     paused = _say(kf, "second", _calls(("sql_query", "q", "g1")))
+    unserved = _say(kf, "third", TimeoutError("the provider took too long"))
     looking = AIMessage(
         content="Looking.", tool_calls=[{"name": "web_search", "args": {"query": "q"}, "id": "c1"}]
     )
     with pytest.raises(RuntimeError, match="the model broke"):
-        _say(kf, "third", looking, RuntimeError("the model broke"))
+        _say(kf, "fourth", looking, RuntimeError("the model broke"))
     failed = _openings(logged)[-1]["turn"]
 
     assert answered.answer == "42", "the control: the answer was not cleaned"
     assert paused.stop_reason == AWAITING, "the control: the turn never stopped at the gate"
+    assert (unserved.answer, unserved.stop_reason) == ("", "model_unavailable")
     ends = {}
     for line in _lines(logged):
         ends[line["turn"]] = _untimed(line)
     assert ends == {
-        answered.turn_id: {"turn": answered.turn_id, ANSWER: "42"},
-        paused.turn_id: {"turn": paused.turn_id, ANSWER: ""},
-        failed: {"turn": failed, ANSWER: ""},
+        answered.turn_id: {"turn": answered.turn_id, ANSWER: "42", STOP_REASON: END_TURN},
+        paused.turn_id: {"turn": paused.turn_id, ANSWER: "", STOP_REASON: AWAITING},
+        unserved.turn_id: {
+            "turn": unserved.turn_id, ANSWER: "", STOP_REASON: "model_unavailable"
+        },
+        failed: {"turn": failed, ANSWER: "", STOP_REASON: None},
     }
+    assert [(one.answer, one.stop_reason) for one in kf.session("s").turns()] == [
+        ("42", END_TURN), ("", AWAITING), ("", "model_unavailable"), ("", None)
+    ]
     assert _conversation(logged) == _ended_on()
 
 
