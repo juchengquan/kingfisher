@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphInterrupt
 
 from kingfisher import Kingfisher, Request
@@ -555,6 +555,42 @@ def test_a_stream_ending_with_its_last_chunk_unread_still_ends():
         return [await asyncio.wait_for(stream.next(), 2) for _ in range(2)]
 
     assert asyncio.run(read()) == ["last", running._ENDED]
+
+
+def test_a_turn_that_outlived_its_claim_writes_nothing_behind_the_turn_that_took_it(
+    charging, monkeypatch
+):
+    """A turn whose tool hung past its claim ended after a newer turn had taken the
+    session over, and wrote its ending behind that turn's: the newer exchange vanished
+    from the conversation, and nothing said so."""
+    monkeypatch.setattr(Config, "superstep_bound", property(lambda _: 0.3))
+    cfg = replace(charging.cfg, turn_timeout_s=0.3)
+    sink = RecordedEvents()
+    Scripted.script.append(_asking("hold"))
+    old: dict[str, Any] = {}
+
+    def outlived() -> None:
+        kf = Kingfisher(cfg, sessions=LocalSessions(), run_events=sink)
+        old["result"] = kf.run(_asked())
+
+    hung = threading.Thread(target=outlived)
+    hung.start()
+    while "hold" not in _lines(charging.begun):
+        time.sleep(0.01)
+    # Past `claim_stale_after`, 0.6s here: the hung turn's claim is a dead turn's now.
+    time.sleep(1.0)
+    Scripted.script.append(AIMessage(content="the newer answer"))
+    charging.kf(cfg).run(Request("the newer question", agent="only", session_id="s"))
+    charging.release.touch()
+    hung.join(15)
+
+    Scripted.script.append(AIMessage(content="noted"))
+    charging.kf().run(Request("what happened?", agent="only", session_id="s"))
+    heard = [one.text for one in Scripted.heard[-1] if isinstance(one, HumanMessage)]
+    assert any("the newer question" in one for one in heard), "the newer turn was erased"
+    assert old["result"].keep_failure == running.TAKEN_OVER
+    [warned] = sink.named("turn_outlived_claim")
+    assert (warned["session_id"], warned["calls"]) == ("s", ["c-hold"])
 
 
 def test_a_turn_ending_after_its_caller_left_warns_by_its_errors_type_never_its_words(

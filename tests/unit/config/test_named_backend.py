@@ -50,6 +50,9 @@ class Recording(Sessions):
     def release(self, cfg, session_id, token, /):
         return None
 
+    def claimed_by(self, cfg, session_id, token, /):
+        return True
+
 
 class BoomError(RuntimeError):
     """What a deployment's own factory raises when its credentials are missing."""

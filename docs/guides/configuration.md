@@ -76,7 +76,9 @@ overrun smaller. The session stays claimed for the turn timeout plus that longes
 (and never less than 120 seconds past the deadline), plus the longest model `timeout_s`
 again where memory is on, for the memory writer's call, which is what keeps a second caller
 out of a session whose turn is still finishing: raising the execution timeout for a
-build or a test suite also lengthens how long a dead turn's session is locked out.
+build or a test suite also lengthens how long a dead turn's session is locked out. A turn
+that finishes after all, its claim already taken over, writes nothing behind the turn
+that took it.
 
 **Unbounded is survivable on a disk and is not survivable in memory.** A
 deployment whose sessions are memory-backed shares one fixed size between every

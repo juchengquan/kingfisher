@@ -140,9 +140,12 @@ class Elsewhere(Sessions):
         return session_id
 
     def release(self, cfg, session_id, token, /):
-        lock = self.root / session_id / HARNESS / "claim"
-        if (lock / "token").is_file() and (lock / "token").read_text(encoding="utf-8") == token:
-            shutil.rmtree(lock, ignore_errors=True)
+        if self.claimed_by(cfg, session_id, token):
+            shutil.rmtree(self.root / session_id / HARNESS / "claim", ignore_errors=True)
+
+    def claimed_by(self, cfg, session_id, token, /):
+        held = self.root / session_id / HARNESS / "claim" / "token"
+        return held.is_file() and held.read_text(encoding="utf-8") == token
 
 
 class ElsewhereRunner(CommandRunner):

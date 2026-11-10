@@ -186,7 +186,14 @@ def _revised(
 
 
 def kept_memory(  # noqa: PLR0913 -- the turn, and how it ended
-    prepared: Prepared, snapshot: Any, *, cfg: Config, answer: str, ok: bool, paused: bool
+    prepared: Prepared,
+    snapshot: Any,
+    *,
+    cfg: Config,
+    answer: str,
+    ok: bool,
+    paused: bool,
+    claimed: Callable[[], Steps[None]],
 ) -> Steps[tuple[MemoryChanges, tuple[RunEvent, ...]]]:
     """The memory file as the turn leaves it, and what the turn did to it.
 
@@ -212,8 +219,10 @@ def kept_memory(  # noqa: PLR0913 -- the turn, and how it ended
     turns = unread.turns + 1
     events: list[RunEvent] = []
     written: str | None = None
+    asked = False
     if ok and (runtime.summarised_in(snapshot) or turns >= cfg.memory_every):
         revised, why = yield from _revised(prepared, layout, entries, said)
+        asked = True
         # Read, kept or not: the next run reads what follows, not this again.
         turns, said = 0, ()
         if revised is None:
@@ -224,6 +233,10 @@ def kept_memory(  # noqa: PLR0913 -- the turn, and how it ended
             written = with_entries(text, entries)
     if written is None and dropped and text is not None:
         written = without_entries(text, frozenset(one.id for one in dropped))
+    if asked:
+        # The writer's model call is the one long wait in a turn's ending, and the claim
+        # can lapse during it, as it can while the turn's own calls run.
+        yield from claimed()
     if written is not None and written != text:
         answers = yield changing(
             prepared.files,

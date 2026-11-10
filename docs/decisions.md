@@ -3487,6 +3487,22 @@ process lived -- and it changes every `Sessions`. Build it when a deployment nee
 to outlast its deadline. Still open, with what was measured, in `ONGOING.md`: refusing
 new `tools.*` and `task()` calls from code once the turn is out of time. *(2026-11-04.)*
 
+**A turn that outlived its claim writes nothing.** A claim is never renewed, as the
+paragraph above says, so a turn whose tool hangs past `claim_stale_after` can find its
+session taken over when it does end. It wrote its ending anyway, behind the turn that
+took it: driven on the sync path, the newer turn's question and answer were gone from
+the conversation the next turn rebuilt, and nothing said so. The ending now asks
+`Sessions.claimed_by` before its first write and, where the memory writer ran, again
+after the writer's model call and before it writes: the two waits long enough for a
+claim to lapse in. The rest of an ending is quick writes back to back, and a check
+before each would cost a remote store a round trip apiece. A turn whose claim is gone
+writes nothing more, warns `turn_outlived_claim` with the call ids it did not keep, and
+still hands a caller waiting for it the answer, with `keep_failure` saying nothing more
+was kept. A claim can still lapse between a check and the write after it; closing that
+would take a store that refuses an old token's writes. `claimed_by` is required of every
+`Sessions` rather than defaulted, since a default answering yes would leave a
+deployment's own store unprotected without a word. *(2026-11-10.)*
+
 **An output is not evidence the command wrote it.** The run's folder is in the session's
 scratchpad because the Linux fences grant one session and nothing else, so the agent's
 shell and its file tools reach it while the run is going -- measured in one message

@@ -18,6 +18,26 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A turn that outlived its claim writes nothing, after #1281
+
+- **A `Sessions` of your own must answer `claimed_by(cfg, session_id, token, /)`**: true
+  while the claim `token` took still holds the session, false once a later turn has taken
+  it over or it was given back. Until it does, it fails to instantiate, naming the
+  method. Compare the token you already keep for `release`:
+
+  ```python
+  def claimed_by(self, cfg, session_id, token, /):
+      return self._token_held(session_id) == token  # what `release` compares
+  ```
+
+  `aclaimed_by` runs it on kingfisher's pool; override it where the answer is a round
+  trip you can await. `tests/checks/sessions.py` checks both.
+- **A turn that ends after its claim was taken over keeps nothing more**, where it used
+  to write behind the turn that took the session and erase that turn's conversation. Its
+  caller still gets the answer, with `RunResult.keep_failure` saying nothing more was
+  kept, and `turn_outlived_claim` reaches your `RunEvents` with the call ids whose
+  results were not kept.
+
 ## `doctor` fails on whatever startup refuses, after #1280
 
 - **`doctor` can exit 1 on a new `startup` row.** It now runs the check a turn runs

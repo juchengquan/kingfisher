@@ -116,6 +116,18 @@ class GivesBackAnyClaim(LocalSessions):
         remove_tree(_claim_at(cfg, session_id))
 
 
+class AnswersForAnyClaim(LocalSessions):
+    """A `claimed_by` that never reads the claim, holding whatever token it is asked about."""
+
+    def claimed_by(self, cfg, session_id, token, /):
+        return True
+
+
+class AnswersForAnyClaimAsync(LocalSessions):
+    async def aclaimed_by(self, cfg, session_id, token, /):
+        return True
+
+
 class OneLockForAll(LocalSessions):
     """One lock for the whole object, taken whichever session asks."""
 
@@ -185,13 +197,15 @@ class MarksNothingAsync(LocalSessions):
         ("arelease_gives_back_what_claim_took", KeepsTheClaimAsync, "left the claim held"),
         ("asize_counts_what_size_does", WeighsNothingAsync, "where size counts"),
         ("amark_used_moves_the_session_on", MarksNothingAsync, "as last used as it was"),
+        ("aclaimed_by_answers_as_claimed_by", AnswersForAnyClaimAsync, "did not answer"),
     ],
-    ids=["aclaim", "arelease", "asize", "amark_used"],
+    ids=["aclaim", "arelease", "asize", "amark_used", "aclaimed_by"],
 )
 def test_the_kit_catches_an_async_twin_that_disagrees(cfg, check, backends, said):
-    """A kit blind to an `aclaim`, `arelease`, `asize` or `amark_used` that disagrees
-    with its sync twin passes a deployment whose async turns share a held session, leave
-    it busy, miscount its quota or leave it to `reap`.
+    """A kit blind to an `aclaim`, `arelease`, `asize`, `amark_used` or `aclaimed_by`
+    that disagrees with its sync twin passes a deployment whose async turns share a held
+    session, leave it busy, miscount its quota, leave it to `reap` or write behind the
+    turn that took their session over.
     """
     with pytest.raises(AssertionError, match=said):
         _check(check)(lambda: (cfg, backends()))
@@ -257,6 +271,15 @@ def test_the_kit_catches_a_release_that_ignores_its_token(cfg, check):
     """
     with pytest.raises(AssertionError, match="gave back"):
         _check(check)(lambda: (cfg, GivesBackAnyClaim()))
+
+
+def test_the_kit_catches_a_claim_still_answered_for_once_taken_over(cfg):
+    """A kit that passed a `claimed_by` answering yes for any token would let a deployment's
+    turn that outlived its claim write behind the turn that took it, erasing its
+    conversation.
+    """
+    with pytest.raises(AssertionError, match="still its first taker's"):
+        _check("a_claim_taken_over_is_no_longer_its_takers")(lambda: (cfg, AnswersForAnyClaim()))
 
 
 def test_two_callers_judging_one_claim_stale_take_it_over_once(cfg, monkeypatch):
