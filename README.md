@@ -95,7 +95,8 @@ before the first turn, and `--only files` or `--only conversation` takes back on
 leaves the other -- `kf.session(session_id).rewind(turn_id, only="files")` from Python,
 with `START` for the start. The turns after it are kept, so a rewind to one of them
 returns. A file with no copy of that version stays as it is, named in
-`Rewound.not_restored`; `KINGFISHER_REWIND_MAX_BYTES` caps what the copies may hold.
+`Rewound.not_restored`; `KINGFISHER_REWIND_MAX_BYTES` caps what the copies may hold, and
+`KINGFISHER_REWIND_ENABLED=false` keeps none and refuses every rewind.
 
 An agent can be written to stop before a tool runs and wait for you — see
 *Approval gates* in [`formats.md`](docs/guides/formats.md), and

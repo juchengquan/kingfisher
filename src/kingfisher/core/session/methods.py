@@ -18,6 +18,7 @@ from .model import (
     DEFAULT_SESSION,
     Conversation,
     QuotaExceededError,
+    RewindError,
     SessionBusyError,
     held_by_a_turn,
     most_recent_first,
@@ -205,6 +206,11 @@ class SessionMethods:
     def _rewind_in(
         self, session_id: str, to: str | Start, only: RewindPart | None, opened: list[Any]
     ) -> Steps[Rewound]:
+        if not self.cfg.rewind_enabled:
+            # Whole, not the conversation alone: no turn kept the files, the memory file or
+            # what the agent heard of its inputs, so that rewind would leave a later turn's.
+            msg = "rewinding is switched off here: KINGFISHER_REWIND_ENABLED is false"
+            raise RewindError(msg)
         files = yield from self._existing_files(session_id, opened)
         # Taken, as `forget` takes it: a turn starting halfway would read a conversation
         # from one branch and a ledger from another.

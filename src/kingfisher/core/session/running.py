@@ -510,7 +510,8 @@ class Running:
             # Last, after the memory writer and the store: the memory file as the turn left it.
             # The same walk: the sweep hands over results in the scratchpad, which it does not
             # reach.
-            yield from keep_turn_files(prepared, self.cfg, walked)
+            if self.cfg.rewind_enabled:
+                yield from keep_turn_files(prepared, self.cfg, walked)
         except _TakenOver:
             # The answer still goes to a caller waiting for it: the work was done, and only
             # the session's record of it is lost.

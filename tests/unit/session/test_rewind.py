@@ -224,6 +224,22 @@ def test_a_misspelt_part_takes_back_nothing(rewinding):
     assert _harness_files(rewinding) == kept
 
 
+def test_with_rewinding_off_every_rewind_is_refused_and_changes_nothing(rewinding):
+    """Off, no turn kept the files, the memory file or what the agent heard of its inputs,
+    so even a rewind of the conversation alone would leave a later turn's of each beside an
+    earlier conversation."""
+    kf = Kingfisher(replace(rewinding, rewind_enabled=False), sessions=LocalSessions())
+    first = _say(kf, "TASK-FIRST", AIMessage("ANSWER-FIRST"))
+    _say(kf, "TASK-SECOND", AIMessage("ANSWER-SECOND"))
+    kept = _harness_files(rewinding)
+
+    for only in (None, "files", "conversation"):
+        with pytest.raises(RewindError, match="KINGFISHER_REWIND_ENABLED"):
+            kf.session("s").rewind(first.turn_id, only=only)
+
+    assert _harness_files(rewinding) == kept
+
+
 def test_turns_logged_under_one_id_are_listed_and_a_rewind_behind_them_is_refused(cfg, monkeypatch):
     """A supplied graph's session that ran two turns under one id, before #1208 refused it,
     logged the second's line in place of the first's: the walk back came round forever, so

@@ -173,12 +173,21 @@ def test_a_setting_that_moved_one_kind_is_refused(env, tmp_path, setting):
 # -- what it resolves to ---------------------------------------------------
 
 
-def test_citing_results_is_on_unless_turned_off(env):
-    """Read with the wrong default, every deployment that never set it would stop
-    telling the model it may cite a result, which is the provenance the ledger is for.
+#: Each switch that is on unless a deployment turns it off, by its `Config` field.
+ON_UNLESS_TURNED_OFF = {
+    "cite_results": "KINGFISHER_CITE_RESULTS",
+    "rewind_enabled": "KINGFISHER_REWIND_ENABLED",
+}
+
+
+@pytest.mark.parametrize(("name", "key"), sorted(ON_UNLESS_TURNED_OFF.items()))
+def test_a_switch_on_by_default_is_on_unless_turned_off(env, name, key):
+    """Read with the wrong default, every deployment that never set it would lose what it
+    is on for: the model told it may cite a result, which is the provenance the ledger is
+    for, or the file history every rewind needs, from each turn since.
     """
-    assert config_from_env(env).cite_results is True
-    assert config_from_env({**env, "KINGFISHER_CITE_RESULTS": "false"}).cite_results is False
+    assert getattr(config_from_env(env), name) is True
+    assert getattr(config_from_env({**env, key: "false"}), name) is False
 
 
 LIMITS = {

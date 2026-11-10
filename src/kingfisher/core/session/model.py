@@ -33,7 +33,8 @@ class TurnIdError(ValueError):
 
 
 class RewindError(ValueError):
-    """A rewind named a turn its session cannot be put back to."""
+    """A rewind named a turn its session cannot be put back to, or the deployment keeps
+    no history to rewind with."""
 
 
 class Start(Enum):

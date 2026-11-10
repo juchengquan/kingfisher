@@ -18,6 +18,19 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A deployment can switch the file history off, after #1290
+
+- **Nothing changes unless you set `KINGFISHER_REWIND_ENABLED=false`.** Then a turn's end
+  reads and writes no file history -- no copies under `.harness/files/`, no line in
+  `.harness/files.jsonl`, no `.harness/artifacts.jsonl` -- `KINGFISHER_REWIND_MAX_BYTES` is
+  ignored, and `Session.rewind` and `kingfisher rewind` raise `RewindError`, whatever part
+  they ask for. `Session.turns()` gives `files=None` for a turn run with it off.
+- **A session's copies from before stay** until the session is deleted, and `forget`
+  still takes an entry out of them. Turned back on, a rewind cannot put back the files of
+  a turn run while it was off.
+- **Like every flag, a value other than `1`, `true`, `yes` or `on` is false**, so
+  `KINGFISHER_REWIND_ENABLED=y` switches the history off.
+
 ## A refused turn id says what that turn answered, after #1289
 
 - **`TurnRecord.answer` and `TurnRecord.stop_reason`** hand on what the turn's caller was
