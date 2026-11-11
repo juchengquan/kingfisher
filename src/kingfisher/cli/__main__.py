@@ -439,6 +439,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="reap every session no turn is running in",
     )
+    sweeping.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "with --session: reap it even while a turn holds it, for a turn you know "
+            "died -- one still running loses its files"
+        ),
+    )
     return parser
 
 
@@ -1031,7 +1039,11 @@ def _reap(args: argparse.Namespace) -> int:
     cfg = config_from_env()
     kf = _configured(cfg)
     if args.session is not None:
-        return _reap_one(kf, args.session)
+        return _reap_one(kf, args.session, force=args.force)
+    if args.force:
+        # Never across a sweep: one forced reap is an operator naming the turn they know died.
+        print("--force needs --session: name the session whose turn died", file=sys.stderr)
+        return 2
 
     result = kf.reap(now=time.time())
     for gone in result.removed:
@@ -1133,11 +1145,11 @@ def _rewind(args: argparse.Namespace) -> int:
     return 0
 
 
-def _reap_one(kf: Kingfisher, session_id: str) -> int:
+def _reap_one(kf: Kingfisher, session_id: str, *, force: bool = False) -> int:
     """Reap one session by name; refused, as a sweep spares it, while a turn holds it."""
     # Looked up first: deleting answers `None` for nothing there too, so a mistyped id
     # would report work nothing did.
-    failure = _opened(kf, session_id).delete()
+    failure = _opened(kf, session_id).delete(force=force)
     if failure:
         print(f"not reaped -- {failure}", file=sys.stderr)
         return 1

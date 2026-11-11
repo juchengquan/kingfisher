@@ -5220,7 +5220,9 @@ deletes, so it claims again: a turn that took the session in between keeps it, a
 says so on `deletion_failure` rather than raising, since its answer is worth keeping. **The
 cost, taken:** `kingfisher reap --session` removed a session a turn still held, its help
 saying the turn would not survive; it is refused too, and a dead turn's session goes once
-its claim is stale. **Not taken:** keeping the turn's claim through its ending into the
+its claim is stale -- or at once, named with `--force`, which `Session.delete(force=True)`
+backs by taking any claim as stale. Kept off `--all`, so forcing is always an operator
+naming the one session whose turn they know died. **Not taken:** keeping the turn's claim through its ending into the
 delete, which puts a delete in the ending `stream` shares, where a caller closing early
 must not delete. *(2026-11-11.)*
 

@@ -984,8 +984,10 @@ claim that took over. Subclass `Sessions` and `aclaim`, `arelease`, `aclaimed_by
 `atook_over` run them on kingfisher's pool; override them where your lock is a round
 trip you can await. A delete is under the claim too: `Session.delete`,
 `delete_session=True` and `reap` claim the session, `delete` it and then `release`, so a
-`release` naming a session `delete` has just removed must return quietly. Two turns in one session share a conversation and the last write
-wins, so this is what refuses the second. The backend `open` returns carries none of
+`release` naming a session `delete` has just removed must return quietly. A forced delete
+claims with `stale_after=0`, so a claim of any age must then be taken over. Two turns in
+one session share a conversation and the last write wins, so this is what refuses the
+second. The backend `open` returns carries none of
 this.
 
 **A pre-built graph names its sessions too.** `Kingfisher(cfg, graph=...)`

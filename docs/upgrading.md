@@ -30,6 +30,8 @@ replaced the four layers began.
 - **`Session.delete`, `adelete` and `kingfisher reap --session` raise `SessionBusyError`**
   while a turn holds the session, as `reap --all` already spared it; the command exits 2
   and says to wait. A claim gone stale is a dead turn's, and the delete goes ahead.
+  `kingfisher reap --session ID --force`, or `Session.delete(force=True)`, removes a
+  session whose turn you know died without waiting for its claim to go stale.
 - **`run(delete_session=True)` keeps a session another turn took once this one ended**,
   with `deletion_failure` saying so, and `kingfisher run --delete-session` prints it.
 
