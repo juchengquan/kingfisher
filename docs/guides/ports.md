@@ -982,7 +982,9 @@ turn may have done outside. `LocalSessions` does it with `mkdir` under the sessi
 aside under a name only it has, so a second taker's rename fails, and a note in the
 claim that took over. Subclass `Sessions` and `aclaim`, `arelease`, `aclaimed_by` and
 `atook_over` run them on kingfisher's pool; override them where your lock is a round
-trip you can await. Two turns in one session share a conversation and the last write
+trip you can await. A delete is under the claim too: `Session.delete`,
+`delete_session=True` and `reap` claim the session, `delete` it and then `release`, so a
+`release` naming a session `delete` has just removed must return quietly. Two turns in one session share a conversation and the last write
 wins, so this is what refuses the second. The backend `open` returns carries none of
 this.
 

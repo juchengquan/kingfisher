@@ -430,8 +430,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--session",
         metavar="ID",
         help=(
-            "reap this one by name -- whether or not a turn is running in it, "
-            "which that turn will not survive"
+            "reap this one by name -- refused while a turn is running in it, "
+            "as --all spares it"
         ),
     )
     chosen.add_argument(
@@ -919,7 +919,12 @@ def _discard(kf: Kingfisher, result: RunResult) -> None:
         for name in result.artifacts:
             print(f"  {name}", file=sys.stderr)
     session = kf.session(result.session_id)
-    failure = session.delete() if session is not None else None
+    try:
+        failure = session.delete() if session is not None else None
+    except SessionBusyError as exc:
+        # A turn that took the session once this one let go: kept, and the exit code
+        # still says how this turn ended.
+        failure = str(exc)
     if failure:
         print(f"session not deleted -- {failure}", file=sys.stderr)
 
@@ -1042,7 +1047,7 @@ def _reap(args: argparse.Namespace) -> int:
             held = "it" if result.kept == 1 else "each of them"
             print(
                 f"nothing to reap -- {held} is {held_by_a_turn(cfg.claim_stale_after)}; "
-                "reap again then, or reap one by name with --session"
+                "reap again then"
             )
     return 1 if result.failures else 0
 
@@ -1129,7 +1134,7 @@ def _rewind(args: argparse.Namespace) -> int:
 
 
 def _reap_one(kf: Kingfisher, session_id: str) -> int:
-    """Reap one session by name, whatever is running in it."""
+    """Reap one session by name; refused, as a sweep spares it, while a turn holds it."""
     # Looked up first: deleting answers `None` for nothing there too, so a mistyped id
     # would report work nothing did.
     failure = _opened(kf, session_id).delete()

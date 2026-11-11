@@ -42,6 +42,7 @@ from .ledger import file_left, keep_ledger, sweep_results
 from .memory import kept_in_store
 from .memory_writer import kept_memory
 from .messages import joined
+from .model import SessionBusyError
 from .provider_errors import refused_request
 from .steps import (
     Steps,
@@ -768,7 +769,8 @@ class Running:
 
         `delete_session=True` disposes of the session once the turn has completed; one
         stopped at a bound keeps it, as a retry is rebuilt from it. A failed deletion is
-        `deletion_failure` on the result. Not on `stream`: a generator's `finally` also
+        `deletion_failure` on the result, as is a session another turn took once this one
+        let go of it, which is kept. Not on `stream`: a generator's `finally` also
         fires when a caller stops reading early, which would delete the session.
         """
         result: RunResult | None = None
@@ -791,7 +793,12 @@ class Running:
             msg = "the stream ended without a finished event"
             raise RuntimeError(msg)
         if delete_session and result.completed:
-            failure = yield from self._delete_session_steps(result.session_id)
+            # The turn gave its claim back as it ended, so a turn may hold the session by
+            # now; on the result rather than raised, as any failed deletion is.
+            try:
+                failure = yield from self._delete_session_steps(result.session_id)
+            except SessionBusyError as exc:
+                failure = str(exc)
             if failure:
                 result = replace(result, deletion_failure=failure)
         return result

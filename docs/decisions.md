@@ -5177,6 +5177,20 @@ and nothing made -- and a client continuing a conversation knows it is doing so.
 would have closed only the moment between that call and the turn's own listing, against
 a sweep that runs only when someone runs it. *(2026-11-01.)*
 
+**A delete refuses a session a turn holds, as a sweep spares one.** `Session.delete` and
+`run(delete_session=True)` deleted without the claim, so a caller deleting a chat while its
+agent answered removed the files under the running turn. Both take the claim on `reap`'s
+path now, and a held session answers `SessionBusyError`: refused rather than waited for,
+which would hold the caller as long as the turn. A stale claim is a dead turn's, taken over
+as a sweep takes it. `run(delete_session=True)` has given its claim back by the time it
+deletes, so it claims again: a turn that took the session in between keeps it, and the run
+says so on `deletion_failure` rather than raising, since its answer is worth keeping. **The
+cost, taken:** `kingfisher reap --session` removed a session a turn still held, its help
+saying the turn would not survive; it is refused too, and a dead turn's session goes once
+its claim is stale. **Not taken:** keeping the turn's claim through its ending into the
+delete, which puts a delete in the ending `stream` shares, where a caller closing early
+must not delete. *(2026-11-11.)*
+
 **No migration and no fallback reader.** The failure a fallback would paper over is
 silence rather than breakage: a pin the new code cannot find means a session re-pins and
 may change agent mid-conversation, and a transcript read from the new path comes back

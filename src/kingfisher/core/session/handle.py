@@ -144,7 +144,11 @@ class Session:
         return await adrive(self._service._size_in(self.id))
 
     def delete(self) -> str | None:
-        """Dispose of this session and everything its backend holds. A failure, or None."""
+        """Dispose of this session and everything its backend holds. A failure, or None.
+
+        `SessionBusyError` while a turn holds the session, as `reap` spares it; a claim
+        gone stale is a dead turn's, and taken over for the delete.
+        """
         return drive(self._service._delete_session_steps(self.id))
 
     async def adelete(self) -> str | None:

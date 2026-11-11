@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A delete refuses a session a turn is running in
+
+- **`Session.delete`, `adelete` and `kingfisher reap --session` raise `SessionBusyError`**
+  while a turn holds the session, as `reap --all` already spared it; the command exits 2
+  and says to wait. A claim gone stale is a dead turn's, and the delete goes ahead.
+- **`run(delete_session=True)` keeps a session another turn took once this one ended**,
+  with `deletion_failure` saying so, and `kingfisher run --delete-session` prints it.
+
 ## A turn after one that kept no record starts the record afresh, after #1291
 
 - **A turn whose parent has no line in `.harness/files.jsonl`** -- its listing of the

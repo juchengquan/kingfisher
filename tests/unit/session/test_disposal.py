@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import os
+import time
 from dataclasses import replace
 
 import pytest
 
 from kingfisher import Kingfisher
 from kingfisher.core.request import Request
+from kingfisher.core.session.model import SessionBusyError
 from kingfisher.plugins import LocalSessions
 from tests.conftest import Through, start
 from tests.unit.access.test_tenancy import service
@@ -19,6 +22,12 @@ class Stuck(LocalSessions):
 
     def delete(self, cfg, session_id):
         return "directory not removed (Permission denied)"
+
+def _aged(cfg, claim) -> None:
+    """Make `claim` older than `claim_stale_after`, as a dead turn leaves one."""
+    long_ago = time.time() - cfg.claim_stale_after - 60
+    os.utime(claim, (long_ago, long_ago))
+
 
 # -- lifecycle: disposal is asked for -------------------------------------
 
@@ -127,6 +136,24 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     assert result.removed == (idle,)
     assert result.kept == 1
     assert (cfg.workspace / "sessions" / busy).exists()
+
+
+def test_deleting_a_session_a_turn_holds_is_refused_until_its_claim_goes_stale(cfg):
+    """`Session.delete` took no claim, so deleting a chat while its agent answered removed
+    the files under the running turn; a claim gone stale is a dead turn's, and the control."""
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=LocalSessions())
+    session = start(cfg, "s")
+    directory = cfg.workspace / "sessions" / session
+    assert LocalSessions().claim(cfg, session, stale_after=3600)
+
+    with pytest.raises(SessionBusyError, match="delete it once it is free"):
+        Through(kf).delete(session)
+    assert directory.exists()
+
+    _aged(cfg, claim_of(cfg, session))
+
+    assert Through(kf).delete(session) is None
+    assert not directory.exists()
 
 
 class ClaimedFirst(LocalSessions):
@@ -462,6 +489,8 @@ def test_deleting_a_session_takes_its_claim_with_it(cfg):
     session = start(cfg, "s")
     claim = claim_of(cfg, session)
     claim.mkdir(parents=True, exist_ok=True)
+    # A dead turn's: a live one's refuses the delete.
+    _aged(cfg, claim)
 
     Through(kf).delete(session)
 
@@ -473,6 +502,7 @@ def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg):
     kf = service(cfg)
     start(cfg, "reused")
     claim_of(cfg, "reused").mkdir(parents=True, exist_ok=True)
+    _aged(cfg, claim_of(cfg, "reused"))
     Through(kf).delete("reused")
 
     start(cfg, "reused")
@@ -554,4 +584,32 @@ def test_a_deletion_that_fails_is_on_the_result_beside_the_answer(cfg, monkeypat
     assert result.answer == "ok"
     assert result.deletion_failure is not None
     assert "not removed" in result.deletion_failure
+    assert (cfg.workspace / "sessions" / result.session_id).is_dir()
+
+
+class ClaimedOnRelease(LocalSessions):
+    """Another turn claiming the session the moment a turn gives it back."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.taken: str | None = None
+
+    def release(self, cfg, session_id, token, /):
+        super().release(cfg, session_id, token)
+        if self.taken is None:
+            self.taken = super().claim(cfg, session_id, stale_after=3600)
+
+
+def test_a_run_deleting_its_session_spares_a_turn_that_started_after_it(cfg):
+    """`run(delete_session=True)` deleted after giving its claim back, so a turn that took
+    the session in between had it removed under it."""
+    sessions = ClaimedOnRelease()
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), sessions=sessions)
+
+    result = kf.run(Request("go"), delete_session=True)
+
+    assert sessions.taken is not None, "the next turn took its claim"
+    assert result.answer == "ok"
+    assert result.deletion_failure is not None
+    assert "delete it once it is free" in result.deletion_failure
     assert (cfg.workspace / "sessions" / result.session_id).is_dir()
