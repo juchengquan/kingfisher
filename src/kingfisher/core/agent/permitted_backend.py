@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deepagents.backends import CompositeBackend, FilesystemBackend
+from deepagents.backends.composite import _route_for_path
 from deepagents.backends.protocol import (
     INVALID_PATH,
     PERMISSION_DENIED,
@@ -397,10 +398,10 @@ def host_path(backend: Any, where: str) -> tuple[Path | None, Path] | None:
         answered = own(where)
         return None if answered is None else (None, Path(answered))
     if isinstance(backend, CompositeBackend):
-        for prefix in sorted(backend.routes, key=len, reverse=True):
-            if where.startswith(prefix) or where == prefix.rstrip("/"):
-                return host_path(backend.routes[prefix], "/" + where[len(prefix) :])
-        return host_path(backend.default, where)
+        routed, inner, _ = _route_for_path(
+            default=backend.default, sorted_routes=backend.sorted_routes, path=where
+        )
+        return host_path(routed, inner)
     if isinstance(backend, FilesystemBackend) and backend.virtual_mode:
         root = Path(backend.cwd)
         return root, root / where.lstrip("/")

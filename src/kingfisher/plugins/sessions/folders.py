@@ -69,11 +69,17 @@ def sessions_under(root: Path) -> tuple[tuple[str, float], ...]:
     """Each session folder under `root`, and when it was last used."""
     if not root.is_dir():
         return ()
-    return tuple(
-        (p.name, p.stat().st_mtime)
-        for p in root.iterdir()
-        if p.is_dir() and names_a_session(p.name)
-    )
+    found = []
+    for p in root.iterdir():
+        if not names_a_session(p.name):
+            continue
+        # One look, and a miss forgiven: raised, a session deleted mid-listing would fail
+        # every turn that lists the sessions then, in whichever session it runs.
+        with suppress(FileNotFoundError):
+            held = p.stat()
+            if stat.S_ISDIR(held.st_mode):
+                found.append((p.name, held.st_mtime))
+    return tuple(found)
 
 
 def remove_tree(path: Path) -> str | None:
@@ -169,4 +175,11 @@ def session_bytes(session_dir: Path) -> int:
     session_dir = Path(session_dir)
     if not session_dir.is_dir():
         return 0
-    return sum(p.stat().st_size for p in session_dir.rglob("*") if p.is_file())
+    total = 0
+    for p in session_dir.rglob("*"):
+        # A file the session's shell removed since the walk found it holds nothing now.
+        with suppress(FileNotFoundError):
+            held = p.stat()
+            if stat.S_ISREG(held.st_mode):
+                total += held.st_size
+    return total

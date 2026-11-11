@@ -116,7 +116,11 @@ def copied_on_host(source: tuple[Path | None, Path], destination: tuple[Path | N
     # resolved, so anything else is a link below it.
     if root is not None and path.resolve() != path:
         raise OSError(errno.ELOOP, "it is or runs through a link", str(path))
-    target = destination[1]
+    target_root, target = destination
+    # A rewind writes into `/outputs`, where the shell may have made a folder a link: through
+    # it, this process would replace a file outside the session.
+    if target_root is not None and target.parent.resolve() != target.parent:
+        raise OSError(errno.ELOOP, "it runs through a link", str(target))
     target.parent.mkdir(parents=True, exist_ok=True)
     target.unlink(missing_ok=True)
     held = os.open(path, _SOURCE)

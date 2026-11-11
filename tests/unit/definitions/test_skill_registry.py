@@ -53,6 +53,16 @@ def test_a_folder_called_catalogue_is_refused(cfg):
         _read(cfg.skills_dir)
 
 
+def test_two_skills_of_one_name_in_one_source_are_refused(cfg):
+    """Kept as one, the other directory had no deny rule, and a caller locked out of the
+    skill or never granted it read it by its path."""
+    _skill(cfg.skills_dir, "audit", GOOD.format(name="audit", desc="Current."))
+    _skill(cfg.skills_dir, "audit-old", GOOD.format(name="audit", desc="Superseded."))
+
+    with pytest.raises(ConfigError, match="audit-old"):
+        _read(cfg.skills_dir)
+
+
 def test_a_missing_skills_folder_is_no_skills_and_no_source(tmp_path, caplog):
     """Handed a source it cannot list, deepagents logs "Cannot load skills" -- when the
     catalogue is read, and on every turn after -- for a folder a deployment simply

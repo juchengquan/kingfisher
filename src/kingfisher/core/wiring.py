@@ -35,6 +35,12 @@ def built_from_setting(spec: str, *, setting: str, interface: type) -> Any:
             "define it"
         )
         raise ConfigError(msg) from exc
+    if not callable(factory):
+        msg = (
+            f"{setting} names {spec!r}, which is a {type(factory).__name__} and not "
+            "callable -- name a function that builds it, callable with no arguments"
+        )
+        raise ConfigError(msg)
 
     built = factory()
     # Not `refuse_unless_subclass`: `interface` may be a `Mapping`, which nobody subclasses.

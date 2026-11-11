@@ -4,6 +4,7 @@ outside."""
 
 from __future__ import annotations
 
+import functools
 import inspect
 import re
 from collections.abc import Awaitable, Callable, Collection, Iterator
@@ -16,7 +17,7 @@ from deepagents.middleware.filesystem import DEFAULT_READ_LIMIT, FilesystemMiddl
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.todo import WRITE_TODOS_SYSTEM_PROMPT
 from langchain_core.messages import SystemMessage, ToolMessage
-from langchain_core.tools import BaseTool
+from langchain_core.tools import BaseTool, StructuredTool
 
 from kingfisher.core.agent.backend import folders_of, miscased, strays
 from kingfisher.core.agent.prompting import (
@@ -348,10 +349,9 @@ _PATH_ARGUMENT = {
 }
 
 
-def _miscased(request: Any, folders: frozenset[str], layout: Layout) -> ToolMessage | None:
+def _miscased(call: Any, folders: frozenset[str], layout: Layout) -> ToolMessage | None:
     """The refusal of a file tool's path that spells a folder of the session in other
     capitals; `None` for any other call."""
-    call = request.tool_call
     argument = _PATH_ARGUMENT.get(call.get("name"))
     path = (call.get("args") or {}).get(argument) if argument else None
     if not isinstance(path, str):
@@ -364,10 +364,9 @@ def _miscased(request: Any, folders: frozenset[str], layout: Layout) -> ToolMess
     return None if meant is None else failed(call, f"Error: {miscased_path(where, meant)}")
 
 
-def _stray(request: Any, folders: frozenset[str], layout: Layout) -> ToolMessage | None:
+def _stray(call: Any, folders: frozenset[str], layout: Layout) -> ToolMessage | None:
     """The refusal of a `write_file` or `edit_file` outside every folder of the session;
     `None` for any other call."""
-    call = request.tool_call
     if call.get("name") not in (WRITE_FILE, EDIT_FILE):
         return None
     path = (call.get("args") or {}).get("file_path")
@@ -381,6 +380,42 @@ def _stray(request: Any, folders: frozenset[str], layout: Layout) -> ToolMessage
     if not strays(where, folders):
         return None
     return failed(call, f"Error: {stray_save(where, layout)}")
+
+
+def _misplaced(call: Any, folders: frozenset[str], layout: Layout) -> ToolMessage | None:
+    return _miscased(call, folders, layout) or _stray(call, folders, layout)
+
+
+def _from_code(tool: Any, folders: frozenset[str], layout: Layout) -> Any:
+    """`tool` refusing what `_misplaced` refuses of a direct call, for `eval`.
+
+    A program's `tools.*` runs the object the model request holds and meets no
+    `wrap_tool_call`, so without this `/.HARNESS/x` reached the real `.harness` from code
+    on a case-insensitive volume.
+    """
+    if not isinstance(tool, StructuredTool) or tool.name not in _PATH_ARGUMENT:
+        return tool
+
+    def refusal(args: dict[str, Any]) -> str | None:
+        refused = _misplaced({"name": tool.name, "args": args}, folders, layout)
+        return None if refused is None else str(refused.content)
+
+    update: dict[str, Any] = {}
+    if (func := tool.func) is not None:
+
+        @functools.wraps(func)
+        def checked(*args: Any, **kwargs: Any) -> Any:
+            return refusal(kwargs) or func(*args, **kwargs)
+
+        update["func"] = checked
+    if (coroutine := tool.coroutine) is not None:
+
+        @functools.wraps(coroutine)
+        async def achecked(*args: Any, **kwargs: Any) -> Any:
+            return refusal(kwargs) or await coroutine(*args, **kwargs)
+
+        update["coroutine"] = achecked
+    return tool.model_copy(update=update)
 
 
 def _ruled(description: str, rule: str | None) -> str:
@@ -688,7 +723,11 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         held = {requested_tool_name(tool) for tool in request.tools}
         lines = _held_lines(held)
         tools = [
-            _offered(_described(_naming_held(tool, lines), self._rule, self._timed))
+            _from_code(
+                _offered(_described(_naming_held(tool, lines), self._rule, self._timed)),
+                self._folders,
+                self._layout,
+            )
             for tool in request.tools
         ]
         if not all(new is old for new, old in zip(tools, request.tools, strict=True)):
@@ -780,8 +819,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
         return (
             _overlong(request, self._longest)
             or _unreadable(request)
-            or _miscased(request, self._folders, self._layout)
-            or _stray(request, self._folders, self._layout)
+            or _misplaced(request.tool_call, self._folders, self._layout)
         )
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:

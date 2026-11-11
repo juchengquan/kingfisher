@@ -402,6 +402,40 @@ def test_a_command_from_code_is_held_to_the_setting(cfg, session_dir):
 
 
 @pytest.mark.parametrize(
+    ("path", "refused_with"),
+    [
+        ("/.HARNESS/x.txt", "other capitals"),
+        ("/scratchpad/TOOL_RESULTS/x.txt", "other capitals"),
+        ("/stray.txt", "outside the session's folders"),
+        # The control: without it this passes for a write that never runs from code.
+        ("/outputs/kept.txt", None),
+    ],
+)
+def test_a_write_from_code_is_refused_where_a_direct_one_is(
+    cfg, session_dir, path, refused_with
+):
+    """`tools.writeFile(...)` from `eval` wrote `/.HARNESS/x.txt`, which on a case-insensitive
+    volume is the real `.harness`: the refusal sat in a `wrap_tool_call` code never meets.
+    """
+    wired = replace(cfg, interpreter_enabled=True)
+    asked = json.dumps({"file_path": path, "content": "x"})
+
+    answered, _ = _from_code(
+        wired,
+        session_dir,
+        f"(async () => await tools.writeFile({asked}))()",
+        capabilities=Capabilities(builtin_tools=("eval", "write_file", "read_file")),
+    )
+
+    written = session_dir / path.lstrip("/")
+    if refused_with is None:
+        assert written.read_text() == "x", answered
+    else:
+        assert refused_with in answered
+        assert not written.exists()
+
+
+@pytest.mark.parametrize(
     ("gated", "spelled"),
     # A built-in, which reaches the sandbox by name, and an offered tool, which
     # reaches it as an object: two lists, and a gate has to empty both.

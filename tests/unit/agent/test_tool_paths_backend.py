@@ -258,3 +258,21 @@ def test_a_route_named_without_its_slash_is_the_routed_folder(cfg, session_dir):
     root, where = found
     assert where.resolve() == skills, where
     assert root is not None and root.resolve() == skills
+
+
+def test_a_route_without_its_slash_does_not_take_a_longer_name(tmp_path):
+    """A `/data` route took `/database/x` as its own `/base/x`, so a tool was handed a file
+    under a folder the rules deny while they judged one beside it they allow."""
+    (tmp_path / "kept" / "database").mkdir(parents=True)
+    (tmp_path / "kept" / "database" / "x").write_text("allowed")
+    (tmp_path / "denied" / "base").mkdir(parents=True)
+    (tmp_path / "denied" / "base" / "x").write_text("denied")
+    mixed = CompositeBackend(
+        default=FilesystemBackend(tmp_path / "kept", virtual_mode=True),
+        routes={"/data": FilesystemBackend(tmp_path / "denied", virtual_mode=True)},
+    )
+    rules = [FilesystemPermission(operations=["read"], paths=["/data/**"], mode="deny")]
+
+    handed = _paths(mixed, tmp_path, rules).real("/database/x")
+
+    assert handed == str((tmp_path / "kept" / "database" / "x").resolve())
