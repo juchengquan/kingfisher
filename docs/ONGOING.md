@@ -62,7 +62,10 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   `pay.py::line_count` under a grant of `line_count`, or the other way round, runs
   without `line_count` and nothing refuses. Measured through `build_agent`; one spelling
   on both sides keeps it. Spelling both before the intersect changes what a run is
-  handed, so it is the owner's call. *(2026-10-27.)*
+  handed, so it is the owner's call. The withheld report in `core/reporting.py` compares
+  a skills grant with `registry.names` as written too, so a request granting
+  `catalogue::review` for a unique `review` is told `review` was not granted though it
+  holds it; it waits on the same decision. *(2026-11-11.)*
 - **The suite at the floors, in the `floors` job.** The job loads every public name and
   runs no tests, so a floor that installs and loads but behaves wrongly passes it:
   `langchain-anthropic` 1.7.5 did, with a window five times too large, and only a local

@@ -12,6 +12,7 @@ import os
 import re
 from typing import Any
 
+import ormsgpack
 import pytest
 from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage
@@ -590,6 +591,33 @@ def test_a_pause_that_did_not_survive_an_upgrade_is_refused(cfg):
     drive(write_pause_mark(kept, {**written, "deepagents": "0.0.1-before"}))
 
     with pytest.raises(DecisionError, match="did not survive the upgrade"):
+        kf.run(
+            Resume(
+                session_id=paused.session_id,
+                decisions=(Decision(call_id=paused.pending[0].call_id, action="approve"),),
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("document", "named"),
+    [
+        ({"storage": [], "writes": []}, "has no blobs"),
+        ({"storage": [], "writes": [], "blobs": [7]}, "not shaped as a pause writes it"),
+    ],
+    ids=["a part missing", "a row of another shape"],
+)
+def test_a_pause_whose_state_is_the_wrong_shape_is_refused(cfg, document, named):
+    """A paused state that read as msgpack but lacked a part or held a row of another shape
+    failed the resume with a bare `KeyError` or `TypeError` naming no session."""
+    kf = Kingfisher(
+        cfg, graph=_gated(calls=[_write("/outputs/a.txt", "x", "c1")]), sessions=LocalSessions()
+    )
+    paused = kf.run(Request("write it"))
+    corrupt = b"msgpack\n" + ormsgpack.packb(document)
+    drive(harness_of(cfg, paused.session_id).store(PAUSED_STATE, corrupt))
+
+    with pytest.raises(DecisionError, match=f"pause whose state cannot be read: .*{named}"):
         kf.run(
             Resume(
                 session_id=paused.session_id,

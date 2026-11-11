@@ -32,7 +32,14 @@ from .checkpointing import (
     library_versions,
     resumed_saver,
 )
-from .files import InputsPlacement, inputs_changed, inputs_seen, place_inputs, planned_inputs
+from .files import (
+    InputsPlacement,
+    checked,
+    inputs_changed,
+    inputs_seen,
+    place_inputs,
+    planned_inputs,
+)
 from .ledger import Ledger
 from .memory import UsersMemory, as_file, settled_memory, users_memory
 from .memory_writer import writer_model
@@ -76,6 +83,7 @@ from .turnlog import TurnLog, logged_turns, read_log, resuming
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+    from pathlib import Path
 
     from kingfisher.core.agent.tool_context import Caller
     from kingfisher.core.interfaces import MemoryStore, RunEvents
@@ -110,9 +118,9 @@ class Preparation:
     ) -> Steps[Prepared]:
         """Everything up to the model call, as the one sequence both loops drive.
 
-        Every refusal comes before `run_start`, so a refused request leaves no turn behind;
-        the claim is taken before them and given back if one refuses, and a session this
-        request made goes with it unless another turn has used it.
+        Every refusal comes before `run_start`, so a refused request leaves no turn behind.
+        Those that read the session come under its claim, given back if one refuses, and a
+        session this request made goes with it unless another turn has used it.
         """
         cfg = self.cfg
         # Once, and kept to the turn's end: asked again, one turn could build its agent
@@ -134,6 +142,13 @@ class Preparation:
             if resolved and not unnamed_resume
             else None
         )
+        # Before the claim, as these read only the request and the catalogue: refused under
+        # a claim taken over from a dead turn, the release takes the note telling the next
+        # turn so. And a file that is not there fails before any that were are placed.
+        seen = yield on_host(checked, getattr(request, "inputs", ()))
+        allowed = self.grants.intersect(request.capabilities)
+        if agent is not None:
+            allowed = self._settled_subagents(allowed, agent=agent, held=held, catalogue=catalogue)
         if files is None:
             # Asked before the open, which makes the session it is asked for: a refusal
             # may take back only a session this request made.
@@ -148,6 +163,9 @@ class Preparation:
         yield changing(self._sessions, "mark_used", cfg, session.id)
         # Before the other refusals: those read the session, and a turn arriving halfway
         # through would be reading it as it moved.
+        # The turn's deadline runs from here, not from the end of setup: the claim goes stale
+        # counting from now, and a setup slower than its margin was taken over still running.
+        claimed_at = monotonic()
         claimed = yield from self._claim_or_refuse(session.id, "wait, or start another session")
         try:
             # The only trace a killed turn leaves: its claim, gone stale and taken over.
@@ -166,8 +184,11 @@ class Preparation:
                 held=held,
                 catalogue=catalogue,
                 agent=agent,
+                allowed=allowed,
+                seen=seen,
                 log=log,
                 took_over=bool(took_over),
+                claimed_at=claimed_at,
             )
         except BaseException:
             # Each a call that changes something, so a cancel arriving during it waits for
@@ -189,8 +210,11 @@ class Preparation:
         held: frozenset[str] | None,
         catalogue: Definitions,
         agent: AgentSpec | None,
+        allowed: Capabilities,
+        seen: Mapping[str, Path],
         log: TurnLog,
         took_over: bool,
+        claimed_at: float,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
         # Optional on a backend, like `host_path`; reported rather than raised.
@@ -199,12 +223,8 @@ class Preparation:
         # Before the inputs are placed: placing them grows the session.
         yield from self._refuse_if_over_budget(session, harness)
 
-        # Before the turn exists, so a missing file fails before anything else is asked.
-        placement = yield from planned_inputs(
-            getattr(request, "inputs", ()), files, self.cfg.layout
-        )
+        placement = yield from planned_inputs(seen, files, self.cfg.layout)
 
-        allowed = self.grants.intersect(request.capabilities)
         # Before the build: a resume runs on a saver that already holds the pause.
         paused, resume, discarded, pause = yield from self._read_pause(
             request, session, harness
@@ -212,19 +232,11 @@ class Preparation:
         if agent is None and (self._graph is None or held is not None):
             # A resume naming none, past a pause that named no agent to refuse it with.
             agent = self._agent_named(request.agent, held=held, catalogue=catalogue)
+            allowed = self._settled_subagents(allowed, agent=agent, held=held, catalogue=catalogue)
         recorded = pause.get(BUILT_FROM_MARK) if resume is not None and pause else None
         # A pause written before the record resumes unchecked, as every pause did then.
         if isinstance(recorded, dict) and agent is not None:
             _refuse_changed_since(session, recorded, built_from(catalogue, agent))
-        if self._graph is None:
-            # Before the build and the reports, which must both see a bare name settled to
-            # the one this caller reaches.
-            allowed = settled_request(
-                allowed,
-                ceiling=for_the_caller(agent, self.grants, held=held).subagents,
-                held=held,
-                catalogue=catalogue,
-            )
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
         earlier = (yield from read_ledger(harness, log.off_path)) if self._graph is None else None
         # The ledger, written before the log, names every turn the log opens; a supplied
@@ -286,6 +298,7 @@ class Preparation:
             earlier=earlier,
             caller=caller,
             started=started.timestamp(),
+            claimed_at=claimed_at,
             users_memory=users.key is not None,
             catalogue=catalogue,
         )
@@ -350,6 +363,25 @@ class Preparation:
             release_interpreter(self.cfg, prepared.graph)
             raise
         return prepared
+
+    def _settled_subagents(
+        self,
+        allowed: Capabilities,
+        *,
+        agent: AgentSpec,
+        held: frozenset[str] | None,
+        catalogue: Definitions,
+    ) -> Capabilities:
+        """`allowed`, each bare subagent name settled to the one this caller reaches. Before
+        the build and the reports, which must both see it settled."""
+        if self._graph is not None:
+            return allowed
+        return settled_request(
+            allowed,
+            ceiling=for_the_caller(agent, self.grants, held=held).subagents,
+            held=held,
+            catalogue=catalogue,
+        )
 
     def _with_message(
         self,
@@ -463,6 +495,7 @@ class Preparation:
         log: TurnLog,
         catalogue: Definitions,
         started: float,
+        claimed_at: float,
         earlier: KeptLedger | None = None,
         caller: Caller | None = None,
         users_memory: bool = False,
@@ -558,7 +591,7 @@ class Preparation:
 
         asked = getattr(request, "task", "")
         # One clock: what the turn is stopped at between chunks is what no run goes past.
-        deadline = monotonic() + cfg.turn_timeout_s
+        deadline = claimed_at + cfg.turn_timeout_s
         return Prepared(
             graph=graph,
             files=files,

@@ -1267,6 +1267,16 @@ the seam rather than computing the intersection: a test that works out the answe
 way the code does agrees with itself and checks nothing. *(2026-09-23, from an
 architecture review.)*
 
+**A pre-built graph is held to no grant, and that is deliberate.** With `graph=`,
+`_graph_for` returns the graph as it was compiled: neither `cfg.grants` nor the tool and
+skill locks the caller's source ids open are applied to it, and only a request whose
+`capabilities` narrow anything is refused. The graph is the deployment's own, compiled with
+the tools it chose, so there is no definition for a grant to narrow and no build to narrow
+it in; a deployment that wants a ceiling compiles it in. Where something is locked, the
+agent a request names is still resolved against the caller's source ids. The refusal is
+what stays: a narrowing request accepted and not applied would run with more than it asked
+for, unseen. *(2026-11-11, confirmed by the owner after a review raised it.)*
+
 **The axes are read off the dataclass.** Written three times -- as fields, in
 `__post_init__`, in `intersect` -- nothing held the lists together. Measured by adding a
 ninth axis: it kept whatever list it arrived as, and `intersect` answered `'*'` for it,
@@ -3545,6 +3555,17 @@ not built until a deployment shows its turns die often and it retries in the sam
 session, since one opening a new session after `SessionBusyError` is never told either
 way. *(2026-11-10.)*
 
+**A request refused for what it asks is refused before the claim, so a dead turn's note
+outlives it.** A turn that took over a stale claim and was then refused gave the claim
+back, and the note `took_over` reads went with it, so the next turn was never told. The
+refusals that read only the request and the catalogue -- the agent it names, its input
+files, the subagents it names -- come before the claim now. Those that read the session
+stay under it, since another turn could change what they read: the quota, the pause a
+resume answers or names its agent by, a turn id already used, and the build's own, which
+needs the turn the ledger numbers. A turn refused by one of those still loses the note.
+Closing that takes a `Sessions` that keeps the note past a release, a change to the port,
+not made until a deployment shows a dying turn followed by such a refusal. *(2026-11-11.)*
+
 **An output is not evidence the command wrote it.** The run's folder is in the session's
 scratchpad because the Linux fences grant one session and nothing else, so the agent's
 shell and its file tools reach it while the run is going -- measured in one message
@@ -5145,6 +5166,18 @@ the `claim` seam rather than raced, and the rule asserts the two numbers *differ
 were once the same, and a rule comparing against either would have passed then.
 *(2026-10-11, from an architecture review.)*
 
+**A turn's bound runs from its claim, not from the end of its setup.** The claim goes stale
+counting from when it is taken, and the deadline was set once setup had built the graph, so
+setup came out of the superstep's margin that `claim_stale_after` adds -- which that margin
+was not sized for. Reproduced with a `TurnInstructions` that took 121 s at
+`turn_timeout_s=2`: the next turn took the session over while the first was inside its
+bound, was told a turn had died, and the first one's record was refused. Kingfisher's own
+setup measured 0.03 to 0.6 s; what can take long is a deployment's hook with no timeout --
+a memory store, a `Sessions`, the instruction hooks, a middleware factory. **Not taken:**
+starting the claim's clock at the deadline, which needs a renewal on the `Sessions` port
+that every implementation would have to add. The cost is the setup, out of the turn's
+own time. *(2026-11-11, measured before it was built.)*
+
 **The grace period has to cover a shell command, not a model call alone.** It added the
 longest model timeout, and `execution_timeout_s` bounds a superstep exactly as a model's
 `timeout_s` does: the deadline is read between stream chunks, so a turn out of time runs
@@ -5193,6 +5226,22 @@ agreed and then not built, because `kf.session(session_id)` already answers it -
 and nothing made -- and a client continuing a conversation knows it is doing so. The flag
 would have closed only the moment between that call and the turn's own listing, against
 a sweep that runs only when someone runs it. *(2026-11-01.)*
+
+**A delete refuses a session a turn holds, as a sweep spares one.** `Session.delete` and
+`run(delete_session=True)` deleted without the claim, so a caller deleting a chat while its
+agent answered removed the files under the running turn. Both take the claim on `reap`'s
+path now, and a held session answers `SessionBusyError`: refused rather than waited for,
+which would hold the caller as long as the turn. A stale claim is a dead turn's, taken over
+as a sweep takes it. `run(delete_session=True)` has given its claim back by the time it
+deletes, so it claims again: a turn that took the session in between keeps it, and the run
+says so on `deletion_failure` rather than raising, since its answer is worth keeping. **The
+cost, taken:** `kingfisher reap --session` removed a session a turn still held, its help
+saying the turn would not survive; it is refused too, and a dead turn's session goes once
+its claim is stale -- or at once, named with `--force`, which `Session.delete(force=True)`
+backs by taking any claim as stale. Kept off `--all`, so forcing is always an operator
+naming the one session whose turn they know died. **Not taken:** keeping the turn's claim through its ending into the
+delete, which puts a delete in the ending `stream` shares, where a caller closing early
+must not delete. *(2026-11-11.)*
 
 **No migration and no fallback reader.** The failure a fallback would paper over is
 silence rather than breakage: a pin the new code cannot find means a session re-pins and

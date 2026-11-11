@@ -57,18 +57,16 @@ class InputsPlacement:
 
 
 def planned_inputs(
-    sources: tuple[Path, ...], backend: Any, layout: Layout
+    seen: Mapping[str, Path], backend: Any, layout: Layout
 ) -> Steps[InputsPlacement]:
-    """What placing these files in a session's inputs folder would place and replace.
+    """What placing the files `checked` found in a session's inputs folder would place and
+    replace.
 
     Changes nothing: a request refused after this must leave the session's files as they
     were.
     """
-    if not sources:
+    if not seen:
         return InputsPlacement()
-    # Before anything is read or sent: a request naming a file that is not there
-    # must fail without having placed the ones that were.
-    seen = yield on_host(checked, sources)
     listing = yield reading(backend, "ls", layout.inputs_route)
     existing = {PurePosixPath(entry["path"]).name for entry in listing.entries or ()}
     return InputsPlacement(

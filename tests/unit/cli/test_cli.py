@@ -993,6 +993,20 @@ def test_reaping_one_by_name_leaves_the_rest(cfg, monkeypatch, capsys):
     assert (cfg.workspace / "sessions" / "keep").is_dir()
 
 
+def test_a_forced_reap_removes_a_session_a_dead_turn_still_holds(cfg, monkeypatch, capsys):
+    """A turn that died left its session refused to every reap until its claim went stale,
+    with no way for an operator to remove it sooner; unforced is the control."""
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "held")
+    assert LocalSessions().claim(cfg, "held", stale_after=3600)
+
+    assert main(["reap", "--session", "held"]) == 2
+    assert (cfg.workspace / "sessions" / "held").is_dir()
+
+    assert main(["reap", "--session", "held", "--force"]) == 0
+    assert not (cfg.workspace / "sessions" / "held").exists()
+
+
 def test_an_id_that_names_nothing_is_refused_rather_than_called_done(cfg, monkeypatch, capsys):
     """Deleting answers `None` both for "removed it" and for "there was no such
     session", so without the check here a mistyped id reports success for work that

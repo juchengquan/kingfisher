@@ -312,7 +312,7 @@ def _overlong(request: Any, longest: int) -> ToolMessage | None:
     return failed(call, f"Error: timeout {asked}s exceeds maximum allowed ({longest}s).")
 
 
-def _unreadable(request: Any) -> ToolMessage | None:
+def _unreadable(call: Any) -> ToolMessage | None:
     """The refusal of a `read_file` call on a file no model here takes as it is; `None` for
     any other call.
 
@@ -320,7 +320,6 @@ def _unreadable(request: Any) -> ToolMessage | None:
     result, so only refusing the call stops them; a `.pptx` is counted by the summarizer
     whichever model then drops it.
     """
-    call = request.tool_call
     if call.get("name") != READ_FILE:
         return None
     path = (call.get("args") or {}).get("file_path")
@@ -387,7 +386,7 @@ def _misplaced(call: Any, folders: frozenset[str], layout: Layout) -> ToolMessag
 
 
 def _from_code(tool: Any, folders: frozenset[str], layout: Layout) -> Any:
-    """`tool` refusing what `_misplaced` refuses of a direct call, for `eval`.
+    """`tool` refusing what `_unreadable` and `_misplaced` refuse of a direct call, for `eval`.
 
     A program's `tools.*` runs the object the model request holds and meets no
     `wrap_tool_call`, so without this `/.HARNESS/x` reached the real `.harness` from code
@@ -397,7 +396,8 @@ def _from_code(tool: Any, folders: frozenset[str], layout: Layout) -> Any:
         return tool
 
     def refusal(args: dict[str, Any]) -> str | None:
-        refused = _misplaced({"name": tool.name, "args": args}, folders, layout)
+        call = {"name": tool.name, "args": args}
+        refused = _unreadable(call) or _misplaced(call, folders, layout)
         return None if refused is None else str(refused.content)
 
     update: dict[str, Any] = {}
@@ -818,7 +818,7 @@ class BuiltinToolsMiddleware(AgentMiddleware):
     def _refused(self, request: Any) -> ToolMessage | None:
         return (
             _overlong(request, self._longest)
-            or _unreadable(request)
+            or _unreadable(request.tool_call)
             or _misplaced(request.tool_call, self._folders, self._layout)
         )
 

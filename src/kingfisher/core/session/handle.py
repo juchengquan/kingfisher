@@ -143,10 +143,16 @@ class Session:
         """`size`, for a caller on an event loop."""
         return await adrive(self._service._size_in(self.id))
 
-    def delete(self) -> str | None:
-        """Dispose of this session and everything its backend holds. A failure, or None."""
-        return drive(self._service._delete_session_steps(self.id))
+    def delete(self, *, force: bool = False) -> str | None:
+        """Dispose of this session and everything its backend holds. A failure, or None.
 
-    async def adelete(self) -> str | None:
+        `SessionBusyError` while a turn holds the session, as `reap` spares it; a claim
+        gone stale is a dead turn's, and taken over for the delete. `force` takes any claim
+        as a dead turn's: for an operator who knows the turn died, since one still running
+        loses its files.
+        """
+        return drive(self._service._delete_session_steps(self.id, force=force))
+
+    async def adelete(self, *, force: bool = False) -> str | None:
         """`delete`, for a caller on an event loop."""
-        return await adrive(self._service._delete_session_steps(self.id))
+        return await adrive(self._service._delete_session_steps(self.id, force=force))

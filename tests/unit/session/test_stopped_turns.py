@@ -27,7 +27,7 @@ from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.middlewares.stopping import NOT_RUN, STOPPING, StoppingMiddleware
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.config import Config
-from kingfisher.core.session import running
+from kingfisher.core.session import preparation, running
 from kingfisher.core.session.model import SessionBusyError
 from kingfisher.core.session.turn import UNFINISHED
 from kingfisher.plugins import LocalSessions, backend_at
@@ -755,3 +755,23 @@ def test_a_cancelled_command_is_ended_not_waited_out(cfg, session_dir):
 
     assert waited < 0.9
     assert not written.exists(), "the command ran on after its cancel"
+
+
+def test_a_turn_s_bound_counts_its_setup_as_its_claim_does(charging, monkeypatch):
+    """The deadline ran from the end of setup while the claim's clock ran from the claim, so
+    a turn with a slow setup could be taken over while still inside its own bound: the
+    next turn was told it had died, and its record was refused."""
+    cfg = replace(charging.cfg, turn_timeout_s=0.4)
+    read_log = preparation.read_log
+
+    def slowly(*args: Any, **kwargs: Any) -> Any:
+        time.sleep(0.6)
+        return (yield from read_log(*args, **kwargs))
+
+    monkeypatch.setattr(preparation, "read_log", slowly)
+    Scripted.script.extend([_asking("1"), AIMessage(content="done")])
+
+    result = charging.kf(cfg).run(_asked())
+
+    assert result.stop_reason == "max_duration"
+    assert charging.charged() == [], "the turn ran past a bound its setup had used up"

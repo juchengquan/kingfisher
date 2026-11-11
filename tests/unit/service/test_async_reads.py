@@ -138,14 +138,12 @@ def test_opening_a_sessions_files_makes_no_sync_port_call_on_the_loop(cfg, sync_
     assert not on_the_loop, f"made on the event loop's thread: {on_the_loop}"
 
 
-def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
-    cfg, sync_calls, tmp_path
-):
-    """Refused once claimed -- here over inputs naming a file that is not there -- setup
+def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(cfg, sync_calls):
+    """Refused once claimed -- here a resume of a session waiting on nothing -- setup
     gave the claim back with the sync `release`, on the loop, a round trip every other
     turn waited through on a remote backend.
     """
-    from kingfisher.core.session.files import InputsError
+    from kingfisher.core.request import Decision, DecisionError, Resume
 
     kf = Kingfisher(
         cfg, graph=StubAgent("ok"), sessions=LocalSessions()
@@ -153,8 +151,10 @@ def test_an_async_turn_refused_after_its_claim_gives_it_back_off_the_loop(
     start(cfg, "s")
     sync_calls.clear()
 
-    with pytest.raises(InputsError):
-        asyncio.run(kf.arun(Request("go", session_id="s", inputs=(tmp_path / "nope.csv",))))
+    with pytest.raises(DecisionError, match="not waiting on a decision"):
+        asyncio.run(
+            kf.arun(Resume(session_id="s", decisions=(Decision(call_id="c", action="approve"),)))
+        )
 
     released = [loop for name, loop in sync_calls if name == "LocalSessions.release"]
     assert released, "the claim was never given back"

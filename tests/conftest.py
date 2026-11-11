@@ -238,9 +238,9 @@ def at_the_command_line(cfg, monkeypatch):
 
 def supplied(sources, backend, layout):
     """`sources` planned and placed, as setup does either side of the build."""
-    from kingfisher.core.session.files import place_inputs, planned_inputs
+    from kingfisher.core.session.files import checked, place_inputs, planned_inputs
 
-    placement = yield from planned_inputs(sources, backend, layout)
+    placement = yield from planned_inputs(checked(sources), backend, layout)
     yield from place_inputs(placement, backend, layout)
     return placement
 

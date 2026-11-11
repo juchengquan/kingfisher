@@ -285,6 +285,8 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, FirstCall):
         `caller` is the turn's, made from the request where none is given.
         """
         if self._graph is not None:
+            # `cfg.grants` is not applied: the graph is the deployment's own, built with the
+            # tools it chose. *A pre-built graph is held to no grant* in decisions.md.
             if not request.capabilities.is_unrestricted:
                 msg = "cannot honour request.capabilities against a pre-built graph"
                 raise ValueError(msg)
