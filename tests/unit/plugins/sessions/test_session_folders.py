@@ -4,6 +4,8 @@ whose folder is a link is not opened, and the `AGENTS.md` scaffold writes throug
 from __future__ import annotations
 
 import os
+import shutil
+import stat
 from pathlib import Path
 
 import pytest
@@ -255,3 +257,39 @@ def test_every_folder_a_route_is_rooted_at_in_the_session_may_not_be_a_link(cfg)
     assert {"scratchpad/blobs", "memory"} <= rooted
     assert rooted <= set(DEFAULT_LAYOUT.unlinked_dirs)
 
+
+
+def _gone_once_seen(monkeypatch, removed: Path) -> None:
+    """Have `removed` deleted right after its first look, as a sweep or the session's own
+    shell can delete it between two looks."""
+    look = Path.stat
+
+    def then_gone(path: Path, **kwargs) -> os.stat_result:
+        found = look(path, **kwargs)
+        if path == removed:
+            shutil.rmtree(removed) if stat.S_ISDIR(found.st_mode) else removed.unlink()
+        return found
+
+    monkeypatch.setattr(Path, "stat", then_gone)
+
+
+def test_a_session_deleted_while_the_sessions_are_listed_is_left_out(cfg, monkeypatch):
+    """A session reaped between the listing and its look raised `FileNotFoundError` out of
+    the listing, which every turn asks first, so a turn in another session failed."""
+    sessions = LocalSessions()
+    sessions.open(cfg, "kept")
+    sessions.open(cfg, "reaped")
+    _gone_once_seen(monkeypatch, cfg.workspace / "sessions" / "reaped")
+
+    assert "kept" in {name for name, _ in sessions.sessions(cfg)}
+
+
+def test_a_file_removed_while_a_session_is_measured_is_not_counted(cfg, monkeypatch):
+    """A file the session's shell removed mid-walk raised out of `size`."""
+    sessions = LocalSessions()
+    sessions.open(cfg, DEFAULT)
+    scratch = cfg.workspace / "sessions" / DEFAULT / "scratchpad" / "build.tmp"
+    scratch.write_bytes(b"x" * 10)
+    _gone_once_seen(monkeypatch, scratch)
+
+    assert sessions.size(cfg, DEFAULT) >= 0
