@@ -64,12 +64,14 @@ wrong.*
   scripted turn of 400 model calls, each reply 4,000 characters, streamed in 0.95s
   without the mode and 0.98s with it, over three trials each. *(2026-10-28, langgraph
   1.2.15.)*
-- **A subagent a program starts with `task()` inside `eval` streams its `updates` and no
-  tokens.** They come under the `eval` call's namespace with nothing naming the subagent,
-  so they read as the caller's, and `messages` sends nothing of it: it runs with no
-  callbacks, for the reason under *The code sandbox*. Two started at once ran and
-  answered. *(2026-10-27, corrected 2026-10-29, deepagents 0.7.22, langchain-quickjs
-  0.3.8.)*
+- **A subagent a program starts with `task()` inside `eval` streams as one the `task`
+  tool starts does**: its tokens, model calls and tool results, each under its subagent's
+  name and the chain `("e1", "ptc_task_…")`. Left to the library it streamed `updates`
+  only, under the `eval` call's namespace with nothing naming it, since it ran with no
+  callbacks for the reason under *The code sandbox*; `ProgramDispatchMiddleware` hands
+  it them, and the chain it stamps rides the `messages` chunks. Two started at once ran
+  and answered. *(2026-10-27, corrected 2026-10-29 and 2026-11-11, deepagents 0.7.22,
+  langchain-quickjs 0.3.8, langgraph 1.2.15.)*
 - **An `updates` chunk carries a message written back under its own id as if it were
   new.** Clearing swaps an older result for its handle that way, and deepagents'
   summariser clips an overflowing result the same way; in the node's update either is

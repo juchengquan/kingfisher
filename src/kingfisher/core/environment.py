@@ -149,6 +149,7 @@ class Environment:
                 ("execution_timeout_s", "KINGFISHER_EXECUTION_TIMEOUT_S", 1),
                 ("turn_timeout_s", "KINGFISHER_TURN_TIMEOUT_S", 1),
                 ("cancel_wait_s", "KINGFISHER_CANCEL_WAIT_S", 0),
+                ("stream_result_chars", "KINGFISHER_STREAM_RESULT_CHARS", 1),
                 ("recursion_limit", "KINGFISHER_RECURSION_LIMIT", 1),
                 ("thread_pool_size", "KINGFISHER_THREAD_POOL_SIZE", 1),
                 ("keep_results_rounds", "KINGFISHER_KEEP_RESULTS_ROUNDS", 1),

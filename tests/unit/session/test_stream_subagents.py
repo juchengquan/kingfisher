@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
+from kingfisher import Kingfisher
 from kingfisher.core.request import Request
 from kingfisher.core.run import stream
 from kingfisher.core.session import stream_chunks
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import FakeGraph, FakeToolCallingModel, start
+from tests.conftest import FakeGraph, FakeToolCallingModel, an_agent, start
+from tests.unit.conftest import define_each
+from tests.unit.scripted import Scripted
 from tests.unit.stand_ins import StubAgent
 
 
@@ -86,6 +91,97 @@ def test_the_subagents_own_steps_arrive_too(cfg, session_dir):
     events = _events(cfg, session_dir)
 
     assert [e for e in events if e.kind == "model_call" and e.agent == "reviewer"]
+
+
+def test_a_subagents_own_tool_results_reach_the_caller(scripted):
+    """The stream is the client's to filter, so a subagent's tool results are on it;
+    nothing else held that, and a filter on a subagent's `updates` would drop them
+    while its model calls and its `task` answer still arrived."""
+    define_each(scripted, "name: reviewer\ndescription: R.\nbuiltin_tools: [ls]\n"
+            "system_prompt: |\n  You review.\n")
+    an_agent(scripted, subagents="[reviewer]", builtin_tools="[task, ls]")
+    start(scripted, "s")
+    asked = {"description": "look", "subagent_type": "reviewer"}
+    Scripted.script.extend(
+        [
+            AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}]),
+            AIMessage(content="", tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": "l1"}]),
+            AIMessage(content="REVIEWER-DONE"),
+            AIMessage(content="done"),
+        ]
+    )
+
+    events = list(
+        Kingfisher(scripted, sessions=LocalSessions()).stream(
+            Request("go", agent="only", session_id="s")
+        )
+    )
+
+    (listed,) = [e for e in events if e.kind == "tool_result" and e.tool == "ls"]
+    assert (listed.agent, listed.delegations, listed.call) == ("reviewer", ("t1",), "l1")
+
+
+def test_a_deployment_sets_how_much_of_a_result_the_stream_carries(scripted):
+    """The cut was a constant, so a client wanting a subagent's result or answer whole
+    had nothing to ask with; the control is the default cut at 300."""
+    define_each(scripted, "name: reviewer\ndescription: R.\nbuiltin_tools: [read_file]\n"
+            "system_prompt: |\n  You review.\n")
+    an_agent(scripted, subagents="[reviewer]", builtin_tools="[task, write_file, read_file]")
+    start(scripted, "s")
+    body, answer = "b" * 600, "a" * 500
+
+    def results(cfg) -> dict[str | None, int]:
+        written = {"file_path": "/outputs/r.txt", "content": body}
+        asked = {"description": "look", "subagent_type": "reviewer"}
+        Scripted.script.extend(
+            [
+                AIMessage(content="", tool_calls=[{"name": "write_file", "args": written,
+                                                   "id": "w"}]),
+                AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t"}]),
+                AIMessage(content="", tool_calls=[{"name": "read_file",
+                                                   "args": {"file_path": "/outputs/r.txt"},
+                                                   "id": "r"}]),
+                AIMessage(content=answer),
+                AIMessage(content="done"),
+            ]
+        )
+        events = Kingfisher(cfg, sessions=LocalSessions()).stream(
+            Request("go", agent="only", session_id="s")
+        )
+        return {e.tool: len(e.text) for e in events if e.kind == "tool_result"}
+
+    assert results(scripted)["read_file"] == 300
+    whole = results(replace(scripted, stream_result_chars=10_000))
+    assert whole["read_file"] > len(body), "a subagent's result was still cut"
+    assert whole["task"] >= len(answer), "a subagent's answer was still cut"
+
+
+def test_a_model_that_does_not_stream_still_says_what_it_wrote(scripted):
+    """`model_call` left its prose to the tokens, and a model that does not stream sends
+    none, so neither agent's prose reached the stream; a subagent's past its answer's cut
+    reached nothing at all."""
+    define_each(scripted, "name: reviewer\ndescription: R.\nsystem_prompt: |\n  You review.\n")
+    an_agent(scripted, subagents="[reviewer]", builtin_tools="[task]")
+    start(scripted, "s")
+    asked = {"description": "look", "subagent_type": "reviewer"}
+    Scripted.script.extend(
+        [
+            AIMessage(content="handing it over", tool_calls=[{"name": "task", "args": asked,
+                                                              "id": "t"}]),
+            AIMessage(content="the review"),
+            AIMessage(content="done"),
+        ]
+    )
+
+    events = list(
+        Kingfisher(scripted, sessions=LocalSessions()).stream(
+            Request("go", agent="only", session_id="s")
+        )
+    )
+
+    assert not [e for e in events if e.kind == "token"], "the control: nothing streamed"
+    said = [(e.agent, e.text) for e in events if e.kind == "model_call"]
+    assert said == [(None, "handing it over"), ("reviewer", "the review"), (None, "done")]
 
 
 # -- and is distinguishable -----------------------------------------------

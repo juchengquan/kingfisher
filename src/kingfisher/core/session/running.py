@@ -551,6 +551,7 @@ class Running:
                 turn.subagent_names,
                 seen=turn.seen,
                 delegations=turn.delegations,
+                result_chars=self.cfg.stream_result_chars,
             )
         )
 
