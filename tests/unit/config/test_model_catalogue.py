@@ -8,6 +8,7 @@ vanishes, a param that looks set and is not.
 from __future__ import annotations
 
 import os
+import re
 import warnings
 
 import pytest
@@ -434,6 +435,43 @@ def test_a_model_missing_its_endpoint_is_refused(tmp_path):
     out."""
     with pytest.raises(ConfigError, match="missing required key 'endpoint'"):
         loaded(tmp_path, GOOD.replace("  main-model:\n    endpoint: gateway", "  main-model:"))
+
+
+URL, KEY_ENV, DEFAULT = (
+    "    base_url: https://example.invalid/anthropic\n",
+    "    key_env: GATEWAY_API_KEY\n",
+    "default: main-model\n",
+)
+
+
+@pytest.mark.parametrize(
+    ("change", "field", "found"),
+    [
+        ((URL, "    base_url: [https://example.invalid]\n"), "base_url", "['https"),
+        ((URL, "    base_url: true\n"), "base_url", "True"),
+        (("    api: anthropic\n", "    api: [anthropic]\n"), "api", "['anthropic']"),
+        ((KEY_ENV, f"{KEY_ENV}    key: 0\n"), "key", "0"),
+        ((KEY_ENV, "    key_env: true\n"), "key_env", "True"),
+        (("    endpoint: gateway\n  tuned:", "    endpoint: [x]\n  tuned:"), "endpoint", "['x']"),
+        ((DEFAULT, "default: 0\n"), "default", "0"),
+        ((DEFAULT, f"{DEFAULT}memory_writer: 0\n"), "memory_writer", "0"),
+        ((DEFAULT, f"{DEFAULT}memory_writer: false\n"), "memory_writer", "False"),
+        ((DEFAULT, f"{DEFAULT}memory_writer: []\n"), "memory_writer", "[]"),
+    ],
+    ids=[
+        "base_url-list", "base_url-true", "api-list", "key-zero-beside-key_env", "key_env-true",
+        "endpoint-list", "default-zero", "memory_writer-zero", "memory_writer-false",
+        "memory_writer-empty-list",
+    ],
+)
+def test_a_name_or_address_that_is_not_text_is_refused(tmp_path, change, field, found):
+    """`str()` and `or` turned these into something else: a `base_url: true` built an
+    endpoint at "True" that failed only at the first turn, `key: 0` beside `key_env` was
+    dropped instead of refused as naming both, and `memory_writer: false` read as unset."""
+    body = GOOD.replace(*change)
+    assert body != GOOD
+    with pytest.raises(ConfigError, match=rf"models\.yaml.*: {field} is {re.escape(found)}"):
+        loaded(tmp_path, body)
 
 
 # -- the one duplication that stayed, and why it cannot drift --------------

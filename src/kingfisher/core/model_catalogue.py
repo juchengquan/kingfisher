@@ -194,12 +194,15 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
     for name, raw in _mapping(document.get("endpoints"), f"{source}: endpoints").items():
         entry = _mapping(raw, f"{source}: endpoint {name!r}")
         _refuse_unknown(entry, KNOWN_ENDPOINT, f"{source}: endpoint {name!r}")
-        for required in ("api", "base_url"):
-            if not str(entry.get(required) or "").strip():
-                msg = f"{source}: endpoint {name!r} is missing required key {required!r}"
+        subject = f"{source}: endpoint {name!r}"
+        api = _text(entry.get("api"), subject, "api")
+        base_url = _text(entry.get("base_url"), subject, "base_url")
+        for required, written in (("api", api), ("base_url", base_url)):
+            if not written:
+                msg = f"{subject} is missing required key {required!r}"
                 raise ConfigError(msg)
-        named_entry = str(entry.get("key") or "").strip()
-        named_variable = str(entry.get("key_env") or "").strip()
+        named_entry = _text(entry.get("key"), subject, "key")
+        named_variable = _text(entry.get("key_env"), subject, "key_env")
         if named_entry and named_variable:
             msg = (
                 f"{source}: endpoint {name!r} names both 'key' and 'key_env'; its key "
@@ -212,7 +215,6 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
                 f"nothing says where its key is"
             )
             raise ConfigError(msg)
-        api = str(entry["api"]).strip()
         if api not in buildable:
             # Refused as it is read, like every other closed set here, rather than when a
             # turn starts, from inside a request.
@@ -236,13 +238,26 @@ def _endpoints(  # noqa: PLR0913 -- one argument per source a key can come from
             continue
         resolved[name] = Endpoint(
             api=api,
-            base_url=str(entry["base_url"]),
+            base_url=base_url,
             api_key=key,
             key_env=named_variable,
             key_entry=named_entry,
             wire_format=buildable[api],
         )
     return resolved, dropped
+
+
+def _text(written: object, subject: str, field: str) -> str:
+    """A name or address as written, stripped, or empty where unset.
+
+    `str()` would make `true` the text "True", and `or` would read `0` or `false` as unset.
+    """
+    if written is None:
+        return ""
+    if not isinstance(written, str):
+        msg = f"{subject}: {field} is {written!r}; it takes text"
+        raise ConfigError(msg)
+    return written.strip()
 
 
 def _count(written: object, subject: str, field: str, *, least: int, of: str) -> int:
@@ -279,7 +294,7 @@ def _models(
     for name, raw in _mapping(document.get("models"), f"{source}: models").items():
         entry = _mapping(raw, f"{source}: model {name!r}")
         _refuse_unknown(entry, KNOWN_MODEL, f"{source}: model {name!r}")
-        endpoint_name = str(entry.get("endpoint") or "").strip()
+        endpoint_name = _text(entry.get("endpoint"), f"{source}: model {name!r}", "endpoint")
         if not endpoint_name:
             msg = f"{source}: model {name!r} is missing required key 'endpoint'"
             raise ConfigError(msg)
@@ -426,13 +441,13 @@ def load(
         )
     models, unreachable = _models(document, endpoints, dropped, path, buildable)
 
-    default = str(document.get("default") or "").strip()
+    default = _text(document.get("default"), str(path), "default")
     if not default:
         msg = f"{path}: no 'default' model named; one must be, or nothing knows what to run"
         raise ConfigError(msg)
     _refuse_unrunnable("default", default, models, document, path)
     # Optional: absent, the memory writer runs on the agent's own model.
-    memory_writer = str(document.get("memory_writer") or "").strip() or None
+    memory_writer = _text(document.get("memory_writer"), str(path), "memory_writer") or None
     if memory_writer is not None:
         _refuse_unrunnable("memory_writer", memory_writer, models, document, path)
     return Models(
