@@ -585,7 +585,12 @@ def bundled_tool_names(
 
 def _one_registry(name: str, directories: tuple[Path, ...]) -> SkillRegistry:
     """One bundle's skills, read from each of its directories and held as one."""
-    read = [skill_registry.read(LocalSkillRepository(one, flat=True)) for one in directories]
+    try:
+        read = [skill_registry.read(LocalSkillRepository(one, flat=True)) for one in directories]
+    except ConfigError as exc:
+        # A bundle's fault is the subagent's, which is what every reader of a bundle catches.
+        msg = f"subagent {name!r}: {exc}"
+        raise SubagentError(msg) from exc
     if len(read) == 1:
         return read[0]
     # Refused, not merged: every directory is mounted under the bundle's one label, so

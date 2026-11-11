@@ -1509,6 +1509,11 @@ loud error instead of silently changing which skill the caller gets.
 one `skills:` list are the same skill, and are refused when the definitions load:
 each entry may say who is told of it, and only one of the two could apply.
 
+**Within one source a name is one skill.** Two directories in one folder whose
+headers give the same `name` stop startup, naming both: deepagents would offer one
+and drop the other, and the one dropped would be readable by path to a caller no
+grant or lock lets near the name.
+
 Renaming is still the better answer for anyone who controls both files — the
 model chooses between two entries on description alone, and two distinct names
 tell it more than one name and a qualifier. This exists for when nobody controls

@@ -231,8 +231,19 @@ def read(repository: LocalSkillRepository) -> SkillRegistry:
                     path=f"{prefix}{one['path']}",
                     description=one["description"],
                 )
+                key = qualified(label, entry.name)
+                # Refused, not last-wins: the one dropped gets no deny rule, so a caller
+                # neither granted nor let past its lock could still read it by its path.
+                if (first := offered.get(key)) is not None:
+                    msg = (
+                        f"two skills are called {entry.name!r} in one source: "
+                        f"{PurePosixPath(first.path).parent} and "
+                        f"{PurePosixPath(entry.path).parent}, and only one would be "
+                        "offered -- rename one, directory and header both"
+                    )
+                    raise ConfigError(msg)
                 here.append(entry)
-                offered[qualified(label, entry.name)] = entry
+                offered[key] = entry
         loaded.extend(here)
 
         # Directories that looked like a skill and did not load. Compared by directory, not

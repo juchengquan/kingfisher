@@ -377,7 +377,7 @@ REFUSALS: dict[str, Refusal] = {
     "core/definitions/subagents/spec.py::_skills_directories": Refusal(
         2, defect=a_portable_subagent_whose_skills_hold_one_another),
     "core/definitions/catalogue.py::_one_registry": Refusal(
-        1, defect=a_portable_subagent_carrying_one_skill_name_twice),
+        2, defect=a_portable_subagent_carrying_one_skill_name_twice),
     # Raises the error class it was handed, agent's or subagent's: an agent's is filed.
     "core/definitions/catalogue.py::refuse_doubled_skill": Refusal(
         1, defect=an_agent_naming_one_skill_bare_and_qualified),

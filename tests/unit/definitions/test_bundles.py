@@ -756,6 +756,22 @@ def test_a_subagent_is_told_about_the_skill_in_its_own_folder(cfg, session_dir):
     assert "sampling" in narrowed._format_skills_list(narrowed._qualified())
 
 
+def test_two_skills_of_one_name_in_a_subagents_folder_are_its_fault(cfg):
+    """Raised as the registry's `ConfigError`, which no reader of a bundle catches, and
+    `kingfisher list` failed outright rather than reporting the subagent."""
+    workspace_with_bundle(cfg, definition=OWN_TOOL_AND_SKILL)
+    with_private_skill(cfg)
+    folder = cfg.definitions / "subagents" / "surveyor" / "skills" / "sampling-old"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text(
+        SKILL.format(name="sampling", description="The older one."), encoding="utf-8"
+    )
+
+    assert "surveyor" in (inventory(cfg).bundles_error or "")
+    with pytest.raises(SubagentError, match="subagent 'surveyor'"):
+        Definitions.from_config(cfg).warm()
+
+
 def with_buried_skill(cfg, name="deep"):
     """A skill one folder down inside `surveyor`'s own `skills/`, where the catalogue
     would allow it and a subagent's folder does not.
