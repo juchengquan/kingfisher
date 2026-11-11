@@ -552,6 +552,7 @@ def pending_from_mark(mark: Mapping[str, Any]) -> tuple[PendingDecision, ...]:
             tool=str(item.get("tool") or ""),
             args=dict(item.get("args") or {}),
             agent=item.get("agent") or None,
+            delegations=tuple(str(one) for one in item.get("delegations") or ()),
             decisions=tuple(item.get("decisions") or ()),
         )
         for item in (mark.get(PENDING_MARK) or ())
@@ -567,6 +568,7 @@ def pending_as_mark(waiting: Sequence[PendingDecision]) -> list[dict[str, Any]]:
             "tool": item.tool,
             "args": dict(item.args),
             "agent": item.agent,
+            "delegations": list(item.delegations),
             "decisions": list(item.decisions),
         }
         for item in waiting

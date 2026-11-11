@@ -1006,6 +1006,16 @@ reason was known says `null`: `end_turn` would read as one that finished.
 `None` while two delegations are open, for the reason `_subagent_behind` gives.
 *(2026-10-27, narrowed 2026-10-29, #1149, #1150, #1151.)*
 
+**`decision_needed` names the subagent that paused, as every other event inside a
+delegation does.** It said `agent=None` and `delegations=()` for any pause, so a client
+filtering the stream by subagent filed a subagent's pause as the caller's own.
+`PendingDecision` carries the `task` call's id beside the name, read off the same call,
+and the event takes both where every call waiting has the same owner. With two owners it
+names neither, since one event stands for every call and the wrong name beside a call
+about to be approved is worse than none. Read off the top-level state alone, so a
+helper's pause should name the subagent that consulted it with a chain one id long; that
+is read from the code, not measured. *(2026-11-11.)*
+
 ## Packaging: where the definitions live
 
 This reversed twice. The current answer is the third one.

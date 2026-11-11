@@ -103,7 +103,7 @@ def pending_in(snapshot: Any) -> tuple[PendingDecision, ...]:
     """Every gated call a paused turn is waiting on; nothing for a turn that ran on."""
     found: list[PendingDecision] = []
     for task in getattr(snapshot, "tasks", ()) or ():
-        subagent = _subagent_behind(task, snapshot)
+        subagent, started_by = _subagent_behind(task, snapshot)
         for pause in getattr(task, "interrupts", ()) or ():
             value = pause.value
             if not isinstance(value, dict):
@@ -119,6 +119,7 @@ def pending_in(snapshot: Any) -> tuple[PendingDecision, ...]:
                         tool=str(request.get("name") or ""),
                         args=dict(request.get("args") or {}),
                         agent=subagent,
+                        delegations=(started_by,) if started_by else (),
                         # Narrowed to what kingfisher accepts: a bare `True` gate also
                         # offers `edit`, which the resume path would refuse.
                         decisions=tuple(d for d in allowed if d in DECISIONS),
@@ -194,8 +195,9 @@ def _gated_calls(requests: Sequence[Any], messages: Sequence[Any]) -> list[str |
     return found
 
 
-def _subagent_behind(task: Any, snapshot: Any) -> str | None:
-    """Which subagent proposed this, where the pause can say so without guessing.
+def _subagent_behind(task: Any, snapshot: Any) -> tuple[str | None, str | None]:
+    """Which subagent proposed this and the id of the `task` call that started it, where
+    the pause can say so without guessing; `(None, None)` where it cannot.
 
     The name is in the parent's last message, as the `subagent_type` of the `task` call
     that started it, and is unambiguous only while one subagent is in flight. With two
@@ -204,18 +206,18 @@ def _subagent_behind(task: Any, snapshot: Any) -> str | None:
     # The pause's task first: one message may gate the agent's own call and start one
     # subagent, and the search would hand the agent's call that subagent's name.
     if getattr(task, "name", "") != TOOLS_NODE:
-        return None
+        return None, None
     for message in reversed(list(getattr(snapshot, "values", {}).get("messages", ()))):
         calls = getattr(message, "tool_calls", None)
         if not calls:
             continue
         started = [
-            str(call["args"][SUBAGENT_TYPE_ARG])
+            (str(call["args"][SUBAGENT_TYPE_ARG]), str(call.get("id") or "") or None)
             for call in calls
             if call.get("name") == TASK_TOOL and SUBAGENT_TYPE_ARG in (call.get("args") or {})
         ]
-        return started[0] if len(started) == 1 else None
-    return None
+        return started[0] if len(started) == 1 else (None, None)
+    return None, None
 
 
 def resume_payload(answers: Iterable[Decision], pending: Iterable[PendingDecision]) -> Any:

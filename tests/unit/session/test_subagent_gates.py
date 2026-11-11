@@ -22,7 +22,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher
 from kingfisher.core.request import Decision, Request, Resume
-from kingfisher.core.result import AWAITING, END_TURN
+from kingfisher.core.result import AWAITING, END_TURN, PendingDecision
+from kingfisher.core.session.turn import decision_needed
 from kingfisher.plugins import LocalSessions
 from tests.conftest import FakeToolCallingModel
 
@@ -107,6 +108,39 @@ def test_the_subagent_is_named_where_one_was_in_flight(cfg):
     result = kf.run(Request("delegate it"))
 
     assert result.pending[0].agent == "scribe"
+
+
+def test_a_subagents_pause_names_it_on_the_stream(cfg):
+    """`decision_needed` arrived with `agent=None` and `delegations=()` for a subagent's
+    pause, so a client filtering the stream by subagent filed it as the caller's own."""
+    kf = Kingfisher(cfg, graph=_parent_with("scribe"), sessions=LocalSessions())
+
+    events = list(kf.stream(Request("delegate it")))
+
+    (needed,) = [e for e in events if e.kind == "decision_needed"]
+    assert (needed.agent, needed.delegations) == ("scribe", ("p0",))
+    (start,) = [e for e in events if e.kind == "delegation_start"]
+    assert needed.delegations == start.delegations
+    (result,) = [e.result for e in events if e.kind == "finished"]
+    assert result is not None
+    session = kf.session(result.session_id)
+    assert session is not None
+    # Read back off disk, as a caller answering from another process sees it.
+    assert [call.delegations for call in session.pending()] == [("p0",)]
+
+
+def test_a_pause_with_two_owners_names_neither_on_the_stream():
+    """One event stands for every call waiting, so naming the first of two owners would
+    put the wrong actor beside the other's call, which is about to be approved."""
+    waiting = (
+        PendingDecision(call_id="i#0", tool="write_file", agent="scribe", delegations=("p0",)),
+        PendingDecision(call_id="i#1", tool="execute"),
+    )
+
+    needed = decision_needed(waiting)
+
+    assert (needed.agent, needed.delegations) == (None, ())
+    assert decision_needed(waiting[:1]).agent == "scribe", "the control: one owner is named"
 
 
 def test_a_top_level_gate_names_no_subagent(cfg):
