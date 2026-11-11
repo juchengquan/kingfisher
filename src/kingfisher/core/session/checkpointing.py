@@ -73,16 +73,26 @@ def resumed_saver(state: bytes) -> Any:
     """The saver `paused_state` was taken from, rebuilt from its bytes."""
     kind, _, payload = state.partition(b"\n")
     document = _SERDE.loads_typed((kind.decode("utf-8"), payload))
+    # Raised as `ValueError`, which is what the resume refuses a pause for: a `KeyError`
+    # or `TypeError` from the rows below would fail the turn naming no session.
+    held = document if isinstance(document, dict) else {}
+    if missing := [part for part in ("storage", "writes", "blobs") if part not in held]:
+        msg = f"it has no {', '.join(missing)}"
+        raise ValueError(msg)
     # The entries are still bytes, decoded only when the graph reads them, and by this
     # saver's serde rather than the one above.
     saver = InMemorySaver(serde=_SERDE)
-    # Assigned *through* the mappings, so the saver's defaultdicts survive: `get_tuple`
-    # indexes a thread and namespace that may not exist yet. msgpack reads every tuple
-    # back as a list, and only the keys are hashed, so only they are converted.
-    for thread, namespace, checkpoint_id, entry in document["storage"]:
-        saver.storage[thread][namespace][checkpoint_id] = entry
-    for outer, inner, entry in document["writes"]:
-        saver.writes[tuple(outer)][tuple(inner)] = entry
-    for key, entry in document["blobs"]:
-        saver.blobs[tuple(key)] = entry
+    try:
+        # Assigned *through* the mappings, so the saver's defaultdicts survive: `get_tuple`
+        # indexes a thread and namespace that may not exist yet. msgpack reads every tuple
+        # back as a list, and only the keys are hashed, so only they are converted.
+        for thread, namespace, checkpoint_id, entry in document["storage"]:
+            saver.storage[thread][namespace][checkpoint_id] = entry
+        for outer, inner, entry in document["writes"]:
+            saver.writes[tuple(outer)][tuple(inner)] = entry
+        for key, entry in document["blobs"]:
+            saver.blobs[tuple(key)] = entry
+    except (TypeError, ValueError) as exc:
+        msg = f"a row is not shaped as a pause writes it: {exc}"
+        raise ValueError(msg) from exc
     return saver
