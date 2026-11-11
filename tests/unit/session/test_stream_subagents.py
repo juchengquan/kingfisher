@@ -6,12 +6,15 @@ from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
+from kingfisher import Kingfisher
 from kingfisher.core.request import Request
 from kingfisher.core.run import stream
 from kingfisher.core.session import stream_chunks
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
-from tests.conftest import FakeGraph, FakeToolCallingModel, start
+from tests.conftest import FakeGraph, FakeToolCallingModel, an_agent, start
+from tests.unit.conftest import define_each
+from tests.unit.scripted import Scripted
 from tests.unit.stand_ins import StubAgent
 
 
@@ -86,6 +89,34 @@ def test_the_subagents_own_steps_arrive_too(cfg, session_dir):
     events = _events(cfg, session_dir)
 
     assert [e for e in events if e.kind == "model_call" and e.agent == "reviewer"]
+
+
+def test_a_subagents_own_tool_results_reach_the_caller(scripted):
+    """The stream is the client's to filter, so a subagent's tool results are on it;
+    nothing else held that, and a filter on a subagent's `updates` would drop them
+    while its model calls and its `task` answer still arrived."""
+    define_each(scripted, "name: reviewer\ndescription: R.\nbuiltin_tools: [ls]\n"
+            "system_prompt: |\n  You review.\n")
+    an_agent(scripted, subagents="[reviewer]", builtin_tools="[task, ls]")
+    start(scripted, "s")
+    asked = {"description": "look", "subagent_type": "reviewer"}
+    Scripted.script.extend(
+        [
+            AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t1"}]),
+            AIMessage(content="", tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": "l1"}]),
+            AIMessage(content="REVIEWER-DONE"),
+            AIMessage(content="done"),
+        ]
+    )
+
+    events = list(
+        Kingfisher(scripted, sessions=LocalSessions()).stream(
+            Request("go", agent="only", session_id="s")
+        )
+    )
+
+    (listed,) = [e for e in events if e.kind == "tool_result" and e.tool == "ls"]
+    assert (listed.agent, listed.delegations, listed.call) == ("reviewer", ("t1",), "l1")
 
 
 # -- and is distinguishable -----------------------------------------------
