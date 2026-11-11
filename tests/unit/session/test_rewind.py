@@ -10,6 +10,7 @@ here would hold only what the test expected.
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 from dataclasses import replace
 from typing import Any
@@ -498,6 +499,27 @@ def test_a_file_the_turn_did_not_have_goes_though_no_copy_holds_it(rewinding):
     assert sorted(one.name for one in outputs.iterdir()) == ["notes.md", "table.bin"]
     assert "outputs/table.bin" in forward.restored
     assert {"outputs/video.bin", "outputs/clip.bin"} <= set(forward.not_restored)
+
+
+def test_a_file_put_back_goes_through_no_link_the_shell_left(rewinding, tmp_path):
+    """A folder in `/outputs` the shell replaced with a link to the host had a rewind, run
+    outside every fence, overwrite the host's file of that name with the agent's."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    outputs = _outputs(rewinding)
+    (outputs / "sub").mkdir()
+    (outputs / "sub" / "report.md").write_text("the agent's", encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("ok"))
+    host = tmp_path / "host"
+    host.mkdir()
+    (host / "report.md").write_text("the host's", encoding="utf-8")
+    shutil.rmtree(outputs / "sub")
+    (outputs / "sub").symlink_to(host, target_is_directory=True)
+    _say(kf, "again", AIMessage("ok"))
+
+    back = kf.session("s").rewind(first.turn_id)
+
+    assert (host / "report.md").read_text(encoding="utf-8") == "the host's"
+    assert "link" in back.not_restored["outputs/sub/report.md"]
 
 
 def test_at_a_budget_of_0_a_rewind_leaves_the_folder_and_says_it_may_have_changed(rewinding):
