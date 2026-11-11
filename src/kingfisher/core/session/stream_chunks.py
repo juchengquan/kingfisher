@@ -66,8 +66,8 @@ def _event_for(message: Any, *, result_chars: int) -> RunEvent | None:
             call=message.tool_call_id or None,
         )
     if isinstance(message, AIMessage):
-        # One event per model turn, with its tools' arguments but not its prose, which
-        # already arrived as tokens.
+        # One event per model turn. Its prose too, though a streaming model sent it as
+        # tokens: a model that does not stream sends none, and nothing else carries it.
         names, args, ids = tool_calls(message)
         # `.text`, not `str()`, which renders the Responses API's content blocks as a repr.
         # A message with no text, tools or usage is a state shuffle, not a turn.
@@ -75,6 +75,7 @@ def _event_for(message: Any, *, result_chars: int) -> RunEvent | None:
             return None
         return RunEvent(
             kind="model_call",
+            text=message.text,
             tools=names,
             args=args,
             calls=ids,

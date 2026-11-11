@@ -940,6 +940,13 @@ pause does not hold the call's id. A provider that leaves an id out gives `""`, 
 keeps the tuple aligned. No printed line shows an id: to a reader a provider's
 `toolu_01…` is noise. *(2026-10-27, #1130.)*
 
+**A `model_call` carries the reply's prose in `text`, though a streaming model sent it as
+tokens.** It left the prose to the tokens, and a model that does not stream sends none,
+so neither agent's prose reached the stream, and a subagent's reached nothing past its
+answer's cut. The stream is the client's to filter, so it carries both and the client
+picks one: the command prints the tokens, and its `model_call` line shows no `text`.
+*(2026-11-11.)*
+
 **A `delegation_start` announces each delegation on every turn it is open in, and no
 event announces its end.** It is the delegation's own: `agent` is the subagent,
 `delegations` ends in its id, and `text` is what it was asked. It fires when the call

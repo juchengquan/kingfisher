@@ -156,6 +156,34 @@ def test_a_deployment_sets_how_much_of_a_result_the_stream_carries(scripted):
     assert whole["task"] >= len(answer), "a subagent's answer was still cut"
 
 
+def test_a_model_that_does_not_stream_still_says_what_it_wrote(scripted):
+    """`model_call` left its prose to the tokens, and a model that does not stream sends
+    none, so neither agent's prose reached the stream; a subagent's past its answer's cut
+    reached nothing at all."""
+    define_each(scripted, "name: reviewer\ndescription: R.\nsystem_prompt: |\n  You review.\n")
+    an_agent(scripted, subagents="[reviewer]", builtin_tools="[task]")
+    start(scripted, "s")
+    asked = {"description": "look", "subagent_type": "reviewer"}
+    Scripted.script.extend(
+        [
+            AIMessage(content="handing it over", tool_calls=[{"name": "task", "args": asked,
+                                                              "id": "t"}]),
+            AIMessage(content="the review"),
+            AIMessage(content="done"),
+        ]
+    )
+
+    events = list(
+        Kingfisher(scripted, sessions=LocalSessions()).stream(
+            Request("go", agent="only", session_id="s")
+        )
+    )
+
+    assert not [e for e in events if e.kind == "token"], "the control: nothing streamed"
+    said = [(e.agent, e.text) for e in events if e.kind == "model_call"]
+    assert said == [(None, "handing it over"), ("reviewer", "the review"), (None, "done")]
+
+
 # -- and is distinguishable -----------------------------------------------
 
 
