@@ -29,7 +29,7 @@ from .file_history import (
 )
 from .files import walk_artifacts
 from .model import START, RewindError, RewindPart, Start
-from .steps import changing
+from .steps import changing, reading
 from .store import (
     RESUMED,
     Drift,
@@ -314,8 +314,13 @@ def _put_back(
     if version is None:
         # Whether or not a copy holds it, as a file rewritten is: the folders are put back as
         # the turn left them, and a version too large to copy is the deployment's to keep.
-        yield changing(files, "delete", f"/{where}")
-        return True, None
+        removed = yield changing(files, "delete", f"/{where}")
+        if (refused := getattr(removed, "error", None)) is None:
+            return True, None
+        # Asked again rather than read from the wording: a file already gone is not one the
+        # backend refused.
+        (left,) = yield reading(files, "download_files", [f"/{where}"])
+        return (True, None) if left.error == "file_not_found" else (False, str(refused))
     under, mark, why = version
     if mark is not None and mark_now == mark:
         return False, None

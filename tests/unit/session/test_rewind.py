@@ -16,6 +16,7 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
+from deepagents.backends.protocol import DeleteResult
 from langchain_core.messages import AIMessage
 
 from assets.middlewares.summarize_by_count import SummarizeByCount
@@ -44,6 +45,7 @@ from kingfisher.core.session import copying, preparation, rewind
 from kingfisher.core.session.file_history import OVER_BUDGET, dropped_for_space
 from kingfisher.core.session.rewind import COPIES_OFF
 from kingfisher.plugins import LocalSessions
+from kingfisher.plugins.sessions.backend import WorkspaceScopedBackend
 from tests.conftest import (
     EVERY_TOOL,
     an_agent,
@@ -499,6 +501,33 @@ def test_a_file_the_turn_did_not_have_goes_though_no_copy_holds_it(rewinding):
     assert sorted(one.name for one in outputs.iterdir()) == ["notes.md", "table.bin"]
     assert "outputs/table.bin" in forward.restored
     assert {"outputs/video.bin", "outputs/clip.bin"} <= set(forward.not_restored)
+
+
+def test_a_file_the_backend_would_not_remove_is_not_said_to_be_put_back(
+    rewinding, monkeypatch
+):
+    """A delete the backend refused was reported restored, so the caller was told the
+    rewind removed a file still there, and the next turn heard nothing of it."""
+    kf = Kingfisher(rewinding, sessions=LocalSessions())
+    outputs = _outputs(rewinding)
+    (outputs / "report.md").write_text("LONG", encoding="utf-8")
+    first = _say(kf, "write it", AIMessage("ok"))
+    (outputs / "extra.md").write_text("more", encoding="utf-8")
+    _say(kf, "add to it", AIMessage("ok"))
+    removing = WorkspaceScopedBackend.delete
+
+    def refused(self, file_path):
+        if file_path == "/outputs/extra.md":
+            return DeleteResult(error="refused by the store")
+        return removing(self, file_path)
+
+    monkeypatch.setattr(WorkspaceScopedBackend, "delete", refused)
+
+    back = kf.session("s").rewind(first.turn_id)
+
+    assert (outputs / "extra.md").exists()
+    assert "outputs/extra.md" not in back.restored
+    assert "refused by the store" in back.not_restored["outputs/extra.md"]
 
 
 def test_a_file_put_back_goes_through_no_link_the_shell_left(rewinding, tmp_path):
