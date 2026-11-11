@@ -1250,6 +1250,16 @@ the seam rather than computing the intersection: a test that works out the answe
 way the code does agrees with itself and checks nothing. *(2026-09-23, from an
 architecture review.)*
 
+**A pre-built graph is held to no grant, and that is deliberate.** With `graph=`,
+`_graph_for` returns the graph as it was compiled: neither `cfg.grants` nor the tool and
+skill locks the caller's source ids open are applied to it, and only a request whose
+`capabilities` narrow anything is refused. The graph is the deployment's own, compiled with
+the tools it chose, so there is no definition for a grant to narrow and no build to narrow
+it in; a deployment that wants a ceiling compiles it in. Where something is locked, the
+agent a request names is still resolved against the caller's source ids. The refusal is
+what stays: a narrowing request accepted and not applied would run with more than it asked
+for, unseen. *(2026-11-11, confirmed by the owner after a review raised it.)*
+
 **The axes are read off the dataclass.** Written three times -- as fields, in
 `__post_init__`, in `intersect` -- nothing held the lists together. Measured by adding a
 ninth axis: it kept whatever list it arrived as, and `intersect` answered `'*'` for it,
