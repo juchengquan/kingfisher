@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A request is refused for what it asks before its session is claimed
+
+- **An input file that is not there, or a subagent the request names that it is not
+  offered, is refused before the session is opened or claimed.** Sent to a session a
+  turn holds, such a request now raises `InputsError` or `CapabilityError` rather than
+  `SessionBusyError`, and a missing file is refused ahead of the session's quota.
+
 ## A delete refuses a session a turn is running in
 
 - **`Session.delete`, `adelete` and `kingfisher reap --session` raise `SessionBusyError`**

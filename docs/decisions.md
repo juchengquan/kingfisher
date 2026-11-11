@@ -3528,6 +3528,17 @@ not built until a deployment shows its turns die often and it retries in the sam
 session, since one opening a new session after `SessionBusyError` is never told either
 way. *(2026-11-10.)*
 
+**A request refused for what it asks is refused before the claim, so a dead turn's note
+outlives it.** A turn that took over a stale claim and was then refused gave the claim
+back, and the note `took_over` reads went with it, so the next turn was never told. The
+refusals that read only the request and the catalogue -- the agent it names, its input
+files, the subagents it names -- come before the claim now. Those that read the session
+stay under it, since another turn could change what they read: the quota, the pause a
+resume answers or names its agent by, a turn id already used, and the build's own, which
+needs the turn the ledger numbers. A turn refused by one of those still loses the note.
+Closing that takes a `Sessions` that keeps the note past a release, a change to the port,
+not made until a deployment shows a dying turn followed by such a refusal. *(2026-11-11.)*
+
 **An output is not evidence the command wrote it.** The run's folder is in the session's
 scratchpad because the Linux fences grant one session and nothing else, so the agent's
 shell and its file tools reach it while the run is going -- measured in one message
