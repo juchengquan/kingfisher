@@ -5149,6 +5149,18 @@ the `claim` seam rather than raced, and the rule asserts the two numbers *differ
 were once the same, and a rule comparing against either would have passed then.
 *(2026-10-11, from an architecture review.)*
 
+**A turn's bound runs from its claim, not from the end of its setup.** The claim goes stale
+counting from when it is taken, and the deadline was set once setup had built the graph, so
+setup came out of the superstep's margin that `claim_stale_after` adds -- which that margin
+was not sized for. Reproduced with a `TurnInstructions` that took 121 s at
+`turn_timeout_s=2`: the next turn took the session over while the first was inside its
+bound, was told a turn had died, and the first one's record was refused. Kingfisher's own
+setup measured 0.03 to 0.6 s; what can take long is a deployment's hook with no timeout --
+a memory store, a `Sessions`, the instruction hooks, a middleware factory. **Not taken:**
+starting the claim's clock at the deadline, which needs a renewal on the `Sessions` port
+that every implementation would have to add. The cost is the setup, out of the turn's
+own time. *(2026-11-11, measured before it was built.)*
+
 **The grace period has to cover a shell command, not a model call alone.** It added the
 longest model timeout, and `execution_timeout_s` bounds a superstep exactly as a model's
 `timeout_s` does: the deadline is read between stream chunks, so a turn out of time runs

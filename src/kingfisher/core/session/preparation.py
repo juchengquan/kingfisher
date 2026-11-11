@@ -163,6 +163,9 @@ class Preparation:
         yield changing(self._sessions, "mark_used", cfg, session.id)
         # Before the other refusals: those read the session, and a turn arriving halfway
         # through would be reading it as it moved.
+        # The turn's deadline runs from here, not from the end of setup: the claim goes stale
+        # counting from now, and a setup slower than its margin was taken over still running.
+        claimed_at = monotonic()
         claimed = yield from self._claim_or_refuse(session.id, "wait, or start another session")
         try:
             # The only trace a killed turn leaves: its claim, gone stale and taken over.
@@ -185,6 +188,7 @@ class Preparation:
                 seen=seen,
                 log=log,
                 took_over=bool(took_over),
+                claimed_at=claimed_at,
             )
         except BaseException:
             # Each a call that changes something, so a cancel arriving during it waits for
@@ -210,6 +214,7 @@ class Preparation:
         seen: Mapping[str, Path],
         log: TurnLog,
         took_over: bool,
+        claimed_at: float,
     ) -> Steps[Prepared]:
         """The rest of setup, once the session is claimed."""
         # Optional on a backend, like `host_path`; reported rather than raised.
@@ -293,6 +298,7 @@ class Preparation:
             earlier=earlier,
             caller=caller,
             started=started.timestamp(),
+            claimed_at=claimed_at,
             users_memory=users.key is not None,
             catalogue=catalogue,
         )
@@ -489,6 +495,7 @@ class Preparation:
         log: TurnLog,
         catalogue: Definitions,
         started: float,
+        claimed_at: float,
         earlier: KeptLedger | None = None,
         caller: Caller | None = None,
         users_memory: bool = False,
@@ -584,7 +591,7 @@ class Preparation:
 
         asked = getattr(request, "task", "")
         # One clock: what the turn is stopped at between chunks is what no run goes past.
-        deadline = monotonic() + cfg.turn_timeout_s
+        deadline = claimed_at + cfg.turn_timeout_s
         return Prepared(
             graph=graph,
             files=files,
