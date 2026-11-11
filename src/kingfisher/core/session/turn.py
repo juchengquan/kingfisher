@@ -287,11 +287,17 @@ def decision_needed(waiting: tuple[PendingDecision, ...]) -> RunEvent:
     The calls ride on `tools`/`args`, as `model_call` publishes them. The ids are only
     on `RunResult.pending`, which a resume is built from, so there is one copy to keep.
     """
+    # Named only where every call has one owner: the event is one, and naming the first of
+    # two would put the wrong actor beside a call about to be approved.
+    owners = {(item.agent, item.delegations) for item in waiting}
+    agent, delegations = owners.pop() if len(owners) == 1 else (None, ())
     return RunEvent(
         kind="decision_needed",
         text=f"waiting on {', '.join(sorted({item.tool for item in waiting}))}",
         tools=tuple(item.tool for item in waiting),
         args=tuple(item.args for item in waiting),
+        agent=agent,
+        delegations=delegations,
     )
 
 

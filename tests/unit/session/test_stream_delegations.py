@@ -18,15 +18,15 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk
 from langgraph.checkpoint.memory import InMemorySaver
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, Landing
 from kingfisher.core.request import Decision, Request, Resume
 from kingfisher.core.result import RunEvent
 from kingfisher.core.session import stream_chunks
-from kingfisher.plugins import LocalSessions, backend_at
+from kingfisher.plugins import LocalSessions, WireFormat, backend_at
 from tests.conftest import EVERY_TOOL, FakeToolCallingModel, an_agent, start
 from tests.unit.agent.test_subagent_helpers import HELPER, REVIEWER
 from tests.unit.conftest import define_each
-from tests.unit.scripted import Scripted
+from tests.unit.scripted import Scripted, Streamed
 
 #: What two runs of one subagent say, a word at a time.
 SAID = ("a0 a1 a2 a3 a4", "b0 b1 b2 b3 b4")
@@ -242,6 +242,17 @@ def _dispatching(scripted, program: str, *script: AIMessage | Exception, **agent
     return cfg
 
 
+def _streamed(cfg) -> Any:
+    """`cfg` with every endpoint answered by `Streamed`, whose replies arrive as tokens."""
+    row = WireFormat(
+        f"{Streamed.__module__}:Streamed",
+        Landing(model="model", base_url="base_url", api_key="api_key",
+                max_tokens="max_tokens", timeout="timeout"),
+    )
+    endpoints = {name: replace(one, wire_format=row) for name, one in cfg.models.endpoints.items()}
+    return replace(cfg, models=replace(cfg.models, endpoints=endpoints))
+
+
 def test_two_dispatches_one_program_starts_at_once_are_told_apart(scripted):
     """No `tasks` chunk announces a program's dispatch, so two at once carried no
     delegation: the CLI held neither, and printed both live under one tag."""
@@ -259,6 +270,47 @@ def test_two_dispatches_one_program_starts_at_once_are_told_apart(scripted):
     assert sorted(str(e.call) for e in ended) == sorted(chain[-1] for chain in starts)
     # Which dispatch got which reply is the scheduler's choice.
     assert sorted(e.text for e in ended) == ["answer A", "answer B"]
+
+
+def test_a_dispatched_subagents_own_steps_reach_the_caller(scripted):
+    """The library runs a program's subagent with no callbacks, so its tokens never
+    reached the stream and its tool results read as the caller's; a client filtering on
+    `agent` or `delegations` would have lost or misfiled them."""
+    cfg = _dispatching(
+        scripted,
+        "(async () => await task({description: 'look', subagentType: 'reviewer'}))()",
+        AIMessage(content="", tool_calls=[{**WRITE, "id": "w1"}]),
+        AIMessage(content="reviewer says hello"),
+        AIMessage(content="done"),
+    )
+
+    asked = Request("go", agent="only", session_id="s")
+    events = _drained(Kingfisher(_streamed(cfg), sessions=LocalSessions()), asked)
+
+    (chain,) = [e.delegations for e in events if e.kind == "delegation_start"]
+    (written,) = [e for e in events if e.kind == "tool_result" and e.tool == "write_file"]
+    assert (written.agent, written.delegations, written.call) == ("reviewer", chain, "w1")
+    said = "".join(e.text for e in events if e.kind == "token" and e.delegations == chain)
+    assert said == "reviewer says hello"
+
+
+def test_a_dispatchs_answer_is_cut_where_the_deployment_says(scripted):
+    """A program's dispatch is answered on its own path, past the `ToolNode`, so a setting
+    honoured there alone left a program's subagent's answer at the old cut."""
+    answer = "a" * 500
+    cfg = _dispatching(
+        scripted,
+        "(async () => await task({description: 'look', subagentType: 'reviewer'}))()",
+        AIMessage(content=answer),
+        AIMessage(content="done"),
+    )
+
+    asked = Request("go", agent="only", session_id="s")
+    events = _drained(Kingfisher(replace(cfg, stream_result_chars=10_000),
+                                 sessions=LocalSessions()), asked)
+
+    (ended,) = [e.text for e in events if e.kind == "tool_result" and e.tool == "task"]
+    assert ended == answer
 
 
 def test_a_dispatch_that_would_pause_is_refused(scripted):

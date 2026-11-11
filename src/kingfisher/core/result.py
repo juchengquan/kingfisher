@@ -70,6 +70,9 @@ class PendingDecision:
     args: Mapping[str, Any] = field(default_factory=dict)
     #: Which subagent proposed it, or `None` for the caller's agent; the caller answers either way.
     agent: str | None = None
+    #: The `task` call that started `agent`, as `RunEvent.delegations` names it; `()`
+    #: wherever `agent` is `None`.
+    delegations: tuple[str, ...] = ()
     #: What this call will accept, as the middleware declared it: a caller guessing from
     #: `DECISIONS` would offer a choice the gate may refuse.
     decisions: tuple[str, ...] = ()
