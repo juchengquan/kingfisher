@@ -136,6 +136,19 @@ def test_an_attribute_that_is_not_there_is_refused():
         named(f"{HERE}:no_such_factory")
 
 
+#: What a deployment names when it hands over sessions already built.
+ready_made = Recording()
+
+
+def test_a_name_that_is_not_a_factory_is_refused():
+    """Called regardless, it raised a bare `TypeError` saying an object is not callable,
+    which named neither the setting nor the fix."""
+    with pytest.raises(ConfigError, match="callable") as caught:
+        named(f"{HERE}:ready_made")
+
+    assert SETTING in str(caught.value)
+
+
 def test_a_factory_returning_the_wrong_shape_is_refused():
     """What was returned, and what it should have been."""
     with pytest.raises(ConfigError, match="NoneType") as caught:
