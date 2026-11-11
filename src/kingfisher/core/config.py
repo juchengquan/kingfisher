@@ -344,6 +344,9 @@ class Config:
     #: still running. Only that: the call's answer is kept either way, and past the wait
     #: the session answers busy until the call ends. 0 lets the caller go at once.
     cancel_wait_s: int = 5
+    #: How much of a tool result a `tool_result` event carries. Nothing else bounds it: a
+    #: 450KB `read_file` reached the model whole, and would reach every event and log line.
+    stream_result_chars: int = 300
     # Unset by default: workspaces vary by orders of magnitude. Checked before a turn,
     # never during: `execute` writes without any file tool seeing it.
     session_max_bytes: int | None = None

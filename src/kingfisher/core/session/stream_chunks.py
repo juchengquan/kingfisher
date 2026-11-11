@@ -18,7 +18,8 @@ from .runtime import SUBAGENT_TYPE_ARG, SUMMARISER, TOOLS_NODE, cut_off, tool_ca
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
 OutOfSteps = GraphRecursionError
 
-#: How much of a tool result or message to keep on an event.
+#: How much of a provider's error message to keep. A tool result's share is
+#: `Config.stream_result_chars`, and this is its default too.
 PREVIEW = 300
 
 #: A `messages` chunk is a (message, metadata) pair.
@@ -56,12 +57,12 @@ def cut_off_mark(reply: Any) -> dict[str, Any]:
     return {CUT_OFF_MARK: usage_of(reply)}
 
 
-def _event_for(message: Any) -> RunEvent | None:
+def _event_for(message: Any, *, result_chars: int) -> RunEvent | None:
     if isinstance(message, ToolMessage):
         return RunEvent(
             kind="tool_result",
             tool=getattr(message, "name", None),
-            text=message.text[:PREVIEW],
+            text=message.text[:result_chars],
             call=message.tool_call_id or None,
         )
     if isinstance(message, AIMessage):
@@ -235,7 +236,11 @@ def _token_event(chunk: Any) -> RunEvent | None:
 
 
 def _dispatch_event(
-    said: Mapping[str, Any], *, agent: str | None, delegations: tuple[str, ...]
+    said: Mapping[str, Any],
+    *,
+    agent: str | None,
+    delegations: tuple[str, ...],
+    result_chars: int,
 ) -> RunEvent:
     """A program's dispatch starting or answering, written where its `eval` call runs."""
     if "chain" in said:
@@ -248,7 +253,7 @@ def _dispatch_event(
     return RunEvent(
         kind="tool_result",
         tool=TASK_TOOL,
-        text=str(said.get("answer") or "")[:PREVIEW],
+        text=str(said.get("answer") or "")[:result_chars],
         call=str(said.get("call") or "") or None,
         agent=agent,
         delegations=delegations,
@@ -263,6 +268,7 @@ def events_in(  # noqa: PLR0912, PLR0913 -- a branch per mode, and what the stre
     *,
     seen: SeenMessages,
     delegations: Delegations,
+    result_chars: int = PREVIEW,
 ) -> Iterator[RunEvent]:
     """Translate one stream chunk into domain events."""
     if mode == "tasks":
@@ -286,7 +292,9 @@ def events_in(  # noqa: PLR0912, PLR0913 -- a branch per mode, and what the stre
                 delegations=within,
             )
         elif isinstance(said := chunk.get(DISPATCH), Mapping):
-            yield _dispatch_event(said, agent=named, delegations=within)
+            yield _dispatch_event(
+                said, agent=named, delegations=within, result_chars=result_chars
+            )
         return
     if mode == "messages":
         if isinstance(chunk, tuple) and len(chunk) == TOKEN_CHUNK_PARTS:
@@ -303,7 +311,7 @@ def events_in(  # noqa: PLR0912, PLR0913 -- a branch per mode, and what the stre
         for message in messages_in(update):
             if seen.rewritten(namespace, message):
                 continue
-            if (event := _event_for(message)) is not None:
+            if (event := _event_for(message, result_chars=result_chars)) is not None:
                 yield replace(event, agent=named, delegations=within)
 
 

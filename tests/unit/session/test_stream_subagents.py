@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
@@ -117,6 +119,41 @@ def test_a_subagents_own_tool_results_reach_the_caller(scripted):
 
     (listed,) = [e for e in events if e.kind == "tool_result" and e.tool == "ls"]
     assert (listed.agent, listed.delegations, listed.call) == ("reviewer", ("t1",), "l1")
+
+
+def test_a_deployment_sets_how_much_of_a_result_the_stream_carries(scripted):
+    """The cut was a constant, so a client wanting a subagent's result or answer whole
+    had nothing to ask with; the control is the default cut at 300."""
+    define_each(scripted, "name: reviewer\ndescription: R.\nbuiltin_tools: [read_file]\n"
+            "system_prompt: |\n  You review.\n")
+    an_agent(scripted, subagents="[reviewer]", builtin_tools="[task, write_file, read_file]")
+    start(scripted, "s")
+    body, answer = "b" * 600, "a" * 500
+
+    def results(cfg) -> dict[str | None, int]:
+        written = {"file_path": "/outputs/r.txt", "content": body}
+        asked = {"description": "look", "subagent_type": "reviewer"}
+        Scripted.script.extend(
+            [
+                AIMessage(content="", tool_calls=[{"name": "write_file", "args": written,
+                                                   "id": "w"}]),
+                AIMessage(content="", tool_calls=[{"name": "task", "args": asked, "id": "t"}]),
+                AIMessage(content="", tool_calls=[{"name": "read_file",
+                                                   "args": {"file_path": "/outputs/r.txt"},
+                                                   "id": "r"}]),
+                AIMessage(content=answer),
+                AIMessage(content="done"),
+            ]
+        )
+        events = Kingfisher(cfg, sessions=LocalSessions()).stream(
+            Request("go", agent="only", session_id="s")
+        )
+        return {e.tool: len(e.text) for e in events if e.kind == "tool_result"}
+
+    assert results(scripted)["read_file"] == 300
+    whole = results(replace(scripted, stream_result_chars=10_000))
+    assert whole["read_file"] > len(body), "a subagent's result was still cut"
+    assert whole["task"] >= len(answer), "a subagent's answer was still cut"
 
 
 # -- and is distinguishable -----------------------------------------------

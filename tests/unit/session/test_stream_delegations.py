@@ -294,6 +294,25 @@ def test_a_dispatched_subagents_own_steps_reach_the_caller(scripted):
     assert said == "reviewer says hello"
 
 
+def test_a_dispatchs_answer_is_cut_where_the_deployment_says(scripted):
+    """A program's dispatch is answered on its own path, past the `ToolNode`, so a setting
+    honoured there alone left a program's subagent's answer at the old cut."""
+    answer = "a" * 500
+    cfg = _dispatching(
+        scripted,
+        "(async () => await task({description: 'look', subagentType: 'reviewer'}))()",
+        AIMessage(content=answer),
+        AIMessage(content="done"),
+    )
+
+    asked = Request("go", agent="only", session_id="s")
+    events = _drained(Kingfisher(replace(cfg, stream_result_chars=10_000),
+                                 sessions=LocalSessions()), asked)
+
+    (ended,) = [e.text for e in events if e.kind == "tool_result" and e.tool == "task"]
+    assert ended == answer
+
+
 def test_a_dispatch_that_would_pause_is_refused(scripted):
     """A pause inside a program was resumed by running the program again before any model
     call had set `tools.*` up, so the approved call never ran; set up, every `tools.*`
