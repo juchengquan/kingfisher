@@ -263,8 +263,8 @@ def _read(held: bytes) -> tuple[list[tuple[str, dict[str, Any]]], bool]:
     Stopped, not skipped: past a damaged line, a tool result can answer a call that was on
     it, which a provider refuses on every later turn. `fetch` hands back a save whole where
     one copy is, so a damaged line comes only from a file neither copy's seal matches: one
-    written before seals were, by something other than kingfisher, or by a power cut, since
-    nothing flushes either copy to the drive.
+    written before seals were, by something other than kingfisher, or by a power cut on a
+    backend that flushes nothing.
     """
     lines = []
     for raw in held.decode("utf-8", errors="replace").splitlines():

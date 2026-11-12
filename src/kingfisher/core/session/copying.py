@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.agent.permitted_backend import HostPathFailedError, host_path_in_turn
 
+from .durable import flushed, missing_folders
 from .steps import Steps, changing, on_host, reading
 
 if TYPE_CHECKING:
@@ -121,6 +122,7 @@ def copied_on_host(source: tuple[Path | None, Path], destination: tuple[Path | N
     # it, this process would replace a file outside the session.
     if target_root is not None and target.parent.resolve() != target.parent:
         raise OSError(errno.ELOOP, "it runs through a link", str(target))
+    made = missing_folders(target.parent)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.unlink(missing_ok=True)
     held = os.open(path, _SOURCE)
@@ -135,6 +137,11 @@ def copied_on_host(source: tuple[Path | None, Path], destination: tuple[Path | N
             target.unlink(missing_ok=True)
             with os.fdopen(os.dup(held), "rb") as read, target.open("xb") as write:
                 shutil.copyfileobj(read, write, _CHUNK)
+        # Before the `.harness` record that names it, or a power cut could keep the record
+        # and empty the copy, which a rewind would put back as restored. Not a full flush:
+        # that record's own takes the drive's cache along on macOS, and elsewhere a plain
+        # one is full.
+        flushed(target, made, new=True, full=False)
         return found.st_size
     finally:
         os.close(held)

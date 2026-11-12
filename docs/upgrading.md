@@ -38,6 +38,14 @@ replaced the four layers began.
   the log shows `no end`. A script reading the old columns by position needs updating;
   `Session.turns()` already gave both times as `started` and `ended`.
 
+## Each save to this host's disk waits for the drive, after #1301
+
+- **A backend that keeps a session on this host, by naming a host path as
+  `LocalSessions` does, now has each `.harness` record and each copy of a file flushed to
+  the drive as it is saved.** A power cut just after a save no longer empties both
+  copies of a record. On macOS a turn spends about 37 ms more on it; nothing needs
+  changing. A backend that keeps sessions elsewhere is unaffected.
+
 ## A request is refused for what it asks before its session is claimed, after #1295
 
 - **An input file that is not there, or a subagent the request names that it is not
