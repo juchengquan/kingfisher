@@ -72,7 +72,7 @@ def test_a_setting_the_guard_never_named_is_cleared_all_the_same():
     """
     done = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
         [
-            sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+            sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:xdist",
             f"{__file__}::test_no_kingfisher_setting_reaches_a_test",
         ],
         cwd=repository_root(),
