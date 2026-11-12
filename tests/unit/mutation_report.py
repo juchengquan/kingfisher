@@ -119,14 +119,9 @@ def verdict(root: pathlib.Path, timeout: int) -> tuple[str, str]:
     whole run -- and because a mutant can be lethal enough to hang: breaking
     `create_exclusive` so it never reports success spins the turn-id loop
     forever. Read as "no failures", a timeout is the exact opposite of one.
-
-    One process, not xdist's workers: shards run side by side, each a suite of its own.
     """
     run = subprocess.Popen(
-        [
-            "uv", "run", "--no-sync", "pytest", "-q", "--tb=no", "-p", "no:randomly", "-x",
-            "-p", "no:xdist",
-        ],
+        ["uv", "run", "--no-sync", "pytest", "-q", "--tb=no", "-p", "no:randomly", "-x"],
         cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         # Its own group, so a hang is ended whole: the timeout kills only `uv`, and the
         # pytest under it went on spinning a core for days.

@@ -7878,23 +7878,23 @@ with 55 cut between, is 138 added in 12 days, about 80 a week, across the whole 
 and turn-log build. That is well under 430, so no count goes into CI. Cutting goes on
 only as the four kinds, in a file read for other work. *(2026-11-09, from a review.)*
 
-**The suite spreads over two workers here and runs in one process on CI.** One process
-took about 245 seconds on twelve cores; across xdist's workers it took 126 with 2, 89
-with 3, 72 with 4, 49 with 6 and 36 with 12, all green. Two, and never more than half the
-cores, the owner's call: several checkouts run the suite side by side and every test
-that starts a shell starts processes of its own, and two halves the wait while leaving
-the rest of the machine to them. `-n N` or `-n auto` takes more when asked for. CI
-keeps one process, also the owner's call: its runners have three or four cores, and its
-timings are read against that baseline. `tests/conftest.py` makes
-the choice in `pytest_cmdline_main`, and never in a worker. xdist runs that hook again in
-each worker with `-n` reset, so a hook choosing there starts workers in every worker: an
-experiment doing so on 2026-11-11 and 11-12 reached 1,833 processes and a load of 638,
-and the machine was restarted both times. `test_parallel_runs.py` drives the choice with
-configs built in the test, since a real run with that check broken would do the same
-again. The suite's own nested pytest and `mutation_report.py` pass `-p no:xdist`: one runs
-a single test, the other runs shards side by side. `mutation_report.py` also ends a hung
-mutant's whole process group, since its timeout killed only `uv` and left the pytest under
-it on a core: two had spun for five days when found. *(2026-11-12.)*
+**The suite splits across plain processes here, and runs in one on CI.** One process
+took about 245 seconds on twelve cores; xdist's workers took 126 with 2, 89 with 3, 72
+with 4, 49 with 6 and 36 with 12, all green. `scripts/check.py` runs ruff and ty, lists
+the tests once, and gives each of two `pytest` processes a share of the files. Not xdist,
+the owner's call after it shipped: xdist runs pytest's hooks again in each worker, so a
+hook choosing a worker count started workers in every worker -- an experiment on
+2026-11-11 and 11-12 reached 1,833 processes and a load of 638, and the machine was
+restarted both times -- and a guard against that was one condition between the suite and
+the machine. Processes started from outside pytest cannot start more of themselves. Two,
+never more than half the cores, also the owner's call: several checkouts run the suite
+side by side and every test that starts a shell starts processes of its own. The plain
+`uv run pytest -q` stays one process everywhere, so CI and its command are unchanged.
+The script is green only when every process exits 0 and between them they ran every test
+listed, since a process killed partway fails nothing it never reached; `test_check.py`
+drives both. `mutation_report.py` ends a hung mutant's whole process group, since its
+timeout killed only `uv` and left the pytest under it on a core: two had spun for five
+days when found. *(2026-11-12.)*
 
 ## Proposals, and what became of them
 
