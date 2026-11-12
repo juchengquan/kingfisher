@@ -33,6 +33,35 @@ if TYPE_CHECKING:
     from kingfisher.core.definitions.subagents.spec import SubagentSpec
 
 
+def workers_by_default(
+    config: pytest.Config, environ: dict[str, str], cpus: int | None
+) -> int | None:
+    """How many xdist workers a run left to choose spreads over, or `None` for one process.
+
+    Never in a worker: xdist resets `-n` there and runs this hook again, so a worker
+    choosing for itself starts workers of its own, each doing the same, until the machine
+    has no processes left to give.
+    """
+    if hasattr(config, "workerinput") or not config.pluginmanager.hasplugin("xdist"):
+        return None
+    if environ.get("CI", "").lower() not in ("", "0", "false"):
+        return None
+    option = config.option
+    if option.numprocesses is not None or option.usepdb or option.capture == "no":
+        return None  # asked for a count, a debugger, or prints as they happen
+    # Two, never more than half the cores: several checkouts run the suite side by side
+    # here, and every test that starts a shell adds processes of its own.
+    return max(1, min(2, (cpus or 2) // 2))
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_cmdline_main(config: pytest.Config) -> None:
+    """The suite across two workers unless told otherwise; `-n0` runs it in one process."""
+    count = workers_by_default(config, dict(os.environ), os.cpu_count())
+    if count is not None:
+        config.option.numprocesses = count
+
+
 class FakeGraph:
     """What a stand-in for a compiled graph answers before it is driven.
 

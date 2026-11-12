@@ -68,7 +68,12 @@ def test_an_id_that_cannot_name_a_folder_names_no_session(workspace, session_id)
         session_dir(workspace / "sessions", session_id)
 
 
-@pytest.mark.parametrize("session_id", [uuid4().hex, "default", "q3-report", "Alice Smith"])
+@pytest.mark.parametrize(
+    "session_id",
+    # A fixed name for the random id: each xdist worker lists the tests itself, and a name
+    # that differs between them stops every worker before a test runs.
+    [pytest.param(uuid4().hex, id="kingfishers-own"), "default", "q3-report", "Alice Smith"],
+)
 def test_an_id_a_person_or_kingfisher_would_write_names_a_session(workspace, session_id):
     """The control beside the refusals: a rule refusing every id would pass all of them."""
     assert session_dir(workspace / "sessions", session_id) == workspace / "sessions" / session_id
