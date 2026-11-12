@@ -176,11 +176,11 @@ def a_command_leaves_nothing_running(make: Callable[[], CommandRunner]) -> None:
 
         # The command waits until its job has begun, so it ends with the job running.
         started(
-            f"touch {began}; sleep 1; touch {mark}",
+            f"touch {began}; sleep 0.5; touch {mark}",
             then=f"while [ ! -e {began} ]; do sleep 0.05; done",
-            timeout=5,
+            timeout=2,
         )
-        time.sleep(1.5)
+        time.sleep(1)
         if present(mark):
             msg = (
                 "a process the command started in the background was still running after "
