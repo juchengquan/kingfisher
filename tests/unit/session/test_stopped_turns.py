@@ -502,9 +502,12 @@ def test_a_turn_its_caller_left_ends_before_its_claim_could_lapse(charging, monk
     """A turn whose caller had left waited for a hung call with no bound, holding its
     session past the point another turn may take the claim over, and then wrote its ending
     behind that turn. It ends a superstep's bound past its deadline, without the answer."""
-    cfg = replace(charging.cfg, turn_timeout_s=0.5, cancel_wait_s=0.1)
-    monkeypatch.setattr(Config, "superstep_bound", property(lambda _: 0.5))
+    # Room for setup inside the bound, which counts it: a slow runner spent all of 0.5s
+    # before the call began, and the test waited for a call the turn never started.
+    cfg = replace(charging.cfg, turn_timeout_s=2.0, cancel_wait_s=0.1)
+    monkeypatch.setattr(Config, "superstep_bound", property(lambda _: 1.0))
     Scripted.script.append(_asking("hold"))
+    claim = charging.cfg.workspace / "sessions" / "s" / ".harness" / "claim"
 
     async def left() -> ToolMessage:
         turn = asyncio.ensure_future(charging.kf(cfg).arun(_asked()))
@@ -512,7 +515,8 @@ def test_a_turn_its_caller_left_ends_before_its_claim_could_lapse(charging, monk
         turn.cancel()
         with pytest.raises(asyncio.CancelledError):
             await turn
-        await asyncio.sleep(1.5)
+        # Before the hung call's own 10s: a turn waiting on it lets go only then.
+        await _until(lambda: not claim.exists(), within=4.0)
         try:
             # Under a claim that is not stale, so only the turn letting go frees it.
             return await asyncio.to_thread(_told_next, charging, "c-hold")
@@ -526,9 +530,11 @@ def test_a_turn_out_of_time_ends_before_its_claim_could_lapse(charging, monkeypa
     """Out of time, a turn waited for a hung call with no bound, its caller held as long as
     the call and its claim left to lapse under it. It answers a superstep's bound past its
     deadline, with the session already let go of."""
-    cfg = replace(charging.cfg, turn_timeout_s=0.3)
-    monkeypatch.setenv("KF_TEST_SLOW", "0.5")
-    monkeypatch.setattr(Config, "superstep_bound", property(lambda _: 0.5))
+    # Room for setup inside the bound, which counts it: a slow runner spent all of 0.3s
+    # before `1` began. `1` still lands past the deadline and inside the bound after it.
+    cfg = replace(charging.cfg, turn_timeout_s=1.5)
+    monkeypatch.setenv("KF_TEST_SLOW", "1.5")
+    monkeypatch.setattr(Config, "superstep_bound", property(lambda _: 1.5))
     Scripted.script.append(_asking("1", "hold"))
 
     async def out_of_time() -> tuple[Any, list[str]]:
