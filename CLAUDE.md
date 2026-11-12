@@ -10,9 +10,9 @@ Exactly what CI runs, and all three must pass before a commit:
 
 `ty` runs with `error-on-warning`, so an *unused* ignore directive fails too.
 
-Here `pytest` spreads over two workers; on CI, where `CI` is set, it runs in one
-process. `-n0` runs one process here too, and `-n N` picks a count. Never make a worker
-choose its own count: a worker runs the same hook, and each one it starts does the same.
+`uv run python scripts/check.py` runs the same three here in about half the time, the
+tests split across two plain `pytest` processes. Not pytest-xdist: a hook that starts
+workers runs again in every worker, and twice took the machine down.
 
 **Never run `ruff format`.** It is not in CI and the tree is not formatted to
 it: it rewrites most of the repository, burying a real change in noise. `ruff
