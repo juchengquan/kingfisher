@@ -5,9 +5,10 @@
     uv run python scripts/check.py --processes 3
 
 ruff and ty run as CI runs them. pytest lists the tests once, gives each process a share
-of the test files, and runs the processes side by side; the run is green only when every
-process exited cleanly and between them they ran every test the listing found. CI runs
-plain `uv run pytest -q` in one process, which stays the baseline.
+of the test files by how long each took in the last green run, and runs the processes side
+by side; the run is green only when every process exited cleanly and between them they ran
+every test the listing found. CI runs plain `uv run pytest -q` in one process, which stays
+the baseline.
 
 Logs are kept, and their folder named, only when the run is red.
 """
@@ -15,6 +16,7 @@ Logs are kept, and their folder named, only when the run is red.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -25,6 +27,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from xml.etree import ElementTree
 
 #: Never more than half the cores: other checkouts run the suite side by side here, and
 #: every test that starts a shell starts processes of its own.
@@ -33,6 +36,9 @@ PROCESSES = 2
 #: What a test can end as in pytest's last line; `warnings` and `deselected` are not.
 OUTCOMES = ("passed", "failed", "skipped", "xfailed", "xpassed", "error", "errors")
 SUMMARY = re.compile(r"^=*\s*\d+ \w+.* in [\d.]+s")
+
+#: Seconds per test file from the last green run, inside the folder git already ignores.
+TIMES = Path(".pytest_cache") / "kingfisher-check-times.json"
 
 
 @dataclass(frozen=True)
@@ -58,22 +64,53 @@ def listed(root: Path) -> list[str]:
     return lines[: lines.index("")] if "" in lines else lines
 
 
-def split(ids: list[str], processes: int) -> list[tuple[str, ...]]:
-    """The test files in at most `processes` shares, largest first onto the lightest.
+def split(
+    ids: list[str], processes: int, times: dict[str, float] | None = None
+) -> list[tuple[str, ...]]:
+    """The test files in at most `processes` shares, slowest first onto the lightest.
 
-    A share is never empty: `pytest` given no files runs the whole suite.
+    A file is weighed by its time last run, and one never timed by its tests at the
+    average time a test took; with no times at all, every test weighs the same. A share
+    is never empty: `pytest` given no files runs the whole suite.
     """
     sizes: dict[str, int] = {}
     for test in ids:
         file = test.split("::", 1)[0]
         sizes[file] = sizes.get(file, 0) + 1
+    known = {file: seconds for file, seconds in (times or {}).items() if file in sizes}
+    tests_known = sum(sizes[file] for file in known)
+    per_test = sum(known.values()) / tests_known if tests_known else 1.0
+    weight = {file: known.get(file, sizes[file] * per_test) for file in sizes}
     shares: list[list[str]] = [[] for _ in range(max(1, min(processes, len(sizes))))]
-    weights = [0] * len(shares)
-    for file in sorted(sizes, key=lambda f: (-sizes[f], f)):
-        lightest = weights.index(min(weights))
+    loads = [0.0] * len(shares)
+    for file in sorted(weight, key=lambda f: (-weight[f], f)):
+        lightest = loads.index(min(loads))
         shares[lightest].append(file)
-        weights[lightest] += sizes[file]
+        loads[lightest] += weight[file]
     return [tuple(share) for share in shares if share]
+
+
+def recorded(root: Path) -> dict[str, float]:
+    """The times the last green run left, or none when there are none to read."""
+    try:
+        times = json.loads((root / TIMES).read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(times, dict):
+        return {}
+    return {str(f): float(t) for f, t in times.items() if isinstance(t, (int, float))}
+
+
+def measured(reports: list[Path]) -> dict[str, float]:
+    """Seconds per test file, added up from what each process reported."""
+    times: dict[str, float] = {}
+    for report in reports:
+        tree = ElementTree.parse(report)  # noqa: S314 -- pytest's own report, just written
+        for case in tree.iter("testcase"):
+            file = case.get("file")
+            if file:
+                times[file] = times.get(file, 0.0) + float(case.get("time") or 0)
+    return times
 
 
 def counts(log: str) -> dict[str, int] | None:
@@ -109,16 +146,19 @@ def problems(shards: list[Shard], expected: int) -> list[str]:
 def run_tests(root: Path, processes: int, logs: Path) -> list[str]:
     """The suite across `processes` pytest processes side by side; why it is red, if it is."""
     ids = listed(root)
-    shares = split(ids, processes)
-    print(f"pytest: {len(ids)} tests in {len(shares)} processes", flush=True)
+    times = recorded(root)
+    shares = split(ids, processes, times)
+    by = "last run's times" if times else "test count"
+    print(f"pytest: {len(ids)} tests in {len(shares)} processes, split by {by}", flush=True)
     started: list[tuple[tuple[str, ...], subprocess.Popen[bytes], Path]] = []
     try:
         for number, files in enumerate(shares, 1):
             log = logs / f"pytest-{number}.log"
+            report = logs / f"pytest-{number}.xml"
             with log.open("wb") as out:
                 started.append((files, subprocess.Popen(  # noqa: S603 -- our own interpreter
                     [sys.executable, "-m", "pytest", "-q", "-rfE", "-p", "no:cacheprovider",
-                     *files],
+                     f"--junitxml={report}", "-o", "junit_family=xunit1", *files],
                     cwd=root, stdout=out, stderr=subprocess.STDOUT,
                     # Its own group, so an interrupted run takes every shell a test started.
                     start_new_session=True,
@@ -139,7 +179,14 @@ def run_tests(root: Path, processes: int, logs: Path) -> list[str]:
         failures = [line for line in lines if line.startswith(("FAILED ", "ERROR "))]
         last = next((line for line in reversed(lines) if SUMMARY.match(line)), "no summary")
         print("\n".join([*failures, f"process {number}: {last.strip('= ')}"]), flush=True)
-    return problems(shards, len(ids))
+    found = problems(shards, len(ids))
+    if not found:
+        # Only a green run's: one cut short would weigh what it never reached as nothing.
+        (root / TIMES).parent.mkdir(exist_ok=True)
+        (root / TIMES).write_text(json.dumps(
+            times | measured([log.with_suffix(".xml") for _, _, log in started]), indent=0
+        ))
+    return found
 
 
 def tool(name: str) -> str:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -41,6 +42,19 @@ def test_every_file_lands_in_exactly_one_process_and_none_is_handed_nothing():
         assert all(shares)
 
 
+def test_a_file_is_weighed_by_its_time_and_not_by_its_tests():
+    """Shared out by count, one slow file with few tests left one process waiting on the
+    other for nearly two minutes: 278 seconds against 162."""
+    ids = [f"tests/{f}.py::test_{n}" for f in ("fast_a", "fast_b") for n in range(5)]
+    ids.append("tests/slow.py::test_0")
+    times = {"tests/fast_a.py": 1.0, "tests/fast_b.py": 1.0, "tests/slow.py": 10.0}
+
+    assert sorted(check.split(ids, 2, times)) == [
+        ("tests/fast_a.py", "tests/fast_b.py"), ("tests/slow.py",),
+    ]
+    assert ("tests/slow.py",) not in check.split(ids, 2), "the control: by count it shares"
+
+
 @pytest.mark.parametrize(
     ("logs", "codes", "expected"),
     [
@@ -76,6 +90,9 @@ def test_a_real_failure_in_one_process_turns_the_whole_run_red(tmp_path):
     found = check.run_tests(tmp_path, 2, logs)
 
     assert found in (["process 1 exited 1"], ["process 2 exited 1"]), found
+    assert not (tmp_path / check.TIMES).exists(), "a red run would record what it cut short"
 
     (tmp_path / "test_bad.py").unlink()
     assert check.run_tests(tmp_path, 2, logs) == [], "the control: the same run, all passing"
+    recorded = json.loads((tmp_path / check.TIMES).read_text())
+    assert sorted(recorded) == [f"test_ok{n}.py" for n in range(3)]
