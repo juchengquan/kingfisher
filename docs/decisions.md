@@ -7881,7 +7881,9 @@ only as the four kinds, in a file read for other work. *(2026-11-09, from a revi
 **The suite splits across plain processes here, and runs in one on CI.** One process
 took about 245 seconds on twelve cores; xdist's workers took 126 with 2, 89 with 3, 72
 with 4, 49 with 6 and 36 with 12, all green. `scripts/check.py` runs ruff and ty, lists
-the tests once, and gives each of two `pytest` processes a share of the files. Not xdist,
+the tests once, and gives each of two `pytest` processes a share of the files, weighed by
+the seconds each file took in the last green run. By test count the halves took 139 and
+96 seconds; by time, 120 and 120, against 234 for one process. Not xdist,
 the owner's call after it shipped: xdist runs pytest's hooks again in each worker, so a
 hook choosing a worker count started workers in every worker -- an experiment on
 2026-11-11 and 11-12 reached 1,833 processes and a load of 638, and the machine was
