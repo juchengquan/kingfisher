@@ -400,7 +400,10 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Every turn the session kept a log of, oldest first, including those a\n"
             "rewind left behind. A * marks the path to where the session is now; a\n"
-            "turn's task is what sending it again would regenerate it from."
+            "turn's task is what sending it again would regenerate it from. Each\n"
+            "shows when it started, in this machine's time, and how long it ran:\n"
+            "- for a turn logged before the log kept times, 'no end' for one whose\n"
+            "ending was never logged."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1113,7 +1116,8 @@ def _turns(args: argparse.Namespace) -> int:
         kind = "resumed" if turn.resumed else ""
         said = turn.task.strip().splitlines()[0][:60] if turn.task and turn.task.strip() else ""
         mark = "*" if turn.current else " "
-        print(f"{mark} {turn.id}  after {turn.parent or '-'}  {kind:<8} {said}")
+        when = _timing(turn.started, turn.ended)
+        print(f"{mark} {turn.id}  after {turn.parent or '-'}  {when}  {kind:<8} {said}")
         if turn.files is None:
             print("    files not recorded")
             continue
@@ -1126,6 +1130,23 @@ def _turns(args: argparse.Namespace) -> int:
         for folder in turn.files.unrecorded:
             print(f"    {folder} not recorded")
     return 0
+
+
+def _timing(started: float | None, ended: float | None) -> str:
+    """When a turn started, in this machine's time, and how long it ran."""
+    if started is None:
+        return "-"
+    began = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(started))
+    if ended is None:
+        return f"{began}  no end"
+    took = max(ended - started, 0.0)
+    hours, rest = divmod(round(took), 3600)
+    minutes, seconds = divmod(rest, 60)
+    if hours:
+        return f"{began}  {hours}h{minutes:02d}m"
+    if minutes:
+        return f"{began}  {minutes}m{seconds:02d}s"
+    return f"{began}  {took:.1f}s"
 
 
 def _rewind(args: argparse.Namespace) -> int:

@@ -88,7 +88,8 @@ that should leave nothing behind can say so at the time: `kingfisher run
 --delete-session`, or `Kingfisher.run(..., delete_session=True)` from Python.
 
 `kingfisher turns --session ID` lists the turns a session kept, oldest first, with a `*`
-on the path to where it is now -- `kf.session(session_id).turns()` from Python.
+on the path to where it is now, and when each started and how long it ran --
+`kf.session(session_id).turns()` from Python.
 `kingfisher rewind --session ID --to TURN` puts the session back where that turn ended:
 its conversation and the files in `/outputs` and `/memory`. `--to-start` goes back to
 before the first turn, and `--only files` or `--only conversation` takes back one and

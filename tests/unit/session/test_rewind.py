@@ -10,8 +10,10 @@ here would hold only what the test expected.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import threading
+import time
 from dataclasses import replace
 from typing import Any
 
@@ -29,7 +31,7 @@ from kingfisher import (
     TurnFiles,
     TurnIdError,
 )
-from kingfisher.cli.__main__ import main
+from kingfisher.cli.__main__ import _timing, main
 from kingfisher.core.layout import (
     FILE_HISTORY,
     HARNESS,
@@ -339,6 +341,24 @@ def test_the_command_lists_turns_and_rewinds(rewinding, at_the_command_line, cap
     marked = [line for line in printed.splitlines() if line.startswith("*")]
     assert len(marked) == 1
     assert first.turn_id in marked[0]
+    assert re.search(r"after -  \d{4}-\d\d-\d\d \d\d:\d\d:\d\d  \d+\.\ds ", marked[0])
+
+
+def test_a_turn_without_its_times_says_which_half_is_missing(monkeypatch):
+    """Printed alike, a turn logged before the log kept times and one whose ending the log
+    lost would hide that the log is damaged there; and a start in UTC rather than this
+    machine's time reads hours off."""
+    monkeypatch.setenv("TZ", "Asia/Kolkata")
+    time.tzset()
+    try:
+        assert _timing(None, None) == "-"
+        assert _timing(0.0, None) == "1970-01-01 05:30:00  no end"
+        assert _timing(0.0, 4.3) == "1970-01-01 05:30:00  4.3s"
+        assert _timing(0.0, 125.0) == "1970-01-01 05:30:00  2m05s"
+        assert _timing(0.0, 7300.0) == "1970-01-01 05:30:00  2h01m"
+    finally:
+        monkeypatch.undo()
+        time.tzset()
 
 
 def test_the_command_takes_back_one_part(rewinding, at_the_command_line, capsys):

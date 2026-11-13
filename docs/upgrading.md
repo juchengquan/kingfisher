@@ -18,6 +18,14 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `kingfisher turns` shows when each turn started and how long it ran, after #1302
+
+- **Each turn's line gains two columns after `after PARENT`**: its start in this
+  machine's time, `YYYY-MM-DD HH:MM:SS`, and how long it ran (`4.3s`, `2m05s`, `2h01m`).
+  A turn logged before the log kept times shows `-`, and one whose ending never reached
+  the log shows `no end`. A script reading the old columns by position needs updating;
+  `Session.turns()` already gave both times as `started` and `ended`.
+
 ## A request is refused for what it asks before its session is claimed, after #1295
 
 - **An input file that is not there, or a subagent the request names that it is not
