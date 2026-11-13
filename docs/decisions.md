@@ -4562,19 +4562,39 @@ here: past a damaged line a tool result can answer a call that was on it, and a 
 refuses an answer to no call -- inferred, since no provider was called. So the turn log's
 reading stops there, and the next write keeps only what was read. Since each `.harness`
 file is kept twice under a seal, a damaged line comes only from a log neither copy's seal
-matches: one written before seals were, by something other than kingfisher, or on a local
-disk by a power cut soon after a save. Nothing flushes either copy to the drive, and
-kingfisher's own backend writes each in place, so two copies written moments apart can be
-lost together. A cut read that way is silent, though, and a file emptied reads as a first
+matches: one written before seals were, by something other than kingfisher, or by a
+power cut soon after a save to storage that flushes nothing. Where the session's backend
+names a host path, as kingfisher's own does, each copy is flushed to the drive before the
+other is written, so a power cut damages only the copy being written; see *Every save to
+this host's disk is flushed*. Anywhere else a record is as durable as its backend keeps
+it. A cut read that way is silent, though, and a file emptied reads as a first
 turn's, so the ledger, written before the log, says on each closing line how many
 messages the turn ended on. A turn rebuilding fewer, or stopping at a damaged line, emits
-`history_lost` and sets `RunResult.history_lost`. The ledger is flushed no more than the
-log, so a power cut that empties both, or leaves both at an earlier save, goes
-unreported. Flushing each copy would close that, and is not built: what it costs a turn
-has not been measured. The agent is not told: what it lost is gone, and whether to go on
+`history_lost` and sets `RunResult.history_lost`. On a backend that flushes nothing, a
+power cut that empties both the ledger and the log, or leaves both at an earlier save,
+goes unreported. The agent is not told: what it lost is gone, and whether to go on
 is the caller's. The ledger's own reader decodes leniently now, since its rows keep any
 language and a cut inside a character raised on every later turn: 34 of 312 cut positions
 on a ledger with one Chinese row. *(2026-11-02.)*
+
+**Every save to this host's disk is flushed before the next begins.** Each `.harness`
+record is kept twice so that a save cut short leaves one whole, and upstream writes in
+place, so two copies written moments apart sat in memory together: one power cut could
+empty both, or leave both at an earlier save, with the ledger beside them and nothing
+said. `HarnessFiles` now flushes each copy before writing the other, where the backend
+names a host path, with the folder entries of a file it made. Each copy of a user's file
+made on this host is flushed before the record naming it, which could otherwise outlive
+the copy, and a rewind would put back an empty file as restored. On macOS `fsync` stops
+at the drive's cache, so a record takes `F_FULLFSYNC`, and a copy a plain flush, the
+record written after it taking the cache along; elsewhere `fsync` is the full one. A
+filesystem refusing `F_FULLFSYNC` gets the plain one rather than a failed turn. In the
+core rather than kingfisher's own backend, so a deployment's backend keeping sessions on
+this host gets it too; one keeping them elsewhere is as durable as it keeps them, since
+`BackendProtocol` has no flush to ask for. Measured on macOS, median of 15: the full flush
+4 ms at 2 KB, 6 ms at 1 MB and 18 ms at 50 MB, the plain one next to nothing; a turn makes
+eight, 37 ms in all. Linux is not measured. The suite's sessions take the plain flush,
+which saves 63 of its 326 seconds, and the flush's own tests drive the real one.
+*(2026-11-12.)*
 
 **Every turn's messages are kept as first written, each tagged with its turn, in
 `.harness/turns.jsonl`.** It is the only record of what was said: each turn is built on
@@ -4734,7 +4754,8 @@ clock a run event's `ts` reads, so a turn lines up with the events a client read
 converting either. A number rather than a date string, which has to carry its time zone,
 and a duration is a subtraction. `started` is the instant the turn's tools are handed as
 `Caller.started`. An assistant line carries `reasoning`, what its provider handed back as
-reasoning -- Anthropic's thinking blocks, which MiniMax's replies carry too, and a
+reasoning -- Anthropic's thinking blocks, which MiniMax sends only where a request
+enables thinking, the model entry's `extra`, and a
 Responses reply's summary -- read through langchain's `content_blocks`, so each chat
 class's shape is langchain's to translate. Redacted thinking and an encrypted item carry
 no text and are left out, and a block langchain cannot read leaves the line without it
@@ -5227,8 +5248,9 @@ close that much -- setup plus the tail, under a second -- before the last moment
 can still be releasing, since the claim is timed from when it was taken and the deadline
 from the end of setup. Left rather than padded: any term for it would be a guessed
 constant where the rest are derived, and what would make it matter is a longer tail
-rather than a longer turn. A design that flushed session state to disk at turn end would
-put a copy in that window and would have to measure again. *(2026-10-20.)*
+rather than a longer turn. Flushing each save to the drive added to it, and was measured
+again on 2026-11-12 on macOS: eight full flushes a turn, a turn's median from 29 ms to
+66 ms and 111 ms at most, still under a second. *(2026-10-20, 2026-11-12.)*
 
 **A sweep that removes nothing says which reason spared each session.** `expired` folds a
 busy session into `kept`, so `reap` blamed the age for a session `kingfisher sessions`

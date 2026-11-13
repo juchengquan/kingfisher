@@ -26,7 +26,8 @@ from kingfisher.core.layout import (
 )
 from kingfisher.core.result import LedgerEntry, Listed, PendingDecision
 
-from .steps import Steps, changing, reading
+from .durable import flushed, on_this_host, unmade
+from .steps import Steps, changing, on_host, reading
 
 #: Beside each file kingfisher keeps about a session, its second copy: `ledger.jsonl.2`.
 SECOND_COPY = ".2"
@@ -118,13 +119,20 @@ class HarnessFiles:
         return answer.content
 
     def _store_one(self, name: str, content: bytes) -> Steps[None]:
-        files = [(f"{HARNESS_ROUTE}{name}", content)]
-        answers = yield changing(self._backend, "upload_files", files)
+        route = f"{HARNESS_ROUTE}{name}"
+        here = yield on_host(on_this_host, self._backend, route)
+        made, new = ([], False) if here is None else (yield on_host(unmade, here))
+        answers = yield changing(self._backend, "upload_files", [(route, content)])
         refused = [a for a in answers if a.error]
         if refused:
             kept = ", ".join(f"{a.path}: {a.error}" for a in refused)
             msg = f"the session's backend would not keep {kept}"
             raise OSError(msg)
+        if here is not None:
+            # On the drive before the next save begins: a backend writing in place leaves
+            # both copies of a record in memory a moment, for one power cut to take together.
+            # Kept elsewhere, a record is as durable as the backend keeps it.
+            yield on_host(flushed, here, made, new=new)
 
     def folders(self, name: str) -> Steps[tuple[str, ...]]:
         """The names of the folders directly under `name`; none where it is not there."""

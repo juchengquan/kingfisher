@@ -20,6 +20,7 @@ from kingfisher.core.config import Config, Endpoint, Landing, ModelProfile, Mode
 from kingfisher.core.interfaces import NoScratchRunLimit, RunEvents
 from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.logged import ORIGINS
+from kingfisher.core.session import durable
 from kingfisher.core.workspace import ensure_definitions, ensure_layout
 from kingfisher.plugins.sessions.folders import ensure_session_layout
 from tests.unit.scripted import Scripted
@@ -566,6 +567,16 @@ def environment_restored() -> Iterator[None]:
         for key, value in before.items():
             if os.environ.get(key) != value:
                 os.environ[key] = value
+
+
+@pytest.fixture(autouse=True)
+def plain_flushes(monkeypatch):
+    """Every save the suite makes stops at the drive's cache, which only a power cut empties.
+
+    On macOS the full flush took 63 of 326 seconds, 13,228 of them; each test of the flush
+    itself drives the real one by name.
+    """
+    monkeypatch.setattr(durable, "flush", os.fsync)
 
 
 @pytest.fixture(autouse=True)
