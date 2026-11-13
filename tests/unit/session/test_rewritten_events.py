@@ -15,7 +15,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher import Kingfisher, Request
-from kingfisher.core.layout import HARNESS, TURNS_FILE
+from kingfisher.core.layout import HARNESS, RECENT_TURNS_FILE
 from kingfisher.core.session import stream_chunks
 from kingfisher.plugins import LocalSessions
 from tests.conftest import EVERY_TOOL, an_agent, start, tools_dir
@@ -118,7 +118,7 @@ def test_a_turn_with_a_clearing_pass_reports_each_call_and_result_once(scripted)
         )
     )
 
-    logged = (cfg.workspace / "sessions" / "s" / HARNESS / TURNS_FILE).read_text()
+    logged = (cfg.workspace / "sessions" / "s" / HARNESS / RECENT_TURNS_FILE).read_text()
     assert "bytes, cleared;" in logged, "no pass ran, so nothing here was rewritten"
     assert sum(e.kind == "model_call" for e in events) == len(replies) + 1
     assert sum(e.kind == "tool_result" for e in events) == len(replies)

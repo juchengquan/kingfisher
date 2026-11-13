@@ -201,7 +201,7 @@ class SessionMethods:
 
     def _turns_in(self, session_id: str, opened: list[Any]) -> Steps[tuple[TurnRecord, ...]]:
         harness = HarnessFiles((yield from self._existing_files(session_id, opened)))
-        return (yield from turn_records(harness, (yield from read_log(harness))))
+        return (yield from turn_records(harness, (yield from read_log(harness, whole=True))))
 
     def _rewind_in(
         self, session_id: str, to: str | Start, only: RewindPart | None, opened: list[Any]

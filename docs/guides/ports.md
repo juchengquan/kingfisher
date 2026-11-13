@@ -1077,7 +1077,8 @@ right: **`shell_denied`**, in `tests/checks/backend.py`, drives `execute` at `/.
 cannot look inside them.
 
 **Each of those files is kept twice, so yours may write a file in place.** The ledger,
-the turn log and the history of files are read, added to and written back whole every turn
+the turn log's recent half and the history of files are read, added to and written back
+whole every turn
 with `upload_files`, and an upload cut partway, the process killed or the disk full, keeps
 a file's front and loses the rest: older turns' lines with the newest. So each sits beside
 a second copy, `ledger.jsonl.2` beside `ledger.jsonl`, which kingfisher writes whole before

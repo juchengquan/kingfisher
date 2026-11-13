@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The turn log is split into recent and settled turns, after #1303
+
+- **`.harness/recent_turns.jsonl` is new**, kept twice and sealed as every `.harness`
+  file is, and holds every turn's opening line and the lines of the turns since the last
+  split; `turns.jsonl` keeps the lines of the turns settled. An ordinary turn reads and
+  writes only the recent file. A session's existing `turns.jsonl` is read as it is, with
+  no step to convert it first: its next turn splits it, as a summary would.
+- **A backend storing `.harness` sees one more file**, through the same `upload_files`
+  and `download_files`. A script reading `turns.jsonl` for a session's turns reads both
+  now: a turn marked `settled` in the recent file has its other lines in `turns.jsonl`.
+  `scripts/session_survey.py` does.
+
 ## `kingfisher turns` shows when each turn started and how long it ran, after #1302
 
 - **Each turn's line gains two columns after `after PARENT`**: its start in this

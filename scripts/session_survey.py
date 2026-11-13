@@ -84,10 +84,18 @@ FOLDERS = {
 HISTORY = "conversation_history"
 HARNESS = ".harness"
 TURNS = "turns.jsonl"
+#: The recent half of the turn log, which names every turn: `TURNS` then holds the lines of
+#: the turns settled, each standing in it by its opening line alone, marked `settled`.
+RECENT_TURNS = "recent_turns.jsonl"
 OFF_PATH = "off_path.jsonl"
 #: `.harness` files with a part of their own: `agent.yaml` is the pin a session kept before
 #: every call named its agent, read for the name it held.
-HARNESS_PARTS = {TURNS: "turn log", "ledger.jsonl": "ledger", "agent.yaml": "pinned agent"}
+HARNESS_PARTS = {
+    TURNS: "turn log",
+    RECENT_TURNS: "turn log",
+    "ledger.jsonl": "ledger",
+    "agent.yaml": "pinned agent",
+}
 #: Beside each file kingfisher keeps about a session, its second copy: `ledger.jsonl.2`.
 #: Each copy ends in a seal, `{"sha256": ...}` of everything before the newline ahead of it.
 SECOND_COPY = ".2"
@@ -295,10 +303,27 @@ def _read_ledger(harness: Path, s: Session) -> list[tuple[str, str]]:
 
 
 def _log_lines(harness: Path) -> list[dict[str, Any]]:
-    """The turn log's lines, read as kingfisher reads them: as far as the first that is not
+    """The turn log's lines, both its files', each settled turn's in place of its opening."""
+    if not (harness / RECENT_TURNS).exists():
+        return _file_lines(harness / TURNS)
+    settled: dict[str, list[dict[str, Any]]] = {}
+    for line in _file_lines(harness / TURNS):
+        if "parent" in line and isinstance(line.get("turn"), str):
+            settled[line["turn"]] = [line]
+        elif line.get("turn") in settled:
+            settled[line["turn"]].append(line)
+    lines: list[dict[str, Any]] = []
+    for line in _file_lines(harness / RECENT_TURNS):
+        held = settled.get(str(line.get("turn"))) if line.get("settled") else None
+        lines += held or [line]
+    return lines
+
+
+def _file_lines(path: Path) -> list[dict[str, Any]]:
+    """One file's lines, read as kingfisher reads them: as far as the first that is not
     one."""
     lines: list[dict[str, Any]] = []
-    for raw in _record(harness / TURNS).splitlines():
+    for raw in _record(path).splitlines():
         if not raw.strip():
             continue
         try:

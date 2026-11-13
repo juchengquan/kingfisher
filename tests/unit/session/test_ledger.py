@@ -41,9 +41,9 @@ from kingfisher.core.layout import (
     HARNESS,
     LEDGER_FILE,
     PAUSED_STATE,
+    RECENT_TURNS_FILE,
     SCRATCH,
     TOOL_RESULTS,
-    TURNS_FILE,
     Layout,
 )
 from kingfisher.core.request import Decision, Resume
@@ -474,7 +474,7 @@ def test_a_conversation_emptied_on_disk_is_reported_by_the_turn_that_reads_it(le
     """
     _run(ledgered, AIMessage(content="first"))
     whole, said = _stream(ledgered, AIMessage(content="second"))
-    write_old_record(_session(ledgered) / HARNESS / TURNS_FILE, b"")
+    write_old_record(_session(ledgered) / HARNESS / RECENT_TURNS_FILE, b"")
 
     short, warned = _stream(ledgered, AIMessage(content="third"))
 
@@ -496,7 +496,7 @@ def test_a_damaged_conversation_is_reported_where_no_ledger_counts_it(cfg):
     kf = Kingfisher(cfg, graph=graph, sessions=LocalSessions())
     kf.run(Request("first", session_id="s"))
     kf.run(Request("second", session_id="s"))
-    log = _session(cfg) / HARNESS / TURNS_FILE
+    log = _session(cfg) / HARNESS / RECENT_TURNS_FILE
     lines = read_record(log).splitlines(keepends=True)
     # The first turn's opening and its message, then its reply cut.
     write_old_record(log, "".join([*lines[:2], '{"role": "assist\n', *lines[3:]]))
@@ -650,7 +650,7 @@ def test_results_are_written_before_the_ledger_and_the_ledger_before_the_turn_lo
     )
 
     assert backends.at("A-0001-loud.txt") < backends.at(LEDGER_FILE)
-    assert backends.at(LEDGER_FILE) < backends.at(TURNS_FILE)
+    assert backends.at(LEDGER_FILE) < backends.at(RECENT_TURNS_FILE)
 
 
 def test_a_result_file_is_swept_only_once_the_turn_log_is_written(ledgered):
@@ -669,7 +669,7 @@ def test_a_result_file_is_swept_only_once_the_turn_log_is_written(ledgered):
     )
 
     assert not stray.exists(), "the stray file was never swept"
-    assert backends.at(TURNS_FILE) < backends.at("A-0007-web_search.txt")
+    assert backends.at(RECENT_TURNS_FILE) < backends.at("A-0007-web_search.txt")
 
 
 def test_a_paused_turn_keeps_its_rows_before_its_state(ledgered):

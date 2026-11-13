@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.layout import HARNESS, TURNS_FILE
+from kingfisher.core.layout import HARNESS, RECENT_TURNS_FILE
 from kingfisher.core.request import Request
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins import LocalSessions
@@ -61,7 +61,7 @@ def test_a_file_tool_cannot_write_into_the_harness(cfg, session_dir):
 
     said = _drive(
         cfg, session_dir, "write_file",
-        {"file_path": f"/{HARNESS}/{TURNS_FILE}", "content": "rewritten"},
+        {"file_path": f"/{HARNESS}/{RECENT_TURNS_FILE}", "content": "rewritten"},
     )
 
     assert "permission denied" in said.lower()
@@ -76,7 +76,7 @@ def test_a_file_tool_cannot_read_the_harness_either(cfg, session_dir):
     kept.parent.mkdir(parents=True, exist_ok=True)
     kept.write_text(CONVERSATION, encoding="utf-8")
 
-    said = _drive(cfg, session_dir, "read_file", {"file_path": f"/{HARNESS}/{TURNS_FILE}"})
+    said = _drive(cfg, session_dir, "read_file", {"file_path": f"/{HARNESS}/{RECENT_TURNS_FILE}"})
 
     assert "You help" not in said
 

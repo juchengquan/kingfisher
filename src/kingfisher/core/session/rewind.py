@@ -57,7 +57,7 @@ def turn_records(harness: HarnessFiles, log: TurnLog) -> Steps[tuple[TurnRecord,
     files = turn_files((yield from read_file_history(harness)))
     current = set(log.path)
     records = []
-    for turn, (opening, body) in by_turn([line for _, line in log.lines]).items():
+    for turn, (opening, body) in by_turn(log.view).items():
         started, ended = times_of(opening, body)
         answer, stopped = outcome_of(body)
         records.append(
@@ -88,7 +88,7 @@ def rewound(
         raise ValueError(msg)
     harness = HarnessFiles(files)
     log = yield from read_log(harness)
-    turns = by_turn([line for _, line in log.lines])
+    turns = by_turn(log.view)
     ledger = yield from read_ledger(harness, log.off_path)
     path: list[str]
     if to is START:

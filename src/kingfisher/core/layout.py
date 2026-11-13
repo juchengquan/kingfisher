@@ -75,7 +75,12 @@ LEDGER_FILE = "ledger.jsonl"
 #: the turn it followed: the only record of what was said, which every turn's
 #: conversation is rebuilt from. Here, because the agent can write
 #: `conversation_history/`, and a conversation rebuilt from that is one it wrote itself.
+#: Once the log is split, the settled turns' lines alone.
 TURNS_FILE = "turns.jsonl"
+#: The turns since the log was last split, whole, and every other turn by its opening line
+#: alone, so that an ordinary turn reads and writes this file and not `TURNS_FILE`, which
+#: then holds the settled turns' lines.
+RECENT_TURNS_FILE = "recent_turns.jsonl"
 #: The turns a rewind left behind, as a list of ids. Their lines stay in the ledger and the
 #: turn log so a rewind can return to them; written by a rewind alone, so a session that
 #: never rewound has none.

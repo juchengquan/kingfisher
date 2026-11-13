@@ -276,14 +276,22 @@ def read_record(path: Path) -> str:
 def read_conversation(harness: Path) -> tuple[Any, ...]:
     """The conversation the next turn of the session whose `.harness` is `harness` is built
     on, rebuilt from its turn log as kingfisher rebuilds it; none where it has no log."""
-    from kingfisher.core.layout import OFF_PATH_FILE, TURNS_FILE
+    return read_turns(harness).conversation
+
+
+def read_turns(harness: Path) -> Any:
+    """The turn log of the session whose `.harness` is `harness`, both its files read, as
+    kingfisher reads it for a listing: `view` holds every turn's lines."""
+    from kingfisher.core.layout import OFF_PATH_FILE, RECENT_TURNS_FILE, TURNS_FILE
     from kingfisher.core.session.turnlog import parse_log
 
-    if not (harness / TURNS_FILE).exists():
-        return ()
+    def held(name: str) -> bytes | None:
+        return read_record_bytes(harness / name) if (harness / name).exists() else None
+
     off = harness / OFF_PATH_FILE
     off_path = frozenset(json.loads(read_record(off))) if off.exists() else frozenset()
-    return parse_log(read_record_bytes(harness / TURNS_FILE), off_path).conversation
+    recent, settled = held(RECENT_TURNS_FILE), held(TURNS_FILE)
+    return parse_log(recent, off_path, settled if recent is None else settled or b"")
 
 
 def write_old_record(path: Path, content: str | bytes) -> None:

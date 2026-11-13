@@ -64,3 +64,16 @@ def _resume(kf: Kingfisher, *answers: Decision, script: tuple[AIMessage, ...] = 
 
 def _searches(prefix: str, count: int) -> list[AIMessage]:
     return [_calls(("web_search", f"{prefix}{n}", f"{prefix}{n}")) for n in range(count)]
+
+
+@pytest.fixture
+def clearing(scripted):
+    """An agent with a tool returning 16,000 characters, clearing past 12,000 tokens."""
+    from tests.unit.agent.middlewares.test_clearing import TOOLS as BULKY
+    from tests.unit.conftest import _marked
+
+    tools_dir(scripted).mkdir(parents=True, exist_ok=True)
+    (tools_dir(scripted) / "probe.py").write_text(BULKY, encoding="utf-8")
+    an_agent(scripted, **EVERY_TOOL)
+    start(scripted, "s")
+    return _marked(scripted, clear_results_at=12_000)

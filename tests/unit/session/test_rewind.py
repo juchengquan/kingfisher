@@ -39,7 +39,7 @@ from kingfisher.core.layout import (
     LEDGER_FILE,
     MEMORY_WRITER,
     PAUSED_MARK,
-    TURNS_FILE,
+    RECENT_TURNS_FILE,
 )
 from kingfisher.core.request import Decision, DecisionError
 from kingfisher.core.result import AWAITING
@@ -871,7 +871,7 @@ def test_a_turn_the_ledger_closed_and_the_log_never_opened_is_refused(rewinding)
     kf = Kingfisher(rewinding, sessions=LocalSessions())
     _say(kf, "TASK-FIRST", AIMessage("ANSWER-FIRST"))
     died = _say(kf, "TASK-SECOND", AIMessage("ANSWER-SECOND"))
-    log = rewinding.workspace / "sessions" / "s" / HARNESS / TURNS_FILE
+    log = rewinding.workspace / "sessions" / "s" / HARNESS / RECENT_TURNS_FILE
     lines = read_record(log).splitlines(keepends=True)
     write_old_record(log, "".join(one for one in lines if json.loads(one)["turn"] != died.turn_id))
     kept = _harness_files(rewinding)

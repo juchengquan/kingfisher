@@ -78,7 +78,7 @@ def test_a_skills_file_reaches_a_tool_where_the_backend_keeps_it(scripted):
 
 
 def test_a_tool_is_not_handed_the_turn_log(scripted):
-    """A tool handed `/.harness/turns.jsonl` as a real file reads, and could rewrite, the
+    """A tool handed `/.harness/recent_turns.jsonl` as a real file reads, and could rewrite, the
     conversation kingfisher keeps, where the file tools are refused it.
     """
     if harness_unfenced(ShellSettings(), shell_confinement(scripted, ShellSettings())) is not None:
@@ -88,15 +88,15 @@ def test_a_tool_is_not_handed_the_turn_log(scripted):
     kf = Kingfisher(scripted, sessions=LocalSessions())
     Scripted.script.append(AIMessage("hello"))
     list(kf.stream(Request("first", agent="only", session_id="s")))
-    Scripted.script.extend([_calls(path="/.harness/turns.jsonl"), AIMessage("done")])
+    Scripted.script.extend([_calls(path="/.harness/recent_turns.jsonl"), AIMessage("done")])
 
     said = _said(list(kf.stream(Request("go", agent="only", session_id="s"))))
 
-    kept = (scripted.workspace / "sessions" / "s" / ".harness" / "turns.jsonl").read_text(
+    kept = (scripted.workspace / "sessions" / "s" / ".harness" / "recent_turns.jsonl").read_text(
         encoding="utf-8"
     )
     assert kept.strip(), "the first turn wrote no turn log, so the refusal checks nothing"
-    assert "permission denied for read on /.harness/turns.jsonl" in said
+    assert "permission denied for read on /.harness/recent_turns.jsonl" in said
     assert kept.splitlines()[0].strip() not in said
 
 

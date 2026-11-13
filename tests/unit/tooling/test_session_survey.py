@@ -7,10 +7,12 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.layout import HARNESS, LEDGER_FILE, MEMORY_WRITER
+from kingfisher.core.session import turnlog
 from kingfisher.core.session.messages import as_record
 from kingfisher.core.session.steps import drive
 from kingfisher.core.session.store import SECOND_COPY, HarnessFiles
@@ -84,10 +86,14 @@ def test_the_survey_reads_what_a_turn_leaves_behind(scripted):
     assert found.disk["ledger"] == sum(copy.stat().st_size for copy in copies)
 
 
-def test_the_survey_rebuilds_the_conversation_as_kingfisher_does(scripted):
+@pytest.mark.parametrize("split", [False, True], ids=["one file", "split every turn"])
+def test_the_survey_rebuilds_the_conversation_as_kingfisher_does(scripted, split, monkeypatch):
     """The survey estimates a session's size from the conversation it rebuilds out of the
-    turn log; ignoring a cleared result's line, it counted the whole result again, and
-    ignoring a rewind, the turns the caller took back."""
+    turn log; ignoring a cleared result's line, it counted the whole result again, ignoring
+    a rewind, the turns the caller took back, and reading one file of a split log, the
+    settled turns."""
+    if split:
+        monkeypatch.setattr(turnlog, "SPLIT_BYTES", 0)
     tools_dir(scripted).mkdir(parents=True, exist_ok=True)
     (tools_dir(scripted) / "probe.py").write_text(BULKY, encoding="utf-8")
     an_agent(scripted, **EVERY_TOOL)

@@ -4649,14 +4649,39 @@ clearing wrote. Matched by the id it ends in and its call: a file tool's answer 
 ends in an id is the agent's own file. The log counts against
 `KINGFISHER_SESSION_MAX_BYTES` as anything in the session does.
 
-**The cost, taken:** read and written whole every turn, as the ledger is, since
-`HarnessFiles` has no append; and the log keeps every word said, so it outgrows the
-ledger, and a remote backend moves it three times a turn, read once as the turn begins and
-written as its two copies as it ends. An append on the backend is the answer once a
-session measures slow. **Named for its turns**,
-not as a message log, which the
+**The cost, taken:** read and written whole, as the ledger is, since `HarnessFiles` has
+no append; *The turn log is split in two* below keeps what an ordinary turn moves to the
+turns since the last summary. **Named for its turns**, not as a message log, which the
 glossary turns down as a name for `conversation_history/`; a rewind lists turns.
 *(2026-11-04.)*
+
+**The turn log is split in two: the turns since the last split, and the settled ones.**
+Read and written whole every turn, one file costs a remote backend everything ever said,
+three times a turn. `.harness/recent_turns.jsonl` holds every turn's opening line, in the
+order they ran, so it alone says where the session is and which ids are taken, and the
+other lines of the turns not yet settled; `turns.jsonl` holds the rest. A turn that wrote
+a summary splits the log, as does one finding the recent file past 5 MB, a session that
+never summarises, and one that had to read both files: each turn whole in the recent file
+that none of its lines can still change moves to the settled file, leaving its opening
+line marked `settled`, and the turn splitting puts `base`, the conversation it ended on,
+on its own. The rebuild starts from the last `base` on the path, so an ordinary turn reads
+and writes the recent file alone; a rewind to a settled turn has the next turn read both,
+and split, which puts a `base` on it.
+
+**A turn settles only once its lines are final.** Expiry swaps a result's line for its
+handle once it is out of view, which may be several turns after a split; swapped in a file
+no ordinary turn writes, it would wait for the next split, keeping the result on disk and
+handing it to a turn rewound to that one. So a turn holding a result whole that the ledger
+says may still expire stays whole in the recent file, and the turn writing, whose own rows
+are not in the ledger it is handed, always does. The swap reaches `base` too. With
+`KINGFISHER_KEEP_RESULTS_ROUNDS` unset no result expires, and every turn but the one writing
+settles; turned on later, results already settled stay whole there. **Rejected: one file
+per turn**, which a remote backend fetches one request each; **an SQLite file**, which
+`HarnessFiles` can only move whole; **a conversion of the one file**: a session's
+`turns.jsonl` is read as the settled file is, with no recent file, and its next turn
+splits. **Order:** the settled file is written first, holding every line the recent file
+is about to drop, so a split dying between the two leaves a turn in both, whose recent
+copy the reading prefers, and loses none: `test_turn_log_split.py`. *(2026-11-13.)*
 
 **The turn log says who wrote each piece of a turn's message, and ends each turn on what
 the caller was answered.** A client showing a conversation from the log would otherwise
