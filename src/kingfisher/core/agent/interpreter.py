@@ -51,7 +51,7 @@ def interpreter(
     gone by the next. The image is a constant size, so no cap keeps part of it.
     """
     # Deferred, so a run that never enables the sandbox does not import it.
-    from langchain_quickjs import CodeInterpreterMiddleware  # noqa: PLC0415
+    from .middlewares.code_interpreter import InterpreterMiddleware  # noqa: PLC0415
 
     # Beside the cap below, which is what causes the warning.
     quieten_expected_snapshot_drop()
@@ -73,7 +73,7 @@ def interpreter(
             ),
         ]
     )
-    return CodeInterpreterMiddleware(
+    return InterpreterMiddleware(
         tool_name=INTERPRETER_TOOL,
         # Never `task`, which the library refuses here: it is the `task()` global,
         # governed by `subagents=`.

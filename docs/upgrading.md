@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Only an agent granted `eval` is told of it, after #1304
+
+- **With `KINGFISHER_INTERPRETER_ENABLED` on, an agent whose grant leaves out `eval` is
+  no longer sent the interpreter's block.** It was sent on every call whatever the grant:
+  16k characters on the shipped `analyst`, describing a tool every call to which is
+  refused. An agent granted `eval`, or granted every built-in, is sent it as before.
+- **The middleware is kingfisher's `InterpreterMiddleware` now**, a subclass of
+  langchain-quickjs's `CodeInterpreterMiddleware`. Code finding it with `isinstance`
+  finds it still; code matching its `name` reads `InterpreterMiddleware`.
+
 ## The turn log is split into recent and settled turns, after #1303
 
 - **`.harness/recent_turns.jsonl` is new**, kept twice and sealed as every `.harness`
