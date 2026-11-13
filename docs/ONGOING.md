@@ -149,10 +149,8 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
   fires at 170,000 tokens, which needs that deployment's sessions. *(2026-10-27.)*
 - **`scripts/session_survey.py` on the client's deployment.** Three questions wait on its
   numbers: whether per-session memory earns its writer runs, what replaying old tool
-  output costs in speed and window as a session grows, and what sessions hold on disk,
-  which also says whether the turn log, read and written whole each turn, wants another
-  layout: an append cannot keep the one seal ending each copy, and a file per turn
-  changes it too. It answers the M2.5 one above as well. It reads a sessions folder, and
+  output costs in speed and window as a session grows, and what sessions hold on disk.
+  It answers the M2.5 one above as well. It reads a sessions folder, and
   the run log when given one, and prints counts only -- nothing anyone said, no session
   ids -- so its output can be sent back as it is. *(2026-11-09.)*
 - **`scripts/turn_deadline_survey.py` on the client's deployment.** Whether to stop a

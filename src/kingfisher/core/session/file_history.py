@@ -28,7 +28,7 @@ from .memory import without_any
 from .memory_writer import unread_dropped
 from .steps import Steps, reading
 from .store import HarnessFiles, read_listing, write_listing
-from .turnlog import PARENT, read_turn_log
+from .turnlog import turn_parents
 
 if TYPE_CHECKING:
     from kingfisher.core.config import Config
@@ -349,11 +349,7 @@ def _copies_recorded(  # noqa: PLR0913 -- the history, and the folders as found 
     )
     # The tree only where a rewind made one: until then the order the turns ran is it.
     parents = (
-        {
-            line["turn"]: line.get(PARENT)
-            for line in (yield from read_turn_log(harness))
-            if PARENT in line and isinstance(line.get("turn"), str)
-        }
+        (yield from turn_parents(harness))
         if cfg.rewind_max_bytes is not None and prepared.log.off_path
         else None
     )

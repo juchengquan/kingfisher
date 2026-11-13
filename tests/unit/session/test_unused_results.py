@@ -17,7 +17,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.interfaces import UnusedResults
-from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH, TOOL_RESULTS, TURNS_FILE
+from kingfisher.core.layout import DEFAULT_LAYOUT, RECENT_TURNS_FILE, SCRATCH, TOOL_RESULTS
 from kingfisher.plugins import (
     DeleteUnusedResults,
     LocalSessions,
@@ -188,7 +188,7 @@ class Reaching(UnusedResults):
     def settle(self, found: UnusedFiles) -> None:
         (one,) = found
         self.offered = (_public(found), _public(one))
-        elsewhere = f"/.harness/{TURNS_FILE}"
+        elsewhere = f"/.harness/{RECENT_TURNS_FILE}"
         for attempt in (
             lambda: replace(one, path=elsewhere).remove(),
             lambda: replace(one, path=elsewhere).read(),
@@ -214,7 +214,7 @@ def test_the_files_handed_over_reach_no_other_path(workspace):
 
     assert len(reaching.refused) == 3, reaching.refused
     assert all("is not one of the unused results" in said for said in reaching.refused)
-    assert (workspace.workspace / "sessions" / "s" / ".harness" / TURNS_FILE).exists()
+    assert (workspace.workspace / "sessions" / "s" / ".harness" / RECENT_TURNS_FILE).exists()
     assert reaching.offered == ({"session_id"}, {"path", "size", "read", "remove"})
 
 

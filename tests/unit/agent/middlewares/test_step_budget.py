@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.assembly import build_agent
 from kingfisher.core.agent.middlewares.step_budget import StepBudgetMiddleware
-from kingfisher.core.layout import HARNESS, TURNS_FILE
+from kingfisher.core.layout import HARNESS, RECENT_TURNS_FILE
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
 from tests.conftest import EVERY_TOOL, an_agent, start, subagents_dir
@@ -127,7 +127,7 @@ def test_the_note_is_never_kept(busy):
 
     _turn(cfg, calls=20)
 
-    kept = (cfg.workspace / "sessions" / "s" / HARNESS / TURNS_FILE).read_text()
+    kept = (cfg.workspace / "sessions" / "s" / HARNESS / RECENT_TURNS_FILE).read_text()
     assert "model calls left" not in kept and "model call left" not in kept
 
 

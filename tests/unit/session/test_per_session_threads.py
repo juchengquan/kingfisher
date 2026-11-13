@@ -16,7 +16,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from kingfisher import Kingfisher
 from kingfisher.core.config import Config
-from kingfisher.core.layout import HARNESS, TURNS_FILE
+from kingfisher.core.layout import HARNESS, RECENT_TURNS_FILE
 from kingfisher.core.request import Request
 from kingfisher.plugins import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import session_bytes
@@ -24,7 +24,7 @@ from tests.conftest import FakeToolCallingModel, Through, an_agent
 from tests.unit.scripted import Scripted
 from tests.unit.stand_ins import StubAgent
 
-LOG = f"{HARNESS}/{TURNS_FILE}"
+LOG = f"{HARNESS}/{RECENT_TURNS_FILE}"
 
 
 def _session_dir(cfg: Config, session_id: str):

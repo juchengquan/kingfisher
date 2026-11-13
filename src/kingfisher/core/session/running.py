@@ -346,6 +346,7 @@ class Running:
                 stop_reason=stop_reason,
                 started=prepared.started,
                 ended=time.time(),
+                results_expire=self.cfg.keep_results_rounds is not None,
             )
             # Only with the message saying so: kept by a turn the agent never heard from,
             # what changed before it would never be said.

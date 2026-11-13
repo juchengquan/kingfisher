@@ -16,7 +16,7 @@ from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.definitions.subagents.catalogue import LocalSubagentRepository
 from kingfisher.core.interfaces import CommandResult, CommandRunner
-from kingfisher.core.layout import DEFAULT_LAYOUT, TURNS_FILE
+from kingfisher.core.layout import DEFAULT_LAYOUT, RECENT_TURNS_FILE
 from kingfisher.core.reporting import opening_events
 from kingfisher.core.request import Request
 from kingfisher.core.session.files import InputsChanged
@@ -451,7 +451,7 @@ def test_a_supplied_graph_refuses_a_turn_id_its_turn_log_holds(cfg):
     # The control: under an id of its own a turn runs. Also what puts the reused id a
     # turn back, rather than on the log's last line.
     kf.run(Request("second", agent="only", session_id="s", turn_id="req-78"))
-    log = cfg.workspace / "sessions" / "s" / ".harness" / "turns.jsonl"
+    log = cfg.workspace / "sessions" / "s" / ".harness" / "recent_turns.jsonl"
     kept = log.read_bytes()
 
     with pytest.raises(TurnIdError, match="req-77"):
@@ -480,7 +480,7 @@ def test_a_refused_turn_id_hands_back_the_turn_that_holds_it(scripted):
     assert held is not None
     assert (held.id, held.answer, held.stop_reason) == ("req-77", "first", "end_turn")
     # A turn that died after the ledger and before the log: the ledger alone names it.
-    log = scripted.workspace / "sessions" / session / ".harness" / TURNS_FILE
+    log = scripted.workspace / "sessions" / session / ".harness" / RECENT_TURNS_FILE
     lines = read_record(log).splitlines(keepends=True)
     write_old_record(log, "".join(one for one in lines if json.loads(one)["turn"] != "req-78"))
     with pytest.raises(TurnIdError, match="req-78") as refused:

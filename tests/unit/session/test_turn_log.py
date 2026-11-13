@@ -23,7 +23,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from assets.middlewares.summarize_by_count import SummarizeByCount
 from kingfisher import Kingfisher, Request
 from kingfisher.core.agent.middlewares.result_rows import expired_handle
-from kingfisher.core.layout import HARNESS, LEDGER_FILE, TURNS_FILE
+from kingfisher.core.layout import HARNESS, LEDGER_FILE, RECENT_TURNS_FILE
 from kingfisher.core.request import Decision, DecisionError, Resume
 from kingfisher.core.result import AWAITING, END_TURN
 from kingfisher.core.session.messages import Message
@@ -48,27 +48,14 @@ from tests.conftest import (
     an_agent,
     read_conversation,
     read_record,
-    start,
-    tools_dir,
+    read_turns,
     write_old_record,
 )
-from tests.unit.agent.middlewares.test_clearing import TOOLS as BULKY
 from tests.unit.agent.middlewares.test_clearing import _one
-from tests.unit.conftest import _marked
 from tests.unit.scripted import Scripted
 from tests.unit.session.conftest import _calls, _resume, _say, _searches
 from tests.unit.session.test_subagent_gates import _parent_with
 from tests.unit.stand_ins import _Ordered
-
-
-@pytest.fixture
-def clearing(scripted):
-    """An agent with a tool returning 16,000 characters, clearing past 12,000 tokens."""
-    tools_dir(scripted).mkdir(parents=True, exist_ok=True)
-    (tools_dir(scripted) / "probe.py").write_text(BULKY, encoding="utf-8")
-    an_agent(scripted, **EVERY_TOOL)
-    start(scripted, "s")
-    return _marked(scripted, clear_results_at=12_000)
 
 
 def _harness(cfg, name: str):
@@ -76,7 +63,8 @@ def _harness(cfg, name: str):
 
 
 def _lines(cfg) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in read_record(_harness(cfg, TURNS_FILE)).splitlines()]
+    """Every line of the log, both its files', each settled turn's after its opening."""
+    return list(read_turns(cfg.workspace / "sessions" / "s" / HARNESS).view)
 
 
 def _conversation(cfg) -> tuple[Message, ...]:
@@ -246,7 +234,7 @@ def test_the_reading_stops_at_the_first_damaged_line_and_the_turn_after_says_so(
     seals were, or by something other than kingfisher."""
     kf = Kingfisher(logged, sessions=LocalSessions())
     _say(kf, "first", _calls(("web_search", "q", "c1")), AIMessage("one"))
-    log = _harness(logged, TURNS_FILE)
+    log = _harness(logged, RECENT_TURNS_FILE)
     opening, asked, called, *rest = read_record(log).splitlines(keepends=True)
     assert '"c1"' in called, "the control: the line damaged is not the call"
     write_old_record(log, "".join([opening, asked, damaged + "\n", *rest]))
@@ -301,10 +289,10 @@ def test_each_answer_names_the_call_it_answered_and_not_its_place_in_the_pause(l
         _calls(("web_search", "q", "c1"), ("sql_query", "a", "ga"), ("sql_query", "b", "gb")),
     )
     first, second = (one.call_id for one in paused.pending)
-    held = _harness(logged, TURNS_FILE).read_text()
+    held = _harness(logged, RECENT_TURNS_FILE).read_text()
     with pytest.raises(DecisionError):
         _resume(kf, Decision(call_id="nobody#0", action="approve"))
-    assert _harness(logged, TURNS_FILE).read_text() == held, "a refused resume was logged"
+    assert _harness(logged, RECENT_TURNS_FILE).read_text() == held, "a refused resume was logged"
 
     done = AIMessage("done")
     resumed = _resume(
@@ -468,7 +456,7 @@ def test_the_log_is_written_after_the_ledger(logged):
     backends = _Ordered()
     _say(Kingfisher(logged, sessions=backends), "go", AIMessage("done"))
 
-    assert backends.at(LEDGER_FILE) < backends.at(TURNS_FILE)
+    assert backends.at(LEDGER_FILE) < backends.at(RECENT_TURNS_FILE)
 
 
 def _users(cfg) -> list[dict[str, Any]]:

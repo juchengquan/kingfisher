@@ -27,7 +27,7 @@ from kingfisher.core.definitions.subagents.spec import SubagentError, declared
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository, ToolError, found_in
 from kingfisher.core.definitions.tools.spec import tool_name
 from kingfisher.core.inventory import inventory
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, TURNS_FILE
+from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, RECENT_TURNS_FILE
 from kingfisher.core.service import Kingfisher
 from kingfisher.core.session.model import START, QuotaExceededError
 from kingfisher.plugins import LocalSessions, backend_at
@@ -1060,7 +1060,7 @@ def test_a_used_session_the_listing_missed_outlives_a_refused_turn(turns, door):
 
     _refused_over_budget(turns, sessions, door, "s")
 
-    assert (turns.sessions_root / "s" / HARNESS / TURNS_FILE).is_file()
+    assert (turns.sessions_root / "s" / HARNESS / RECENT_TURNS_FILE).is_file()
 
 
 def test_a_session_rewound_to_the_start_outlives_a_refused_turn(turns):
@@ -1073,7 +1073,7 @@ def test_a_session_rewound_to_the_start_outlives_a_refused_turn(turns):
 
     _refused_over_budget(turns, sessions, "run", "s")
 
-    assert (turns.sessions_root / "s" / HARNESS / TURNS_FILE).is_file()
+    assert (turns.sessions_root / "s" / HARNESS / RECENT_TURNS_FILE).is_file()
 
 
 @pytest.mark.parametrize("door", ["run", "arun"])

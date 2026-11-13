@@ -249,7 +249,7 @@ class Preparation:
                 f"session {session.id} already has a turn {request.turn_id!r}; "
                 "give each turn an id of its own"
             )
-            listed = yield from turn_records(harness, log)
+            listed = yield from turn_records(harness, (yield from read_log(harness, whole=True)))
             raise TurnIdError(
                 msg, turn=next((one for one in listed if one.id == request.turn_id), None)
             )

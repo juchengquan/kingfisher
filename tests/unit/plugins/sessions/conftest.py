@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from kingfisher.core.layout import HARNESS, TURNS_FILE
+from kingfisher.core.layout import HARNESS, RECENT_TURNS_FILE
 
 #: A conversation as kept, for a tool or the shell to be refused rewriting or reading.
 CONVERSATION = '{"role": "user", "content": "You help"}\n'
@@ -10,7 +10,7 @@ CONVERSATION = '{"role": "user", "content": "You help"}\n'
 
 def kept_conversation(session_dir) -> Path:
     """Where the default backend keeps a session's conversation, on disk."""
-    return Path(session_dir) / HARNESS / TURNS_FILE
+    return Path(session_dir) / HARNESS / RECENT_TURNS_FILE
 
 
 def keep_conversation(session_dir) -> Path:
