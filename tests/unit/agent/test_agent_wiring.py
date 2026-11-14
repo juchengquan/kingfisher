@@ -325,6 +325,9 @@ def test_deepagents_own_middleware_is_discovered_across_the_package():
 
     assert set(REQUIRED_BY_DEEPAGENTS) <= found
     assert "SummarizationMiddleware" in found, "the factory-built one, missed by graph.py alone"
+    # A stand-in answering to a class no deepagents module holds: by class name alone, a
+    # deployment's own caching took the turn text's slot without a word.
+    assert "AnthropicPromptCachingMiddleware" in found
     assert "AgentMiddleware" not in found, "the base class is not one of deepagents' own"
 
 

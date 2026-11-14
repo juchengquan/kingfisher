@@ -265,7 +265,18 @@ for the next reader who reaches for one.*
   stack rather than running beside it. Kingfisher warns about this; the mechanism
   and the reasoning are in `_warn_if_it_replaces_deepagents` in
   `core/agent/kinds/declared_middleware.py`, and the names are
-  discovered at run time rather than listed. *(2026-08-31.)*
+  discovered at run time rather than listed. *(2026-08-31.)* A class may answer to
+  another class's name: deepagents' Anthropic caching is `_LazyAnthropicPromptCachingMiddleware`,
+  which defers importing `langchain_anthropic` and reports `AnthropicPromptCachingMiddleware`,
+  so the names are what each class's `name` reports as well as its own. Where both hold
+  rules, a `FilesystemMiddleware` merged over deepagents' own must hold the same ones or
+  `create_deep_agent` raises `ValueError`; one holding none is given the agent's.
+  *(2026-11-14, deepagents 0.7.32.)*
+- **Under rules, deepagents refuses a path it cannot resolve before the backend sees
+  it.** Each file tool resolves the path through `FilesystemBackend._real_path` to check
+  the rules against the link's target, and answers any `ValueError` or `OSError` there as
+  `Error: cannot resolve <path>`, so a backend's own refusal of a link never reaches the
+  model in its words. *(2026-11-14, deepagents 0.7.32.)*
 - **The memory block gets a cache breakpoint of its own only in deepagents' slot
   for it.** With `memory=`, `MemoryMiddleware` runs after
   `AnthropicPromptCachingMiddleware`, so a `ChatAnthropic` is sent two

@@ -12,8 +12,13 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher import Kingfisher, Request
+from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.agent.middlewares.step_budget import StepBudgetMiddleware
+from kingfisher.core.agent.middlewares.step_budget import (
+    STEPS_PER_CALL,
+    StepBudgetMiddleware,
+    steps_per_call,
+)
 from kingfisher.core.layout import HARNESS, RECENT_TURNS_FILE
 from kingfisher.plugins import LocalSessions
 from kingfisher.plugins.sessions.backend import backend_at
@@ -254,6 +259,23 @@ def test_a_subagents_budget_follows_what_a_call_costs_the_agent(consulting, who)
     assert _handed_back().startswith(
         "[Stopped: this subagent reached its limit of 6 model calls"
     )
+
+
+def test_skills_add_no_step_to_a_model_call(cfg, session_dir):
+    """deepagents' `pinned_skills` hook, which nothing here fills, ran as a step of its own
+    before every model call with skills on: 37 calls in the default 150 steps, not 50."""
+    skill = cfg.skills_dir / "local"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: local\ndescription: A skill.\n---\nBody.\n")
+    on = replace(cfg, skills_enabled=True)
+
+    built = build_agent(
+        on, backend=backend_at(on, session_dir), capabilities=Capabilities(skills=("local",))
+    )
+
+    nodes = built.graph.get_graph().nodes
+    assert "SkillsMiddleware.before_agent" in nodes, "the control: skills are on"
+    assert steps_per_call(built.graph) == STEPS_PER_CALL, sorted(nodes)
 
 
 def test_it_adds_no_step_to_the_agents_loop(busy):

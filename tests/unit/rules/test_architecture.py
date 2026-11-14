@@ -2833,7 +2833,6 @@ AGENT_RUNTIME = (
     "langgraph",
     "langchain",
     "langchain_core",
-    "langchain_openai",
     "langchain_anthropic",
 )
 

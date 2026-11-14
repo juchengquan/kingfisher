@@ -53,7 +53,7 @@ def _drive(cfg, session_dir, capabilities, tool, args):
     ).graph
     result = graph.invoke(
         {"messages": [("user", "go")]},
-        config={"configurable": {"thread_id": "t"}, "recursion_limit": 8},
+        config={"configurable": {"thread_id": "t"}, "recursion_limit": 9},
     )
     return " ".join(
         str(m.content) for m in result["messages"] if type(m).__name__ == "ToolMessage"
