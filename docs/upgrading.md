@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The last call a turn is told of is one its answer finishes on, after #1306
+
+- **The step budget's note comes one call sooner**, near the limit: a call is counted as
+  left only if its answer, and the hooks that run after an answer, fit in the turn's steps.
+  A turn that answers on the call it was told is its last now ends `end_turn`, not
+  `max_steps`. A deployment raising `KINGFISHER_RECURSION_LIMIT` by one for #1305 need not.
+
 ## deepagents 0.7.32, after #1305
 
 - **deepagents moves from 0.7.22 to 0.7.32**, and the lock to langchain 1.5 and

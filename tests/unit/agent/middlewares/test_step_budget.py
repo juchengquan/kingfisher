@@ -67,8 +67,9 @@ def test_a_turn_past_four_fifths_of_its_steps_is_told_on_every_call_after(busy):
 
     told = _told()
     assert result.stop_reason == "max_steps"
-    # Model calls fall on steps 2, 5, 8 ... and a 30-step turn makes its last at 29.
-    assert told == [None] * 8 + [1, "last"], told
+    # Model calls fall on steps 2, 5, 8 ... 29. A turn's steps end at 29, and an answer
+    # takes two more after its call, so the call at 26 is the last whose answer finishes.
+    assert told == [None] * 8 + ["last", "last"], told
 
 
 def test_the_count_follows_the_limit_a_deployment_sets(busy):
@@ -78,7 +79,7 @@ def test_the_count_follows_the_limit_a_deployment_sets(busy):
     _turn(cfg, calls=30)
 
     told = _told()
-    assert told == [None] * 16 + [3, 2, 1, "last"], told
+    assert told == [None] * 16 + [2, 1, "last", "last"], told
 
 
 class Hooked(AgentMiddleware):
@@ -100,11 +101,12 @@ STACKS = {
 @pytest.mark.parametrize(
     ("hooks", "told"),
     [
-        # Four steps a call: calls fall on 2, 6 ... 58, the last a 60-step turn makes.
-        ("gate", [None] * 12 + [2, 1, "last"]),
-        ("before_model", [None] * 12 + [2, 1, "last"]),
+        # Four steps a call: calls fall on 2, 6 ... 58. The gate's hook runs after an
+        # answer too, so an answer's tail is three steps with it and two without.
+        ("gate", [None] * 12 + [1, "last", "last"]),
+        ("before_model", [None] * 12 + [1, "last", "last"]),
         # Five, and the hook before the first call is a step too: 3, 8 ... 58.
-        ("both", [None] * 9 + [2, 1, "last"]),
+        ("both", [None] * 9 + [1, "last", "last"]),
     ],
 )
 def test_a_hook_beside_the_model_call_is_counted_in_what_is_left(busy, hooks, told):
@@ -117,6 +119,17 @@ def test_a_hook_beside_the_model_call_is_counted_in_what_is_left(busy, hooks, to
 
     assert result.stop_reason == "max_steps"
     assert _told() == told, _told()
+
+
+def test_a_turn_answering_on_the_call_told_its_last_finishes(busy):
+    """Told it had a call left, a turn that answered on it ran out of steps on the hooks
+    after the answer and ended `max_steps`: the count stopped at the call, not its tail."""
+    cfg = replace(busy, recursion_limit=40)
+
+    result = _turn(cfg, calls=11)
+
+    assert _told()[-2:] == [1, "last"], _told()
+    assert result.stop_reason == "end_turn"
 
 
 def test_a_turn_well_inside_its_steps_is_never_told(busy):

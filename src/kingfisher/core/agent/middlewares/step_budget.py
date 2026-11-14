@@ -22,6 +22,14 @@ STEPS_PER_CALL = 3
 #: Both sides: a `before_model` hook runs on every call as surely as an `after_model` one.
 HOOKS = (".before_model", ".after_model")
 
+#: What `StepBudget` assumes of the steps after a final answer until it has read the graph:
+#: `TodoListMiddleware`'s hook after the call.
+TAIL = 1
+
+#: What runs after the call that answers, before the run can end: every hook after a call,
+#: and every one after the agent, which deepagents' parent notifier is.
+TAIL_HOOKS = (".after_model", ".after_agent")
+
 
 def steps_per_call(graph: Any) -> int:
     """Graph steps one model call costs on a compiled `graph`.
@@ -30,6 +38,11 @@ def steps_per_call(graph: Any) -> int:
     langgraph runs as a node of its own: an approval gate's, or a deployment's.
     """
     return 2 + sum(str(node).endswith(HOOKS) for node in graph.get_graph().nodes)
+
+
+def tail(graph: Any) -> int:
+    """Graph steps a compiled `graph` still takes after the model call that answers."""
+    return sum(str(node).endswith(TAIL_HOOKS) for node in graph.get_graph().nodes)
 
 
 class StepBudget:
@@ -43,6 +56,7 @@ class StepBudget:
     def __init__(self, limit: int) -> None:
         self.limit = limit
         self.steps_per_call = STEPS_PER_CALL
+        self.tail = TAIL
 
     def measure(self, graph: Any) -> None:
         """Read the cost off the agent's compiled `graph`.
@@ -51,6 +65,7 @@ class StepBudget:
         that holds.
         """
         self.steps_per_call = steps_per_call(graph)
+        self.tail = tail(graph)
 
     @property
     def calls(self) -> int:
@@ -58,12 +73,13 @@ class StepBudget:
         return self.limit // self.steps_per_call
 
 
-def calls_left(steps: int) -> int | None:
-    """About how many model calls this run has after this one, once it is past `WARN_AT`.
+def calls_left(steps: int, after: int = TAIL) -> int | None:
+    """About how many model calls this run has after this one, once it is past `WARN_AT`,
+    counting only a call whose answer and the `after` steps behind it fit.
 
     Read off langgraph's own step counter and limit, so it follows whatever limit a
-    deployment sets, at `steps` a call. A run stops past its first step plus the limit plus
-    one; a fresh turn's first step is 0, and a resumed one's later, which only warns it early.
+    deployment sets, at `steps` a call. A fresh turn's last step to finish is the limit
+    less one, and a resumed one's later, which only warns it early.
     """
     try:
         config = get_config()
@@ -73,7 +89,9 @@ def calls_left(steps: int) -> int | None:
     step = (config.get("metadata") or {}).get("langgraph_step")
     if not isinstance(limit, int) or not isinstance(step, int) or step < WARN_AT * limit:
         return None
-    return (limit + 1 - step) // steps
+    # Counted to the end of the answer's tail, not of the call: a turn told it had one call
+    # left, answering on it, ran out of steps on the hooks after and ended `max_steps`.
+    return max(0, (limit - 1 - after - step) // steps)
 
 
 def warning(left: int) -> str:
@@ -124,7 +142,7 @@ class StepBudgetMiddleware(AgentMiddleware):
 
     def _left(self, request: Any) -> int | None:
         if not self.subagent:
-            return calls_left(self.budget.steps_per_call)
+            return calls_left(self.budget.steps_per_call, self.budget.tail)
         calls, made = self.budget.calls, _made(request)
         return None if made < WARN_AT * calls else max(0, calls - made - 1)
 
