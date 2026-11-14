@@ -1362,17 +1362,14 @@ def test_assistant_builds_from_the_definitions_alone(cfg, session_dir, shipped):
 
 
 class _Reader(BaseChatModel):
-    """Reads a file per call, noting whether it was shown the read before.
-
-    `follow_history` has it read the file a summary names, once one appears.
-    """
+    """Reads a file per call, noting whether it was shown the read before, and the
+    summaries it was handed."""
 
     reads: int
     big_reads: int = 0
-    follow_history: bool = False
     calls: int = 0
     summarised: int = 0
-    history: str = ""
+    summaries: list[str] = []
     saw_last_read: list[bool] = []
 
     @property
@@ -1389,19 +1386,9 @@ class _Reader(BaseChatModel):
             self.summarised += 1
             return _reply(AIMessage(content="a summary"))
         last = messages[-1]
-        if isinstance(last, ToolMessage) and last.tool_call_id == "history":
-            self.history = last.text
-            return _reply(AIMessage(content="done"))
-        summary = next(
-            (m.text for m in messages if m.additional_kwargs.get("lc_source") == "summarization"),
-            "",
-        )
-        # Under whatever root the summary gives, so the read follows it and the test
-        # says separately where that is.
-        named = re.search(r"\S*/conversation_history/\S+?\.md", summary)
-        if self.follow_history and named:
-            call = {"name": "read_file", "args": {"file_path": named.group()}, "id": "history"}
-            return _reply(AIMessage(content="", tool_calls=[call]))
+        self.summaries += [
+            m.text for m in messages if m.additional_kwargs.get("lc_source") == "summarization"
+        ]
         if self.calls:
             self.saw_last_read.append(
                 isinstance(last, ToolMessage) and last.tool_call_id == f"read-{self.calls}"
@@ -1478,18 +1465,17 @@ def test_a_compacted_agent_still_sees_what_it_just_read(shipped, cfg, session_di
 def test_summarize_by_count_fires_at_sixty_messages_however_small(shipped, cfg, session_dir):
     """Small reads never reach deepagents' token threshold; the message clause does.
 
-    And the summary names where what it replaced went, which `general`'s prompt
-    tells the agent to read -- read back here through the agent's own `read_file`,
-    so under the permissions the agent runs with rather than the backend's. It went
-    to `conversation_history/` at the session root, outside every folder the layout
-    names, until the backend gave deepagents the scratchpad.
+    And it keeps no copy of what it replaced: the conversation is kingfisher's to keep, in
+    `/records/conversation.md`, where a rewind follows it. A copy under
+    `conversation_history/` outlived a rewind to before its summary.
     """
-    model = _Reader(reads=40, follow_history=True)
+    model = _Reader(reads=40, summaries=[])
     warned = _read_under_summarizer(shipped, cfg, session_dir, model)
 
     assert model.summarised, "sixty small messages were never summarized"
-    assert "Summarized at" in model.history, f"the history did not read back: {model.history!r}"
-    assert list((session_dir / SCRATCH / "conversation_history").glob("*.md"))
+    assert model.summaries, "the control: the model was never handed the summary"
+    assert not any("saved to" in summary for summary in model.summaries), model.summaries
+    assert not (session_dir / SCRATCH / "conversation_history").exists(), "a copy was kept"
     assert not (session_dir / "conversation_history").exists(), "kept at the session root"
     # The notice kingfisher gives when a middleware takes one of deepagents' own
     # places. Here it is the design: without it, this runs beside deepagents'

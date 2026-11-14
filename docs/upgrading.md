@@ -18,6 +18,32 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## What a summary replaced is in `/records/conversation.md`, after #1311
+
+- **deepagents' summariser keeps no copy.** Its writes under `conversation_history/` and
+  `large_tool_results/`, beneath your backend's `artifacts_root`, are refused: kingfisher
+  hands deepagents a copy of your `CompositeBackend` with both routed to a folder that
+  holds nothing. Every graph's summariser writes through it, a subagent's, a helper's and
+  one your definitions name included. Its warning about the refused write is quietened.
+- **`/records/conversation.md` holds what summaries replaced** along the session's current
+  path, rebuilt from the turn log: a heading a turn, the user's and assistant's words, each
+  call, and each result as its ledger row. It is rebuilt right after a summary and at the
+  start of a turn after a rewind, follows the rewind, and is absent where nothing was
+  summarised. The agent may read it and not write it.
+- **The summary the model is sent names it**, in the request only: the turn log keeps the
+  summary as deepagents wrote it, `lc_source` mark and all.
+- **A batch of results still too long once summarised now ends the turn
+  `model_unavailable`**, saying the conversation does not fit the input window. deepagents
+  could copy that batch aside before; any `ContextOverflowError` that reaches a turn now
+  ends it so, where it was raised.
+- **A user message over deepagents' human-message limit is sent whole**, no longer kept
+  aside under `conversation_history/`.
+- **A session is no longer made with `scratchpad/conversation_history/` or
+  `scratchpad/large_tool_results/`**, and `Layout.made_dirs` names neither. The names stay
+  reserved and denied. `Layout.conversation_route` names the new file.
+- **Nothing is migrated.** An older session's history files stay on disk, and the file
+  tools no longer reach them.
+
 ## A rewind moves the results of the turns it leaves behind, after #1310
 
 - **A rewind that takes back the conversation moves the saved results of every turn it

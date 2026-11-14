@@ -26,7 +26,7 @@ from kingfisher import KingfisherWarning
 from kingfisher.core.agent.prompting import refuse_a_workspace_prompt
 from kingfisher.core.config import ConfigError
 from kingfisher.core.interfaces import CommandResult, CommandRunner
-from kingfisher.core.layout import DEFAULT_LAYOUT, HARNESS, HISTORY, Layout
+from kingfisher.core.layout import CONVERSATION_FILE, DEFAULT_LAYOUT, HARNESS, HISTORY, Layout
 from kingfisher.core.workspace import ensure_layout
 from kingfisher.plugins.sessions.backend import LocalSessions, backend_at
 from kingfisher.plugins.sessions.folders import ensure_session_layout
@@ -1046,7 +1046,7 @@ def test_the_shell_cannot_change_the_files_a_deployment_authors(cfg, session_dir
         # The shell starts in the session, so this is the shorter command and the one a
         # model writes; the fence then reports the path with no root in front of it.
         "echo x > inputs/new.txt",
-        f"echo x > scratchpad/{HISTORY}/forged.md",
+        f"echo x > {DEFAULT_LAYOUT.records}/{CONVERSATION_FILE}",
     ],
 )
 def test_what_the_fence_says_is_a_message_the_note_can_read(cfg, session_dir, command):
@@ -1160,8 +1160,8 @@ def test_the_shell_cannot_rewrite_the_conversation_kept_aside(cfg):
 
     Through `open`, as a turn gets its backend. Reads stay and the scratchpad stays
     writable, both asserted, so a rule refusing everything would not pass this. The
-    folder is `ensure_session_layout`'s to make: a fence binds only what is there, which
-    is why the layout makes this one and not `blobs`, which nothing writes.
+    folder is made by the upload here, not with the session: sandbox-exec's rule is a
+    pattern, which holds whether the folder was there when the fence was built or not.
     """
     backend = LocalSessions().open(cfg, "history")
     folder, route = DEFAULT_LAYOUT.history, f"{DEFAULT_LAYOUT.scratch_route}{HISTORY}/"

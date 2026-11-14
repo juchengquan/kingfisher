@@ -53,7 +53,7 @@ from tests.conftest import (
 )
 from tests.unit.agent.middlewares.test_clearing import _one
 from tests.unit.scripted import Scripted
-from tests.unit.session.conftest import _calls, _resume, _say, _searches
+from tests.unit.session.conftest import _calls, _resume, _say, _searches, _unpointed
 from tests.unit.session.test_subagent_gates import _parent_with
 from tests.unit.stand_ins import _Ordered
 
@@ -75,13 +75,15 @@ def _conversation(cfg) -> tuple[Message, ...]:
 def _ended_on(*reply: AIMessage) -> tuple[Message, ...]:
     """The conversation as the model last saw it: what the last call was handed, and the
     reply it gave, where it gave one."""
-    handed = [one for one in as_messages(Scripted.heard[-1]) if one.role != "system"]
+    handed = [one for one in as_messages(_unpointed(Scripted.heard[-1])) if one.role != "system"]
     return (*handed, *as_messages(reply))
 
 
 def _handed_first(at: int) -> tuple[Message, ...]:
     """What call `at`, the first of a turn, was handed before the turn's own message."""
-    *before, asked = [one for one in as_messages(Scripted.heard[at]) if one.role != "system"]
+    *before, asked = [
+        one for one in as_messages(_unpointed(Scripted.heard[at])) if one.role != "system"
+    ]
     assert asked.role == "user", "the turn's own message was not the last thing handed"
     return tuple(before)
 

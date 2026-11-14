@@ -88,6 +88,7 @@ from .models import (
     refuse_a_mark_deepagents_reaches_first,
     summarizer_trigger_and_count,
 )
+from .no_copies import keeping_no_copies
 from .permitted_backend import PermittedBackend
 from .prompting import EXECUTE, memory_guidelines, skills_index, system_prompt
 from .session_paths import SessionPaths
@@ -105,6 +106,7 @@ if TYPE_CHECKING:
         ScratchRunLimit,
         SubagentMiddlewares,
     )
+    from kingfisher.core.session.conversation import ConversationRecord
     from kingfisher.core.session.ledger import Ledger
 
 
@@ -356,6 +358,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     held: frozenset[str] | None = None,
     caller: Caller | None = None,
     ledger: Ledger | None = None,
+    conversation: ConversationRecord | None = None,
     instructions: str = "",
     turn_text: str | None = None,
     users_memory: bool = False,
@@ -366,6 +369,8 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     """Wire model, backend and checkpointer into a deep agent, and say what was wired.
 
     `ledger` is the turn's, recorded into by every graph built here; `None` records nothing.
+    `conversation` is the turn's record of what summaries replaced, which the agent's own
+    graph keeps current and points its summary at; `None` keeps none.
     `turn_text` is what the deployment's `TurnInstructions` said for this turn, sent to every
     graph but a compiled one; `None` where it wired none.
     `users_memory` where this turn's memory is the user's, kept by a `MemoryStore`.
@@ -389,6 +394,9 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
     capabilities = roots.unlocked_for(capabilities, held)
     # Every backend: a check only some builds ran would be one nothing here exercises.
     refuse_unusable_backend(backend, cfg.layout)
+    # Before anything is handed it: every summariser built below, the agent's, a
+    # subagent's, `general-purpose`'s and a helper's, writes through this one.
+    backend = keeping_no_copies(backend)
     shell = shell_told(backend)
     # Before the middleware stack, because `standing_middleware` needs the names. A caller that
     # has walked them itself -- `--list` -- wins over the catalogue.
@@ -577,6 +585,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             scratch_run_limit=limit,
             recorder=recording(agent),
             ledger=ledger,
+            conversation=conversation,
             clearing=clearing,
             tools=tools,
             skills=narrowed_skills,

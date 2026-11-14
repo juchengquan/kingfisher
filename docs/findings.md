@@ -364,8 +364,30 @@ for the next reader who reaches for one.*
   session, `conversation_history/<session_id>.md` under the root the next entry
   describes, a timestamped section appended each time; through kingfisher's backend
   that is `/scratchpad/conversation_history/`, and the agent reads it back with
-  `read_file`. `test_summarize_by_count_fires_at_sixty_messages_however_small` reads it back
-  that way. *(2026-10-01; the root 2026-10-11.)*
+  `read_file`. *(2026-10-01; the root 2026-10-11.)* kingfisher refuses that write since
+  2026-11-14, so none of this is reached; the next entry says what deepagents does then.
+- **A refused write costs deepagents' summary its path, and nothing else.**
+  `_offload_to_backend` reads a `WriteResult` carrying an error, or an exception, as a
+  failed offload: it logs `Failed to offload conversation history to …` as a warning,
+  returns `None`, and `wrap_model_call` logs `Offloading conversation history to backend
+  failed during summarization. Older messages will not be recoverable.` as an error and
+  raises it as a `UserWarning`, then summarises anyway. The summary is then `Here is a
+  summary of the conversation to date:` and the text, with no "saved to" line, and the
+  event's `file_path` is `None`. Inline media goes the same way: its upload refused, it is
+  a failed-offload placeholder in what the summariser model reads. A user message over the
+  human-message limit whose write is refused is sent whole, untagged.
+  `test_summarize_by_count_fires_at_sixty_messages_however_small` and
+  `test_a_request_too_long_to_send_is_kept_nowhere_a_rewind_cannot_reach` drive both.
+  *(2026-11-14, deepagents 0.7.32.)*
+- **Its overflow cut keeps a result it could not copy, and then refuses the request.**
+  `_offload_tool_message_content` returns `None` on a failed `write`, and
+  `_clip_overflow_tail` keeps that result whole in the request; a `read_file`'s is still
+  cut to its first 4,000 characters, which needs no write. Nothing clipped, the request is
+  as long as before, and `_check_reduction` raises `ContextOverflowError` ("Context
+  remains above the input budget after compaction") before it is sent. A `write` that
+  raises, rather than answering an error, fails the whole cut: hence `NothingKept`
+  answers. `test_a_batch_still_too_big_once_summarised_stops_the_turn_as_unavailable`
+  drives it. *(2026-11-14, deepagents 0.7.32.)*
 - **It writes two kinds of file on its own, under one root it reads with
   `isinstance`.** A tool result over 20,000 tokens, counted at four characters each,
   is saved to `large_tool_results/<call id>` and the model is handed a head-and-tail

@@ -7,6 +7,7 @@ from deepagents.backends import CompositeBackend
 
 from kingfisher import Kingfisher
 from kingfisher.core.agent.assembly import build_agent
+from kingfisher.core.agent.no_copies import NothingKept
 from kingfisher.core.agent.usable_backend import refuse_unusable_backend
 from kingfisher.core.config import ConfigError
 from kingfisher.core.layout import DEFAULT_LAYOUT, INPUTS
@@ -194,7 +195,13 @@ def test_what_open_returns_is_what_the_agent_is_built_on(cfg, session_dir):
         catalogue=service.catalogue,
     )
 
-    assert built.backend is made[0]
+    # A copy of it, deepagents' two folders refused: every route and the shell its own.
+    assert type(built.backend) is Substitute
+    assert built.backend.default is made[0].default
+    refused = {route for route, one in built.backend.routes.items() if isinstance(one, NothingKept)}
+    assert {r: b for r, b in built.backend.routes.items() if r not in refused} == {
+        r: b for r, b in made[0].routes.items() if r not in refused
+    }
 
 
 def test_a_backend_deepagents_will_not_give_a_shell_is_refused(cfg, session_dir):

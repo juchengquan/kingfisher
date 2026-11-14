@@ -32,6 +32,7 @@ from .checkpointing import (
     library_versions,
     resumed_saver,
 )
+from .conversation import ConversationRecord, keep_at_start
 from .files import (
     InputsPlacement,
     checked,
@@ -201,6 +202,20 @@ class Preparation:
             raise
         return replace(prepared, claim=claimed)
 
+    def _earlier_ledger(
+        self, harness: HarnessFiles, files: Any, log: TurnLog
+    ) -> Steps[KeptLedger | None]:
+        """The ledger the session's turns have written, with its results where the path puts
+        them; `None` for a supplied graph, which has nothing hooked to record into it."""
+        if self._graph is not None:
+            return None
+        earlier = yield from read_ledger(harness, log.off_path)
+        # Before the build: a rewind that stopped moving results would leave the agent one
+        # from a turn it no longer follows, or without one from a turn it does.
+        if (yield from results_unsettled(harness)):
+            yield from results_placed(files, harness, self.cfg.layout, earlier, log.off_path)
+        return earlier
+
     def _claimed(  # noqa: PLR0913 -- setup's, handed on: a second backend is a second sandbox
         self,
         request: Request | Resume,
@@ -238,12 +253,7 @@ class Preparation:
         # A pause written before the record resumes unchecked, as every pause did then.
         if isinstance(recorded, dict) and agent is not None:
             _refuse_changed_since(session, recorded, built_from(catalogue, agent))
-        # Only for a graph built here: a supplied one has nothing hooked to record into it.
-        earlier = (yield from read_ledger(harness, log.off_path)) if self._graph is None else None
-        # Before the build: a rewind that stopped moving results would leave the agent one
-        # from a turn it no longer follows, or without one from a turn it does.
-        if earlier is not None and (yield from results_unsettled(harness)):
-            yield from results_placed(files, harness, self.cfg.layout, earlier, log.off_path)
+        earlier = yield from self._earlier_ledger(harness, files, log)
         # The ledger, written before the log, names every turn the log opens; a supplied
         # graph keeps none, and the log is all that names its turns.
         taken = earlier.turns if earlier is not None else logged_turns(log)
@@ -336,6 +346,17 @@ class Preparation:
                 )
             if pause is not None and resume is None:
                 yield from clear_pause(harness)
+            if prepared.ledger is not None:
+                # Before the graph runs, which is when the agent reads it: a rewind since
+                # the last turn moved what it should hold.
+                yield from keep_at_start(
+                    files,
+                    harness,
+                    prepared.log,
+                    prepared.ledger.row,
+                    self.cfg.layout.conversation_route,
+                    took_over=took_over,
+                )
             # Before the graph runs, which reads the file: numbered now, so what the
             # turn's end compares with is entries rather than lines nobody has named. The
             # user's entries first, so another session's changes are this turn's baseline.
@@ -416,6 +437,8 @@ class Preparation:
             drift=drift,
             unfinished=prepared.earlier_turn_unfinished,
         )
+        if prepared.conversation is not None:
+            prepared.conversation.parts = message
         return replace(prepared, message=message, inputs_seen=now, drift=drift)
 
     def _read_pause(
@@ -527,6 +550,18 @@ class Preparation:
                 if earlier is not None
                 else None
             )
+            conversation = (
+                ConversationRecord(
+                    files,
+                    harness,
+                    ledger,
+                    turn=turn.id,
+                    route=cfg.layout.conversation_route,
+                    tool_results_route=cfg.layout.tool_results_route,
+                )
+                if ledger is not None
+                else None
+            )
             built = self._graph_for(
                 request,
                 capabilities=allowed,
@@ -537,6 +572,7 @@ class Preparation:
                 session_id=session.id,
                 catalogue=catalogue,
                 ledger=ledger,
+                conversation=conversation,
                 caller=caller,
                 users_memory=users_memory,
             )
@@ -550,6 +586,8 @@ class Preparation:
                 if isinstance(request, Resume) and resume is not None
                 else None
             )
+            if conversation is not None:
+                conversation.resumed = answering
             # Tools are read off the graph, the only honest answer to what was offered;
             # skills and subagents are asked of the functions `build_agent` asked.
             withheld = withheld_by_kind(
@@ -615,6 +653,7 @@ class Preparation:
             else None,
             log=log,
             ledger=ledger,
+            conversation=conversation,
             # Written once the inputs are placed, which this must not wait for.
             message=(),
             session=session,

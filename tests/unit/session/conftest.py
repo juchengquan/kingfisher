@@ -9,6 +9,8 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
+from kingfisher.core.agent.middlewares.summary_pointer import pointer
+from kingfisher.core.layout import DEFAULT_LAYOUT
 from kingfisher.core.request import Decision, Resume
 from tests.conftest import EVERY_TOOL, an_agent, start, tools_dir
 from tests.unit.scripted import Scripted
@@ -77,3 +79,15 @@ def clearing(scripted):
     an_agent(scripted, **EVERY_TOOL)
     start(scripted, "s")
     return _marked(scripted, clear_results_at=12_000)
+
+
+def _unpointed(messages: list[Any]) -> list[Any]:
+    """`messages` as the log keeps them: a summary without the line naming the conversation
+    it replaced, which only the request the model is sent carries."""
+    said = pointer(DEFAULT_LAYOUT.conversation_route)
+    return [
+        one.model_copy(update={"content": one.content.removeprefix(said)})
+        if one.additional_kwargs.get("lc_source") == "summarization"
+        else one
+        for one in messages
+    ]

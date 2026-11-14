@@ -781,10 +781,13 @@ def test_a_helpers_clearing_and_pdfs_are_sized_by_the_summarizer_it_runs(cfg, se
     assert _high(helper) == high_mark(fires, None, subject="the helper")
 
 
-def test_a_helpers_history_is_kept_apart_from_its_summoners(cfg, session_dir):
-    """The task tool hands a helper its summoner's state, the summariser's own keys among
-    them: had the session id that names a history file come too, the helper's evicted
-    messages would have been appended to its summoner's. Driven, both summarising."""
+def test_neither_a_subagent_nor_its_helper_keeps_a_copy_of_what_it_summarised(
+    cfg, session_dir
+):
+    """Each graph builds a summariser of its own, so the refusal kingfisher puts on the
+    agent's had to reach a subagent's and its helper's too: missed, either kept its
+    summarised messages in `conversation_history/`, where no rewind follows them.
+    Driven, both summarising."""
     define_each(cfg, REVIEWER, HELPER)
     for name, mark in (("a.txt", "REVIEWERS"), ("b.txt", "HELPERS")):
         line = f"{mark} " + "x" * 280 + "\n"
@@ -823,15 +826,10 @@ def test_a_helpers_history_is_kept_apart_from_its_summoners(cfg, session_dir):
 
     out = graph.invoke({"messages": [{"role": "user", "content": "go"}]}, {"recursion_limit": 40})
 
+    # The control: each summary was asked for in its place, or the answers would be out of
+    # step and the last one another.
     assert out["messages"][-1].content == "PARENT-DONE"
-    histories = [
-        path.read_text(encoding="utf-8")
-        for path in (session_dir / "scratchpad" / "conversation_history").glob("*.md")
-    ]
-    whose = sorted(
-        ("TASK-FOR-reviewer" in text, "TASK-FOR-second-opinion" in text) for text in histories
-    )
-    assert whose == [(False, True), (True, False)], "one history each, holding its own"
+    assert not (session_dir / "scratchpad" / "conversation_history").exists()
 
 
 @pytest.mark.filterwarnings("ignore:.*a name deepagents uses:UserWarning")
