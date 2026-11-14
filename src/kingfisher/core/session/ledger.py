@@ -14,6 +14,7 @@ from kingfisher.core.logged import warn
 from kingfisher.core.result import ResultError
 
 from .messages import from_record
+from .off_path_results import OFF_PATH_RESULTS_ROUTE
 from .steps import Steps, changing, on_host, reading
 from .store import (
     HarnessFiles,
@@ -300,14 +301,18 @@ def sweep_results(  # noqa: PLR0913 -- by keyword, so no route is passed for a s
     tools are refused this folder, but its shell is not.
     """
     named = ledger.earlier.paths | {e.path for e in entries if e.path}
-    listing = yield reading(files, "ls", tool_results_route)
-    unused = [
-        (one["path"], one.get("size"))
-        for one in listing.entries or ()
-        if not one.get("is_dir")
-        and one["path"] not in named
-        and names_a_result(PurePosixPath(one["path"]).name)
-    ]
+    unused = []
+    # A row names a hidden result by where it was filed, so a result expired while its turn
+    # was off the path is found there too.
+    for route in (tool_results_route, OFF_PATH_RESULTS_ROUTE):
+        listing = yield reading(files, "ls", route)
+        unused += [
+            (one["path"], one.get("size"))
+            for one in listing.entries or ()
+            if not one.get("is_dir")
+            and f"{tool_results_route}{(name := PurePosixPath(one['path']).name)}" not in named
+            and names_a_result(name)
+        ]
     if unused:
         # On the host, and waited for by a cancel: the turn lets go of its claim only
         # after this, so no new turn can name a file while it is being dropped.
@@ -324,16 +329,21 @@ def read_result(files: Any, number: str) -> Steps[str]:
     `ResultError` for an id no row has, and for a result kept nowhere.
     """
     harness = HarnessFiles(files)
-    row = (yield from read_ledger(harness, (yield from read_off_path(harness)))).row(number)
+    off_path = yield from read_off_path(harness)
+    row = (yield from read_ledger(harness, off_path)).row(number)
     if row is None:
         msg = f"no result {number} in this session"
         raise ResultError(msg)
     if row.path is not None:
-        (answer,) = yield reading(files, "download_files", [row.path])
-        if answer.error or answer.content is None:
-            msg = f"{number}: {answer.error or 'no content'} at {row.path}"
-            raise ResultError(msg)
-        return answer.content.decode("utf-8")
+        hidden = f"{OFF_PATH_RESULTS_ROUTE}{PurePosixPath(row.path).name}"
+        # Both, the likelier first: a rewind that stopped moving it left it in either.
+        tried = (hidden, row.path) if row.turn in off_path else (row.path, hidden)
+        for where in tried:
+            (answer,) = yield reading(files, "download_files", [where])
+            if not answer.error and answer.content is not None:
+                return answer.content.decode("utf-8")
+        msg = f"{number}: {answer.error or 'no content'} at {row.path}"
+        raise ResultError(msg)
     logged = [
         from_record(line)
         for line in (yield from read_turn_log(HarnessFiles(files)))

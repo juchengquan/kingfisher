@@ -90,6 +90,12 @@ RECENT_TURNS_FILE = "recent_turns.jsonl"
 #: turn log so a rewind can return to them; written by a rewind alone, so a session that
 #: never rewound has none.
 OFF_PATH_FILE = "off_path.jsonl"
+#: The saved results of those turns, moved out of the tool results folder so the agent
+#: finds only what happened along the path, and moved back by a rewind returning to them.
+OFF_PATH_RESULTS = "off_path_results"
+#: Written before a rewind moves saved results and dropped once each is where
+#: `OFF_PATH_FILE` says: while it is there, the next rewind or turn finishes the move.
+RESULTS_MOVING = "results_moving.jsonl"
 #: Which files a rewind could not put back, until the next turn that tells the agent has
 #: written its conversation: what the agent remembers of them is no longer what is there.
 REWOUND_FILE = "rewound.jsonl"

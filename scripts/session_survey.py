@@ -89,6 +89,8 @@ TURNS = "turns.jsonl"
 #: the turns settled, each standing in it by its opening line alone, marked `settled`.
 RECENT_TURNS = "recent_turns.jsonl"
 OFF_PATH = "off_path.jsonl"
+#: Where a rewind keeps the saved results of the turns it left behind.
+OFF_PATH_RESULTS = "off_path_results"
 #: `.harness` files with a part of their own: `agent.yaml` is the pin a session kept before
 #: every call named its agent, read for the name it held.
 HARNESS_PARTS = {
@@ -236,6 +238,8 @@ def _yaml_scalar(text: str, key: str) -> str | None:
 
 def _part(relative: tuple[str, ...], names: dict[str, str]) -> str:
     top, rest = relative[0], relative[1:]
+    if top == HARNESS and rest and rest[0] == OFF_PATH_RESULTS:
+        return "result files"
     if top == HARNESS:
         named = HARNESS_PARTS.get(rest[0].removesuffix(SECOND_COPY)) if len(rest) == 1 else None
         return named or "rest of .harness"

@@ -18,6 +18,23 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A rewind moves the results of the turns it leaves behind, after #1310
+
+- **A rewind that takes back the conversation moves the saved results of every turn it
+  leaves off the path** from `/records/tool_results/` to `/.harness/off_path_results/`,
+  where the agent's file tools cannot read them, and a rewind returning to those turns
+  moves them back. A rewind of the files alone moves none. Ledger rows, ids and expiry are
+  unchanged: a row still names its file under `/records/tool_results/`, and
+  `Session.result` reads a hidden one by its id as before.
+- **An `UnusedResults` plugin may be handed a file under `/.harness/off_path_results/`**:
+  a result that expired while its turn was off the path. `UnusedFile.path` is where the
+  file is in the session, not always a path the agent's file tools reach.
+- **A move that stopped is finished by the next turn or rewind**, which
+  `.harness/results_moving.jsonl` marks. A rewind that cannot finish one is refused with
+  `RewindError`, and the warning `result_not_moved` names each file a move could not take.
+- **Nothing is migrated.** A session from before #1309 keeps its results in the scratchpad,
+  where nothing moves them.
+
 ## Saved results are kept under `/records/`, after #1309
 
 - **A session has a new top-level folder, `/records/`**, which the agent may read and

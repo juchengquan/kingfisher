@@ -49,6 +49,7 @@ from .model import (
     TurnIdError,
     refuse_files_of_another,
 )
+from .off_path_results import results_placed, results_unsettled
 from .rewind import turn_records
 from .runlog import RunLogger
 from .steps import (
@@ -239,6 +240,10 @@ class Preparation:
             _refuse_changed_since(session, recorded, built_from(catalogue, agent))
         # Only for a graph built here: a supplied one has nothing hooked to record into it.
         earlier = (yield from read_ledger(harness, log.off_path)) if self._graph is None else None
+        # Before the build: a rewind that stopped moving results would leave the agent one
+        # from a turn it no longer follows, or without one from a turn it does.
+        if earlier is not None and (yield from results_unsettled(harness)):
+            yield from results_placed(files, harness, self.cfg.layout, earlier, log.off_path)
         # The ledger, written before the log, names every turn the log opens; a supplied
         # graph keeps none, and the log is all that names its turns.
         taken = earlier.turns if earlier is not None else logged_turns(log)

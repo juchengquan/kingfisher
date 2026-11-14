@@ -4883,6 +4883,31 @@ bound nothing once a session rewound; and its id, its file and its turn id stay 
 because the lines do. A result a rewind took out of the conversation before it was filed
 is read back from the turn log, which keeps it as first written.
 
+**Their files do not stay where the agent reads them** *(2026-11-14)*. The rows stayed,
+but the files they name stayed in `/records/tool_results/` too, so after a rewind a `glob`
+there read what a branch the caller took back had found. A rewind of the conversation now
+moves each saved result whose row's turn it leaves off the path to
+`.harness/off_path_results/`, under the same name, and each whose turn it returns to
+back; a rewind of the files alone leaves the turns off the path as they were, and so moves
+none. The conversation part, because `off_path.jsonl` is that part's to write and the
+folder should follow what it names. **Rows, ids and expiry are unchanged:** a row still
+names its file in the results folder, `Session.result` looks in both, and the sweep lists
+both, so a result that expires while hidden is removed from there.
+
+**A move is copy then delete, finished before the next changes direction.** A backend
+has no rename, so a move stopped partway can leave a file in both folders, the copy cut and
+its source whole. `.harness/results_moving.jsonl` is written before `off_path.jsonl` and
+dropped once every file is where it says, and while it is there the next turn finishes the
+move before its build, and the next rewind before it writes a new `off_path.jsonl`. Since
+the turns off the path never change while a move is unfinished, a file in both folders is
+always one whose source is whole, so the finishing copy is made over the target whatever it
+holds. A rewind that cannot finish one is refused rather than run, since reversing it would
+take the cut copy for the whole one. A move a backend refuses is warned of as
+`result_not_moved`, and the mark stays for the next turn or rewind. Kept in `.harness`,
+where the file tools do not reach and every fence refuses the shell's writes; the shell
+reads `.harness` as it reads the turn log, which holds those turns' results as first
+written anyway. `test_off_path_results.py`.
+
 **A pause the rewind finds is discarded**, as a new request discards it: answered after,
 it would run calls asked for in a conversation the session is no longer at.
 
