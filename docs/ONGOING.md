@@ -215,8 +215,3 @@ measured at 0.7.38: langchain's refusal check, which 0.7.38 wires in, reads ever
 and the turn with it, where at 0.7.32 only its log line lost the block;
 `test_a_reply_whose_reasoning_cannot_be_read_still_logs_its_turn` goes red there.
 *(2026-11-14.)*
-
-At 0.7.32, not at 0.7.22, every run ends on a step of deepagents' own, `_ParentNotifierMiddleware`'s
-`after_agent`, which `StepBudget` does not reserve: a turn that answers on the call it was
-told left it one more ends `max_steps` with its answer kept, as one answering on its last
-already did. Whether to warn a step sooner is open. *(2026-11-14, deepagents 0.7.32.)*

@@ -4366,6 +4366,14 @@ agent had 30. The graph is compiled after its subagents are built, so one `StepB
 shared by the agent and every subagent, measured by each build -- the last is the one
 served, not a probe -- and read when a call runs.
 
+A call is counted as left only if its answer finishes. After the call that answers, every
+`after_model` hook runs again and every `after_agent` hook once -- deepagents' parent
+notifier is one from 0.7.32 -- and a fresh turn's last step to finish is its limit less
+one. Counted to the call alone, a turn told it was on its last call, or from 0.7.32 one
+told it had one more, answered there and ended `max_steps`, its answer kept and its
+ending reported as a turn cut off. So the count reserves that tail, read off the graph
+with the rest. *(2026-11-14.)*
+
 A subagent does not run under that limit: deepagents binds 9,999 steps to the graph it
 builds, and the turn's limit does not override that. Measured under a 30-step turn, a
 subagent saw 9,999 and made 41 calls. So `standing_middleware` holds each subagent to the
