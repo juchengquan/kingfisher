@@ -2933,7 +2933,7 @@ scratchpad moved them. A folder at the session's top that no fence grants is ref
 all three on their plainest rule, by the file tools on one deny of `/records/**`, and by
 `shell_denied`, which could not ask about the scratchpad's. `Layout.records` renames it
 as the other leaves are, and `tool_results` sits under it. It is where the rest of the
-record of a conversation is meant to go (`docs/design/2026-11-14-records.md`).
+record of a conversation goes.
 deepagents' three folders stay in the scratchpad for now. No migration and no refusal: an
 older session's rows still name `/scratchpad/tool_results/`, which is now ordinary
 scratchpad. *(2026-11-14, #1309.)*
@@ -2987,8 +2987,19 @@ window even once summarised: a later turn may, since its summary takes that batc
 **Not taken: a store a rewind moves.** Keeping deepagents' files and moving them with a
 rewind would keep two records of one conversation that can disagree, the one the agent
 reads not the one kingfisher rebuilds from. No migration: an older session's history
-files stay, unreachable through the file tools. *(2026-11-14, after #1309;
-`docs/design/2026-11-14-records.md` slice (b).)*
+files stay, unreachable through the file tools. *(2026-11-14, #1311.)*
+
+**The prompt says nothing of where a summary's words went; the summary does.** `session.md`
+told every agent, subagent and helper, on every call, that summarised conversation was
+under `/scratchpad/conversation_history/` and to search there when nothing named a path:
+four lines in a cached prompt, for the few calls after a summary. Measured on
+MiniMax-M3.1-Flash with the sentence and without it (2026-11-14), five sessions each, a
+70-row log pasted in turn 1 and summarised on a filler turn before turn 5 asked for one
+row: the history was read in 5 runs of 5 on both sides, and answered as often. The
+summary's own line naming the file was enough to find it, and since #1311 that line names
+`/records/conversation.md`, the one place it is. A folder named in the prompt and holding
+nothing would send the search somewhere empty, which
+`test_the_prompt_names_no_folder_deepagents_is_refused` holds. *(2026-11-14.)*
 
 **What a failure says about a path is the path the model wrote.** Two spellings reached
 the model instead, both measured from its own seat. The composite strips a route before
