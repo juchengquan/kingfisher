@@ -183,7 +183,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     # knows cost a reconciliation at every turn's end to tell the two apart. Its longest
     # command is the setting: an `execute` from `eval`'s code meets no `wrap_tool_call`,
     # so this is the one check between it and a sandbox that honours any `timeout`.
-    # `_permissions` is deepagents' own keyword, private and passed as it asks.
+    # deepagents refuses to merge it over its own unless the two hold the same rules.
     # Not beside one `inner` names: deepagents' merge keeps the later of the two, and a
     # helper's stack, which meets no merge, refused to build holding both.
     if not any(one.name == FILESYSTEM for one in inner):
@@ -192,7 +192,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
                 backend=backend,
                 tool_token_limit_before_evict=None,
                 max_execute_timeout=longest,
-                _permissions=permissions,
+                permissions=permissions,
             )
         )
     shell = shell_told(backend)

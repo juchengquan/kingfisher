@@ -304,14 +304,31 @@ def _deepagents_middleware_names() -> frozenset[str]:
     import deepagents.graph  # noqa: F401, PLC0415  -- loads the submodules walked below
 
     return frozenset(
-        obj.__name__
+        answers_to
         for name, module in list(sys.modules.items())
         if name.startswith("deepagents") and module is not None
         for obj in vars(module).values()
         if isinstance(obj, type)
         and issubclass(obj, AgentMiddleware)
         and obj is not AgentMiddleware
+        for answers_to in (obj.__name__, _reported_name(obj))
+        if answers_to
     )
+
+
+def _reported_name(cls: type[AgentMiddleware]) -> str | None:
+    """The name `cls` reports through a `name` of its own, which deepagents merges by.
+
+    Read off an instance never initialised: deepagents' Anthropic caching is a stand-in
+    that answers to a class it has not imported, which no module here holds.
+    """
+    own = vars(cls).get("name")
+    if not isinstance(own, property) or own.fget is None:
+        return None
+    try:
+        return str(own.fget(cls.__new__(cls)))
+    except Exception:  # noqa: BLE001 -- a name that needs `__init__` is not one to find
+        return None
 
 
 def _warn_if_it_replaces_deepagents(

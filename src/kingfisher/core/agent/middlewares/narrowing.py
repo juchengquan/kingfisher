@@ -106,6 +106,11 @@ class CatalogueSkillsMiddleware(SkillsMiddleware):
     def name(self) -> str:
         return "SkillsMiddleware"
 
+    # deepagents' hook for `pinned_skills`, which nothing here fills. Inherited, langgraph
+    # runs it as a step of its own before every model call: a quarter of a turn's calls.
+    before_model = AgentMiddleware.before_model
+    abefore_model = AgentMiddleware.abefore_model
+
     def _format_skills_list(self, skills: list[Any]) -> str:
         if not skills:
             return "(No skills are offered here.)"

@@ -18,6 +18,22 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## deepagents 0.7.32, after #1305
+
+- **deepagents moves from 0.7.22 to 0.7.32**, and the lock to langchain 1.5 and
+  langchain-core 1.8, which it brings.
+- **A file tool called on a link out of a route's folder answers `Error: cannot resolve
+  <path>`**, deepagents' words rather than kingfisher's. It is refused, names the path the
+  model wrote and no host path, and the turn goes on, as before.
+- **Every run takes one graph step more**, at its end. A turn that answers on the call
+  it was told left it one more now ends `max_steps`, with its answer kept. A deployment
+  with `KINGFISHER_RECURSION_LIMIT` sized to the step may raise it by one.
+- **A deployment's own `FilesystemMiddleware` holding rules must hold kingfisher's**:
+  deepagents raises `ValueError` where they differ. One holding none runs under
+  kingfisher's. It is passed `permissions=` now; `_permissions=` warns and goes in 0.9.
+- **A deployment's middleware named `AnthropicPromptCachingMiddleware` is warned about
+  again**, and refused beside turn text, as it was before 0.7.32 hid the name.
+
 ## Only an agent granted `eval` is told of it, after #1304
 
 - **With `KINGFISHER_INTERPRETER_ENABLED` on, an agent whose grant leaves out `eval` is

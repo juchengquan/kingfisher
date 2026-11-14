@@ -18,9 +18,9 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    # Held at 0.7.22 by the owner's call: raise it only once they say so. A ceiling
+    # Held at 0.7.32 by the owner's call: raise it only once they say so. A ceiling
     # rather than the lock alone, so that `uv lock --upgrade` stops here as well.
-    "deepagents>=0.7.22,<0.7.23",
+    "deepagents>=0.7.32,<0.7.33",
     # Imported directly by core/agent/interpreter.py, lazily, so that installing it
     # costs nothing until `KINGFISHER_INTERPRETER_ENABLED` is on. It also arrives
     # through deepagents' own `quickjs` extra, but an extra is not a promise either --

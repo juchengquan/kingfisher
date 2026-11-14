@@ -805,7 +805,7 @@ def test_a_plain_function_is_withheld_when_the_grant_withholds_it(cfg, session_d
         capabilities=Capabilities(tools=None),  # every built-in, none of ours
     ).graph
     graph.invoke(
-        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 4}
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 5}
     )
 
     assert "read_file" in model.offered, "the built-ins should be untouched"

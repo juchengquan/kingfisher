@@ -209,7 +209,14 @@ left unbuilt, under *Not built, and still open* in `decisions.md`.
 
 ## When deepagents moves
 
-It is held at 0.7.22 by the owner's call, which `pyproject.toml` records. 0.7.24 retries
-an overflowing summary call, which kingfisher's version does not. 0.7.23 adds
-`pinned_skills`, a hook that costs a graph step on every model call while skills are on,
-which `NarrowedSkills` would have to drop. *(2026-10-13.)*
+It is held at 0.7.32 by the owner's call, which `pyproject.toml` records. Past it,
+measured at 0.7.38: langchain's refusal check, which 0.7.38 wires in, reads every reply's
+`content_blocks`, so a reply whose reasoning langchain cannot read fails the model call
+and the turn with it, where at 0.7.32 only its log line lost the block;
+`test_a_reply_whose_reasoning_cannot_be_read_still_logs_its_turn` goes red there.
+*(2026-11-14.)*
+
+At 0.7.32, not at 0.7.22, every run ends on a step of deepagents' own, `_ParentNotifierMiddleware`'s
+`after_agent`, which `StepBudget` does not reserve: a turn that answers on the call it was
+told left it one more ends `max_steps` with its answer kept, as one answering on its last
+already did. Whether to warn a step sooner is open. *(2026-11-14, deepagents 0.7.32.)*

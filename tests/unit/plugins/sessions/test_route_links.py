@@ -74,7 +74,8 @@ def test_a_link_out_of_a_route_is_the_operations_error(scripted, session, call):
     answer = _answer(scripted, tool, args)
 
     assert answer.status == "error"
-    assert "a link out of its folder" in answer.text
+    # Whose words is not pinned: deepagents' own check refuses it first, under rules.
+    assert next(iter(args.values())) in answer.text
     assert str(scripted.workspace) not in answer.text
     assert (session / "scratchpad" / "notes.md").read_text() == NOTES
     assert (session / "memory" / "notes.md").is_symlink()
