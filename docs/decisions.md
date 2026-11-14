@@ -2833,8 +2833,9 @@ kept file is offered every turn; an async twin, since `settle` already runs off 
 loop and a twin is a second method to keep in step; a check in the contract kits,
 since the core itself holds what is chosen and what can be reached, leaving a plugin
 no promise to break; and deepagents' copies under `large_tool_results/`, which no row
-names: its summariser writes them only on a refusal for length clearing could not answer,
-and the sweep lists only `tool_results/`. *(2026-10-21.)*
+names: its summariser writes them, on a refusal for length clearing could not answer or a
+request still over the input budget once summarised, and the sweep lists only
+`tool_results/`. *(2026-10-21.)*
 
 **The recorder's own folder is refused, and that is not the same decision.** Only
 `tool_results/` is write-denied to the file tools, `delete` included. A row names its file
@@ -2857,7 +2858,8 @@ third permanent route to protect rows a version without this property wrote is n
 it, with no layout version to move, so they age out with their sessions. *(2026-10-14,
 from an architecture review.)* *Since 2026-10-21 a row names only `tool_results/`, and
 only deepagents' summariser writes `large_tool_results/`, on a refusal for length clearing
-could not answer; both stay denied, with every other folder of kept records, below.*
+could not answer or a request still over the input budget once summarised; both stay
+denied, with every other folder of kept records, below.*
 
 **Two fences of three now refuse the shell both folders a row can name.** Once older
 results are cleared to handles, the saved file is the only copy, so an overwrite is the
@@ -2872,8 +2874,9 @@ read-only grant under a writable parent being stepped over (`_session_writable`)
 is also why `shell_denied` does not ask a deployment's backend for it. Two of three is not
 a boundary, so nothing claims one. *(2026-10-16, before clearing results to handles.)*
 *Since 2026-10-21 only deepagents' summariser writes `large_tool_results/`, on a refusal
-for length clearing could not answer; it is made with the session and denied with every
-other folder of kept records, below.*
+for length clearing could not answer or a request still over the input budget once
+summarised; it is made with the session and denied with every other folder of kept
+records, below.*
 
 **Every folder of kept records is denied, not only the ones a row names.** The question
 was always who reads the file back: a row's file is denied because the prompt tells the
@@ -2898,7 +2901,8 @@ reaches it -- driven in one turn with the refusals, since a turn that only check
 refusals would pass with the keeping broken. Not taken: denying reads, which is what the
 history is for. *(2026-10-21.)* *Since 2026-10-22 the offloads are made with the session
 too: deepagents' summariser writes there mid-turn, on a refusal for length clearing could
-not answer, and bubblewrap's fence is built once a turn, so a folder it made was the
+not answer or a request still over the input budget once summarised, and bubblewrap's
+fence is built once a turn, so a folder it made was the
 shell's to write until the next.*
 
 **What a failure says about a path is the path the model wrote.** Two spellings reached
@@ -5592,8 +5596,9 @@ by what actually holds it. *(2026-10-15, from an architecture review.)*
 
 **deepagents' own files are kept in the scratchpad.** deepagents writes unasked what its
 summarizer replaced, and a user message too long to send, under `conversation_history/`,
-and on a refusal for length clearing could not answer, the latest batch's results under
-`large_tool_results/`. Until 2026-10-21 it also evicted a tool result over about 80,000
+and on a refusal for length clearing could not answer or a request still over the input
+budget once summarised, the latest batch's results under `large_tool_results/`. Until
+2026-10-21 it also evicted a tool result over about 80,000
 characters there, which is off now that kingfisher saves every result itself. Both
 hang off
 `CompositeBackend.artifacts_root`, which defaults to `/`, so they sat at the session root,

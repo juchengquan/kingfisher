@@ -44,7 +44,8 @@ TOOL_RESULTS = "tool_results"
 
 #: deepagents' own folder for a result too long to show the model whole. Its offloading is
 #: off -- `standing_middleware` replaces the middleware that would -- but its summariser
-#: still writes here on a refusal for length that clearing could not answer. Reserved
+#: still writes here, before sending a request still over the model's input budget once
+#: summarised, and on a refusal for length that clearing could not answer. Reserved
 #: below, so a layout holding the name cannot overwrite either.
 OFFLOADS = "large_tool_results"
 

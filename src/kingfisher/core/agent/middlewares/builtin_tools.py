@@ -478,9 +478,9 @@ JOINED = (
     'for "foo" and for "bar", each literally, while'
 )
 
-#: deepagents' sentence on where a long result is kept, naming a folder only its answer to
-#: a refusal for length writes, with a stub naming the path: `standing_middleware` turns
-#: its offloading off, so every other result is under this layout's own folder. Left to
+#: deepagents' sentence on where a long result is kept, naming a folder only its
+#: summariser writes, with a stub naming the path: `standing_middleware` turns its
+#: offloading off, so every other result is under this layout's own folder. Left to
 #: say nothing rather than reworded, because the section above already tells the model
 #: where results are and says it once.
 OFFLOADED_ELSEWHERE = (
