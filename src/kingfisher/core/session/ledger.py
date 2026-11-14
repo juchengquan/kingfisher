@@ -222,8 +222,8 @@ def file_left(
     """File, in one save, what left the conversation this turn with no file: each result
     behind the summary's cut, `away`, and a subagent's results its run did not file.
 
-    Before the ledger is written, so its rows name the files. Only now for `away`: the
-    whole of each is held in state until the turn ends.
+    Before the ledger is written, so its rows name the files. For `away`, at the turn's
+    end, and after a summary made mid-turn, whose rows `/records/conversation.md` lists.
     """
     wanted = list(ledger.held())
     for message in away:

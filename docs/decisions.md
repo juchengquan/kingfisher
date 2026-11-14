@@ -2905,7 +2905,9 @@ history is for. *(2026-10-21.)* *Since 2026-10-22 the offloads are made with the
 too: deepagents' summariser writes there mid-turn, on a refusal for length clearing could
 not answer or a request still over the input budget once summarised, and bubblewrap's
 fence is built once a turn, so a folder it made was the
-shell's to write until the next.*
+shell's to write until the next.* *Since 2026-11-14 neither the history nor the offloads is
+made, and nothing writes either: deepagents' writes there are refused, below. Both stay
+denied and reserved.*
 
 **Kept records have a folder of their own, `/records/`, which the agent reads and never
 writes.** The saved results sat in `/scratchpad/tool_results/`, a read-only hole in a
@@ -2919,6 +2921,58 @@ record of a conversation is meant to go (`docs/design/2026-11-14-records.md`).
 deepagents' three folders stay in the scratchpad for now. No migration and no refusal: an
 older session's rows still name `/scratchpad/tool_results/`, which is now ordinary
 scratchpad. *(2026-11-14, #1309.)*
+
+**The conversation a summary replaced is kingfisher's to keep, in
+`/records/conversation.md`, rebuilt from the turn log; deepagents keeps no copy.** Measured
+with a scripted turn: deepagents' summariser wrote what it removed to
+`/scratchpad/conversation_history/session_<id>.md`, a new file a summary, and no rewind
+touched it, so after a rewind to before a summary a new turn's `read_file` on it returned
+the words of the turns the rewind abandoned. The turn log already keeps every message as
+first written and rebuilds a conversation along the current path, so the file is that,
+for what summaries removed alone: a heading a turn, the user's and the assistant's words
+and each call, and a result as its ledger row -- id, call, size, file -- never its text,
+which would be a second copy of a file a rewind may hide. What kingfisher added to a
+turn's message is left out; its rows are there already. No file where nothing on the path
+was summarised.
+
+*Built where the mistakes are cheapest to stop.* **The refusal is the backend's**, not a
+middleware's: `build_agent` hands deepagents a copy of the session's `CompositeBackend`
+with `conversation_history/` and `large_tool_results/` under its `artifacts_root` routed to
+`NothingKept`, which holds nothing and refuses every write with a result rather than an
+exception. A copy, so a sessions plugin's class and every other route still run, and read
+off `artifacts_root` as deepagents reads it, so it holds on any plugin; at the top of the
+build, so every summariser -- the agent's, a subagent's, `general-purpose`'s, a helper's,
+one a definition names -- writes through it. deepagents' warning about the refused write,
+an error log and a `UserWarning` on every summary, is quietened by its message, as the
+QuickJS one is. **The pointer is in the request**, by `SummaryPointerMiddleware` inside
+the summariser on the agent's stack: deepagents leaves out its "saved to" line once the
+write fails, and the summary between turns is rebuilt from the log, so one middleware
+opening every summary-marked message with the file's route covers both. Not in the log or
+the state: the turn's end compares the state with the log's replay, and text in one and
+not the other is a rewrite line every turn. **Rebuilt as a summary is made**, by that
+middleware, when the request opens on a summary the state does not yet hold, so a later
+call of the same turn reads what was just summarised; the summarised results are filed
+then rather than at the turn's end, so their rows name their files. **And at a turn's
+start only where the path moved**: a rewind since the last turn, or a turn that never
+ended. Any other turn starts on the file the last left, unchanged, and a turn after a
+summary still reads the recent half of the log alone. An expired result's row may name its
+removed file until the file is next rebuilt; its `read_file` says the result expired.
+
+**A subagent keeps its summary only.** Its summariser's writes are refused like the
+agent's, and nothing records what it replaced: its run is one tool call of the agent's.
+
+**A batch still over the budget once summarised fails the turn.** deepagents' overflow cut
+copies each trailing result but a `read_file`'s to `large_tool_results/`; refused, it keeps
+them whole and raises `ContextOverflowError`. The owner accepted the failure over a second
+store. The turn ends `model_unavailable`, saying the conversation does not fit its input
+window even once summarised: a later turn may, since its summary takes that batch in. Any
+`ContextOverflowError` reaching the turn ends it so, where it was a traceback.
+
+**Not taken: a store a rewind moves.** Keeping deepagents' files and moving them with a
+rewind would keep two records of one conversation that can disagree, the one the agent
+reads not the one kingfisher rebuilds from. No migration: an older session's history
+files stay, unreachable through the file tools. *(2026-11-14, after #1309;
+`docs/design/2026-11-14-records.md` slice (b).)*
 
 **What a failure says about a path is the path the model wrote.** Two spellings reached
 the model instead, both measured from its own seat. The composite strips a route before
@@ -3241,6 +3295,11 @@ not one a session.** deepagents names the file by an id it also keeps in private
 carrying that id across turns is the same workaround, and after this fix the files do not
 overlap. **Kept for the life of the session**, unlike saved tool results: a history file
 is the only copy of what it holds, and no call fetches it again. *(2026-10-21.)*
+*Superseded on 2026-11-14: deepagents keeps no history file, and what a summary replaced
+is in `/records/conversation.md`, rebuilt from the log along the current path; see* The
+conversation a summary replaced is kingfisher's to keep *above. The summary still keeps
+its `lc_source` mark, and the log keeps deepagents' text; the line naming the file is
+added in the request alone.*
 
 **Whether the model may cite a result is a deployment's switch, on by default.**
 `KINGFISHER_CITE_RESULTS`, read into `Config.cite_results`. Citing is the provenance the
@@ -5661,6 +5720,9 @@ never the session itself, so the shell can write these where it could not write 
 root-level ones; they are working material nothing kingfisher reads back trusts, so that is
 accepted rather than fenced. *No migration*: an older session keeps its root-level folders
 until it is reaped. *(2026-10-11.)*
+*Since 2026-11-14 deepagents' writes to the two are refused, whatever the root: see* The
+conversation a summary replaced is kingfisher's to keep. *`artifacts_root` still decides
+where the refused folders are.*
 
 **A save outside every folder of the session is refused.** A file saved at the top of a
 session, or in a folder the layout does not name, is handed back to nobody, and the tool

@@ -50,6 +50,7 @@ from .logged import INFO, ORIGINS, handed
 from .origins import Origins
 from .reporting import what_opens
 from .request import Request, Resume, caller_of
+from .session.conversation import ConversationRecord
 from .session.disposal import Disposal
 from .session.first_call import FirstCall
 from .session.ledger import Ledger
@@ -275,6 +276,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, FirstCall):
         session_id: str,
         catalogue: Definitions,
         ledger: Ledger | None = None,
+        conversation: ConversationRecord | None = None,
         caller: Caller | None = None,
         users_memory: bool = False,
     ) -> Any:
@@ -320,6 +322,7 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, FirstCall):
             checkpointer=checkpointer,
             catalogue=catalogue,
             ledger=ledger,
+            conversation=conversation,
         )
 
     def _turn_text(self, session_id: str, caller: Caller) -> str | None:

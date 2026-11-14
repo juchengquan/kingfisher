@@ -430,6 +430,14 @@ class Running:
             turn.ok = True
             turn.pending.append(model_unavailable(exc.why))
         except Exception as exc:
+            # Ahead of the 4xx: a provider's own overflow is one, and deepagents has already
+            # summarised and retried once before it lets one through.
+            if (why := provider_errors.overflowed(exc)) is not None:
+                turn.answer = normalize_answer(turn.answer)
+                turn.stop_reason = "model_unavailable"
+                turn.ok = True
+                turn.pending.append(model_unavailable(why))
+                return
             # Only a provider's 4xx, which the person at the terminal can fix, becomes a
             # one-line error; the rest keep their traceback, so a bug still looks like one.
             if (refused := refused_request(exc, self.cfg)) is None:

@@ -182,6 +182,24 @@ def _turn_lines(  # noqa: PLR0913 -- what the turn was asked, and what its state
     return lines
 
 
+def lines_so_far(  # noqa: PLR0913 -- `_turn_lines`' own, less the ending
+    turn: str,
+    parent: str | None,
+    *,
+    parts: Sequence[Part],
+    history: int,
+    resumed: Resuming | None,
+    snapshot: Any,
+) -> list[dict[str, Any]]:
+    """The lines this turn would log were it to end on `snapshot` now, without the answer
+    line it has not reached: what a summary made mid-turn is read against."""
+    lines = _turn_lines(
+        turn, parent, parts=parts, history=history, resumed=resumed, snapshot=snapshot,
+        answer="", stop_reason=None, started=0.0, ended=0.0,
+    )
+    return [line for line in lines if ANSWER not in line]
+
+
 def _with_parts(added: list[dict[str, Any]], parts: Sequence[Part], turn: str) -> None:
     """Keep the turn's message, the first user line in `added`, as the pieces it was sent
     as. Not always first: deepagents answers a superseded pause's calls ahead of it."""

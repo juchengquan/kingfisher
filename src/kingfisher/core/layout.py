@@ -46,16 +46,19 @@ RECORDS = "records"
 #: anyone gives a folder of their own work.
 TOOL_RESULTS = "tool_results"
 
-#: deepagents' own folder for a result too long to show the model whole. Its offloading is
-#: off -- `standing_middleware` replaces the middleware that would -- but its summariser
-#: still writes here, before sending a request still over the model's input budget once
-#: summarised, and on a refusal for length that clearing could not answer. Reserved
-#: below, so a layout holding the name cannot overwrite either.
+#: What summaries replaced along the session's current path, under the records: rebuilt
+#: from the turn log, never written by deepagents, so a rewind takes back what it holds.
+CONVERSATION_FILE = "conversation.md"
+
+#: deepagents' own folder for a result too long to show the model whole. Nothing writes
+#: it: its summariser's write here is refused by the backend `build_agent` hands it, so a
+#: batch still over the budget once summarised fails the turn rather than leave a copy no
+#: rewind follows. Reserved below, so a layout holding the name cannot overwrite either.
 OFFLOADS = "large_tool_results"
 
-#: The conversation deepagents keeps aside: what a summary left behind, and a message too
-#: long to send. Written in every deployment, and the prompt sends the model here to read
-#: some back, which is what makes a write here forgery rather than editing.
+#: Where deepagents' summariser would keep the conversation it replaced. Refused the same
+#: way: `/records/conversation.md`, rebuilt from the turn log, is the one copy, and it
+#: follows a rewind where a file here did not.
 HISTORY = "conversation_history"
 
 #: An attachment's payload, where deepagents keeps one it replaced in a message with a
@@ -78,9 +81,9 @@ HARNESS = ".harness"
 LEDGER_FILE = "ledger.jsonl"
 #: Every turn's messages as first written, each tagged with its turn, and each turn with
 #: the turn it followed: the only record of what was said, which every turn's
-#: conversation is rebuilt from. Here, because the agent can write
-#: `conversation_history/`, and a conversation rebuilt from that is one it wrote itself.
-#: Once the log is split, the settled turns' lines alone.
+#: conversation is rebuilt from, and `/records/conversation.md` too. Here, because the
+#: agent can write the scratchpad, and a conversation rebuilt from that is one it wrote
+#: itself. Once the log is split, the settled turns' lines alone.
 TURNS_FILE = "turns.jsonl"
 #: The turns since the log was last split, whole, and every other turn by its opening line
 #: alone, so that an ordinary turn reads and writes this file and not `TURNS_FILE`, which
@@ -251,6 +254,11 @@ class Layout:
         return _route(self.records, self.tool_results)
 
     @property
+    def conversation_route(self) -> str:
+        """The conversation summaries replaced, as the file tools name it."""
+        return f"{self.records_route}{CONVERSATION_FILE}"
+
+    @property
     def kept_record_routes(self) -> tuple[str, ...]:
         """Each kept-records folder as the agent addresses it, in the same order."""
         return tuple(_route(*path.split("/")) for path in self.kept_records)
@@ -276,13 +284,14 @@ class Layout:
 
     @property
     def history(self) -> str:
-        """Where the conversation kept aside goes, as a path inside the session."""
+        """Where deepagents' summariser would keep the conversation it replaced, as a
+        path inside the session."""
         return f"{self.scratchpad}/{HISTORY}"
 
     @property
     def offloads(self) -> str:
-        """Where deepagents puts a result it took out of a message, as a path inside the
-        session."""
+        """Where deepagents would put a result it took out of a message, as a path inside
+        the session."""
         return f"{self.scratchpad}/{OFFLOADS}"
 
     @property
@@ -292,27 +301,18 @@ class Layout:
 
         The records whole, not only `saved_results`, the folder a ledger row names and the
         unused results walk: nothing kingfisher keeps there is the agent's to write.
-        deepagents' three folders hold no rows, and the offloads and `blobs` are listed
-        though only its summariser writes the one and nothing the other: a deployment
-        that replaces `FilesystemMiddleware` back turns both on, and a rule written for
-        what writes today would not be there on the day it did.
+        deepagents' three folders are listed though nothing writes them: a deployment that
+        replaces `FilesystemMiddleware` back turns `blobs` on, and a rule written for what
+        writes today would not be there on the day something did.
         """
         return (self.records, self.history, f"{self.scratchpad}/{BLOBS}", self.offloads)
 
     @property
     def made_dirs(self) -> tuple[str, ...]:
-        """Every directory a session is made with: the agent's, `.harness`, the saved
-        results, the history and the offloads.
-
-        The last two are made here although deepagents makes each on its first write
-        anyway, because a fence binds one read-only only if it is there when the fence is
-        built, once a turn: `present` drops an absent path, so a folder made after it --
-        by deepagents mid-turn, or by the shell itself -- is the shell's to write until
-        the next turn's fence binds what it wrote. `blobs` stays absent, since nothing
-        writes it and a mount does not make a folder.
-        """
-        return (*self.session_dirs, HARNESS, *self.saved_results, self.history,
-                self.offloads)
+        """Every directory a session is made with: the agent's, `.harness` and the saved
+        results. deepagents' three are not, since nothing writes them, and a shell that
+        makes one makes a folder no file tool reads."""
+        return (*self.session_dirs, HARNESS, *self.saved_results)
 
     @property
     def unlinked_dirs(self) -> tuple[str, ...]:
@@ -360,11 +360,11 @@ class Layout:
             Route(self.scratch_route, routed=False),
             # The kept records: read-only to the file tools, and mounted only so the rules
             # can be written, since deepagents refuses a rule whose path is under no route.
-            # A row names its file and the prompt sends the model to the history, so a
-            # write in either forges what a later turn reads as true. The shell is the
-            # fences' to refuse, via `shell_read_only`. Landlock never grants the records,
-            # and cannot refuse inside the scratchpad it grants whole, so no boundary is
-            # claimed for the three folders deepagents writes there.
+            # A row names its file and a summary names the conversation, so a write in
+            # either forges what a later turn reads as true. The shell is the fences' to
+            # refuse, via `shell_read_only`. Landlock never grants the records, and cannot
+            # refuse inside the scratchpad it grants whole, so no boundary is claimed for
+            # deepagents' three folders there, which nothing writes.
             *(
                 Route(route, deny_write_under=f"{route}**")
                 for route in self.kept_record_routes

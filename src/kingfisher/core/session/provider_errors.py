@@ -73,6 +73,26 @@ def unavailable(exc: BaseException) -> str | None:
     return None
 
 
+#: What langchain and deepagents raise for a request that does not fit the model's input
+#: window, by name as the rest here are.
+OVERFLOW = "ContextOverflowError"
+
+
+def overflowed(exc: BaseException) -> str | None:
+    """Why the turn could not go on where `exc` says its request does not fit even once
+    summarised, else `None`.
+
+    deepagents raises it only after its own summary and its one smaller retry, and its
+    cut of an oversized batch keeps the results whole where it may not copy them aside;
+    a later turn may fit, since its summary takes that batch in too.
+    """
+    if OVERFLOW not in {cls.__name__ for cls in type(exc).__mro__}:
+        return None
+    return f"the conversation does not fit its input window even once summarised: {exc}"[
+        :PREVIEW
+    ]
+
+
 def error_type(exc: BaseException) -> str | None:
     """The provider's name for the error, on the exception or in the body it came with."""
     kind = getattr(exc, "type", None)

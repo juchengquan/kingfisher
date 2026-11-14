@@ -43,7 +43,6 @@ from kingfisher.core.layout import (
     PAUSED_STATE,
     RECENT_TURNS_FILE,
     RECORDS,
-    SCRATCH,
     TOOL_RESULTS,
     Layout,
 )
@@ -1987,7 +1986,7 @@ def test_once_a_turn_summarised_the_next_message_carries_the_index_and_not_the_d
 def test_a_summarised_conversation_is_not_summarised_again_the_next_turn(ledgered):
     """The summary lived only in the turn's private state, so the next turn started from
     every message again, past the trigger, and summarised the whole conversation once a
-    turn -- a summary call and a new history file repeating the early messages, each time.
+    turn -- a summary call over nearly everything, each time.
 
     Driven through deepagents' real summariser over turns, because the bug is in what
     crosses from one turn to the next.
@@ -2002,8 +2001,6 @@ def test_a_summarised_conversation_is_not_summarised_again_the_next_turn(ledgere
     _say(kf, "go", AIMessage(content="done"))
 
     assert Scripted.summaries == 1, "a conversation already summarised was summarised again"
-    history = _session(cfg) / SCRATCH / "conversation_history"
-    assert len(list(history.glob("*.md"))) == 1
     saved = read_conversation(_session(cfg) / HARNESS)
     assert saved[0].summary, "the conversation does not open on the summary"
     assert HALF not in [message.content for message in saved[:1]]

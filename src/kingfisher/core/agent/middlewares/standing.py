@@ -37,12 +37,14 @@ from .scratch_runs import ScratchRunsMiddleware, limit_answer
 from .signed_thinking import SignedThinkingMiddleware, signers_of
 from .step_budget import StepBudget, StepBudgetMiddleware
 from .stopping import StoppingMiddleware
+from .summary_pointer import SummaryPointerMiddleware
 from .turn_instructions import TurnInstructionsMiddleware
 
 if TYPE_CHECKING:
     from kingfisher.core.agent.models import SummarizerCount
     from kingfisher.core.config import Config
     from kingfisher.core.interfaces import PdfAttachments, ScratchRunLimit
+    from kingfisher.core.session.conversation import ConversationRecord
     from kingfisher.core.session.ledger import Ledger
 
 #: The graphs kingfisher builds itself: the agent, a subagent a definition declares, and
@@ -82,6 +84,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     turn_text: str | None,
     turn_cached: bool = True,
     hands_to_compiled: bool = False,
+    conversation: ConversationRecord | None = None,
 ) -> list[AgentMiddleware[Any, Any, Any]]:
     """Every standing middleware for one graph, in the order it wraps it.
 
@@ -96,9 +99,10 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     for what the tool raised and must not answer for them -- cannot be left off a graph.
 
     `turn_cached` is false only for a helper, whose stack its parent's own
-    `SubAgentMiddleware` builds with no prompt caching.
+    `SubAgentMiddleware` builds with no prompt caching. `conversation` is the turn's
+    record of what summaries replaced, the agent's alone.
     """
-    if kind != "agent" and reachable is not None:
+    if kind != "agent" and (reachable is not None or conversation is not None):
         msg = f"the declared-subagent check is the agent's, not a {kind}'s"
         raise ValueError(msg)
     # Whatever this turn's text: refused only on some sessions, it would look intermittent.
@@ -118,6 +122,9 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     standing: list[AgentMiddleware[Any, Any, Any]] = (
         [] if clearing is None else [clearing(granted)]
     )
+    # After clearing, which measures the summariser's request before this lengthens it.
+    if conversation is not None:
+        standing.append(SummaryPointerMiddleware(conversation))
     # Ahead of every tool wrapper here and in `inner`, so a deployment's reads what the tool
     # reads.
     standing.append(CurrentGraphMiddleware(None if kind == "agent" else name))

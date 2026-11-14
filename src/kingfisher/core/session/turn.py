@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.tool_context import ToolContext
     from kingfisher.core.config import Config
 
+    from .conversation import ConversationRecord
     from .files import InputsChanged
     from .ledger import Ledger
     from .messages import Message
@@ -57,6 +58,9 @@ class Prepared:
     #: What this turn's tools returned, kept when it ends, or `None` for a graph the
     #: caller built, which nothing here can hook.
     ledger: Ledger | None
+    #: What summaries replaced, kept current mid-turn by the agent's graph; `None` where
+    #: the turn keeps no ledger, whose rows it lists.
+    conversation: ConversationRecord | None = None
     #: The saver the turn ran on, which a turn stopping at a gate writes out before
     #: letting it go.
     saver: Any = None
@@ -261,15 +265,15 @@ def _listed(entries: Sequence[LedgerEntry]) -> list[str]:
     lines: list[str] = []
     for entry in entries:
         if entry.run is None:
-            lines.append(_delta_line(entry))
-            lines.extend(f"  {_delta_line(one)}" for one in under.pop(entry.call, ()))
+            lines.append(ledger_line(entry))
+            lines.extend(f"  {ledger_line(one)}" for one in under.pop(entry.call, ()))
     lines.extend(
-        f"{_delta_line(one)}  (its task never answered)" for one in entries if one.run in under
+        f"{ledger_line(one)}  (its task never answered)" for one in entries if one.run in under
     )
     return lines
 
 
-def _delta_line(entry: LedgerEntry) -> str:
+def ledger_line(entry: LedgerEntry) -> str:
     """One entry, ending in its file; or in why it has none, saying nothing for one still
     in the conversation."""
     called = f"{entry.tool} {entry.args}" if entry.args else entry.tool

@@ -286,13 +286,11 @@ class WorkspaceScopedBackend(CompositeBackend):
         workspace: Path,
         layout: Layout,
     ) -> None:
-        # Where deepagents writes on its own: a tool result too long to send, the history
-        # its summarizer keeps, an attachment's payload. Working material, so not
-        # `/outputs`, which would hand each to the caller as an artifact, nor the default
-        # `/`, outside every folder the layout names. Each is a kept record, denied to the
-        # file tools and to the shell: kingfisher reads none of them back, but the prompt
-        # sends the model to the history, and that reader is the one being protected.
-        # deepagents reads this only off a `CompositeBackend`, so it is set here.
+        # Where deepagents would write on its own: a tool result too long to send, the
+        # history its summarizer keeps, an attachment's payload. The core refuses the first
+        # two under whatever root this is, so it decides where the refused folders sit: not
+        # `/outputs`, handed to the caller, nor the default `/`, outside every folder the
+        # layout names. deepagents reads this only off a `CompositeBackend`.
         super().__init__(default=default, routes=routes, artifacts_root=layout.scratch_route)
         #: What a host path is refused against; not the session, which the refusal's
         #: suggestion needs separately.
@@ -438,8 +436,8 @@ def backend_at(  # noqa: PLR0913 -- one keyword per thing a session's backend is
         layout.harness_route: lambda: RootedBackend(root_dir=str(session_dir / layout.harness)),
     }
     # Each kept record for the same reason, readable: the agent reads a result and the
-    # conversation kept aside back from them, and only writing is denied. A mount does not
-    # make the folder, so `blobs`, which nothing writes, stays absent until something does.
+    # conversation back from them, and only writing is denied. A mount does not make the
+    # folder, so deepagents' three, which nothing writes, stay absent.
     backing.update({
         route: (lambda folder=folder: RootedBackend(root_dir=str(session_dir / folder)))
         for route, folder in zip(layout.kept_record_routes, layout.kept_records, strict=True)

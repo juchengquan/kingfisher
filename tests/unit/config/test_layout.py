@@ -60,12 +60,9 @@ def test_the_default_layout_is_the_module_constants():
     )
     assert default.history == "scratchpad/conversation_history"
     assert default.offloads == "scratchpad/large_tool_results"
-    # Made, unlike `blobs`: a fence binds only a folder that is already there.
-    assert default.made_dirs[-2:] == (
-        "scratchpad/conversation_history",
-        "scratchpad/large_tool_results",
-    )
-    assert "scratchpad/blobs" not in default.made_dirs
+    assert default.conversation_route == "/records/conversation.md"
+    # None of deepagents' three is made: nothing writes them, and they stay reserved.
+    assert not {default.history, default.offloads, "scratchpad/blobs"} & set(default.made_dirs)
 
 
 # -- a renamed layout derives everything from its leaves ------------------------
@@ -81,6 +78,7 @@ def test_a_renamed_layout_spells_every_route_from_its_leaves():
     assert MOVED.scratch_route == "/scratch/"
     assert MOVED.records_route == "/kept/"
     assert MOVED.tool_results_route == "/kept/results/"
+    assert MOVED.conversation_route == "/kept/conversation.md"
     assert MOVED.saved_results == ("kept/results",)
     # Only the parent moves: the three leaves are deepagents' own spellings.
     assert MOVED.kept_records == (

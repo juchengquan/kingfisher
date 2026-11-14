@@ -104,7 +104,8 @@ def test_a_folder_spelled_in_other_capitals_is_refused_by_every_file_tool(
     assert sorted(p.name for p in (session / "records" / "tool_results").iterdir()) == [
         "kept.txt"
     ]
-    assert not list((session / "scratchpad" / "conversation_history").iterdir())
+    history = session / "scratchpad" / "conversation_history"
+    assert not history.exists() or not list(history.iterdir())
 
 
 def test_the_folders_spelled_as_they_are_are_untouched(scripted, session):

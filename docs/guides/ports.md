@@ -1303,16 +1303,19 @@ dropping its leading slash, and route one somewhere the shell cannot follow, and
 agent can read its inputs and run nothing over them, with a confused model as the
 only symptom.
 
-**deepagents' own files have to land under `/scratchpad/`.** The summarizer saves
+**deepagents' own folders have to sit under `/scratchpad/`.** Its summarizer would save
 the conversation it replaces under the composite's `artifacts_root`, as
-`conversation_history/`, and the prompt tells the agent that is `/scratchpad/`. A tool
-result too long to show whole is kingfisher's to save, under `/records/tool_results/`, whatever
-`artifacts_root` says. The backend `backend_at` builds has it set, and so does a
-subclass of its class that calls its `__init__`. A `CompositeBackend` of your own
-defaults to `/` and puts that folder at the session root: pass
-`artifacts_root="/scratchpad/"`. deepagents reads it only off a
-`CompositeBackend`, so on anything else it is `/` whatever you set.
-`offloads_in_the_scratchpad` reads it the same way.
+`conversation_history/`, and a batch too long to send as `large_tool_results/`.
+kingfisher hands deepagents a copy of your backend with both routed to a folder that
+holds nothing and refuses every write, read off `artifacts_root` as deepagents reads it,
+so nothing lands there on any backend; the conversation a summary replaced is
+kingfisher's to keep, in `/records/conversation.md`. A tool result too long to show whole
+is kingfisher's to save too, under `/records/tool_results/`, whatever `artifacts_root`
+says. The backend `backend_at` builds has it set, and so does a subclass of its class
+that calls its `__init__`. A `CompositeBackend` of your own defaults to `/`, which puts
+the refused folders at the session root: pass `artifacts_root="/scratchpad/"`.
+deepagents reads it only off a `CompositeBackend`, so on anything else it is `/`
+whatever you set. `offloads_in_the_scratchpad` reads it the same way.
 
 **The shell may not write under `/.harness`, `/inputs` or `/records`.** `shell_denied`
 writes a file there through the backend, then has the shell try to overwrite it and to create
@@ -1321,8 +1324,8 @@ sandbox off it fails on `/.harness`, which is exactly the deployment it is there
 to catch.
 
 **And the kept records in the scratchpad, which the kit does not ask about.**
-`/scratchpad/conversation_history/` and the two folders beside it hold what happened
-rather than what the agent made, as `/records/` does, and the prompt sends the model to
+`/scratchpad/conversation_history/` and the two folders beside it are reserved for what
+happened rather than what the agent made, as `/records/` is, and the prompt sends the model to
 read the history back — so a shell that can write it lets the agent forge a conversation
 for a later turn to find. The file tools are refused by the rules kingfisher builds from
 `Layout.kept_records`, whatever backend is underneath; the shell is yours to keep out,
