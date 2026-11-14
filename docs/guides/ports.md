@@ -324,6 +324,7 @@ and its sentence says them again:
 | `pdf_attachments_failed` | your `PdfAttachments` raised | `tool`, `call`, `error_type`, `error_at` |
 | `result_not_filed` | a result leaving the conversation could not be saved | `result`, `path`, `reason` |
 | `result_not_kept` | a result too long to show whole could not be saved | `tool`, `call`, `result`, `path`, `reason` |
+| `result_not_moved` | a rewind could not move a saved result into or out of `/.harness/off_path_results/`; the next turn or rewind tries again | `path`, `reason` |
 | `run_events_failed` | a sink raised, below | `dropped`, `error_type`, `error_at` |
 | `scratch_folder_left` | a scratch run's folder could not be removed | `path`, `reason` |
 | `scratch_run_limit_failed` | your `ScratchRunLimit` raised | `kind`, `graph`, `error_type`, `error_at` |
@@ -486,7 +487,7 @@ The command does not take it. Left out, it is
 written, and only when there is something to hand over: a turn that leaves no unused
 file does not call it. What it is handed is an `UnusedFiles`, which has the
 `session_id` they are in and iterates as one `UnusedFile` per file, each with `path`
-(as the agent's file tools name it), `size` (in bytes as the backend listed it, or
+(where it is in the session, as the backend names it), `size` (in bytes as the backend listed it, or
 `None` where the listing did not say), `read()` and `remove()`. That is all of it.
 There is no way through it to any other file in the session: a path not among those
 handed over is refused, and the session's backend is not on offer.
@@ -494,7 +495,8 @@ handed over is refused, and the session's backend is not on offer.
 Every file handed over has already been judged safe to drop: no row names it, and its
 name starts with a result's id, as the recorder names it, so a file the agent's shell
 wrote into the folder under a name of its own is never among them. Nothing outside that
-folder is ever handed over: it is the one place a result is saved.
+folder is ever handed over but `/.harness/off_path_results/`, where a rewind keeps the
+results of the turns it left behind, and a result there expires as one on the path does.
 
 Things to know:
 

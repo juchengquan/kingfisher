@@ -17,7 +17,8 @@ if TYPE_CHECKING:
 class UnusedFile:
     """One recorded result no ledger row names."""
 
-    #: Where it is in the session, as the agent's file tools name it.
+    #: Where it is in the session, as its backend names it: under `.harness` for a result
+    #: of a turn a rewind left behind, which the agent's file tools do not reach.
     path: str
     #: Its length in bytes as the session's backend listed it, or `None` where the
     #: listing did not say.

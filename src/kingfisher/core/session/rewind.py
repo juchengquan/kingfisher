@@ -29,6 +29,7 @@ from .file_history import (
 )
 from .files import walk_artifacts
 from .model import START, RewindError, RewindPart, Start
+from .off_path_results import results_moving, results_placed, results_unsettled
 from .steps import changing, reading
 from .store import (
     RESUMED,
@@ -109,6 +110,13 @@ def rewound(
     else:
         msg = f"this session has no turn {to!r}"
         raise RewindError(msg)
+    if (yield from results_unsettled(harness)):
+        # Finished before the turns off the path change: a file then found in both folders
+        # is one this move stopped copying, whose source is whole.
+        unsettled = yield from results_placed(files, harness, layout, ledger, log.off_path)
+        if unsettled is not None:
+            msg = f"the saved results an earlier rewind began moving could not be: {unsettled}"
+            raise RewindError(msg)
     mark = yield from read_pause_mark(harness)
     discarded = pending_from_mark(mark) if mark is not None else ()
     # Superseded, as a new request supersedes it: the pause was asked on a conversation the
@@ -128,7 +136,13 @@ def rewound(
         # the path and the ledger counts only the turns on it, so a rewind dying after this
         # leaves the session at the turn rewound to, holding the files and the record of the
         # inputs the turns after it left, as a rewind that restored none would.
-        yield from write_off_path(harness, frozenset(turns.keys() - set(path)))
+        off_path = frozenset(turns.keys() - set(path))
+        # Before the path: a rewind dying between the two would leave its moves to no one.
+        yield from results_moving(harness)
+        yield from write_off_path(harness, off_path)
+        # Not refused when a move fails: the mark stays, and the next turn or rewind
+        # finishes it.
+        yield from results_placed(files, harness, layout, ledger, off_path)
         yield from restore_state(harness, records, path, (INPUTS_SEEN,))
     if only != "conversation":
         yield from restore_state(harness, records, path, (MEMORY_WRITER,))
