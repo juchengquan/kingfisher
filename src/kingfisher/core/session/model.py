@@ -77,6 +77,10 @@ class QuotaExceededError(ValueError):
     """A session is already holding more than the deployment allows."""
 
 
+class MessageTooLongError(ValueError):
+    """A turn's message is longer than kingfisher sends; its content belongs in a file."""
+
+
 @dataclass(frozen=True)
 class Turn:
     """One request within a conversation."""

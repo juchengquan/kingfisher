@@ -25,6 +25,7 @@ _EXPORTS = {
     "CapabilityError": "kingfisher.core.access.capabilities",
     "InputsError": "kingfisher.core.session.files",
     "QuotaExceededError": "kingfisher.core.session.model",
+    "MessageTooLongError": "kingfisher.core.session.model",
     "SessionBusyError": "kingfisher.core.session.model",
     "TurnIdError": "kingfisher.core.session.model",
     "RewindError": "kingfisher.core.session.model",
@@ -131,6 +132,7 @@ __all__ = [
     "MemoryChanges",
     "MemoryEntry",
     "MemoryEntryError",
+    "MessageTooLongError",
     "MissingCredentialsWarning",
     "ModelProfile",
     "Models",
@@ -245,6 +247,7 @@ if TYPE_CHECKING:
     from kingfisher.core.session.files import InputsError as InputsError
     from kingfisher.core.session.handle import Session as Session
     from kingfisher.core.session.model import START as START
+    from kingfisher.core.session.model import MessageTooLongError as MessageTooLongError
     from kingfisher.core.session.model import QuotaExceededError as QuotaExceededError
     from kingfisher.core.session.model import RewindError as RewindError
     from kingfisher.core.session.model import SessionBusyError as SessionBusyError

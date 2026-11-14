@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Collection, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
-from deepagents.middleware.filesystem import FilesystemMiddleware
+from deepagents.middleware.filesystem import NUM_CHARS_PER_TOKEN, FilesystemMiddleware
 from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 
 from kingfisher.core.agent.backend import (
@@ -54,6 +55,15 @@ Kind = Literal["agent", "subagent", "general-purpose"]
 
 #: The name deepagents merges its filesystem middleware by, which a deployment's may take.
 FILESYSTEM = FilesystemMiddleware.__name__
+
+#: The longest turn message kingfisher sends, in characters: past it deepagents would have
+#: written the message aside and sent a cut-down copy, counted as it counts. Read off its
+#: default, so an upgrade that moves the limit moves the refusal with it.
+LONGEST_MESSAGE = NUM_CHARS_PER_TOKEN * (
+    inspect.signature(FilesystemMiddleware.__init__)
+    .parameters["human_message_token_limit_before_evict"]
+    .default
+)
 
 
 def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing one is built from
@@ -198,6 +208,9 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
             FilesystemMiddleware(
                 backend=backend,
                 tool_token_limit_before_evict=None,
+                # Off too: a message past `LONGEST_MESSAGE` is refused before the turn, so
+                # the conversation is its one copy and none is written aside.
+                human_message_token_limit_before_evict=None,
                 max_execute_timeout=longest,
                 permissions=permissions,
             )

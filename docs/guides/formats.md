@@ -72,6 +72,16 @@ a later turn replays it as it was sent and is not sent it again. It never goes i
 the system prompt, whose text is the cached part of every call. A `Resume` has
 none, because a resume adds no message.
 
+### How long a message may be
+
+A turn's message -- the task, the note, and kingfisher's own lines after them -- may
+be up to 200,000 characters: deepagents' limit for a user message, 50,000 tokens at
+the four characters it counts each, read from the deepagents installed. One longer
+is refused with `MessageTooLongError` before the turn runs, and `kingfisher run`
+exits 2. Put long content in a file and send it in `inputs`; the agent reads it from
+`/inputs/`. Files sent with a refused request are placed before the message is
+measured, since the message names them, and stay in the session.
+
 `context` is the other half: facts about the caller a tool needs and the model
 does not -- a user id to filter by, a timezone. Names to text, read by nothing in
 kingfisher, and handed to tools as `runtime.context.caller.context`, never to the
