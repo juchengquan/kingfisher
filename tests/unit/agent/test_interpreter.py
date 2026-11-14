@@ -99,9 +99,33 @@ def test_an_unrestricted_request_gets_no_tool_namespace(cfg, session_dir):
     assert _ptc(_interpreter_in(built)) is None
 
 
+def test_an_agent_not_granted_eval_is_not_told_of_it(cfg, monkeypatch):
+    """The interpreter's block, 16k characters saying an `eval` tool is available, sent to
+    an agent whose grant left `eval` out, so the model was told of a tool every call to
+    which is refused."""
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+    wired = replace(cfg, interpreter_enabled=True)
+    an_agent(wired, "without", builtin_tools="[read_file]")
+    # The control: the same build granted `eval` is told, so the block is still wired.
+    an_agent(wired, "with", builtin_tools="[read_file, eval]")
+    kf = Kingfisher(wired, sessions=LocalSessions())
+    try:
+        told = {
+            name: [block.source for block in kf.sent(Request("go", agent=name)).system]
+            for name in ("without", "with")
+        }
+    finally:
+        _close_every_interpreter()
+
+    assert "interpreter" not in told["without"]
+    assert "interpreter" in told["with"]
+
+
 def _interpreter_in(built):
+    from langchain_quickjs import CodeInterpreterMiddleware
+
     for middleware in built.middleware or ():
-        if type(middleware).__name__ == "CodeInterpreterMiddleware":
+        if isinstance(middleware, CodeInterpreterMiddleware):
             return middleware
     return None
 
