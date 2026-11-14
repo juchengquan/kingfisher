@@ -126,7 +126,7 @@ that never is — a file tool, `write_todos` — and wherever no ledger is kept.
 unused, and no other result is given it. A turn that dies before keeping its
 ledger does hand its numbers out again, so write a file named after one where an
 overwrite does no harm. Never write it in the tool results folder,
-`/scratchpad/tool_results/` by default: a file there named like a result, which no
+`/records/tool_results/` by default: a file there named like a result, which no
 row names, is handed to `UnusedResults`, and the default deletes it.
 
 **The set is not a closed list.** It is whatever the two build sites hold, and

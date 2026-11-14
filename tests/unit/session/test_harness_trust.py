@@ -105,7 +105,7 @@ def test_the_kit_catches_a_shell_that_can_write_the_harness(cfg, session_dir):
         shell_denied(lambda: (cfg, backend_at(cfg, session_dir, shell=unfenced)))
 
     said = str(caught.value)
-    assert "/.harness" in said and "/inputs" in said, said
+    assert "/.harness" in said and "/inputs" in said and "/records" in said, said
 
 
 def test_the_kit_passes_where_a_fence_holds_both_folders(cfg, session_dir):

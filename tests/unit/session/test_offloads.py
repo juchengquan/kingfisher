@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
-from kingfisher.core.layout import DEFAULT_LAYOUT, SCRATCH, SCRATCH_ROUTE
+from kingfisher.core.layout import DEFAULT_LAYOUT, RECORDS, SCRATCH, SCRATCH_ROUTE
 from kingfisher.core.session.ledger import Ledger
 from kingfisher.core.session.store import KeptLedger
 from kingfisher.plugins.sessions.backend import backend_at
@@ -68,9 +68,9 @@ def _previewed_into_the_results_folder(model: Shown, session_dir) -> None:
     # the wrong place.
     assert len(str(shown.text)) < 80_000, "the model was shown it whole: nothing previewed"
     assert "row 00000 " in str(shown.text), "the preview kept no head of the result"
-    results = f"{SCRATCH_ROUTE}{DEFAULT_LAYOUT.tool_results}/"
+    results = DEFAULT_LAYOUT.tool_results_route
     assert f"full result: {results}" in str(shown.text)
-    (kept,) = (session_dir / SCRATCH / DEFAULT_LAYOUT.tool_results).iterdir()
+    (kept,) = (session_dir / RECORDS / DEFAULT_LAYOUT.tool_results).iterdir()
     assert kept.read_text(encoding="utf-8").startswith("row 00000 ")
     # Its contents, not whether it is there: every session is made with it.
     assert not list((session_dir / SCRATCH / EVICTED).rglob("*")), "deepagents offloaded it"

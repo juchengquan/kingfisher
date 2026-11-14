@@ -220,8 +220,8 @@ Things to know:
   `shell_here_execute.md`.
 - **A part left `None` is said the neutral way**, claiming only what holds wherever a
   shell runs — for `execute`, deepagents' own line stays — and `""` says nothing there.
-- **`{{inputs}}`, `{{outputs}}`, `{{memory}}`, `{{scratchpad}}` and `{{tool_results}}`
-  are filled from `Config.layout`**, as kingfisher's own wording is, so renaming a
+- **`{{inputs}}`, `{{outputs}}`, `{{memory}}`, `{{scratchpad}}`, `{{records}}` and
+  `{{tool_results}}` are filled from `Config.layout`**, as kingfisher's own wording is, so renaming a
   folder cannot leave your sentence naming the old one. Any other `{{name}}` is refused
   when the `ShellPrompt` is made.
 - **It is read off the shell, not off your `LocalSessions` subclass.** A subclass
@@ -457,7 +457,7 @@ and a sink that keeps state between events wants a lock.
 ## `UnusedResults` — what becomes of a recorded result nothing names
 
 A result kingfisher records — not a file tool's, nor the checklist's — is filed under
-`/scratchpad/tool_results/` once it leaves the conversation, or as it arrives where it is
+`/records/tool_results/` once it leaves the conversation, or as it arrives where it is
 too long to show whole, and the session's ledger names its file. Two things leave a
 file there that no row names: a turn that died before it wrote its ledger, and a result
 older than `KINGFISHER_KEEP_RESULTS_ROUNDS` keeps, once its row is expired. Kingfisher's
@@ -1014,7 +1014,7 @@ with `glob`, what a turn left is listed with `glob` under
 `/outputs/` and `/memory/`, and `Session.artifact` fetches one with
 `download_files`. `Session.memory` reads the memory file with `download_files`, and
 `Session.forget` writes it back with `upload_files`, holding the session's claim, and lists `/.harness/files/` with `ls`, removing with `delete` the folder of any turn no line of the session's file history names. Each tool result a turn records is saved with `upload_files` under
-`/scratchpad/tool_results/`, outside the file tools' permissions, which deny that folder
+`/records/tool_results/`, outside the file tools' permissions, which deny `/records/`
 to them, though your backend's own refusals still apply; at
 the end of the turn that folder is listed with `ls`, and a result file no row of the
 ledger names is handed to
@@ -1040,8 +1040,10 @@ is downloaded to compare: a backend hands a file back only whole, every turn.
 **Those are the default names.** A `Config` may rename a session's folders, and what
 yours has to serve is what the `Config` it is handed says: `cfg.layout`, a `Layout`
 from `kingfisher.plugins`, with each folder's name and a route for each --
-`inputs_route`, `outputs_route`, `scratch_route`, `skills_route`, `harness_route` and
-the rest. `DEFAULT_LAYOUT` is the one a `Config` has unless told. Two folders of the
+`inputs_route`, `outputs_route`, `scratch_route`, `records_route`, `skills_route`,
+`harness_route` and the rest. `records`, the folder kingfisher keeps what happened in
+and the agent may only read, holds the saved results as `tool_results`, so
+`/records/tool_results/` by default; renaming the scratchpad no longer moves them. `DEFAULT_LAYOUT` is the one a `Config` has unless told. Two folders of the
 workspace are on the `Config` too: `cfg.sessions_root`, where kingfisher's own sessions
 are kept and against which the origins line tells them from yours, and
 `cfg.kingfisher_dir`, kingfisher's own folder, where `LocalSessions` keeps what its
@@ -1071,8 +1073,8 @@ behind, and a turn paused at an approval gate are all written
 and read through your backend — which means your agent's shell can reach them too,
 unless your backend keeps it out. Nothing signs them, so what stands between the
 agent and rewriting its own conversation is that fence, and it is yours to get
-right: **`shell_denied`**, in `tests/checks/backend.py`, drives `execute` at `/.harness` and
-`/inputs` and fails if the shell can write either. `kingfisher doctor` warns when
+right: **`shell_denied`**, in `tests/checks/backend.py`, drives `execute` at `/.harness`,
+`/inputs` and `/records` and fails if the shell can write any of them. `kingfisher doctor` warns when
 `KINGFISHER_SESSIONS` names sessions of yours, because it
 cannot look inside them.
 
@@ -1302,7 +1304,7 @@ only symptom.
 **deepagents' own files have to land under `/scratchpad/`.** The summarizer saves
 the conversation it replaces under the composite's `artifacts_root`, as
 `conversation_history/`, and the prompt tells the agent that is `/scratchpad/`. A tool
-result too long to show whole is kingfisher's to save, under `tool_results/`, whatever
+result too long to show whole is kingfisher's to save, under `/records/tool_results/`, whatever
 `artifacts_root` says. The backend `backend_at` builds has it set, and so does a
 subclass of its class that calls its `__init__`. A `CompositeBackend` of your own
 defaults to `/` and puts that folder at the session root: pass
@@ -1310,22 +1312,23 @@ defaults to `/` and puts that folder at the session root: pass
 `CompositeBackend`, so on anything else it is `/` whatever you set.
 `offloads_in_the_scratchpad` reads it the same way.
 
-**The shell may not write under `/.harness` or `/inputs`.** `shell_denied` writes a
-file there through the backend, then has the shell try to overwrite it and to create
+**The shell may not write under `/.harness`, `/inputs` or `/records`.** `shell_denied`
+writes a file there through the backend, then has the shell try to overwrite it and to create
 another beside it. `LocalSessions` passes on the strength of its sandbox; with the
 sandbox off it fails on `/.harness`, which is exactly the deployment it is there
 to catch.
 
-**And the kept records, which the kit does not ask about.** `/scratchpad/tool_results/`,
-`/scratchpad/conversation_history/` and the two folders beside them hold what happened
-rather than what the agent made, and the prompt sends the model to read both of the first
-two back — so a shell that can write them lets the agent forge a result or a conversation
+**And the kept records in the scratchpad, which the kit does not ask about.**
+`/scratchpad/conversation_history/` and the two folders beside it hold what happened
+rather than what the agent made, as `/records/` does, and the prompt sends the model to
+read the history back — so a shell that can write it lets the agent forge a conversation
 for a later turn to find. The file tools are refused by the rules kingfisher builds from
 `Layout.kept_records`, whatever backend is underneath; the shell is yours to keep out,
-and `Layout.shell_read_only` lists the folders. It is not in `shell_denied` because
-kingfisher's own Landlock fence cannot satisfy it — Landlock grants, so a read-only hole
-inside a scratchpad it grants whole cannot be expressed, and a kit kingfisher's own
-backend fails would be a wrong kit. *Every folder of kept records is denied, not only
+and `Layout.shell_read_only` lists the folders. These three are not in `shell_denied`
+because kingfisher's own Landlock fence cannot satisfy it — Landlock grants, so a
+read-only hole inside a scratchpad it grants whole cannot be expressed, and a kit
+kingfisher's own backend fails would be a wrong kit. `/records/` is outside the
+scratchpad, which is why the kit asks about it. *Every folder of kept records is denied, not only
 the ones a row names* in `decisions.md` has the measurements.
 
 The last is ordinary: if you refuse host paths, refuse them with `HostPathError`

@@ -242,6 +242,26 @@ def test_the_shell_cannot_write_the_harness_of_a_session_it_opened(cfg):
 
 
 @needs_landlock
+def test_the_shell_cannot_write_a_saved_result(two_sessions):
+    """A grant of the records would let the shell forge what a later turn reads back as a
+    tool's answer: Landlock only grants, so the records are safe only while no rule names
+    them, which is why they are not in the scratchpad it grants whole.
+    """
+    _, theirs = two_sessions
+    folder = theirs / DEFAULT_LAYOUT.saved_results[0]
+    kept = folder / "A-0001-execute.txt"
+    kept.write_text("as written", encoding="utf-8")
+    runner = _runner_for(theirs)
+
+    runner.run(f"printf FORGED > {kept}")
+    runner.run(f"printf FORGED > {folder / 'A-0002-execute.txt'}")
+    runner.run(f"rm -rf {theirs / DEFAULT_LAYOUT.records}")
+
+    assert kept.read_text(encoding="utf-8") == "as written", "the shell rewrote a result"
+    assert not (folder / "A-0002-execute.txt").exists(), "the shell added a result"
+
+
+@needs_landlock
 def test_the_rest_of_the_session_stays_writable(two_sessions):
     """The bound on the rule above: one directory is left out of the grants, not the
     session's own.

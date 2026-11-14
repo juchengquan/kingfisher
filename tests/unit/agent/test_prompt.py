@@ -92,7 +92,8 @@ def test_the_shell_section_says_where_its_writes_go():
     agent's, both in `test_confinement.py`.
     """
     moved = Layout(
-        inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
+        inputs="in", outputs="out", memory="mem", scratchpad="scratch", records="kept",
+        tool_results="results",
     )
     text = render_system_prompt(layout=moved, shell=kingfishers_shell(fenced=True))
     joined = " ".join(text.split())
@@ -109,7 +110,8 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     names the backend no longer routes -- so every templated path must move together.
     """
     moved = Layout(
-        inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
+        inputs="in", outputs="out", memory="mem", scratchpad="scratch", records="kept",
+        tool_results="results",
     )
     text = render_system_prompt(layout=moved, shell=kingfishers_shell(fenced=True))
     remembered = memory_guidelines(None, moved)
@@ -118,14 +120,14 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     assert '| `/in/<name>` | `"$KINGFISHER_SESSION_ROOT/in/<name>"` |' in text
     assert '| `/out/<name>` | `"$KINGFISHER_SESSION_ROOT/out/<name>"` |' in text
     assert '| `/scratch/<name>` | `"$KINGFISHER_SESSION_ROOT/scratch/<name>"` |' in text
-    assert "/scratch/results/" in text
+    assert "/kept/results/" in text
     # The fixed sub-leaves stay fixed, under the renamed scratchpad.
     assert "/scratch/conversation_history/" in text
     # The memory block names the renamed memory leaf.
     assert "`/mem`" in remembered
 
     # And none of the default spellings the rename replaced.
-    for gone in ("/inputs", "/outputs", "/scratchpad", "/memory", "/tool_results"):
+    for gone in ("/inputs", "/outputs", "/scratchpad", "/memory", "/records", "/tool_results"):
         assert gone not in text, gone
         # Backticked, as the block writes a path: its own closing tag holds `/memory`.
         assert f"`{gone}" not in remembered, gone

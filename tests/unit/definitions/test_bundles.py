@@ -896,10 +896,10 @@ def test_a_bundles_skills_add_a_mount_and_no_rule(cfg, session_dir):
     assert DEFAULT_LAYOUT.denied_scopes() == (
         "/.harness/**",
         "/inputs/**",
+        "/records/**",
         "/scratchpad/blobs/**",
         "/scratchpad/conversation_history/**",
         "/scratchpad/large_tool_results/**",
-        "/scratchpad/tool_results/**",
         "/skills/**",
     )
     assert all(route.startswith("/skills/") for route in mounted), (

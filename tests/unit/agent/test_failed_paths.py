@@ -70,7 +70,7 @@ def _answers(cfg, session_dir, *calls: tuple[str, dict[str, Any]]) -> dict[str, 
         "/inputs/nope.txt",
         "/memory/nope.md",
         "/skills/nope/SKILL.md",
-        "/scratchpad/tool_results/nope.txt",
+        "/records/tool_results/nope.txt",
         # The control: a path under no route, which was right all along.
         "/scratchpad/nope.txt",
     ],

@@ -42,6 +42,7 @@ from kingfisher.core.layout import (
     LEDGER_FILE,
     PAUSED_STATE,
     RECENT_TURNS_FILE,
+    RECORDS,
     SCRATCH,
     TOOL_RESULTS,
     Layout,
@@ -178,7 +179,7 @@ def _rows(cfg) -> list[dict[str, Any]]:
 
 def _kept(cfg) -> list[str]:
     """What the tool results folder holds, by name."""
-    folder = _session(cfg) / SCRATCH / TOOL_RESULTS
+    folder = _session(cfg) / RECORDS / TOOL_RESULTS
     return sorted(one.name for one in folder.iterdir()) if folder.exists() else []
 
 
@@ -228,7 +229,7 @@ def test_a_result_is_recorded_kept_and_handed_to_the_caller(ledgered):
     assert _rows(ledgered)[1:] == [{"turn": result.turn_id, "messages": 4}]
 
 
-def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
+def test_a_renamed_layout_records_under_its_own_records(ledgered):
     """The recorder, the row, and the sweep all follow a renamed layout.
 
     A result lands under the configured `tool_results` folder, the row names it there,
@@ -238,7 +239,8 @@ def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
     moved = replace(
         ledgered,
         layout=Layout(
-            inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
+            inputs="in", outputs="out", memory="mem", scratchpad="scratch", records="kept",
+            tool_results="results",
         ),
     )
     session = ensure_session_layout(moved.workspace / "sessions" / "s2", moved.layout)
@@ -248,11 +250,12 @@ def test_a_renamed_layout_records_under_its_own_scratchpad(ledgered):
     result = service.run(Request("go", agent="only", session_id="s2"))
 
     (entry,) = result.ledger
-    assert entry.path == "/scratch/results/A-0001-loud.txt"
-    kept = session / "scratch" / "results" / "A-0001-loud.txt"
+    assert entry.path == "/kept/results/A-0001-loud.txt"
+    kept = session / "kept" / "results" / "A-0001-loud.txt"
     assert kept.read_text(encoding="utf-8").startswith("row 00000 ")
     # The default spellings are written nowhere: the whole path moved, not a copy of it.
     assert not (session / "scratchpad").exists()
+    assert not (session / "records").exists()
     assert (session / "mem" / "AGENTS.md").exists()
     assert not (session / "memory").exists()
 
@@ -568,7 +571,7 @@ def test_a_tool_name_is_one_path_segment_in_the_tool_results_folder(ledgered):
     result = _run(ledgered, _calls(("../../up.and/away", {}, "c1")), AIMessage(content="done"))
 
     (entry,) = result.ledger
-    assert entry.path == "/scratchpad/tool_results/A-0001-up_and_away.txt"
+    assert entry.path == "/records/tool_results/A-0001-up_and_away.txt"
     assert _kept(ledgered) == ["A-0001-up_and_away.txt"]
 
 
@@ -657,7 +660,7 @@ def test_a_result_file_is_swept_only_once_the_turn_log_is_written(ledgered):
     """Swept before it, a crash between the two leaves the conversation the next turn is
     rebuilt from naming a file that has gone.
     """
-    stray = _session(ledgered) / SCRATCH / TOOL_RESULTS / "A-0007-web_search.txt"
+    stray = _session(ledgered) / RECORDS / TOOL_RESULTS / "A-0007-web_search.txt"
     stray.parent.mkdir(parents=True, exist_ok=True)
     stray.write_text("from a turn that died", encoding="utf-8")
     backends = _Ordered()
@@ -719,7 +722,7 @@ def test_what_the_shell_writes_beside_the_results_is_left_alone(ledgered):
         # One call per message: asked together they run at once, and an id is taken as a
         # call starts, so `execute` sometimes took `A-0001` and the names below did not hold.
         _calls(("loud", {}, "c1")),
-        _calls(("execute", {"command": "printf mine > scratchpad/tool_results/notes.md"}, "c2")),
+        _calls(("execute", {"command": "printf mine > records/tool_results/notes.md"}, "c2")),
         AIMessage(content="done"),
         kf=Kingfisher(ledgered, sessions=LocalSessions(shell=ShellSettings(sandbox="off"))),
     )
@@ -838,7 +841,7 @@ def test_a_result_file_no_row_names_is_swept(ledgered):
     """A turn that died before writing its rows leaves its files behind, and nothing
     else would ever remove them.
     """
-    stray = _session(ledgered) / SCRATCH / TOOL_RESULTS / "A-0007-web_search.txt"
+    stray = _session(ledgered) / RECORDS / TOOL_RESULTS / "A-0007-web_search.txt"
     stray.parent.mkdir(parents=True, exist_ok=True)
     stray.write_text("from a turn that died", encoding="utf-8")
     _run(ledgered, _calls(("loud", {}, "c1")), AIMessage(content="done"))
@@ -861,7 +864,7 @@ class _Refusing(LocalSessions):
         upload = opened.upload_files
 
         def refused(files):
-            if any(path.startswith(f"/{SCRATCH}/{TOOL_RESULTS}/") for path, _ in files):
+            if any(path.startswith(f"/{RECORDS}/{TOOL_RESULTS}/") for path, _ in files):
                 return [FileUploadResponse(path=p, error=self.error) for p, _ in files]
             return upload(files)
 
@@ -921,7 +924,7 @@ class _Raising(LocalSessions):
     def open(self, cfg, session_id, /, *, catalogue=None):
         opened = super().open(cfg, session_id, catalogue=catalogue)
         upload, aupload = opened.upload_files, opened.aupload_files
-        mine = f"/{SCRATCH}/{TOOL_RESULTS}/"
+        mine = f"/{RECORDS}/{TOOL_RESULTS}/"
 
         def raised(files):
             if any(path.startswith(mine) for path, _ in files):
@@ -1778,7 +1781,7 @@ def _entry(  # noqa: PLR0913 -- one keyword for each field the delta reads
         args=args,
         access=None,
         size=size,
-        path=f"/scratchpad/tool_results/{at}-{tool}.txt" if kept and not unkept else None,
+        path=f"/records/tool_results/{at}-{tool}.txt" if kept and not unkept else None,
         summary=tool,
         unkept=unkept,
     )
@@ -1814,12 +1817,12 @@ def test_a_subagents_entries_sit_under_its_answer_and_unanswered_ones_follow_the
 
     assert shown.splitlines() == [
         "<ledger_delta>",
-        "A-0001 search query='EV' -> 14 KB  /scratchpad/tool_results/A-0001-search.txt",
+        "A-0001 search query='EV' -> 14 KB  /records/tool_results/A-0001-search.txt",
         "A-0005 task subagent_type='researcher' -> 2 KB",
-        "  A-0002 fetch url='https://x' -> 30 KB  /scratchpad/tool_results/A-0002-fetch.txt",
-        "  A-0004 sql query='select 1' -> 6 KB  /scratchpad/tool_results/A-0004-sql.txt",
+        "  A-0002 fetch url='https://x' -> 30 KB  /records/tool_results/A-0002-fetch.txt",
+        "  A-0004 sql query='select 1' -> 6 KB  /records/tool_results/A-0004-sql.txt",
         "A-0006 loud -> 99 KB  not kept",
-        "A-0003 search query='BYD' -> 100 B  /scratchpad/tool_results/A-0003-search.txt"
+        "A-0003 search query='BYD' -> 100 B  /records/tool_results/A-0003-search.txt"
         "  (its task never answered)",
         "</ledger_delta>",
     ]
@@ -1838,7 +1841,7 @@ def test_a_size_is_shown_in_the_unit_it_has_reached(size, shown):
     """
     (line,) = ledger_delta([_entry(1, "search", size=size)]).splitlines()[1:-1]
 
-    assert line == f"A-0001 search -> {shown}  /scratchpad/tool_results/A-0001-search.txt"
+    assert line == f"A-0001 search -> {shown}  /records/tool_results/A-0001-search.txt"
 
 
 def test_the_next_message_lists_what_was_recorded_since_the_last_one(ledgered):
@@ -2071,7 +2074,7 @@ def _one_each(*numbers: int) -> list[tuple[LedgerEntry, ...]]:
 def _full(*numbers: int) -> list[str]:
     """Those searches, each as the delta lists it."""
     return [
-        f"{entry_id(n)} search -> 100 B  /scratchpad/tool_results/{entry_id(n)}-search.txt"
+        f"{entry_id(n)} search -> 100 B  /records/tool_results/{entry_id(n)}-search.txt"
         for n in numbers
     ]
 
@@ -2186,7 +2189,7 @@ def test_a_result_older_than_the_rounds_kept_loses_its_file_and_keeps_its_row(le
     first, second = (row for row in _rows(cfg) if "id" in row)
     assert (first["path"], first["expired_in"]) == (None, third.turn_id)
     assert first["summary"].startswith("loud_about subject='c1' -- c1 00000 ")
-    assert second["path"] == "/scratchpad/tool_results/A-0002-loud_about.txt"
+    assert second["path"] == "/records/tool_results/A-0002-loud_about.txt"
     assert second["expired_in"] is None
 
 

@@ -437,7 +437,7 @@ def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
 #: session: each target is a file an offered tool writing to its `path` must not reach.
 PLANTED = {
     "the conversation": ("scratchpad/link", f"{HARNESS}/{TURNS_FILE}"),
-    "a saved result": ("outputs/link", "scratchpad/tool_results/r1.txt"),
+    "a saved result": ("outputs/link", "records/tool_results/r1.txt"),
     "through a linked folder": ("scratchpad/dir", HARNESS),
     "inside a route": ("memory/link", "memory/AGENTS.md"),
 }

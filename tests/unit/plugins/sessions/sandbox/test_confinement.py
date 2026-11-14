@@ -1104,15 +1104,15 @@ def test_the_shell_cannot_lift_the_bits_on_the_callers_inputs(cfg, session_dir):
 
 @macos
 @pytest.mark.parametrize(
-    "layout", [DEFAULT_LAYOUT, Layout(scratchpad="work", tool_results="kept")],
+    "layout", [DEFAULT_LAYOUT, Layout(scratchpad="work", records="kept")],
     ids=["default", "renamed"],
 )
 def test_the_shell_cannot_rewrite_a_saved_result(cfg, layout):
     """A ledger row names its file and a later turn reads the file back as what the tool
     returned, so a shell that can write there forges a result. Tried by overwriting, by
     adding a file, through a hard link, by removing the folder, and by renaming the
-    scratchpad away and back --
-    which beat a rule on the two folders alone: measured, the row's file held `FORGED`.
+    records away and back -- which, done to the scratchpad that held them, beat a rule on
+    the two folders alone: measured, the row's file held `FORGED`.
 
     Through `open`, as a turn gets its backend, so the renamed case also catches a
     layout that reaches the folders but not the fence. Reads stay and the scratchpad
@@ -1120,7 +1120,7 @@ def test_the_shell_cannot_rewrite_a_saved_result(cfg, layout):
     """
     named = replace(cfg, layout=layout)
     backend = LocalSessions().open(named, "results")
-    scratch, kept = layout.scratchpad, layout.tool_results
+    scratch, records = layout.scratchpad, layout.records
     routes = (layout.tool_results_route,)
     backend.upload_files([(f"{route}A-0001.txt", b"as written") for route in routes])
 
@@ -1135,7 +1135,8 @@ def test_the_shell_cannot_rewrite_a_saved_result(cfg, layout):
         )
         backend.execute(f"rm -rf {folder}")
     moved = backend.execute(
-        f"mv {scratch} moved && printf FORGED > moved/{kept}/A-0001.txt; mv moved {scratch}"
+        f"mv {records} moved && printf FORGED > moved/{layout.tool_results}/A-0001.txt; "
+        f"mv moved {records}"
     )
 
     held = backend.download_files([f"{route}A-0001.txt" for route in routes])
@@ -1294,7 +1295,7 @@ def test_every_pattern_in_the_profile_still_means_the_path_it_is_about(name, tmp
         one / HARNESS,
         one / "scratchpad",
         one / "memory",
-        one / "scratchpad" / "tool_results" / "A-0001-execute.txt",
+        one / "records" / "tool_results" / "A-0001-execute.txt",
         one / "scratchpad" / "conversation_history" / "kept.md",
         one / "scratchpad" / "blobs" / "0f1e2d",
         one / "scratchpad" / "large_tool_results" / "call_1",
@@ -1337,11 +1338,10 @@ def test_a_renamed_inputs_leaf_is_the_one_the_profile_denies(tmp_path):
     )
 
 
-def test_a_renamed_layout_moves_the_saved_results_denies_with_it(tmp_path):
-    """The saved-results rules are spelled from the configured scratchpad and
-    `tool_results`, for the reason the renamed inputs leaf above gives -- and the
-    scratchpad rule with them, or a renamed one could be moved away from under its
-    results as the default could before it was denied.
+def test_a_renamed_layout_moves_the_records_denies_with_it(tmp_path):
+    """The records rule is spelled from the configured name, for the reason the renamed
+    inputs leaf above gives -- and the scratchpad rule with the scratchpad, or a renamed
+    one could be moved away from under the conversation kept aside in it.
     """
     workspace = ensure_layout(tmp_path / "ws")
     one = (workspace / "sessions").resolve() / "s1"
@@ -1352,7 +1352,7 @@ def test_a_renamed_layout_moves_the_saved_results_denies_with_it(tmp_path):
         readable=(),
         writable=(workspace,),
         itself=workspace / ".kingfisher" / "shell.sb",
-        layout=Layout(scratchpad="work", tool_results="kept"),
+        layout=Layout(scratchpad="work", records="kept"),
     )
 
     denied = [
@@ -1361,9 +1361,9 @@ def test_a_renamed_layout_moves_the_saved_results_denies_with_it(tmp_path):
         if "(regex " in line
     ]
     work = one / "work"
-    for path in (work, work / "kept" / "A.txt"):
+    for path in (work, one / "kept" / "tool_results" / "A.txt"):
         assert any(rule.match(str(path)) for rule in denied), f"{path} is denied by nothing"
-    for path in (one / "scratchpad" / "tool_results" / "A.txt", work / "mine.txt"):
+    for path in (one / "records" / "tool_results" / "A.txt", work / "mine.txt"):
         assert not any(rule.match(str(path)) for rule in denied), f"{path} is denied"
 
 

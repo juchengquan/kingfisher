@@ -23,7 +23,8 @@ from kingfisher.plugins.sessions.folders import ensure_session_layout
 #: One leaf renamed on every axis, so a test that passes by leaving a default in place
 #: fails here instead. None of these is a reserved name or a collision.
 MOVED = Layout(
-    inputs="in", outputs="out", memory="mem", scratchpad="scratch", tool_results="results"
+    inputs="in", outputs="out", memory="mem", scratchpad="scratch", records="kept",
+    tool_results="results",
 )
 
 
@@ -38,20 +39,21 @@ def _laid_out(cfg, layout: Layout, session_id: str = "m") -> Path:
 def test_the_default_layout_is_the_module_constants():
     """`Layout()` and the module cannot drift: this is the pin that says so."""
     default = Layout()
-    assert default.session_dirs == ("inputs", "outputs", "memory", "scratchpad")
+    assert default.session_dirs == ("inputs", "outputs", "memory", "scratchpad", "records")
     assert default.artifact_dirs == (OUTPUTS, MEMORY)
     assert (default.inputs_route, default.memory_route, default.outputs_route) == (
         "/inputs/",
         "/memory/",
         "/outputs/",
     )
-    assert (default.scratch_route, default.tool_results_route) == (
+    assert (default.scratch_route, default.records_route, default.tool_results_route) == (
         "/scratchpad/",
-        "/scratchpad/tool_results/",
+        "/records/",
+        "/records/tool_results/",
     )
-    assert default.saved_results == ("scratchpad/tool_results",)
+    assert default.saved_results == ("records/tool_results",)
     assert default.kept_records == (
-        "scratchpad/tool_results",
+        "records",
         "scratchpad/conversation_history",
         "scratchpad/blobs",
         "scratchpad/large_tool_results",
@@ -77,18 +79,19 @@ def test_a_renamed_layout_spells_every_route_from_its_leaves():
     assert MOVED.memory_route == "/mem/"
     assert MOVED.outputs_route == "/out/"
     assert MOVED.scratch_route == "/scratch/"
-    assert MOVED.tool_results_route == "/scratch/results/"
-    assert MOVED.saved_results == ("scratch/results",)
+    assert MOVED.records_route == "/kept/"
+    assert MOVED.tool_results_route == "/kept/results/"
+    assert MOVED.saved_results == ("kept/results",)
     # Only the parent moves: the three leaves are deepagents' own spellings.
     assert MOVED.kept_records == (
-        "scratch/results",
+        "kept",
         "scratch/conversation_history",
         "scratch/blobs",
         "scratch/large_tool_results",
     )
     assert MOVED.history == "scratch/conversation_history"
     assert MOVED.offloads == "scratch/large_tool_results"
-    assert MOVED.session_dirs == ("in", "out", "mem", "scratch")
+    assert MOVED.session_dirs == ("in", "out", "mem", "scratch", "kept")
     assert MOVED.artifact_dirs == ("out", "mem")
 
 
@@ -97,19 +100,19 @@ def test_a_renamed_layout_routes_and_denies_under_its_own_names():
     inputs and kept records writable to the file tools, and deepagents refuses a deny
     rule for a kept record left unmounted."""
     routed = MOVED.routed_paths()
-    assert {"/in/", "/mem/", "/scratch/results/"} <= set(routed)
+    assert {"/in/", "/mem/", "/kept/"} <= set(routed)
     # Every kept record is mounted, because a deny rule under no route is refused.
     assert set(MOVED.kept_record_routes) <= set(routed)
     # The fixed routes are still there, unmoved.
     assert {"/skills/", "/.harness/"} <= set(routed)
     # And the default spellings are gone, not left beside the renamed ones.
     assert "/inputs/" not in routed
-    assert "/scratchpad/tool_results/" not in routed
+    assert "/records/" not in routed
 
     denied = MOVED.denied_scopes()
     assert {
         "/in/**",
-        "/scratch/results/**",
+        "/kept/**",
         "/scratch/conversation_history/**",
         "/scratch/blobs/**",
         "/scratch/large_tool_results/**",
@@ -147,6 +150,22 @@ def test_two_leaves_that_collide_are_refused():
         Layout(inputs="same", outputs="same")
 
 
+def test_the_records_may_not_share_a_name_with_another_leaf():
+    """Records named like the scratchpad are one folder, and the shell, granted the
+    scratchpad, writes the saved results a later turn reads back as a tool's answer."""
+    with pytest.raises(ValueError, match="collide"):
+        Layout(records="scratchpad")
+
+
+def test_a_renamed_scratchpad_leaves_the_saved_results_where_they_are():
+    """Saved results that still followed the scratchpad would be inside the folder the
+    shell is granted whole, which no fence can carve a read-only folder out of."""
+    moved = Layout(scratchpad="work")
+    assert moved.tool_results_route == "/records/tool_results/"
+    assert moved.kept_records[0] == "records"
+    assert "records" not in moved.shell_writable
+
+
 def test_a_name_with_a_trailing_newline_is_refused():
     """`$` matches before a final newline, so `data\n` passed as a bare folder name."""
     with pytest.raises(ValueError, match="bare folder name"):
@@ -170,7 +189,7 @@ def test_read_only_permissions_deny_the_renamed_scopes():
     saved results writable to the file tools."""
     scopes = [p.paths[0] for p in read_only_permissions(MOVED)]
     assert "/in/**" in scopes
-    assert "/scratch/results/**" in scopes
+    assert "/kept/**" in scopes
     assert "/inputs/**" not in scopes
 
 
@@ -228,9 +247,9 @@ def test_backend_at_mounts_and_lays_out_the_renamed_leaves(cfg):
     session = _laid_out(moved, MOVED)
     backend = backend_at(moved, session)
 
-    assert {"/in/", "/mem/", "/scratch/results/"} <= set(backend.routes)
+    assert {"/in/", "/mem/", "/kept/"} <= set(backend.routes)
     assert "/memory/" not in backend.routes
-    assert "/scratchpad/tool_results/" not in backend.routes
+    assert "/records/" not in backend.routes
     # The route points where the leaf moved to, not where the default name was.
     assert Path(backend.routes["/mem/"].cwd) == (session / "mem").resolve()
     # deepagents reads its eviction root off this: the scratchpad moved, so it must too.
@@ -238,7 +257,7 @@ def test_backend_at_mounts_and_lays_out_the_renamed_leaves(cfg):
 
     # And the directories exist on disk under the renamed leaves, not the defaults.
     assert (session / "mem" / "AGENTS.md").exists()
-    for leaf in ("in", "out", "mem", "scratch"):
+    for leaf in ("in", "out", "mem", "scratch", "kept/results"):
         assert (session / leaf).is_dir()
-    for default in ("inputs", "outputs", "memory", "scratchpad"):
+    for default in ("inputs", "outputs", "memory", "scratchpad", "records"):
         assert not (session / default).exists()

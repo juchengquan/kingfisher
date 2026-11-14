@@ -105,8 +105,9 @@ def test_each_escape_works_when_nothing_is_sandboxing_it(two_sessions):
 def test_a_saved_result_is_the_shells_to_read_and_not_to_write(tmp_path):
     """A ledger row names its file and a later turn reads it back as what the tool
     returned, so a shell that can write there forges a result. Overwrite, add, link,
-    remove, and rename the scratchpad away and back -- the last beat a rule matched by position
-    on macOS, and here it asks whether the bind moves with the folder it sits in.
+    remove, and rename the records away and back -- done to the scratchpad that held them, the
+    last beat a rule matched by position on macOS, and here it asks whether the bind moves
+    with the folder it is.
 
     The control runs first, because the rename probe is the one that could leave the
     scratchpad somewhere else if it got half-way.
@@ -127,7 +128,7 @@ def test_a_saved_result_is_the_shells_to_read_and_not_to_write(tmp_path):
         runner.run(f"ln {folder}/A-0001.txt linked && printf FORGED > linked; rm -f linked")
         runner.run(f"rm -rf {folder}")
     runner.run(
-        "mv scratchpad moved && printf FORGED > moved/tool_results/A-0001.txt; mv moved scratchpad"
+        "mv records moved && printf FORGED > moved/tool_results/A-0001.txt; mv moved records"
     )
 
     assert mine.output.strip() == "ok", f"the scratchpad stopped being writable: {mine.output}"

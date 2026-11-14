@@ -26,7 +26,7 @@ def session(scripted):
     made = scripted.workspace / "sessions" / "s"
     (made / "scratchpad" / "notes.md").write_text(NOTES)
     (made / "memory" / "notes.md").symlink_to("../scratchpad/notes.md")
-    (made / "scratchpad" / "tool_results" / "kept.txt").symlink_to("../../outputs")
+    (made / "records" / "tool_results" / "kept.txt").symlink_to("../../outputs")
     (made / "inputs").chmod(0o755)
     (made / "inputs" / "notes.md").symlink_to("../scratchpad/notes.md")
     (made / "memory" / "real.md").write_text("kept in memory\n")
@@ -59,7 +59,7 @@ CALLS = [
     ("edit_file", {"file_path": "/memory/notes.md", "old_string": "a", "new_string": "b"}),
     ("delete", {"file_path": "/memory/notes.md"}),
     ("ls", {"path": "/memory/notes.md"}),
-    ("read_file", {"file_path": "/scratchpad/tool_results/kept.txt"}),
+    ("read_file", {"file_path": "/records/tool_results/kept.txt"}),
     ("read_file", {"file_path": "/inputs/notes.md"}),
 ]
 

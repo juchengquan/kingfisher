@@ -142,7 +142,7 @@ def _unseen_shell(sessions: object) -> Check:
         "warn",
         detail,
         "confine it in your sessions -- shell_denied, in kingfisher's "
-        "tests/checks/backend.py, drives the shell at /.harness and /inputs",
+        "tests/checks/backend.py, drives the shell at /.harness, /inputs and /records",
     )
 
 

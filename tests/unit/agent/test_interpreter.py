@@ -429,7 +429,7 @@ def test_a_command_from_code_is_held_to_the_setting(cfg, session_dir):
     ("path", "refused_with"),
     [
         ("/.HARNESS/x.txt", "other capitals"),
-        ("/scratchpad/TOOL_RESULTS/x.txt", "other capitals"),
+        ("/scratchpad/CONVERSATION_HISTORY/x.txt", "other capitals"),
         ("/stray.txt", "outside the session's folders"),
         # The control: without it this passes for a write that never runs from code.
         ("/outputs/kept.txt", None),

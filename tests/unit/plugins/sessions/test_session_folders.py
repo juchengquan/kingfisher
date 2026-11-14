@@ -55,8 +55,8 @@ def test_the_file_tools_follow_no_link_into_the_harness(cfg, folder, tool):
 def test_the_file_tools_follow_no_link_into_the_saved_results(cfg):
     """A link to a saved result let `edit` forge what a later turn reads back as a tool's
     answer, under a write rule that judged only `/scratchpad/...`."""
-    backend, session = _planted(cfg, "scratchpad/link", "scratchpad/tool_results/r1.txt")
-    result = session / "scratchpad" / "tool_results" / "r1.txt"
+    backend, session = _planted(cfg, "scratchpad/link", "records/tool_results/r1.txt")
+    result = session / "records" / "tool_results" / "r1.txt"
     result.write_text("TRUE RESULT", encoding="utf-8")
 
     assert backend.edit("/scratchpad/link", "TRUE RESULT", "FORGED").error

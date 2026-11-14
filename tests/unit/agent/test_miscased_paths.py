@@ -40,7 +40,7 @@ def session(scripted):
     start(scripted, "s")
     made = scripted.workspace / "sessions" / "s"
     (made / ".harness" / "secret.txt").write_text(HELD)
-    (made / "scratchpad" / "tool_results" / "kept.txt").write_text(KEPT)
+    (made / "records" / "tool_results" / "kept.txt").write_text(KEPT)
     return made
 
 
@@ -72,14 +72,16 @@ CALLS = [
      "/.harness/secret.txt"),
     ("ls", {"path": "/.Harness"}, "/.Harness", "/.harness"),
     ("grep", {"pattern": HELD, "path": "/.HARNESS"}, "/.HARNESS", "/.harness"),
-    ("glob", {"pattern": "*", "path": "/scratchpad/TOOL_RESULTS"},
-     "/scratchpad/TOOL_RESULTS", "/scratchpad/tool_results"),
-    ("write_file", {"file_path": "/scratchpad/TOOL_RESULTS/forged.txt", "content": "F"},
-     "/scratchpad/TOOL_RESULTS/forged.txt", "/scratchpad/tool_results/forged.txt"),
+    ("glob", {"pattern": "*", "path": "/RECORDS/tool_results"},
+     "/RECORDS/tool_results", "/records/tool_results"),
+    ("write_file",
+     {"file_path": "/scratchpad/CONVERSATION_HISTORY/forged.txt", "content": "F"},
+     "/scratchpad/CONVERSATION_HISTORY/forged.txt",
+     "/scratchpad/conversation_history/forged.txt"),
     ("edit_file",
-     {"file_path": "/scratchpad/Tool_Results/kept.txt", "old_string": "as",
+     {"file_path": "/Records/tool_results/kept.txt", "old_string": "as",
       "new_string": "FORGED"},
-     "/scratchpad/Tool_Results/kept.txt", "/scratchpad/tool_results/kept.txt"),
+     "/Records/tool_results/kept.txt", "/records/tool_results/kept.txt"),
     ("delete", {"file_path": "/.HARNESS/secret.txt"}, "/.HARNESS/secret.txt",
      "/.harness/secret.txt"),
 ]
@@ -98,10 +100,11 @@ def test_a_folder_spelled_in_other_capitals_is_refused_by_every_file_tool(
     assert answer.text == f"Error: {miscased_path(where, meant)}"
     assert answer.status == "error"
     assert (session / ".harness" / "secret.txt").read_text() == HELD
-    assert (session / "scratchpad" / "tool_results" / "kept.txt").read_text() == KEPT
-    assert sorted(p.name for p in (session / "scratchpad" / "tool_results").iterdir()) == [
+    assert (session / "records" / "tool_results" / "kept.txt").read_text() == KEPT
+    assert sorted(p.name for p in (session / "records" / "tool_results").iterdir()) == [
         "kept.txt"
     ]
+    assert not list((session / "scratchpad" / "conversation_history").iterdir())
 
 
 def test_the_folders_spelled_as_they_are_are_untouched(scripted, session):
@@ -151,22 +154,23 @@ def test_a_tool_handed_the_backend_is_refused_the_same_spellings(scripted, sessi
     with pytest.raises(UnreachablePathError, match="other capitals"):
         handed.on_this_host("/.HARNESS/secret.txt")
     (downloaded,) = handed.download_files(["/.HARNESS/secret.txt"])
-    (uploaded,) = handed.upload_files([("/scratchpad/TOOL_RESULTS/A-0009-x.txt", b"FORGED")])
+    (uploaded,) = handed.upload_files([("/RECORDS/tool_results/A-0009-x.txt", b"FORGED")])
     assert (downloaded.error, downloaded.content, uploaded.error) == (
         INVALID_PATH, None, INVALID_PATH
     )
     assert (session / ".harness" / "secret.txt").read_text() == HELD
-    assert not (session / "scratchpad" / "tool_results" / "A-0009-x.txt").exists()
+    assert not (session / "records" / "tool_results" / "A-0009-x.txt").exists()
 
 
 @pytest.mark.parametrize(
     ("where", "meant"),
     [
         ("/.HARNESS", "/.harness"),
-        ("/Scratchpad/TOOL_results/a", "/scratchpad/tool_results/a"),
+        ("/Records/TOOL_results/a", "/records/TOOL_results/a"),
+        ("/Scratchpad/Conversation_History/a", "/scratchpad/conversation_history/a"),
         ("/SCRATCHPAD/Notes.md", "/scratchpad/Notes.md"),
         ("/Shared/a", "/shared/a"),
-        ("/scratchpad/tool_results/a", None),
+        ("/records/tool_results/a", None),
         ("/scratchpad", None),
         ("/outputs/Report.csv", None),
         ("/elsewhere/a", None),

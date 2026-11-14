@@ -15,7 +15,7 @@ its place, covering the whole session: the results that followed each of the lat
 few messages, listed the same way, and for each earlier message that had any, one line
 giving the range of their ids and how many results each tool returned.
 
-A result is put in a file under `/{{scratchpad}}/{{tool_results}}/` once it leaves
+A result is put in a file under `/{{records}}/{{tool_results}}/` once it leaves
 this conversation, and at once if it is too long to show you whole: that one is shown as
 its head and its tail, with the last line naming the file that holds all of it. While
 you can still see a result, it has no file; what a subagent's own tools returned is
