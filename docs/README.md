@@ -77,9 +77,6 @@ slices land.
   kingfisher sends back of a model's thinking once the vendor, or the conversation
   before it, has changed, keyed on the endpoint that answered. Its first slice has
   landed; the rest wait on one live Anthropic call each.
-- [One record of what happened](design/2026-11-14-records.md) — a read-only
-  `/records/` folder holding the one copy of a conversation the agent reads, which
-  follows a rewind. Its first slice, the folder itself, is being built.
 
 Others have passed through and left the way the rule says -- named rather than
 counted, because the count above this list said "three" while five were named,

@@ -121,8 +121,6 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
     assert '| `/out/<name>` | `"$KINGFISHER_SESSION_ROOT/out/<name>"` |' in text
     assert '| `/scratch/<name>` | `"$KINGFISHER_SESSION_ROOT/scratch/<name>"` |' in text
     assert "/kept/results/" in text
-    # The fixed sub-leaves stay fixed, under the renamed scratchpad.
-    assert "/scratch/conversation_history/" in text
     # The memory block names the renamed memory leaf.
     assert "`/mem`" in remembered
 
@@ -133,22 +131,19 @@ def test_a_renamed_layout_reaches_every_path_in_the_prompt():
         assert f"`{gone}" not in remembered, gone
 
 
-def test_the_prompt_names_the_folder_deepagents_writes_on_its_own(cfg, session_dir):
-    """A prompt naming a folder the backend no longer has deepagents write sends the
-    agent's search somewhere empty, as deepagents' own `grep` description did.
+def test_the_prompt_names_no_folder_deepagents_is_refused():
+    """A prompt naming a folder deepagents may no longer write sends the agent's search
+    somewhere empty, as deepagents' own `grep` description did.
 
-    One folder, not two: its offloading is off, and what its summariser still writes to
-    `large_tool_results` is read through the stub that names it. The root is read off what
-    `backend_at` builds rather than spelled here, so moving the setting or renaming the
-    scratchpad fails this until the prompt follows.
+    The agent finds what a summary replaced through the summary's own line naming
+    `/records/conversation.md`: told nothing else, MiniMax-M3.1-Flash read the history in 5
+    runs of 5 (2026-11-14). Read off the shipped text, so a template naming either folder
+    again fails here.
     """
-    from kingfisher.plugins.sessions.backend import backend_at
-
-    root = backend_at(cfg, session_dir).artifacts_root.rstrip("/")
     text = shipped()
 
-    assert f"`{root}/conversation_history/`" in text
-    assert "large_tool_results" not in text, "a folder read through its stubs is named"
+    assert "conversation_history" not in text, "a folder that holds nothing is named"
+    assert "large_tool_results" not in text, "a folder that holds nothing is named"
 
 
 @pytest.mark.parametrize("layout", [DEFAULT_LAYOUT, Layout(outputs="results")])

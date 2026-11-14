@@ -18,6 +18,13 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The prompt no longer names `conversation_history/`, after #1312
+
+- **`session.md` loses its sentence about `/scratchpad/conversation_history/`.** That folder
+  holds nothing since #1311; the summary itself names `/records/conversation.md`. A
+  deployment's own instructions or `ShellPrompt` text that send the agent to
+  `conversation_history/` should say nothing, or name `/records/conversation.md`.
+
 ## What a summary replaced is in `/records/conversation.md`, after #1311
 
 - **deepagents' summariser keeps no copy.** Its writes under `conversation_history/` and
