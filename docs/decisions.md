@@ -2880,6 +2880,22 @@ for length clearing could not answer or a request still over the input budget on
 summarised; it is made with the session and denied with every other folder of kept
 records, below.*
 
+**A message past deepagents' limit is refused, not written aside.** deepagents wrote a
+user message over 50,000 tokens to `conversation_history/<uuid>.md` and sent the model a
+cut-down copy naming it, or the whole message when that write failed: a second copy of
+the conversation, under a name nothing kingfisher records, and a message that is only as
+whole as a file the agent may never read back. So `standing_middleware`
+passes `human_message_token_limit_before_evict=None` in every stack, and a turn whose
+message is longer than `LONGEST_MESSAGE` raises `MessageTooLongError` before it runs:
+long content belongs in `/inputs`, which is what that folder is for. Measured as
+deepagents measured -- the whole message, kingfisher's lines included, in characters,
+the limit read off its default -- so the refusal falls exactly where the copy was made.
+That puts the check after the inputs are placed, since the message names them: a refused
+request leaves its files, and one refused under a claim taken from a dead turn costs the
+next turn the note that the dead one never finished. Not taken: measuring the task and note before the claim, which
+touches nothing but sends whole a message kingfisher's own lines take past the limit.
+*(2026-11-14.)*
+
 **Every folder of kept records is denied, not only the ones a row names.** The question
 was always who reads the file back: a row's file is denied because the prompt tells the
 model to read it. The prompt sends it to `conversation_history/` in the same breath, and

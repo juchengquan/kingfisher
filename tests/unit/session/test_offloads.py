@@ -1,10 +1,10 @@
-"""Where a long result and a long request land in a session: the one kingfisher saves
-and previews, and nowhere deepagents would keep them aside.
+"""Where a long result lands in a session: the one kingfisher saves and previews, and
+nowhere deepagents would keep it aside.
 """
 
 from __future__ import annotations
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher.core.access.capabilities import Capabilities
 from kingfisher.core.agent.assembly import build_agent
@@ -117,25 +117,6 @@ def test_a_subagent_s_long_results_are_saved_the_same_way(cfg, session_dir):
     )
 
     _previewed_into_the_results_folder(model, session_dir)
-
-
-def test_a_request_too_long_to_send_is_kept_nowhere_a_rewind_cannot_reach(cfg, session_dir):
-    """deepagents kept a user message too long to send under `conversation_history/`, a
-    copy no rewind took back, so a later turn could read a request the caller had rewound
-    away. Its write is refused, and the message is sent as it was asked.
-    """
-    # About 250,000 characters, past the 50,000 tokens it keeps in a user message.
-    request = "\n".join(f"line {n:06d} " + "y" * 90 for n in range(2_500))
-    model = Shown(responses=[AIMessage(content="done")])
-
-    build_agent(cfg, backend=backend_at(cfg, session_dir), model=model).graph.invoke(
-        {"messages": [{"role": "user", "content": request}]}, config={"recursion_limit": 8}
-    )
-
-    (shown,) = [m for m in model.shown[0] if isinstance(m, HumanMessage)]
-    assert str(shown.text) == request, "deepagents kept it aside after all"
-    assert not (session_dir / SCRATCH / KEPT_ASIDE).exists(), "kept in the scratchpad"
-    assert not (session_dir / KEPT_ASIDE).exists(), "kept at the session root"
 
 
 def test_the_file_tools_neither_write_nor_find_anything_under_deepagents_folders(

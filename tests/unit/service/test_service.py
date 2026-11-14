@@ -355,6 +355,7 @@ REFUSALS = [
     "inputs name one file twice",
     "session over budget",
     "backend refuses the upload",
+    "message over the limit",
 ]
 
 
@@ -364,9 +365,10 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how,
     until the claim went stale; refused after `run_start`, the run log held a turn that
     never ran.
     """
+    from kingfisher.core.agent.middlewares.standing import LONGEST_MESSAGE
     from kingfisher.core.session import preparation
     from kingfisher.core.session.files import InputsError
-    from kingfisher.core.session.model import QuotaExceededError
+    from kingfisher.core.session.model import MessageTooLongError, QuotaExceededError
     from tests.conftest import RecordedEvents, start
     from tests.unit.stand_ins import claim_of
 
@@ -379,7 +381,9 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how,
         "inputs name one file twice": (tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv"),
         "session over budget": (),
         "backend refuses the upload": (tmp_path / "a" / "same.csv",),
+        "message over the limit": (),
     }[how]
+    task = "y" * (LONGEST_MESSAGE + 1) if how == "message over the limit" else "go"
     if how == "backend refuses the upload":
 
         def refusing(placement, files, layout):
@@ -399,8 +403,8 @@ def test_a_refused_request_starts_no_turn_and_keeps_no_claim(cfg, tmp_path, how,
         run_events=recorded,
     )
 
-    with pytest.raises((InputsError, QuotaExceededError)):
-        kf.run(Request("go", session_id=session, inputs=inputs))
+    with pytest.raises((InputsError, MessageTooLongError, QuotaExceededError)):
+        kf.run(Request(task, session_id=session, inputs=inputs))
 
     assert recorded.named("run_start") == []
     assert not claim_of(budgeted, session).exists()

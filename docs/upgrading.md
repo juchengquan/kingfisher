@@ -36,8 +36,9 @@ replaced the four layers began.
   `model_unavailable`**, saying the conversation does not fit the input window. deepagents
   could copy that batch aside before; any `ContextOverflowError` that reaches a turn now
   ends it so, where it was raised.
-- **A user message over deepagents' human-message limit is sent whole**, no longer kept
-  aside under `conversation_history/`.
+- **A user message over deepagents' human-message limit is no longer kept aside** under
+  `conversation_history/`: #1308 turns that eviction off and refuses such a request
+  before the turn.
 - **A session is no longer made with `scratchpad/conversation_history/` or
   `scratchpad/large_tool_results/`**, and `Layout.made_dirs` names neither. The names stay
   reserved and denied. `Layout.conversation_route` names the new file.
@@ -82,6 +83,18 @@ replaced the four layers began.
 - **Nothing is migrated.** An older session's `/scratchpad/tool_results/` stays where it
   is, now ordinary scratchpad: its rows still name it, nothing sweeps it, and the agent
   may write there.
+
+## A turn's message past 200,000 characters is refused, after #1308
+
+- **A request whose message is over deepagents' 50,000-token limit raises
+  `MessageTooLongError`** before the turn runs, and `kingfisher run` exits 2. The
+  message is the task, the note and kingfisher's own lines, counted in characters at
+  four a token. deepagents wrote one that long to `conversation_history/<uuid>.md` and
+  sent the model a cut-down copy; it is off in every stack kingfisher builds. Send the
+  content as a file in `inputs`. A deployment's own `FilesystemMiddleware` keeps
+  whatever limit it sets.
+- **Files sent with a refused request stay in the session's `/inputs`**, placed before
+  the message that names them is measured, and the next turn is told of them as new.
 
 ## The last call a turn is told of is one its answer finishes on, after #1306
 

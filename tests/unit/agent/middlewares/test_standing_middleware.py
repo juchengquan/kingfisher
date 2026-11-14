@@ -6,6 +6,7 @@ import inspect
 from dataclasses import replace
 
 import pytest
+from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
@@ -145,6 +146,64 @@ def test_general_purpose_is_wrapped_in_standing_then_offered(cfg, session_dir):
         "PromptCachingMiddleware",
         "OfferedToolFailureMiddleware",
     ]
+
+
+def _stacks(middleware, specs) -> list[list]:
+    """`middleware`, then each stack below it: every subagent's, and each helper's hung off
+    one, however deep."""
+    stacks = [list(middleware)]
+    for spec in specs:
+        inner = spec.get("middleware", [])
+        helpers = [
+            helper
+            for one in inner
+            for attribute in ("subagents", "_subagents")
+            for helper in getattr(one, attribute, None) or ()
+        ]
+        stacks.extend(_stacks(inner, helpers))
+    return stacks
+
+
+#: A subagent that consults another, so the build hangs helpers off it.
+REVIEWER = """name: reviewer
+description: Checks figures.
+builtin_tools: ["*"]
+subagents: [second-opinion]
+system_prompt: |
+  You check figures.
+"""
+
+SECOND_OPINION = """name: second-opinion
+description: Answers again.
+builtin_tools: ["*"]
+system_prompt: |
+  You answer again.
+"""
+
+
+def test_no_stack_writes_a_long_message_aside(cfg, session_dir):
+    """A stack left at deepagents' default wrote a message past its limit to
+    `conversation_history/` and sent a cut-down copy, a second copy of the conversation
+    nothing of kingfisher's names. The real builder, every stack it hands deepagents."""
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    for text in (REVIEWER, SECOND_OPINION):
+        name = text.split("\n", 1)[0].removeprefix("name: ")
+        (subagents_dir(cfg) / f"{name}.yaml").write_text(text, encoding="utf-8")
+    built = build_agent(
+        cfg,
+        backend=backend_at(cfg, session_dir),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
+    )
+
+    stacks = _stacks(built.middleware, built.subagents or ())
+
+    # The agent, its three subagents, and the four helpers hung below them: fewer, and the
+    # walk missed a stack, which this would then pass without reading.
+    assert len(stacks) == 8
+    for stack in stacks:
+        (filesystem,) = [one for one in stack if isinstance(one, FilesystemMiddleware)]
+        assert filesystem._human_message_token_limit_before_evict is None
 
 
 @pytest.mark.parametrize(

@@ -16,6 +16,7 @@ from kingfisher.core.agent.activation import (
 )
 from kingfisher.core.agent.assembly import Assembled
 from kingfisher.core.agent.interpreter import release_interpreter
+from kingfisher.core.agent.middlewares.standing import LONGEST_MESSAGE
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.agents.spec import AgentSpec
 from kingfisher.core.definitions.catalogue import Definitions
@@ -44,8 +45,10 @@ from .files import (
 from .ledger import Ledger
 from .memory import UsersMemory, as_file, settled_memory, users_memory
 from .memory_writer import writer_model
+from .messages import joined
 from .model import (
     Conversation,
+    MessageTooLongError,
     Turn,
     TurnIdError,
     refuse_files_of_another,
@@ -437,6 +440,16 @@ class Preparation:
             drift=drift,
             unfinished=prepared.earlier_turn_unfinished,
         )
+        # The whole message, kingfisher's lines included, as deepagents measured it. Only
+        # once built, after the inputs are placed, since it names them: a refusal leaves
+        # those files there, and the next turn is told of them as new.
+        if (length := len(joined(message))) > LONGEST_MESSAGE:
+            msg = (
+                f"this turn's message is {length:,} characters, over the {LONGEST_MESSAGE:,} "
+                f"kingfisher sends -- put the long content in a file and send it as an "
+                f"input, which the agent reads from {layout.inputs_route}"
+            )
+            raise MessageTooLongError(msg)
         if prepared.conversation is not None:
             prepared.conversation.parts = message
         return replace(prepared, message=message, inputs_seen=now, drift=drift)

@@ -375,9 +375,9 @@ for the next reader who reaches for one.*
   summary of the conversation to date:` and the text, with no "saved to" line, and the
   event's `file_path` is `None`. Inline media goes the same way: its upload refused, it is
   a failed-offload placeholder in what the summariser model reads. A user message over the
-  human-message limit whose write is refused is sent whole, untagged.
-  `test_summarize_by_count_fires_at_sixty_messages_however_small` and
-  `test_a_request_too_long_to_send_is_kept_nowhere_a_rewind_cannot_reach` drive both.
+  human-message limit whose write is refused is sent whole, untagged; kingfisher turns
+  that eviction off and refuses such a request before the turn (#1308).
+  `test_summarize_by_count_fires_at_sixty_messages_however_small` drives the summary.
   *(2026-11-14, deepagents 0.7.32.)*
 - **Its overflow cut keeps a result it could not copy, and then refuses the request.**
   `_offload_tool_message_content` returns `None` on a failed `write`, and
@@ -405,7 +405,8 @@ for the next reader who reaches for one.*
   backend is a `CompositeBackend`: anything else is `/` whatever it carries. The
   `grep` tool's description says offloaded results are under `/large_tool_results/`
   "by default", and does not change with the root. `tests/unit/session/test_offloads.py`
-  drives both evictions. *(2026-10-11, deepagents 0.7.6.)* The limits are the same at
+  drives the first; kingfisher turns the second off, and refuses such a message before
+  its turn. *(2026-10-11, deepagents 0.7.6.)* The limits are the same at
   0.7.22, which adds a third way in: `execute` writes its output to
   `large_tool_results/<call id>` as it runs, and hands back the stub itself, when the
   backend's default is a `BaseSandbox` and that path is not routed. The stub is then what

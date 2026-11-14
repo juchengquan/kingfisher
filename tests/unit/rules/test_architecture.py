@@ -2102,6 +2102,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         "CapabilityError": "embedder",
         "ConfigError": "embedder",
         "InputsError": "embedder",
+        "MessageTooLongError": "embedder",
         "QuotaExceededError": "embedder",
         "SessionBusyError": "embedder",
         "SubagentError": "embedder",
@@ -3794,8 +3795,8 @@ def test_every_record_this_package_hands_out_is_frozen():
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
     "ArtifactError", "CallerError", "CapabilityError", "DecisionError", "InputsError",
-    "MemoryEntryError", "QuotaExceededError", "ResultError", "SessionBusyError",
-    "RewindError", "SubagentError", "TurnIdError", "UnknownSessionError",
+    "MemoryEntryError", "MessageTooLongError", "QuotaExceededError", "ResultError",
+    "SessionBusyError", "RewindError", "SubagentError", "TurnIdError", "UnknownSessionError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.
