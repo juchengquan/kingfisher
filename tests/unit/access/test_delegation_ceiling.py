@@ -282,7 +282,7 @@ def test_an_unrestricted_request_delegates_as_before(cfg, session_dir):
         # The control: a write the rules allow lands, so a refusal below is the rule's.
         ("/outputs/written.txt", True),
         ("/skills/written.txt", False),
-        ("/scratchpad/tool_results/written.txt", False),
+        ("/records/tool_results/written.txt", False),
     ],
 )
 def test_a_subagent_writes_only_where_the_agent_may(cfg, session_dir, subagent, route, lands):

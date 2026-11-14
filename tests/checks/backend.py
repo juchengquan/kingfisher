@@ -117,11 +117,12 @@ def offloads_in_the_scratchpad(make: Callable[[], Any]) -> None:
 
 
 def shell_denied(make: Callable[[], Any]) -> None:
-    """The agent's shell may not write under `/.harness` or `/inputs`.
+    """The agent's shell may not write under `/.harness`, `/inputs` or `/records`.
 
     `/.harness` is what kingfisher reads back and trusts -- the conversation, a
-    paused turn -- and `/inputs` is the caller's input, which the agent
-    is promised it cannot change. The file tools are refused both by the turn's
+    paused turn -- `/inputs` is the caller's input, which the agent
+    is promised it cannot change, and `/records` holds the saved results a later turn
+    reads back as what a tool returned. The file tools are refused both by the turn's
     permissions; the shell bypasses those, so on any backend but kingfisher's own this
     is the only thing that says the shell is refused too.
 
@@ -145,6 +146,7 @@ def shell_denied(make: Callable[[], Any]) -> None:
     for route, what in (
         (cfg.layout.harness_route, "what kingfisher reads back and trusts"),
         (cfg.layout.inputs_route, "the caller's input"),
+        (cfg.layout.records_route, "what a tool returned"),
     ):
         kept, fresh = f"{route}{token}-kept", f"{route}{token}-fresh"
         backend.upload_files([(kept, b"as written")])

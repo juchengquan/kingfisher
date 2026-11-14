@@ -191,8 +191,8 @@ class RecorderMiddleware(AgentMiddleware):
         self._backend = backend
         #: `None` where no definition carries a lock.
         self._audiences = audiences
-        #: Where a result is written: this layout's `/scratchpad/tool_results/`, which the
-        #: backend routes under the same name.
+        #: Where a result is written: this layout's `/records/tool_results/`, which the
+        #: backend reaches through the records' route.
         self._tool_results_route = tool_results_route
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:

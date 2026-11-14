@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from kingfisher.core.config import Config
 
 #: A `{{leaf}}` placeholder in the shipped markdown, filled by name rather than by
-#: replacing default paths: `/scratchpad` is a prefix of `/scratchpad/tool_results`.
+#: replacing default paths: `/records` is a prefix of `/records/tool_results`.
 #: Anything between doubled braces, so `{{ inputs }}` is refused rather than reaching
 #: the model as braces; one pattern for `_fill` and `ShellPrompt`'s check, so a blank
 #: either is wrong about is one the other reports.
@@ -86,7 +86,7 @@ _READING = (
     (
         (GLOB, READ_FILE),
         "To find an older result by its id, `glob` for `A-0042-*` in "
-        "`/{{scratchpad}}/{{tool_results}}/`.",
+        "`/{{records}}/{{tool_results}}/`.",
     ),
 )
 _UNREAD = "None of your tools reads these files: to see a result again, call its tool again."
@@ -164,6 +164,7 @@ def _names(layout: Layout) -> dict[str, str]:
         "outputs": layout.outputs,
         "memory": layout.memory,
         "scratchpad": layout.scratchpad,
+        "records": layout.records,
         "tool_results": layout.tool_results,
     }
 
@@ -201,7 +202,7 @@ class ShellPrompt:
 
     A part left `None` is said the neutral way -- for `execute`, deepagents' own line
     stays -- and `""` says nothing. Each may name a layout leaf as `{{inputs}}`,
-    `{{outputs}}`, `{{memory}}`, `{{scratchpad}}` or `{{tool_results}}`.
+    `{{outputs}}`, `{{memory}}`, `{{scratchpad}}`, `{{records}}` or `{{tool_results}}`.
     """
 
     prompt: str | None = None

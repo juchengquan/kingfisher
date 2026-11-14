@@ -78,6 +78,7 @@ FOLDERS = {
     "outputs": "outputs",
     "memory": "memory",
     "scratchpad": "scratchpad",
+    "records": "records",
     "tool_results": "tool_results",
 }
 #: deepagents' names, which move with the scratchpad but cannot be renamed.
@@ -238,9 +239,9 @@ def _part(relative: tuple[str, ...], names: dict[str, str]) -> str:
     if top == HARNESS:
         named = HARNESS_PARTS.get(rest[0].removesuffix(SECOND_COPY)) if len(rest) == 1 else None
         return named or "rest of .harness"
+    if top == names["records"] and rest and rest[0] == names["tool_results"]:
+        return "result files"
     if top == names["scratchpad"] and rest:
-        if rest[0] == names["tool_results"]:
-            return "result files"
         return "summary history" if rest[0] == HISTORY else "rest of the scratchpad"
     for part in ("outputs", "inputs", "memory"):
         if top == names[part]:

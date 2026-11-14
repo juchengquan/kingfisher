@@ -17,7 +17,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher, Request
 from kingfisher.core.interfaces import UnusedResults
-from kingfisher.core.layout import DEFAULT_LAYOUT, RECENT_TURNS_FILE, SCRATCH, TOOL_RESULTS
+from kingfisher.core.layout import DEFAULT_LAYOUT, RECENT_TURNS_FILE, RECORDS, TOOL_RESULTS
 from kingfisher.plugins import (
     DeleteUnusedResults,
     LocalSessions,
@@ -59,7 +59,7 @@ def workspace(scripted):
 
 
 def _folder(cfg):
-    return cfg.workspace / "sessions" / "s" / SCRATCH / TOOL_RESULTS
+    return cfg.workspace / "sessions" / "s" / RECORDS / TOOL_RESULTS
 
 
 def _kept(cfg) -> list[str]:

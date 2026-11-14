@@ -467,7 +467,7 @@ def test_an_earlier_turns_result_is_named_from_the_ledger_the_turn_found():
 
     handle = _of(talk.cleared(), call).content
 
-    assert "full result: /scratchpad/tool_results/A-0001-web_search.txt" in handle
+    assert "full result: /records/tool_results/A-0001-web_search.txt" in handle
     assert handle.endswith("\n[A-0001]")
     assert talk.ledger.entries[0].id == "A-0002", "numbered on from the ledger"
 
@@ -637,7 +637,7 @@ def test_text_a_reply_carries_twice_is_cleared_in_both():
 # -- what a handle names, by what the agent holds ------------------------------------
 
 #: Where a handle sends an agent holding `read_file`.
-PATH = "full result: /scratchpad/tool_results/A-0001-execute.txt"
+PATH = "full result: /records/tool_results/A-0001-execute.txt"
 
 
 def _handles(tools: tuple[str, ...] | None) -> tuple[str, str]:
@@ -1137,7 +1137,7 @@ def test_a_turn_refused_for_length_goes_on_without_a_summary(bulky):
     said = {one.call_id: one.content for one in _transcript(bulky) if one.role == "tool"}
     for call, number in (("c1", "A-0001"), ("c2", "A-0002")):
         assert UNSHOWN in said[call], said[call]
-        assert f"/scratchpad/tool_results/{number}-bulky.txt" in said[call]
+        assert f"/records/tool_results/{number}-bulky.txt" in said[call]
 
 
 def test_a_long_turn_clears_and_the_transcript_carries_the_handles(bulky):
@@ -1153,7 +1153,7 @@ def test_a_long_turn_clears_and_the_transcript_carries_the_handles(bulky):
     said = {one.call_id: one.content for one in _transcript(cfg) if one.role == "tool"}
     assert len(_transcript(cfg)) == 14, "a message was added or removed"
     for call, number in (("c1", "A-0001"), ("c2", "A-0002")):
-        path = f"/scratchpad/tool_results/{number}-bulky.txt"
+        path = f"/records/tool_results/{number}-bulky.txt"
         assert said[call].startswith(f"bulky n={call[1]} -- row {call[1]}-0000 ")
         assert f"bytes, cleared; full result: {path})\n[{number}]" in said[call]
         kept = (cfg.workspace / "sessions" / "s" / path.lstrip("/")).read_text(encoding="utf-8")
@@ -1161,7 +1161,7 @@ def test_a_long_turn_clears_and_the_transcript_carries_the_handles(bulky):
     for call in ("c3", "c4", "c5", "c6"):
         assert len(said[call]) > 16_000, call
     # Only what left the conversation was filed: the rest are whole in the transcript.
-    folder = cfg.workspace / "sessions" / "s" / "scratchpad" / "tool_results"
+    folder = cfg.workspace / "sessions" / "s" / "records" / "tool_results"
     assert sorted(one.name for one in folder.iterdir()) == ["A-0001-bulky.txt", "A-0002-bulky.txt"]
     # The model was handed the handle on the calls after the pass, not only the file.
     last = [m.content for m in Scripted.heard[-1] if isinstance(m, ToolMessage)]
@@ -1173,14 +1173,14 @@ def test_an_earlier_turns_result_is_filed_when_a_later_turn_clears_it(bulky):
     clears it; filed then without its row naming the file, the sweep at that turn's end
     removes the file the handle has just named."""
     cfg = _marked(bulky, clear_results_at=12_000)
-    folder = cfg.workspace / "sessions" / "s" / "scratchpad" / "tool_results"
+    folder = cfg.workspace / "sessions" / "s" / "records" / "tool_results"
     _turn(cfg, _one("bulky", 1, n=1), AIMessage(content="done"))
     assert not folder.exists() or not list(folder.iterdir()), "the control: filed already"
 
     _turn(cfg, *(_one("bulky", n, n=n) for n in range(2, 8)), AIMessage(content="done"))
     _turn(cfg, AIMessage(content="done"))
 
-    path = "/scratchpad/tool_results/A-0001-bulky.txt"
+    path = "/records/tool_results/A-0001-bulky.txt"
     said = next(one.content for one in _transcript(cfg) if one.call_id == "c1")
     assert f"cleared; full result: {path})" in said
     rows = (cfg.workspace / "sessions" / "s" / HARNESS / LEDGER_FILE).read_text()
@@ -1203,9 +1203,9 @@ def test_a_long_results_handle_finds_it_after_the_turn(bulky):
     _turn(cfg, _one("loud", 0), *bulky_calls, AIMessage(content="done"))
 
     said = next(one.content for one in _transcript(cfg) if one.call_id == "c0")
-    assert "cleared; full result: /scratchpad/tool_results/A-0001-" in said
+    assert "cleared; full result: /records/tool_results/A-0001-" in said
     assert "large_tool_results" not in said
-    folder = cfg.workspace / "sessions" / "s" / "scratchpad" / "tool_results"
+    folder = cfg.workspace / "sessions" / "s" / "records" / "tool_results"
     found = [one for one in folder.iterdir() if one.name.startswith("A-0001-")]
     assert len(found) == 1, sorted(one.name for one in folder.iterdir())
     assert found[0].read_text(encoding="utf-8").startswith("row 00000")

@@ -163,8 +163,9 @@ def read_only_permissions(layout: Layout) -> list[FilesystemPermission]:
 
     These bind the file tools and not `execute`, and neither half suffices alone. The
     shell's half is `confinement.resolve`, macOS-only and switchable off, and the fences,
-    which refuse `/inputs` and `.harness` in their own terms -- the recorded results in only
-    some, since Landlock cannot carve a folder out of the scratchpad it grants whole. The
+    which refuse `/inputs`, `.harness` and the records in their own terms -- the kept records
+    in the scratchpad in only some, since Landlock cannot carve a folder out of the
+    scratchpad it grants whole. The
     write bits `plugins.sessions.permissions` drops under `/inputs` are not that half: the
     shell runs as the files' owner and can lift them.
     """

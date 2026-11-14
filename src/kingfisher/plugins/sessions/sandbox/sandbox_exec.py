@@ -75,7 +75,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name
     lines.append(_sessions_denial(sessions_root))
     lines.append(_session_top_denial(sessions_root))
     lines += [
-        _enclosing_denial(sessions_root, folder) for folder in _enclosing(layout.saved_results)
+        _enclosing_denial(sessions_root, folder) for folder in _enclosing(layout.kept_records)
     ]
     # The one routed folder the shell may write in: replaced by a link, its route would be
     # rooted wherever the link points.
@@ -121,10 +121,10 @@ def _session_top_denial(sessions_root: Path) -> str:
     return f"(deny file-write* (regex {_sb_regex(f'^{root}[^/]+/[^/]+$')}))"
 
 
-def _enclosing(saved_results: tuple[str, ...]) -> tuple[str, ...]:
-    """The folders inside a session that a saved-results folder sits in, once each."""
+def _enclosing(kept: tuple[str, ...]) -> tuple[str, ...]:
+    """The folders inside a session that a kept-records folder sits in, once each."""
     found: dict[str, None] = {}
-    for folder in saved_results:
+    for folder in kept:
         for parent in reversed(PurePosixPath(folder).parents[:-1]):
             found.setdefault(str(parent), None)
     return tuple(found)
@@ -133,8 +133,8 @@ def _enclosing(saved_results: tuple[str, ...]) -> tuple[str, ...]:
 def _enclosing_denial(sessions_root: Path, folder: str) -> str:
     """Deny writes to every session's `folder` node, not to what it holds.
 
-    For a folder enclosing the recorded results, which are guarded by their position under
-    it: renaming it would let the shell write through the new name and rename it back.
+    For a folder enclosing kept records, which are guarded by their position under it:
+    renaming it would let the shell write through the new name and rename it back.
     """
     root = re.escape(f"{fenced_sessions(sessions_root)}/")
     written = f"^{root}[^/]+/{re.escape(folder)}$"
@@ -152,7 +152,7 @@ def _session_folder_denial(sessions_root: Path, folder: str) -> str:
 
     `.harness` is what kingfisher reads back and trusts. `inputs` is the caller's and
     nothing versions it; dropping its write bits is not enough, since the shell owns
-    them. The recorded results are what a later turn reads back as a tool's answer.
+    them. The records hold what a later turn reads back as a tool's answer.
     """
     root = re.escape(f"{fenced_sessions(sessions_root)}/")
     written = f"^{root}[^/]+/{re.escape(folder)}(/|$)"

@@ -18,6 +18,28 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## Saved results are kept under `/records/`, after #1309
+
+- **A session has a new top-level folder, `/records/`**, which the agent may read and
+  never write: the file tools refuse every write under it, and so does each fence's
+  shell. Only kingfisher writes it. A new session is made with it.
+- **Saved tool results move from `/scratchpad/tool_results/` to
+  `/records/tool_results/`.** A ledger row's `path`, a cleared result's handle and the
+  prompt name the new folder. `Layout.saved_results` is `("records/tool_results",)`,
+  `Layout.kept_records` names `records` whole where it named the saved results, and
+  `read_only_permissions` denies `/records/**` where it denied
+  `/scratchpad/tool_results/**`. `conversation_history/`, `large_tool_results/` and
+  `blobs` stay in the scratchpad.
+- **`Layout` gains `records`**, default `"records"`, renamed as the other leaves are and
+  refused where it collides with one of them; `records_route` is its route, and a
+  `ShellPrompt` may name it as `{{records}}`. `tool_results` now names a folder under it,
+  so renaming `scratchpad` no longer moves the saved results.
+- **`shell_denied` also drives the shell at `/records`.** A backend of your own must keep
+  its shell from writing there, as it does `/.harness` and `/inputs`.
+- **Nothing is migrated.** An older session's `/scratchpad/tool_results/` stays where it
+  is, now ordinary scratchpad: its rows still name it, nothing sweeps it, and the agent
+  may write there.
+
 ## The last call a turn is told of is one its answer finishes on, after #1306
 
 - **The step budget's note comes one call sooner**, near the limit: a call is counted as

@@ -218,11 +218,10 @@ def test_a_blank_no_layout_fills_is_refused_when_the_wording_is_made(part, blank
 
 def test_every_blank_a_layout_fills_is_accepted_in_every_part():
     """The control: a refusal that fired on everything would pass the rule above, and
-    the five names are the whole of what a deployment may write.
+    the six names are the whole of what a deployment may write.
     """
-    every = "".join(
-        f"{{{{{leaf}}}}}" for leaf in ("inputs", "outputs", "memory", "scratchpad", "tool_results")
-    )
+    leaves = ("inputs", "outputs", "memory", "scratchpad", "records", "tool_results")
+    every = "".join(f"{{{{{leaf}}}}}" for leaf in leaves)
 
     ShellPrompt(prompt=every, skills=every, execute=every)
 

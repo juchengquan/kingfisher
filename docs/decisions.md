@@ -2709,7 +2709,8 @@ one back with `read_file` and searches with `grep`, no new tool, and it is swept
 session. Not `results/`, which is the name anyone gives a folder of their own work; beside
 deepagents' `large_tool_results/` the two read as a pair. A file the backend refuses
 leaves the row's `path` null and the call succeeds: failed, the model may call again and
-run the tool twice.
+run the tool twice. *Moved on 2026-11-14 to `/records/tool_results/`: see* Kept records
+have a folder of their own *below.*
 
 *Reversed on 2026-10-21: nothing offloads, so there is nothing to point at.* A result
 too long to show the model whole is kingfisher's to save and to preview, in the one
@@ -2873,6 +2874,7 @@ refuses a session without them. Landlock cannot while it grants the scratchpad w
 read-only grant under a writable parent being stepped over (`_session_writable`), which
 is also why `shell_denied` does not ask a deployment's backend for it. Two of three is not
 a boundary, so nothing claims one. *(2026-10-16, before clearing results to handles.)*
+*Since 2026-11-14 the saved results are under `/records/`, which all three refuse.*
 *Since 2026-10-21 only deepagents' summariser writes `large_tool_results/`, on a refusal
 for length clearing could not answer or a request still over the input budget once
 summarised; it is made with the session and denied with every other folder of kept
@@ -2904,6 +2906,19 @@ too: deepagents' summariser writes there mid-turn, on a refusal for length clear
 not answer or a request still over the input budget once summarised, and bubblewrap's
 fence is built once a turn, so a folder it made was the
 shell's to write until the next.*
+
+**Kept records have a folder of their own, `/records/`, which the agent reads and never
+writes.** The saved results sat in `/scratchpad/tool_results/`, a read-only hole in a
+folder the shell is granted whole: Landlock, which only grants, could not refuse it,
+`sandbox-exec` needed a rule on the scratchpad's own node, and a layout renaming the
+scratchpad moved them. A folder at the session's top that no fence grants is refused by
+all three on their plainest rule, by the file tools on one deny of `/records/**`, and by
+`shell_denied`, which could not ask about the scratchpad's. `Layout.records` renames it
+as the other leaves are, and `tool_results` sits under it. It is where the rest of the
+record of a conversation is meant to go (`docs/design/2026-11-14-records.md`).
+deepagents' three folders stay in the scratchpad for now. No migration and no refusal: an
+older session's rows still name `/scratchpad/tool_results/`, which is now ordinary
+scratchpad. *(2026-11-14, #1309.)*
 
 **What a failure says about a path is the path the model wrote.** Two spellings reached
 the model instead, both measured from its own seat. The composite strips a route before

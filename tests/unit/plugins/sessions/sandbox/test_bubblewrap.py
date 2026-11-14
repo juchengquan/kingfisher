@@ -95,7 +95,7 @@ def test_the_harness_is_read_only_and_lands_over_the_folders(session):
     guarded = [
         str(session / p)
         for p in (
-            HARNESS, INPUTS, *DEFAULT_LAYOUT.saved_results, DEFAULT_LAYOUT.history,
+            HARNESS, INPUTS, DEFAULT_LAYOUT.records, DEFAULT_LAYOUT.history,
             DEFAULT_LAYOUT.offloads,
         )
     ]
@@ -110,20 +110,20 @@ def test_the_harness_is_read_only_and_lands_over_the_folders(session):
         assert index_of(argv, "--ro-bind", path) > last_writable
 
 
-def test_a_renamed_layout_binds_its_own_saved_results(tmp_path):
-    """The binds follow the configured names, so a renamed scratchpad is not left
-    writable while the default spelling, which no session has, is guarded instead.
+def test_a_renamed_layout_binds_its_own_records(tmp_path):
+    """The binds follow the configured names, so renamed records are not left writable
+    while the default spelling, which no session has, is guarded instead.
     Made by `ensure_session_layout` as the fixture above is, since `present` drops a
     bind whose folder is not there.
     """
-    moved = Layout(scratchpad="work", tool_results="kept")
+    moved = Layout(scratchpad="work", records="kept")
     session = ensure_session_layout(tmp_path / "sessions" / "s1", moved)
 
     argv = argv_for(session, moved)
 
     bound = {source for source, _ in chosen(argv)}
-    assert str(session / "work" / "kept") in bound
-    assert not (session / "scratchpad").exists(), "the default scratchpad was made beside it"
+    assert str(session / "kept") in bound
+    assert not (session / "records").exists(), "the default records were made beside it"
 
 
 def test_no_system_path_bound_here_holds_a_session(session):

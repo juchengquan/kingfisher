@@ -109,7 +109,7 @@ def _listing(result: Any, path: str) -> Any:
     """One directory's own entries: what it holds, each named once.
 
     deepagents answers `/` with a row for every route, nested ones included, while its own
-    `ls` does not recurse -- so `/scratchpad/tool_results/` arrived as an entry of `/`,
+    `ls` does not recurse -- so `/scratchpad/conversation_history/` arrived as an entry of `/`,
     beside the folder that holds it. Those rows are dropped rather than moved under the
     directory they belong to, because nothing needs them: measured with every route
     mounted and a bundle shipped, the only rows this was ever asked to move were two whose

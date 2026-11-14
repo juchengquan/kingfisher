@@ -37,9 +37,13 @@ MEMORY_FILE = "AGENTS.md"
 #: saved, swept when the session goes.
 SCRATCH = "scratchpad"
 
-#: Where a recorded tool result is kept, under the scratchpad. Not `results`, the name
-#: anyone gives a folder of their own work: the agent writes there too, and this is the
-#: recorder's.
+#: What kingfisher keeps of what happened in a session, for the agent to read and never
+#: write: outside the scratchpad, which is the agent's, so no rule has to carve a
+#: read-only hole in a folder the shell is otherwise granted whole.
+RECORDS = "records"
+
+#: Where a recorded tool result is kept, under the records. Not `results`, the name
+#: anyone gives a folder of their own work.
 TOOL_RESULTS = "tool_results"
 
 #: deepagents' own folder for a result too long to show the model whole. Its offloading is
@@ -178,12 +182,14 @@ class Layout:
     outputs: str = OUTPUTS
     memory: str = MEMORY
     scratchpad: str = SCRATCH
+    records: str = RECORDS
     tool_results: str = TOOL_RESULTS
 
     def __post_init__(self) -> None:
         named = {
             "inputs": self.inputs, "outputs": self.outputs, "memory": self.memory,
-            "scratchpad": self.scratchpad, "tool_results": self.tool_results,
+            "scratchpad": self.scratchpad, "records": self.records,
+            "tool_results": self.tool_results,
         }
         for field_name, value in named.items():
             if not _LEAF.fullmatch(value):
@@ -202,7 +208,7 @@ class Layout:
     @property
     def session_dirs(self) -> tuple[str, ...]:
         """The directories a session is laid out with, which the agent addresses."""
-        return (self.inputs, self.outputs, self.memory, self.scratchpad)
+        return (self.inputs, self.outputs, self.memory, self.scratchpad, self.records)
 
     @property
     def artifact_dirs(self) -> tuple[str, ...]:
@@ -231,8 +237,12 @@ class Layout:
         return _route(self.scratchpad)
 
     @property
+    def records_route(self) -> str:
+        return _route(self.records)
+
+    @property
     def tool_results_route(self) -> str:
-        return _route(self.scratchpad, self.tool_results)
+        return _route(self.records, self.tool_results)
 
     @property
     def kept_record_routes(self) -> tuple[str, ...]:
@@ -256,7 +266,7 @@ class Layout:
     def saved_results(self) -> tuple[str, ...]:
         """The folder a ledger row names, as a path inside the session: what the fences
         refuse the shell, beside `.harness` and the inputs."""
-        return (f"{self.scratchpad}/{self.tool_results}",)
+        return (f"{self.records}/{self.tool_results}",)
 
     @property
     def history(self) -> str:
@@ -274,14 +284,14 @@ class Layout:
         """Every folder of kept records, as a path inside the session: what says what
         happened rather than what the agent made, so a write there is forgery.
 
-        Wider than `saved_results`, which is the folder a ledger row names and the unused
-        results walk -- a history file is no row's, and deepagents' other two folders hold
-        no rows either. Both are listed though only its summariser writes the offloads, and
-        nothing `blobs`: a deployment that replaces `FilesystemMiddleware` back turns both
-        on, and a rule written for what writes today would not be there on the day it did.
+        The records whole, not only `saved_results`, the folder a ledger row names and the
+        unused results walk: nothing kingfisher keeps there is the agent's to write.
+        deepagents' three folders hold no rows, and the offloads and `blobs` are listed
+        though only its summariser writes the one and nothing the other: a deployment
+        that replaces `FilesystemMiddleware` back turns both on, and a rule written for
+        what writes today would not be there on the day it did.
         """
-        return (*self.saved_results, self.history, f"{self.scratchpad}/{BLOBS}",
-                self.offloads)
+        return (self.records, self.history, f"{self.scratchpad}/{BLOBS}", self.offloads)
 
     @property
     def made_dirs(self) -> tuple[str, ...]:
@@ -309,8 +319,10 @@ class Layout:
     def shell_writable(self) -> tuple[str, ...]:
         """What every fence lets the shell write inside a session: its folders one by one,
         never the session itself, where a file is handed back to nobody.
-        `inputs` is the caller's."""
-        return tuple(name for name in self.session_dirs if name != self.inputs)
+        `inputs` is the caller's, and the records kingfisher's."""
+        return tuple(
+            name for name in self.session_dirs if name not in {self.inputs, self.records}
+        )
 
     @property
     def shell_read_only(self) -> tuple[str, ...]:
@@ -344,8 +356,9 @@ class Layout:
             # can be written, since deepagents refuses a rule whose path is under no route.
             # A row names its file and the prompt sends the model to the history, so a
             # write in either forges what a later turn reads as true. The shell is the
-            # fences' to refuse, via `shell_read_only`, and Landlock cannot inside a
-            # scratchpad it grants whole, so no boundary is claimed.
+            # fences' to refuse, via `shell_read_only`. Landlock never grants the records,
+            # and cannot refuse inside the scratchpad it grants whole, so no boundary is
+            # claimed for the three folders deepagents writes there.
             *(
                 Route(route, deny_write_under=f"{route}**")
                 for route in self.kept_record_routes
