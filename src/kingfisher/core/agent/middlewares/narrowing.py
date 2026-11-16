@@ -10,6 +10,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 
+from kingfisher.core.agent.prompting import piece
 from kingfisher.core.definitions.skills.registry import KEY, alist_skills, list_skills, qualified
 from kingfisher.core.definitions.subagents import TASK_TOOL
 
@@ -37,11 +38,11 @@ class GrantedOnlyMiddleware(AgentMiddleware):
         tools: tuple[str, ...] | None = None,
         *,
         subagents: tuple[str, ...] | None = None,
-        subject: str = "this request",
+        subject: str | None = None,
     ) -> None:
         self._allowed = None if tools is None else set(tools)
         self._declared = None if subagents is None else set(subagents)
-        self._subject = subject
+        self._subject = piece("refusals/for_this_request") if subject is None else subject
         super().__init__()
 
     def _filter(self, request: Any) -> Any:
@@ -68,25 +69,29 @@ class GrantedOnlyMiddleware(AgentMiddleware):
         call = request.tool_call
         name = call.get("name")
         if self._allowed is not None and name not in self._allowed:
-            return failed(
-                call,
-                f"Error: {name} is not available for {self._subject}. "
-                f"Available tools: {', '.join(sorted(self._allowed)) or 'none'}.",
+            # `Error` opens it in code, not in the piece: clearing reads a result opening so
+            # as failed once a replay has dropped its status.
+            told = piece(
+                "refusals/tool_not_available",
+                tool=str(name),
+                subject=self._subject,
+                tools=", ".join(sorted(self._allowed)) or piece("refusals/none_available"),
             )
+            return failed(call, f"Error: {told}")
         if name != TASK_TOOL or self._declared is None:
             return None
         wanted = (call.get("args") or {}).get("subagent_type")
         if wanted in self._declared:
             return None
-        offered = ", ".join(sorted(self._declared)) or "none"
+        offered = ", ".join(sorted(self._declared)) or piece("refusals/none_available")
         # A missing argument is a different mistake from a refused name: told the name was
         # refused, a live model that had sent `subagentType` called the tool broken and gave up.
-        detail = (
-            "no subagent_type was given -- the argument is `subagent_type`"
+        told = (
+            piece("refusals/no_subagent_type", subagents=offered)
             if wanted is None
-            else f"{wanted!r} is not a subagent this request may use"
+            else piece("refusals/subagent_not_usable", subagent=repr(wanted), subagents=offered)
         )
-        return failed(call, f"Error: {detail}. Available: {offered}.")
+        return failed(call, f"Error: {told}")
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         return self._refuse(request) or handler(request)

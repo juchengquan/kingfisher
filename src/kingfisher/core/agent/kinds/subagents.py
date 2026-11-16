@@ -24,7 +24,7 @@ from kingfisher.core.agent.models import (
     refuse_a_mark_deepagents_reaches_first,
     summarizer_trigger_and_count,
 )
-from kingfisher.core.agent.prompting import subagent_prompt
+from kingfisher.core.agent.prompting import piece, subagent_prompt
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.agents.spec import AgentSpec
@@ -402,7 +402,7 @@ def as_subagent(  # noqa: PLR0913 -- one per narrowing rule; bundling them hides
         + tuple(one.name for one in private),
         # The agent's: a subagent's own `interrupt_on` is copied from them below.
         gated=gated,
-        tools_subject=refused_by or f"the {spec.name!r} subagent",
+        tools_subject=refused_by or piece("refusals/for_the_subagent", subagent=repr(spec.name)),
         # The parent's sources, passed in rather than rebuilt: two walks could disagree
         # and offer the subagent a different skill than the one named.
         skills=None if skills is None or skills == ALL else tuple(skills),

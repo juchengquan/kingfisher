@@ -11,6 +11,7 @@ from kingfisher.core.interfaces import MAX_SCRATCH_BYTES, MAX_SCRATCH_OUTPUTS, S
 from kingfisher.core.session.threads import finished, off_loop, thread_pool
 
 from .permitted_backend import scratch_runs_of
+from .prompting import piece
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -55,7 +56,7 @@ class ScratchRunner:
             return ScratchRun(error=refused)
         method = scratch_runs_of(self._backend)
         if method is None:
-            return ScratchRun(error=_NO_METHOD)
+            return ScratchRun(error=piece(_NO_METHOD))
         return method(
             list(argv), dict(files), outputs=tuple(outputs), timeout=self._left(timeout)
         )
@@ -74,7 +75,7 @@ class ScratchRunner:
         args = (list(argv), dict(files))
         method = scratch_runs_of(self._backend)
         if method is None:
-            return ScratchRun(error=_NO_METHOD)
+            return ScratchRun(error=piece(_NO_METHOD))
         stop = threading.Event()
         pending = off_loop(
             thread_pool(),
@@ -97,32 +98,32 @@ class ScratchRunner:
         self, argv: Sequence[str], files: Mapping[str, bytes], outputs: Sequence[str]
     ) -> str | None:
         if self._closed:
-            return "refused: this tool call has ended, and its runs with it"
+            return piece("refusals/scratch_call_ended")
         if isinstance(argv, str) or not argv or not all(isinstance(a, str) for a in argv):
-            return "refused: argv is the program and its arguments as a list of strings"
+            return piece("refusals/scratch_argv")
         named = [*files, *outputs]
         if bad := [name for name in named if unfit(name)]:
-            return (
-                f"refused: {', '.join(map(repr, bad))} -- a file here is one plain name, "
-                "with no folder and no leading dot"
-            )
+            return piece("refusals/scratch_names", names=", ".join(map(repr, bad)))
         carried = sum(len(data) for data in files.values())
         if carried > MAX_SCRATCH_BYTES:
-            return (
-                f"refused: the files come to {carried} bytes, past the {MAX_SCRATCH_BYTES} "
-                "one run may carry"
+            return piece(
+                "refusals/scratch_too_large", carried=str(carried), most=str(MAX_SCRATCH_BYTES)
             )
         if len(outputs) > MAX_SCRATCH_OUTPUTS:
-            return (
-                f"refused: {len(outputs)} outputs named, past the {MAX_SCRATCH_OUTPUTS} one "
-                "run may bring back"
+            return piece(
+                "refusals/scratch_too_many_outputs",
+                named=str(len(outputs)),
+                most=str(MAX_SCRATCH_OUTPUTS),
             )
         return None
 
     def _out_of_time(self) -> str | None:
         if self._left(None) < 1:
-            spent = "this turn" if self._turn_ends else "this tool call"
-            return f"refused: {spent} has no time left to run anything in"
+            return piece(
+                "refusals/scratch_turn_out_of_time"
+                if self._turn_ends
+                else "refusals/scratch_call_out_of_time"
+            )
         return None
 
     def _left(self, asked: int | None) -> int:
@@ -130,6 +131,4 @@ class ScratchRunner:
         return left if asked is None else min(asked, left)
 
 
-_NO_METHOD = (
-    "refused: this session's backend offers no run_in_scratch, so there is nowhere to run it"
-)
+_NO_METHOD = "refusals/scratch_no_method"

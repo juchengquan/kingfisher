@@ -37,7 +37,7 @@ from kingfisher.core.agent.middlewares.scratch_runs import (
 )
 from kingfisher.core.agent.permitted_backend import PermittedBackend
 from kingfisher.core.agent.scratch import ScratchRunner
-from kingfisher.core.agent.tool_context import NOT_GRANTED
+from kingfisher.core.agent.tool_context import not_granted
 from kingfisher.core.agent.tool_guards import guarded_tools
 from kingfisher.core.definitions.agents.catalogue import LocalAgentRepository
 from kingfisher.core.definitions.tools.catalogue import LocalToolRepository
@@ -61,6 +61,8 @@ from tests.conftest import (
 )
 from tests.unit.agent.test_interpreter import _from_code
 from tests.unit.scripted import Scripted
+
+NOT_GRANTED = not_granted()
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -90,7 +90,7 @@ from .models import (
 )
 from .no_copies import keeping_no_copies
 from .permitted_backend import PermittedBackend
-from .prompting import EXECUTE, memory_guidelines, skills_index, system_prompt
+from .prompting import EXECUTE, memory_guidelines, piece, skills_index, system_prompt
 from .session_paths import SessionPaths
 from .tool_context import Caller, ToolContext
 from .tool_guards import guarded_tools
@@ -845,7 +845,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
                         wanted=None,
                     ),
                     kind="general-purpose",
-                    refused_by=f"the {name!r} subagent",
+                    refused_by=piece("refusals/for_the_subagent", subagent=repr(name)),
                     # What this subagent runs: a helper's spec must name a model.
                     model=runs,
                     helper=True,
@@ -935,7 +935,7 @@ def build_agent(  # noqa: PLR0912, PLR0913, PLR0915 -- the composition root: eac
             cfg,
             kind="general-purpose",
             # It withholds nothing of its own, so whatever it is refused, the request refused.
-            refused_by="this request",
+            refused_by=piece("refusals/for_this_request"),
             runs=running,
             instructions=instructions,
             turn_text=turn_text,

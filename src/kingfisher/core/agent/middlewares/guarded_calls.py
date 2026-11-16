@@ -11,6 +11,7 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import ToolException
 
 from kingfisher.core.agent.host_paths import HostPathError, UnreachablePathError
+from kingfisher.core.agent.prompting import piece
 from kingfisher.core.agent.session_paths import (
     SessionPaths,
     as_asked,
@@ -31,12 +32,10 @@ def _handed_back(call: Any, exc: Exception) -> ToolMessage | None:
     """
     if call.get("name") != TASK_TOOL or (why := unavailable(exc)) is None:
         return None
-    whose = (call.get("args") or {}).get("subagent_type") or "the subagent"
-    return failed(
-        call,
-        f"Error: {whose!r} could not reach its model ({why}). Go on without it, or "
-        "say in your answer that this part could not be done.",
-    )
+    whose = (call.get("args") or {}).get("subagent_type") or piece("refusals/unnamed_subagent")
+    # `Error` opens it in code, not in the piece: clearing reads a result opening so as
+    # failed once a replay has dropped its status.
+    return failed(call, f"Error: {piece('refusals/model_unreachable', who=repr(whose), why=why)}")
 
 
 # The other half of `reject_host_path`.

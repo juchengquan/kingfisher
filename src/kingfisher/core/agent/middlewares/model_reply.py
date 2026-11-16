@@ -105,11 +105,8 @@ def _stopped(reply: AIMessage, *, subagent: bool) -> AIMessage:
     """
     if not subagent:
         return text_of(reply)
-    return text_of(
-        reply,
-        f"[Incomplete: this subagent's replies reached {output_limit(reply)} "
-        f"{GIVE_UP} times in a row, and the answer below is cut off.]\n\n",
-    )
+    said = piece("tool_notes/subagent_gave_up", limit=output_limit(reply), times=str(GIVE_UP))
+    return text_of(reply, f"{said}\n\n")
 
 
 def _raised(exc: Exception) -> Exception:
