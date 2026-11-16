@@ -718,9 +718,12 @@ def _prompt(args: argparse.Namespace) -> int:
 
 
 def _pieces(args: argparse.Namespace) -> int:
-    """List kingfisher's prompt pieces, or print one as it ships."""
-    # Read from the package alone: a name to copy is wanted before a deployment exists.
-    pieces = shipped()
+    """List kingfisher's prompt pieces and its sessions', or print one as it ships."""
+    from .configured import configured_sessions  # noqa: PLC0415
+
+    # From the package and the sessions the settings name alone, not the definitions: a
+    # name to copy is wanted before a deployment exists.
+    pieces = {**shipped(), **configured_sessions().prompt_pieces()}
     if args.piece is not None:
         if args.piece not in pieces:
             print(f"no piece is called {args.piece!r}; --pieces lists them", file=sys.stderr)
