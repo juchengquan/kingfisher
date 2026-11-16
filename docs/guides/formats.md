@@ -188,10 +188,29 @@ object with `text(cfg) -> str`, asked once per agent built, so a change reaches 
 next turn. Text for one turn rather than every one goes after all three, from
 `turn_instructions=` — [`ports.md`](ports.md) says where, and why there.
 
-There is no way to replace the last. An agent without it is not leaner — it is
-one holding tools nobody told it about, discovering its permissions by being
-denied. `kingfisher prompt` shows what an agent is sent, which is where to check;
-[*Seeing what the model is sent*](#seeing-what-the-model-is-sent) says how.
+The last can be reworded, piece by piece, and not taken over. Every sentence
+kingfisher writes for the model — the harness, the notes on each task, the nudges in a
+turn, what a refused tool call is told — is a file under `kingfisher/core/agent/prompts/`
+in the installed package, and a file of the same path in `prompts/` beside your
+definitions is sent in its place:
+
+    my-definitions/
+      agents/ ...
+      INSTRUCTIONS.md
+      prompts/
+        session.md                    the session's folders, in your words
+        tool_results/reading_grep.md  empty: this sentence is not sent
+
+kingfisher still decides when each piece is sent, so a reworded sentence about `grep`
+reaches only an agent holding `grep`. A replacement keeps every blank its piece has —
+`{{files}}`, `{{outputs}}`, and in `memory.md` and `skills.md` the single-brace ones
+deepagents fills — and adds none, or the deployment does not start; an empty file says
+nothing there. The folder is read again when it changes and checked as the definitions
+are, so a broken edit leaves turns on the last wording that passed. Two pieces cannot be
+replaced: `memory/never_save` and `turn/unfinished`, each a rule a rewording could lose.
+An empty piece is not leaner: an agent not told what a folder or a tool is for finds out
+by being refused. `kingfisher prompt` shows what an agent is sent, which is where to
+check; [*Seeing what the model is sent*](#seeing-what-the-model-is-sent) says how.
 
 The first part is required: the two after it are written once for the whole
 deployment and neither has heard of this agent. Say what this agent is and how it

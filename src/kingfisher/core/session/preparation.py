@@ -90,6 +90,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
+    from kingfisher.core.agent.prompting import TurnWording
     from kingfisher.core.agent.tool_context import Caller
     from kingfisher.core.interfaces import MemoryStore, RunEvents
     from kingfisher.core.versions import Versions
@@ -120,6 +121,7 @@ class Preparation:
         *,
         source_ids: Held | None = None,
         files: Any = None,
+        wording: TurnWording | None = None,
     ) -> Steps[Prepared]:
         """Everything up to the model call, as the one sequence both loops drive.
 
@@ -132,6 +134,10 @@ class Preparation:
         # from one set of definitions and its tools or subagents from the next. On the
         # host, since a changed folder is read and checked while the turn waits.
         catalogue = yield on_host(self._versions.current)
+        # Every piece said from here on is in this set's words, the agent's and the
+        # subagents' alike.
+        if wording is not None:
+            wording.use(catalogue.wording)
         session = yield from self._session_for(request)
         # Who is calling, before the session is marked, claimed or written to: later, a
         # refused caller's files would be in its `/inputs`.

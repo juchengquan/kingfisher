@@ -18,6 +18,16 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `prompts/` beside the definitions rewords kingfisher's own text, after #1316
+
+- **A `prompts/` folder beside your definitions is now read.** Each `.md` file in it
+  replaces the piece of kingfisher's prompt at the same path under
+  `kingfisher/core/agent/prompts/`. A file naming no piece, a file that is not `.md`, one
+  replacing `memory/never_save` or `turn/unfinished`, or one that drops or adds a blank
+  stops the deployment at startup, and a later edit like that is refused while turns keep
+  the last wording that passed. A deployment that already kept a folder of that name
+  there, for anything else, should move it.
+
 ## The prompt no longer names `conversation_history/`, after #1312
 
 - **`session.md` loses its sentence about `/scratchpad/conversation_history/`.** That folder

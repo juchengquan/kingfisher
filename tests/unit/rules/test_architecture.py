@@ -3613,7 +3613,8 @@ def test_the_catalogue_holds_one_module_per_kind():
 #: `prompts` reads and fills `system_prompt` written long, which `definition` declares on
 #: both kinds: two copies of the slot grammar would let a slot mean one thing per kind.
 #: `skill_locks` reads `skill_locks.yaml`, which sits beside the kinds rather than in one:
-#: inside `skills/`, the agent could read it.
+#: inside `skills/`, the agent could read it. `wording` reads `prompts/`, which sits there too
+#: and is kingfisher's text reworded rather than a kind.
 KINDS_HELPERS = frozenset(
     {
         "__init__",
@@ -3625,6 +3626,7 @@ KINDS_HELPERS = frozenset(
         "prompts",
         "seeding",
         "skill_locks",
+        "wording",
     }
 )
 
@@ -3812,6 +3814,7 @@ DEPLOYMENT_ERRORS = frozenset({
     # deployment's own.
     "AgentError", "ConfigError", "HostPathError", "HostPathFailedError", "LoadError",
     "MiddlewareError", "SkillLockError", "ToolError", "UnreachablePathError",
+    "WordingError",
 })
 
 #: Caused by the model's provider, and never raised to a caller: a turn ends on it as a
