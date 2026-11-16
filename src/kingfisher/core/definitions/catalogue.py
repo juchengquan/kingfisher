@@ -45,6 +45,7 @@ from .subagents.catalogue import LocalSubagentRepository
 from .subagents.spec import SubagentError
 from .tools.catalogue import CarriedTools, LocalToolRepository, ToolError
 from .tools.spec import FoundTool, Offering, admitted, audienced, placed, reference
+from .wording import PROMPTS_FOLDER, Wording, read_wording
 
 if TYPE_CHECKING:
     from kingfisher.core.access import Vocabulary
@@ -103,6 +104,7 @@ class Definitions:
             "subagents": self.subagents.root,
             "tools": self.tools.root,
             **{f"skills/{label}": mount for label, mount in self.skills.mounts.items()},
+            PROMPTS_FOLDER: self._prompts,
         }
         locks = Path(self.skills.root).parent / SKILL_LOCKS_FILE
         return {
@@ -113,6 +115,16 @@ class Definitions:
             },
             **({SKILL_LOCKS_FILE: locks} if locks.is_file() else {}),
         }
+
+    @property
+    def _prompts(self) -> Path:
+        # Beside the definitions, as the skill locks are, which is the skills folder's parent.
+        return Path(self.skills.root).parent / PROMPTS_FOLDER
+
+    @cached_property
+    def wording(self) -> Wording:
+        """The deployment's replacements for kingfisher's prompt pieces, checked."""
+        return read_wording(self._prompts)
 
     @cached_property
     def digests(self) -> Mapping[str, str]:
@@ -308,6 +320,7 @@ class Definitions:
         _ = self.middlewares.classes
         _ = self.registry
         _ = self.locked_skills
+        _ = self.wording
         # Here, not in the reader: whether `audit` is `catalogue::audit` is the catalogue's
         # to say. Both load, and the entry without an audience reaches whom the other kept out.
         for kind, specs, error in (

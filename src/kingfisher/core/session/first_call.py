@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.access import caller_holds
 from kingfisher.core.agent.interpreter import release_interpreter
+from kingfisher.core.agent.prompting import TurnWording, worded
 from kingfisher.core.agent.sent import first_call
 
 from .model import SessionBusyError
@@ -52,13 +53,19 @@ class FirstCall:
         claimed nor written to. One made in order to look is removed again, under its
         claim, unless a turn has started in it meanwhile.
         """
-        return drive(self._sent_steps(request, source_ids))
+        wording = TurnWording()
+        with worded(wording):
+            return drive(self._sent_steps(request, source_ids, wording))
 
     async def asent(self, request: Request, *, source_ids: Held | None = None) -> Sent:
         """`sent`, for a caller on an event loop."""
-        return await adrive(self._sent_steps(request, source_ids))
+        wording = TurnWording()
+        with worded(wording):
+            return await adrive(self._sent_steps(request, source_ids, wording))
 
-    def _sent_steps(self, request: Request, source_ids: Held | None) -> Steps[Sent]:
+    def _sent_steps(
+        self, request: Request, source_ids: Held | None, wording: TurnWording
+    ) -> Steps[Sent]:
         if self._graph is not None:
             msg = (
                 "this deployment supplied its own graph, which kingfisher did not build "
@@ -71,6 +78,7 @@ class FirstCall:
             raise ValueError(msg)
         # Once, as a turn asks.
         catalogue = yield on_host(self._versions.current)
+        wording.use(catalogue.wording)
         session = yield from self._session_for(request)
         held = caller_holds(catalogue.vocabulary, source_ids)
         made = session.id not in (yield from self._known_steps())

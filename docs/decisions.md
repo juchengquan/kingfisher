@@ -615,7 +615,7 @@ failure stays. Measured on MiniMax-M3 with an agent whose whole prompt was "You 
 task you are given", three turns each way of a question about an input file that an
 answer settles, and of the smoke: every answer was right and none left a file in
 `/outputs`, with the behaviour in the harness and without it, and all six smokes passed.
-*(2026-10-26.)*
+*(2026-10-26.)* *The replaceable part is taken for the facts that remain, 2026-11-16, below.*
 
 **The client's text comes first, and each mechanism is described in one file.** An
 agent's prompt is its own `system_prompt`, then the deployment's instructions, then the
@@ -652,6 +652,30 @@ profiles process-wide or stripping each profile's wording. Not measured: how oft
 langchain rewrites `write_todos`' text, and the OpenAI Codex and NVIDIA Nemotron profiles,
 which were listed and never resolved. Each change of this kind was checked with real turns
 on both sides before it landed, the counts in its pull request. *(2026-10-26.)*
+
+**Reversed: kingfisher's own text is replaceable, a piece at a time, from the definitions.**
+The 26 October entry above did not take a part a deployment may replace, because the text
+then told every agent how to behave and a replaceable default keeps kingfisher speaking
+unless every client opts out. What is left after that cut is facts about how kingfisher
+runs the turn, and a deployment downstream asked to put them in its own words -- another
+language, chiefly. So every sentence kingfisher writes for the model became a named file
+under `prompts/` (#1313, #1314, #1315, which changed no byte sent), and a file of the same
+path in `prompts/` beside the definitions is sent instead. kingfisher keeps deciding when a
+piece is sent; a replacement only words it. Three rules keep a rewording from losing what a
+piece carries: it keeps exactly the piece's blanks, or the fact a blank holds is never sent
+and nothing says so; an empty file says nothing, the one way to drop a sentence; and
+`memory/never_save` and `turn/unfinished` cannot be replaced, the first being what keeps a
+credential from being sent on every later call, the second measured at 6 repeated outside
+actions in 6 without it. Texts code matches on, or that copy deepagents' wording, stay in
+code beside what reads them, where an edit cannot break the match from another file.
+**A folder in the definitions, not a hook.** A turn runs on one checked set of definitions,
+and the planned definitions source hands kingfisher a version as files; a `prompts/` folder
+is one more path in that version, checked with the rest and changed with it. A hook beside
+it would be a second source a turn reads at another moment, and a rename of `outputs` in
+the definitions could meet a hook still answering `{{outputs}}`. Text that lives in a
+deployment's own code reaches kingfisher through that source when it is built, or as
+files today. Not taken: wording per caller, since a version is one per deployment.
+*(2026-11-16.)*
 
 **`general-purpose` is told the deployment's instructions, as a declared subagent is.**
 kingfisher supplies it, to carry the standing middleware, and supplied it with deepagents'

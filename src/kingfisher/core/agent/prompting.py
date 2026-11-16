@@ -8,18 +8,20 @@ naming one. `test_a_public_name_that_runs_no_agent_loads_no_runtime` holds it.
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from functools import lru_cache
-from importlib import resources
 from typing import TYPE_CHECKING
 
 from kingfisher.core.config import ConfigError
 from kingfisher.core.definitions.skills import READ_FILE
+from kingfisher.core.definitions.wording import Wording, shipped
 from kingfisher.core.interfaces import Instructions
 from kingfisher.core.layout import DEFAULT_LAYOUT, Layout
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Iterator
 
     from kingfisher.core.config import Config
 
@@ -129,9 +131,42 @@ _KEPT = {False: "memory/kept_session", True: "memory/kept_user"}
 _EVIDENCE = {True: "memory/evidence_read_file", False: "memory/evidence"}
 
 
+class TurnWording:
+    """The wording one turn runs on: kingfisher's own until the turn has its definitions,
+    then theirs, kept to the turn's end as they are."""
+
+    def __init__(self) -> None:
+        self.wording = Wording()
+
+    def use(self, wording: Wording) -> None:
+        self.wording = wording
+
+
+#: Set around each part of a turn's own work, as its warnings are, and copied into its
+#: graph's threads. A holder rather than the wording itself: the turn learns its
+#: definitions after the first of those parts has begun.
+_WORDING: ContextVar[TurnWording | None] = ContextVar("kingfisher_turn_wording", default=None)
+
+
+@contextmanager
+def worded(turn: TurnWording) -> Iterator[None]:
+    """Send `turn`'s wording for every piece said until the block ends."""
+    token = _WORDING.set(turn)
+    try:
+        yield
+    finally:
+        _WORDING.reset(token)
+
+
+def _in_force() -> Wording:
+    turn = _WORDING.get()
+    return Wording() if turn is None else turn.wording
+
+
 def _prompt_text(name: str) -> str:
-    prompts = resources.files("kingfisher.core.agent.prompts")
-    return prompts.joinpath(name).read_text(encoding="utf-8")
+    stem = name.removesuffix(".md")
+    said = _in_force().text(stem)
+    return shipped()[stem] if said is None else said
 
 
 def _names(layout: Layout) -> dict[str, str]:
@@ -207,13 +242,17 @@ class ShellPrompt:
                 raise ValueError(msg)
 
 
-@lru_cache(maxsize=1)
 def _neutral() -> ShellPrompt:
+    return _neutral_in(_in_force())
+
+
+# Keyed on the wording in force, which is what `_prompt_text` reads.
+@lru_cache(maxsize=8)
+def _neutral_in(_wording: Wording) -> ShellPrompt:
     prompt, skills = (_prompt_text(name).strip() for name in _ELSEWHERE)
     return ShellPrompt(prompt=prompt, skills=skills)
 
 
-@lru_cache(maxsize=8)
 def rooted(shell: ShellPrompt | None) -> ShellPrompt:
     """`shell`, its section and its `execute` line also telling the agent of
     `$KINGFISHER_SESSION_ROOT`, for a shell that exports it.
@@ -221,6 +260,11 @@ def rooted(shell: ShellPrompt | None) -> ShellPrompt:
     The `execute` line, because it is all a subagent is told; where `shell` left it
     `None`, the sentence takes the place of deepagents' "Use absolute paths" line.
     """
+    return _rooted(shell, _in_force())
+
+
+@lru_cache(maxsize=8)
+def _rooted(shell: ShellPrompt | None, _wording: Wording) -> ShellPrompt:
     said = shell or ShellPrompt()
     prompt, execute = (_prompt_text(name).strip() for name in _ROOTED)
     return replace(
@@ -321,10 +365,6 @@ def _tool_results(
     ).strip()
 
 
-#: Enough for a fleet: `ahead` carries the running agent's line, so there is a key per
-#: agent a process serves. `layout` and `shell` are in the key because two layouts or
-#: two shells must not be handed one prompt.
-@lru_cache(maxsize=32)
 def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt describes
     *,
     cite_results: bool = True,
@@ -341,6 +381,31 @@ def render_system_prompt(  # noqa: PLR0913 -- one keyword per thing the prompt d
     says nothing. `tools` is what the agent was granted, and `None` is everything: a
     tool it does not hold is not described, since a model told of one calls it.
     """
+    return _rendered(
+        cite_results=cite_results,
+        keep_results_rounds=keep_results_rounds,
+        ahead=ahead,
+        layout=layout,
+        shell=shell,
+        tools=tools,
+        wording=_in_force(),
+    )
+
+
+#: Enough for a fleet: `ahead` carries the running agent's line, so there is a key per
+#: agent a process serves. `layout`, `shell` and `wording` are in the key because two
+#: layouts, two shells or two wordings must not be handed one prompt.
+@lru_cache(maxsize=32)
+def _rendered(  # noqa: PLR0913 -- render_system_prompt's keywords, and the wording in force
+    *,
+    cite_results: bool,
+    keep_results_rounds: int | None,
+    ahead: str,
+    layout: Layout,
+    shell: ShellPrompt | None,
+    tools: frozenset[str] | None,
+    wording: Wording,  # noqa: ARG001 -- the cache key: `_prompt_text` reads it from context
+) -> str:
     held = _held(tools)
     shelled = tools is None or EXECUTE in tools
     harness = "\n\n".join(

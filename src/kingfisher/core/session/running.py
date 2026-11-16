@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.core.access import Held, with_datazone
 from kingfisher.core.agent.interpreter import release_interpreter
 from kingfisher.core.agent.middlewares.stopping import ON_THREADS, STOPPING, OnThreads
+from kingfisher.core.agent.prompting import TurnWording, worded
 from kingfisher.core.config import Config
 from kingfisher.core.layout import INPUTS_SEEN, PAUSED_STATE, REWOUND_FILE
 from kingfisher.core.logged import TurnWarnings, raised, warn, warning_into
@@ -625,28 +626,36 @@ class Running:
         files: Any = None,
     ) -> Iterator[RunEvent]:
         """One turn, on the graph's own stream."""
-        heard = TurnWarnings(self.run_events)
-        with warning_into(heard):
-            turn = _Turn(drive(self._prepare_steps(request, source_ids=source_ids, files=files)))
+        heard, wording = TurnWarnings(self.run_events), TurnWording()
+        with warning_into(heard), worded(wording):
+            turn = _Turn(
+                drive(
+                    self._prepare_steps(
+                        request, source_ids=source_ids, files=files, wording=wording
+                    )
+                )
+            )
         try:
             with self._turn_outcome(turn):
                 # Inside, not before: a caller that stops reading during these must still
                 # end the turn.
                 yield from turn.prepared.events
-                yield from self._graph_events(turn, heard)
+                yield from self._graph_events(turn, heard, wording)
         finally:
-            with warning_into(heard):
+            with warning_into(heard), worded(wording):
                 self._end_turn(turn)
         yield from self._ending(turn)
 
-    def _graph_events(self, turn: _Turn, heard: TurnWarnings) -> Iterator[RunEvent]:
+    def _graph_events(
+        self, turn: _Turn, heard: TurnWarnings, wording: TurnWording
+    ) -> Iterator[RunEvent]:
         """The graph's stream, read as events until it ends or the turn's time does.
 
         Driven in a context of its own, which the graph's threads copy, so `STOPPING` and
         the turn's warnings are this turn's alone and never set in its caller's context.
         """
         stopping = threading.Event()
-        with warning_into(heard):
+        with warning_into(heard), worded(wording):
             context = contextvars.copy_context()
         context.run(STOPPING.set, stopping)
         graph = turn.prepared.graph
@@ -673,19 +682,19 @@ class Running:
     ) -> AsyncGenerator[RunEvent, None]:
         """The same turn on the graph's async stream; an `AsyncGenerator` so `astream` can
         `aclose` it."""
-        heard = TurnWarnings(self.run_events)
-        with warning_into(heard):
+        heard, wording = TurnWarnings(self.run_events), TurnWording()
+        with warning_into(heard), worded(wording):
             prepared, cancelled = await adrive_finished(
-                self._prepare_steps(request, source_ids=source_ids, files=files)
+                self._prepare_steps(request, source_ids=source_ids, files=files, wording=wording)
             )
         turn = _Turn(prepared)
         if cancelled is not None:
             # The cancel arrived while the turn was being built, so the built turn is
             # the caller's to let go of: ended the way any turn ends, then the cancel.
-            with warning_into(heard):
+            with warning_into(heard), worded(wording):
                 await self._aend_turn(turn)
             raise cancelled
-        with warning_into(heard):
+        with warning_into(heard), worded(wording):
             context = contextvars.copy_context()
         # Raised where a call fails or a call on a thread is cancelled: the turn's own stop
         # cancels the graph, which cancels its calls.
@@ -725,7 +734,7 @@ class Running:
             )
             # `_end_later`'s task copies this context, so a turn ending after its caller
             # left is heard too.
-            with warning_into(heard):
+            with warning_into(heard), worded(wording):
                 if ended or time.monotonic() >= until:
                     await self._aend_turn(turn)
                 else:
