@@ -52,7 +52,9 @@ from kingfisher.core.access import Datazone, ExtraDatazone, with_datazone
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import resolve_definitions
-from kingfisher.core.definitions.wording import FIXED, shipped
+from kingfisher.core.definitions.importing import LoadError
+from kingfisher.core.definitions.skill_locks import SkillLockError
+from kingfisher.core.definitions.wording import FIXED, WordingError, shipped
 from kingfisher.core.logged import RUN_LOGGER
 from kingfisher.core.session.model import held_by_a_turn
 
@@ -1263,9 +1265,10 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
     return 1 if worst(checks) == "fail" else 0
 
 
-#: What a caller can put wrong, reported rather than raised: a traceback buries the one
-#: line that would help. `SessionBusyError` and `ConfigError` have their own branches
-#: in `main`, each with more to say.
+#: What a caller or the definitions can put wrong, reported rather than raised: a
+#: traceback buries the one line that would help. `LoadError` is a tool's or a
+#: middleware's that will not load. `SessionBusyError` and `ConfigError` have their own
+#: branches in `main`, each with more to say.
 REFUSALS = (
     AgentError,
     ArtifactError,
@@ -1273,12 +1276,15 @@ REFUSALS = (
     CapabilityError,
     DecisionError,
     InputsError,
+    LoadError,
     MessageTooLongError,
     QuotaExceededError,
     ResultError,
     RewindError,
+    SkillLockError,
     SubagentError,
     UnknownSessionError,
+    WordingError,
 )
 
 #: Verb -> what runs it. Each names only the arguments its own verb defines, so none
