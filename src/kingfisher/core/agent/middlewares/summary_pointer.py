@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import HumanMessage
 
+from kingfisher.core.agent.prompting import piece
+
 if TYPE_CHECKING:
     from kingfisher.core.session.conversation import ConversationRecord
 
@@ -20,11 +22,7 @@ _SUMMARY_EVENT = "_summarization_event"
 
 def pointer(route: str) -> str:
     """The line a summary opens with."""
-    return (
-        f"The conversation this summary replaced is in {route}: each turn's words, and a "
-        "row for each tool result naming the file that holds it. Read it when you need "
-        "something the summary left out.\n\n"
-    )
+    return f"{piece('nudges/summary_pointer', file=route)}\n\n"
 
 
 def _is_summary(message: Any) -> bool:

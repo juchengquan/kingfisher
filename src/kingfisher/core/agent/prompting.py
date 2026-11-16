@@ -172,10 +172,10 @@ def _names(layout: Layout) -> dict[str, str]:
 _LEAVES = frozenset(_names(DEFAULT_LAYOUT))
 
 
-def _fill(text: str, layout: Layout, source: str, **more: str) -> str:
+def _fill(text: str, layout: Layout | None, source: str, **more: str) -> str:
     """`text`, with every `{{leaf}}` replaced by the layout's name for it, and every
     blank in `more` by its value."""
-    names = {**_names(layout), **more}
+    names = {**(_names(layout) if layout is not None else {}), **more}
 
     def _one(match: re.Match[str]) -> str:
         leaf = match.group(1)
@@ -190,6 +190,12 @@ def _fill(text: str, layout: Layout, source: str, **more: str) -> str:
 def _filled(name: str, layout: Layout, **more: str) -> str:
     """One shipped prompt, with every `{{leaf}}` replaced by the layout's name for it."""
     return _fill(_prompt_text(name), layout, name, **more)
+
+
+def piece(name: str, layout: Layout | None = None, **more: str) -> str:
+    """One sentence-sized piece of the shipped prompt, `name` without its `.md`, filled:
+    `layout` for one that names a folder, `more` for the rest of its blanks."""
+    return _fill(_prompt_text(f"{name}.md").strip(), layout, name, **more)
 
 
 @dataclass(frozen=True)
