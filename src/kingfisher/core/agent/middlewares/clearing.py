@@ -70,8 +70,8 @@ _TEXT_HANDLE = re.compile(
     r"\A[\d,]+ chars(?: written)?, cleared(?:; .* holds the current text)?\Z", re.S
 )
 
-#: The ways a result says it failed once its status is gone, as it is from one the turn
-#: log replays: a file tool's error, a call that never finished or never ran
+#: The ways a result says it failed once its status is gone, as it is from a turn log
+#: written before records kept it: a file tool's error, a call that never finished or never ran
 #: (deepagents' `PatchToolCallsMiddleware`), a command that exited non-zero, and a call
 #: refused because the reply was cut off writing it.
 _FAILED = re.compile(

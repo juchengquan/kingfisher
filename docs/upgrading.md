@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## A failed call stays failed when a later turn replays it, after #1319
+
+- **`Message` has a `failed` field**, true only on a tool message whose call failed, and
+  written as `"failed": true` in the turn log. A replayed result carries it as its status,
+  so clearing no longer has to guess a failure from the result's opening word -- which
+  read "This call did not run: the turn stopped before it began." as a success, and
+  replaced a refused write's text with a line saying the file held it. A turn log written
+  before this has no such field and is read as before: those failures are still guessed.
+
 ## The sessions plugin's shell wording is reworded from `prompts/sessions/`, after #1318
 
 - **`Sessions.prompt_pieces()`** is new, answering `{}` by default: the wording a
