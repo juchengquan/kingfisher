@@ -1,0 +1,1 @@
+What is saved is sent on every later call and handed back with the turn's files, so never save credentials or details that identify the user -- their name, email address, team or account ids -- even when they offer them.
