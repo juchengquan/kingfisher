@@ -67,7 +67,7 @@ def test_kingfishers_own_shell_is_described_by_what_holds_of_it(cfg, session_dir
     backend = backend_at(cfg, session_dir)
     seen = _seen(backend.execute(PROBE).output)
 
-    assert shell_prompt_of(backend) is hosts_shell(cfg)
+    assert shell_prompt_of(backend) == hosts_shell(cfg)
     assert Path(seen["pwd"]).resolve() == session_dir.resolve()
     assert Path(seen["root"]).resolve() == session_dir.resolve()
     assert Path(seen["tmp"]).resolve() == (session_dir / "scratchpad").resolve()
@@ -89,7 +89,7 @@ def test_an_unfenced_shell_is_asked_where_to_write_rather_than_told_it_is_refuse
         backend = backend_at(cfg, session_dir, shell=ShellSettings(sandbox=sandbox))
     told = shell_prompt_of(backend)
 
-    assert told is kingfishers_shell(fenced=False)
+    assert told == kingfishers_shell(fenced=False)
     for part in (told.prompt or "", told.execute or ""):
         assert "refused" not in part
         assert "never in `/{{inputs}}`" in part
@@ -98,11 +98,11 @@ def test_an_unfenced_shell_is_asked_where_to_write_rather_than_told_it_is_refuse
 def test_a_fenced_shell_is_told_where_it_is_refused(cfg, session_dir):
     """The control: under a fence of kingfisher's own the refusal is real, so it is
     said; `test_confinement.py` holds the claim against the fence itself."""
-    if hosts_shell(cfg) is not kingfishers_shell(fenced=True):
+    if hosts_shell(cfg) != kingfishers_shell(fenced=True):
         pytest.skip("no sandbox kingfisher applies itself is available on this host")
     told = shell_prompt_of(backend_at(cfg, session_dir))
 
-    assert told is kingfishers_shell(fenced=True)
+    assert told == kingfishers_shell(fenced=True)
     for part in (told.prompt or "", told.execute or ""):
         assert "`/{{inputs}}` is refused" in part or "refused in `/{{inputs}}`" in part
 

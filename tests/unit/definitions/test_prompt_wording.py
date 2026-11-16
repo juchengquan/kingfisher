@@ -84,3 +84,10 @@ def test_a_deployment_with_a_broken_replacement_does_not_start(cfg):
     _replace(cfg.definitions, "session", "No folders named here.")
     with pytest.raises(WordingError, match="leaves out"):
         Kingfisher(cfg, sessions=LocalSessions())
+
+
+def test_a_plugin_cannot_name_its_wording_after_kingfishers(tmp_path):
+    """Taken, a plugin's `session` would decide which blanks a replacement of
+    kingfisher's own must keep, and be reworded with it."""
+    with pytest.raises(WordingError, match="kingfisher's own"):
+        read_wording(tmp_path, also={"session": "the plugin's"})

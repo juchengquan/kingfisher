@@ -230,7 +230,15 @@ Things to know:
   A sandbox that says nothing is described neutrally.
 - **Kingfisher's own shell describes itself**, so `shell_prompt=` without a runner is
   refused. Standing instructions for every agent go in `INSTRUCTIONS.md` beside the
-  definitions, or `instructions=` on `Kingfisher`.
+  definitions, or `instructions=` on `Kingfisher`. Its wording can still be reworded from
+  the definitions, in `prompts/sessions/` ([`formats.md`](formats.md) says how).
+- **A sessions plugin's own wording can be reworded the way kingfisher's is.** Name each
+  piece in `prompt_pieces()` on your `Sessions` subclass, as it ships, under a folder of
+  your own (`{"mysandbox/shell": SHELL_TEXT}`), and build the text a turn is sent with
+  `reworded(name, SHELL_TEXT)` from `kingfisher.plugins`, inside the turn: `open` is.
+  kingfisher checks a replacement in `prompts/mysandbox/shell.md` against your text with
+  the rest of the definitions, so a misspelt name or a dropped blank stops the deployment.
+  A name kingfisher already uses is refused.
 - **Where the shell has a session root, the agent is told the variable after your
   wording.** A sentence teaching `$KINGFISHER_SESSION_ROOT` follows your `prompt` and
   `execute` text, or the neutral wording where a part is `None`; for `execute` it takes

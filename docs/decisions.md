@@ -677,6 +677,16 @@ deployment's own code reaches kingfisher through that source when it is built, o
 files today. Not taken: wording per caller, since a version is one per deployment.
 *(2026-11-16.)*
 
+**The sessions plugin's wording is reworded from the same folder, and the core checks it.**
+`LocalSessions` writes the shell section most agents read, choosing one of three by its
+fence, and the core may not name a plugin's pieces. So a plugin answers them, as it ships
+them, from `Sessions.prompt_pieces()`, and the core checks a replacement of one beside its
+own, at startup and on each change; the plugin builds its text through `reworded` inside
+the turn, where the turn's wording is in force. The plugin keeps choosing which of its
+pieces is said. Not taken: the plugin running the check itself, which was the first plan,
+since it reads its pieces only when a session opens, so a misspelt name would have been
+heard on the first turn rather than at startup. *(2026-11-16.)*
+
 **`general-purpose` is told the deployment's instructions, as a declared subagent is.**
 kingfisher supplies it, to carry the standing middleware, and supplied it with deepagents'
 bare prompt, so a turn delegated to it escaped every house rule a declared subagent was

@@ -118,7 +118,6 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, FirstCall):
         self.run_events: RunEvents = (
             run_events if run_events is not None else LoggedRunEvents()
         )
-        self._versions = Versions(self.cfg, self.run_events)
 
         # Sessions, not a backend: one backend shared by every session is one filesystem
         # for every caller, and nothing at the call site would look wrong.
@@ -160,6 +159,8 @@ class Kingfisher(SessionMethods, Disposal, Preparation, Running, FirstCall):
         refuse_unbuildable_middleware(self.middlewares)
         self._sessions: Sessions = sessions
         self._graph = graph
+        # After the sessions, whose own wording a replacement in `prompts/` may name.
+        self._versions = Versions(self.cfg, self.run_events, sessions.prompt_pieces())
 
         # Last, so the line reports what was resolved, and a wiring failure raises
         # instead of announcing a deployment that never came up. Built whatever Python's

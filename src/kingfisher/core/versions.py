@@ -28,13 +28,16 @@ class Versions:
     a wiring mistake, to fail at startup rather than serve an agent told about nothing.
     """
 
-    def __init__(self, cfg: Config, sink: RunEvents) -> None:
+    def __init__(
+        self, cfg: Config, sink: RunEvents, pieces: Mapping[str, str] | None = None
+    ) -> None:
         self._cfg = cfg
+        self._pieces = dict(pieces or {})
         # The deployment's own, not a turn's: a refusal found outside any turn is said too.
         self._sink = sink
         # One turn reads a changed folder while the others wait for what it read.
         self._lock = Lock()
-        fresh = resolve_definitions(cfg)
+        fresh = resolve_definitions(cfg, self._pieces)
         self._seen = _signature(fresh)
         self._current = checked(cfg, fresh)
         #: What the folder held when it was last refused, so a refusal is said once.
@@ -48,7 +51,7 @@ class Versions:
         """
         with self._lock:
             try:
-                fresh = resolve_definitions(self._cfg)
+                fresh = resolve_definitions(self._cfg, self._pieces)
                 seen = _signature(fresh)
                 if seen == self._seen:
                     return self._current

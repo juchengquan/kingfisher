@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import suppress
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, field, fields, replace
 from functools import cached_property, partial
 from hashlib import sha256
 from pathlib import Path
@@ -81,6 +81,10 @@ class Definitions:
     tools: LocalToolRepository
     middlewares: LocalMiddlewareRepository
 
+    #: The sessions plugin's own wording, as it ships, which `prompts/` may reword too. No
+    #: kind: `DEFINITION_KINDS` leaves it out.
+    pieces: Mapping[str, str] = field(default_factory=dict, compare=False)
+
     def __post_init__(self) -> None:
         # Here, not where skills are first read: a mount's label becomes a route segment,
         # and a plugin mounting these labels must not be the first to find two collide.
@@ -124,7 +128,7 @@ class Definitions:
     @cached_property
     def wording(self) -> Wording:
         """The deployment's replacements for kingfisher's prompt pieces, checked."""
-        return read_wording(self._prompts)
+        return read_wording(self._prompts, self.pieces)
 
     @cached_property
     def digests(self) -> Mapping[str, str]:
@@ -449,16 +453,17 @@ def bundled_skill_mounts(where: str, directories: tuple[Path, ...]) -> tuple[tup
     )
 
 
-#: The kinds, taken from the type that already has one field per kind.
-DEFINITION_KINDS: tuple[str, ...] = tuple(f.name for f in fields(Definitions))
+#: The kinds, taken from the type that already has one field per kind and one more.
+DEFINITION_KINDS: tuple[str, ...] = tuple(f.name for f in fields(Definitions) if f.name != "pieces")
 
-def resolve_definitions(cfg: Config) -> Definitions:
-    """This deployment's definitions, read from the folder `cfg` names.
+def resolve_definitions(cfg: Config, pieces: Mapping[str, str] | None = None) -> Definitions:
+    """This deployment's definitions, read from the folder `cfg` names, with `pieces` the
+    sessions plugin's own wording.
 
     A missing kind folder means none of that kind.
     """
     refuse_missing_definitions(cfg.definitions)
-    return Definitions.from_config(cfg)
+    return replace(Definitions.from_config(cfg), pieces=dict(pieces or {}))
 
 
 class CallerOffers(NamedTuple):

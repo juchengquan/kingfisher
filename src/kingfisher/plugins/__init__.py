@@ -31,6 +31,7 @@ _EXPORTS = {
     "list_skills": "kingfisher.core.definitions.skills.registry",
     "WireFormat": "kingfisher.core.config",
     "ShellPrompt": "kingfisher.core.agent.prompting",
+    "reworded": "kingfisher.core.agent.prompting",
     "Layout": "kingfisher.core.layout",
     "DEFAULT_LAYOUT": "kingfisher.core.layout",
     "HostPathError": "kingfisher.core.agent.host_paths",
@@ -89,6 +90,7 @@ __all__ = [
     "list_skills",
     "refuse_unless_subclass",
     "reject_host_path",
+    "reworded",
     "scratch_runs_of",
     "unrouted_denials",
     "warn",
@@ -104,6 +106,7 @@ if TYPE_CHECKING:
     from kingfisher.core.agent.permitted_backend import scratch_runs_of as scratch_runs_of
     from kingfisher.core.agent.prompting import InstructionsFile as InstructionsFile
     from kingfisher.core.agent.prompting import ShellPrompt as ShellPrompt
+    from kingfisher.core.agent.prompting import reworded as reworded
     from kingfisher.core.agent.usable_backend import unrouted_denials as unrouted_denials
     from kingfisher.core.agent.usable_backend import why_no_shell as why_no_shell
     from kingfisher.core.config import WireFormat as WireFormat

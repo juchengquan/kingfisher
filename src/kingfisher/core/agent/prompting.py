@@ -163,6 +163,13 @@ def _in_force() -> Wording:
     return Wording() if turn is None else turn.wording
 
 
+def reworded(name: str, text: str) -> str:
+    """`text`, a plugin's own wording, or the deployment's replacement for it where the
+    turn's definitions have one under `name`, which the plugin's `prompt_pieces` names."""
+    said = _in_force().text(name)
+    return text if said is None else said
+
+
 def _prompt_text(name: str) -> str:
     stem = name.removesuffix(".md")
     said = _in_force().text(stem)
