@@ -77,11 +77,16 @@ class Wording:
         return dict(self.replaced).get(name)
 
 
-def read_wording(folder: Path) -> Wording:
-    """The replacements in `folder`, each checked against the piece it replaces."""
+def read_wording(folder: Path, also: Mapping[str, str] | None = None) -> Wording:
+    """The replacements in `folder`, each checked against the piece it replaces: one of
+    kingfisher's, or one `also` names, the sessions plugin's own."""
+    also = also or {}
+    if clash := sorted(set(also) & set(shipped())):
+        msg = f"the sessions plugin names its wording {clash}, which are kingfisher's own"
+        raise WordingError(msg)
     if not folder.is_dir():
         return Wording()
-    ours = shipped()
+    ours = {**shipped(), **also}
     replaced: dict[str, str] = {}
     for path in sorted(folder.rglob("*")):
         relative = path.relative_to(folder)

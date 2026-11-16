@@ -1199,7 +1199,7 @@ def _doctor(*, as_document: bool = False, from_dotenv: frozenset[str] | None = N
     sessions = configured_sessions()
     # Read once and handed to the listing and every check, so all of them describe one set
     # of files rather than the folder at four moments.
-    catalogue = resolve_definitions(cfg)
+    catalogue = resolve_definitions(cfg, sessions.prompt_pieces())
     found = inventory(cfg, catalogue=catalogue, sessions=sessions)
     checks = examine(
         cfg, found, catalogue=catalogue, from_dotenv=from_dotenv, sessions=sessions

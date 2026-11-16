@@ -18,6 +18,18 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## The sessions plugin's shell wording is reworded from `prompts/sessions/`, after #1318
+
+- **`Sessions.prompt_pieces()`** is new, answering `{}` by default: the wording a
+  sessions plugin gives the agent, by the name `prompts/` rewords it under. `LocalSessions`
+  answers its seven shell pieces under `sessions/`. A plugin of your own wording a shell
+  may answer its own and build its text with `kingfisher.plugins.reworded`; one that
+  answers nothing is unchanged.
+- **`resolve_definitions(cfg, pieces)` and `Versions(cfg, sink, pieces)`** take the
+  plugin's pieces; without them, a replacement under `prompts/sessions/` is refused as
+  naming no piece. `kingfishers_shell` is no longer cached, being read in each turn's
+  wording.
+
 ## `prompts/` beside the definitions rewords kingfisher's own text, after #1316
 
 - **A `prompts/` folder beside your definitions is now read.** Each `.md` file in it

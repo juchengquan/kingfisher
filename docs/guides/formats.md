@@ -208,6 +208,9 @@ deepagents fills — and adds none, or the deployment does not start; an empty f
 nothing there. The folder is read again when it changes and checked as the definitions
 are, so a broken edit leaves turns on the last wording that passed. Two pieces cannot be
 replaced: `memory/never_save` and `turn/unfinished`, each a rule a rewording could lose.
+Kingfisher's own sessions add the shell's wording under `sessions/`, the pieces of
+`plugins/sessions/prompts/` in the package: `prompts/sessions/shell_here.md` rewords the
+shell section an agent holding `execute` is sent.
 An empty piece is not leaner: an agent not told what a folder or a tool is for finds out
 by being refused. `kingfisher prompt` shows what an agent is sent, which is where to
 check; [*Seeing what the model is sent*](#seeing-what-the-model-is-sent) says how.

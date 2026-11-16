@@ -2251,6 +2251,7 @@ WITNESSES: dict[str, dict[str, str]] = {
         # `ports.md` has a deployment whose shell is not kingfisher's say what it sees,
         # on its runner or on its own sandbox; nothing here has a shell of that kind.
         "ShellPrompt": "document",
+        "reworded": "document",
         # `ports.md` tells a backend that refuses host paths to refuse them with this,
         # because it is the type `GuardedCallsMiddleware` turns into a correction.
         "HostPathError": "document",

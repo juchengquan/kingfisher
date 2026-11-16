@@ -20,7 +20,7 @@ from deepagents.backends import LocalShellBackend
 from deepagents.backends.local_shell import DEFAULT_EXECUTE_TIMEOUT
 from deepagents.backends.protocol import ExecuteResponse
 
-from kingfisher.core.agent.prompting import ShellPrompt
+from kingfisher.core.agent.prompting import ShellPrompt, reworded
 from kingfisher.core.config import Config
 from kingfisher.core.definitions.catalogue import Definitions
 from kingfisher.core.interfaces import CommandRunner, ScratchRun
@@ -81,19 +81,33 @@ _WRITES = {
 }
 
 
-@lru_cache(maxsize=2)
+def _piece(file: str) -> str:
+    """The name a deployment rewords `file` under in `prompts/`: a folder of this plugin's
+    own, so no name of kingfisher's can be taken."""
+    return f"sessions/{file.removesuffix('.md')}"
+
+
+@lru_cache(maxsize=1)
+def shell_pieces() -> Mapping[str, str]:
+    """All of this shell's wording, as it ships, by the name `prompts/` rewords it under."""
+    prompts = resources.files("kingfisher.plugins.sessions.prompts")
+    files = (*_HERE, *_WRITES[True], *_WRITES[False])
+    return {_piece(file): prompts.joinpath(file).read_text(encoding="utf-8") for file in files}
+
+
 def kingfishers_shell(*, fenced: bool) -> ShellPrompt:
-    """What kingfisher's own shell says of itself, `fenced` or not.
+    """What kingfisher's own shell says of itself, `fenced` or not, in the wording of the
+    turn it is built in.
 
     It exports the session root as `KINGFISHER_SESSION_ROOT`, with `TMPDIR` the
     scratchpad and `KINGFISHER_SKILLS` the catalogue. A deployment's runner given
     `session_root=` exports the first and no runner the other two, so this is never what
     a deployment's shell is said to be.
     """
-    prompts = resources.files("kingfisher.plugins.sessions.prompts")
+    pieces = shell_pieces()
     prompt, skills, execute, writes, writes_line = (
-        prompts.joinpath(name).read_text(encoding="utf-8").strip()
-        for name in (*_HERE, *_WRITES[fenced])
+        reworded(_piece(file), pieces[_piece(file)]).strip()
+        for file in (*_HERE, *_WRITES[fenced])
     )
     return ShellPrompt(
         prompt=f"{prompt}\n\n{writes}",

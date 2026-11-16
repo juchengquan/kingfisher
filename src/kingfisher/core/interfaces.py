@@ -253,6 +253,14 @@ class Sessions(ABC):
         reports, or `None` where they are kept elsewhere."""
         return None
 
+    def prompt_pieces(self) -> Mapping[str, str]:
+        """The wording these sessions give the agent, by the name a deployment rewords it
+        under in `prompts/`, as it ships; none by default.
+
+        Asked as the definitions are read, so a replacement is checked with the rest.
+        """
+        return {}
+
     # Written out so a subclass inherits each twin as its sync one on kingfisher's pool,
     # and overrides only one it can await.
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import fields
 
 from kingfisher.core.access.capabilities import Capabilities
-from kingfisher.core.definitions.catalogue import Definitions
+from kingfisher.core.definitions.catalogue import DEFINITION_KINDS
 from kingfisher.core.definitions.subagents.catalogue import ASSET_DIRECTORIES
 from tests.integration import driver
 
@@ -143,8 +143,8 @@ NOT_SUBTRACTABLE = {
 
 
 def test_what_the_catalogue_loads_is_accounted_for():
-    """One directory per field of `Definitions`."""
-    covered = {f.name for f in fields(Definitions)}
+    """One directory per kind `Definitions` reads."""
+    covered = set(DEFINITION_KINDS)
 
     assert covered | set(NOT_ON_DISK) == set(AXES) | set(NOT_AN_AXIS)
     assert not covered & set(NOT_ON_DISK)

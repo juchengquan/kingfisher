@@ -16,7 +16,7 @@ from kingfisher.core.backing import MemoryBacking, memory_backing
 # the command ships in this wheel, so it takes each name where it lives.
 from kingfisher.core.definitions.catalogue import DEFINITION_KINDS, resolve_definitions
 from kingfisher.core.origins import kingfishers_own
-from kingfisher.plugins import Definitions
+from kingfisher.plugins import Definitions, Sessions
 from kingfisher.plugins.sessions.sandbox import confinement
 from kingfisher.plugins.sessions.sandbox.confinement import (
     LINUX_FENCES,
@@ -437,7 +437,9 @@ def examine(
     # and every row between it and the one saying why would be lost.
     read: Definitions | ConfigError
     try:
-        read = resolve_definitions(cfg) if catalogue is None else catalogue
+        # Only sessions kingfisher can ask: a stand-in passed here has no wording.
+        pieces = sessions.prompt_pieces() if isinstance(sessions, Sessions) else {}
+        read = resolve_definitions(cfg, pieces) if catalogue is None else catalogue
     except ConfigError as exc:
         read = exc
     checks: list[Check] = []

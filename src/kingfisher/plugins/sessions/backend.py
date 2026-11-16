@@ -49,6 +49,7 @@ from .shell import (
     fence_for,
     kingfishers_shell,
     shell_env,
+    shell_pieces,
     shell_skills,
 )
 
@@ -553,6 +554,10 @@ class LocalSessions(Sessions):
         anything changed.
         """
         return cfg.sessions_root if type(self) is LocalSessions else None
+
+    def prompt_pieces(self) -> Mapping[str, str]:
+        """What kingfisher's own shell says, which `prompts/sessions/` may reword."""
+        return shell_pieces()
 
     # The turn lock is a directory: `mkdir` fails when the name is taken, where `write`
     # overwrites and two turns would both take it.
