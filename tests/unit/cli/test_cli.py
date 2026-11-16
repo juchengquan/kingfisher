@@ -1173,6 +1173,9 @@ def _said_and_not_raised() -> tuple[type[Exception], ...]:
         UnknownSessionError,
     )
     from kingfisher.core.definitions.agents.spec import AgentError
+    from kingfisher.core.definitions.importing import LoadError
+    from kingfisher.core.definitions.skill_locks import SkillLockError
+    from kingfisher.core.definitions.wording import WordingError
 
     return (
         AgentError,
@@ -1181,12 +1184,15 @@ def _said_and_not_raised() -> tuple[type[Exception], ...]:
         CapabilityError,
         DecisionError,
         InputsError,
+        LoadError,
         MessageTooLongError,
         QuotaExceededError,
         ResultError,
         RewindError,
+        SkillLockError,
         SubagentError,
         UnknownSessionError,
+        WordingError,
     )
 
 
