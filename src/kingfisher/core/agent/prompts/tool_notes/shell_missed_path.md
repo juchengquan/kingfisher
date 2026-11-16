@@ -1,0 +1,1 @@
+`{{path}}` is a file-tool path, which the shell reads from the host's root. The shell exports the session root, so there it is `"$KINGFISHER_SESSION_ROOT{{path}}"` -- in the command, and in a script as `os.environ["KINGFISHER_SESSION_ROOT"]`.

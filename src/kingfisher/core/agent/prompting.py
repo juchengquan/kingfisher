@@ -172,10 +172,10 @@ def _names(layout: Layout) -> dict[str, str]:
 _LEAVES = frozenset(_names(DEFAULT_LAYOUT))
 
 
-def _fill(text: str, layout: Layout, source: str, **more: str) -> str:
+def _fill(text: str, layout: Layout | None, source: str, **more: str) -> str:
     """`text`, with every `{{leaf}}` replaced by the layout's name for it, and every
     blank in `more` by its value."""
-    names = {**_names(layout), **more}
+    names = {**(_names(layout) if layout is not None else {}), **more}
 
     def _one(match: re.Match[str]) -> str:
         leaf = match.group(1)
@@ -190,6 +190,12 @@ def _fill(text: str, layout: Layout, source: str, **more: str) -> str:
 def _filled(name: str, layout: Layout, **more: str) -> str:
     """One shipped prompt, with every `{{leaf}}` replaced by the layout's name for it."""
     return _fill(_prompt_text(name), layout, name, **more)
+
+
+def piece(name: str, layout: Layout | None = None, **more: str) -> str:
+    """One sentence-sized piece of the shipped prompt, `name` without its `.md`, filled:
+    `layout` for one that names a folder, `more` for the rest of its blanks."""
+    return _fill(_prompt_text(f"{name}.md").strip(), layout, name, **more)
 
 
 @dataclass(frozen=True)
@@ -435,26 +441,20 @@ def what_you_make_goes(outputs_route: str, scratch_route: str) -> str:
     Each folder with what it is for, because choosing between them is the whole use of the
     sentence: `/outputs` is handed back and `/scratchpad` is not.
     """
-    return (
-        f"Save what you make under `{outputs_route}<name>` to hand it back, or under "
-        f"`{scratch_route}<name>` to work on it."
+    return piece(
+        "refusals/where_you_make_goes", outputs_route=outputs_route, scratch_route=scratch_route
     )
 
 
 def stray_save(where: str, layout: Layout) -> str:
     """Why a save at `where` is refused, naming where it belongs in this layout."""
-    return (
-        f"{where} is outside the session's folders, so a file saved there is neither kept "
-        f"nor handed back. {what_you_make_goes(layout.outputs_route, layout.scratch_route)}"
-    )
+    goes = what_you_make_goes(layout.outputs_route, layout.scratch_route)
+    return piece("refusals/stray_save", where=where, goes=goes)
 
 
 def miscased_path(where: str, meant: str) -> str:
     """Why `where` is refused for spelling a folder of the session in other capitals."""
-    return (
-        f"{where} spells a folder of this session in other capitals, and a path here is "
-        f"matched exactly as written: it is {meant}."
-    )
+    return piece("refusals/miscased_path", where=where, meant=meant)
 
 
 def subagent_prompt(prompt: str, instructions: str, layout: Layout) -> str:

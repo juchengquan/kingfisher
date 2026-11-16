@@ -16,11 +16,12 @@ from kingfisher.core.reachable import Reachable
 if TYPE_CHECKING:
     from kingfisher.core.interfaces import ScratchRun
 
-#: Why a tool's run was refused when nothing was bound for its call.
-NOT_GRANTED = (
-    "refused: the agent that called this tool may not run commands itself, so neither may "
-    "its tools"
-)
+def not_granted() -> str:
+    """Why a tool's run was refused when nothing was bound for its call."""
+    # Here, not at the top, as `_refused`'s import is: the prompt's reader loads the core.
+    from .prompting import piece  # noqa: PLC0415
+
+    return piece("refusals/scratch_not_granted")
 
 
 #: Not a `ToolContext` field: one context is handed to every graph a turn runs, a
@@ -119,4 +120,4 @@ def _refused() -> ScratchRun:
     # Here, not at the top: a tool importing this module for its annotation pays nothing.
     from kingfisher.core.interfaces import ScratchRun  # noqa: PLC0415
 
-    return ScratchRun(error=NOT_GRANTED)
+    return ScratchRun(error=not_granted())

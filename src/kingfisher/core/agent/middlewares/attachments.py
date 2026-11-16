@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 
+from kingfisher.core.agent.prompting import piece
 from kingfisher.core.interfaces import ReturnedPdf
 from kingfisher.core.logged import raised, warn
 from kingfisher.core.session.threads import off_loop, thread_pool
@@ -169,16 +170,20 @@ def _asked_by(messages: Sequence[Any], call_id: Any) -> str | None:
 def _image(where: str, chars: int, beside: int) -> str | None:
     """What the model is told instead of an image beside `beside` already open, or `None`."""
     if chars > MAX_IMAGE_CHARS:
-        return (
-            f"{where} is a {readable_size(chars)} image, larger than the "
-            f"{MAX_IMAGE_CHARS // MB} MB one image may be."
+        return piece(
+            "tool_notes/image_too_large",
+            where=where,
+            size=readable_size(chars),
+            most=str(MAX_IMAGE_CHARS // MB),
         )
     if beside + chars <= MAX_TURN_IMAGE_CHARS:
         return None
-    return (
-        f"{where} is a {readable_size(chars)} image. The images already open in this turn "
-        f"total {readable_size(beside)}, and a turn holds at most "
-        f"{MAX_TURN_IMAGE_CHARS // MB} MB; work from those, or say what is left."
+    return piece(
+        "tool_notes/images_fill_the_turn",
+        where=where,
+        size=readable_size(chars),
+        open=readable_size(beside),
+        most=str(MAX_TURN_IMAGE_CHARS // MB),
     )
 
 
@@ -232,23 +237,18 @@ class AttachmentsMiddleware(AgentMiddleware):
         if verdict == "passes":
             return None
         if verdict == "too_large":
-            text = (
-                f"{where} is a {readable_size(size)} PDF, too large to hand over whole: it "
-                "would be sent again with every model call after this one, and can end the "
-                "turn."
-            )
+            text = piece("tool_notes/pdf_too_large", where=where, size=readable_size(size))
         else:
-            text = (
-                f"{where} is a {readable_size(size)} PDF, and the PDFs already open in this "
-                f"turn take up {readable_size(beside)} of the {readable_size(self._pdf_bytes)} "
-                "a turn holds."
+            text = piece(
+                "tool_notes/pdfs_fill_the_turn",
+                where=where,
+                size=readable_size(size),
+                open=readable_size(beside),
+                most=readable_size(self._pdf_bytes),
             )
         if self._offered is not None and PDF_TEXT in self._offered:
-            return (
-                f"{text} Call {PDF_TEXT} on it to save its text, then read that a range at a "
-                "time."
-            )
-        return f"{text} Work from its text, or from a part of it, instead."
+            return f"{text} {piece('tool_notes/pdf_save_its_text', tool=PDF_TEXT)}"
+        return f"{text} {piece('tool_notes/pdf_work_from_text')}"
 
     def _advice(self, where: str, found: _Attachment, held: _Open) -> str | None:
         """What the model is told instead of `found`, or `None` to hand it over beside what
@@ -260,12 +260,9 @@ class AttachmentsMiddleware(AgentMiddleware):
         # A reference carries nothing the summarizer counts, and the provider fetches it.
         if not found.inline:
             return None
-        what = f"a file of type {found.mime}" if found.mime else "a file of no stated type"
-        return (
-            f"{where} is {what}, which can't be handed to the model here. If you hold a tool "
-            "that can read it, use that instead; otherwise say that this part could not be "
-            "done."
-        )
+        if found.mime:
+            return piece("tool_notes/cannot_hand_type", where=where, type=found.mime)
+        return piece("tool_notes/cannot_hand_untyped", where=where)
 
     def _replacement(
         self, found: _Attachment, held: _Open, call: Mapping[str, Any], path: str | None
@@ -328,7 +325,7 @@ class AttachmentsMiddleware(AgentMiddleware):
         if not any(found):
             return result
         path = answer.additional_kwargs.get("read_file_path")
-        where = path or f"{call.get('name')}'s result"
+        where = path or piece("tool_notes/result_of", tool=str(call.get("name")))
         messages = _conversation(request)
         held = _held(messages)
         batch = _asked_by(messages, call.get("id"))

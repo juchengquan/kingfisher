@@ -10,6 +10,7 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from kingfisher.core.agent.prompting import piece
 from kingfisher.core.session.provider_errors import ModelUnavailableError, unavailable
 from kingfisher.core.session.runtime import call_block_id, cut_off, output_limit, with_call_args
 from kingfisher.core.session.stream_chunks import cut_off_mark
@@ -104,11 +105,8 @@ def _stopped(reply: AIMessage, *, subagent: bool) -> AIMessage:
     """
     if not subagent:
         return text_of(reply)
-    return text_of(
-        reply,
-        f"[Incomplete: this subagent's replies reached {output_limit(reply)} "
-        f"{GIVE_UP} times in a row, and the answer below is cut off.]\n\n",
-    )
+    said = piece("tool_notes/subagent_gave_up", limit=output_limit(reply), times=str(GIVE_UP))
+    return text_of(reply, f"{said}\n\n")
 
 
 def _raised(exc: Exception) -> Exception:

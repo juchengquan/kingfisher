@@ -1,0 +1,1 @@
+{{where}} is not kept on this host by this session's backend, so it cannot be handed to a tool as a file; a tool taking `runtime: ToolRuntime[ToolContext]` reads it through `runtime.context.backend` instead

@@ -15,7 +15,7 @@ from kingfisher.core.agent.backend import (
     shell_runs_here,
     shell_told,
 )
-from kingfisher.core.agent.prompting import EXECUTE, WRITE_TODOS, skills_index
+from kingfisher.core.agent.prompting import EXECUTE, WRITE_TODOS, piece, skills_index
 from kingfisher.core.agent.session_paths import SessionPaths
 from kingfisher.core.config import ConfigError
 
@@ -83,7 +83,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
     clearing: Callable[[tuple[str, ...] | None], ResultClearingMiddleware] | None,
     tools: Sequence[str] | None,
     gated: Collection[str],
-    tools_subject: str = "this request",
+    tools_subject: str | None = None,
     skills: Sequence[str] | None,
     skill_sources: Sequence[Any] = (),
     indexed: bool = False,
@@ -170,7 +170,7 @@ def standing_middleware(  # noqa: PLR0913 -- one keyword per thing a standing on
         GrantedOnlyMiddleware(
             granted,
             subagents=None if reachable is None else tuple(reachable),
-            subject=tools_subject,
+            subject=piece("refusals/for_this_request") if tools_subject is None else tools_subject,
         )
     )
     # Outside `BuiltinToolsMiddleware`, so a `grep` it runs as several searches fails once,

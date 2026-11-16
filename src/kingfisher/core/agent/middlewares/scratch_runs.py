@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
 
-from kingfisher.core.agent.prompting import EXECUTE
+from kingfisher.core.agent.prompting import EXECUTE, piece
 from kingfisher.core.agent.scratch import ScratchRunner
 from kingfisher.core.agent.tool_context import ToolContext
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
@@ -56,9 +56,8 @@ def limit_answer(limit: ScratchRunLimit, name: str, kind: GraphKind) -> tuple[bo
             error_type=error_type,
             error_at=error_at,
         )
-        return False, (
-            f"refused: this deployment's ScratchRunLimit raised {type(error).__name__}: {error}"
-        )
+        said = f"{type(error).__name__}: {error}"
+        return False, piece("refusals/scratch_limit_raised", error=said)
     if allows is True or allows is False:
         return allows, None
     # Only `True` grants: an `async def allows` answers a coroutine, which is truthy, and
@@ -73,10 +72,7 @@ def limit_answer(limit: ScratchRunLimit, name: str, kind: GraphKind) -> tuple[bo
     )
     if inspect.iscoroutine(allows):
         allows.close()
-    return False, (
-        f"refused: this deployment's ScratchRunLimit answered {type(allows).__name__}, "
-        "not True or False"
-    )
+    return False, piece("refusals/scratch_limit_answered", answered=type(allows).__name__)
 
 
 @dataclass(frozen=True)

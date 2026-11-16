@@ -34,6 +34,7 @@ from kingfisher.core.agent.prompting import (
     ShellPrompt,
     execute_line,
     miscased_path,
+    piece,
     skills_index,
     stray_save,
     what_you_make_goes,
@@ -136,11 +137,7 @@ def missed(output: str, virtual: re.Pattern[str]) -> str | None:
 
 def hint(path: str) -> str:
     """The correction appended to a shell result that missed `path`."""
-    return (
-        f"`{path}` is a file-tool path, which the shell reads from the host's root. The "
-        f'shell exports the session root, so there it is `"$KINGFISHER_SESSION_ROOT{path}"` '
-        '-- in the command, and in a script as `os.environ["KINGFISHER_SESSION_ROOT"]`.'
-    )
+    return piece("tool_notes/shell_missed_path", path=path)
 
 
 #: What a fence says of a write to a folder it keeps read-only. Each is the kernel's word,
@@ -221,10 +218,8 @@ def strayed_under(output: str, root: str, folders: Collection[str]) -> str | Non
 
 def _not_yours(what: str, layout: Layout) -> str:
     """The one wording for a write the fence refused, `what` being what it refused."""
-    return (
-        f"{what} is not yours to write: the shell is refused there, as the file "
-        f"tools are. {what_you_make_goes(layout.outputs_route, layout.scratch_route)}"
-    )
+    goes = what_you_make_goes(layout.outputs_route, layout.scratch_route)
+    return piece("tool_notes/shell_not_yours", where=what, goes=goes)
 
 
 def kept_note(folder: str, layout: Layout) -> str:
@@ -259,15 +254,12 @@ def _found_nothing(tool: str, said: str) -> bool:
 def unfiled_note(number: str) -> str:
     """Appended to a search for a result that is still in the conversation, so has no file:
     told nothing, the agent takes the result as lost and runs its tool again."""
-    return f"{number} has no file yet; it is still in this conversation."
+    return piece("tool_notes/no_file_yet", id=number)
 
 
 def expired_note(rounds: int) -> str:
     """Appended to a search of the recorded results that found nothing."""
-    return (
-        f"A saved result older than {rounds} rounds of this conversation has expired and "
-        "its file is gone; to see it again, call the tool that made it again."
-    )
+    return piece("tool_notes/result_expired", rounds=str(rounds))
 
 
 def _described(tool: Any, rule: str | None, timed: str) -> Any:
@@ -328,17 +320,14 @@ def _unreadable(call: Any) -> ToolMessage | None:
     kind = _get_backend_read_file_type(path)
     suffix = PurePosixPath(path).suffix.lower()
     if kind in ("audio", "video"):
-        what, reads = kind, kind
+        told = piece(f"refusals/cannot_hand_{kind}", path=path)
     elif kind == "file" and suffix != ".pdf":
-        what, reads = f"a {suffix} file", f"{suffix} files"
+        told = piece("refusals/cannot_hand_suffix", path=path, suffix=suffix)
     else:
         return None
-    return failed(
-        call,
-        f"Error: {path} is {what}, which can't be handed to the model here. If you hold a "
-        f"tool that can read {reads}, call it on {path}; otherwise say that this part "
-        "could not be done.",
-    )
+    # `Error` opens it in code, not in the piece: clearing reads a result opening so as
+    # failed once a replay has dropped its status.
+    return failed(call, f"Error: {told}")
 
 
 #: Where each file tool takes the path it acts on.
@@ -635,8 +624,11 @@ def _joined(call: dict[str, Any], parts: list[str], answers: list[Any]) -> Any:
     """One answer for the call the model made, each part's under a line naming it."""
     if not all(isinstance(one, ToolMessage) for one in answers):
         return answers[0]
-    said = [f"Searched `{call['args']['pattern']}` as separate literal parts."]
-    said += [f"matches for `{part}`:\n{one.text}" for part, one in zip(parts, answers, strict=True)]
+    said = [piece("tool_notes/grep_split", pattern=call["args"]["pattern"])]
+    said += [
+        f"{piece('tool_notes/grep_part', part=part)}\n{one.text}"
+        for part, one in zip(parts, answers, strict=True)
+    ]
     all_failed = all(one.status == "error" for one in answers)
     return ToolMessage(
         content="\n\n".join(said),

@@ -32,9 +32,11 @@ from deepagents.backends.protocol import (
 
 from kingfisher.core.layout import HISTORY, OFFLOADS
 
+from .prompting import piece
+
 #: What a refused write answers. A result, never an exception: deepagents' overflow cut
 #: reads a raise as a failure of the whole cut, not of the one result it could not copy.
-REFUSED = "kingfisher keeps no copy here"
+REFUSED = "refusals/no_copy_here"
 
 #: deepagents' words for the write `NothingKept` refuses, on every summary. Matched on the
 #: message, not silenced by level: the same logger carries warnings that matter.
@@ -73,13 +75,13 @@ class NothingKept(BackendProtocol):
 
     @override
     def write(self, file_path: str, content: str) -> WriteResult:
-        return WriteResult(error=REFUSED)
+        return WriteResult(error=piece(REFUSED))
 
     @override
     def edit(
         self, file_path: str, old_string: str, new_string: str, replace_all: bool = False
     ) -> EditResult:
-        return EditResult(error=REFUSED)
+        return EditResult(error=piece(REFUSED))
 
     @override
     def delete(self, file_path: str) -> DeleteResult:

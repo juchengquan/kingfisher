@@ -10,7 +10,7 @@ from typing import Any
 from kingfisher.core.layout import Layout
 
 from .host_paths import HOST_PATH_SAID, HOST_ROOTS, HostPathError
-from .prompting import what_you_make_goes
+from .prompting import piece, what_you_make_goes
 
 #: Which arguments name a file: a convention `tools.md` documents, so widening it
 #: means a sentence there too.
@@ -153,11 +153,15 @@ def refusal_text(escaped: ValueError, paths: SessionPaths) -> str:
     The middleware and `GuardedTool` both say it, so the rule reads the same either way
     and the model can correct itself.
     """
-    return (
-        f"Error: {escaped}. Tool paths are the same virtual paths the file "
-        f"tools take, rooted at this session -- `{paths.inputs_route}<name>`, "
-        f"`{paths.outputs_route}<name>` -- and cannot climb out of it."
+    # `Error` opens it in code, not in the piece: clearing reads a result opening so as
+    # failed once a replay has dropped its status.
+    told = piece(
+        "refusals/path_refused",
+        escaped=str(escaped),
+        inputs_route=paths.inputs_route,
+        outputs_route=paths.outputs_route,
     )
+    return f"Error: {told}"
 
 
 #: How deepagents reports a write its own deny rules refused, which is the only sign
@@ -177,7 +181,5 @@ def where_to_write(text: str, paths: SessionPaths) -> str:
     """
     if _REFUSED_WRITE not in text:
         return text
-    return (
-        f"{text} -- that path is not yours to write. "
-        f"{what_you_make_goes(paths.outputs_route, paths.scratch_route)}"
-    )
+    goes = what_you_make_goes(paths.outputs_route, paths.scratch_route)
+    return f"{text} {piece('refusals/not_yours_to_write', goes=goes)}"

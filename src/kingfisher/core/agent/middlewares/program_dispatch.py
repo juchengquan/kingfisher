@@ -10,6 +10,7 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langgraph.errors import GraphInterrupt
 
+from kingfisher.core.agent.prompting import piece
 from kingfisher.core.definitions.subagents import INTERPRETER_TOOL, TASK_TOOL
 from kingfisher.core.session.runtime import SUBAGENT_TYPE_ARG
 from kingfisher.core.session.stream_chunks import DISPATCH, dispatch_answered, dispatch_started
@@ -71,11 +72,10 @@ def _refusal(subagent: str, paused: GraphInterrupt) -> str:
         for request in value.get("action_requests") or ()
         if isinstance(request, Mapping) and request.get("name")
     ]
-    waited = f"approval of {', '.join(gated)}" if gated else "decision"
-    return (
-        f"`{subagent}` stopped for a person's {waited}, which a program cannot wait for. "
-        f"Hand this work to `{subagent}` with the `task` tool instead."
-    )
+    if gated:
+        tools = ", ".join(gated)
+        return piece("refusals/program_cannot_wait_approval", subagent=subagent, tools=tools)
+    return piece("refusals/program_cannot_wait_decision", subagent=subagent)
 
 
 class ProgramDispatchMiddleware(AgentMiddleware):

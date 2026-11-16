@@ -38,7 +38,7 @@ from kingfisher.core.logged import raised, warn
 
 from .backend import folders_of, miscased, strays
 from .host_paths import UnreachablePathError
-from .prompting import miscased_path, stray_save
+from .prompting import miscased_path, piece, stray_save
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -98,12 +98,7 @@ class PermittedBackend(BackendProtocol):
             raise UnreachablePathError(refused)
         mapped = host_path_in_turn(self._inner, where, call=call)
         if mapped is None:
-            msg = (
-                f"{where} is not kept on this host by this session's backend, so it "
-                "cannot be handed to a tool as a file; a tool taking "
-                "`runtime: ToolRuntime[ToolContext]` reads it through "
-                "`runtime.context.backend` instead"
-            )
+            msg = piece("refusals/not_on_this_host", where=where)
             raise UnreachablePathError(msg)
         root, candidate = mapped
         real = candidate.resolve()
@@ -111,7 +106,7 @@ class PermittedBackend(BackendProtocol):
         # link the shell planted at `/scratchpad/x` reaches `.harness` without leaving
         # the session. A root that answered is already resolved, as upstream roots one.
         if root is not None and real != candidate:
-            msg = f"{where} is or runs through a link, and a tool is handed none"
+            msg = piece("refusals/through_a_link", where=where)
             raise UnreachablePathError(msg)
         return real
 
@@ -434,8 +429,5 @@ def host_path_in_turn(
             error_at=error_at,
             **({} if call is None else {"call": call}),
         )
-        msg = (
-            f"the session's storage could not say where {where} is kept, so it cannot be "
-            "handed to a tool as a file"
-        )
+        msg = piece("refusals/storage_could_not_say", where=where)
         raise HostPathFailedError(msg) from None
