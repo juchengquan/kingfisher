@@ -26,7 +26,10 @@ def _as_langchain(message: Message) -> Any:
     """One of kingfisher's records, in the shape LangChain expects."""
     if message.role == "tool":
         return ToolMessage(
-            content=message.content, tool_call_id=message.call_id, name=message.name or None
+            content=message.content,
+            tool_call_id=message.call_id,
+            name=message.name or None,
+            status="error" if message.failed else "success",
         )
     if message.role == "assistant" and message.tool_calls:
         return AIMessage(
@@ -64,6 +67,7 @@ def as_messages(messages: Iterable[Any]) -> tuple[Message, ...]:
                 name=str(getattr(raw, "name", "") or ""),
                 summary=(getattr(raw, "additional_kwargs", None) or {}).get("lc_source")
                 == SUMMARISER,
+                failed=getattr(raw, "status", None) == "error",
             )
         )
     return tuple(read)

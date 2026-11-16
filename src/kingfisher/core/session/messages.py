@@ -57,6 +57,10 @@ class Message:
     #: Set only on the summary deepagents wrote in place of the messages before it, which
     #: it must still recognise when it summarises again.
     summary: bool = False
+    #: Set only on a tool message whose call failed, as its status said: replayed without
+    #: it, a refusal that does not open with `Error` reads as a success, and clearing
+    #: tells the agent a refused write's file holds its text.
+    failed: bool = False
 
 
 def as_record(message: Message) -> dict[str, Any]:
@@ -77,6 +81,7 @@ def as_record(message: Message) -> dict[str, Any]:
         **({"call_id": message.call_id} if message.call_id else {}),
         **({"name": message.name} if message.name else {}),
         **({"summary": True} if message.summary else {}),
+        **({"failed": True} if message.failed else {}),
     }
 
 
@@ -97,4 +102,5 @@ def from_record(raw: Any) -> Message:
         call_id=raw.get("call_id", ""),
         name=raw.get("name", ""),
         summary=bool(raw.get("summary", False)),
+        failed=bool(raw.get("failed", False)),
     )
