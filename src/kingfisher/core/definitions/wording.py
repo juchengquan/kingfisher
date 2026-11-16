@@ -97,8 +97,8 @@ def read_wording(folder: Path) -> Wording:
             raise WordingError(msg)
         if name not in ours:
             msg = (
-                f"{where} names no piece kingfisher sends; the names are the files under "
-                "kingfisher/core/agent/prompts/ in the installed package, without `.md`"
+                f"{where} names no piece kingfisher sends; `kingfisher prompt --pieces` "
+                "lists the names"
             )
             raise WordingError(msg)
         text = path.read_text(encoding="utf-8").strip()
