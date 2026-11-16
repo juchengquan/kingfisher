@@ -65,7 +65,7 @@ _DESCRIBED = frozenset((*FILE_TOOLS, EXECUTE))
 
 #: Where a deployment that wants results cited says the model may. Permission, not an
 #: instruction: told to, the model hangs an id on every claim whether the reader wants one.
-_CITING = "You can cite it by that id when you rely on that result."
+_CITING = "tool_results/citing"
 
 #: What the agent's results are recorded as, and how one is seen again.
 TOOL_RESULTS_FILE = "tool_results.md"
@@ -73,32 +73,20 @@ TOOL_RESULTS_FILE = "tool_results.md"
 #: A sentence for each way to read a recorded result back, and every tool it needs: `glob`
 #: finds a file only `read_file` opens.
 _READING = (
-    (
-        (READ_FILE,),
-        "Read one back with `read_file`, a range of lines at a time, rather than calling "
-        "the tool again.",
-    ),
-    (
-        (GREP,),
-        "Search the filed ones with `grep`, a result too long to show you whole included: "
-        "every one is in the same folder, named after its id.",
-    ),
-    (
-        (GLOB, READ_FILE),
-        "To find an older result by its id, `glob` for `A-0042-*` in "
-        "`/{{records}}/{{tool_results}}/`.",
-    ),
+    ((READ_FILE,), "tool_results/reading_read_file"),
+    ((GREP,), "tool_results/reading_grep"),
+    ((GLOB, READ_FILE), "tool_results/reading_glob"),
 )
-_UNREAD = "None of your tools reads these files: to see a result again, call its tool again."
+_UNREAD = "tool_results/unread"
 #: For one holding the shell, which may read them.
-_AGAIN = "To see a result again, call its tool again."
+_AGAIN = "tool_results/unread_shelled"
 
 #: How a cleared result is seen again, by whether `read_file` is held: a handle names its
 #: file to that tool alone, and tells any other agent to call the tool again.
-_RECOVERING = {
-    True: "Read that file or call the tool again; a file may have changed since.",
-    False: "To see a result whole again, call its tool again.",
-}
+_RECOVERING = {True: "tool_results/recovering_read_file", False: "tool_results/recovering"}
+
+#: Said where recorded results expire, since the rest promises every one is kept.
+_EXPIRING = "tool_results/expiring"
 
 #: The file tools memory is saved with, `edit_file` first: it changes the file in place,
 #: where `write_file` replaces it whole. Not `execute`, which may run where `/memory` is not.
@@ -126,30 +114,19 @@ MEMORY = "memory.md"
 
 #: What the memory block says of saving, by whether the agent holds a tool to save with.
 #: The rule is worded as what saving does, since that is what makes it kingfisher's to say.
-_SAVING = {
-    True: (
-        "Save to it with `{saver}`, one entry per line, written `- ` and the text; "
-        "kingfisher numbers each as `- [m1]`, and an entry is changed or removed by its "
-        "line. What is saved is sent on every later call and handed back with the turn's "
-        "files, so never save credentials or details that identify the user -- their name, "
-        "email address, team or account ids -- even when they offer them."
-    ),
-    False: "It can be read here but not added to, so do not try to save to it.",
-}
+_SAVING = {True: "memory/saving", False: "memory/not_saving"}
+
+#: Said after `_SAVING`'s saving sentence wherever the agent can save.
+_NEVER_SAVE = "memory/never_save"
 
 #: How long the memory block says memory lasts, by whether a `MemoryStore` keeps it for
 #: the user. Said only where true: a promise of later conversations with no store had the
 #: agent writing for a reader who never arrives.
-_KEPT = {
-    False: (
-        "Like `/{outputs}`, it is kept for later turns of this conversation and reported "
-        "back when the turn ends."
-    ),
-    True: (
-        "It is this user's memory, kept for their later conversations as well as later "
-        "turns of this one, and reported back when the turn ends."
-    ),
-}
+_KEPT = {False: "memory/kept_session", True: "memory/kept_user"}
+
+#: What the memory block calls the evidence it weighs memory against, by whether
+#: `read_file` is held.
+_EVIDENCE = {True: "memory/evidence_read_file", False: "memory/evidence"}
 
 
 def _prompt_text(name: str) -> str:
@@ -172,10 +149,10 @@ def _names(layout: Layout) -> dict[str, str]:
 _LEAVES = frozenset(_names(DEFAULT_LAYOUT))
 
 
-def _fill(text: str, layout: Layout, source: str, **more: str) -> str:
+def _fill(text: str, layout: Layout | None, source: str, **more: str) -> str:
     """`text`, with every `{{leaf}}` replaced by the layout's name for it, and every
     blank in `more` by its value."""
-    names = {**_names(layout), **more}
+    names = {**(_names(layout) if layout is not None else {}), **more}
 
     def _one(match: re.Match[str]) -> str:
         leaf = match.group(1)
@@ -190,6 +167,12 @@ def _fill(text: str, layout: Layout, source: str, **more: str) -> str:
 def _filled(name: str, layout: Layout, **more: str) -> str:
     """One shipped prompt, with every `{{leaf}}` replaced by the layout's name for it."""
     return _fill(_prompt_text(name), layout, name, **more)
+
+
+def piece(name: str, layout: Layout | None = None, **more: str) -> str:
+    """One sentence-sized piece of the shipped prompt, `name` without its `.md`, filled:
+    `layout` for one that names a folder, `more` for the rest of its blanks."""
+    return _fill(_prompt_text(f"{name}.md").strip(), layout, name, **more)
 
 
 @dataclass(frozen=True)
@@ -291,15 +274,19 @@ def memory_guidelines(
     for an agent granted `tools`, `None` being everything. `users` where the memory is the
     user's, kept by a `MemoryStore`, rather than this session's."""
     held = _held(tools)
-    evidence = (
-        "evidence from `read_file` and other tools"
-        if READ_FILE in held
-        else "evidence from your tools"
-    )
     saver = _saver(held)
-    saving = _SAVING[saver is not None].format(saver=saver)
-    kept = _KEPT[users].format(outputs=layout.outputs)
-    return _filled(MEMORY, layout, kept=kept, saving=saving, evidence=evidence)
+    saving = (
+        f"{piece(_SAVING[True], layout, saver=saver)} {piece(_NEVER_SAVE, layout)}"
+        if saver is not None
+        else piece(_SAVING[False], layout)
+    )
+    return _filled(
+        MEMORY,
+        layout,
+        kept=piece(_KEPT[users], layout),
+        saving=saving,
+        evidence=piece(_EVIDENCE[READ_FILE in held], layout),
+    )
 
 
 def memory_writer_prompt(layout: Layout, *, entries: int, characters: int) -> str:
@@ -317,31 +304,20 @@ def _file_tools(held: tuple[str, ...], layout: Layout) -> str:
     return _filled(FILE_TOOLS_FILE, layout, file_tools=named).strip()
 
 
-def _expiring(rounds: int | None) -> str:
-    """Said where recorded results expire, since the rest promises every one is kept."""
-    if rounds is None:
-        return ""
-    return (
-        f"A result older than {rounds} rounds of this conversation expires: its file is "
-        "removed, and it gets none once it leaves the conversation, so to see it again, "
-        "call its tool again."
-    )
-
-
 def _tool_results(
     held: tuple[str, ...], layout: Layout, *, shelled: bool, rounds: int | None, cites: bool
 ) -> str:
     """What the agent's results are recorded as, and how one is seen again, naming only the
     tools in `held`."""
-    told = [said for needs, said in _READING if all(name in held for name in needs)]
-    unread = _AGAIN if shelled else _UNREAD
+    told = [piece(said, layout) for needs, said in _READING if all(n in held for n in needs)]
+    unread = piece(_AGAIN if shelled else _UNREAD, layout)
     return _filled(
         TOOL_RESULTS_FILE,
         layout,
-        citing=_CITING if cites else "",
-        reading=_fill("\n".join(told) or unread, layout, TOOL_RESULTS_FILE),
-        expiring=_expiring(rounds),
-        recovering=_RECOVERING[READ_FILE in held],
+        citing=piece(_CITING, layout) if cites else "",
+        reading="\n".join(told) or unread,
+        expiring="" if rounds is None else piece(_EXPIRING, layout, rounds=str(rounds)),
+        recovering=piece(_RECOVERING[READ_FILE in held], layout),
     ).strip()
 
 

@@ -300,7 +300,7 @@ class Instructions(ABC):
     subagent: deepagents runs that graph with the prompt its `build` gave it.
 
     Asked once per agent built, so a change reaches the next turn without a restart.
-    Read after kingfisher's own prompt and before the agent's, the most general first.
+    Read after the agent's own prompt and before kingfisher's.
     What kingfisher tells every agent is not replaceable.
     """
 
