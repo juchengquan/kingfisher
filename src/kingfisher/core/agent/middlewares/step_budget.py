@@ -10,6 +10,8 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.config import get_config
 
+from kingfisher.core.agent.prompting import piece
+
 from .replies import last_reply, replaced, text_of
 
 #: The share of a run's steps after which the agent is told what is left.
@@ -95,16 +97,13 @@ def calls_left(steps: int, after: int = TAIL) -> int | None:
 
 
 def warning(left: int) -> str:
+    # One piece per count rather than a plural worked out here: a language whose words
+    # for one call and for several do not differ by an `s` is written whole in each.
     if left == 0:
-        return (
-            "This is your last model call in this turn. Give your answer now, from what you "
-            "have, and say what is left undone."
-        )
-    calls = "call" if left == 1 else "calls"
-    return (
-        f"You have about {left} model {calls} left in this turn. Finish now: give your "
-        "answer from what you have, and say what is left undone."
-    )
+        return piece("nudges/last_call")
+    if left == 1:
+        return piece("nudges/one_call_left")
+    return piece("nudges/calls_left", left=str(left))
 
 
 def _made(request: Any) -> int:

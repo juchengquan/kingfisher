@@ -1,0 +1,1 @@
+The previous turn in this session was interrupted before it finished, and nothing from it is in this conversation. Anything it did outside this session may already have happened, so check before repeating an outside action.

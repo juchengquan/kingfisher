@@ -9,6 +9,7 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.core.agent.middlewares.result_rows import readable_size
+from kingfisher.core.agent.prompting import piece
 from kingfisher.core.layout import Layout
 from kingfisher.core.result import LedgerEntry, MemoryEntry, PendingDecision, RunEvent
 
@@ -145,10 +146,12 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
     # Straight after the ask, where it was measured, and kept with it: a later turn reads
     # why this one checked before acting.
     warned = (Part(f"\n\n{UNFINISHED}", "kingfisher"),) if unfinished else ()
-    arrived = _inputs_changed(changed, layout.inputs_route)
+    arrived = _inputs_changed(changed, layout)
     # Each call the conversation shows invites another; refused, it costs a model call,
     # and on MiniMax-M3 one agent said it had re-read a file it no longer could.
-    lacking = f" Not available on this turn: {', '.join(unavailable)}." if unavailable else ""
+    lacking = (
+        f" {piece('turn/not_available', tools=', '.join(unavailable))}" if unavailable else ""
+    )
     # After a rewind, the conversation remembers each file as its last turn left it, and the
     # file may be otherwise: a version with no copy to put back, or one part taken back alone.
     drifted = _drifted(drift) if drift is not None else ""
@@ -164,8 +167,7 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
         *noted,
         *warned,
         Part(
-            f"\n\n{layout.scratch_route} is yours to work in (from the shell, "
-            f"{layout.scratchpad}).{arrived}{drifted}{lacking}{ledger}",
+            f"\n\n{piece('turn/scratchpad', layout)}{arrived}{drifted}{lacking}{ledger}",
             "kingfisher",
         ),
     )
@@ -173,11 +175,11 @@ def turn_message(  # noqa: PLR0913 -- one per fact a message can carry
 
 def _drifted(drift: Drift) -> str:
     """The files a rewind left otherwise than the conversation remembers them, or nothing."""
-    changed = ", ".join(f"/{one}" for one in drift.changed)
-    unsure = ", ".join(f"/{one}" for one in drift.unsure)
-    return (f" Changed since your last turn: {changed}." if changed else "") + (
-        f" May have changed since your last turn: {unsure}." if unsure else ""
-    )
+    said = ""
+    for name, files in (("turn/changed", drift.changed), ("turn/may_have_changed", drift.unsure)):
+        if files:
+            said += f" {piece(name, files=', '.join(f'/{one}' for one in files))}"
+    return said
 
 
 def not_offered(history: tuple[Message, ...], granted: tuple[str, ...] | None) -> tuple[str, ...]:
@@ -189,21 +191,25 @@ def not_offered(history: tuple[Message, ...], granted: tuple[str, ...] | None) -
     return tuple(sorted(called - set(granted)))
 
 
-def _inputs_changed(changed: InputsChanged, route: str) -> str:
+def _inputs_changed(changed: InputsChanged, layout: Layout) -> str:
     """The changes to the inputs folder, the folder named once, or nothing.
 
     Names alone: on MiniMax-M3 a sentence saying an earlier read is out of date sent the
     agent back to the file no more often than "Replaced" did.
     """
     said: list[str] = []
-    for label, where, names in (
-        ("New files", "in", changed.new),
-        ("Replaced", "in", changed.replaced),
-        ("Removed", "from", changed.removed),
+    for name, names in (
+        ("turn/inputs_new", changed.new),
+        ("turn/inputs_replaced", changed.replaced),
+        ("turn/inputs_removed", changed.removed),
     ):
         if names:
-            folder = "" if said else f" {where} {route}"
-            said.append(f"{label}{folder}: {', '.join(names)}.")
+            # The first names the folder, and the ones after it take it as read.
+            said.append(
+                piece(name, files=", ".join(names))
+                if said
+                else piece(f"{name}_first", layout, files=", ".join(names))
+            )
     return "".join(f" {one}" for one in said)
 
 
@@ -317,11 +323,7 @@ def decision_discarded(tools: tuple[str, ...]) -> RunEvent:
 #: What the model is told on a turn that took over a dead turn's claim. Measured on
 #: MiniMax-M3 before kingfisher said it: a reminder already sent went out again 0 times in
 #: 6 with it, and 6 in 6 without, where the model had no way to ask whether it was sent.
-UNFINISHED = (
-    "The previous turn in this session was interrupted before it finished, and nothing "
-    "from it is in this conversation. Anything it did outside this session may already "
-    "have happened, so check before repeating an outside action."
-)
+UNFINISHED = piece("turn/unfinished")
 
 
 def earlier_turn_unfinished() -> RunEvent:
