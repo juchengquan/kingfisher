@@ -192,7 +192,9 @@ The last can be reworded, piece by piece, and not taken over. Every sentence
 kingfisher writes for the model — the harness, the notes on each task, the nudges in a
 turn, what a refused tool call is told — is a file under `kingfisher/core/agent/prompts/`
 in the installed package, and a file of the same path in `prompts/` beside your
-definitions is sent in its place:
+definitions is sent in its place. `kingfisher prompt --pieces` lists the names, with no
+deployment needed, and `kingfisher prompt --piece session > prompts/session.md` starts
+a replacement from kingfisher's own words:
 
     my-definitions/
       agents/ ...

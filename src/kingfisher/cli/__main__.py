@@ -52,6 +52,7 @@ from kingfisher.core.access import Datazone, ExtraDatazone, with_datazone
 # Private names, taken where they live: the command ships in the library's own wheel.
 from kingfisher.core.definitions.agents.spec import AgentError
 from kingfisher.core.definitions.catalogue import resolve_definitions
+from kingfisher.core.definitions.wording import FIXED, shipped
 from kingfisher.core.logged import RUN_LOGGER
 from kingfisher.core.session.model import held_by_a_turn
 
@@ -322,14 +323,28 @@ def build_parser() -> argparse.ArgumentParser:
             "\n"
             "Built as `run` builds it, in the session --session names, and caught\n"
             "before the call leaves: no model is called and the session is not\n"
-            "written to. A session not there yet is made to look in, and removed."
+            "written to. A session not there yet is made to look in, and removed.\n"
+            "\n"
+            "--pieces lists the pieces of kingfisher's own text a deployment may\n"
+            "reword in prompts/ beside its definitions, and --piece prints one as\n"
+            "kingfisher ships it, to copy from. Neither reads the deployment."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    showing.add_argument(
+    looking = showing.add_mutually_exclusive_group(required=True)
+    looking.add_argument(
         "--agent",
-        required=True,
         help="the agent to show (`kingfisher list` shows them)",
+    )
+    looking.add_argument(
+        "--pieces",
+        action="store_true",
+        help="list the pieces prompts/ may reword, marking those it may not",
+    )
+    looking.add_argument(
+        "--piece",
+        metavar="NAME",
+        help="print one piece as kingfisher ships it, to copy into prompts/NAME.md",
     )
     showing.add_argument(
         "--session",
@@ -682,6 +697,8 @@ LOOKING = "(kingfisher prompt: nothing is run)"
 
 def _prompt(args: argparse.Namespace) -> int:
     """Print what an agent's first model call would be sent, without making it."""
+    if args.pieces or args.piece is not None:
+        return _pieces(args)
     if args.tell is not None and not args.tell.strip():
         print(EMPTY_TELL, file=sys.stderr)
         return 2
@@ -697,6 +714,25 @@ def _prompt(args: argparse.Namespace) -> int:
     else:
         for line in render(sent):
             print(line)
+    return 0
+
+
+def _pieces(args: argparse.Namespace) -> int:
+    """List kingfisher's prompt pieces, or print one as it ships."""
+    # Read from the package alone: a name to copy is wanted before a deployment exists.
+    pieces = shipped()
+    if args.piece is not None:
+        if args.piece not in pieces:
+            print(f"no piece is called {args.piece!r}; --pieces lists them", file=sys.stderr)
+            return 2
+        sys.stdout.write(pieces[args.piece])
+        return 0
+    if args.json:
+        listed = [{"name": name, "fixed": name in FIXED} for name in sorted(pieces)]
+        print(json.dumps(listed, indent=2))
+        return 0
+    for name in sorted(pieces):
+        print(f"{name}  (fixed: always sent as it ships)" if name in FIXED else name)
     return 0
 
 
