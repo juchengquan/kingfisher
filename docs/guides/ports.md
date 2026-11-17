@@ -1331,6 +1331,24 @@ another beside it. `LocalSessions` passes on the strength of its sandbox; with t
 sandbox off it fails on `/.harness`, which is exactly the deployment it is there
 to catch.
 
+**It may read them, under kingfisher's own fences too, and no kit asks.** The file tools
+cannot see `/.harness`; the shell can list and read it: the turn log with each result as
+first written, the earlier versions of `/outputs` and `/memory` files a rewind restores,
+and the results of turns a rewind left behind. Landlock grants and cannot hide a folder
+inside a session it grants whole, and a shell that cannot list its own session is swapped
+for no fence at all, so a read check is one kingfisher's own backend would fail. If the
+agent must not see those, mount only `Layout.session_dirs` into the shell's sandbox and
+keep `/.harness` where only your backend's file operations reach it.
+
+**A backend built on `BaseSandbox` runs its file operations as the agent's shell.**
+deepagents' `BaseSandbox` lists, reads, edits, searches and deletes by running commands
+through your `execute`, and kingfisher lists and deletes under `/.harness` with those. So
+the agent's commands and kingfisher's own work in the same filesystem as the same user,
+and nothing in the sandbox can refuse one and allow the other: such a backend fails
+`shell_denied` unless you override those methods to go through your provider's file API
+and run the agent's commands as a user that cannot write `/.harness`, `/inputs` or
+`/records`.
+
 **And the kept records in the scratchpad, which the kit does not ask about.**
 `/scratchpad/conversation_history/` and the two folders beside it are reserved for what
 happened rather than what the agent made, as `/records/` is, and the prompt sends the model to

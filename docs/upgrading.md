@@ -18,6 +18,15 @@ only the first two items of the checklist, and the sections titled *after #667* 
 #617* or later apply to you, and *after #784* names every change since the work that
 replaced the four layers began.
 
+## `ports.md` says what the shell can read, and what `BaseSandbox` cannot fence, after #1322
+
+- **Nothing a deployment does changes**; the guide now says what already held. The
+  agent's shell may read `/.harness` under every fence kingfisher runs, and `shell_denied`
+  asks about writes alone. A backend built on deepagents' `BaseSandbox` runs its file
+  operations through `execute`, so it fails `shell_denied` unless those go through the
+  provider's own file API and the agent's commands run as a user that cannot write the
+  three folders.
+
 ## A failed call stays failed when a later turn replays it, after #1319
 
 - **`Message` has a `failed` field**, true only on a tool message whose call failed, and
